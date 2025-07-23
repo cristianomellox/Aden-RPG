@@ -72,16 +72,15 @@ async function fetchAndDisplayPlayerInfo() {
     if (user) {
         authContainer.style.display = 'none'; // Esconde autenticação
 
+        // Ao selecionar, não selecione mais a coluna 'class'
         const { data: player, error } = await supabaseClient
             .from('players')
-            .select('*')
+            .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active')
             .eq('id', user.id)
             .single();
 
         if (error) {
             console.error('Erro ao buscar informações do jogador:', error);
-            // Se o perfil não for encontrado ou houver outro erro, exibir o modal de edição
-            // Isso pode acontecer se o trigger falhar ou for um usuário novo ainda não processado.
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = user.email.split('@')[0]; // Sugere nome baseado no email
             editPlayerFactionSelect.value = 'Aliança da Floresta'; // Facção padrão no modal
@@ -89,7 +88,7 @@ async function fetchAndDisplayPlayerInfo() {
         }
 
         // Se o rank for 'Aventureiro(a)' E o nome ainda for o email (indicando perfil padrão recém-criado)
-        if (player.rank === 'Aventureiro(a)' && player.name === user.email) { // *** ALTERADO AQUI ***
+        if (player.rank === 'Aventureiro(a)' && player.name === user.email) {
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player.name; // Preenche com o nome atual (que é o email)
             editPlayerFactionSelect.value = player.faction; // Preenche com a facção atual ('Nenhuma')
@@ -102,7 +101,6 @@ async function fetchAndDisplayPlayerInfo() {
             <p>Nível: ${player.level}</p>
             <p>XP: ${player.xp}</p>
             <p>Ouro: ${player.gold}</p>
-            <p>Classe: ${player.class}</p>
             <p>Facção: ${player.faction}</p>
             <p>Rank: ${player.rank}</p>
             <button id="signOutBtn">Sair</button>
@@ -142,9 +140,10 @@ saveProfileBtn.addEventListener('click', async () => {
 
     profileEditMessage.textContent = "Salvando perfil...";
 
+    // Não atualize a coluna 'class'
     const { data, error } = await supabaseClient
         .from('players')
-        .update({ name: newName, faction: newFaction, rank: 'Aventureiro(a)' }) // *** ALTERADO AQUI ***
+        .update({ name: newName, faction: newFaction, rank: 'Aventureiro(a)' })
         .eq('id', user.id);
 
     if (error) {

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aden RPG - Jogo Simples</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* ... Seu CSS aqui ... */
+    </style>
+</head>
+<body>
+    <div class="container">
+        </div>
+
+    <script>
+        // *** 1. Substitua com suas credenciais do Supabase ***
+        const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxemxibHZta3V3ZWRjb2ZtZ2ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMzAyMjIsImV4cCI6MjA2ODcwNjIyMn0.eviFiu5JSztDItsQD3tH4oPftHxUwlIFdHjCggUJHcE';
+
+        // --- NOVO ALERT AQUI: Para verificar se o script está começando a rodar ---
+        alert('Script principal do jogo começando a rodar!');
+
+        let supabase;
+        try {
+            supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            alert('Supabase client criado com sucesso!');
+        } catch (e) {
+            alert('ERRO: Falha ao criar cliente Supabase: ' + e.message);
+            console.error('Erro ao criar cliente Supabase:', e); // Esta linha só seria vista no console de um computador
+        }
+
+        // Elementos da UI
+        const authSection = document.getElementById('auth-section');
+        const gameSection = document.getElementById('game-section');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const signupBtn = document.getElementById('signup-btn');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authMessage = document.getElementById('auth-message');
+        const playerInfoDiv = document.getElementById('player-info');
+        const chatInput = document.getElementById('chat-input');
+        const sendChatBtn = document.getElementById('send-chat-btn');
+        const messagesDiv = document.getElementById('messages');
+
+        // --- NOVO ALERT AQUI: Para verificar se os elementos da UI foram encontrados ---
+        if (authSection && signupBtn && loginBtn) {
+            alert('Todos os elementos da UI de autenticação encontrados!');
+        } else {
+            alert('AVISO: Nem todos os elementos da UI de autenticação foram encontrados!');
+            console.error('Elemento não encontrado:', {authSection, signupBtn, loginBtn});
+        }
+
+
+        let currentUserId = null;
+        let currentPlayerName = null;
+
+        // --- Funções de Autenticação ---
+
+        async function handleSignUp() {
+            // --- NOVO ALERT AQUI: Quando a função de registro é chamada ---
+            alert('Tentando registrar...');
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            try {
+                const { data, error } = await supabase.auth.signUp({ email, password });
+                if (error) throw error;
+                authMessage.textContent = 'Registro bem-sucedido! Por favor, verifique seu e-mail para confirmar a conta se a confirmação estiver ativada.';
+                alert('Registro SUCESSO!');
+                console.log('Usuário registrado:', data.user);
+                await handleLogin();
+            } catch (error) {
+                authMessage.textContent = 'Erro ao registrar: ' + error.message;
+                alert('Registro ERRO: ' + error.message);
+                console.error('Erro ao registrar:', error.message);
+            }
+        }
+
+        async function handleLogin() {
+            // --- NOVO ALERT AQUI: Quando a função de login é chamada ---
+            alert('Tentando login...');
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                console.log('Usuário logado:', data.user);
+                authMessage.textContent = 'Login bem-sucedido!';
+                alert('Login SUCESSO!');
+                currentUserId = data.user.id;
+                await fetchAndDisplayPlayerInfo();
+                displayGameSection();
+                setupRealtimeChat();
+            } catch (error) {
+                authMessage.textContent = 'Erro ao fazer login: ' + error.message;
+                alert('Login ERRO: ' + error.message);
+                console.error('Erro ao fazer login:', error.message);
+            }
+        }
+
+        // ... O restante do seu código JavaScript (handleLogout, displayGameSection, etc.) ...
+        // Não precisa adicionar alerts em TODAS as funções, mas os primeiros são cruciais.
+
+
+        // --- Event Listeners ---
+        signupBtn.addEventListener('click', handleSignUp);
+        loginBtn.addEventListener('click', handleLogin);
+        logoutBtn.addEventListener('click', handleLogout);
+        sendChatBtn.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        // --- Checar estado de autenticação na inicialização ---
+        async function checkAuthOnLoad() {
+            // --- NOVO ALERT AQUI: Quando a verificação inicial de autenticação começa ---
+            alert('Verificando sessão de autenticação...');
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (session) {
+                currentUserId = session.user.id;
+                await fetchAndDisplayPlayerInfo();
+                displayGameSection();
+                setupRealtimeChat();
+                alert('Sessão encontrada. Logado automaticamente.');
+            } else {
+                displayAuthSection();
+                alert('Nenhuma sessão encontrada. Exibindo tela de autenticação.');
+            }
+        }
+
+        // Executa a verificação ao carregar a página
+        checkAuthOnLoad();
+    </script>
+</body>
+</html>

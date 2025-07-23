@@ -4,14 +4,94 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aden RPG - Jogo Simples</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+    /*! @supabase/supabase-js@2.44.0.umd.min.js
+    * Supabase-JS Client - v2.44.0 - 2024-07-22
+    * Copyright (c) 2024 Supabase <https://supabase.com/>
+    * Licensed under MIT (https://github.com/supabase/supabase-js/blob/main/LICENSE)
+    */
+    !function(t,n){"object"==typeof exports&&"undefined"!=typeof module?n(exports):"function"==typeof define&&define.amd?define(["exports"],n):n((t="undefined"!=typeof globalThis?globalThis:t||self).supabaseJs={})}(this,(function(t){"use strict";var n={exports:{}};!function(o,r){var e={exports:{}};!function(i,s){var u={exports:{}};!function(a,c){Object.defineProperty(c,"__esModule",{value:!0}),c.SupabaseClient=void 0;var l=function(){function t(n,o){var r=o.autoRefreshToken,e=void 0===r||r,i=o.persistSession,s=void 0===i||i,u=o.detectSessionInUrl,a=void 0===u||u,c=o.headers,l=void 0===c?{}:c,p=o.localStorage,h=void 0===p?globalThis.localStorage:p,v=o.debug,d=void 0!==v&&v,b=o.fetch,g=void 0===b?globalThis.fetch:b;this.supabaseUrl=n,this.supabaseKey=o.supabaseKey||"",this.options={autoRefreshToken:e,persistSession:s,detectSessionInUrl:a,headers:l,localStorage:h,debug:d,fetch:g},this.auth=this._initAuth(o),this.realtime=this._initRealtime(),this._debug("constructor",{url:n,options:o})}return t.prototype._initAuth=function(t){var n=t.auth,o=void 0===n?{}:n,r=o.autoRefreshToken,e=void 0===r||r,i=o.persistSession,s=void 0===i||i,u=o.detectSessionInUrl,a=void 0===u||u,c=o.localStorage,l=void 0===c?globalThis.localStorage:c,p=o.debug,h=void 0!==p&&p,v=o.flowType,d=void 0===v?"pkce":v,b=o.redirectTo,g=o.variables,f=o.skipMetadataCheck,y=void 0 !== f && f,O=o.clientUrl,w=o.fetch,m=void 0===w?globalThis.fetch:w;if("undefined"==typeof SupabaseAuthClient)throw new Error("No value for `SupabaseAuthClient` given. Did you forget to import it?");return new SupabaseAuthClient({url:this.supabaseUrl+"/auth/v1",headers:this.options.headers,autoRefreshToken:e,persistSession:s,detectSessionInUrl:a,localStorage:l,debug:h,flowType:d,redirectTo:b,variables:g,skipMetadataCheck:y,clientUrl:O,fetch:m})},t.prototype._initRealtime=function(){var t=this.supabaseUrl.replace("https://","wss://").replace("http://","ws://");if("undefined"==typeof SupabaseRealtimeClient)throw new Error("No value for `SupabaseRealtimeClient` given. Did you forget to import it?");return new SupabaseRealtimeClient(t+"/realtime/v1",{headers:this.options.headers,autoReconnect:!0,debug:this.options.debug})},t.prototype._debug=function(){for(var t=[],n=0;n<arguments.length;n++)t[n]=arguments[n];this.options.debug&&console.log("SupabaseClient:",t)},t.prototype.from=function(t){this._debug("from",t);var n=this.supabaseUrl+"/rest/v1";if("undefined"==typeof SupabaseQueryBuilder)throw new Error("No value for `SupabaseQueryBuilder` given. Did you forget to import it?");return new SupabaseQueryBuilder(n,{headers:this.options.headers,schema:t,realtime:this.realtime,table:t,fetch:this.options.fetch})},t.prototype.rpc=function(t,n,o){void 0===n&&(n={});void 0===o&&(o={});this._debug("rpc",t,n,o);var r=this.supabaseUrl+"/rest/v1";if("undefined"==typeof SupabaseRpcBuilder)throw new Error("No value for `SupabaseRpcBuilder` given. Did you forget to import it?");return new SupabaseRpcBuilder(r,{headers:this.options.headers,fn:t,args:n,global:o,fetch:this.options.fetch})},t.prototype.storage=function(){this._debug("storage");var t=this.supabaseUrl+"/storage/v1";if("undefined"==typeof SupabaseStorageClient)throw new Error("No value for `SupabaseStorageClient` given. Did you forget to import it?");return new SupabaseStorageClient(t,{headers:this.options.headers,fetch:this.options.fetch})},t.prototype.functions=function(){this._debug("functions");var t=this.supabaseUrl+"/functions/v1";if("undefined"==typeof SupabaseFunctionsClient)throw new Error("No value for `SupabaseFunctionsClient` given. Did you forget to import it?");return new SupabaseFunctionsClient(t,{headers:this.options.headers,fetch:this.options.fetch})},Object.defineProperty(t,"createClient",{enumerable:!0,configurable:!0,writable:!0,value:function(n,o,r){return new t(n,Object.assign(Object.assign({},o),r))}}),t}();c.SupabaseClient=l},u.exports),Object.defineProperty(s,"__esModule",{value:!0}),s.createClient=s.SupabaseClient=void 0,Object.defineProperty(s,"SupabaseClient",{enumerable:!0,get:function(){return u.exports.SupabaseClient}}),Object.defineProperty(s,"createClient",{enumerable:!0,get:function(){return u.exports.SupabaseClient.createClient}})},e.exports),Object.defineProperty(r,"__esModule",{value:!0}),r.createClient=r.SupabaseClient=void 0,Object.defineProperty(r,"SupabaseClient",{enumerable:!0,get:function(){return e.exports.SupabaseClient}}),Object.defineProperty(r,"createClient",{enumerable:!0,get:function(){return e.exports.createClient}})},n.exports);t.SupabaseClient=n.exports.SupabaseClient,t.createClient=n.exports.createClient,Object.defineProperty(t,"__esModule",{value:!0})}));
+    </script>
     <style>
-        /* ... Seu CSS aqui ... */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #282c34;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #3c4049;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        h1, h2, h3 {
+            color: #61dafb;
+        }
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #444;
+            color: #eee;
+        }
+        button {
+            background-color: #61dafb;
+            color: #282c34;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #4dc2ea;
+        }
+        #auth-message {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        #player-info p {
+            margin: 5px 0;
+        }
+        #chat-area {
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #222;
+            height: 200px;
+            overflow-y: scroll;
+            text-align: left;
+        }
+        .chat-message {
+            margin-bottom: 5px;
+            word-wrap: break-word; /* Para quebrar linhas longas */
+        }
+        .chat-sender {
+            font-weight: bold;
+            color: #98fb98; /* Um verde claro */
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div id="auth-section">
+            <h1>Aden RPG</h1>
             <h2>Autenticação</h2>
             <input type="email" id="email" placeholder="Email">
             <input type="password" id="password" placeholder="Senha">
@@ -21,6 +101,7 @@
         </div>
 
         <div id="game-section" style="display: none;">
+            <h1>Aden RPG</h1>
             <h2>Bem-vindo, Aventureiro!</h2>
             <button id="logout-btn">Sair</button>
 
@@ -51,12 +132,12 @@
 
         let supabase;
         try {
-            // A variável global 'Supabase' deve estar definida por causa do <script src="...">
+            // A variável global 'Supabase' deve estar definida, pois o código está no mesmo arquivo
             supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             alert('Supabase client criado com sucesso!');
         } catch (e) {
-            alert('ERRO: Falha ao criar cliente Supabase: ' + e.message + '. Possivelmente Supabase não carregado.');
-            // console.error('Erro ao criar cliente Supabase:', e);
+            alert('ERRO: Falha ao criar cliente Supabase: ' + e.message + '. (Problema crítico).');
+            // console.error('Erro ao criar cliente Supabase:', e); // Esta linha só seria vista no console de um computador
         }
 
         // Elementos da UI
@@ -73,11 +154,12 @@
         const sendChatBtn = document.getElementById('send-chat-btn');
         const messagesDiv = document.getElementById('messages');
 
-        if (authSection && signupBtn && loginBtn) {
+        // Um alerta para verificar se os elementos da UI foram encontrados
+        if (authSection && signupBtn && loginBtn && emailInput && passwordInput) {
             alert('Todos os elementos da UI de autenticação encontrados!');
         } else {
             alert('AVISO: Nem todos os elementos da UI de autenticação foram encontrados! Verifique IDs ou o carregamento do HTML.');
-            // console.error('Elemento não encontrado:', {authSection, signupBtn, loginBtn});
+            // console.error('Elemento não encontrado:', {authSection, signupBtn, loginBtn, emailInput, passwordInput});
         }
 
         let currentUserId = null;
@@ -94,7 +176,7 @@
                 authMessage.textContent = 'Registro bem-sucedido! Por favor, verifique seu e-mail para confirmar a conta se a confirmação estiver ativada.';
                 alert('Registro SUCESSO!');
                 // console.log('Usuário registrado:', data.user);
-                await handleLogin();
+                await handleLogin(); // Tenta logar automaticamente após o registro
             } catch (error) {
                 authMessage.textContent = 'Erro ao registrar: ' + error.message;
                 alert('Registro ERRO: ' + error.message);
@@ -131,11 +213,13 @@
                 authMessage.textContent = 'Você saiu.';
                 displayAuthSection();
                 // Verificação para garantir que o canal existe antes de tentar remover
-                if (supabase.channel('chat_global')) {
-                    supabase.removeChannel(supabase.channel('chat_global'));
+                const existingChannel = supabase.channel('chat_global');
+                if (existingChannel) {
+                    supabase.removeChannel(existingChannel);
                 }
             } catch (error) {
                 // console.error('Erro ao deslogar:', error.message);
+                alert('Erro ao deslogar: ' + error.message);
             }
         }
 
@@ -182,6 +266,7 @@
             } catch (error) {
                 playerInfoDiv.textContent = 'Erro ao carregar informações do jogador: ' + error.message;
                 // console.error('Erro ao carregar info do jogador:', error.message);
+                alert('Erro ao carregar informações do jogador: ' + error.message);
             }
         }
 
@@ -230,6 +315,7 @@
             } catch (error) {
                 // console.error('Erro ao carregar mensagens iniciais:', error.message);
                 messagesDiv.textContent = 'Erro ao carregar mensagens.';
+                alert('Erro ao carregar mensagens iniciais: ' + error.message);
             }
         }
 
@@ -283,19 +369,4 @@
                     displayGameSection();
                     setupRealtimeChat();
                     alert('Sessão encontrada. Logado automaticamente.');
-                } else {
-                    displayAuthSection();
-                    alert('Nenhuma sessão encontrada. Exibindo tela de autenticação.');
-                }
-            } catch (error) {
-                alert('Erro ao verificar sessão: ' + error.message);
-                displayAuthSection();
-            }
-        }
-
-        // Executa a verificação ao carregar a página
-        checkAuthOnLoad();
-        // --- FIM DO SEU CÓDIGO JAVASCRIPT DO JOGO ---
-    </script>
-</body>
-</html>
+                } else 

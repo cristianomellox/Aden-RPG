@@ -128,8 +128,10 @@
 
             let supabase;
             try {
-                // A variável global 'Supabase' DEVE estar definida agora
-                supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                // A versão 2 do Supabase expõe 'createClient' através da variável global 'Supabase' (com 'S' maiúsculo)
+                // A correção do ChatGPT para desestruturar 'createClient' precisa ser feita a partir de 'Supabase'
+                const { createClient } = Supabase; // <-- Correção aqui!
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 alert('Supabase client criado com sucesso!');
             } catch (e) {
                 alert('ERRO: Falha ao criar cliente Supabase: ' + e.message + '. Possivelmente Supabase não carregado.');

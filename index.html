@@ -4,7 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aden RPG - Jogo Simples</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/module.mjs';
+
+    // *** 1. Substitua com suas credenciais do Supabase ***
+    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxemxibHZta3V3ZWRjb2ZtZ2ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMzAyMjIsImV4cCI6MjA2ODcwNjIyMn0.eviFiu5JSztDItsQD3tH4oPftHxUwlIFdHjCggUJHcE';
+
+    // --- NOVO ALERT AQUI: Para verificar se o script está começando a rodar ---
+    alert('Script principal do jogo começando a rodar!');
+
+    let supabase;
+    try {
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // AGORA É createClient, NÃO Supabase.createClient
+        alert('Supabase client criado com sucesso!');
+    } catch (e) {
+        alert('ERRO: Falha ao criar cliente Supabase: ' + e.message);
+        console.error('Erro ao criar cliente Supabase:', e);
+    }
+
+    // ... TODO O RESTO DO SEU CÓDIGO JAVASCRIPT ABAIXO DEVE FICAR AQUI, DENTRO DESTA TAG <script type="module"> ... </script>
+    // CERTIFIQUE-SE DE QUE TODO O JAVASCRIPT DO SEU JOGO ESTÁ DENTRO DESTA NOVA TAG <script type="module">
+    </script>
     <style>
         /* ... Seu CSS aqui ... */
     </style>

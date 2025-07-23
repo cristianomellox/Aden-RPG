@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aden RPG - Jogo Simples</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+
+    <script>
+    /*! @supabase/supabase-js@2.44.0.umd.min.js
+    * Supabase-JS Client - v2.44.0 - 2024-07-22
+    * Copyright (c) 2024 Supabase <https://supabase.com/>
+    * Licensed under MIT (https://github.com/supabase/supabase-js/blob/main/LICENSE)
+    */
+    !function(t,n){"object"==typeof exports&&"undefined"!=typeof module?n(exports):"function"==typeof define&&define.amd?define(["exports"],n):n((t="undefined"!=typeof globalThis?globalThis:t||self).supabaseJs={})}(this,(function(t){"use strict";var n={exports:{}};!function(o,r){var e={exports:{}};!function(i,s){var u={exports:{}};!function(a,c){Object.defineProperty(c,"__esModule",{value:!0}),c.SupabaseClient=void 0;var l=function(){function t(n,o){var r=o.autoRefreshToken,e=void 0===r||r,i=o.persistSession,s=void 0===i||i,u=o.detectSessionInUrl,a=void 0===u||u,c=o.headers,l=void 0===c?{}:c,p=o.localStorage,h=void 0===p?globalThis.localStorage:p,v=o.debug,d=void 0!==v&&d,b=o.fetch,g=void 0===b?globalThis.fetch:g;this.supabaseUrl=n,this.supabaseKey=o.supabaseKey||"",this.options={autoRefreshToken:e,persistSession:s,detectSessionInUrl:a,headers:l,localStorage:h,debug:d,fetch:g},this.auth=this._initAuth(o),this.realtime=this._initRealtime(),this._debug("constructor",{url:n,options:o})}return t.prototype._initAuth=function(t){var n=t.auth,o=void 0===n?{}:n,r=o.autoRefreshToken,e=void 0===r||r,i=o.persistSession,s=void 0===i||i,u=o.detectSessionInUrl,a=void 0===u||u,c=o.localStorage,l=void 0===c?globalThis.localStorage:c,p=o.debug,h=void 0!==p&&h,v=o.flowType,d=void 0===v?"pkce":v,b=o.redirectTo,g=o.variables,f=o.skipMetadataCheck,y=void 0 !== f && f,O=o.clientUrl,w=o.fetch,m=void 0===w?globalThis.fetch:m;if("undefined"==typeof SupabaseAuthClient)throw new Error("No value for `SupabaseAuthClient` given. Did you forget to import it?");return new SupabaseAuthClient({url:this.supabaseUrl+"/auth/v1",headers:this.options.headers,autoRefreshToken:e,persistSession:s,detectSessionInUrl:a,localStorage:l,debug:h,flowType:d,redirectTo:b,variables:g,skipMetadataCheck:y,clientUrl:O,fetch:m})},t.prototype._initRealtime=function(){var t=this.supabaseUrl.replace("https://","wss://").replace("http://","ws://");if("undefined"==typeof SupabaseRealtimeClient)throw new Error("No value for `SupabaseRealtimeClient` given. Did you forget to import it?");return new SupabaseRealtimeClient(t+"/realtime/v1",{headers:this.options.headers,autoReconnect:!0,debug:this.options.debug})},t.prototype._debug=function(){for(var t=[],n=0;n<arguments.length;n++)t[n]=arguments[n];this.options.debug&&console.log("SupabaseClient:",t)},t.prototype.from=function(t){this._debug("from",t);var n=this.supabaseUrl+"/rest/v1";if("undefined"==typeof SupabaseQueryBuilder)throw new Error("No value for `SupabaseQueryBuilder` given. Did you forget to import it?");return new SupabaseQueryBuilder(n,{headers:this.options.headers,schema:t,realtime:this.realtime,table:t,fetch:this.options.fetch})},t.prototype.rpc=function(t,n,o){void 0===n&&(n={});void 0===o&&(o={});this._debug("rpc",t,n,o);var r=this.supabaseUrl+"/rest/v1";if("undefined"==typeof SupabaseRpcBuilder)throw new Error("No value for `SupabaseRpcBuilder` given. Did you forget to import it?");return new SupabaseRpcBuilder(r,{headers:this.options.headers,fn:t,args:n,global:o,fetch:this.options.fetch})},t.prototype.storage=function(){this._debug("storage");var t=this.supabaseUrl+"/storage/v1";if("undefined"==typeof SupabaseStorageClient)throw new Error("No value for `SupabaseStorageClient` given. Did you forget to import it?");return new SupabaseStorageClient(t,{headers:this.options.headers,fetch:this.options.fetch})},t.prototype.functions=function(){this._debug("functions");var t=this.supabaseUrl+"/functions/v1";if("undefined"==typeof SupabaseFunctionsClient)throw new Error("No value for `SupabaseFunctionsClient` given. Did you forget to import it?");return new SupabaseFunctionsClient(t,{headers:this.options.headers,fetch:this.options.fetch})},Object.defineProperty(t,"createClient",{enumerable:!0,configurable:!0,writable:!0,value:function(n,o,r){return new t(n,Object.assign(Object.assign({},o),r))}}),t}();c.SupabaseClient=l},u.exports),Object.defineProperty(s,"__esModule",{value:!0}),s.createClient=s.SupabaseClient=void 0,Object.defineProperty(s,"SupabaseClient",{enumerable:!0,get:function(){return u.exports.SupabaseClient}}),Object.defineProperty(s,"createClient",{enumerable:!0,get:function(){return u.exports.SupabaseClient.createClient}})},e.exports),Object.defineProperty(r,"__esModule",{value:!0}),r.createClient=r.SupabaseClient=void 0,Object.defineProperty(r,"SupabaseClient",{enumerable:!0,get:function(){return e.exports.SupabaseClient}}),Object.defineProperty(r,"createClient",{enumerable:!0,get:function(){return e.exports.createClient}})},n.exports);t.SupabaseClient=n.exports.SupabaseClient,t.createClient=n.exports.createClient,Object.defineProperty(t,"__esModule",{value:!0})}));
+    </script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -121,12 +129,13 @@
         alert('Script principal do jogo começando a rodar!');
 
         // Garante que o DOM esteja completamente carregado antes de tentar inicializar o Supabase
+        // E também para ter certeza que o script do Supabase incorporado já foi executado.
         document.addEventListener('DOMContentLoaded', async () => {
             alert('DOM completamente carregado!');
 
             let supabase;
             try {
-                // A variável global 'Supabase' deve estar definida por causa do <script src="...">
+                // A variável global 'Supabase' DEVE estar definida agora, pois o código está no mesmo arquivo
                 supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 alert('Supabase client criado com sucesso!');
             } catch (e) {
@@ -161,7 +170,7 @@
             // --- Funções de Autenticação ---
             async function handleSignUp() {
                 alert('Tentando registrar...');
-                if (!supabase) { alert('Erro: Supabase não inicializado. Não é possível registrar.'); return; }
+                if (!supabase) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível registrar.'; alert('Erro: Supabase não inicializado. Não é possível registrar.'); return; }
                 const email = emailInput.value;
                 const password = passwordInput.value;
                 try {
@@ -180,7 +189,7 @@
 
             async function handleLogin() {
                 alert('Tentando login...');
-                if (!supabase) { alert('Erro: Supabase não inicializado. Não é possível logar.'); return; }
+                if (!supabase) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível logar.'; alert('Erro: Supabase não inicializado. Não é possível logar.'); return; }
                 const email = emailInput.value;
                 const password = passwordInput.value;
                 try {
@@ -329,59 +338,4 @@
             function setupRealtimeChat() {
                 if (!supabase) { alert('Erro: Supabase não inicializado. Não é possível configurar chat em tempo real.'); return; }
                 const existingChannel = supabase.channel('chat_global');
-                if (existingChannel) {
-                    supabase.removeChannel(existingChannel);
-                }
-
-                const chatChannel = supabase.channel('chat_global');
-
-                chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
-                    // console.log('Nova mensagem recebida em tempo real:', payload.new);
-                    addMessageToChat(payload.new);
-                })
-                .subscribe();
-
-                fetchInitialChatMessages();
-            }
-
-            // --- Event Listeners ---
-            signupBtn.addEventListener('click', handleSignUp);
-            loginBtn.addEventListener('click', handleLogin);
-            logoutBtn.addEventListener('click', handleLogout);
-            sendChatBtn.addEventListener('click', sendChatMessage);
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    sendChatMessage();
-                }
-            });
-
-            // --- Checar estado de autenticação na inicialização ---
-            async function checkAuthOnLoad() {
-                alert('Verificando sessão de autenticação...');
-                if (!supabase) { alert('Erro: Supabase não inicializado. Não é possível verificar sessão.'); return; }
-                try {
-                    const { data: { session }, error } = await supabase.auth.getSession();
-                    if (error) throw error;
-                    if (session) {
-                        currentUserId = session.user.id;
-                        await fetchAndDisplayPlayerInfo();
-                        displayGameSection();
-                        setupRealtimeChat();
-                        alert('Sessão encontrada. Logado automaticamente.');
-                    } else {
-                        displayAuthSection();
-                        alert('Nenhuma sessão encontrada. Exibindo tela de autenticação.');
-                    }
-                } catch (error) {
-                    alert('Erro ao verificar sessão: ' + error.message);
-                    displayAuthSection(); // Mostra a seção de autenticação em caso de erro também
-                }
-            }
-
-            // Executa a verificação ao carregar a página
-            checkAuthOnLoad();
-        }); // Fim do DOMContentLoaded
-        // --- FIM DO SEU CÓDIGO JAVASCRIPT DO JOGO ---
-    </script>
-</body>
-</html>
+          

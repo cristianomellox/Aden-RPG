@@ -88,11 +88,11 @@ async function fetchAndDisplayPlayerInfo() {
             return; // Impede a exibição do playerInfoDiv até o perfil ser salvo
         }
 
-        // Se o rank for 'Novato' E o nome ainda for o email (indicando perfil padrão recém-criado)
-        if (player.rank === 'Novato' && player.name === user.email) {
+        // Se o rank for 'Aventureiro(a)' E o nome ainda for o email (indicando perfil padrão recém-criado)
+        if (player.rank === 'Aventureiro(a)' && player.name === user.email) { // *** ALTERADO AQUI ***
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player.name; // Preenche com o nome atual (que é o email)
-            editPlayerFactionSelect.value = player.faction; // Preenche com a facção atual (Nenhuma, mas agora será 'Aliança da Floresta' ou 'Horda do Gelo')
+            editPlayerFactionSelect.value = player.faction; // Preenche com a facção atual ('Nenhuma')
             return; // Impede a exibição do playerInfoDiv até o perfil ser salvo
         }
 
@@ -144,7 +144,7 @@ saveProfileBtn.addEventListener('click', async () => {
 
     const { data, error } = await supabaseClient
         .from('players')
-        .update({ name: newName, faction: newFaction, rank: 'Novato' }) // Define rank como 'Novato' após edição inicial
+        .update({ name: newName, faction: newFaction, rank: 'Aventureiro(a)' }) // *** ALTERADO AQUI ***
         .eq('id', user.id);
 
     if (error) {

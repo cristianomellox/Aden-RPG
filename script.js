@@ -84,7 +84,7 @@ async function fetchAndDisplayPlayerInfo() {
             // Isso pode acontecer se o trigger falhar ou for um usuário novo ainda não processado.
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = user.email.split('@')[0]; // Sugere nome baseado no email
-            editPlayerFactionSelect.value = 'Reino Ocidental'; // Facção padrão no modal
+            editPlayerFactionSelect.value = 'Aliança da Floresta'; // Facção padrão no modal
             return; // Impede a exibição do playerInfoDiv até o perfil ser salvo
         }
 
@@ -92,7 +92,7 @@ async function fetchAndDisplayPlayerInfo() {
         if (player.rank === 'Novato' && player.name === user.email) {
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player.name; // Preenche com o nome atual (que é o email)
-            editPlayerFactionSelect.value = player.faction; // Preenche com a facção atual (Nenhuma)
+            editPlayerFactionSelect.value = player.faction; // Preenche com a facção atual (Nenhuma, mas agora será 'Aliança da Floresta' ou 'Horda do Gelo')
             return; // Impede a exibição do playerInfoDiv até o perfil ser salvo
         }
 

@@ -1,401 +1,119 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aden RPG - Jogo Simples</title>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
-
+    <title>Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #282c34;
-            color: #ffffff;
-            display: flex;
+        body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; margin-top: 50px; }
+        #authContainer, #playerInfoDiv, #gameContainer, #chatContainer {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-top: 20px;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+        }
+        #chatBox { height: 200px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-bottom: 10px; }
+        .chat-message { margin-bottom: 5px; }
+        .chat-message strong { color: #333; }
+
+        /* Estilo para o modal de edição de perfil */
+        #profileEditModal {
+            display: none; /* Inicia oculto */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8); /* Fundo escuro semi-transparente */
+            z-index: 1000; /* Garante que fique acima de outros elementos */
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
         }
-        .container {
-            background-color: #3c4049;
-            padding: 20px;
+        #profileEditModal > div {
+            background: white;
+            padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            width: 90%;
-            max-width: 500px;
             text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 90%;
+            box-sizing: border-box;
         }
-        h1, h2, h3 {
-            color: #61dafb;
-        }
-        input[type="email"],
-        input[type="password"],
-        input[type="text"] {
+        #profileEditModal h2 { margin-top: 0; }
+        #profileEditModal input, #profileEditModal select, #profileEditModal button {
             width: calc(100% - 20px);
             padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #555;
-            border-radius: 4 delighted;
-            background-color: #444;
-            color: #eee;
-        }
-        button {
-            background-color: #61dafb;
-            color: #282c34;
-            padding: 10px 15px;
-            border: none;
+            margin-bottom: 15px;
             border-radius: 4px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+        }
+        #profileEditModal button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
             cursor: pointer;
             font-size: 16px;
-            margin: 5px;
         }
-        button:hover {
-            background-color: #4dc2ea;
+        #profileEditModal button:hover {
+            background-color: #45a049;
         }
-        #auth-message {
+        #profileEditMessage {
             margin-top: 10px;
-            font-weight: bold;
-        }
-        #player-info p {
-            margin: 5px 0;
-        }
-        #chat-area {
-            border: 1px solid #555;
-            border-radius: 4px;
-            padding: 10px;
-            margin-top: 20px;
-            background-color: #222;
-            height: 200px;
-            overflow-y: scroll;
-            text-align: left;
-        }
-        .chat-message {
-            margin-bottom: 5px;
-            word-wrap: break-word; /* Para quebrar linhas longas */
-        }
-        .chat-sender {
-            font-weight: bold;
-            color: #98fb98; /* Um verde claro */
+            font-size: 0.9em;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="auth-section">
-            <h1>Aden RPG</h1>
-            <h2>Autenticação</h2>
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Senha">
-            <button id="signup-btn">Registrar</button>
-            <button id="login-btn">Login</button>
-            <p id="auth-message" style="color: red;"></p>
-        </div>
 
-        <div id="game-section" style="display: none;">
-            <h1>Aden RPG</h1>
-            <h2>Bem-vindo, Aventureiro!</h2>
-            <button id="logout-btn">Sair</button>
+    <h1>Aden RPG</h1>
 
-            <h3>Seu Perfil:</h3>
-            <div id="player-info">
-                Carregando informações do jogador...
-            </div>
-
-            <h3>Chat Global:</h3>
-            <div id="chat-area">
-                <div id="messages">
-                    Nenhuma mensagem ainda.
-                </div>
-                <input type="text" id="chat-input" placeholder="Digite sua mensagem...">
-                <button id="send-chat-btn">Enviar</button>
-            </div>
-        </div>
+    <div id="authContainer">
+        <h2>Login / Registro</h2>
+        <input type="email" id="email" placeholder="Email"><br><br>
+        <input type="password" id="password" placeholder="Senha"><br><br>
+        <button id="signInBtn">Entrar</button>
+        <button id="signUpBtn">Registrar</button>
+        <p id="authMessage" style="color:red;"></p>
     </div>
 
-    <script>
-        // *** 1. Suas credenciais do Supabase ***
-        const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-        // A CHAVE ANON_KEY/PUBLISHABLE_KEY ATUALIZADA AGORA!
-        const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+    <div id="playerInfoDiv" style="display:none;">
+        <h2>Informações do Jogador</h2>
+        </div>
 
-        let supabaseClient; // Variável global para o cliente Supabase
+    <div id="gameContainer" style="display:none;">
+        <h2>Área do Jogo</h2>
+        <p>Bem-vindo ao mundo de Aden!</p>
+        </div>
 
-        alert('Script principal do jogo começando a rodar!'); // Este alert deve aparecer primeiro
+    <div id="chatContainer" style="display:none;">
+        <h2>Chat Global</h2>
+        <div id="chatBox"></div>
+        <input type="text" id="chatInput" placeholder="Digite sua mensagem...">
+        <button id="sendChatBtn">Enviar</button>
+    </div>
 
-        // Garante que o DOM esteja completamente carregado
-        document.addEventListener('DOMContentLoaded', async () => {
-            alert('DOM carregado!'); // Este alert deve aparecer
+    <div id="profileEditModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; display:flex; justify-content:center; align-items:center;">
+        <div style="background:white; padding:20px; border-radius:8px; text-align:center;">
+            <h2>Bem-vindo(a), Aventureiro(a)!</h2>
+            <p>Seu perfil é novo. Por favor, edite seu nome e escolha sua facção inicial.</p>
+            <label for="editPlayerName">Nome do Jogador:</label><br>
+            <input type="text" id="editPlayerName" placeholder="Seu nome de aventureiro"><br><br>
 
-            try {
-                // VERIFICAÇÃO CRÍTICA: 'supabase' (minúsculo) DEVE ESTAR DISPONÍVEL AGORA com a CDN UMD
-                if (typeof supabase === 'undefined') {
-                    alert('ERRO: Supabase (global) não carregado ou não disponível.');
-                    // console.error('Supabase (global) não carregado ou não disponível.');
-                    return; // Interrompe a execução se Supabase não estiver pronto
-                }
+            <label for="editPlayerFaction">Escolha sua Facção:</label><br>
+            <select id="editPlayerFaction">
+                <option value="Reino Ocidental">Reino Ocidental</option>
+                <option value="Império Oriental">Império Oriental</option>
+                <option value="Aliança da Floresta">Aliança da Floresta</option>
+            </select><br><br>
 
-                // Inicializa o cliente Supabase usando 'supabase.createClient'
-                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                alert('✅ Supabase conectado e cliente criado com sucesso!');
-
-            } catch (e) {
-                alert('ERRO: Falha ao criar cliente Supabase: ' + e.message);
-                // console.error('Erro ao criar cliente Supabase:', e);
-                return; // Interrompe a execução se a inicialização falhou
-            }
-
-            // O restante do seu código de inicialização do jogo continua aqui
-            const authSection = document.getElementById('auth-section');
-            const gameSection = document.getElementById('game-section');
-            const emailInput = document.getElementById('email');
-            const passwordInput = document.getElementById('password');
-            const signupBtn = document.getElementById('signup-btn');
-            const loginBtn = document.getElementById('login-btn');
-            const logoutBtn = document.getElementById('logout-btn');
-            const authMessage = document.getElementById('auth-message');
-            const playerInfoDiv = document.getElementById('player-info');
-            const chatInput = document.getElementById('chat-input');
-            const sendChatBtn = document.getElementById('send-chat-btn');
-            const messagesDiv = document.getElementById('messages');
-
-            if (authSection && signupBtn && loginBtn && emailInput && passwordInput) {
-                alert('Todos os elementos da UI de autenticação encontrados!');
-            } else {
-                alert('AVISO: Nem todos os elementos da UI de autenticação foram encontrados! Verifique IDs ou o carregamento do HTML.');
-                // console.error('Elemento não encontrado:', {authSection, signupBtn, loginBtn, emailInput, passwordInput});
-            }
-
-            let currentUserId = null;
-            let currentPlayerName = null;
-
-            // --- Funções de Autenticação ---
-            async function handleSignUp() {
-                alert('Tentando registrar...');
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível registrar.'; alert('Erro: Supabase não inicializado. Não é possível registrar.'); return; }
-                const email = emailInput.value;
-                const password = passwordInput.value;
-                try {
-                    const { data, error } = await supabaseClient.auth.signUp({ email, password });
-                    if (error) throw error;
-                    authMessage.textContent = 'Registro bem-sucedido! Por favor, verifique seu e-mail para confirmar a conta se a confirmação estiver ativada.';
-                    alert('Registro SUCESSO!');
-                    // console.log('Usuário registrado:', data.user);
-                    await handleLogin(); // Tenta logar automaticamente após o registro
-                } catch (error) {
-                    authMessage.textContent = 'Erro ao registrar: ' + error.message;
-                    alert('Registro ERRO: ' + error.message);
-                    // console.error('Erro ao registrar:', error.message);
-                }
-            }
-
-            async function handleLogin() {
-                alert('Tentando login...');
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível logar.'; alert('Erro: Supabase não inicializado. Não é possível logar.'); return; }
-                const email = emailInput.value;
-                const password = passwordInput.value;
-                try {
-                    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-                    if (error) throw error;
-                    // console.log('Usuário logado:', data.user);
-                    authMessage.textContent = 'Login bem-sucedido!';
-                    alert('Login SUCESSO!');
-                    currentUserId = data.user.id;
-                    await fetchAndDisplayPlayerInfo();
-                    displayGameSection();
-                    setupRealtimeChat();
-                } catch (error) {
-                    authMessage.textContent = 'Erro ao fazer login: ' + error.message;
-                    alert('Login ERRO: ' + error.message);
-                    // console.error('Erro ao fazer login:', error.message);
-                }
-            }
-
-            async function handleLogout() {
-                if (!supabaseClient) { alert('Erro: Supabase não inicializado. Não é possível deslogar.'); return; }
-                try {
-                    const { error } = await supabaseClient.auth.signOut();
-                    if (error) throw error;
-                    // console.log('Usuário deslogado.');
-                    authMessage.textContent = 'Você saiu.';
-                    displayAuthSection();
-                    // Garante que o canal do chat seja removido ao deslogar
-                    const existingChannel = supabaseClient.channel('chat_global');
-                    if (existingChannel) {
-                        supabaseClient.removeChannel(existingChannel);
-                    }
-                } catch (error) {
-                    // console.error('Erro ao deslogar:', error.message);
-                    alert('Erro ao deslogar: ' + error.message);
-                }
-            }
-
-            // --- Funções de UI ---
-            function displayGameSection() {
-                authSection.style.display = 'none';
-                gameSection.style.display = 'block';
-            }
-
-            function displayAuthSection() {
-                authSection.style.display = 'block';
-                gameSection.style.display = 'none';
-                playerInfoDiv.innerHTML = 'Carregando informações do jogador...'; // Reset
-                messagesDiv.innerHTML = 'Nenhuma mensagem ainda.'; // Reset
-                chatInput.value = ''; // Reset
-            }
-
-            // --- Funções do Jogo ---
-            async function fetchAndDisplayPlayerInfo() {
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível carregar informações do jogador.'; alert('Erro: Supabase não inicializado. Não é possível carregar informações do jogador.'); return; }
-                try {
-                    const { data: players, error } = await supabaseClient
-                        .from('players')
-                        .select('*')
-                        .eq('id', currentUserId);
-
-                    if (error) throw error;
-
-                    if (players && players.length > 0) {
-                        const player = players[0];
-                        currentPlayerName = player.name;
-                        playerInfoDiv.innerHTML = `
-                            <p><strong>Nome:</strong> ${player.name}</p>
-                            <p><strong>Nível:</strong> ${player.level}</p>
-                            <p><strong>XP:</strong> ${player.xp}</p>
-                            <p><strong>Ouro:</strong> ${player.gold}</p>
-                            <p><strong>Classe:</strong> ${player.class}</p>
-                            <p><strong>Facção:</strong> ${player.faction}</p>
-                            <p><strong>Rank:</strong> ${player.rank}</p>
-                        `;
-                    } else {
-                        playerInfoDiv.textContent = 'Nenhum perfil de jogador encontrado para este usuário. Por favor, contate o administrador.';
-                        // console.warn('Nenhum perfil de jogador encontrado para ID:', currentUserId);
-                    }
-                } catch (error) {
-                    playerInfoDiv.textContent = 'Erro ao carregar informações do jogador: ' + error.message;
-                    // console.error('Erro ao carregar info do jogador:', error.message);
-                    alert('Erro ao carregar informações do jogador: ' + error.message);
-                }
-            }
-
-            async function sendChatMessage() {
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível enviar mensagem.'; alert('Erro: Supabase não inicializado. Não é possível enviar mensagem.'); return; }
-                const messageText = chatInput.value.trim();
-                if (!messageText || !currentUserId || !currentPlayerName) {
-                    alert('Por favor, digite uma mensagem e certifique-se de que seu perfil esteja carregado.');
-                    return;
-                }
-
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('chat_messages')
-                        .insert({
-                            sender_id: currentUserId,
-                            message: messageText,
-                            player_name: currentPlayerName
-                        });
-                    if (error) {
-                        if (error.code === '42501') {
-                            alert('Você não tem permissão para enviar mensagens no chat (pode estar silenciado ou banido).');
-                        } else {
-                            throw error;
-                        }
-                    } else {
-                        chatInput.value = '';
-                    }
-                } catch (error) {
-                    // console.error('Erro ao enviar mensagem:', error.message);
-                    alert('Erro ao enviar mensagem: ' + error.message);
-                }
-            }
-
-            async function fetchInitialChatMessages() {
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível carregar mensagens.'; alert('Erro: Supabase não inicializado. Não é possível carregar mensagens.'); return; }
-                try {
-                    const { data: messages, error } = await supabaseClient
-                        .from('chat_messages')
-                        .select('*')
-                        .order('sent_at', { ascending: false })
-                        .limit(20);
-
-                    if (error) throw error;
-
-                    messagesDiv.innerHTML = '';
-                    messages.reverse().forEach(addMessageToChat);
-                } catch (error) {
-                    // console.error('Erro ao carregar mensagens iniciais:', error.message);
-                    messagesDiv.textContent = 'Erro ao carregar mensagens.';
-                    alert('Erro ao carregar mensagens iniciais: ' + error.message);
-                }
-            }
-
-            function addMessageToChat(message) {
-                const messageElement = document.createElement('div');
-                messageElement.classList.add('chat-message');
-                const sentAt = new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                messageElement.innerHTML = `<span class="chat-sender">[${sentAt}] ${message.player_name}:</span> ${message.message}`;
-                messagesDiv.appendChild(messageElement);
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }
-
-            function setupRealtimeChat() {
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível configurar chat em tempo real.'; alert('Erro: Supabase não inicializado. Não é possível configurar chat em tempo real.'); return; }
-                const existingChannel = supabaseClient.channel('chat_global');
-                if (existingChannel) {
-                    supabaseClient.removeChannel(existingChannel);
-                }
-
-                const chatChannel = supabaseClient.channel('chat_global');
-
-                chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
-                    // console.log('Nova mensagem recebida em tempo real:', payload.new);
-                    addMessageToChat(payload.new);
-                })
-                .subscribe();
-
-                fetchInitialChatMessages();
-            }
-
-            // --- Event Listeners ---
-            signupBtn.addEventListener('click', handleSignUp);
-            loginBtn.addEventListener('click', handleLogin);
-            logoutBtn.addEventListener('click', handleLogout);
-            sendChatBtn.addEventListener('click', sendChatMessage);
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    sendChatMessage();
-                }
-            });
-
-            // --- Checar estado de autenticação na inicialização ---
-            async function checkAuthOnLoad() {
-                alert('Verificando sessão de autenticação...');
-                if (!supabaseClient) { authMessage.textContent = 'Erro interno: Supabase não inicializado. Não é possível verificar sessão.'; alert('Erro: Supabase não inicializado. Não é possível verificar sessão.'); return; }
-                try {
-                    const { data: { session }, error } = await supabaseClient.auth.getSession();
-                    if (error) throw error;
-                    if (session) {
-                        currentUserId = session.user.id;
-                        await fetchAndDisplayPlayerInfo();
-                        displayGameSection();
-                        setupRealtimeChat();
-                        alert('Sessão encontrada. Logado automaticamente.');
-                    } else {
-                        displayAuthSection();
-                        alert('Nenhuma sessão encontrada. Exibindo tela de autenticação.');
-                    }
-                } catch (error) {
-                    authMessage.textContent = 'Erro ao verificar sessão: ' + error.message;
-                    alert('Erro ao verificar sessão: ' + error.message);
-                }
-            }
-
-            // Executa a verificação ao carregar a página
-            checkAuthOnLoad();
-        }); // Fim do DOMContentLoaded
-        // --- FIM DO SEU CÓDIGO JAVASCRIPT DO JOGO ---
-    </script>
+            <button id="saveProfileBtn">Salvar Perfil</button>
+            <p id="profileEditMessage" style="color:red;"></p>
+        </div>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>

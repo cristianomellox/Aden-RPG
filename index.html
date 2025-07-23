@@ -4,32 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aden RPG - Jogo Simples</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* ... Seu CSS aqui ... */
     </style>
 </head>
 <body>
     <div class="container">
+        <div id="auth-section">
+            <h2>Autenticação</h2>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Senha">
+            <button id="signup-btn">Registrar</button>
+            <button id="login-btn">Login</button>
+            <p id="auth-message" style="color: red;"></p>
         </div>
 
-    <script type="module">
-        // A linha de import precisa estar aqui no TOPO deste bloco script
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/module.mjs';
+        <div id="game-section" style="display: none;">
+            <h2>Bem-vindo, Aventureiro!</h2>
+            <button id="logout-btn">Sair</button>
 
+            <h3>Seu Perfil:</h3>
+            <div id="player-info">
+                Carregando informações do jogador...
+            </div>
+
+            <h3>Chat Global:</h3>
+            <div id="chat-area">
+                <div id="messages">
+                    Nenhuma mensagem ainda.
+                </div>
+                <input type="text" id="chat-input" placeholder="Digite sua mensagem...">
+                <button id="send-chat-btn">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
         // *** 1. Suas credenciais do Supabase ***
         const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxxemxibHZta3V3ZWRjb2ZtZ2ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMzAyMjIsImV4cCI6MjA2ODcwNjIyMn0.eviFiu5JSztDItsQD3tH4oPftHxUwlIFdHjCggUJHcE';
 
         // --- COMEÇO DO SEU CÓDIGO JAVASCRIPT DO JOGO (COM OS ALERTS) ---
-        alert('Script principal do jogo começando a rodar!'); // ESTE DEVE SER O PRIMEIRO ALERT
+        // Este alert DEVE ser o primeiro a aparecer, se o script estiver sendo executado.
+        alert('Script principal do jogo começando a rodar!');
 
         let supabase;
         try {
-            supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // AGORA É createClient
+            // A variável global 'Supabase' deve estar definida por causa do <script src="...">
+            supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             alert('Supabase client criado com sucesso!');
         } catch (e) {
-            alert('ERRO: Falha ao criar cliente Supabase: ' + e.message);
-            // console.error('Erro ao criar cliente Supabase:', e); // Esta linha só seria vista no console de um computador
+            alert('ERRO: Falha ao criar cliente Supabase: ' + e.message + '. Possivelmente Supabase não carregado.');
+            // console.error('Erro ao criar cliente Supabase:', e);
         }
 
         // Elementos da UI
@@ -49,7 +76,7 @@
         if (authSection && signupBtn && loginBtn) {
             alert('Todos os elementos da UI de autenticação encontrados!');
         } else {
-            alert('AVISO: Nem todos os elementos da UI de autenticação foram encontrados!');
+            alert('AVISO: Nem todos os elementos da UI de autenticação foram encontrados! Verifique IDs ou o carregamento do HTML.');
             // console.error('Elemento não encontrado:', {authSection, signupBtn, loginBtn});
         }
 
@@ -103,7 +130,10 @@
                 // console.log('Usuário deslogado.');
                 authMessage.textContent = 'Você saiu.';
                 displayAuthSection();
-                supabase.removeChannel(supabase.channel('chat_global'));
+                // Verificação para garantir que o canal existe antes de tentar remover
+                if (supabase.channel('chat_global')) {
+                    supabase.removeChannel(supabase.channel('chat_global'));
+                }
             } catch (error) {
                 // console.error('Erro ao deslogar:', error.message);
             }
@@ -213,7 +243,11 @@
         }
 
         function setupRealtimeChat() {
-            supabase.removeChannel(supabase.channel('chat_global'));
+            // Verifica se o canal já existe antes de tentar remover e recriar
+            const existingChannel = supabase.channel('chat_global');
+            if (existingChannel) {
+                supabase.removeChannel(existingChannel);
+            }
 
             const chatChannel = supabase.channel('chat_global');
 
@@ -240,16 +274,22 @@
         // --- Checar estado de autenticação na inicialização ---
         async function checkAuthOnLoad() {
             alert('Verificando sessão de autenticação...');
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (session) {
-                currentUserId = session.user.id;
-                await fetchAndDisplayPlayerInfo();
-                displayGameSection();
-                setupRealtimeChat();
-                alert('Sessão encontrada. Logado automaticamente.');
-            } else {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+                if (session) {
+                    currentUserId = session.user.id;
+                    await fetchAndDisplayPlayerInfo();
+                    displayGameSection();
+                    setupRealtimeChat();
+                    alert('Sessão encontrada. Logado automaticamente.');
+                } else {
+                    displayAuthSection();
+                    alert('Nenhuma sessão encontrada. Exibindo tela de autenticação.');
+                }
+            } catch (error) {
+                alert('Erro ao verificar sessão: ' + error.message);
                 displayAuthSection();
-                alert('Nenhuma sessão encontrada. Exibindo tela de autenticação.');
             }
         }
 

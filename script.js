@@ -20,6 +20,12 @@ const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
 const saveProfileBtn = document.getElementById('saveProfileBtn');
 const profileEditMessage = document.getElementById('profileEditMessage');
 
+// Novos elementos de jogo
+const gainXpBtn = document.getElementById('gainXpBtn');
+const gainGoldBtn = document.getElementById('gainGoldBtn');
+const gameMessage = document.getElementById('gameMessage');
+
+
 // Funções de Autenticação
 async function signIn() {
     const email = document.getElementById('email').value;
@@ -99,10 +105,13 @@ async function fetchAndDisplayPlayerInfo() {
         playerInfoDiv.innerHTML = `
             <p>Olá, ${player.name}!</p>
             <p>Nível: ${player.level}</p>
-            <p>XP: ${player.xp}</p>
+            <p>XP: ${player.xp} / ${player.level * 100} (próximo nível)</p>
             <p>Ouro: ${player.gold}</p>
             <p>Facção: ${player.faction}</p>
             <p>Rank: ${player.rank}</p>
+            <p>HP: ${player.health} | Mana: ${player.mana}</p>
+            <p>Ataque: ${player.attack} | Defesa: ${player.defense}</p>
+            <p>Poder de Combate: ${player.combat_power}</p>
             <button id="signOutBtn">Sair</button>
         `;
         playerInfoDiv.style.display = 'block';
@@ -155,6 +164,112 @@ saveProfileBtn.addEventListener('click', async () => {
         fetchAndDisplayPlayerInfo(); // Atualiza as informações exibidas
     }
 });
+
+// FUNÇÕES DE PROGRESSÃO DO JOGADOR
+async function gainXP(amount) {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+        gameMessage.textContent = "Você precisa estar logado para ganhar XP.";
+        return;
+    }
+
+    const { data: player, error: fetchError } = await supabaseClient
+        .from('players')
+        .select('xp, level, health, mana, attack, defense, combat_power') // Seleciona atributos para aumento no level-up
+        .eq('id', user.id)
+        .single();
+
+    if (fetchError) {
+        console.error('Erro ao buscar XP atual:', fetchError);
+        gameMessage.textContent = `Erro ao ganhar XP: ${fetchError.message}`;
+        return;
+    }
+
+    let currentXP = player.xp + amount;
+    let currentLevel = player.level;
+    let newHealth = player.health;
+    let newMana = player.mana;
+    let newAttack = player.attack;
+    let newDefense = player.defense;
+    let newCombatPower = player.combat_power;
+
+    const xpNeededForNextLevel = currentLevel * 100; // Exemplo: Nv 1 precisa de 100 XP, Nv 2 precisa de 200 XP, etc.
+
+    let leveledUp = false;
+    if (currentXP >= xpNeededForNextLevel) {
+        leveledUp = true;
+        currentLevel++;
+        currentXP -= xpNeededForNextLevel; // Reseta XP para o próximo nível
+
+        // Aumento de atributos ao subir de nível (exemplo)
+        newHealth += 10;
+        newMana += 5;
+        newAttack += 2;
+        newDefense += 1;
+        newCombatPower = (newHealth + newMana + newAttack + newDefense) * currentLevel / 10; // Recalcula poder de combate
+    }
+
+    const { error: updateError } = await supabaseClient
+        .from('players')
+        .update({
+            xp: currentXP,
+            level: currentLevel,
+            health: newHealth,
+            mana: newMana,
+            attack: newAttack,
+            defense: newDefense,
+            combat_power: newCombatPower
+        })
+        .eq('id', user.id);
+
+    if (updateError) {
+        console.error('Erro ao atualizar XP/Nível:', updateError);
+        gameMessage.textContent = `Erro ao atualizar XP/Nível: ${updateError.message}`;
+    } else {
+        if (leveledUp) {
+            gameMessage.textContent = `PARABÉNS! Você alcançou o Nível ${currentLevel} e seus atributos aumentaram!`;
+        } else {
+            gameMessage.textContent = `Você ganhou ${amount} XP!`;
+        }
+        fetchAndDisplayPlayerInfo(); // Atualiza a exibição do perfil
+    }
+}
+
+async function gainGold(amount) {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+        gameMessage.textContent = "Você precisa estar logado para ganhar Ouro.";
+        return;
+    }
+
+    const { data: player, error: fetchError } = await supabaseClient
+        .from('players')
+        .select('gold')
+        .eq('id', user.id)
+        .single();
+
+    if (fetchError) {
+        console.error('Erro ao buscar Ouro atual:', fetchError);
+        gameMessage.textContent = `Erro ao ganhar Ouro: ${fetchError.message}`;
+        return;
+    }
+
+    const newGold = player.gold + amount;
+
+    const { error: updateError } = await supabaseClient
+        .from('players')
+        .update({ gold: newGold })
+        .eq('id', user.id);
+
+    if (updateError) {
+        console.error('Erro ao atualizar Ouro:', updateError);
+        gameMessage.textContent = `Erro ao ganhar Ouro: ${updateError.message}`;
+    } else {
+        gameMessage.textContent = `Você ganhou ${amount} Ouro! Total: ${newGold}`;
+        fetchAndDisplayPlayerInfo(); // Atualiza a exibição do perfil
+    }
+}
+// FIM DAS FUNÇÕES DE PROGRESSÃO
 
 
 // Funções de Chat
@@ -247,6 +362,11 @@ document.addEventListener('DOMContentLoaded', () => {
             sendMessage();
         }
     });
+
+    // Novos listeners para os botões de jogo
+    if (gainXpBtn) gainXpBtn.addEventListener('click', () => gainXP(100));
+    if (gainGoldBtn) gainGoldBtn.addEventListener('click', () => gainGold(50));
+
 
     // Inicializa a UI com base no estado de autenticação
     supabaseClient.auth.onAuthStateChange((event, session) => {

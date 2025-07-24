@@ -22,6 +22,7 @@ const profileEditMessage = document.getElementById('profileEditMessage');
 
 // Elementos do menu do rodapé e balão de chat
 const footerMenu = document.getElementById('footerMenu');
+const homeBtn = document.getElementById('homeBtn'); // NOVO: Referência ao botão "Início"
 const guildBtn = document.getElementById('guildBtn');
 const pvpBtn = document.getElementById('pvpBtn');
 const afkBtn = document.getElementById('afkBtn');
@@ -39,7 +40,7 @@ const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
 // Referências ao modal de resultado de combate
 const combatResultModal = document.getElementById('combatResultModal');
 const combatResultTitle = document.getElementById('combatResultTitle');
-const combatResultMessage = document.getElementById('combatResultMessage'); // CORRIGIDO AQUI!
+const combatResultMessage = document.getElementById('combatResultMessage');
 const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
 
 
@@ -473,6 +474,12 @@ chatInput.addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
         sendMessage();
     }
+});
+
+// NOVO: Event Listener para o botão "Início"
+homeBtn.addEventListener('click', () => {
+    fetchAndDisplayPlayerInfo(); // Atualiza as infos e volta para playerInfoDiv
+    showFloatingMessage("Você está na página inicial!");
 });
 
 // NOVO: Event Listeners para botões do rodapé com mensagem "Em desenvolvimento"

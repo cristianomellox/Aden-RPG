@@ -39,7 +39,7 @@ const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
 // Referências ao modal de resultado de combate
 const combatResultModal = document.getElementById('combatResultModal');
 const combatResultTitle = document.getElementById('combatResultTitle');
-const combatResultMessage = document = document.getElementById('combatResultMessage'); // Corrigido aqui
+const combatResultMessage = document.getElementById('combatResultMessage'); // CORRIGIDO AQUI!
 const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
 
 
@@ -48,7 +48,8 @@ function showFloatingMessage(message, duration = 3000) {
     if (!floatingMessageDiv) return;
     floatingMessageDiv.textContent = message;
     floatingMessageDiv.style.display = 'block';
-    floatingMessageDiv.offsetWidth; // Força o reflow
+    // Força o reflow para garantir que a transição de opacidade ocorra
+    floatingMessageDiv.offsetWidth;
     floatingMessageDiv.style.opacity = '1';
     setTimeout(() => {
         floatingMessageDiv.style.opacity = '0';
@@ -97,8 +98,7 @@ function showDamagePopup(damageAmount, isCritical) {
 
 // EXPOR A FUNÇÃO DE POPUP DE DANO PARA USO PELO AFK SCRIPT
 window.showDamagePopup = showDamagePopup;
-// REMOVIDO: Função para Atualizar Barras de HP (updateHealthBar)
-// A função updateHealthBar e seus elementos HTML foram removidos.
+
 // --- Funções do Modal de Resultado de Combate ---
 // Esta função será chamada pelo afk_script.js
 window.showCombatResultModal = (title, message, onConfirmCallback) => {
@@ -106,7 +106,7 @@ window.showCombatResultModal = (title, message, onConfirmCallback) => {
     combatResultMessage.innerHTML = message;
     combatResultModal.style.display = 'flex';
 
-    confirmCombatResultBtn.onclick = null;
+    confirmCombatResultBtn.onclick = null; // Limpa qualquer listener anterior
     confirmCombatResultBtn.onclick = () => {
         combatResultModal.style.display = 'none';
         if (onConfirmCallback) {
@@ -159,22 +159,23 @@ async function signOut() {
 }
 
 // Funções de Perfil do Jogador
-async function fetchAndDisplayPlayerInfo() {
+async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // Adicionado parâmetro
     console.log("Buscando informações do jogador...");
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
         authContainer.style.display = 'none';
         const { data: player, error } = await supabaseClient
             .from('players')
-            .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active, daily_attempts_left, last_attempt_reset') // Adicionado daily_attempts_left e last_attempt_reset
+            .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active, daily_attempts_left, last_attempt_reset')
             .eq('id', user.id)
             .single();
+
         if (error || (player.rank === 'Aventureiro(a)' && player.name === user.email)) {
             console.log("Perfil não configurado ou erro ao buscar. Abrindo modal de edição.");
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
-            updateUIVisibility(false);
+            updateUIVisibility(false); // Oculta tudo, pois o modal é a prioridade
             footerMenu.style.display = 'none';
             chatBubble.style.display = 'none';
             return;
@@ -198,7 +199,14 @@ async function fetchAndDisplayPlayerInfo() {
         document.getElementById('signOutBtn').onclick = signOut;
 
         console.log("Informações do jogador carregadas. Exibindo UI padrão.");
-        updateUIVisibility(true, 'playerInfoDiv');
+        // Se preserveActiveContainer for true, não altere o container atual
+        if (!preserveActiveContainer) {
+            updateUIVisibility(true, 'playerInfoDiv'); // Volta para a tela de informações do jogador por padrão
+        } else {
+            // Se já há um container ativo (ex: AFK), apenas garante que playerInfoDiv está escondido
+            playerInfoDiv.style.display = 'none';
+        }
+        
         subscribeToChat();
         updateLastActive(user.id);
         if (typeof window.onPlayerInfoLoadedForAfk === 'function') {
@@ -242,7 +250,7 @@ saveProfileBtn.addEventListener('click', async () => {
         profileEditMessage.textContent = "Perfil salvo com sucesso!";
         console.log("Perfil salvo com sucesso.");
         profileEditModal.style.display = 'none';
-        fetchAndDisplayPlayerInfo();
+        fetchAndDisplayPlayerInfo(); // Redireciona para o perfil após salvar
     }
 });
 
@@ -424,15 +432,14 @@ async function loadInitialChatMessages() {
 }
 
 // Funções de UI
-function updateUIVisibility(isLoggedIn, activeContainerId = null) {
+window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
     if (isLoggedIn) {
         authContainer.style.display = 'none';
-        playerInfoDiv.style.display = 'block';
         footerMenu.style.display = 'flex';
         chatBubble.style.display = 'flex';
 
-        // Oculta todos os containers e mostra apenas o ativo (ou o playerInfoDiv por padrão)
-        const containers = [afkContainer, chatContainer]; // Adicione outros containers aqui conforme a necessidade
+        // Oculta todos os containers e mostra apenas o ativo
+        const containers = [playerInfoDiv, afkContainer, chatContainer]; // Adicione outros containers aqui conforme a necessidade
         containers.forEach(container => {
             if (container) {
                 container.style.display = 'none';
@@ -441,15 +448,11 @@ function updateUIVisibility(isLoggedIn, activeContainerId = null) {
 
         if (activeContainerId === 'chatContainer') {
             chatContainer.style.display = 'block';
-            afkContainer.style.display = 'none'; // Garante que o AFK esteja oculto
         } else if (activeContainerId === 'afkContainer') {
             afkContainer.style.display = 'block';
-            chatContainer.style.display = 'none'; // Garante que o Chat esteja oculto
         } else {
-            // Se nenhum container específico for solicitado, mostra as informações do jogador.
-            // Oculta chat e afk por padrão se não forem explicitamente solicitados.
-            chatContainer.style.display = 'none';
-            afkContainer.style.display = 'none';
+            // Por padrão, mostra playerInfoDiv se nenhum específico for solicitado
+            playerInfoDiv.style.display = 'block';
         }
 
     } else {
@@ -502,7 +505,7 @@ chatBubble.addEventListener('click', () => {
 supabaseClient.auth.onAuthStateChange((event, session) => {
     if (session) {
         console.log('Sessão encontrada:', session);
-        fetchAndDisplayPlayerInfo();
+        fetchAndDisplayPlayerInfo(); // Chama sem preserveActiveContainer para voltar ao playerInfoDiv
     } else {
         console.log('Nenhuma sessão.');
         updateUIVisibility(false);

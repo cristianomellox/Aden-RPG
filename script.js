@@ -31,27 +31,34 @@ const chatBubble = document.getElementById('chatBubble');
 
 // Referência ao container AFK
 const afkContainer = document.getElementById('afkContainer');
-
 // Referência ao novo elemento de mensagem flutuante (para menus)
 const floatingMessageDiv = document.getElementById('floatingMessage');
 // Referência ao novo elemento de popup de dano de combate
 const combatDamagePopupDiv = document.getElementById('combatDamagePopup');
+const popupAttackerNameSpan = document.getElementById('popupAttackerName');
+const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
 // Referências ao modal de resultado de combate
 const combatResultModal = document.getElementById('combatResultModal');
 const combatResultTitle = document.getElementById('combatResultTitle');
 const combatResultMessage = document.getElementById('combatResultMessage');
 const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
 
+// NOVOS: Elementos das barras de HP
+const playerHealthDisplay = document.getElementById('playerHealthDisplay');
+const playerHealthBar = document.getElementById('playerHealthBar');
+const playerCurrentHealthText = document.getElementById('playerCurrentHealthText');
+const monsterHealthDisplay = document.getElementById('monsterHealthDisplay');
+const monsterHealthBar = document.getElementById('monsterHealthBar');
+const monsterCurrentHealthText = document.getElementById('monsterCurrentHealthText');
+
 
 // --- Funções de Notificação Flutuante (para menus) ---
 function showFloatingMessage(message, duration = 3000) {
     if (!floatingMessageDiv) return;
-
     floatingMessageDiv.textContent = message;
     floatingMessageDiv.style.display = 'block';
     floatingMessageDiv.offsetWidth; // Força o reflow
     floatingMessageDiv.style.opacity = '1';
-
     setTimeout(() => {
         floatingMessageDiv.style.opacity = '0';
         setTimeout(() => {
@@ -61,10 +68,12 @@ function showFloatingMessage(message, duration = 3000) {
 }
 
 // --- Funções de Popup de Dano (para combate) ---
-function showDamagePopup(damageAmount, isCritical, isPlayerDamage = false) {
+function showDamagePopup(attackerName, damageAmount, isCritical) {
     if (!combatDamagePopupDiv) return;
 
-    combatDamagePopupDiv.textContent = `${damageAmount}`;
+    popupAttackerNameSpan.textContent = attackerName;
+    popupDamageAmountSpan.textContent = damageAmount;
+
     combatDamagePopupDiv.classList.remove('critical');
 
     if (isCritical) {
@@ -76,7 +85,6 @@ function showDamagePopup(damageAmount, isCritical, isPlayerDamage = false) {
     const offset = Math.random() * 40 - 20; // -20 a +20 pixels
     combatDamagePopupDiv.style.transform = `translate(-50%, -50%) translateX(${offset}px) translateY(${offset}px)`;
     combatDamagePopupDiv.style.opacity = '1';
-
     setTimeout(() => {
         combatDamagePopupDiv.style.opacity = '0';
         setTimeout(() => {
@@ -88,6 +96,32 @@ function showDamagePopup(damageAmount, isCritical, isPlayerDamage = false) {
 
 // EXPOR A FUNÇÃO DE POPUP DE DANO PARA USO PELO AFK SCRIPT
 window.showDamagePopup = showDamagePopup;
+
+// --- Função para Atualizar Barras de HP ---
+function updateHealthBar(elementId, currentHp, maxHp) {
+    const bar = document.getElementById(elementId);
+    const textSpan = document.getElementById(`${elementId}Text`);
+
+    if (!bar || !textSpan) {
+        console.warn(`Elementos da barra de HP para ${elementId} não encontrados.`);
+        return;
+    }
+
+    const percentage = (currentHp / maxHp) * 100;
+    bar.style.width = `${Math.max(0, percentage)}%`; // Garante que não vá abaixo de 0%
+    bar.textContent = `${currentHp}/${maxHp}`; // Exibe HP no texto
+
+    // Atualiza o texto fora da barra também
+    if (elementId === 'playerHealthBar') {
+        playerCurrentHealthText.textContent = `${currentHp}/${maxHp}`;
+    } else if (elementId === 'monsterHealthBar') {
+        monsterCurrentHealthText.textContent = `${currentHp}/${maxHp}`;
+    }
+}
+
+// EXPOR A FUNÇÃO DE ATUALIZAÇÃO DE HP PARA USO PELO AFK SCRIPT
+window.updateHealthBar = updateHealthBar;
+
 
 // --- Funções do Modal de Resultado de Combate ---
 // Esta função será chamada pelo afk_script.js
@@ -153,16 +187,13 @@ async function signOut() {
 async function fetchAndDisplayPlayerInfo() {
     console.log("Buscando informações do jogador...");
     const { data: { user } } = await supabaseClient.auth.getUser();
-
     if (user) {
         authContainer.style.display = 'none';
-
         const { data: player, error } = await supabaseClient
             .from('players')
             .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active')
             .eq('id', user.id)
             .single();
-
         if (error || (player.rank === 'Aventureiro(a)' && player.name === user.email)) {
             console.log("Perfil não configurado ou erro ao buscar. Abrindo modal de edição.");
             profileEditModal.style.display = 'flex';
@@ -237,7 +268,6 @@ saveProfileBtn.addEventListener('click', async () => {
         fetchAndDisplayPlayerInfo(); // Atualiza as informações exibidas e a UI
     }
 });
-
 // FUNÇÕES DE PROGRESSÃO DO JOGADOR (ainda necessárias para as recompensas AFK)
 window.gainXP = async (userId, amount) => {
     console.log(`Tentando ganhar ${amount} XP para o usuário ${userId}`);
@@ -246,7 +276,6 @@ window.gainXP = async (userId, amount) => {
         .select('xp, level, health, mana, attack, defense, combat_power')
         .eq('id', userId)
         .single();
-
     if (fetchError) {
         console.error('Erro ao buscar XP atual:', fetchError);
         return { success: false, message: `Erro ao buscar XP: ${fetchError.message}` };
@@ -260,7 +289,6 @@ window.gainXP = async (userId, amount) => {
     let newDefense = player.defense;
     let newCombatPower = player.combat_power;
     let leveledUp = false;
-
     const xpNeededForNextLevel = currentLevel * 100;
 
     if (currentXP >= xpNeededForNextLevel) {
@@ -288,7 +316,6 @@ window.gainXP = async (userId, amount) => {
             combat_power: newCombatPower
         })
         .eq('id', userId);
-
     if (updateError) {
         console.error('Erro ao atualizar XP/Nível:', updateError);
         return { success: false, message: `Erro ao atualizar XP/Nível: ${updateError.message}` };
@@ -305,19 +332,16 @@ window.gainGold = async (userId, amount) => {
         .select('gold')
         .eq('id', userId)
         .single();
-
     if (fetchError) {
         console.error('Erro ao buscar Ouro atual:', fetchError);
         return { success: false, message: `Erro ao buscar Ouro: ${fetchError.message}` };
     }
 
     const newGold = player.gold + amount;
-
     const { error: updateError } = await supabaseClient
         .from('players')
         .update({ gold: newGold })
         .eq('id', userId);
-
     if (updateError) {
         console.error('Erro ao atualizar Ouro:', updateError);
         return { success: false, message: `Erro ao atualizar Ouro: ${updateError.message}` };
@@ -345,7 +369,6 @@ async function sendMessage() {
         .select('name, rank')
         .eq('id', user.id)
         .single();
-
     if (playerError) {
         console.error('Erro ao buscar nome/rank do jogador para o chat:', playerError);
         showFloatingMessage('Erro ao verificar seu perfil para o chat.');
@@ -353,10 +376,10 @@ async function sendMessage() {
     }
 
     // Verificação de Rank para chat global
-    if (player.rank !== 'Monarca' && player.rank !== 'Nobre') {
-        showFloatingMessage('Apenas Monarcas e Nobres podem escrever no chat global.');
-        return;
-    }
+    // if (player.rank !== 'Monarca' && player.rank !== 'Nobre') {
+    //     showFloatingMessage('Apenas Monarcas e Nobres podem escrever no chat global.');
+    //     return;
+    // }
 
     // Limite de caracteres para mensagens
     if (messageText.length > 200) {
@@ -365,7 +388,6 @@ async function sendMessage() {
     }
 
     const playerName = player ? player.name : 'Desconhecido';
-
     const { error } = await supabaseClient
         .from('chat_messages')
         .insert({ user_id: user.id, username: playerName, message: messageText });
@@ -393,14 +415,12 @@ function displayChatMessage(message) {
 function subscribeToChat() {
     console.log("Inscrito no canal de chat.");
     supabaseClient.removeChannel('chat_messages_channel');
-
     supabaseClient
         .channel('chat_messages_channel')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
             loadInitialChatMessages();
         })
         .subscribe();
-
     loadInitialChatMessages();
 }
 
@@ -410,7 +430,6 @@ async function loadInitialChatMessages() {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
-
     if (error) {
         console.error('Erro ao carregar mensagens iniciais:', error);
         return;
@@ -419,19 +438,16 @@ async function loadInitialChatMessages() {
     messages.reverse().forEach(displayChatMessage);
 }
 
-
 // Função para atualizar last_active do jogador
 async function updateLastActive(userId) {
     const { error } = await supabaseClient
         .from('players')
         .update({ last_active: new Date().toISOString() })
         .eq('id', userId);
-
     if (error) {
         console.error('Erro ao atualizar last_active:', error);
     }
 }
-
 
 // --- Funções de Visibilidade da UI ---
 function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
@@ -440,12 +456,14 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     afkContainer.style.display = 'none';
     profileEditModal.style.display = 'none';
     combatResultModal.style.display = 'none'; // Garante que o modal de combate esteja oculto
+    playerHealthDisplay.style.display = 'none'; // Esconde barras de HP
+    monsterHealthDisplay.style.display = 'none'; // Esconde barras de HP
+
 
     if (showGameUI) {
         authContainer.style.display = 'none';
         footerMenu.style.display = 'flex';
         chatBubble.style.display = 'flex';
-
         const activeDiv = document.getElementById(activeContainerId);
         if (activeDiv) {
             activeDiv.style.display = 'block';
@@ -463,7 +481,6 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     }
     authMessage.textContent = '';
 }
-
 
 // --- Funções dos Botões do Menu ---
 function showGuildMenu() {
@@ -483,49 +500,4 @@ function showAfkMenu() {
     }
 }
 
-function showMiningMenu() {
-    updateUIVisibility(true, 'playerInfoDiv');
-    showFloatingMessage("Menu de Mineração (Em desenvolvimento)");
-}
-
-function showCastlesMenu() {
-    updateUIVisibility(true, 'playerInfoDiv');
-    showFloatingMessage("Menu de Castelos (Em desenvolvimento)");
-}
-
-
-// Listeners de Eventos
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('signInBtn').addEventListener('click', signIn);
-    document.getElementById('signUpBtn').addEventListener('click', signUp);
-    document.getElementById('sendChatBtn').addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
-
-    if (guildBtn) guildBtn.addEventListener('click', showGuildMenu);
-    if (pvpBtn) pvpBtn.addEventListener('click', showPvPMenu);
-    if (afkBtn) afkBtn.addEventListener('click', showAfkMenu);
-    if (miningBtn) miningBtn.addEventListener('click', showMiningMenu);
-    if (castlesBtn) castlesBtn.addEventListener('click', showCastlesMenu);
-
-    if (chatBubble) chatBubble.addEventListener('click', () => {
-        if (chatContainer.style.display === 'none') {
-            updateUIVisibility(true, 'chatContainer');
-            loadInitialChatMessages();
-            chatInput.focus();
-        } else {
-            updateUIVisibility(true, 'playerInfoDiv');
-        }
-    });
-
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            fetchAndDisplayPlayerInfo();
-        } else {
-            updateUIVisibility(false);
-        }
-    });
-});
+function sh

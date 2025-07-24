@@ -22,7 +22,7 @@ const profileEditMessage = document.getElementById('profileEditMessage');
 
 // Elementos do menu do rodapé e balão de chat
 const footerMenu = document.getElementById('footerMenu');
-const homeBtn = document.getElementById('homeBtn'); // NOVO: Referência ao botão "Início"
+const homeBtn = document.getElementById('homeBtn'); // Referência ao botão "Início"
 const guildBtn = document.getElementById('guildBtn');
 const pvpBtn = document.getElementById('pvpBtn');
 const afkBtn = document.getElementById('afkBtn');
@@ -176,13 +176,13 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // A
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
-            updateUIVisibility(false); // Oculta tudo, pois o modal é a prioridade
+            // updateUIVisibility(false); // Não oculta tudo se o modal é a prioridade
             footerMenu.style.display = 'none';
             chatBubble.style.display = 'none';
             return;
         }
 
-        // NOVO: Calcula o XP necessário para o próximo nível com base na nova curva
+        // Calcula o XP necessário para o próximo nível com base na nova curva
         const xpNeededForNextLevel = calculateXPForNextLevel(player.level);
 
         playerInfoDiv.innerHTML = `
@@ -255,10 +255,10 @@ saveProfileBtn.addEventListener('click', async () => {
     }
 });
 
-// NOVO: Constante para o nível máximo do jogador
+// Constante para o nível máximo do jogador
 const MAX_PLAYER_LEVEL = 100;
 
-// NOVO: Função para calcular o XP necessário para o próximo nível
+// Função para calcular o XP necessário para o próximo nível
 // A curva é exponencial para tornar cada vez mais difícil
 function calculateXPForNextLevel(level) {
     if (level <= 0) return 100; // Caso base para nível 0 ou erro
@@ -287,21 +287,21 @@ window.gainXP = async (userId, amount) => {
     let newCombatPower = player.combat_power;
     let leveledUp = false;
 
-    // NOVO: Verifica se o jogador já atingiu o nível máximo
+    // Verifica se o jogador já atingiu o nível máximo
     if (currentLevel >= MAX_PLAYER_LEVEL) {
         console.log(`Jogador ${userId} já está no nível máximo (${MAX_PLAYER_LEVEL}). Não receberá mais XP.`);
         return { success: false, message: `Você já atingiu o nível máximo (${MAX_PLAYER_LEVEL})!` };
     }
 
     currentXP += amount;
-    const xpNeededForNextLevel = calculateXPForNextLevel(currentLevel); // NOVO: Usa a nova função de cálculo
+    const xpNeededForNextLevel = calculateXPForNextLevel(currentLevel); // Usa a nova função de cálculo
 
     if (currentXP >= xpNeededForNextLevel) {
         leveledUp = true;
         currentLevel++;
         currentXP -= xpNeededForNextLevel; // Reseta o XP após subir de nível
 
-        // NOVO: Garante que o XP não continue acumulando se atingir o nível máximo logo após subir de nível
+        // Garante que o XP não continue acumulando se atingir o nível máximo logo após subir de nível
         if (currentLevel >= MAX_PLAYER_LEVEL) {
             currentLevel = MAX_PLAYER_LEVEL;
             currentXP = 0; // Zera o XP ao atingir o nível máximo para evitar overflow ou confusão.
@@ -439,20 +439,23 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
         footerMenu.style.display = 'flex';
         chatBubble.style.display = 'flex';
 
-        // Oculta todos os containers e mostra apenas o ativo
-        const containers = [playerInfoDiv, afkContainer, chatContainer]; // Adicione outros containers aqui conforme a necessidade
+        // Oculta todos os containers
+        const containers = [playerInfoDiv, afkContainer, chatContainer];
         containers.forEach(container => {
             if (container) {
                 container.style.display = 'none';
             }
         });
 
+        // Mostra o container ativo
         if (activeContainerId === 'chatContainer') {
             chatContainer.style.display = 'block';
         } else if (activeContainerId === 'afkContainer') {
             afkContainer.style.display = 'block';
+        } else if (activeContainerId === 'playerInfoDiv') { // Adicionado para explicitar playerInfoDiv
+            playerInfoDiv.style.display = 'block';
         } else {
-            // Por padrão, mostra playerInfoDiv se nenhum específico for solicitado
+            // Caso padrão se nenhum for especificado, volta para playerInfoDiv
             playerInfoDiv.style.display = 'block';
         }
 
@@ -476,13 +479,14 @@ chatInput.addEventListener('keypress', function(event) {
     }
 });
 
-// NOVO: Event Listener para o botão "Início"
+// Event Listener para o botão "Início"
 homeBtn.addEventListener('click', () => {
-    fetchAndDisplayPlayerInfo(); // Atualiza as infos e volta para playerInfoDiv
+    updateUIVisibility(true, 'playerInfoDiv'); // Força a exibição da div de informações do jogador
+    fetchAndDisplayPlayerInfo(true); // Atualiza as infos, mas sem mudar a visibilidade do container
     showFloatingMessage("Você está na página inicial!");
 });
 
-// NOVO: Event Listeners para botões do rodapé com mensagem "Em desenvolvimento"
+// Event Listeners para botões do rodapé com mensagem "Em desenvolvimento"
 guildBtn.addEventListener('click', () => {
     showFloatingMessage("Guilda: Em desenvolvimento!");
 });

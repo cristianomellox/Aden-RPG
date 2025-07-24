@@ -10,16 +10,6 @@ const startAdventureBtn = document.getElementById('startAdventureBtn');
 const afkMessage = document.getElementById('afkMessage'); // Específico para mensagens AFK
 const combatLogDiv = document.getElementById('combatLog'); // Será oculto por padrão agora
 
-// NOVOS: Elementos das barras de HP
-const playerHpBarContainer = document.getElementById('playerHpBarContainer');
-const playerHpBarFill = document.getElementById('playerHpBarFill');
-const playerHpBarValue = document.getElementById('playerHpBarValue');
-const monsterHpBarContainer = document.getElementById('monsterHpBarContainer');
-const monsterHpBarLabel = document.getElementById('monsterHpBarLabel');
-const monsterHpBarFill = document.getElementById('monsterHpBarFill');
-const monsterHpBarValue = document.getElementById('monsterHpBarValue');
-
-
 // Variável para armazenar os dados do jogador mais recentes para o AFK
 let currentPlayerData = null;
 
@@ -53,30 +43,6 @@ function clearCombatLog() {
     combatLogDiv.style.display = 'none'; // Garante que o log esteja oculto
 }
 
-// NOVO: Função para atualizar as barras de HP
-function updateHpBars(playerCurrent, playerMax, monsterName, monsterCurrent, monsterMax) {
-    // Exibe os containers das barras
-    playerHpBarContainer.style.display = 'flex';
-    monsterHpBarContainer.style.display = 'flex';
-
-    // Atualiza a barra do jogador
-    let playerPercent = (playerCurrent / playerMax) * 100;
-    playerHpBarFill.style.width = `${Math.max(0, playerPercent)}%`; // Garante que não vá abaixo de 0
-    playerHpBarValue.textContent = `${Math.max(0, playerCurrent)} / ${playerMax}`;
-
-    // Atualiza a barra do monstro
-    monsterHpBarLabel.textContent = `${monsterName} HP`;
-    let monsterPercent = (monsterCurrent / monsterMax) * 100;
-    monsterHpBarFill.style.width = `${Math.max(0, monsterPercent)}%`; // Garante que não vá abaixo de 0
-    monsterHpBarValue.textContent = `${Math.max(0, monsterCurrent)} / ${monsterMax}`;
-}
-
-// NOVO: Função para esconder as barras de HP
-function hideHpBars() {
-    playerHpBarContainer.style.display = 'none';
-    monsterHpBarContainer.style.display = 'none';
-}
-
 
 // Função chamada pelo script principal (script.js) quando os dados do jogador são carregados
 window.onPlayerInfoLoadedForAfk = (player) => {
@@ -93,7 +59,6 @@ window.initAfkDisplay = () => {
     console.log("AFK Script: initAfkDisplay chamado.");
     afkMessage.textContent = '';
     clearCombatLog();
-    hideHpBars(); // Esconde as barras de HP ao entrar na tela AFK
     if (currentPlayerData) {
         calculateAndDisplayAfkRewards();
     } else {
@@ -166,11 +131,10 @@ async function calculateAndDisplayAfkRewards() {
 }
 
 async function collectAfkRewards() {
-    console.log("AFK Script: Coletando recompensas... ");
+    console.log("AFK Script: Coletando recompensas AFK.");
     afkMessage.textContent = 'Coletando recompensas...';
     collectAfkRewardsBtn.disabled = true;
     clearCombatLog();
-    hideHpBars(); // Esconde as barras de HP ao coletar
 
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
@@ -275,9 +239,7 @@ async function startAdventure() {
     logCombat(`Atributos do Monstro: HP ${monster.hp}, ATK ${monster.attack}, DEF ${monster.defense}`);
 
     let playerCurrentHP = player.health;
-    const playerMaxHP = player.health; // Para a barra de HP
     let monsterCurrentHP = monster.hp;
-    const monsterMaxHP = monster.hp; // Para a barra de HP
     let turn = 0;
     const maxTurns = 50; // Limite para evitar loops infinitos
     const criticalChance = 0.2; // 20% de chance de crítico
@@ -285,9 +247,6 @@ async function startAdventure() {
     const turnDelay = 1500; // 1.5 segundos entre cada ação de ataque/dano
 
     afkMessage.textContent = `Combate contra ${monster.name} no estágio ${currentStage} em andamento...`;
-
-    // Inicializa as barras de HP
-    updateHpBars(playerCurrentHP, playerMaxHP, monster.name, monsterCurrentHP, monsterMaxHP);
 
     while (playerCurrentHP > 0 && monsterCurrentHP > 0 && turn < maxTurns) {
         turn++;
@@ -302,12 +261,11 @@ async function startAdventure() {
         } else {
             logCombat(`${player.name} ataca ${monster.name}!`);
         }
-        window.showDamagePopup(player.name, playerDamage, isPlayerCritical); // Mostra popup de dano
+        window.showDamagePopup(playerDamage, isPlayerCritical); // Mostra popup de dano
         monsterCurrentHP -= playerDamage;
-        updateHpBars(playerCurrentHP, playerMaxHP, monster.name, monsterCurrentHP, monsterMaxHP); // Atualiza HP do monstro
         logCombat(`- ${player.name} causa ${playerDamage} de dano a ${monster.name}. HP restante: ${Math.max(0, monsterCurrentHP)}`);
         
-        await delay(turnDelay); // Espera para o popup e a barra serem visíveis
+        await delay(turnDelay); // Espera para o popup ser visível
 
         if (monsterCurrentHP <= 0) {
             logCombat(`${monster.name} foi derrotado!`);
@@ -323,12 +281,11 @@ async function startAdventure() {
         } else {
             logCombat(`${monster.name} ataca ${player.name}!`);
         }
-        window.showDamagePopup(monster.name, monsterDamage, isMonsterCritical); // Mostra popup de dano
+        window.showDamagePopup(monsterDamage, isMonsterCritical); // Mostra popup de dano
         playerCurrentHP -= monsterDamage;
-        updateHpBars(playerCurrentHP, playerMaxHP, monster.name, monsterCurrentHP, monsterMaxHP); // Atualiza HP do jogador
         logCombat(`- ${monster.name} causa ${monsterDamage} de dano a ${player.name}. HP restante: ${Math.max(0, playerCurrentHP)}`);
 
-        await delay(turnDelay); // Espera para o popup e a barra serem visíveis
+        await delay(turnDelay); // Espera para o popup ser visível
 
         if (playerCurrentHP <= 0) {
             logCombat(`${player.name} foi derrotado...`);
@@ -339,7 +296,6 @@ async function startAdventure() {
     // Limpa a mensagem AFK e o log de combate visível
     afkMessage.textContent = '';
     clearCombatLog();
-    hideHpBars(); // Esconde as barras de HP ao final do combate
 
     let resultTitle = "";
     let resultMessage = "";
@@ -351,7 +307,7 @@ async function startAdventure() {
     if (playerCurrentHP > 0) {
         isVictory = true;
         resultTitle = "VITÓRIA!";
-        resultMessage = `Você derrotou ${monster.name} no Estágio ${currentStage}!`;
+        resultMessage = `Você derrotou ${monster.name} no Estágio ${currentStage}!<br>Preparando-se para o Estágio ${currentStage + 1}.`;
         
         xpReward = monster.xpReward;
         goldReward = monster.goldReward;

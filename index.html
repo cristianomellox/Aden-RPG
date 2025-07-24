@@ -206,11 +206,10 @@
         </div>
 
     <div id="gameContainer" style="display:none;">
-        <h2>Área do Jogo</h2>
-        <p>Bem-vindo ao mundo de Aden!</p>
-
-        <div style="margin-top: 20px; padding: 15px; border: 1px dashed #ccc; border-radius: 5px;">
-            <h3>Ações Rápidas de Teste:</h3>
+        <h2>Praça Central de Aden</h2>
+        <p>Um centro vibrante onde aventureiros se reúnem. Explore as lojas, encontre missões e interaja com outros jogadores.</p>
+        <div style="margin-top: 30px; padding: 15px; border: 1px dashed #ccc; border-radius: 5px; background-color: #fcfcfc;">
+            <h3>🛠️ Ferramentas de Desenvolvimento:</h3>
             <button id="gainXpBtn">Ganhar 100 XP</button>
             <button id="gainGoldBtn">Ganhar 50 Ouro</button>
             <p id="gameMessage"></p>
@@ -219,12 +218,13 @@
 
     <div id="afkContainer" style="display:none;">
         <h2>Aventura AFK</h2>
-        <p>Estágio Atual: <span id="afkStage">N/A</span></p>
-        <p>Tempo AFK: <span id="afkTime">0 segundos</span></p>
+        <p>Seu aventureiro está explorando o mundo mesmo quando você não está jogando. Colete as recompensas da sua jornada!</p>
+        <p>Estágio Atual de PvE: <span id="afkStage">N/A</span></p>
+        <p>Tempo AFK Acumulado: <span id="afkTime">0 segundos</span></p>
         <p>XP Estimado: <span id="afkXPGain">0</span></p>
         <p>Ouro Estimado: <span id="afkGoldGain">0</span></p>
         <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
-        <button id="startAdventureBtn">Iniciar Aventura</button>
+        <button id="startAdventureBtn">Iniciar Nova Aventura (Avançar Estágio PvE)</button>
         <p id="afkMessage"></p>
     </div>
     <div id="chatContainer" style="display:none;">

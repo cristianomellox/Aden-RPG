@@ -32,28 +32,79 @@ const chatBubble = document.getElementById('chatBubble');
 // Referência ao container AFK
 const afkContainer = document.getElementById('afkContainer');
 
-// Referência ao novo elemento de mensagem flutuante
+// Referência ao novo elemento de mensagem flutuante (para menus)
 const floatingMessageDiv = document.getElementById('floatingMessage');
+// Referência ao novo elemento de popup de dano de combate
+const combatDamagePopupDiv = document.getElementById('combatDamagePopup');
+// Referências ao modal de resultado de combate
+const combatResultModal = document.getElementById('combatResultModal');
+const combatResultTitle = document.getElementById('combatResultTitle');
+const combatResultMessage = document.getElementById('combatResultMessage');
+const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
 
 
-// --- Funções de Notificação Flutuante ---
+// --- Funções de Notificação Flutuante (para menus) ---
 function showFloatingMessage(message, duration = 3000) {
     if (!floatingMessageDiv) return;
 
     floatingMessageDiv.textContent = message;
     floatingMessageDiv.style.display = 'block';
-    // Força o reflow para a transição funcionar se for exibido de 'none'
-    floatingMessageDiv.offsetWidth; 
+    floatingMessageDiv.offsetWidth; // Força o reflow
     floatingMessageDiv.style.opacity = '1';
 
     setTimeout(() => {
         floatingMessageDiv.style.opacity = '0';
-        // Esconde completamente após a transição
         setTimeout(() => {
             floatingMessageDiv.style.display = 'none';
         }, 500); // Duração da transição CSS
     }, duration);
 }
+
+// --- Funções de Popup de Dano (para combate) ---
+function showDamagePopup(damageAmount, isCritical, isPlayerDamage = false) {
+    if (!combatDamagePopupDiv) return;
+
+    combatDamagePopupDiv.textContent = `${damageAmount}`;
+    combatDamagePopupDiv.classList.remove('critical');
+
+    if (isCritical) {
+        combatDamagePopupDiv.classList.add('critical');
+    }
+
+    combatDamagePopupDiv.style.display = 'block';
+    // Posição aleatória para múltiplos popups serem visíveis
+    const offset = Math.random() * 40 - 20; // -20 a +20 pixels
+    combatDamagePopupDiv.style.transform = `translate(-50%, -50%) translateX(${offset}px) translateY(${offset}px)`;
+    combatDamagePopupDiv.style.opacity = '1';
+
+    setTimeout(() => {
+        combatDamagePopupDiv.style.opacity = '0';
+        setTimeout(() => {
+            combatDamagePopupDiv.style.display = 'none';
+            combatDamagePopupDiv.style.transform = `translate(-50%, -50%)`; // Reseta a posição
+        }, 100); // Transição CSS de opacidade
+    }, 1000); // Duração que o popup fica visível
+}
+
+// EXPOR A FUNÇÃO DE POPUP DE DANO PARA USO PELO AFK SCRIPT
+window.showDamagePopup = showDamagePopup;
+
+// --- Funções do Modal de Resultado de Combate ---
+// Esta função será chamada pelo afk_script.js
+window.showCombatResultModal = (title, message, onConfirmCallback) => {
+    combatResultTitle.textContent = title;
+    combatResultMessage.innerHTML = message; // Use innerHTML para permitir quebras de linha ou formatação
+    combatResultModal.style.display = 'flex'; // Exibe o modal
+
+    // Limpa listeners antigos para evitar chamadas duplicadas
+    confirmCombatResultBtn.onclick = null;
+    confirmCombatResultBtn.onclick = () => {
+        combatResultModal.style.display = 'none'; // Esconde o modal ao confirmar
+        if (onConfirmCallback) {
+            onConfirmCallback(); // Chama o callback para aplicar recompensas e atualizar a UI
+        }
+    };
+};
 
 
 // Funções de Autenticação
@@ -69,7 +120,6 @@ async function signIn() {
     } else {
         authMessage.textContent = ''; // Limpa a mensagem de erro
         console.log("Login bem-sucedido.");
-        // fetchAndDisplayPlayerInfo() e subscribeToChat() serão chamados via onAuthStateChange
     }
 }
 
@@ -95,7 +145,6 @@ async function signOut() {
         console.error('Erro ao sair:', error.message);
     } else {
         console.log("Sessão encerrada.");
-        // A UI será atualizada via o listener onAuthStateChange
         chatBox.innerHTML = ''; // Limpa o chat
     }
 }
@@ -343,7 +392,6 @@ function displayChatMessage(message) {
 
 function subscribeToChat() {
     console.log("Inscrito no canal de chat.");
-    // Remove qualquer inscrição anterior para evitar duplicação
     supabaseClient.removeChannel('chat_messages_channel');
 
     supabaseClient
@@ -353,7 +401,7 @@ function subscribeToChat() {
         })
         .subscribe();
 
-    loadInitialChatMessages(); // Carrega mensagens iniciais ao se inscrever
+    loadInitialChatMessages();
 }
 
 async function loadInitialChatMessages() {
@@ -385,68 +433,63 @@ async function updateLastActive(userId) {
 }
 
 
-// --- Funções de Visibilidade da UI (Refatorada) ---
+// --- Funções de Visibilidade da UI ---
 function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
-    // Primeiro, ocultamos todos os containers de jogo
     playerInfoDiv.style.display = 'none';
     chatContainer.style.display = 'none';
     afkContainer.style.display = 'none';
-    profileEditModal.style.display = 'none'; // Garante que o modal esteja oculto por padrão
+    profileEditModal.style.display = 'none';
+    combatResultModal.style.display = 'none'; // Garante que o modal de combate esteja oculto
 
     if (showGameUI) {
         authContainer.style.display = 'none';
-        footerMenu.style.display = 'flex'; // Mostra o menu do rodapé
-        chatBubble.style.display = 'flex'; // Mostra o balão de chat
+        footerMenu.style.display = 'flex';
+        chatBubble.style.display = 'flex';
 
-        // Em seguida, mostramos o container ativo
         const activeDiv = document.getElementById(activeContainerId);
         if (activeDiv) {
             activeDiv.style.display = 'block';
             console.log(`Exibindo container: ${activeContainerId}`);
         } else {
-            // Fallback: se o ID for inválido, mostra o playerInfoDiv por segurança
             playerInfoDiv.style.display = 'block';
             console.warn(`Container ${activeContainerId} não encontrado. Exibindo playerInfoDiv.`);
         }
     } else {
-        // Se não estamos no jogo (tela de login)
-        authContainer.style.display = 'block'; // Mostra login
+        authContainer.style.display = 'block';
         playerInfoDiv.style.display = 'none';
-        footerMenu.style.display = 'none'; // Esconde o menu do rodapé
-        chatBubble.style.display = 'none'; // Esconde o balão de chat
+        footerMenu.style.display = 'none';
+        chatBubble.style.display = 'none';
         console.log("Exibindo tela de login.");
     }
-    authMessage.textContent = ''; // Limpa mensagens de autenticação ao mudar de estado
-    // Não limpa afkMessage aqui, pois ela é específica do afkContainer
+    authMessage.textContent = '';
 }
 
 
-// --- Funções dos Botões do Menu (Agora usam showFloatingMessage) ---
+// --- Funções dos Botões do Menu ---
 function showGuildMenu() {
-    updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
+    updateUIVisibility(true, 'playerInfoDiv');
     showFloatingMessage("Menu da Guilda (Em desenvolvimento)");
 }
 
 function showPvPMenu() {
-    updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
+    updateUIVisibility(true, 'playerInfoDiv');
     showFloatingMessage("Menu de PvP (Em desenvolvimento)");
 }
 
 function showAfkMenu() {
-    updateUIVisibility(true, 'afkContainer'); // Mostra o container AFK
-    // Chama a função no script AFK para iniciar o cálculo
+    updateUIVisibility(true, 'afkContainer');
     if (typeof window.initAfkDisplay === 'function') {
         window.initAfkDisplay();
     }
 }
 
 function showMiningMenu() {
-    updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
+    updateUIVisibility(true, 'playerInfoDiv');
     showFloatingMessage("Menu de Mineração (Em desenvolvimento)");
 }
 
 function showCastlesMenu() {
-    updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
+    updateUIVisibility(true, 'playerInfoDiv');
     showFloatingMessage("Menu de Castelos (Em desenvolvimento)");
 }
 
@@ -462,14 +505,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Listeners para os botões do rodapé
     if (guildBtn) guildBtn.addEventListener('click', showGuildMenu);
     if (pvpBtn) pvpBtn.addEventListener('click', showPvPMenu);
     if (afkBtn) afkBtn.addEventListener('click', showAfkMenu);
     if (miningBtn) miningBtn.addEventListener('click', showMiningMenu);
     if (castlesBtn) castlesBtn.addEventListener('click', showCastlesMenu);
 
-    // Listener para o balão de chat
     if (chatBubble) chatBubble.addEventListener('click', () => {
         if (chatContainer.style.display === 'none') {
             updateUIVisibility(true, 'chatContainer');
@@ -480,7 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Inicializa a UI com base no estado de autenticação
     supabaseClient.auth.onAuthStateChange((event, session) => {
         if (session) {
             fetchAndDisplayPlayerInfo();

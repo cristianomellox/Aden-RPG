@@ -16,7 +16,8 @@ let currentPlayerData = null;
 window.onPlayerInfoLoadedForAfk = (player) => {
     currentPlayerData = player;
     // Se o container AFK já estiver visível, atualiza as recompensas
-    if (afkContainer.style.display === 'block') {
+    const afkContainer = document.getElementById('afkContainer');
+    if (afkContainer && afkContainer.style.display === 'block') {
         calculateAndDisplayAfkRewards();
     }
 };
@@ -52,14 +53,14 @@ async function calculateAndDisplayAfkRewards() {
     const afkDurationSeconds = Math.floor(afkDurationMs / 1000);
     const afkDurationMinutes = Math.floor(afkDurationSeconds / 60);
 
-    // Limita o tempo AFK máximo para evitar recompensas exageradas (ex: 8 horas = 480 minutos)
-    const maxAfkMinutes = 8 * 60;
+    // ***** NOVO: Limita o tempo AFK máximo para 4 horas (240 minutos) *****
+    const maxAfkMinutes = 4 * 60; // 4 horas * 60 minutos/hora = 240 minutos
     const effectiveAfkMinutes = Math.min(afkDurationMinutes, maxAfkMinutes);
 
-    // Formatação do tempo AFK
-    const hours = Math.floor(effectiveAfkMinutes / 60);
-    const minutes = effectiveAfkMinutes % 60;
-    const seconds = afkDurationSeconds % 60; // Mantém segundos exatos para exibição
+    // Formatação do tempo AFK para exibição
+    const hours = Math.floor(afkDurationMinutes / 60); // Usa afkDurationMinutes para exibir o tempo total, não o efetivo
+    const minutes = afkDurationMinutes % 60;
+    const seconds = afkDurationSeconds % 60;
 
     let timeString = '';
     if (hours > 0) timeString += `${hours}h `;
@@ -78,7 +79,12 @@ async function calculateAndDisplayAfkRewards() {
     afkStageSpan.textContent = currentPlayerData.current_afk_stage;
     afkXPGainSpan.textContent = estimatedXPGain;
     afkGoldGainSpan.textContent = estimatedGoldGain;
-    afkMessage.textContent = ''; // Limpa mensagem de cálculo
+
+    if (afkDurationMinutes >= maxAfkMinutes) {
+        afkMessage.textContent = `Você atingiu o limite de 4 horas de coleta AFK! Colete suas recompensas.`;
+    } else {
+        afkMessage.textContent = ''; // Limpa mensagem de cálculo
+    }
 
     collectAfkRewardsBtn.disabled = (estimatedXPGain === 0 && estimatedGoldGain === 0); // Habilita/desabilita
     // Armazena os ganhos estimados para a coleta
@@ -185,7 +191,7 @@ async function collectAfkRewards() {
 }
 
 async function startAdventure() {
-    afkMessage.textContent = "Aventura iniciada! Você está agora em um novo estágio AFK.";
+    afkMessage.textContent = "Iniciando nova aventura de PvE...";
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         afkMessage.textContent = "Erro: Usuário não logado.";
@@ -219,7 +225,7 @@ async function startAdventure() {
         console.error('Erro ao atualizar estágio AFK:', updateError);
         afkMessage.textContent = `Erro ao iniciar aventura: ${updateError.message}`;
     } else {
-        afkMessage.textContent = `Aventura iniciada! Seu estágio AFK agora é ${newStage}.`;
+        afkMessage.textContent = `Nova Aventura de PvE iniciada! Seu estágio AFK agora é ${newStage}.`;
         // Atualiza os dados locais e recalcula
         currentPlayerData.current_afk_stage = newStage;
         currentPlayerData.last_afk_start_time = new Date().toISOString();

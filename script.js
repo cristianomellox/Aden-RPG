@@ -1,6 +1,4 @@
-// Mantenha o conteúdo do script.js como está da última vez.
-// Não há mudanças significativas necessárias neste arquivo para as novas funcionalidades.
-// Apenas garanta que ele esteja atualizado com as chaves do Supabase.
+// afk_script.js - Este script lida com toda a lógica e UI do AFK
 
 // Configuração do Supabase (AQUI!)
 // **ATENÇÃO: Substitua estes valores pelos do seu projeto Supabase!**
@@ -114,7 +112,7 @@ window.showCombatResultModal = (title, message, onConfirmCallback) => {
 
 // Funções de Autenticação
 async function signIn() {
-    console.log("Tentando login...");
+    console.log("Tentando login..."); // Este log só aparece no console do navegador, mas mantemos para clareza
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     authMessage.textContent = 'Tentando fazer login...';
@@ -525,4 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chatContainer.style.display === 'none') {
             updateUIVisibility(true, 'chatContainer');
             loadInitialChatMessages();
-            chatInput.f
+            chatInput.focus();
+        } else {
+            updateUIVisibility(true, 'playerInfoDiv');
+   

@@ -9,7 +9,7 @@ let currentDailyAttemptsLeft; // Para controlar as tentativas diárias
 let currentAfkStage; // Para acompanhar o estágio atual do AFK
 
 const MAX_ATTACKS = 10; // Número de ataques por tentativa de combate
-let remainingAttacks = MAX_ATTACKS;
+let remainingAttacks = MAX_ATTacks;
 
 // Elementos da UI AFK
 const afkStageSpan = document.getElementById('afkStage');
@@ -42,7 +42,8 @@ const BASE_GOLD_PER_SECOND = 1 / 900; // 900 segundos = 15 minutos
 // XP: 1 a cada 10 minutos = 1 / (10 * 60) = 0.001666... por segundo
 const BASE_XP_PER_SECOND = 1 / 600; // 600 segundos = 10 minutos
 
-// REFERÊNCIA AO NOVO BOTÃO
+// REFERÊNCIA AOS BOTÕES DO MODAL (verifique se confirmCombatResultBtn e nextStageBtn estão definidos em script.js ou globalmente)
+const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
 const nextStageBtn = document.getElementById('nextStageBtn');
 
 
@@ -163,7 +164,7 @@ function calculateAndDisplayAfkRewards() {
     collectAfkRewardsBtn.disabled = (estimatedXP === 0 && estimatedGold === 0);
 }
 
-// NOVO: Função para formatar o tempo (hh:mm:ss)
+// Função para formatar o tempo (hh:mm:ss)
 function formatTime(seconds) {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -357,36 +358,42 @@ async function endCombat(isVictory) {
 
     let title, message;
 
-    // NOVO: Esconde o botão "Próximo Estágio" por padrão
+    // Esconde o botão "Próximo Estágio" por padrão no início da função
     nextStageBtn.style.display = 'none';
-
-    // Função de retorno para o botão "Confirmar"
-    const onConfirmCallback = async () => {
-        combatResultModal.style.display = 'none';
-        afkMessage.textContent = "Retornando à tela de aventura AFK.";
-        if (typeof window.fetchAndDisplayPlayerInfo === 'function') {
-            await window.fetchAndDisplayPlayerInfo(); // Garante que a UI do playerInfoDiv seja atualizada
-        }
-        calculateAndDisplayAfkRewards();
-        // Reabilita o botão de iniciar aventura se houver tentativas e não atingiu o estágio máximo
-        if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
-            startAdventureBtn.disabled = false;
-        }
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-    };
 
     if (isVictory) {
         title = "Vitória!";
-        message = `Você derrotou o monstro do Estágio ${currentAfakStage}!`;
+        message = `Você derrotou o monstro do Estágio ${currentAfkStage}!`; // Corrigido aqui
+
+        // MOSTRA o modal
+        window.showCombatResultModal(title, message);
+
+        // Define o comportamento do botão "Confirmar" para vitória
+        confirmCombatResultBtn.onclick = async () => {
+            combatResultModal.style.display = 'none'; // Fecha o modal
+            afkMessage.textContent = "Retornando à tela de aventura AFK.";
+            // Garante que a tela da aventura AFK seja exibida
+            window.updateUIVisibility(true, 'afkContainer');
+            // Re-fetch e display para garantir que o perfil esteja atualizado
+            if (typeof window.fetchAndDisplayPlayerInfo === 'function') {
+                await window.fetchAndDisplayPlayerInfo();
+            }
+            calculateAndDisplayAfkRewards();
+            // Reabilita o botão de iniciar aventura se houver tentativas e não atingiu o estágio máximo
+            if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
+                startAdventureBtn.disabled = false;
+            }
+            setTimeout(() => { afkMessage.textContent = ''; }, 3000);
+        };
 
         // Se vitória E ainda tem tentativas E não atingiu o estágio máximo, mostra o botão "Próximo Estágio"
         if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
-            nextStageBtn.style.display = 'block'; // Mostra o botão
+            nextStageBtn.style.display = 'block'; // Mostra o botão "Próximo Estágio"
             nextStageBtn.onclick = async () => {
                 combatResultModal.style.display = 'none'; // Fecha o modal
-                // Lógica de avanço de estágio (similar ao que estava no onConfirmCallback da vitória)
                 afkMessage.textContent = "Avançando para o próximo estágio...";
-                const newStage = Math.min(currentAfkStage + 1, MAX_AFK_STAGE);
+
+                const newStage = Math.min(currentAfkStage + 1, MAX_AFK_STAGE); // Garante que não exceda o estágio máximo
                 const { error: updateStageError } = await supabaseClient
                     .from('players')
                     .update({ current_afk_stage: newStage, last_afk_start_time: new Date().toISOString() })
@@ -395,40 +402,43 @@ async function endCombat(isVictory) {
                     console.error('Erro ao avançar estágio:', updateStageError.message);
                     afkMessage.textContent = `Erro ao avançar estágio: ${updateStageError.message}`;
                 } else {
-                    currentAfkStage = newStage;
-                    afkStageSpan.textContent = currentAfkStage;
+                    currentAfkStage = newStage; // Atualiza localmente
+                    afkStageSpan.textContent = currentAfkStage; // Atualiza o display do estágio
                     afkMessage.textContent = `Você avançou para o Estágio ${currentAfkStage}! Coletando XP...`;
 
-                    const xpForVictory = Math.floor(currentAfkStage * 50);
+                    // Recompensas de XP por vitória no estágio
+                    const xpForVictory = Math.floor(currentAfkStage * 50); // XP maior por vitória
                     const xpResult = await window.gainXP(currentPlayerId, xpForVictory);
                     let finalMsg = `Vitória! Ganhou ${xpForVictory} XP no Estágio ${currentAfkStage}.`;
                     if (xpResult.leveledUp) {
                         finalMsg += ` Você subiu para o nível ${xpResult.newLevel}!`;
                     }
                     afkMessage.textContent = finalMsg;
+                    // Re-fetch e display para garantir que o perfil esteja atualizado
                     if (typeof window.fetchAndDisplayPlayerInfo === 'function') {
                         await window.fetchAndDisplayPlayerInfo();
                     }
+                    // Atualiza o objeto local (opcional, mas bom para consistência)
                     currentPlayerData.current_afk_stage = newStage;
                     currentPlayerData.last_afk_start_time = new Date().toISOString();
                 }
                 calculateAndDisplayAfkRewards();
-                // Chama startAdventure novamente para iniciar o próximo combate
-                startAdventure();
+                startAdventure(); // Inicia o próximo combate
                 setTimeout(() => { afkMessage.textContent = ''; }, 5000);
             };
         }
 
-        // Lógica para o botão "Confirmar" na vitória
-        confirmCombatResultBtn.onclick = onConfirmCallback;
-
     } else { // Derrota
         title = "Derrota!";
         message = `Você não conseguiu derrotar o monstro em ${MAX_ATTACKS} ataques.<br>Tente novamente!`;
+
+        // MOSTRA o modal
+        window.showCombatResultModal(title, message);
+
         // Certifica-se de que o botão "Próximo Estágio" está oculto em caso de derrota
         nextStageBtn.style.display = 'none';
 
-        // Lógica para o botão "Confirmar" na derrota (cura e retorna)
+        // Define o comportamento do botão "Confirmar" para derrota (cura e retorna para a tela AFK)
         confirmCombatResultBtn.onclick = async () => {
             combatResultModal.style.display = 'none';
             afkMessage.textContent = "Retornando à base para se curar...";
@@ -440,6 +450,8 @@ async function endCombat(isVictory) {
                     .eq('id', user.id);
             }
             afkMessage.textContent = "Pronto para outra tentativa.";
+            // Garante que a tela da aventura AFK seja exibida
+            window.updateUIVisibility(true, 'afkContainer');
             if (typeof window.fetchAndDisplayPlayerInfo === 'function') {
                 await window.fetchAndDisplayPlayerInfo();
             }
@@ -451,8 +463,6 @@ async function endCombat(isVictory) {
             setTimeout(() => { afkMessage.textContent = ''; }, 5000);
         };
     }
-
-    window.showCombatResultModal(title, message, null); // Passa null para onConfirmCallback pois já definimos o onclick
 }
 
 

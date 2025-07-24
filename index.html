@@ -16,7 +16,7 @@
             background-color: #f0f2f5; /* Um fundo leve para melhor visualização */
         }
         /* Adicionado #afkContainer aos seletores de estilo gerais */
-        #authContainer, #playerInfoDiv, #gameContainer, #chatContainer, #afkContainer {
+        #authContainer, #playerInfoDiv, #chatContainer, #afkContainer {
             border: 1px solid #ccc;
             padding: 20px;
             margin-top: 20px;
@@ -52,7 +52,7 @@
             opacity: 0.9;
         }
         /* Adicionado p#afkMessage */
-        p#authMessage, p#gameMessage, p#profileEditMessage, p#afkMessage {
+        p#authMessage, p#profileEditMessage, p#afkMessage { /* Removido gameMessage */
             margin-top: 10px;
             font-size: 0.9em;
             color: red;
@@ -205,17 +205,6 @@
         <h2>Informações do Jogador</h2>
         </div>
 
-    <div id="gameContainer" style="display:none;">
-        <h2>Praça Central de Aden</h2>
-        <p>Um centro vibrante onde aventureiros se reúnem. Explore as lojas, encontre missões e interaja com outros jogadores.</p>
-        <div style="margin-top: 30px; padding: 15px; border: 1px dashed #ccc; border-radius: 5px; background-color: #fcfcfc;">
-            <h3>🛠️ Ferramentas de Desenvolvimento:</h3>
-            <button id="gainXpBtn">Ganhar 100 XP</button>
-            <button id="gainGoldBtn">Ganhar 50 Ouro</button>
-            <p id="gameMessage"></p>
-        </div>
-        </div>
-
     <div id="afkContainer" style="display:none;">
         <h2>Aventura AFK</h2>
         <p>Seu aventureiro está explorando o mundo mesmo quando você não está jogando. Colete as recompensas da sua jornada!</p>
@@ -224,8 +213,10 @@
         <p>XP Estimado: <span id="afkXPGain">0</span></p>
         <p>Ouro Estimado: <span id="afkGoldGain">0</span></p>
         <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
-        <button id="startAdventureBtn">Iniciar Nova Aventura (Avançar Estágio PvE)</button>
+        <button id="startAdventureBtn">Iniciar Combate PvE</button>
         <p id="afkMessage"></p>
+        <div id="combatLog" style="height: 150px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-top: 10px; background-color: #f9f9f9; display: none;">
+            </div>
     </div>
     <div id="chatContainer" style="display:none;">
         <h2>Chat Global</h2>

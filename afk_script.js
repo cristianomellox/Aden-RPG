@@ -18,6 +18,8 @@ const remainingAttacksSpan = document.getElementById('remainingAttacks');
 const monsterHealthPercentageSpan = document.getElementById('monsterCurrentHealthDisplay');
 const monsterHealthPercentageDiv = document.getElementById('monsterHealthPercentage'); // O div pai
 
+// Elemento para tentativas diárias
+const dailyAttemptsLeftSpan = document.getElementById('dailyAttemptsLeft');
 
 // Variáveis de estado do AFK
 let currentAfkPlayerId = null;
@@ -41,6 +43,10 @@ let monsterDefense = 0; // Defesa do monstro
 // Variáveis para o sistema de ataque limitado
 let attackCount = 0;
 const MAX_ATTACKS = 10;
+const MAX_DAILY_ATTEMPTS = 5; // Limite de tentativas diárias
+
+let dailyAttemptsRemaining = MAX_DAILY_ATTEMPTS;
+let lastAttemptResetDate = null;
 
 
 // Função para inicializar a exibição AFK
@@ -56,7 +62,7 @@ window.initAfkDisplay = async () => {
 
     const { data: player, error } = await supabaseClient
         .from('players')
-        .select('current_afk_stage, last_afk_start_time, name, health, attack, defense, combat_power')
+        .select('current_afk_stage, last_afk_start_time, name, health, attack, defense, combat_power, daily_attempts_left, last_attempt_reset')
         .eq('id', user.id)
         .single();
 
@@ -73,16 +79,22 @@ window.initAfkDisplay = async () => {
     playerDefense = player.defense;
     playerCombatPower = player.combat_power;
     currentAfkStage = player.current_afk_stage;
+    dailyAttemptsRemaining = player.daily_attempts_left;
+    lastAttemptResetDate = player.last_attempt_reset ? new Date(player.last_attempt_reset) : null;
 
     afkStageSpan.textContent = currentAfkStage;
     lastAfkStartTime = player.last_afk_start_time ? new Date(player.last_afk_start_time) : null;
     startAfkTimer();
+
+    // Resetar tentativas diárias se necessário
+    await checkAndResetDailyAttempts();
 
     startAdventureBtn.style.display = 'inline-block';
     collectAfkRewardsBtn.style.display = 'inline-block';
     afkTimeSpan.parentElement.style.display = 'block';
     afkXPGainSpan.parentElement.style.display = 'block';
     afkGoldGainSpan.parentElement.style.display = 'block';
+    dailyAttemptsLeftSpan.parentElement.style.display = 'block'; // Mostra o contador de tentativas
 
     // Garante que elementos de combate estejam ocultos inicialmente
     attackButton.style.display = 'none';
@@ -91,6 +103,7 @@ window.initAfkDisplay = async () => {
     combatLogDiv.style.display = 'none';
     console.log("AFK: Display inicial dos elementos de combate configurado para 'none'.");
 
+    updateStartAdventureButtonState(); // Atualiza estado do botão de iniciar aventura
 };
 
 // Função chamada pelo script.js quando as informações do jogador são carregadas
@@ -104,10 +117,14 @@ window.onPlayerInfoLoadedForAfk = (player) => {
     playerDefense = player.defense;
     playerCombatPower = player.combat_power;
     currentAfkStage = player.current_afk_stage;
+    dailyAttemptsRemaining = player.daily_attempts_left; // Atualiza tentativas diárias
+    lastAttemptResetDate = player.last_attempt_reset ? new Date(player.last_attempt_reset) : null;
 
     afkStageSpan.textContent = currentAfkStage;
     lastAfkStartTime = player.last_afk_start_time ? new Date(player.last_afk_start_time) : null;
     startAfkTimer();
+
+    updateStartAdventureButtonState(); // Atualiza estado do botão de iniciar aventura
 };
 
 
@@ -122,6 +139,7 @@ function updateAfkTimeAndRewards() {
     const now = new Date();
     const elapsedTime = Math.floor((now.getTime() - lastAfkStartTime.getTime()) / 1000);
 
+    // XP e Ouro por segundo aumentam com o estágio
     const xpPerSecond = 10 * currentAfkStage;
     const goldPerSecond = 5 * currentAfkStage;
 
@@ -136,6 +154,52 @@ function startAfkTimer() {
     }
     afkTimerInterval = setInterval(updateAfkTimeAndRewards, 1000);
 }
+
+async function checkAndResetDailyAttempts() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Zera hora para comparar apenas a data
+
+    let needsReset = false;
+    if (!lastAttemptResetDate) {
+        // Se nunca foi resetado, assume que precisa de um reset inicial
+        needsReset = true;
+    } else {
+        const resetDay = new Date(lastAttemptResetDate);
+        resetDay.setHours(0, 0, 0, 0);
+        if (resetDay.getTime() !== today.getTime()) {
+            needsReset = true; // Se o último reset não foi hoje, precisa resetar
+        }
+    }
+
+    if (needsReset) {
+        console.log("AFK: Resetando tentativas diárias.");
+        dailyAttemptsRemaining = MAX_DAILY_ATTEMPTS;
+        lastAttemptResetDate = new Date(); // Atualiza para agora
+        await supabaseClient
+            .from('players')
+            .update({
+                daily_attempts_left: dailyAttemptsRemaining,
+                last_attempt_reset: lastAttemptResetDate.toISOString()
+            })
+            .eq('id', currentAfkPlayerId);
+        afkMessage.textContent = "Tentativas diárias de estágio resetadas!";
+    }
+    dailyAttemptsLeftSpan.textContent = dailyAttemptsRemaining;
+    updateStartAdventureButtonState(); // Atualiza o estado do botão após o reset
+}
+
+function updateStartAdventureButtonState() {
+    if (dailyAttemptsRemaining <= 0) {
+        startAdventureBtn.disabled = true;
+        startAdventureBtn.textContent = "Sem Tentativas Hoje";
+        afkMessage.textContent = "Você esgotou suas tentativas diárias de estágio. Volte amanhã!";
+    } else {
+        startAdventureBtn.disabled = false;
+        startAdventureBtn.textContent = "Iniciar Combate PvE";
+        afkMessage.textContent = ""; // Limpa a mensagem se houver tentativas
+    }
+}
+
 
 // Event Listeners
 collectAfkRewardsBtn.addEventListener('click', async () => {
@@ -178,10 +242,25 @@ collectAfkRewardsBtn.addEventListener('click', async () => {
 });
 
 // Listener do botão Iniciar Combate PvE
-startAdventureBtn.addEventListener('click', startAdventure);
+startAdventureBtn.addEventListener('click', async () => {
+    if (dailyAttemptsRemaining <= 0) {
+        afkMessage.textContent = "Você não tem mais tentativas de estágio hoje!";
+        return;
+    }
+    await startAdventure();
+});
 
 async function startAdventure() {
     console.log("AFK: Função startAdventure iniciada.");
+
+    // Decrementa a tentativa diária e salva no DB
+    dailyAttemptsRemaining--;
+    dailyAttemptsLeftSpan.textContent = dailyAttemptsRemaining;
+    await supabaseClient
+        .from('players')
+        .update({ daily_attempts_left: dailyAttemptsRemaining })
+        .eq('id', currentAfkPlayerId);
+
     afkMessage.textContent = "Iniciando combate PvE...";
     combatLogDiv.innerHTML = '';
     combatLogDiv.style.display = 'block';
@@ -192,6 +271,7 @@ async function startAdventure() {
     afkGoldGainSpan.parentElement.style.display = 'none';
     collectAfkRewardsBtn.style.display = 'none';
     startAdventureBtn.style.display = 'none';
+    dailyAttemptsLeftSpan.parentElement.style.display = 'none'; // Oculta o contador de tentativas durante o combate
     console.log("AFK: Elementos AFK ocultados.");
 
     // Busca informações mais recentes do jogador para combate
@@ -221,7 +301,8 @@ async function startAdventure() {
     console.log("AFK: Dados do jogador carregados para combate.");
 
     monsterName = `Goblin do Estágio ${currentAfkStage}`;
-    monsterMaxHealth = 50 + (currentAfkStage * 10);
+    // HP do monstro aumenta com o estágio
+    monsterMaxHealth = 50 + (currentAfkStage * 20); // Aumento mais significativo no HP
     monsterCurrentHealth = monsterMaxHealth;
     monsterDefense = currentAfkStage;
     console.log(`AFK: Monstro gerado: ${monsterName} com ${monsterMaxHealth} HP.`);
@@ -330,11 +411,13 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
     if (monsterHealthPercentageDiv) monsterHealthPercentageDiv.style.display = 'none';
     combatLogDiv.style.display = 'none';
 
+    // Garante que os elementos de AFK e tentativas voltem a ser exibidos
     afkTimeSpan.parentElement.style.display = 'block';
     afkXPGainSpan.parentElement.style.display = 'block';
     afkGoldGainSpan.parentElement.style.display = 'block';
     collectAfkRewardsBtn.style.display = 'inline-block';
     startAdventureBtn.style.display = 'inline-block';
+    dailyAttemptsLeftSpan.parentElement.style.display = 'block'; // Mostra novamente o contador de tentativas
 
     let title = "";
     let message = "";
@@ -342,8 +425,9 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
 
     if (playerWon) {
         title = "Vitória!";
-        const xpGain = 50 + (currentAfkStage * 10);
-        const goldGain = 20 + (currentAfkStage * 5);
+        // XP e Ouro da vitória também aumentam com o estágio
+        const xpGain = 50 + (currentAfkStage * 15);
+        const goldGain = 20 + (currentAfkStage * 10);
         message = `Você derrotou o ${monsterName}!<br>Ganhou ${xpGain} XP e ${goldGain} Ouro.`;
 
         onConfirm = async () => {
@@ -357,7 +441,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
                     .update({
                         current_afk_stage: currentAfkStage,
                         last_afk_start_time: lastAfkStartTime.toISOString(),
-                        health: playerMaxHealth
+                        health: playerMaxHealth // Cura total
                     })
                     .eq('id', user.id);
 
@@ -373,6 +457,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
                 }
                 afkMessage.textContent = finalMsg;
                 window.fetchAndDisplayPlayerInfo();
+                updateStartAdventureButtonState(); // Atualiza estado do botão após o estágio avançar
             }
         };
 
@@ -386,11 +471,12 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
             if (user) {
                 await supabaseClient
                     .from('players')
-                    .update({ health: playerMaxHealth })
+                    .update({ health: playerMaxHealth }) // Cura total
                     .eq('id', user.id);
             }
             afkMessage.textContent = "Pronto para outra tentativa.";
             window.fetchAndDisplayPlayerInfo();
+            updateStartAdventureButtonState(); // Atualiza estado do botão após a derrota
         };
     }
 

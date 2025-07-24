@@ -39,10 +39,8 @@ const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
 // Referências ao modal de resultado de combate
 const combatResultModal = document.getElementById('combatResultModal');
 const combatResultTitle = document.getElementById('combatResultTitle');
-const combatResultMessage = document.getElementById('combatResultMessage');
+const combatResultMessage = document = document.getElementById('combatResultMessage'); // Corrigido aqui
 const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
-
-// REMOVIDO: Referências aos elementos de barras de HP (playerHealthDisplay, monsterHealthDisplay, etc.)
 
 
 // --- Funções de Notificação Flutuante (para menus) ---
@@ -168,7 +166,7 @@ async function fetchAndDisplayPlayerInfo() {
         authContainer.style.display = 'none';
         const { data: player, error } = await supabaseClient
             .from('players')
-            .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active')
+            .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active, daily_attempts_left, last_attempt_reset') // Adicionado daily_attempts_left e last_attempt_reset
             .eq('id', user.id)
             .single();
         if (error || (player.rank === 'Aventureiro(a)' && player.name === user.email)) {
@@ -255,12 +253,6 @@ const MAX_PLAYER_LEVEL = 100;
 // A curva é exponencial para tornar cada vez mais difícil
 function calculateXPForNextLevel(level) {
     if (level <= 0) return 100; // Caso base para nível 0 ou erro
-    // Fórmula: XP base * (nível atual elevado a um expoente)
-    // Nível 1: 100 * 1^1.5 = 100
-    // Nível 2: 100 * 2^1.5 = 282
-    // Nível 10: 100 * 10^1.5 = 3162
-    // Nível 50: 100 * 50^1.5 = 35355
-    // Nível 99: 100 * 99^1.5 = 98500 aproximadamente
     return Math.floor(100 * Math.pow(level, 1.5));
 }
 
@@ -480,7 +472,21 @@ chatInput.addEventListener('keypress', function(event) {
     }
 });
 
-// Event Listeners para botões do rodapé
+// NOVO: Event Listeners para botões do rodapé com mensagem "Em desenvolvimento"
+guildBtn.addEventListener('click', () => {
+    showFloatingMessage("Guilda: Em desenvolvimento!");
+});
+pvpBtn.addEventListener('click', () => {
+    showFloatingMessage("PvP: Em desenvolvimento!");
+});
+miningBtn.addEventListener('click', () => {
+    showFloatingMessage("Mineração: Em desenvolvimento!");
+});
+castlesBtn.addEventListener('click', () => {
+    showFloatingMessage("Castelos: Em desenvolvimento!");
+});
+
+// EXISTENTES: Event Listeners para botões do rodapé
 afkBtn.addEventListener('click', () => {
     updateUIVisibility(true, 'afkContainer');
     showFloatingMessage("Você entrou na Aventura AFK!");
@@ -490,6 +496,7 @@ chatBubble.addEventListener('click', () => {
     updateUIVisibility(true, 'chatContainer');
     showFloatingMessage("Você abriu o Chat Global!");
 });
+
 
 // Funções de verificação de sessão e inicialização
 supabaseClient.auth.onAuthStateChange((event, session) => {

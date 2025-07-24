@@ -30,8 +30,13 @@ const miningBtn = document.getElementById('miningBtn');
 const castlesBtn = document.getElementById('castlesBtn');
 const chatBubble = document.getElementById('chatBubble');
 
-// Referência ao container AFK
+// Referência ao container AFK e seus novos elementos
 const afkContainer = document.getElementById('afkContainer');
+const currentAfkStageSpan = document.getElementById('currentAfkStage'); // Span para o estágio atual
+const monsterNameP = document.getElementById('monsterName'); // P para o nome do monstro
+const monsterImage = document.getElementById('monsterImage'); // Imagem do monstro
+const attackButton = document.getElementById('attackButton'); // Botão de ataque
+
 // Referência ao novo elemento de mensagem flutuante (para menus)
 const floatingMessageDiv = document.getElementById('floatingMessage');
 // Referência ao novo elemento de popup de dano de combate
@@ -198,8 +203,6 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
         document.getElementById('signOutBtn').onclick = signOut;
 
         console.log("Informações do jogador carregadas.");
-        // APENAS CHAMA updateUIVisibility SE NÃO FOR PARA PRESERVAR O CONTAINER ATUAL.
-        // Isso impede que esta função altere a visibilidade quando o botão "Início" já a definiu.
         if (!preserveActiveContainer) {
             console.log("fetchAndDisplayPlayerInfo: Chamando updateUIVisibility para playerInfoDiv.");
             updateUIVisibility(true, 'playerInfoDiv');
@@ -209,6 +212,14 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
         
         subscribeToChat();
         updateLastActive(user.id);
+
+        // ATUALIZA INFORMAÇÕES DO MONSTRO AFK AQUI
+        if (player.current_afk_stage) {
+            updateMonsterDisplay(player.current_afk_stage);
+        } else {
+            updateMonsterDisplay(1); // Default para estágio 1 se não houver no DB
+        }
+
         if (typeof window.onPlayerInfoLoadedForAfk === 'function') {
             window.onPlayerInfoLoadedForAfk(player);
         }
@@ -469,6 +480,56 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
     }
 }
 
+// --- Funções para Monstro AFK ---
+const MONSTER_IMAGE_URL = 'https://raw.githubusercontent.com/username/your-repo/main/assets/monster_goblin.png'; // Substitua pelo seu caminho real
+const MONSTER_IMAGE_LOCAL_STORAGE_KEY = 'cached_monster_goblin_image';
+
+async function loadAndCacheMonsterImage() {
+    const cachedImage = localStorage.getItem(MONSTER_IMAGE_LOCAL_STORAGE_KEY);
+    if (cachedImage) {
+        monsterImage.src = cachedImage;
+        console.log("Imagem do monstro carregada do cache.");
+    } else {
+        console.log("Baixando imagem do monstro e armazenando em cache...");
+        try {
+            const response = await fetch(MONSTER_IMAGE_URL);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                const base64data = reader.result;
+                monsterImage.src = base64data;
+                localStorage.setItem(MONSTER_IMAGE_LOCAL_STORAGE_KEY, base64data);
+                console.log("Imagem do monstro baixada e salva em cache.");
+            };
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            console.error("Erro ao carregar ou cachear imagem do monstro:", error);
+            // Fallback para uma imagem de placeholder se a principal falhar
+            monsterImage.src = 'https://via.placeholder.com/150?text=Monstro';
+        }
+    }
+}
+
+function updateMonsterDisplay(stage) {
+    monsterNameP.textContent = `Goblin Nível ${stage}`;
+    currentAfkStageSpan.textContent = stage; // Atualiza o estágio na descrição da aventura
+
+    // Calcula a matiz para o estágio
+    // A matiz vai de 0 a 360 graus. Distribuímos 100 estágios ao longo de 360 graus.
+    const hueDegree = (stage - 1) * (360 / 100); 
+    monsterImage.style.filter = `hue-rotate(${hueDegree}deg)`;
+    console.log(`Monstro atualizado para o estágio ${stage}. Matiz: ${hueDegree}deg`);
+}
+
+function triggerMonsterAttackAnimation() {
+    monsterImage.classList.add('shake-animation');
+    // Remove a classe após a animação para que ela possa ser disparada novamente
+    monsterImage.addEventListener('animationend', () => {
+        monsterImage.classList.remove('shake-animation');
+    }, { once: true }); // O { once: true } garante que o listener seja removido após uma execução
+}
+
+
 // Event Listeners
 document.getElementById('signInBtn').addEventListener('click', signIn);
 document.getElementById('signUpBtn').addEventListener('click', signUp);
@@ -482,8 +543,8 @@ chatInput.addEventListener('keypress', function(event) {
 // Event Listener para o botão "Início"
 homeBtn.addEventListener('click', () => {
     console.log("Botão Início clicado. Definindo visibilidade para playerInfoDiv.");
-    updateUIVisibility(true, 'playerInfoDiv'); // Força a exibição da div de informações do jogador
-    fetchAndDisplayPlayerInfo(true); // Atualiza as infos, mas sem mudar a visibilidade do container
+    updateUIVisibility(true, 'playerInfoDiv');
+    fetchAndDisplayPlayerInfo(true);
     showFloatingMessage("Você está na página inicial!");
 });
 
@@ -505,11 +566,24 @@ castlesBtn.addEventListener('click', () => {
 afkBtn.addEventListener('click', () => {
     updateUIVisibility(true, 'afkContainer');
     showFloatingMessage("Você entrou na Aventura AFK!");
+    // Garante que o monstro seja carregado e atualizado ao entrar na tela AFK
+    loadAndCacheMonsterImage();
+    // Você precisará de uma maneira de obter o current_afk_stage do jogador logado aqui
+    // Por enquanto, vamos buscar o jogador novamente ou garantir que 'player' está acessível.
+    // Para simplificar, vamos chamar fetchAndDisplayPlayerInfo para garantir os dados.
+    fetchAndDisplayPlayerInfo(true); // Atualiza dados do jogador, que contém o current_afk_stage
 });
 
 chatBubble.addEventListener('click', () => {
     updateUIVisibility(true, 'chatContainer');
     showFloatingMessage("Você abriu o Chat Global!");
+});
+
+// Event Listener para o botão de ataque do monstro
+attackButton.addEventListener('click', () => {
+    triggerMonsterAttackAnimation();
+    showFloatingMessage("Você atacou o Goblin!"); // Apenas para feedback visual
+    // Aqui você adicionaria a lógica real do ataque (dano, etc.)
 });
 
 
@@ -518,7 +592,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
     console.log("onAuthStateChange disparado. Event:", event, "Session:", session);
     if (session) {
         console.log('Sessão encontrada:', session);
-        fetchAndDisplayPlayerInfo(); // Chama sem preserveActiveContainer para voltar ao playerInfoDiv se for um login/refresh padrão
+        fetchAndDisplayPlayerInfo();
     } else {
         console.log('Nenhuma sessão.');
         updateUIVisibility(false);

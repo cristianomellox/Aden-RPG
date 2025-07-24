@@ -111,7 +111,7 @@
             width: calc(100% - 20px);
             padding: 10px;
             margin-bottom: 15px;
-            border-radius: 4px;
+            border-radius: 4lesspx;
             border: 1px solid #ddd;
             box-sizing: border-box;
         }
@@ -282,7 +282,7 @@
             color: white;
             font-size: 1.5em;
             font-weight: bold;
-            display: flex;
+            display: flex !important; /* FORÇAR DISPLAY */
             justify-content: center;
             align-items: center;
             margin: 20px auto;
@@ -303,7 +303,7 @@
 
         /* Estilo para a porcentagem de HP do monstro */
         #monsterHealthPercentage {
-            display: none; /* Inicia oculto */
+            display: block !important; /* FORÇAR DISPLAY */
             text-align: center;
             font-weight: bold;
             margin-top: 10px;

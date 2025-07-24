@@ -1,31 +1,29 @@
 html, body {
-    height: 100%; /* Garante que HTML e Body ocupam a altura total da viewport */
+    height: 100%;
     margin: 0;
     padding: 0;
-    box-sizing: border-box; /* Garante que padding e border não aumentem a largura/altura total */
+    box-sizing: border-box;
 }
 
 body {
     font-family: Arial, sans-serif;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    /* margin-top: 50px; REMOVIDO: será tratado com padding-top no main-content */
-    padding-bottom: 100px; /* Mais espaço para o menu do rodapé */
+    align-items: center; /* Centraliza horizontalmente o conteúdo principal */
+    padding-bottom: 100px;
     background-color: #f0f2f5;
-    position: relative; /* Para posicionar elementos filhos com 'absolute' ou 'fixed' relativos ao body */
-    min-height: 100vh; /* Garante que o body tenha pelo menos a altura da viewport */
-    overflow-x: hidden; /* Previne rolagem horizontal indesejada no body */
+    position: relative;
+    min-height: 100vh;
+    overflow-x: hidden;
 }
 
-/* Um container principal para o conteúdo que não é o rodapé ou chat bubble */
 #mainContentWrapper {
-    flex-grow: 1; /* Permite que este wrapper ocupe o espaço disponível */
+    flex-grow: 1;
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 50px; /* Para empurrar o conteúdo abaixo de uma potencial barra de título futura ou topo da página */
+    padding-top: 50px;
     box-sizing: border-box;
 }
 
@@ -33,16 +31,21 @@ body {
     border: 1px solid #ccc;
     padding: 20px;
     margin-top: 20px;
-    width: 80%;
-    max-width: 500px;
+    width: 90%; /* Ajuste aqui: 80% estava muito largo em algumas telas */
+    max-width: 500px; /* Mantém o tamanho máximo */
     box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
     margin-bottom: 20px;
     background-color: white;
     border-radius: 8px;
-    box-sizing: border-box; /* Crucial para o dimensionamento */
-    flex-shrink: 0; /* Impede que estes containers encolham se o flex pai tentar comprimi-los */
-    min-height: 150px; /* Uma altura mínima para garantir que não colapsam */
+    box-sizing: border-box;
+    flex-shrink: 0;
+    min-height: 150px;
+    /* IMPORTANTE para centralizar itens internos */
+    display: flex; /* Adicionado para usar flexbox interno */
+    flex-direction: column; /* Coloca os itens em coluna */
+    align-items: center; /* Centraliza horizontalmente os itens dentro do container */
 }
+
 h1, h2 {
     color: #333;
 }
@@ -75,6 +78,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     margin-top: 10px;
     font-size: 0.9em;
     color: red;
+    text-align: center; /* Garante que as mensagens de status também centralizem */
 }
 
 /* Estilos do Chat */
@@ -86,6 +90,8 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     margin-bottom: 10px;
     background-color: #f9f9f9;
     border-radius: 4px;
+    width: 100%; /* Ajustado para preencher o container pai */
+    box-sizing: border-box;
 }
 .chat-message {
     margin-bottom: 5px;
@@ -169,7 +175,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     -webkit-overflow-scrolling: touch;
     white-space: nowrap;
     flex-wrap: nowrap;
-    justify-content: flex-start; /* Garante que o conteúdo comece à esquerda */
+    justify-content: center; /* CENTRALIZA OS BOTÕES DO RODAPÉ */
 }
 #footerMenu button {
     background-color: #555;
@@ -309,9 +315,10 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: white;
     font-size: 1.5em;
     font-weight: bold;
+    display: flex; /* MANTEM COMO FLEX PARA CENTRALIZAR CONTEÚDO */
     justify-content: center;
     align-items: center;
-    margin: 20px auto;
+    margin: 20px auto 0 auto; /* Ajusta a margem superior para espaçamento com a imagem, e auto para centralizar */
     border: 4px solid #d84315;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     transition: background-color 0.2s, transform 0.1s;
@@ -340,14 +347,15 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 0px; /* Reduz margem para aproximar do botão */
+    margin-top: 10px; /* Adiciona margem superior para afastar de outros textos */
 }
 
 #monsterNameDisplay {
     font-size: 1.4em;
     font-weight: bold;
     color: #444;
-    margin-bottom: 10px;
+    margin-bottom: 10px; /* Espaçamento entre nome e imagem */
     text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
@@ -355,7 +363,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     width: 150px; /* Ajuste o tamanho conforme necessário */
     height: auto;
     display: block;
-    margin-top: 10px;
+    /* Removido margin-top, container já controla o espaçamento */
     animation: float 2s ease-in-out infinite alternate; /* Animação de flutuação */
     transition: filter 0.5s ease-in-out; /* Transição suave para o filtro de cor */
 }
@@ -369,7 +377,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Animação de piscar para a imagem do monstro */
 @keyframes flash {
     0% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.2; } /* Torna o piscar mais notável */
     100% { opacity: 1; }
 }
 

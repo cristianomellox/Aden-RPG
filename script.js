@@ -1,5 +1,3 @@
-// afk_script.js - Este script lida com toda a lógica e UI do AFK
-
 // Configuração do Supabase (AQUI!)
 // **ATENÇÃO: Substitua estes valores pelos do seu projeto Supabase!**
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co'; // Ex: 'https://abcdefg1234.supabase.co'
@@ -63,11 +61,10 @@ function showFloatingMessage(message, duration = 3000) {
 }
 
 // --- Funções de Popup de Dano (para combate) ---
-// Função de Popup de Dano AGORA RECEBE O NOME DO ATACANTE E SE É CRÍTICO
-function showDamagePopup(attackerName, damageAmount, isCritical) {
+function showDamagePopup(damageAmount, isCritical, isPlayerDamage = false) {
     if (!combatDamagePopupDiv) return;
 
-    combatDamagePopupDiv.textContent = `${attackerName}: ${damageAmount}`;
+    combatDamagePopupDiv.textContent = `${damageAmount}`;
     combatDamagePopupDiv.classList.remove('critical');
 
     if (isCritical) {
@@ -112,7 +109,7 @@ window.showCombatResultModal = (title, message, onConfirmCallback) => {
 
 // Funções de Autenticação
 async function signIn() {
-    console.log("Tentando login..."); // Este log só aparece no console do navegador, mas mantemos para clareza
+    console.log("Tentando login...");
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     authMessage.textContent = 'Tentando fazer login...';
@@ -444,11 +441,6 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     profileEditModal.style.display = 'none';
     combatResultModal.style.display = 'none'; // Garante que o modal de combate esteja oculto
 
-    // Esconde as barras de HP por padrão ao mudar de tela
-    document.getElementById('playerHpBarContainer').style.display = 'none';
-    document.getElementById('monsterHpBarContainer').style.display = 'none';
-
-
     if (showGameUI) {
         authContainer.style.display = 'none';
         footerMenu.style.display = 'flex';
@@ -526,4 +518,14 @@ document.addEventListener('DOMContentLoaded', () => {
             chatInput.focus();
         } else {
             updateUIVisibility(true, 'playerInfoDiv');
-   
+        }
+    });
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            fetchAndDisplayPlayerInfo();
+        } else {
+            updateUIVisibility(false);
+        }
+    });
+});

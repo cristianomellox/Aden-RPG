@@ -9,7 +9,6 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
 const playerInfoDiv = document.getElementById('playerInfoDiv');
-// Removido gameContainer
 const chatContainer = document.getElementById('chatContainer');
 const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
@@ -20,10 +19,6 @@ const editPlayerNameInput = document.getElementById('editPlayerName');
 const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
 const saveProfileBtn = document.getElementById('saveProfileBtn');
 const profileEditMessage = document.getElementById('profileEditMessage');
-
-// Removido gainXpBtn, gainGoldBtn, gameMessage
-// Elementos de jogo (para mensagens gerais do jogo, agora usaremos afkMessage para fins de teste)
-const afkMessage = document.getElementById('afkMessage'); // Reutilizando para mensagens gerais temporariamente
 
 // Elementos do menu do rodapé e balão de chat
 const footerMenu = document.getElementById('footerMenu');
@@ -37,9 +32,33 @@ const chatBubble = document.getElementById('chatBubble');
 // Referência ao container AFK
 const afkContainer = document.getElementById('afkContainer');
 
+// Referência ao novo elemento de mensagem flutuante
+const floatingMessageDiv = document.getElementById('floatingMessage');
+
+
+// --- Funções de Notificação Flutuante ---
+function showFloatingMessage(message, duration = 3000) {
+    if (!floatingMessageDiv) return;
+
+    floatingMessageDiv.textContent = message;
+    floatingMessageDiv.style.display = 'block';
+    // Força o reflow para a transição funcionar se for exibido de 'none'
+    floatingMessageDiv.offsetWidth; 
+    floatingMessageDiv.style.opacity = '1';
+
+    setTimeout(() => {
+        floatingMessageDiv.style.opacity = '0';
+        // Esconde completamente após a transição
+        setTimeout(() => {
+            floatingMessageDiv.style.display = 'none';
+        }, 500); // Duração da transição CSS
+    }, duration);
+}
+
 
 // Funções de Autenticação
 async function signIn() {
+    console.log("Tentando login...");
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     authMessage.textContent = 'Tentando fazer login...';
@@ -49,11 +68,13 @@ async function signIn() {
         console.error('Erro ao fazer login:', error);
     } else {
         authMessage.textContent = ''; // Limpa a mensagem de erro
+        console.log("Login bem-sucedido.");
         // fetchAndDisplayPlayerInfo() e subscribeToChat() serão chamados via onAuthStateChange
     }
 }
 
 async function signUp() {
+    console.log("Tentando registro...");
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     authMessage.textContent = 'Registrando usuário...';
@@ -63,22 +84,25 @@ async function signUp() {
         console.error('Erro ao registrar:', error);
     } else {
         authMessage.textContent = 'Registro realizado! Verifique seu email para confirmar a conta.';
+        console.log("Registro solicitado. Verifique o email.");
     }
 }
 
 async function signOut() {
+    console.log("Tentando sair...");
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
         console.error('Erro ao sair:', error.message);
     } else {
+        console.log("Sessão encerrada.");
         // A UI será atualizada via o listener onAuthStateChange
         chatBox.innerHTML = ''; // Limpa o chat
     }
 }
 
 // Funções de Perfil do Jogador
-// Agora, fetchAndDisplayPlayerInfo pode receber um callback para o AFK script
 async function fetchAndDisplayPlayerInfo() {
+    console.log("Buscando informações do jogador...");
     const { data: { user } } = await supabaseClient.auth.getUser();
 
     if (user) {
@@ -91,6 +115,7 @@ async function fetchAndDisplayPlayerInfo() {
             .single();
 
         if (error || (player.rank === 'Aventureiro(a)' && player.name === user.email)) {
+            console.log("Perfil não configurado ou erro ao buscar. Abrindo modal de edição.");
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
@@ -114,17 +139,17 @@ async function fetchAndDisplayPlayerInfo() {
         `;
         document.getElementById('signOutBtn').onclick = signOut;
 
+        console.log("Informações do jogador carregadas. Exibindo UI padrão.");
         updateUIVisibility(true, 'playerInfoDiv'); // Mostra o playerInfoDiv por padrão
         subscribeToChat();
         updateLastActive(user.id); // Atualiza last_active ao fazer login
 
-        // ** Novo: Chama uma função no script AFK se ele existir e for relevante **
-        // Verificamos se `window.onPlayerInfoLoadedForAfk` existe
         if (typeof window.onPlayerInfoLoadedForAfk === 'function') {
             window.onPlayerInfoLoadedForAfk(player);
         }
 
     } else {
+        console.log("Nenhum usuário logado. Exibindo tela de login.");
         updateUIVisibility(false);
     }
 }
@@ -146,6 +171,7 @@ saveProfileBtn.addEventListener('click', async () => {
     }
 
     profileEditMessage.textContent = "Salvando perfil...";
+    console.log("Salvando perfil...");
 
     const { data, error } = await supabaseClient
         .from('players')
@@ -157,14 +183,15 @@ saveProfileBtn.addEventListener('click', async () => {
         profileEditMessage.textContent = `Erro ao salvar perfil: ${error.message}`;
     } else {
         profileEditMessage.textContent = "Perfil salvo com sucesso!";
+        console.log("Perfil salvo com sucesso.");
         profileEditModal.style.display = 'none'; // Esconde o modal
         fetchAndDisplayPlayerInfo(); // Atualiza as informações exibidas e a UI
     }
 });
 
 // FUNÇÕES DE PROGRESSÃO DO JOGADOR (ainda necessárias para as recompensas AFK)
-// Estas funções agora são chamadas internamente pelo afk_script.js
-async function gainXP(userId, amount) {
+window.gainXP = async (userId, amount) => {
+    console.log(`Tentando ganhar ${amount} XP para o usuário ${userId}`);
     const { data: player, error: fetchError } = await supabaseClient
         .from('players')
         .select('xp, level, health, mana, attack, defense, combat_power')
@@ -173,7 +200,6 @@ async function gainXP(userId, amount) {
 
     if (fetchError) {
         console.error('Erro ao buscar XP atual:', fetchError);
-        // Não exibe mensagem na UI aqui, pois a chamada virá do AFK script
         return { success: false, message: `Erro ao buscar XP: ${fetchError.message}` };
     }
 
@@ -198,6 +224,7 @@ async function gainXP(userId, amount) {
         newAttack += 2;
         newDefense += 1;
         newCombatPower = Math.floor((newHealth + newMana + newAttack + newDefense) * currentLevel / 10);
+        console.log(`Jogador subiu para o nível ${currentLevel}!`);
     }
 
     const { error: updateError } = await supabaseClient
@@ -217,11 +244,13 @@ async function gainXP(userId, amount) {
         console.error('Erro ao atualizar XP/Nível:', updateError);
         return { success: false, message: `Erro ao atualizar XP/Nível: ${updateError.message}` };
     } else {
+        console.log(`XP e nível atualizados para ${userId}. Novo XP: ${currentXP}, Nível: ${currentLevel}`);
         return { success: true, leveledUp: leveledUp, newLevel: currentLevel, message: `Ganhou ${amount} XP.` };
     }
 }
 
-async function gainGold(userId, amount) {
+window.gainGold = async (userId, amount) => {
+    console.log(`Tentando ganhar ${amount} Ouro para o usuário ${userId}`);
     const { data: player, error: fetchError } = await supabaseClient
         .from('players')
         .select('gold')
@@ -244,13 +273,10 @@ async function gainGold(userId, amount) {
         console.error('Erro ao atualizar Ouro:', updateError);
         return { success: false, message: `Erro ao atualizar Ouro: ${updateError.message}` };
     } else {
+        console.log(`Ouro atualizado para ${userId}. Novo Ouro: ${newGold}`);
         return { success: true, message: `Ganhou ${amount} Ouro.` };
     }
 }
-
-// EXPOR FUNÇÕES DE PROGRESSÃO GLOBALMENTE PARA USO PELO AFK SCRIPT
-window.gainXP = gainXP;
-window.gainGold = gainGold;
 
 
 // Funções de Chat
@@ -261,8 +287,7 @@ async function sendMessage() {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         console.error('Nenhum usuário logado para enviar mensagem.');
-        afkMessage.textContent = 'Você precisa estar logado para enviar mensagens.'; // Usando afkMessage temporariamente
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
+        showFloatingMessage('Você precisa estar logado para enviar mensagens.');
         return;
     }
 
@@ -274,22 +299,19 @@ async function sendMessage() {
 
     if (playerError) {
         console.error('Erro ao buscar nome/rank do jogador para o chat:', playerError);
-        afkMessage.textContent = 'Erro ao verificar seu perfil para o chat.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
+        showFloatingMessage('Erro ao verificar seu perfil para o chat.');
         return;
     }
 
     // Verificação de Rank para chat global
     if (player.rank !== 'Monarca' && player.rank !== 'Nobre') {
-        afkMessage.textContent = 'Apenas Monarcas e Nobres podem escrever no chat global.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 5000);
+        showFloatingMessage('Apenas Monarcas e Nobres podem escrever no chat global.');
         return;
     }
 
     // Limite de caracteres para mensagens
     if (messageText.length > 200) {
-        afkMessage.textContent = 'Mensagem muito longa! Máximo de 200 caracteres.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 5000);
+        showFloatingMessage('Mensagem muito longa! Máximo de 200 caracteres.');
         return;
     }
 
@@ -302,11 +324,9 @@ async function sendMessage() {
     if (error) {
         console.error('Erro ao enviar mensagem:', error);
         if (error.code === '42501') {
-            afkMessage.textContent = 'Permissão negada para enviar mensagem (RLS).';
-            setTimeout(() => { afkMessage.textContent = ''; }, 5000);
+            showFloatingMessage('Permissão negada para enviar mensagem (RLS).');
         } else {
-             afkMessage.textContent = `Erro ao enviar mensagem: ${error.message}`;
-             setTimeout(() => { afkMessage.textContent = ''; }, 5000);
+            showFloatingMessage(`Erro ao enviar mensagem: ${error.message}`);
         }
     } else {
         chatInput.value = '';
@@ -322,6 +342,7 @@ function displayChatMessage(message) {
 }
 
 function subscribeToChat() {
+    console.log("Inscrito no canal de chat.");
     // Remove qualquer inscrição anterior para evitar duplicação
     supabaseClient.removeChannel('chat_messages_channel');
 
@@ -365,8 +386,6 @@ async function updateLastActive(userId) {
 
 
 // --- Funções de Visibilidade da UI (Refatorada) ---
-// showGameUI: true para mostrar a interface do jogo (com menu), false para mostrar o login.
-// activeContainerId: o ID do container (ex: 'playerInfoDiv', 'chatContainer', 'afkContainer') a ser exibido.
 function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     // Primeiro, ocultamos todos os containers de jogo
     playerInfoDiv.style.display = 'none';
@@ -383,9 +402,11 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
         const activeDiv = document.getElementById(activeContainerId);
         if (activeDiv) {
             activeDiv.style.display = 'block';
+            console.log(`Exibindo container: ${activeContainerId}`);
         } else {
             // Fallback: se o ID for inválido, mostra o playerInfoDiv por segurança
             playerInfoDiv.style.display = 'block';
+            console.warn(`Container ${activeContainerId} não encontrado. Exibindo playerInfoDiv.`);
         }
     } else {
         // Se não estamos no jogo (tela de login)
@@ -393,25 +414,22 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
         playerInfoDiv.style.display = 'none';
         footerMenu.style.display = 'none'; // Esconde o menu do rodapé
         chatBubble.style.display = 'none'; // Esconde o balão de chat
+        console.log("Exibindo tela de login.");
     }
     authMessage.textContent = ''; // Limpa mensagens de autenticação ao mudar de estado
-    afkMessage.textContent = ''; // Limpa mensagens AFK/gerais
+    // Não limpa afkMessage aqui, pois ela é específica do afkContainer
 }
 
 
-// --- Funções dos Botões do Menu (Agora usam updateUIVisibility) ---
+// --- Funções dos Botões do Menu (Agora usam showFloatingMessage) ---
 function showGuildMenu() {
     updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
-    afkMessage.textContent = "Menu da Guilda (Em desenvolvimento)";
-    setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-    // Futuramente: updateUIVisibility(true, 'guildContainer');
+    showFloatingMessage("Menu da Guilda (Em desenvolvimento)");
 }
 
 function showPvPMenu() {
     updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
-    afkMessage.textContent = "Menu de PvP (Em desenvolvimento)";
-    setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-    // Futuramente: updateUIVisibility(true, 'pvpContainer');
+    showFloatingMessage("Menu de PvP (Em desenvolvimento)");
 }
 
 function showAfkMenu() {
@@ -424,16 +442,12 @@ function showAfkMenu() {
 
 function showMiningMenu() {
     updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
-    afkMessage.textContent = "Menu de Mineração (Em desenvolvimento)";
-    setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-    // Futuramente: updateUIVisibility(true, 'miningContainer');
+    showFloatingMessage("Menu de Mineração (Em desenvolvimento)");
 }
 
 function showCastlesMenu() {
     updateUIVisibility(true, 'playerInfoDiv'); // Volta para playerInfoDiv por enquanto
-    afkMessage.textContent = "Menu de Castelos (Em desenvolvimento)";
-    setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-    // Futuramente: updateUIVisibility(true, 'castlesContainer');
+    showFloatingMessage("Menu de Castelos (Em desenvolvimento)");
 }
 
 
@@ -448,8 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Removido listeners para gainXpBtn e gainGoldBtn
-
     // Listeners para os botões do rodapé
     if (guildBtn) guildBtn.addEventListener('click', showGuildMenu);
     if (pvpBtn) pvpBtn.addEventListener('click', showPvPMenu);
@@ -459,13 +471,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listener para o balão de chat
     if (chatBubble) chatBubble.addEventListener('click', () => {
-        // Se o chat está oculto e será mostrado
         if (chatContainer.style.display === 'none') {
-            updateUIVisibility(true, 'chatContainer'); // Mostra apenas o chat container
+            updateUIVisibility(true, 'chatContainer');
             loadInitialChatMessages();
             chatInput.focus();
         } else {
-            // Se o chat está visível e será ocultado, retorna para o playerInfoDiv padrão
             updateUIVisibility(true, 'playerInfoDiv');
         }
     });
@@ -475,8 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (session) {
             fetchAndDisplayPlayerInfo();
         } else {
-            updateUIVisibility(false); // Garante que a tela de login esteja visível
+            updateUIVisibility(false);
         }
     });
-
 });

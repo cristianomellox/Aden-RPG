@@ -15,7 +15,8 @@
             margin-bottom: 80px; /* Espaço para o menu do rodapé */
             background-color: #f0f2f5; /* Um fundo leve para melhor visualização */
         }
-        #authContainer, #playerInfoDiv, #gameContainer, #chatContainer, #afkContainer { /* Adicionado #afkContainer */
+        /* Adicionado #afkContainer aos seletores de estilo gerais */
+        #authContainer, #playerInfoDiv, #gameContainer, #chatContainer, #afkContainer {
             border: 1px solid #ccc;
             padding: 20px;
             margin-top: 20px;
@@ -50,7 +51,7 @@
         button:hover {
             opacity: 0.9;
         }
-        p#authMessage, p#gameMessage, p#profileEditMessage {
+        p#authMessage, p#gameMessage, p#profileEditMessage, p#afkMessage { /* Adicionado p#afkMessage */
             margin-top: 10px;
             font-size: 0.9em;
             color: red;

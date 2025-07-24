@@ -1,530 +1,557 @@
-// Configuração do Supabase (AQUI!)
-// **ATENÇÃO: Substitua estes valores pelos do seu projeto Supabase!**
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-// Ex: 'https://abcdefg1234.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx'; // Ex: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+// script.js
 
-// Define supabaseClient globalmente para ser acessível em outros scripts
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-// Elementos da UI
+// Inicialização do Supabase
+const supabaseUrl = 'https://lqzlblvmkuwedcofmgfb.supabase.co'; // Substitua pela sua URL do Supabase
+const supabaseAnonKey = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx'; // Substitua pela sua chave anon do Supabase
+const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+// Referências aos elementos HTML
 const authContainer = document.getElementById('authContainer');
-const playerInfoDiv = document.getElementById('playerInfoDiv');
-const chatContainer = document.getElementById('chatContainer');
-const chatBox = document.getElementById('chatBox');
-const chatInput = document.getElementById('chatInput');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const signInBtn = document.getElementById('signInBtn');
+const signUpBtn = document.getElementById('signUpBtn');
 const authMessage = document.getElementById('authMessage');
-
+const playerInfoDiv = document.getElementById('playerInfoDiv');
 const profileEditModal = document.getElementById('profileEditModal');
 const editPlayerNameInput = document.getElementById('editPlayerName');
 const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
 const saveProfileBtn = document.getElementById('saveProfileBtn');
 const profileEditMessage = document.getElementById('profileEditMessage');
 
-// Elementos do menu do rodapé e balão de chat
+// Elementos do AFK (declarados aqui para serem acessíveis globalmente ou passados)
+const afkContainer = document.getElementById('afkContainer');
+// Outros elementos do AFK são declarados e manipulados dentro de afk_script.js
+
+// Elementos do Chat
+const chatContainer = document.getElementById('chatContainer');
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const sendChatBtn = document.getElementById('sendChatBtn');
+const chatBubble = document.getElementById('chatBubble');
+
+// Elementos do rodapé
 const footerMenu = document.getElementById('footerMenu');
 const guildBtn = document.getElementById('guildBtn');
 const pvpBtn = document.getElementById('pvpBtn');
 const afkBtn = document.getElementById('afkBtn');
 const miningBtn = document.getElementById('miningBtn');
 const castlesBtn = document.getElementById('castlesBtn');
-const chatBubble = document.getElementById('chatBubble');
 
-// Referência ao container AFK
-const afkContainer = document.getElementById('afkContainer');
-// Referência ao novo elemento de mensagem flutuante (para menus)
-const floatingMessageDiv = document.getElementById('floatingMessage');
-// Referência ao novo elemento de popup de dano de combate
-const combatDamagePopupDiv = document.getElementById('combatDamagePopup');
-const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
-// Referências ao modal de resultado de combate
+// Elemento para mensagens flutuantes
+const floatingMessage = document.getElementById('floatingMessage');
+
+// Elementos do Modal de Dano de Combate
+const combatDamagePopup = document.getElementById('combatDamagePopup');
+const popupDamageAmount = document.getElementById('popupDamageAmount');
+
+// Elementos do Modal de Resultado de Combate
 const combatResultModal = document.getElementById('combatResultModal');
 const combatResultTitle = document.getElementById('combatResultTitle');
-const combatResultMessage = document = document.getElementById('combatResultMessage'); // Corrigido aqui
+const combatResultMessage = document.getElementById('combatResultMessage');
 const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
+const nextStageBtn = document.getElementById('nextStageBtn'); // Referência ao novo botão
 
 
-// --- Funções de Notificação Flutuante (para menus) ---
-function showFloatingMessage(message, duration = 3000) {
-    if (!floatingMessageDiv) return;
-    floatingMessageDiv.textContent = message;
-    floatingMessageDiv.style.display = 'block';
-    floatingMessageDiv.offsetWidth; // Força o reflow
-    floatingMessageDiv.style.opacity = '1';
-    setTimeout(() => {
-        floatingMessageDiv.style.opacity = '0';
-        setTimeout(() => {
-            floatingMessageDiv.style.display = 'none';
-        }, 500); // Duração da transição CSS
-    }, duration);
-}
+// --- Funções de Autenticação ---
 
-// --- Funções de Popup de Dano (para combate) ---
-function showDamagePopup(damageAmount, isCritical) {
-    if (!combatDamagePopupDiv) {
-        console.error("combatDamagePopupDiv não encontrado!");
-        return;
-    }
-
-    const damageSpan = combatDamagePopupDiv.querySelector('#popupDamageAmount');
-
-    if (damageSpan) {
-        damageSpan.textContent = damageAmount;
-    } else {
-        console.warn("popupDamageAmount span not found inside combatDamagePopupDiv");
-    }
-
-    combatDamagePopupDiv.classList.remove('critical');
-
-    if (isCritical) {
-        combatDamagePopupDiv.classList.add('critical');
-    }
-
-    combatDamagePopupDiv.style.display = 'block';
-    // Posição aleatória para múltiplos popups serem visíveis
-    const offset = Math.random() * 40 - 20;
-    // -20 a +20 pixels
-    combatDamagePopupDiv.style.transform = `translate(-50%, -50%) translateX(${offset}px) translateY(${offset}px)`;
-    combatDamagePopupDiv.style.opacity = '1';
-    setTimeout(() => {
-        combatDamagePopupDiv.style.opacity = '0';
-        setTimeout(() => {
-            combatDamagePopupDiv.style.display = 'none';
-            combatDamagePopupDiv.style.transform = `translate(-50%, -50%)`; // Reseta a posição
-        }, 100); // Transição CSS de opacidade
-    }, 1000);
-    // Duração que o popup fica visível
-}
-
-// EXPOR A FUNÇÃO DE POPUP DE DANO PARA USO PELO AFK SCRIPT
-window.showDamagePopup = showDamagePopup;
-// REMOVIDO: Função para Atualizar Barras de HP (updateHealthBar)
-// A função updateHealthBar e seus elementos HTML foram removidos.
-// --- Funções do Modal de Resultado de Combate ---
-// Esta função será chamada pelo afk_script.js
-window.showCombatResultModal = (title, message, onConfirmCallback) => {
-    combatResultTitle.textContent = title;
-    combatResultMessage.innerHTML = message;
-    combatResultModal.style.display = 'flex';
-
-    confirmCombatResultBtn.onclick = null;
-    confirmCombatResultBtn.onclick = () => {
-        combatResultModal.style.display = 'none';
-        if (onConfirmCallback) {
-            onConfirmCallback();
-        }
-    };
-};
-
-
-// Funções de Autenticação
 async function signIn() {
-    console.log("Tentando login...");
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    authMessage.textContent = 'Tentando fazer login...';
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
-        authMessage.textContent = `Erro ao fazer login: ${error.message}`;
-        console.error('Erro ao fazer login:', error);
+        authMessage.textContent = 'Erro ao fazer login: ' + error.message;
     } else {
-        authMessage.textContent = '';
-        console.log("Login bem-sucedido.");
+        authMessage.textContent = 'Login bem-sucedido!';
+        console.log('Usuário logado:', data.user);
+        checkUserProfile(data.user);
     }
 }
 
 async function signUp() {
-    console.log("Tentando registro...");
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    authMessage.textContent = 'Registrando usuário...';
-    const { error } = await supabaseClient.auth.signUp({ email, password });
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
     if (error) {
-        authMessage.textContent = `Erro ao registrar: ${error.message}`;
-        console.error('Erro ao registrar:', error);
+        authMessage.textContent = 'Erro ao registrar: ' + error.message;
     } else {
-        authMessage.textContent = 'Registro realizado! Verifique seu email para confirmar a conta.';
-        console.log("Registro solicitado. Verifique o email.");
+        authMessage.textContent = 'Registro bem-sucedido! Verifique seu email para confirmar.';
+        console.log('Usuário registrado:', data.user);
+        // Após o registro, ainda é necessário que o usuário confirme o email
+        // Não chamamos checkUserProfile aqui, pois o email ainda não está confirmado.
+        // O perfil será criado na primeira vez que o usuário logar APÓS a confirmação.
     }
 }
 
-async function signOut() {
-    console.log("Tentando sair...");
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) {
-        console.error('Erro ao sair:', error.message);
+// --- Funções de Perfil de Jogador ---
+
+async function checkUserProfile(user) {
+    if (!user) return;
+
+    const { data: player, error } = await supabaseClient
+        .from('players')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+    if (error && error.code === 'PGRST116') { // Não encontrado
+        console.log("Perfil não encontrado, criando novo perfil...");
+        showProfileEditModal(true); // Abre o modal para criar um novo perfil
+    } else if (error) {
+        console.error('Erro ao buscar perfil:', error.message);
+        // Tratar outros erros
     } else {
-        console.log("Sessão encerrada.");
-        chatBox.innerHTML = '';
-    }
-}
-
-// Funções de Perfil do Jogador
-async function fetchAndDisplayPlayerInfo() {
-    console.log("Buscando informações do jogador...");
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (user) {
-        authContainer.style.display = 'none';
-        const { data: player, error } = await supabaseClient
-            .from('players')
-            .select('id, created_at, name, faction, level, xp, gold, health, mana, attack, defense, combat_power, ranking_points, guild_id, crystals, current_afk_stage, last_afk_start_time, rank, is_silenced_until, is_banned, last_active, daily_attempts_left, last_attempt_reset') // Adicionado daily_attempts_left e last_attempt_reset
-            .eq('id', user.id)
-            .single();
-        if (error || (player.rank === 'Aventureiro(a)' && player.name === user.email)) {
-            console.log("Perfil não configurado ou erro ao buscar. Abrindo modal de edição.");
-            profileEditModal.style.display = 'flex';
-            editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
-            editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
-            updateUIVisibility(false);
-            footerMenu.style.display = 'none';
-            chatBubble.style.display = 'none';
-            return;
-        }
-
-        // NOVO: Calcula o XP necessário para o próximo nível com base na nova curva
-        const xpNeededForNextLevel = calculateXPForNextLevel(player.level);
-
-        playerInfoDiv.innerHTML = `
-            <p>Olá, ${player.name}!</p>
-            <p>Nível: ${player.level}</p>
-            <p>XP: ${player.xp} / ${xpNeededForNextLevel} (próximo nível)</p>
-            <p>Ouro: ${player.gold}</p>
-            <p>Facção: ${player.faction}</p>
-            <p>Rank: ${player.rank}</p>
-            <p>HP: ${player.health} | Mana: ${player.mana}</p>
-            <p>Ataque: ${player.attack} | Defesa: ${player.defense}</p>
-            <p>Poder de Combate: ${player.combat_power}</p>
-            <button id="signOutBtn">Sair</button>
-        `;
-        document.getElementById('signOutBtn').onclick = signOut;
-
-        console.log("Informações do jogador carregadas. Exibindo UI padrão.");
-        updateUIVisibility(true, 'playerInfoDiv');
-        subscribeToChat();
-        updateLastActive(user.id);
-        if (typeof window.onPlayerInfoLoadedForAfk === 'function') {
+        console.log("Perfil encontrado:", player);
+        currentPlayer = player; // Armazena o perfil do jogador globalmente
+        displayPlayerInfo(player);
+        updateUIVisibility(true); // Mostra a UI principal do jogo
+        profileEditModal.style.display = 'none'; // Esconde o modal de edição
+        // Chama a função de inicialização do AFK script
+        if (window.onPlayerInfoLoadedForAfk) {
             window.onPlayerInfoLoadedForAfk(player);
         }
-
-    } else {
-        console.log("Nenhum usuário logado. Exibindo tela de login.");
-        updateUIVisibility(false);
+        // Inicia o chat ao logar
+        setupChat();
     }
 }
 
-// Função para Salvar Perfil
-saveProfileBtn.addEventListener('click', async () => {
-    const newName = editPlayerNameInput.value.trim();
-    const newFaction = editPlayerFactionSelect.value;
+async function createOrUpdateProfile() {
+    const playerName = editPlayerNameInput.value.trim();
+    const playerFaction = editPlayerFactionSelect.value;
+    const user = (await supabaseClient.auth.getUser()).data.user;
 
-    if (!newName) {
-        profileEditMessage.textContent = "O nome do jogador não pode ser vazio.";
-        return;
-    }
-
-    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         profileEditMessage.textContent = "Erro: Usuário não logado.";
         return;
     }
+    if (!playerName) {
+        profileEditMessage.textContent = "Por favor, digite um nome para o jogador.";
+        return;
+    }
 
-    profileEditMessage.textContent = "Salvando perfil...";
-    console.log("Salvando perfil...");
+    // Verifica se já existe um perfil com esse ID
+    const { data: existingPlayer, error: fetchError } = await supabaseClient
+        .from('players')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // Outro erro que não seja 'não encontrado'
+        profileEditMessage.textContent = "Erro ao verificar perfil existente: " + fetchError.message;
+        return;
+    }
+
+    let operation;
+    let updateData = {
+        name: playerName,
+        faction: playerFaction,
+        last_login: new Date().toISOString()
+    };
+
+    if (existingPlayer) {
+        // Atualiza perfil existente
+        operation = supabaseClient
+            .from('players')
+            .update(updateData)
+            .eq('id', user.id);
+        profileEditMessage.textContent = "Atualizando perfil...";
+    } else {
+        // Cria novo perfil
+        updateData.id = user.id;
+        // Valores iniciais para um novo jogador
+        updateData.level = 1;
+        updateData.xp = 0;
+        updateData.gold = 0;
+        updateData.health = 100;
+        updateData.attack = 10;
+        updateData.current_afk_stage = 1; // Começa no estágio 1
+        updateData.last_afk_start_time = new Date().toISOString(); // Marca o tempo de início do AFK
+        updateData.daily_attempts_left = 5; // 5 tentativas diárias iniciais
+        updateData.last_attempt_reset = new Date().toISOString(); // Define o reset para agora
+
+        operation = supabaseClient
+            .from('players')
+            .insert([updateData]);
+        profileEditMessage.textContent = "Criando perfil...";
+    }
+
+    const { data, error } = await operation;
+
+    if (error) {
+        profileEditMessage.textContent = 'Erro ao salvar perfil: ' + error.message;
+        console.error('Erro:', error);
+    } else {
+        profileEditMessage.textContent = 'Perfil salvo com sucesso!';
+        console.log('Perfil salvo/atualizado:', data);
+        profileEditModal.style.display = 'none';
+        checkUserProfile(user); // Re-carrega o perfil para exibir na UI principal
+    }
+}
+
+function displayPlayerInfo(player) {
+    let content = `
+        <p>Nome: ${player.name}</p>
+        <p>Facção: ${player.faction}</p>
+        <p>Nível: ${player.level}</p>
+        <p>XP: ${player.xp}</p>
+        <p>Ouro: ${player.gold}</p>
+        <p>Vida: ${player.health}</p>
+        <p>Ataque: ${player.attack}</p>
+        <p>Estágio AFK: ${player.current_afk_stage}</p>
+    `;
+    playerInfoDiv.innerHTML = content;
+}
+
+function showProfileEditModal(isNewPlayer = false) {
+    if (isNewPlayer) {
+        document.querySelector('#profileEditModal h2').textContent = "Bem-vindo(a), Aventureiro(a)!";
+        document.querySelector('#profileEditModal p').textContent = "Seu perfil é novo. Por favor, edite seu nome e escolha sua facção inicial.";
+        editPlayerNameInput.value = '';
+        editPlayerFactionSelect.value = 'Aliança da Floresta';
+    } else {
+        document.querySelector('#profileEditModal h2').textContent = "Editar Perfil";
+        document.querySelector('#profileEditModal p').textContent = "Edite seu nome ou facção.";
+        editPlayerNameInput.value = currentPlayer ? currentPlayer.name : '';
+        editPlayerFactionSelect.value = currentPlayer ? currentPlayer.faction : 'Aliança da Floresta';
+    }
+    profileEditMessage.textContent = '';
+    profileEditModal.style.display = 'flex'; // Usar flex para centralizar
+}
+
+// --- Funções de XP e Ouro (expostas globalmente para afk_script.js) ---
+
+window.gainXP = async (playerId, amount) => {
+    if (amount <= 0) return { success: true, message: "Nenhum XP ganho.", leveledUp: false };
+
+    const { data: player, error } = await supabaseClient
+        .from('players')
+        .select('xp, level')
+        .eq('id', playerId)
+        .single();
+
+    if (error) {
+        console.error('Erro ao buscar XP do jogador:', error.message);
+        return { success: false, message: error.message };
+    }
+
+    let newXP = player.xp + amount;
+    let newLevel = player.level;
+    let leveledUp = false;
+
+    // Lógica de nivelamento (exemplo simples)
+    // XP necessário para o próximo nível (exemplo: Nível * 100)
+    const xpToNextLevel = newLevel * 100;
+
+    if (newXP >= xpToNextLevel) {
+        newLevel++;
+        newXP -= xpToNextLevel; // XP restante para o próximo nível
+        leveledUp = true;
+        // Aumentar atributos ao subir de nível (exemplo)
+        await supabaseClient
+            .from('players')
+            .update({ attack: player.attack + 2, health: player.health + 10 })
+            .eq('id', playerId);
+        window.showFloatingMessage(`Você subiu para o nível ${newLevel}!`, 'level-up');
+    }
+
+    const { error: updateError } = await supabaseClient
+        .from('players')
+        .update({ xp: newXP, level: newLevel })
+        .eq('id', playerId);
+
+    if (updateError) {
+        console.error('Erro ao atualizar XP do jogador:', updateError.message);
+        return { success: false, message: updateError.message };
+    }
+
+    window.showFloatingMessage(`+${amount} XP`, 'xp-gain');
+    return { success: true, newXP, newLevel, leveledUp };
+};
+
+window.gainGold = async (playerId, amount) => {
+    if (amount <= 0) return { success: true, message: "Nenhum ouro ganho." };
 
     const { data, error } = await supabaseClient
         .from('players')
-        .update({ name: newName, faction: newFaction, rank: 'Aventureiro(a)' })
-        .eq('id', user.id);
+        .rpc('add_gold', { player_id_param: playerId, amount_param: amount });
 
     if (error) {
-        console.error('Erro ao salvar perfil:', error);
-        profileEditMessage.textContent = `Erro ao salvar perfil: ${error.message}`;
-    } else {
-        profileEditMessage.textContent = "Perfil salvo com sucesso!";
-        console.log("Perfil salvo com sucesso.");
-        profileEditModal.style.display = 'none';
-        fetchAndDisplayPlayerInfo();
-    }
-});
-
-// NOVO: Constante para o nível máximo do jogador
-const MAX_PLAYER_LEVEL = 100;
-
-// NOVO: Função para calcular o XP necessário para o próximo nível
-// A curva é exponencial para tornar cada vez mais difícil
-function calculateXPForNextLevel(level) {
-    if (level <= 0) return 100; // Caso base para nível 0 ou erro
-    return Math.floor(100 * Math.pow(level, 1.5));
-}
-
-// FUNÇÕES DE PROGRESSÃO DO JOGADOR (ainda necessárias para as recompensas AFK)
-window.gainXP = async (userId, amount) => {
-    console.log(`Tentando ganhar ${amount} XP para o usuário ${userId}`);
-    const { data: player, error: fetchError } = await supabaseClient
-        .from('players')
-        .select('xp, level, health, mana, attack, defense, combat_power')
-        .eq('id', userId)
-        .single();
-    if (fetchError) {
-        console.error('Erro ao buscar XP atual:', fetchError);
-        return { success: false, message: `Erro ao buscar XP: ${fetchError.message}` };
+        console.error('Erro ao adicionar ouro:', error.message);
+        return { success: false, message: error.message };
     }
 
-    let currentXP = player.xp;
-    let currentLevel = player.level;
-    let newHealth = player.health;
-    let newMana = player.mana;
-    let newAttack = player.attack;
-    let newDefense = player.defense;
-    let newCombatPower = player.combat_power;
-    let leveledUp = false;
+    window.showFloatingMessage(`+${amount} Ouro`, 'gold-gain');
+    return { success: true };
+};
 
-    // NOVO: Verifica se o jogador já atingiu o nível máximo
-    if (currentLevel >= MAX_PLAYER_LEVEL) {
-        console.log(`Jogador ${userId} já está no nível máximo (${MAX_PLAYER_LEVEL}). Não receberá mais XP.`);
-        return { success: false, message: `Você já atingiu o nível máximo (${MAX_PLAYER_LEVEL})!` };
-    }
+// Função para buscar e exibir informações atualizadas do jogador
+window.fetchAndDisplayPlayerInfo = async () => {
+    const { data: { user } = { user: null } } = await supabaseClient.auth.getUser();
+    if (user) {
+        const { data: player, error } = await supabaseClient
+            .from('players')
+            .select('*')
+            .eq('id', user.id)
+            .single();
 
-    currentXP += amount;
-    const xpNeededForNextLevel = calculateXPForNextLevel(currentLevel); // NOVO: Usa a nova função de cálculo
-
-    if (currentXP >= xpNeededForNextLevel) {
-        leveledUp = true;
-        currentLevel++;
-        currentXP -= xpNeededForNextLevel; // Reseta o XP após subir de nível
-
-        // NOVO: Garante que o XP não continue acumulando se atingir o nível máximo logo após subir de nível
-        if (currentLevel >= MAX_PLAYER_LEVEL) {
-            currentLevel = MAX_PLAYER_LEVEL;
-            currentXP = 0; // Zera o XP ao atingir o nível máximo para evitar overflow ou confusão.
-            console.log(`Jogador ${userId} atingiu o nível máximo: ${MAX_PLAYER_LEVEL}!`);
-        }
-
-        newHealth += 10;
-        newMana += 5;
-        newAttack += 2;
-        newDefense += 1;
-        newCombatPower = Math.floor((newHealth + newMana + newAttack + newDefense) * currentLevel / 10);
-        console.log(`Jogador subiu para o nível ${currentLevel}!`);
-    }
-
-    const { error: updateError } = await supabaseClient
-        .from('players')
-        .update({
-            xp: currentXP,
-            level: currentLevel,
-            health: newHealth,
-            mana: newMana,
-            attack: newAttack,
-            defense: newDefense,
-            combat_power: newCombatPower
-        })
-        .eq('id', userId);
-    if (updateError) {
-        console.error('Erro ao atualizar XP/Nível:', updateError);
-        return { success: false, message: `Erro ao atualizar XP/Nível: ${updateError.message}` };
-    } else {
-        console.log(`XP e nível atualizados para ${userId}. Novo XP: ${currentXP}, Nível: ${currentLevel}`);
-        return { success: true, leveledUp: leveledUp, newLevel: currentLevel, message: `Ganhou ${amount} XP.` };
-    }
-}
-
-window.gainGold = async (userId, amount) => {
-    console.log(`Tentando ganhar ${amount} Ouro para o usuário ${userId}`);
-    const { data: player, error: fetchError } = await supabaseClient
-        .from('players')
-        .select('gold')
-        .eq('id', userId)
-        .single();
-    if (fetchError) {
-        console.error('Erro ao buscar Ouro atual:', fetchError);
-        return { success: false, message: `Erro ao buscar Ouro: ${fetchError.message}` };
-    }
-    const newGold = player.gold + amount;
-    const { error: updateError } = await supabaseClient
-        .from('players')
-        .update({ gold: newGold })
-        .eq('id', userId);
-    if (updateError) {
-        console.error('Erro ao atualizar Ouro:', updateError);
-        return { success: false, message: `Erro ao atualizar Ouro: ${updateError.message}` };
-    } else {
-        console.log(`Ouro atualizado para ${userId}. Novo Ouro: ${newGold}`);
-        return { success: true, message: `Ganhou ${amount} Ouro.` };
-    }
-}
-
-// Funções de Chat
-async function sendMessage() {
-    const messageText = chatInput.value.trim();
-    if (messageText === '') return;
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        console.error('Nenhum usuário logado para enviar mensagem.');
-        showFloatingMessage('Você precisa estar logado para enviar mensagens.');
-        return;
-    }
-    const { data: player, error: playerError } = await supabaseClient
-        .from('players')
-        .select('name, rank')
-        .eq('id', user.id)
-        .single();
-    if (playerError) {
-        console.error('Erro ao buscar nome/rank do jogador para o chat:', playerError);
-        showFloatingMessage('Erro ao verificar seu perfil para o chat.');
-        return;
-    }
-    const playerName = player ? player.name : 'Desconhecido';
-    const { error } = await supabaseClient
-        .from('chat_messages')
-        .insert({ user_id: user.id, username: playerName, message: messageText });
-    if (error) {
-        console.error('Erro ao enviar mensagem:', error);
-        if (error.code === '42501') {
-            showFloatingMessage('Permissão negada para enviar mensagem (RLS).');
+        if (error) {
+            console.error('Erro ao recarregar perfil:', error.message);
         } else {
-            showFloatingMessage(`Erro ao enviar mensagem: ${error.message}`);
+            currentPlayer = player; // Atualiza o objeto currentPlayer global
+            displayPlayerInfo(player); // Atualiza a exibição na div playerInfoDiv
+            // Notifica o afk_script.js que os dados foram atualizados
+            if (window.onPlayerInfoLoadedForAfk) {
+                window.onPlayerInfoLoadedForAfk(player);
+            }
         }
-    } else {
-        chatInput.value = '';
     }
-}
+};
 
-function displayChatMessage(message) {
-    const p = document.createElement('p');
-    p.classList.add('chat-message');
-    p.innerHTML = `<strong>[${message.username}]</strong>: ${message.message}`;
-    chatBox.appendChild(p);
-    chatBox.scrollTop = chatBox.scrollHeight;
-}
+// --- Funções do Chat ---
 
-function subscribeToChat() {
-    console.log("Inscrito no canal de chat.");
-    supabaseClient.removeChannel('chat_messages_channel');
+async function setupChat() {
+    await fetchMessages(); // Busca mensagens existentes
+
+    // Assina o canal 'chat' para novas mensagens
     supabaseClient
-        .channel('chat_messages_channel')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
-            loadInitialChatMessages();
+        .channel('chat_messages')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat' }, payload => {
+            console.log('Change received!', payload);
+            if (payload.eventType === 'INSERT') {
+                displayMessage(payload.new);
+            }
         })
         .subscribe();
-    loadInitialChatMessages();
 }
 
-async function loadInitialChatMessages() {
-    const { data: messages, error } = await supabaseClient
-        .from('chat_messages')
+async function fetchMessages() {
+    const { data, error } = await supabaseClient
+        .from('chat')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .order('created_at', { ascending: true })
+        .limit(50); // Limita para as 50 mensagens mais recentes
+
     if (error) {
-        console.error('Erro ao carregar mensagens iniciais:', error);
+        console.error('Erro ao buscar mensagens:', error.message);
+    } else {
+        chatBox.innerHTML = ''; // Limpa antes de exibir
+        data.forEach(displayMessage);
+    }
+}
+
+async function sendMessage() {
+    const messageContent = chatInput.value.trim();
+    if (messageContent === '') return;
+
+    const user = (await supabaseClient.auth.getUser()).data.user;
+    if (!user || !currentPlayer) {
+        alert("Você precisa estar logado e ter um perfil para enviar mensagens.");
         return;
     }
-    chatBox.innerHTML = '';
-    messages.reverse().forEach(displayChatMessage);
+
+    const { error } = await supabaseClient
+        .from('chat')
+        .insert([
+            { sender_id: user.id, sender_name: currentPlayer.name, message: messageContent }
+        ]);
+
+    if (error) {
+        console.error('Erro ao enviar mensagem:', error.message);
+    } else {
+        chatInput.value = ''; // Limpa o input
+    }
 }
 
-// Funções de UI
-function updateUIVisibility(isLoggedIn, activeContainerId = null) {
-    if (isLoggedIn) {
+function displayMessage(message) {
+    const p = document.createElement('p');
+    const timestamp = new Date(message.created_at).toLocaleTimeString();
+    p.textContent = `[${timestamp}] ${message.sender_name}: ${message.message}`;
+    chatBox.appendChild(p);
+    chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll
+}
+
+// --- Funções de Visibilidade da UI ---
+
+window.updateUIVisibility = (loggedIn, activeContainer = 'afkContainer') => {
+    if (loggedIn) {
         authContainer.style.display = 'none';
         playerInfoDiv.style.display = 'block';
-        footerMenu.style.display = 'flex';
-        chatBubble.style.display = 'flex';
+        footerMenu.style.display = 'flex'; // Exibe o menu do rodapé
+        chatBubble.style.display = 'block'; // Exibe o ícone do chat flutuante
 
-        // Oculta todos os containers e mostra apenas o ativo (ou o playerInfoDiv por padrão)
-        const containers = [afkContainer, chatContainer]; // Adicione outros containers aqui conforme a necessidade
-        containers.forEach(container => {
-            if (container) {
-                container.style.display = 'none';
-            }
-        });
+        // Oculta todos os containers de conteúdo primeiro
+        afkContainer.style.display = 'none';
+        chatContainer.style.display = 'none';
+        // Adicione outras seções do jogo aqui se houver
+        // ...
 
-        if (activeContainerId === 'chatContainer') {
-            chatContainer.style.display = 'block';
-            afkContainer.style.display = 'none'; // Garante que o AFK esteja oculto
-        } else if (activeContainerId === 'afkContainer') {
-            afkContainer.style.display = 'block';
-            chatContainer.style.display = 'none'; // Garante que o Chat esteja oculto
-        } else {
-            // Se nenhum container específico for solicitado, mostra as informações do jogador.
-            // Oculta chat e afk por padrão se não forem explicitamente solicitados.
-            chatContainer.style.display = 'none';
-            afkContainer.style.display = 'none';
+        // Exibe o container ativo
+        const containerToShow = document.getElementById(activeContainer);
+        if (containerToShow) {
+            containerToShow.style.display = 'block';
         }
 
     } else {
         authContainer.style.display = 'block';
         playerInfoDiv.style.display = 'none';
-        chatContainer.style.display = 'none';
-        afkContainer.style.display = 'none';
-        footerMenu.style.display = 'none';
-        chatBubble.style.display = 'none';
-    }
-}
-
-// Event Listeners
-document.getElementById('signInBtn').addEventListener('click', signIn);
-document.getElementById('signUpBtn').addEventListener('click', signUp);
-document.getElementById('sendChatBtn').addEventListener('click', sendMessage);
-chatInput.addEventListener('keypress', function(event) {
-    if (event.key === 'Enter') {
-        sendMessage();
-    }
-});
-
-// NOVO: Event Listeners para botões do rodapé com mensagem "Em desenvolvimento"
-guildBtn.addEventListener('click', () => {
-    showFloatingMessage("Guilda: Em desenvolvimento!");
-});
-pvpBtn.addEventListener('click', () => {
-    showFloatingMessage("PvP: Em desenvolvimento!");
-});
-miningBtn.addEventListener('click', () => {
-    showFloatingMessage("Mineração: Em desenvolvimento!");
-});
-castlesBtn.addEventListener('click', () => {
-    showFloatingMessage("Castelos: Em desenvolvimento!");
-});
-
-// EXISTENTES: Event Listeners para botões do rodapé
-afkBtn.addEventListener('click', () => {
-    updateUIVisibility(true, 'afkContainer');
-    showFloatingMessage("Você entrou na Aventura AFK!");
-});
-
-chatBubble.addEventListener('click', () => {
-    updateUIVisibility(true, 'chatContainer');
-    showFloatingMessage("Você abriu o Chat Global!");
-});
-
-
-// Funções de verificação de sessão e inicialização
-supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (session) {
-        console.log('Sessão encontrada:', session);
-        fetchAndDisplayPlayerInfo();
-    } else {
-        console.log('Nenhuma sessão.');
-        updateUIVisibility(false);
-    }
-});
-
-// Inicialização
-fetchAndDisplayPlayerInfo(); // Tenta buscar informações do usuário na carga inicial
-updateLastActive = async (userId) => {
-    const { error } = await supabaseClient
-        .from('players')
-        .update({ last_active: new Date().toISOString() })
-        .eq('id', userId);
-    if (error) {
-        console.error('Erro ao atualizar last_active:', error.message);
+        footerMenu.style.display = 'none'; // Esconde o menu do rodapé
+        chatBubble.style.display = 'none'; // Esconde o ícone do chat flutuante
+        afkContainer.style.display = 'none'; // Garante que o AFK esteja oculto
+        chatContainer.style.display = 'none'; // Garante que o chat esteja oculto
     }
 };
 
-// Temporizador para atualizar o last_active a cada 5 minutos (ajustável)
-setInterval(async () => {
-    const { data: { user } } = await supabaseClient.auth.getUser();
+// --- Funções de Pop-up de Dano e Mensagens Flutuantes ---
+
+window.showDamagePopup = (amount, isCritical) => {
+    popupDamageAmount.textContent = amount;
+    combatDamagePopup.className = 'combat-damage-popup ' + (isCritical ? 'critical' : '');
+    combatDamagePopup.style.display = 'block';
+    combatDamagePopup.style.opacity = '1';
+    combatDamagePopup.style.transform = 'translateY(0)';
+
+    // Resetar posição para a animação
+    combatDamagePopup.style.transition = 'none';
+    combatDamagePopup.style.transform = 'translateY(20px)';
+    combatDamagePopup.style.opacity = '0';
+
+    // Forçar reflow para reiniciar a transição
+    combatDamagePopup.offsetHeight;
+
+    combatDamagePopup.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
+    combatDamagePopup.style.transform = 'translateY(0)';
+    combatDamagePopup.style.opacity = '1';
+
+    setTimeout(() => {
+        combatDamagePopup.style.opacity = '0';
+        combatDamagePopup.style.transform = 'translateY(-20px)'; // Move para cima enquanto desaparece
+        setTimeout(() => {
+            combatDamagePopup.style.display = 'none';
+        }, 500); // Tempo para a animação de fade-out
+    }, 800); // Tempo que o pop-up fica visível
+};
+
+window.showFloatingMessage = (message, type = '') => {
+    floatingMessage.textContent = message;
+    floatingMessage.className = `floating-message ${type}`; // Adiciona classe para estilização
+    floatingMessage.style.display = 'block';
+    floatingMessage.style.opacity = '1';
+
+    // Reset position for re-animation if it was already visible
+    floatingMessage.style.transition = 'none';
+    floatingMessage.style.transform = 'translateY(20px)';
+    floatingMessage.offsetHeight; // Trigger reflow
+
+    floatingMessage.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
+    floatingMessage.style.transform = 'translateY(0)';
+    floatingMessage.style.opacity = '1';
+
+
+    setTimeout(() => {
+        floatingMessage.style.opacity = '0';
+        floatingMessage.style.transform = 'translateY(-20px)';
+        setTimeout(() => {
+            floatingMessage.style.display = 'none';
+        }, 500); // Time for fade-out animation
+    }, 1500); // Time visible before starting fade-out
+};
+
+
+// Funções do Modal de Resultado de Combate
+// Esta função agora APENAS mostra o modal e configura o texto.
+// Os event listeners dos botões serão configurados diretamente no afk_script.js.
+window.showCombatResultModal = (title, message) => { 
+    combatResultTitle.textContent = title;
+    combatResultMessage.innerHTML = message;
+    combatResultModal.style.display = 'flex'; // Garante que o modal seja exibido
+    // Não configura confirmCombatResultBtn.onclick nem nextStageBtn.onclick aqui.
+    // Isso será feito no afk_script.js para ter controle sobre ambos os botões.
+};
+
+
+// --- Event Listeners ---
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Verifica o status de login ao carregar a página
+    const { data: { user } = { user: null } } = await supabaseClient.auth.getUser();
     if (user) {
-        await updateLastActive(user.id);
+        checkUserProfile(user);
+    } else {
+        updateUIVisibility(false); // Mostra a tela de login/registro
     }
-}, 5 * 60 * 1000); // 5 minutos
+
+    signInBtn.addEventListener('click', signIn);
+    signUpBtn.addEventListener('click', signUp);
+    saveProfileBtn.addEventListener('click', createOrUpdateProfile);
+
+    // Event listeners para o menu do rodapé
+    if (guildBtn) {
+        guildBtn.addEventListener('click', () => {
+            alert('Funcionalidade de Guilda em desenvolvimento!');
+            // updateUIVisibility(true, 'guildContainer'); // Exemplo de como mudar a tela
+        });
+    }
+    if (pvpBtn) {
+        pvpBtn.addEventListener('click', () => {
+            alert('Funcionalidade de PvP em desenvolvimento!');
+        });
+    }
+    if (afkBtn) {
+        afkBtn.addEventListener('click', () => {
+            updateUIVisibility(true, 'afkContainer'); // Exibe o container AFK
+        });
+    }
+    if (miningBtn) {
+        miningBtn.addEventListener('click', () => {
+            alert('Funcionalidade de Mineração em desenvolvimento!');
+        });
+    }
+    if (castlesBtn) {
+        castlesBtn.addEventListener('click', () => {
+            alert('Funcionalidade de Castelos em desenvolvimento!');
+        });
+    }
+
+    // Chat
+    if (sendChatBtn) {
+        sendChatBtn.addEventListener('click', sendMessage);
+    }
+    if (chatInput) {
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    }
+    if (chatBubble) {
+        chatBubble.addEventListener('click', () => {
+            // Alterna a visibilidade do chat
+            if (chatContainer.style.display === 'block') {
+                chatContainer.style.display = 'none';
+                updateUIVisibility(true, 'afkContainer'); // Volta para a tela AFK se o chat for fechado
+            } else {
+                updateUIVisibility(true, 'chatContainer'); // Mostra o container do chat
+                chatInput.focus(); // Foca no input do chat
+            }
+        });
+    }
+});
+
+// Acompanha mudanças de autenticação (ex: logout)
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+        updateUIVisibility(false); // Volta para a tela de login
+        // Limpa informações do jogador
+        currentPlayer = null;
+        if (playerInfoDiv) playerInfoDiv.innerHTML = '';
+        if (window.onPlayerInfoLoadedForAfk) {
+            window.onPlayerInfoLoadedForAfk(null); // Notifica o afk_script.js que não há jogador
+        }
+    } else if (event === 'SIGNED_IN') {
+        // Quando o usuário faz login, ele já é tratado por checkUserProfile no DOMContentLoaded
+        // Se já está logado e o token expira/refresca, esta parte garante que a UI permaneça correta.
+        if (session && session.user) {
+            checkUserProfile(session.user);
+        }
+    }
+});

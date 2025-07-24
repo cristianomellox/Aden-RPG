@@ -300,6 +300,15 @@
             background-color: #bf360c;
             transform: scale(0.95);
         }
+
+        /* Estilo para a porcentagem de HP do monstro */
+        #monsterHealthPercentage {
+            display: none; /* Inicia oculto */
+            text-align: center;
+            font-weight: bold;
+            margin-top: 10px;
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -329,6 +338,8 @@
         <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
         <button id="startAdventureBtn">Iniciar Combate PvE</button>
         <p id="afkMessage"></p>
+
+        <p id="monsterHealthPercentage" style="display:none;">HP do Monstro: <span id="monsterCurrentHealthDisplay">100%</span></p>
 
         <button id="attackButton" style="display:none;">Atacar</button>
         <p id="attackCountDisplay" style="display:none; text-align: center; margin-top: 10px; font-weight: bold;">Ataques Restantes: <span id="remainingAttacks">10</span></p>

@@ -1,7 +1,7 @@
 // Configuração do Supabase
 // **ATENÇÃO: Substitua estes valores pelos do seu projeto Supabase!**
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co'; // Ex: 'https://abcdefg1234.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx'; // Ex: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+const SUPABASE_URL = 'SUA_SUPABASE_PROJECT_URL_AQUI'; // Ex: 'https://abcdefg1234.supabase.co'
+const SUPABASE_ANON_KEY = 'SUA_SUPABASE_ANON_KEY_AQUI'; // Ex: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -12,7 +12,7 @@ const gameContainer = document.getElementById('gameContainer');
 const chatContainer = document.getElementById('chatContainer');
 const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
-const authMessage = document.getElementById('authMessage'); // Para mensagens de autenticação
+const authMessage = document.getElementById('authMessage');
 
 const profileEditModal = document.getElementById('profileEditModal');
 const editPlayerNameInput = document.getElementById('editPlayerName');
@@ -20,12 +20,12 @@ const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
 const saveProfileBtn = document.getElementById('saveProfileBtn');
 const profileEditMessage = document.getElementById('profileEditMessage');
 
-// Novos elementos de jogo (para mensagens gerais do jogo e chat)
+// Elementos de jogo (para mensagens gerais do jogo, XP/Ouro, e agora chat também)
 const gainXpBtn = document.getElementById('gainXpBtn');
 const gainGoldBtn = document.getElementById('gainGoldBtn');
-const gameMessage = document.getElementById('gameMessage'); // Usado para XP/Ouro e agora para mensagens do chat também
+const gameMessage = document.getElementById('gameMessage');
 
-// Elementos do menu do rodapé
+// NOVOS Elementos do menu do rodapé e balão de chat
 const footerMenu = document.getElementById('footerMenu');
 const guildBtn = document.getElementById('guildBtn');
 const pvpBtn = document.getElementById('pvpBtn');
@@ -34,30 +34,6 @@ const miningBtn = document.getElementById('miningBtn');
 const castlesBtn = document.getElementById('castlesBtn');
 const chatBubble = document.getElementById('chatBubble');
 
-
-// Funções de Visibilidade da UI
-// Esta função agora é o ponto central para controlar o que é exibido.
-// showGameUI: true para mostrar a interface do jogo, false para mostrar o login.
-function updateUIVisibility(showGameUI) {
-    if (showGameUI) {
-        authContainer.style.display = 'none';
-        playerInfoDiv.style.display = 'block';
-        gameContainer.style.display = 'block';
-        footerMenu.style.display = 'flex'; // Mostra o menu do rodapé
-        chatBubble.style.display = 'flex'; // Mostra o balão de chat
-    } else {
-        authContainer.style.display = 'block'; // Mostra login
-        playerInfoDiv.style.display = 'none';
-        gameContainer.style.display = 'none';
-        footerMenu.style.display = 'none'; // Esconde o menu do rodapé
-        chatBubble.style.display = 'none'; // Esconde o balão de chat
-        chatContainer.style.display = 'none'; // Garante que o chat esteja fechado
-    }
-    // O modal de edição de perfil é gerido exclusivamente dentro de fetchAndDisplayPlayerInfo
-    profileEditModal.style.display = 'none'; // Garante que o modal esteja oculto por padrão
-    authMessage.textContent = ''; // Limpa mensagens de autenticação ao mudar de estado
-    gameMessage.textContent = ''; // Limpa mensagens gerais do jogo
-}
 
 // Funções de Autenticação
 async function signIn() {
@@ -69,8 +45,8 @@ async function signIn() {
         authMessage.textContent = `Erro ao fazer login: ${error.message}`;
         console.error('Erro ao fazer login:', error);
     } else {
-        // A UI será atualizada via o listener onAuthStateChange
-        authMessage.textContent = 'Login bem-sucedido!';
+        authMessage.textContent = ''; // Limpa a mensagem de erro
+        // fetchAndDisplayPlayerInfo() e subscribeToChat() serão chamados via onAuthStateChange
     }
 }
 
@@ -291,7 +267,7 @@ async function sendMessage() {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         console.error('Nenhum usuário logado para enviar mensagem.');
-        gameMessage.textContent = 'Você precisa estar logado para enviar mensagens.'; // Usando gameMessage
+        gameMessage.textContent = 'Você precisa estar logado para enviar mensagens.';
         setTimeout(() => { gameMessage.textContent = ''; }, 3000);
         return;
     }
@@ -304,21 +280,21 @@ async function sendMessage() {
 
     if (playerError) {
         console.error('Erro ao buscar nome/rank do jogador para o chat:', playerError);
-        gameMessage.textContent = 'Erro ao verificar seu perfil para o chat.'; // Usando gameMessage
+        gameMessage.textContent = 'Erro ao verificar seu perfil para o chat.';
         setTimeout(() => { gameMessage.textContent = ''; }, 3000);
         return;
     }
 
     // Verificação de Rank para chat global
     if (player.rank !== 'Monarca' && player.rank !== 'Nobre') {
-        gameMessage.textContent = 'Apenas Monarcas e Nobres podem escrever no chat global.'; // Usando gameMessage
+        gameMessage.textContent = 'Apenas Monarcas e Nobres podem escrever no chat global.';
         setTimeout(() => { gameMessage.textContent = ''; }, 5000);
         return;
     }
 
     // Limite de caracteres para mensagens
     if (messageText.length > 200) {
-        gameMessage.textContent = 'Mensagem muito longa! Máximo de 200 caracteres.'; // Usando gameMessage
+        gameMessage.textContent = 'Mensagem muito longa! Máximo de 200 caracteres.';
         setTimeout(() => { gameMessage.textContent = ''; }, 5000);
         return;
     }
@@ -332,10 +308,10 @@ async function sendMessage() {
     if (error) {
         console.error('Erro ao enviar mensagem:', error);
         if (error.code === '42501') {
-            gameMessage.textContent = 'Permissão negada para enviar mensagem (RLS).'; // Usando gameMessage
+            gameMessage.textContent = 'Permissão negada para enviar mensagem (RLS).';
             setTimeout(() => { gameMessage.textContent = ''; }, 5000);
         } else {
-             gameMessage.textContent = `Erro ao enviar mensagem: ${error.message}`; // Mensagem genérica
+             gameMessage.textContent = `Erro ao enviar mensagem: ${error.message}`;
              setTimeout(() => { gameMessage.textContent = ''; }, 5000);
         }
     } else {
@@ -346,10 +322,6 @@ async function sendMessage() {
 function displayChatMessage(message) {
     const p = document.createElement('p');
     p.classList.add('chat-message');
-    // Adicionando um estilo diferente para Monarcas/Nobres no chat se quisermos
-    // if (message.rank === 'Monarca' || message.rank === 'Nobre') {
-    //     p.style.color = 'lightblue';
-    // }
     p.innerHTML = `<strong>[${message.username}]</strong>: ${message.message}`;
     chatBox.appendChild(p);
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -362,7 +334,6 @@ function subscribeToChat() {
     supabaseClient
         .channel('chat_messages_channel')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
-            // Apenas exibe as 20 últimas mensagens
             loadInitialChatMessages();
         })
         .subscribe();
@@ -371,7 +342,6 @@ function subscribeToChat() {
 }
 
 async function loadInitialChatMessages() {
-    // Buscar apenas as últimas 20 mensagens
     const { data: messages, error } = await supabaseClient
         .from('chat_messages')
         .select('*')
@@ -413,6 +383,29 @@ function showCastlesMenu() {
     setTimeout(() => { gameMessage.textContent = ''; }, 3000);
 }
 
+// --- Funções de Visibilidade da UI ---
+// showGameUI: true para mostrar a interface do jogo (com menu), false para mostrar o login.
+function updateUIVisibility(showGameUI) {
+    if (showGameUI) {
+        authContainer.style.display = 'none';
+        playerInfoDiv.style.display = 'block';
+        gameContainer.style.display = 'block';
+        footerMenu.style.display = 'flex'; // Mostra o menu do rodapé
+        chatBubble.style.display = 'flex'; // Mostra o balão de chat
+    } else {
+        authContainer.style.display = 'block'; // Mostra login
+        playerInfoDiv.style.display = 'none';
+        gameContainer.style.display = 'none';
+        footerMenu.style.display = 'none'; // Esconde o menu do rodapé
+        chatBubble.style.display = 'none'; // Esconde o balão de chat
+        chatContainer.style.display = 'none'; // Garante que o chat esteja fechado
+    }
+    // O modal de edição de perfil é gerido exclusivamente dentro de fetchAndDisplayPlayerInfo
+    profileEditModal.style.display = 'none'; // Garante que o modal esteja oculto por padrão
+    authMessage.textContent = ''; // Limpa mensagens de autenticação ao mudar de estado
+    gameMessage.textContent = ''; // Limpa mensagens gerais do jogo
+}
+
 
 // Listeners de Eventos
 document.addEventListener('DOMContentLoaded', () => {
@@ -428,15 +421,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gainXpBtn) gainXpBtn.addEventListener('click', () => gainXP(100));
     if (gainGoldBtn) gainGoldBtn.addEventListener('click', () => gainGold(50));
 
-    // Listeners para os botões do rodapé
-    guildBtn.addEventListener('click', showGuildMenu);
-    pvpBtn.addEventListener('click', showPvPMenu);
-    afkBtn.addEventListener('click', showAfkMenu);
-    miningBtn.addEventListener('click', showMiningMenu);
-    castlesBtn.addEventListener('click', showCastlesMenu);
+    // Listeners para os botões do rodapé (NOVOS)
+    if (guildBtn) guildBtn.addEventListener('click', showGuildMenu);
+    if (pvpBtn) pvpBtn.addEventListener('click', showPvPMenu);
+    if (afkBtn) afkBtn.addEventListener('click', showAfkMenu);
+    if (miningBtn) miningBtn.addEventListener('click', showMiningMenu);
+    if (castlesBtn) castlesBtn.addEventListener('click', showCastlesMenu);
 
-    // Listener para o balão de chat
-    chatBubble.addEventListener('click', () => {
+    // Listener para o balão de chat (NOVO)
+    if (chatBubble) chatBubble.addEventListener('click', () => {
         chatContainer.style.display = chatContainer.style.display === 'none' ? 'block' : 'none';
         if (chatContainer.style.display === 'block') {
             loadInitialChatMessages(); // Carrega mensagens ao abrir

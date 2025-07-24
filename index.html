@@ -15,7 +15,7 @@
             margin-bottom: 80px; /* Espaço para o menu do rodapé */
             background-color: #f0f2f5; /* Um fundo leve para melhor visualização */
         }
-        #authContainer, #playerInfoDiv, #gameContainer, #chatContainer {
+        #authContainer, #playerInfoDiv, #gameContainer, #chatContainer, #afkContainer { /* Adicionado #afkContainer */
             border: 1px solid #ccc;
             padding: 20px;
             margin-top: 20px;
@@ -215,6 +215,16 @@
         </div>
         </div>
 
+    <div id="afkContainer" style="display:none;">
+        <h2>Aventura AFK</h2>
+        <p>Estágio Atual: <span id="afkStage">N/A</span></p>
+        <p>Tempo AFK: <span id="afkTime">0 segundos</span></p>
+        <p>XP Estimado: <span id="afkXPGain">0</span></p>
+        <p>Ouro Estimado: <span id="afkGoldGain">0</span></p>
+        <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
+        <button id="startAdventureBtn">Iniciar Aventura</button>
+        <p id="afkMessage"></p>
+    </div>
     <div id="chatContainer" style="display:none;">
         <h2>Chat Global</h2>
         <div id="chatBox"></div>

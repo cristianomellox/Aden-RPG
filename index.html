@@ -6,7 +6,14 @@
     <title>Aden RPG</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; margin-top: 50px; }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+            margin-bottom: 80px; /* Espaço para o menu do rodapé */
+        }
         #authContainer, #playerInfoDiv, #gameContainer, #chatContainer {
             border: 1px solid #ccc;
             padding: 20px;
@@ -14,10 +21,21 @@
             width: 80%;
             max-width: 500px;
             box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-        #chatBox { height: 200px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-bottom: 10px; }
-        .chat-message { margin-bottom: 5px; }
-        .chat-message strong { color: #333; }
+        #chatBox {
+            height: 200px;
+            overflow-y: scroll;
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .chat-message {
+            margin-bottom: 5px;
+        }
+        .chat-message strong {
+            color: #333;
+        }
 
         /* Estilo para o modal de edição de perfil */
         #profileEditModal {
@@ -65,6 +83,60 @@
             margin-top: 10px;
             font-size: 0.9em;
         }
+
+        /* Estilos do Rodapé e Chat Flutuante */
+        #footerMenu {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #333;
+            padding: 10px 0;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+            z-index: 999;
+            box-sizing: border-box;
+            display: none; /* Inicia oculto, será mostrado via JS */
+        }
+        #footerMenu button {
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 0 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            flex-grow: 1; /* Faz os botões se expandirem */
+            max-width: 120px;
+        }
+        #footerMenu button:hover {
+            background-color: #777;
+        }
+
+        #chatBubble {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            z-index: 1001; /* Acima do footerMenu */
+            display: none; /* Inicia oculto, será mostrado via JS */
+        }
+        #chatBubble:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -103,8 +175,8 @@
         <button id="sendChatBtn">Enviar</button>
     </div>
 
-    <div id="profileEditModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; display:flex; justify-content:center; align-items:center;">
-        <div style="background:white; padding:20px; border-radius:8px; text-align:center;">
+    <div id="profileEditModal">
+        <div>
             <h2>Bem-vindo(a), Aventureiro(a)!</h2>
             <p>Seu perfil é novo. Por favor, edite seu nome e escolha sua facção inicial.</p>
             <label for="editPlayerName">Nome do Jogador:</label><br>
@@ -119,6 +191,16 @@
             <button id="saveProfileBtn">Salvar Perfil</button>
             <p id="profileEditMessage" style="color:red;"></p>
         </div>
+    </div>
+    <div id="footerMenu" style="display:none;">
+        <button id="guildBtn">Guilda</button>
+        <button id="pvpBtn">PvP</button>
+        <button id="afkBtn">AFK</button>
+        <button id="miningBtn">Mineração</button>
+        <button id="castlesBtn">Castelos</button>
+    </div>
+    <div id="chatBubble" style="display:none;">
+        💬
     </div>
     <script src="script.js"></script>
 </body>

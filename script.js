@@ -69,10 +69,28 @@ function showFloatingMessage(message, duration = 3000) {
 
 // --- Funções de Popup de Dano (para combate) ---
 function showDamagePopup(attackerName, damageAmount, isCritical) {
-    if (!combatDamagePopupDiv) return;
+    if (!combatDamagePopupDiv) {
+        console.error("combatDamagePopupDiv não encontrado!");
+        return;
+    }
 
-    popupAttackerNameSpan.textContent = attackerName;
-    popupDamageAmountSpan.textContent = damageAmount;
+    console.log("showDamagePopup called with:", { attackerName, damageAmount, isCritical }); // DEBUG LOG
+
+    // Certifique-se de que os elementos internos estão sendo corretamente referenciados
+    const attackerSpan = combatDamagePopupDiv.querySelector('#popupAttackerName');
+    const damageSpan = combatDamagePopupDiv.querySelector('#popupDamageAmount');
+
+    if (attackerSpan) {
+        attackerSpan.textContent = attackerName;
+    } else {
+        console.warn("popupAttackerName span not found inside combatDamagePopupDiv");
+    }
+
+    if (damageSpan) {
+        damageSpan.textContent = damageAmount;
+    } else {
+        console.warn("popupDamageAmount span not found inside combatDamagePopupDiv");
+    }
 
     combatDamagePopupDiv.classList.remove('critical');
 
@@ -100,11 +118,16 @@ window.showDamagePopup = showDamagePopup;
 // --- Função para Atualizar Barras de HP ---
 function updateHealthBar(elementId, currentHp, maxHp) {
     const bar = document.getElementById(elementId);
-    const textSpan = document.getElementById(`${elementId}Text`);
+    // Note: playerCurrentHealthText e monsterCurrentHealthText já são IDs diretos.
+    // A função é mais genérica, mas a lógica de texto é específica para esses casos.
+    const textSpan = document.getElementById(`${elementId.replace('Bar', 'CurrentHealthText')}`);
 
-    if (!bar || !textSpan) {
-        console.warn(`Elementos da barra de HP para ${elementId} não encontrados.`);
+    if (!bar) {
+        console.warn(`Barra de HP para ${elementId} não encontrada.`);
         return;
+    }
+    if (!textSpan) {
+        console.warn(`Span de texto para ${elementId.replace('Bar', 'CurrentHealthText')} não encontrado.`);
     }
 
     const percentage = (currentHp / maxHp) * 100;
@@ -112,10 +135,8 @@ function updateHealthBar(elementId, currentHp, maxHp) {
     bar.textContent = `${currentHp}/${maxHp}`; // Exibe HP no texto
 
     // Atualiza o texto fora da barra também
-    if (elementId === 'playerHealthBar') {
-        playerCurrentHealthText.textContent = `${currentHp}/${maxHp}`;
-    } else if (elementId === 'monsterHealthBar') {
-        monsterCurrentHealthText.textContent = `${currentHp}/${maxHp}`;
+    if (textSpan) { // Somente atualiza se o span de texto for encontrado
+        textSpan.textContent = `${currentHp}/${maxHp}`;
     }
 }
 

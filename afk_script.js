@@ -179,16 +179,18 @@ collectAfkRewardsBtn.addEventListener('click', async () => {
     }
 });
 
+// ALTERAÇÃO CRÍTICA AQUI: Usando uma função nomeada para startAdventure
+startAdventureBtn.addEventListener('click', startAdventure);
 
-startAdventureBtn.addEventListener('click', async () => {
+async function startAdventure() {
     afkMessage.textContent = "Iniciando combate PvE...";
     combatLogDiv.innerHTML = ''; // Limpa o log de combate
     combatLogDiv.style.display = 'block'; // Mostra o log de combate
 
     // Esconde os elementos de recompensa AFK e o botão "Iniciar Combate"
-    afkTimeSpan.parentElement.style.display = 'none';
-    afkXPGainSpan.parentElement.style.display = 'none';
-    afkGoldGainSpan.parentElement.style.display = 'none';
+    afkTimeSpan.parentElement.display = 'none'; // Corrigido para 'display'
+    afkXPGainSpan.parentElement.display = 'none'; // Corrigido para 'display'
+    afkGoldGainSpan.parentElement.display = 'none'; // Corrigido para 'display'
     collectAfkRewardsBtn.style.display = 'none';
     startAdventureBtn.style.display = 'none';
 
@@ -243,7 +245,7 @@ startAdventureBtn.addEventListener('click', async () => {
     remainingAttacksSpan.textContent = MAX_ATTACKS;
 
     afkMessage.textContent = "Derrote o monstro em 10 ataques!";
-});
+} // Fim da função startAdventure
 
 // NOVO: Event Listener para o botão de ataque
 attackButton.addEventListener('click', () => {
@@ -324,7 +326,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
     if (playerWon) {
         title = "Vitória!";
         const xpGain = 50 + (currentAfkStage * 10);
-        const goldGain = 20 + (currentAfakStage * 5); // Use currentAfkStage aqui também
+        const goldGain = 20 + (currentAfkStage * 5); // Use currentAfkStage aqui também
         message = `Você derrotou o ${monsterName}!<br>Ganhou ${xpGain} XP e ${goldGain} Ouro.`;
 
         // Lógica para avançar estágio e dar recompensas

@@ -206,7 +206,7 @@
             transition: opacity 0.5s ease-in-out; /* Transição suave */
         }
 
-        /* Estilos para o popup de dano no combate */
+        /* NOVO: Estilos para o popup de dano no combate */
         #combatDamagePopup {
             display: none; /* Escondido por padrão */
             position: fixed;
@@ -226,15 +226,12 @@
             text-align: center;
             min-width: 150px;
         }
-        /* NOVO: Estilo para dano crítico */
         #combatDamagePopup.critical {
-            background-color: rgba(255, 0, 0, 0.9); /* Fundo vermelho para crítico */
-            color: yellow; /* Texto amarelo para crítico */
+            color: red;
             font-size: 2.5em; /* Maior para crítico */
-            border: 3px solid #FFD700; /* Borda dourada para crítico */
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+            border: 3px solid yellow; /* Borda para crítico */
+            box-shadow: 0 0 15px red;
         }
-
         /* Estilos para o modal de resultado de combate */
         #combatResultModal {
             display: none; /* Escondido por padrão */
@@ -280,51 +277,6 @@
             background-color: #0056b3;
         }
 
-        /* NOVO: Estilos para as Barras de HP */
-        .hp-bar-container {
-            width: 90%;
-            max-width: 400px;
-            margin: 10px auto;
-            background-color: #333;
-            border: 1px solid #555;
-            border-radius: 5px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            position: relative;
-            overflow: hidden; /* Garante que a barra interna não vaze */
-        }
-        .hp-bar-label {
-            position: absolute;
-            left: 10px;
-            color: white;
-            font-weight: bold;
-            font-size: 0.9em;
-            z-index: 2; /* Acima da barra de preenchimento */
-        }
-        .hp-bar-fill {
-            height: 100%;
-            background-color: #dc3545; /* Vermelho padrão */
-            width: 100%; /* Inicia cheio */
-            transition: width 0.3s ease-out; /* Animação suave */
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1; /* Abaixo do label */
-            border-radius: 5px;
-        }
-        .hp-bar-value {
-            position: absolute;
-            right: 10px;
-            color: white;
-            font-weight: bold;
-            font-size: 0.9em;
-            z-index: 2;
-        }
-        /* Cor diferente para a barra de HP do monstro para distinguir */
-        #monsterHpBarContainer .hp-bar-fill {
-            background-color: #ffc107; /* Amarelo/Laranja para o monstro */
-        }
     </style>
 </head>
 <body>
@@ -354,18 +306,6 @@
         <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
         <button id="startAdventureBtn">Iniciar Combate PvE</button>
         <p id="afkMessage"></p>
-
-        <div id="playerHpBarContainer" class="hp-bar-container" style="display:none;">
-            <span class="hp-bar-label">Jogador HP</span>
-            <div id="playerHpBarFill" class="hp-bar-fill"></div>
-            <span id="playerHpBarValue" class="hp-bar-value"></span>
-        </div>
-        <div id="monsterHpBarContainer" class="hp-bar-container" style="display:none;">
-            <span id="monsterHpBarLabel" class="hp-bar-label">Monstro HP</span>
-            <div id="monsterHpBarFill" class="hp-bar-fill"></div>
-            <span id="monsterHpBarValue" class="hp-bar-value"></span>
-        </div>
-
         <div id="combatLog" style="height: 150px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-top: 10px; background-color: #f9f9f9; display: none;">
             </div>
     </div>

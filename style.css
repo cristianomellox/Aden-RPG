@@ -1,0 +1,303 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 50px;
+    margin-bottom: 80px; /* Espaço para o menu do rodapé */
+    background-color: #f0f2f5; /* Um fundo leve para melhor visualização */
+}
+#authContainer, #playerInfoDiv, #chatContainer, #afkContainer {
+    border: 1px solid #ccc;
+    padding: 20px;
+    margin-top: 20px;
+    width: 80%;
+    max-width: 500px;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    background-color: white;
+    border-radius: 8px;
+}
+h1, h2 {
+    color: #333;
+}
+input[type="email"], input[type="password"], input[type="text"] {
+    width: calc(100% - 22px);
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    margin: 5px 2px;
+}
+button:hover {
+    opacity: 0.9;
+}
+p#authMessage, p#profileEditMessage, p#afkMessage {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: red;
+}
+
+/* Estilos do Chat */
+#chatBox {
+    height: 200px;
+    overflow-y: scroll;
+    border: 1px solid #eee;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+}
+.chat-message {
+    margin-bottom: 5px;
+    word-wrap: break-word;
+}
+.chat-message strong {
+    color: #555;
+}
+#chatInput {
+    width: calc(100% - 70px);
+    display: inline-block;
+}
+#sendChatBtn {
+    width: 60px;
+    float: right;
+    padding: 10px 0;
+}
+
+/* Estilo para o modal de edição de perfil */
+#profileEditModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+#profileEditModal > div {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    max-width: 400px;
+    width: 90%;
+    box-sizing: border-box;
+}
+#profileEditModal h2 { margin-top: 0; }
+#profileEditModal input, #profileEditModal select, #profileEditModal button {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    box-sizing: border-box;
+}
+#profileEditModal button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+}
+#profileEditModal button:hover {
+    background-color: #0056b3;
+}
+#profileEditMessage {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: red;
+}
+
+/* Estilos do Rodapé e Chat Flutuante */
+#footerMenu {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #333;
+    padding: 10px 0;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+    z-index: 999;
+    box-sizing: border-box;
+}
+#footerMenu button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    margin: 0 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    flex-grow: 1;
+    max-width: 120px;
+}
+#footerMenu button:hover {
+    background-color: #777;
+}
+
+#chatBubble {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    z-index: 1001;
+}
+#chatBubble:hover {
+    background-color: #0056b3;
+}
+
+/* Estilos para a mensagem flutuante do menu */
+#floatingMessage {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 1002;
+    font-size: 1.1em;
+    white-space: nowrap;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* NOVO: Estilos para o popup de dano no combate */
+#combatDamagePopup {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    font-size: 2em;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    z-index: 1003;
+    opacity: 0;
+    transition: opacity 0.1s ease-out, transform 0.1s ease-out;
+    text-align: center;
+    min-width: 150px;
+}
+#combatDamagePopup.critical {
+    color: yellow;
+    font-size: 2.5em;
+    border: 3px solid yellow;
+    box-shadow: 0 0 15px red;
+}
+/* Estilos para o modal de resultado de combate */
+#combatResultModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1004;
+    justify-content: center;
+    align-items: center;
+}
+#combatResultModal > div {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    max-width: 450px;
+    width: 90%;
+    box-sizing: border-box;
+    color: #333;
+}
+#combatResultModal h2 {
+    margin-top: 0;
+    color: #007bff;
+}
+#combatResultModal p {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+}
+#combatResultModal button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.2em;
+}
+#combatResultModal button:hover {
+    background-color: #0056b3;
+}
+
+/* Estilos para o botão de ataque redondo */
+#attackButton {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background-color: #ff5722;
+    color: white;
+    font-size: 1.5em;
+    font-weight: bold;
+    /* display: flex !important; Removido, controlado por JS */
+    justify-content: center;
+    align-items: center;
+    margin: 20px auto;
+    border: 4px solid #d84315;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+#attackButton:hover {
+    background-color: #e64a19;
+    transform: scale(1.05);
+}
+
+#attackButton:active {
+    background-color: #bf360c;
+    transform: scale(0.95);
+}
+
+/* Estilo para a porcentagem de HP do monstro */
+#monsterHealthPercentage {
+    /* display: block !important; Removido, controlado por JS */
+    text-align: center;
+    font-weight: bold;
+    margin-top: 10px;
+    color: #333;
+}

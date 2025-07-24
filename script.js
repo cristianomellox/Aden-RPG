@@ -160,8 +160,8 @@ async function signOut() {
 }
 
 // Funções de Perfil do Jogador
-async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // Adicionado parâmetro
-    console.log("Buscando informações do jogador...");
+async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
+    console.log("fetchAndDisplayPlayerInfo chamada. preserveActiveContainer:", preserveActiveContainer);
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
         authContainer.style.display = 'none';
@@ -178,10 +178,9 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // A
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
             footerMenu.style.display = 'none'; // Footer deve ser escondido quando o modal está aberto
             chatBubble.style.display = 'none'; // Chat bubble deve ser escondido
-            return; // Sai, pois o modal está sendo exibido.
+            return;
         }
 
-        // Calcula o XP necessário para o próximo nível com base na nova curva
         const xpNeededForNextLevel = calculateXPForNextLevel(player.level);
 
         playerInfoDiv.innerHTML = `
@@ -199,13 +198,14 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // A
         document.getElementById('signOutBtn').onclick = signOut;
 
         console.log("Informações do jogador carregadas.");
-        // Visibilidade agora é controlada *principalmente* por updateUIVisibility.
-        // fetchAndDisplayPlayerInfo só chamará updateUIVisibility se não estiver preservando o container,
-        // o que significa que é o comportamento padrão de "ir para playerInfoDiv".
+        // APENAS CHAMA updateUIVisibility SE NÃO FOR PARA PRESERVAR O CONTAINER ATUAL.
+        // Isso impede que esta função altere a visibilidade quando o botão "Início" já a definiu.
         if (!preserveActiveContainer) {
+            console.log("fetchAndDisplayPlayerInfo: Chamando updateUIVisibility para playerInfoDiv.");
             updateUIVisibility(true, 'playerInfoDiv');
+        } else {
+            console.log("fetchAndDisplayPlayerInfo: preserveActiveContainer é true, não alterando a visibilidade.");
         }
-        // !!! LINHA REMOVIDA AQUI: Era 'else { playerInfoDiv.style.display = 'none'; }' !!!
         
         subscribeToChat();
         updateLastActive(user.id);
@@ -433,6 +433,7 @@ async function loadInitialChatMessages() {
 
 // Funções de UI
 window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
+    console.log(`updateUIVisibility chamada. LoggedIn: ${isLoggedIn}, Active ID: ${activeContainerId}`);
     if (isLoggedIn) {
         authContainer.style.display = 'none';
         footerMenu.style.display = 'flex';
@@ -451,7 +452,7 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
             chatContainer.style.display = 'block';
         } else if (activeContainerId === 'afkContainer') {
             afkContainer.style.display = 'block';
-        } else if (activeContainerId === 'playerInfoDiv') { // Adicionado para explicitar playerInfoDiv
+        } else if (activeContainerId === 'playerInfoDiv') {
             playerInfoDiv.style.display = 'block';
         } else {
             // Caso padrão se nenhum for especificado, volta para playerInfoDiv
@@ -480,6 +481,7 @@ chatInput.addEventListener('keypress', function(event) {
 
 // Event Listener para o botão "Início"
 homeBtn.addEventListener('click', () => {
+    console.log("Botão Início clicado. Definindo visibilidade para playerInfoDiv.");
     updateUIVisibility(true, 'playerInfoDiv'); // Força a exibição da div de informações do jogador
     fetchAndDisplayPlayerInfo(true); // Atualiza as infos, mas sem mudar a visibilidade do container
     showFloatingMessage("Você está na página inicial!");
@@ -513,9 +515,10 @@ chatBubble.addEventListener('click', () => {
 
 // Funções de verificação de sessão e inicialização
 supabaseClient.auth.onAuthStateChange((event, session) => {
+    console.log("onAuthStateChange disparado. Event:", event, "Session:", session);
     if (session) {
         console.log('Sessão encontrada:', session);
-        fetchAndDisplayPlayerInfo(); // Chama sem preserveActiveContainer para voltar ao playerInfoDiv
+        fetchAndDisplayPlayerInfo(); // Chama sem preserveActiveContainer para voltar ao playerInfoDiv se for um login/refresh padrão
     } else {
         console.log('Nenhuma sessão.');
         updateUIVisibility(false);
@@ -523,6 +526,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 });
 
 // Inicialização
+console.log("Inicialização do script: Chamando fetchAndDisplayPlayerInfo.");
 fetchAndDisplayPlayerInfo(); // Tenta buscar informações do usuário na carga inicial
 updateLastActive = async (userId) => {
     const { error } = await supabaseClient

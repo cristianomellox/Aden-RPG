@@ -176,10 +176,9 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // A
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
-            // updateUIVisibility(false); // Não oculta tudo se o modal é a prioridade
-            footerMenu.style.display = 'none';
-            chatBubble.style.display = 'none';
-            return;
+            footerMenu.style.display = 'none'; // Footer deve ser escondido quando o modal está aberto
+            chatBubble.style.display = 'none'; // Chat bubble deve ser escondido
+            return; // Sai, pois o modal está sendo exibido.
         }
 
         // Calcula o XP necessário para o próximo nível com base na nova curva
@@ -199,14 +198,14 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) { // A
         `;
         document.getElementById('signOutBtn').onclick = signOut;
 
-        console.log("Informações do jogador carregadas. Exibindo UI padrão.");
-        // Se preserveActiveContainer for true, não altere o container atual
+        console.log("Informações do jogador carregadas.");
+        // Visibilidade agora é controlada *principalmente* por updateUIVisibility.
+        // fetchAndDisplayPlayerInfo só chamará updateUIVisibility se não estiver preservando o container,
+        // o que significa que é o comportamento padrão de "ir para playerInfoDiv".
         if (!preserveActiveContainer) {
-            updateUIVisibility(true, 'playerInfoDiv'); // Volta para a tela de informações do jogador por padrão
-        } else {
-            // Se já há um container ativo (ex: AFK), apenas garante que playerInfoDiv está escondido
-            playerInfoDiv.style.display = 'none';
+            updateUIVisibility(true, 'playerInfoDiv');
         }
+        // !!! LINHA REMOVIDA AQUI: Era 'else { playerInfoDiv.style.display = 'none'; }' !!!
         
         subscribeToChat();
         updateLastActive(user.id);

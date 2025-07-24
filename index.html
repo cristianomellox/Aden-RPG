@@ -111,7 +111,7 @@
             width: calc(100% - 20px);
             padding: 10px;
             margin-bottom: 15px;
-            border-radius: 4lesspx;
+            border-radius: 4px;
             border: 1px solid #ddd;
             box-sizing: border-box;
         }
@@ -282,7 +282,7 @@
             color: white;
             font-size: 1.5em;
             font-weight: bold;
-            display: flex !important; /* FORÇAR DISPLAY */
+            /* display: flex !important; Removido, controlado por JS */
             justify-content: center;
             align-items: center;
             margin: 20px auto;
@@ -303,7 +303,7 @@
 
         /* Estilo para a porcentagem de HP do monstro */
         #monsterHealthPercentage {
-            display: block !important; /* FORÇAR DISPLAY */
+            /* display: block !important; Removido, controlado por JS */
             text-align: center;
             font-weight: bold;
             margin-top: 10px;
@@ -335,6 +335,7 @@
         <p>Tempo AFK Acumulado: <span id="afkTime">0 segundos</span></p>
         <p>XP Estimado: <span id="afkXPGain">0</span></p>
         <p>Ouro Estimado: <span id="afkGoldGain">0</span></p>
+        <p>Tentativas de Estágio Restantes Hoje: <span id="dailyAttemptsLeft">N/A</span></p>
         <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
         <button id="startAdventureBtn">Iniciar Combate PvE</button>
         <p id="afkMessage"></p>

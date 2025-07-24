@@ -1,3 +1,7 @@
+// Mantenha o conteúdo do script.js como está da última vez.
+// Não há mudanças significativas necessárias neste arquivo para as novas funcionalidades.
+// Apenas garanta que ele esteja atualizado com as chaves do Supabase.
+
 // Configuração do Supabase (AQUI!)
 // **ATENÇÃO: Substitua estes valores pelos do seu projeto Supabase!**
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co'; // Ex: 'https://abcdefg1234.supabase.co'
@@ -61,10 +65,11 @@ function showFloatingMessage(message, duration = 3000) {
 }
 
 // --- Funções de Popup de Dano (para combate) ---
-function showDamagePopup(damageAmount, isCritical, isPlayerDamage = false) {
+// Função de Popup de Dano AGORA RECEBE O NOME DO ATACANTE E SE É CRÍTICO
+function showDamagePopup(attackerName, damageAmount, isCritical) {
     if (!combatDamagePopupDiv) return;
 
-    combatDamagePopupDiv.textContent = `${damageAmount}`;
+    combatDamagePopupDiv.textContent = `${attackerName}: ${damageAmount}`;
     combatDamagePopupDiv.classList.remove('critical');
 
     if (isCritical) {
@@ -441,6 +446,11 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     profileEditModal.style.display = 'none';
     combatResultModal.style.display = 'none'; // Garante que o modal de combate esteja oculto
 
+    // Esconde as barras de HP por padrão ao mudar de tela
+    document.getElementById('playerHpBarContainer').style.display = 'none';
+    document.getElementById('monsterHpBarContainer').style.display = 'none';
+
+
     if (showGameUI) {
         authContainer.style.display = 'none';
         footerMenu.style.display = 'flex';
@@ -515,17 +525,4 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chatContainer.style.display === 'none') {
             updateUIVisibility(true, 'chatContainer');
             loadInitialChatMessages();
-            chatInput.focus();
-        } else {
-            updateUIVisibility(true, 'playerInfoDiv');
-        }
-    });
-
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            fetchAndDisplayPlayerInfo();
-        } else {
-            updateUIVisibility(false);
-        }
-    });
-});
+            chatInput.f

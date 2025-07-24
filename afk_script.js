@@ -78,9 +78,10 @@ window.initAfkDisplay = async () => {
     playerAttack = player.attack;
     playerDefense = player.defense;
     playerCombatPower = player.combat_power;
-    currentAfkStage = player.current_afk_stage;
     dailyAttemptsRemaining = player.daily_attempts_left;
+    // O Supabase retorna strings ISO para timestamps, precisa converter para Date
     lastAttemptResetDate = player.last_attempt_reset ? new Date(player.last_attempt_reset) : null;
+    currentAfkStage = player.current_afk_stage; // Moved this line to ensure currentAfkStage is defined early
 
     afkStageSpan.textContent = currentAfkStage;
     lastAfkStartTime = player.last_afk_start_time ? new Date(player.last_afk_start_time) : null;
@@ -116,7 +117,7 @@ window.onPlayerInfoLoadedForAfk = (player) => {
     playerAttack = player.attack;
     playerDefense = player.defense;
     playerCombatPower = player.combat_power;
-    currentAfkStage = player.current_afk_stage;
+    currentAfkStage = player.current_afk_stage; // Ensure this is updated
     dailyAttemptsRemaining = player.daily_attempts_left; // Atualiza tentativas diárias
     lastAttemptResetDate = player.last_attempt_reset ? new Date(player.last_attempt_reset) : null;
 
@@ -143,9 +144,9 @@ function updateAfkTimeAndRewards() {
     const xpPerSecond = 10 * currentAfkStage;
     const goldPerSecond = 5 * currentAfkStage;
 
-    afkTimeSpan.textContent = `${elapsedTime} segundos`;
-    afkXPGainSpan.textContent = (xpPerSecond * elapsedTime).toFixed(0);
+    afkTimeSpan.textContent = (xpPerSecond * elapsedTime).toFixed(0);
     afkGoldGainSpan.textContent = (goldPerSecond * elapsedTime).toFixed(0);
+    afkTimeSpan.textContent = `${elapsedTime} segundos`; // This should be last to prevent issues if xp/gold calculation takes long.
 }
 
 function startAfkTimer() {
@@ -172,16 +173,50 @@ async function checkAndResetDailyAttempts() {
     }
 
     if (needsReset) {
-        console.log("AFK: Resetando tentativas diárias.");
+        console.log("AFK: Resetando tentativas diárias com horário do servidor.");
         dailyAttemptsRemaining = MAX_DAILY_ATTEMPTS;
-        lastAttemptResetDate = new Date(); // Atualiza para agora
-        await supabaseClient
+        // ATENÇÃO AQUI: Usamos supabaseClient.functions.now() para obter o timestamp do servidor
+        // No Supabase JS v2, `supabase.database.now()` é usado para valores de coluna
+        // Se você não tem um Edge Function para NOW(), o mais seguro é usar o "DEFAULT" do Supabase
+        // ou, se for update, enviar um timestamp gerado no cliente mas que você confia
+        // ou criar uma função no Supabase que retorna NOW().
+        // Para este caso, a alteração mais simples é:
+        const { error: updateError } = await supabaseClient
             .from('players')
             .update({
                 daily_attempts_left: dailyAttemptsRemaining,
-                last_attempt_reset: lastAttemptResetDate.toISOString()
+                // Supabase automaticamente define a coluna de timestamp com NOW() se configurada assim
+                // Se não, vamos usar um valor que o Supabase entenda como "agora"
+                // A maneira mais direta no Supabase para um UPDATE é usar 'now()' como string se a coluna for `timestamp with time zone` e não tiver DEFAULT.
+                // Mas, o método mais robusto é deixar o Supabase gerenciar o default se a coluna for criada com default NOW().
+                // Se não tem DEFAULT, e você quer setar o horário do SERVER, é melhor chamar uma função do Supabase
+                // Ex: .update({ last_attempt_reset: 'now()' })
+                // Ou, se a coluna `last_attempt_reset` tiver DEFAULT `now()` no banco de dados,
+                // você pode simplesmente *não incluí-la* no UPDATE e ela será atualizada automaticamente.
+                // Vamos tentar a abordagem de forçar 'now()' para garantir, assuming it's a `timestampz` column.
+                last_attempt_reset: 'now()' // Diz ao Supabase para usar seu próprio NOW()
             })
             .eq('id', currentAfkPlayerId);
+
+        if (updateError) {
+            console.error("AFK: Erro ao resetar tentativas diárias no Supabase:", updateError);
+            afkMessage.textContent = "Erro ao resetar tentativas diárias. Tente novamente.";
+            return;
+        }
+
+        // Após o update, precisamos re-fetch para ter certeza que 'last_attempt_reset' foi pego do servidor
+        const { data: updatedPlayer, error: fetchError } = await supabaseClient
+            .from('players')
+            .select('last_attempt_reset')
+            .eq('id', currentAfkPlayerId)
+            .single();
+
+        if (fetchError || !updatedPlayer) {
+            console.error("AFK: Erro ao re-buscar last_attempt_reset:", fetchError);
+            afkMessage.textContent = "Erro ao carregar dados após reset. Recarregue a página.";
+            return;
+        }
+        lastAttemptResetDate = new Date(updatedPlayer.last_attempt_reset); // Atualiza com o valor do servidor
         afkMessage.textContent = "Tentativas diárias de estágio resetadas!";
     }
     dailyAttemptsLeftSpan.textContent = dailyAttemptsRemaining;
@@ -220,12 +255,33 @@ collectAfkRewardsBtn.addEventListener('click', async () => {
 
     afkMessage.textContent = `Coletando ${totalXPGain} XP e ${totalGoldGain} Ouro...`;
 
-    lastAfkStartTime = new Date();
-    await supabaseClient
+    // ATENÇÃO: Alteração para usar o horário do servidor para last_afk_start_time
+    const { error: updateError } = await supabaseClient
         .from('players')
-        .update({ last_afk_start_time: lastAfkStartTime.toISOString() })
+        .update({ last_afk_start_time: 'now()' }) // Usa o NOW() do Supabase
         .eq('id', currentAfkPlayerId);
-    updateAfkTimeAndRewards();
+
+    if (updateError) {
+        console.error("AFK: Erro ao atualizar last_afk_start_time no Supabase:", updateError);
+        afkMessage.textContent = "Erro ao coletar recompensas AFK. Tente novamente.";
+        return;
+    }
+
+    // Re-fetch para obter o timestamp do servidor para a variável local
+    const { data: updatedPlayer, error: fetchError } = await supabaseClient
+        .from('players')
+        .select('last_afk_start_time')
+        .eq('id', currentAfkPlayerId)
+        .single();
+
+    if (fetchError || !updatedPlayer) {
+        console.error("AFK: Erro ao re-buscar last_afk_start_time após update:", fetchError);
+        afkMessage.textContent = "Erro ao carregar dados após coletar recompensas. Recarregue a página.";
+        return;
+    }
+    lastAfkStartTime = new Date(updatedPlayer.last_afk_start_time); // Atualiza com o valor do servidor
+
+    updateAfkTimeAndRewards(); // Atualiza a exibição após coletar e resetar o tempo
 
     const xpResult = await window.gainXP(currentAfkPlayerId, totalXPGain);
     const goldResult = await window.gainGold(currentAfkPlayerId, totalGoldGain);
@@ -435,12 +491,12 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
             const { data: { user } } = await supabaseClient.auth.getUser();
             if (user) {
                 currentAfkStage++;
-                lastAfkStartTime = new Date();
+                // lastAfkStartTime = new Date(); // Não atualizamos aqui, apenas na coleta de recompensas
                 await supabaseClient
                     .from('players')
                     .update({
                         current_afk_stage: currentAfkStage,
-                        last_afk_start_time: lastAfkStartTime.toISOString(),
+                        // last_afk_start_time: lastAfkStartTime.toISOString(), // Não atualizamos aqui, apenas na coleta de recompensas
                         health: playerMaxHealth // Cura total
                     })
                     .eq('id', user.id);
@@ -457,7 +513,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
                 }
                 afkMessage.textContent = finalMsg;
                 window.fetchAndDisplayPlayerInfo();
-                updateStartAdventureButtonState(); // Atualiza estado do botão após o estágio avançar
+                await checkAndResetDailyAttempts(); // Re-checa tentativas diárias para atualizar o botão
             }
         };
 
@@ -476,7 +532,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
             }
             afkMessage.textContent = "Pronto para outra tentativa.";
             window.fetchAndDisplayPlayerInfo();
-            updateStartAdventureButtonState(); // Atualiza estado do botão após a derrota
+            await checkAndResetDailyAttempts(); // Re-checa tentativas diárias para atualizar o botão
         };
     }
 

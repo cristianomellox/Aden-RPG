@@ -481,7 +481,7 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
 }
 
 // --- Funções para Monstro AFK ---
-const MONSTER_IMAGE_URL = 'https://raw.githubusercontent.com/username/your-repo/main/assets/monster_goblin.png'; // Substitua pelo seu caminho real
+const MONSTER_IMAGE_URL = 'https://github.com/cristianomellox/Aden-RPG/blob/63a0f5cc8963ed80286f9b44cedf927b596a8d79/goblin_afk.png'; // Substitua pelo seu caminho real
 const MONSTER_IMAGE_LOCAL_STORAGE_KEY = 'cached_monster_goblin_image';
 
 async function loadAndCacheMonsterImage() {

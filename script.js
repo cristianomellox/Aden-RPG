@@ -1,8 +1,9 @@
-// Configuração do Supabase
+// Configuração do Supabase (AQUI!)
 // **ATENÇÃO: Substitua estes valores pelos do seu projeto Supabase!**
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co'; // Ex: 'https://abcdefg1234.supabase.co'
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx'; // Ex: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 
+// Define supabaseClient globalmente para ser acessível em outros scripts
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Elementos da UI
@@ -34,15 +35,8 @@ const miningBtn = document.getElementById('miningBtn');
 const castlesBtn = document.getElementById('castlesBtn');
 const chatBubble = document.getElementById('chatBubble');
 
-// NOVOS Elementos da UI AFK (Adicionados aqui)
+// Referência ao container AFK (para ser gerenciado por updateUIVisibility)
 const afkContainer = document.getElementById('afkContainer');
-const afkStageSpan = document.getElementById('afkStage');
-const afkTimeSpan = document.getElementById('afkTime');
-const afkXPGainSpan = document.getElementById('afkXPGain');
-const afkGoldGainSpan = document.getElementById('afkGoldGain');
-const collectAfkRewardsBtn = document.getElementById('collectAfkRewardsBtn');
-const startAdventureBtn = document.getElementById('startAdventureBtn');
-const afkMessage = document.getElementById('afkMessage');
 
 
 // Funções de Autenticação
@@ -84,6 +78,7 @@ async function signOut() {
 }
 
 // Funções de Perfil do Jogador
+// Agora, fetchAndDisplayPlayerInfo pode receber um callback para o AFK script
 async function fetchAndDisplayPlayerInfo() {
     const { data: { user } } = await supabaseClient.auth.getUser();
 
@@ -100,7 +95,6 @@ async function fetchAndDisplayPlayerInfo() {
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
-            // Quando o modal aparece, escondemos o jogo e o menu
             updateUIVisibility(false); // Esconde a UI do jogo para garantir que só o modal apareça
             footerMenu.style.display = 'none';
             chatBubble.style.display = 'none';
@@ -121,15 +115,14 @@ async function fetchAndDisplayPlayerInfo() {
         `;
         document.getElementById('signOutBtn').onclick = signOut;
 
-        // Se tudo está OK, mostra a UI do jogo e o menu/chat bubble
         updateUIVisibility(true, 'gameContainer'); // Mostra o gameContainer por padrão
         subscribeToChat();
-
-        // ** Importante para o AFK **
         updateLastActive(user.id); // Atualiza last_active ao fazer login
-        // Se a tela AFK estiver visível, calcula e exibe recompensas
-        if (afkContainer.style.display === 'block') {
-            calculateAndDisplayAfkRewards(player);
+
+        // ** Novo: Chama uma função no script AFK se ele existir e for relevante **
+        // Verificamos se `window.onPlayerInfoLoadedForAfk` existe
+        if (typeof window.onPlayerInfoLoadedForAfk === 'function') {
+            window.onPlayerInfoLoadedForAfk(player);
         }
 
     } else {
@@ -373,138 +366,135 @@ async function loadInitialChatMessages() {
 }
 
 
-// --- Funções AFK (Novas e Modificadas) ---
-async function calculateAndDisplayAfkRewards(playerData) {
-    afkMessage.textContent = 'Calculando recompensas AFK...';
-    if (!playerData || !playerData.last_afk_start_time) {
-        afkTimeSpan.textContent = 'N/A';
-        afkXPGainSpan.textContent = '0';
-        afkGoldGainSpan.textContent = '0';
-        afkMessage.textContent = 'Nenhum tempo AFK registrado ou dados do jogador insuficientes para cálculo.';
-        collectAfkRewardsBtn.disabled = true; // Desabilita botão se não há o que coletar
-        return;
+// Função para atualizar last_active do jogador
+async function updateLastActive(userId) {
+    const { error } = await supabaseClient
+        .from('players')
+        .update({ last_active: new Date().toISOString() })
+        .eq('id', userId);
+
+    if (error) {
+        console.error('Erro ao atualizar last_active:', error);
     }
-
-    const lastAfkStartTime = new Date(playerData.last_afk_start_time).getTime();
-    const currentTime = new Date().getTime();
-    const afkDurationMs = currentTime - lastAfkStartTime;
-
-    const afkDurationSeconds = Math.floor(afkDurationMs / 1000);
-    const afkDurationMinutes = Math.floor(afkDurationSeconds / 60);
-
-    // Limita o tempo AFK máximo para evitar recompensas exageradas (ex: 8 horas = 480 minutos)
-    const maxAfkMinutes = 8 * 60;
-    const effectiveAfkMinutes = Math.min(afkDurationMinutes, maxAfkMinutes);
-
-    // Formatação do tempo AFK
-    const hours = Math.floor(effectiveAfkMinutes / 60);
-    const minutes = effectiveAfkMinutes % 60;
-    const seconds = afkDurationSeconds % 60; // Mantém segundos exatos para exibição
-
-    let timeString = '';
-    if (hours > 0) timeString += `${hours}h `;
-    if (minutes > 0) timeString += `${minutes}m `;
-    timeString += `${seconds}s`; // Sempre mostra segundos para feedback imediato
-
-    afkTimeSpan.textContent = timeString.trim();
-
-    // Lógica de cálculo de recompensa (exemplo simplificado e ajustável)
-    const xpPerMinutePerStage = 1; // 1 XP por minuto por estágio
-    const goldPerMinutePerStage = 0.5; // 0.5 Ouro por minuto por estágio
-
-    const estimatedXPGain = Math.floor(xpPerMinutePerStage * effectiveAfkMinutes * playerData.current_afk_stage);
-    const estimatedGoldGain = Math.floor(goldPerMinutePerStage * effectiveAfkMinutes * playerData.current_afk_stage);
-
-    afkStageSpan.textContent = playerData.current_afk_stage;
-    afkXPGainSpan.textContent = estimatedXPGain;
-    afkGoldGainSpan.textContent = estimatedGoldGain;
-    afkMessage.textContent = ''; // Limpa mensagem de cálculo
-
-    collectAfkRewardsBtn.disabled = (estimatedXPGain === 0 && estimatedGoldGain === 0); // Habilita/desabilita
-    // Armazena os ganhos estimados para a coleta
-    collectAfkRewardsBtn.dataset.xp = estimatedXPGain;
-    collectAfkRewardsBtn.dataset.gold = estimatedGoldGain;
 }
 
-async function collectAfkRewards() {
-    afkMessage.textContent = 'Coletando recompensas...';
-    collectAfkRewardsBtn.disabled = true; // Desabilita para evitar cliques múltiplos
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        afkMessage.textContent = "Erro: Usuário não logado.";
-        collectAfkRewardsBtn.disabled = false;
-        return;
-    }
+// --- Funções de Visibilidade da UI (Refatorada) ---
+// showGameUI: true para mostrar a interface do jogo (com menu), false para mostrar o login.
+// activeContainerId: o ID do container (ex: 'gameContainer', 'chatContainer', 'afkContainer') a ser exibido.
+function updateUIVisibility(showGameUI, activeContainerId = 'gameContainer') {
+    // Primeiro, ocultamos todos os containers de jogo
+    gameContainer.style.display = 'none';
+    chatContainer.style.display = 'none';
+    afkContainer.style.display = 'none'; // Novo: Oculta afkContainer
+    profileEditModal.style.display = 'none'; // Garante que o modal esteja oculto por padrão
 
-    const xpToGain = parseInt(collectAfkRewardsBtn.dataset.xp || '0', 10);
-    const goldToGain = parseInt(collectAfkRewardsBtn.dataset.gold || '0', 10);
+    if (showGameUI) {
+        authContainer.style.display = 'none';
+        playerInfoDiv.style.display = 'block'; // Informações do jogador sempre visíveis no jogo
+        footerMenu.style.display = 'flex'; // Mostra o menu do rodapé
+        chatBubble.style.display = 'flex'; // Mostra o balão de chat
 
-    if (xpToGain === 0 && goldToGain === 0) {
-        afkMessage.textContent = "Nenhuma recompensa AFK para coletar.";
-        collectAfkRewardsBtn.disabled = false;
-        return;
-    }
-
-    // Busca o jogador novamente para obter os valores atuais de XP/Ouro e nivel
-    const { data: player, error: fetchError } = await supabaseClient
-        .from('players')
-        .select('xp, gold, level, health, mana, attack, defense, combat_power')
-        .eq('id', user.id)
-        .single();
-
-    if (fetchError) {
-        console.error('Erro ao buscar jogador para coletar recompensas:', fetchError);
-        afkMessage.textContent = `Erro ao coletar: ${fetchError.message}`;
-        collectAfkRewardsBtn.disabled = false;
-        return;
-    }
-
-    let newXP = player.xp + xpToGain;
-    let newGold = player.gold + goldToGain;
-    let currentLevel = player.level;
-    let newHealth = player.health;
-    let newMana = player.mana;
-    let newAttack = player.attack;
-    let newDefense = player.defense;
-    let newCombatPower = player.combat_power;
-    let leveledUpMessage = '';
-
-    // Lógica de level up integrada
-    const xpNeededForNextLevel = currentLevel * 100;
-    if (newXP >= xpNeededForNextLevel) {
-        currentLevel++;
-        newXP -= xpNeededForNextLevel; // XP restante após o level up
-        newHealth += 10;
-        newMana += 5;
-        newAttack += 2;
-        newDefense += 1;
-        newCombatPower = Math.floor((newHealth + newMana + newAttack + newDefense) * currentLevel / 10);
-        leveledUpMessage = ` Você alcançou o Nível ${currentLevel} e seus atributos aumentaram!`;
-    }
-
-    // Atualiza XP, Ouro e o last_afk_start_time para o momento da coleta
-    const { error: updateError } = await supabaseClient
-        .from('players')
-        .update({
-            xp: newXP,
-            gold: newGold,
-            level: currentLevel, // Atualiza o nível
-            health: newHealth,
-            mana: newMana,
-            attack: newAttack,
-            defense: newDefense,
-            combat_power: newCombatPower,
-            last_afk_start_time: new Date().toISOString() // Reseta o tempo AFK
-        })
-        .eq('id', user.id);
-
-    if (updateError) {
-        console.error('Erro ao atualizar recompensas AFK:', updateError);
-        afkMessage.textContent = `Erro ao coletar recompensas: ${updateError.message}`;
+        // Em seguida, mostramos o container ativo
+        const activeDiv = document.getElementById(activeContainerId);
+        if (activeDiv) {
+            activeDiv.style.display = 'block';
+        } else {
+            // Fallback: se o ID for inválido, mostra o gameContainer por segurança
+            gameContainer.style.display = 'block';
+        }
     } else {
-        afkMessage.textContent = `Você coletou ${xpToGain} XP e ${goldToGain} Ouro!${leveledUpMessage}`;
-        // Atualiza a exibição de informações do jogador
-        fetchAndDisplayPlayerInfo();
-        // Recalcula recompensas para mostrar que foi resetado
-        calculateAndDisplayAfkRewards({ current_afk_stage: player.current_afk_s
+        // Se não estamos no jogo (tela de login)
+        authContainer.style.display = 'block'; // Mostra login
+        playerInfoDiv.style.display = 'none';
+        footerMenu.style.display = 'none'; // Esconde o menu do rodapé
+        chatBubble.style.display = 'none'; // Esconde o balão de chat
+    }
+    authMessage.textContent = ''; // Limpa mensagens de autenticação ao mudar de estado
+    gameMessage.textContent = ''; // Limpa mensagens gerais do jogo
+    // afkMessage.textContent = ''; // Mensagens AFK serão controladas pelo afk_script.js
+}
+
+
+// --- Funções dos Botões do Menu (Agora usam updateUIVisibility) ---
+function showGuildMenu() {
+    updateUIVisibility(true, 'gameContainer'); // Volta para gameContainer por enquanto
+    gameMessage.textContent = "Menu da Guilda (Em desenvolvimento)";
+    setTimeout(() => { gameMessage.textContent = ''; }, 3000);
+    // Futuramente: updateUIVisibility(true, 'guildContainer');
+}
+
+function showPvPMenu() {
+    updateUIVisibility(true, 'gameContainer'); // Volta para gameContainer por enquanto
+    gameMessage.textContent = "Menu de PvP (Em desenvolvimento)";
+    setTimeout(() => { gameMessage.textContent = ''; }, 3000);
+    // Futuramente: updateUIVisibility(true, 'pvpContainer');
+}
+
+function showAfkMenu() {
+    updateUIVisibility(true, 'afkContainer'); // Mostra o container AFK
+    // Chama a função no script AFK para iniciar o cálculo
+    if (typeof window.initAfkDisplay === 'function') {
+        window.initAfkDisplay();
+    }
+}
+
+function showMiningMenu() {
+    updateUIVisibility(true, 'gameContainer'); // Volta para gameContainer por enquanto
+    gameMessage.textContent = "Menu de Mineração (Em desenvolvimento)";
+    setTimeout(() => { gameMessage.textContent = ''; }, 3000);
+    // Futuramente: updateUIVisibility(true, 'miningContainer');
+}
+
+function showCastlesMenu() {
+    updateUIVisibility(true, 'gameContainer'); // Volta para gameContainer por enquanto
+    gameMessage.textContent = "Menu de Castelos (Em desenvolvimento)";
+    setTimeout(() => { gameMessage.textContent = ''; }, 3000);
+    // Futuramente: updateUIVisibility(true, 'castlesContainer');
+}
+
+
+// Listeners de Eventos
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('signInBtn').addEventListener('click', signIn);
+    document.getElementById('signUpBtn').addEventListener('click', signUp);
+    document.getElementById('sendChatBtn').addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    if (gainXpBtn) gainXpBtn.addEventListener('click', () => gainXP(100));
+    if (gainGoldBtn) gainGoldBtn.addEventListener('click', () => gainGold(50));
+
+    // Listeners para os botões do rodapé
+    if (guildBtn) guildBtn.addEventListener('click', showGuildMenu);
+    if (pvpBtn) pvpBtn.addEventListener('click', showPvPMenu);
+    if (afkBtn) afkBtn.addEventListener('click', showAfkMenu);
+    if (miningBtn) miningBtn.addEventListener('click', showMiningMenu);
+    if (castlesBtn) castlesBtn.addEventListener('click', showCastlesMenu);
+
+    // Listener para o balão de chat
+    if (chatBubble) chatBubble.addEventListener('click', () => {
+        // Se o chat está oculto e será mostrado
+        if (chatContainer.style.display === 'none') {
+            updateUIVisibility(true, 'chatContainer'); // Mostra apenas o chat container
+            loadInitialChatMessages();
+            chatInput.focus();
+        } else {
+            // Se o chat está visível e será ocultado, retorna para o gameContainer padrão
+            updateUIVisibility(true, 'gameContainer');
+        }
+    });
+
+    // Inicializa a UI com base no estado de autenticação
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            fetchAndDisplayPlayerInfo();
+        } else {
+            updateUIVisibility(false); // Garante que a tela de login esteja visível
+        }
+    });
+
+});

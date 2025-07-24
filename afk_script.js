@@ -18,6 +18,7 @@ const remainingAttacksSpan = document.getElementById('remainingAttacks');
 const monsterHealthPercentageSpan = document.getElementById('monsterCurrentHealthDisplay');
 const monsterHealthPercentageDiv = document.getElementById('monsterHealthPercentage'); // O div pai
 
+
 // Variáveis de estado do AFK
 let currentAfkPlayerId = null;
 let currentAfkStage = 1;
@@ -44,10 +45,11 @@ const MAX_ATTACKS = 10;
 
 // Função para inicializar a exibição AFK
 window.initAfkDisplay = async () => {
-    console.log("Inicializando exibição AFK...");
+    console.log("AFK: Inicializando exibição AFK...");
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         afkMessage.textContent = "Você precisa estar logado para iniciar uma aventura AFK.";
+        console.log("AFK: Usuário não logado.");
         return;
     }
     currentAfkPlayerId = user.id;
@@ -59,7 +61,7 @@ window.initAfkDisplay = async () => {
         .single();
 
     if (error || !player) {
-        console.error('Erro ao buscar informações do jogador para AFK:', error);
+        console.error('AFK: Erro ao buscar informações do jogador para AFK:', error);
         afkMessage.textContent = "Erro ao carregar informações da aventura.";
         return;
     }
@@ -82,15 +84,18 @@ window.initAfkDisplay = async () => {
     afkXPGainSpan.parentElement.style.display = 'block';
     afkGoldGainSpan.parentElement.style.display = 'block';
 
+    // Garante que elementos de combate estejam ocultos inicialmente
     attackButton.style.display = 'none';
     attackCountDisplay.style.display = 'none';
     monsterHealthPercentageDiv.style.display = 'none'; // Esconde a porcentagem de HP do monstro
     combatLogDiv.style.display = 'none';
+    console.log("AFK: Display inicial dos elementos de combate configurado para 'none'.");
 
 };
 
 // Função chamada pelo script.js quando as informações do jogador são carregadas
 window.onPlayerInfoLoadedForAfk = (player) => {
+    console.log("AFK: onPlayerInfoLoadedForAfk chamado.");
     currentAfkPlayerId = player.id;
     playerName = player.name;
     playerMaxHealth = player.health;
@@ -134,6 +139,7 @@ function startAfkTimer() {
 
 // Event Listeners
 collectAfkRewardsBtn.addEventListener('click', async () => {
+    console.log("AFK: Botão Coletar Recompensas clicado.");
     if (!currentAfkPlayerId || !lastAfkStartTime) {
         afkMessage.textContent = "Nenhuma recompensa AFK para coletar.";
         return;
@@ -175,20 +181,24 @@ collectAfkRewardsBtn.addEventListener('click', async () => {
 startAdventureBtn.addEventListener('click', startAdventure);
 
 async function startAdventure() {
+    console.log("AFK: Função startAdventure iniciada.");
     afkMessage.textContent = "Iniciando combate PvE...";
     combatLogDiv.innerHTML = '';
     combatLogDiv.style.display = 'block';
 
+    // Esconde os elementos de recompensa AFK e o botão "Iniciar Combate"
     afkTimeSpan.parentElement.style.display = 'none';
     afkXPGainSpan.parentElement.style.display = 'none';
     afkGoldGainSpan.parentElement.style.display = 'none';
     collectAfkRewardsBtn.style.display = 'none';
     startAdventureBtn.style.display = 'none';
+    console.log("AFK: Elementos AFK ocultados.");
 
     // Busca informações mais recentes do jogador para combate
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         afkMessage.textContent = "Erro: Usuário não logado para iniciar combate.";
+        console.error("AFK: Usuário não logado ao tentar iniciar combate.");
         return;
     }
     const { data: player, error: playerError } = await supabaseClient
@@ -198,7 +208,7 @@ async function startAdventure() {
         .single();
 
     if (playerError || !player) {
-        console.error('Erro ao buscar informações do jogador para combate:', playerError);
+        console.error('AFK: Erro ao buscar informações do jogador para combate:', playerError);
         afkMessage.textContent = "Erro ao carregar seu perfil para o combate.";
         return;
     }
@@ -208,20 +218,40 @@ async function startAdventure() {
     playerAttack = player.attack;
     playerDefense = player.defense;
     playerCombatPower = player.combat_power;
-
+    console.log("AFK: Dados do jogador carregados para combate.");
 
     monsterName = `Goblin do Estágio ${currentAfkStage}`;
     monsterMaxHealth = 50 + (currentAfkStage * 10);
     monsterCurrentHealth = monsterMaxHealth;
     monsterDefense = currentAfkStage;
+    console.log(`AFK: Monstro gerado: ${monsterName} com ${monsterMaxHealth} HP.`);
 
     logCombatMessage(`Um ${monsterName} apareceu!`, 'system');
 
     // Exibe a porcentagem de HP do monstro e o botão de ataque
-    monsterHealthPercentageDiv.style.display = 'block'; // Mostra o div pai
+    if (monsterHealthPercentageDiv) {
+        monsterHealthPercentageDiv.style.display = 'block'; // Mostra o div pai
+        console.log("AFK: monsterHealthPercentageDiv definido como 'block'.");
+    } else {
+        console.error("AFK: monsterHealthPercentageDiv não encontrado!");
+    }
+
+    if (attackButton) {
+        attackButton.style.display = 'flex'; // Certifica que o botão de ataque aparece
+        console.log("AFK: attackButton definido como 'flex'.");
+    } else {
+        console.error("AFK: attackButton não encontrado!");
+    }
+
+    if (attackCountDisplay) {
+        attackCountDisplay.style.display = 'block';
+        console.log("AFK: attackCountDisplay definido como 'block'.");
+    } else {
+        console.error("AFK: attackCountDisplay não encontrado!");
+    }
+
+
     updateMonsterHealthDisplay(); // Atualiza a porcentagem inicial
-    attackButton.style.display = 'flex'; // Certifica que o botão de ataque aparece
-    attackCountDisplay.style.display = 'block';
 
     attackCount = 0;
     remainingAttacksSpan.textContent = MAX_ATTACKS;
@@ -230,7 +260,9 @@ async function startAdventure() {
 }
 
 attackButton.addEventListener('click', () => {
+    console.log("AFK: Botão Atacar clicado.");
     if (attackCount >= MAX_ATTACKS || monsterCurrentHealth <= 0) {
+        console.log("AFK: Combate já terminou ou ataques esgotados. Ignorando clique.");
         return;
     }
 
@@ -252,20 +284,27 @@ attackButton.addEventListener('click', () => {
     updateMonsterHealthDisplay(); // Atualiza a porcentagem de HP do monstro
 
     if (monsterCurrentHealth <= 0) {
+        console.log("AFK: Monstro derrotado! Fim do combate.");
         endCombat(true, playerName, playerCombatPower, monsterName);
         attackButton.style.display = 'none';
         attackCountDisplay.style.display = 'none';
     } else if (attackCount >= MAX_ATTACKS) {
+        console.log("AFK: Ataques esgotados. Fim do combate.");
         endCombat(false, playerName, playerCombatPower, monsterName);
         attackButton.style.display = 'none';
         attackCountDisplay.style.display = 'none';
     }
 });
 
-// NOVO: Função para atualizar a exibição da porcentagem de HP do monstro
+// Função para atualizar a exibição da porcentagem de HP do monstro
 function updateMonsterHealthDisplay() {
-    const percentage = ((monsterCurrentHealth / monsterMaxHealth) * 100).toFixed(0);
-    monsterHealthPercentageSpan.textContent = `${percentage}%`;
+    if (monsterHealthPercentageSpan && monsterMaxHealth > 0) {
+        const percentage = ((monsterCurrentHealth / monsterMaxHealth) * 100).toFixed(0);
+        monsterHealthPercentageSpan.textContent = `${percentage}%`;
+        console.log(`AFK: HP do Monstro atualizado para ${percentage}%.`);
+    } else {
+        console.error("AFK: Não foi possível atualizar a porcentagem de HP do monstro. Elemento ou MaxHealth inválido.");
+    }
 }
 
 
@@ -287,7 +326,8 @@ function logCombatMessage(message, type = 'normal') {
 
 
 async function endCombat(playerWon, playerName, playerCombatPower, monsterName) {
-    monsterHealthPercentageDiv.style.display = 'none'; // Esconde a porcentagem de HP do monstro
+    console.log("AFK: Função endCombat iniciada.");
+    if (monsterHealthPercentageDiv) monsterHealthPercentageDiv.style.display = 'none';
     combatLogDiv.style.display = 'none';
 
     afkTimeSpan.parentElement.style.display = 'block';

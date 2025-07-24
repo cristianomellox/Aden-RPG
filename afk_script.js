@@ -42,10 +42,6 @@ const BASE_GOLD_PER_SECOND = 1 / 900; // 900 segundos = 15 minutos
 // XP: 1 a cada 10 minutos = 1 / (10 * 60) = 0.001666... por segundo
 const BASE_XP_PER_SECOND = 1 / 600; // 600 segundos = 10 minutos
 
-// REFERÊNCIA AOS BOTÕES DO MODAL (verifique se confirmCombatResultBtn e nextStageBtn estão definidos em script.js ou globalmente)
-const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
-const nextStageBtn = document.getElementById('nextStageBtn');
-
 
 // Função chamada pelo script.js quando o jogador faz login ou o perfil é atualizado
 window.onPlayerInfoLoadedForAfk = (player) => {
@@ -61,9 +57,9 @@ window.onPlayerInfoLoadedForAfk = (player) => {
     dailyAttemptsLeftSpan.textContent = currentDailyAttemptsLeft; // Atualiza o display das tentativas
 
     // Habilita/desabilita o botão de iniciar aventura com base nas tentativas restantes
-    if (currentDailyAttemptsLeft <= 0 || currentAfkStage >= MAX_AFK_STAGE) { // Adicionado verificação de estágio máximo
+    if (currentDailyAttemptsLeft <= 0) {
         startAdventureBtn.disabled = true;
-        afkMessage.textContent = "Você não tem mais tentativas diárias de aventura ou já conquistou todos os estágios!";
+        afkMessage.textContent = "Você não tem mais tentativas diárias de aventura. Volte amanhã!";
     } else {
         startAdventureBtn.disabled = false;
         afkMessage.textContent = ""; // Limpa a mensagem se houver tentativas
@@ -73,7 +69,7 @@ window.onPlayerInfoLoadedForAfk = (player) => {
     checkAndResetDailyAttempts(); // Verifica e reseta as tentativas se necessário
 };
 
-// Função para verificar e resetar tentativas diárias
+// NOVO: Função para verificar e resetar tentativas diárias
 async function checkAndResetDailyAttempts() {
     console.log("Verificando e resetando tentativas diárias...");
     if (!currentPlayerId) {
@@ -126,9 +122,9 @@ async function checkAndResetDailyAttempts() {
     }
 
     // Garante que o botão esteja desabilitado se as tentativas acabaram após a verificação
-    if (currentDailyAttemptsLeft <= 0 || currentAfkStage >= MAX_AFK_STAGE) { // Adicionado verificação de estágio máximo
+    if (currentDailyAttemptsLeft <= 0) {
         startAdventureBtn.disabled = true;
-        afkMessage.textContent = "Você não tem mais tentativas diárias de aventura ou já conquistou todos os estágios!";
+        afkMessage.textContent = "Você não tem mais tentativas diárias de aventura. Volte amanhã!";
     }
 }
 
@@ -147,31 +143,22 @@ function calculateAndDisplayAfkRewards() {
     const currentTime = Date.now();
     let timeElapsedSeconds = Math.floor((currentTime - lastAfkTime) / 1000);
 
-    // Limita o tempo de acúmulo ao máximo definido (4 horas)
+    // NOVO: Limita o tempo de acúmulo ao máximo definido (4 horas)
     const cappedTimeElapsed = Math.min(timeElapsedSeconds, MAX_AFK_ACCUMULATION_TIME_SECONDS);
 
-    // Calcula o ganho de XP e Ouro baseado nas novas taxas e no estágio atual
+    // NOVO: Calcula o ganho de XP e Ouro baseado nas novas taxas e no estágio atual
     const xpPerSecond = BASE_XP_PER_SECOND * currentAfkStage;
     const goldPerSecond = BASE_GOLD_PER_SECOND * currentAfkStage;
 
     const estimatedXP = Math.floor(cappedTimeElapsed * xpPerSecond);
     const estimatedGold = Math.floor(cappedTimeElapsed * goldPerSecond);
 
-    afkTimeSpan.textContent = formatTime(timeElapsedSeconds); // Formatando o tempo exibido
+    afkTimeSpan.textContent = `${timeElapsedSeconds} segundos (acúmulo máximo: ${MAX_AFK_ACCUMULATION_TIME_SECONDS} segundos)`;
     afkXPGainSpan.textContent = estimatedXP;
     afkGoldGainSpan.textContent = estimatedGold;
 
     collectAfkRewardsBtn.disabled = (estimatedXP === 0 && estimatedGold === 0);
 }
-
-// Função para formatar o tempo (hh:mm:ss)
-function formatTime(seconds) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
 
 // Função para coletar recompensas AFK
 async function collectAfkRewards() {
@@ -181,7 +168,7 @@ async function collectAfkRewards() {
     const currentTime = Date.now();
     let timeElapsedSeconds = Math.floor((currentTime - lastAfkTime) / 1000);
 
-    // Limita o tempo de acúmulo ao máximo definido (4 horas) antes de coletar
+    // NOVO: Limita o tempo de acúmulo ao máximo definido (4 horas) antes de coletar
     const cappedTimeElapsed = Math.min(timeElapsedSeconds, MAX_AFK_ACCUMULATION_TIME_SECONDS);
 
     const xpPerSecond = BASE_XP_PER_SECOND * currentAfkStage;
@@ -232,21 +219,21 @@ async function startAdventure() {
         return;
     }
 
-    // Verifica se o estágio atual é o máximo
+    // NOVO: Verifica se o estágio atual é o máximo
     if (currentAfkStage >= MAX_AFK_STAGE) {
         afkMessage.textContent = `Você já conquistou todos os ${MAX_AFK_STAGE} estágios de aventura!`;
         startAdventureBtn.disabled = true;
         return;
     }
 
-    // Verifica as tentativas diárias
+    // NOVO: Verifica as tentativas diárias
     if (currentDailyAttemptsLeft <= 0) {
         afkMessage.textContent = "Você não tem mais tentativas diárias de aventura. Volte amanhã!";
         startAdventureBtn.disabled = true;
         return;
     }
 
-    // Decrementa a tentativa diária antes de iniciar o combate
+    // NOVO: Decrementa a tentativa diária antes de iniciar o combate
     const { error: decrementError } = await supabaseClient
         .from('players')
         .update({ daily_attempts_left: currentDailyAttemptsLeft - 1 })
@@ -281,7 +268,7 @@ async function startAdventure() {
 
     combatLog.innerHTML = ''; // Limpa log anterior
 
-    // Definições do monstro (escalada para 100 estágios)
+    // NOVO: Definições do monstro (escalada para 100 estágios)
     // HP: Base 100, aumentando 50 por estágio para um total de 5000 no estágio 100
     // Defesa: Base 5, aumentando 1 por estágio para um total de 105 no estágio 100
     const monsterBaseHealth = 100 + (currentAfkStage - 1) * 50;
@@ -298,6 +285,9 @@ async function startAdventure() {
 
 function updateMonsterHealthDisplay() {
     monsterCurrentHealthDisplay.textContent = `${Math.max(0, currentMonsterHealth)} / ${currentMonsterHealth}`;
+    // Se você quiser porcentagem, precisa do HP máximo. Aqui está um exemplo.
+    // Para simplificar, vamos mostrar o valor absoluto por enquanto, ou você pode passar monsterBaseHealth para cá.
+    // monsterCurrentHealthDisplay.textContent = `${Math.max(0, currentMonsterHealth)} HP`;
 }
 
 function appendCombatLog(message) {
@@ -346,7 +336,6 @@ attackButton.addEventListener('click', playerAttack);
 
 // Função para finalizar o combate
 async function endCombat(isVictory) {
-    // Esconde elementos de combate
     attackButton.style.display = 'none';
     attackCountDisplay.style.display = 'none';
     monsterHealthPercentageSpan.style.display = 'none';
@@ -357,78 +346,54 @@ async function endCombat(isVictory) {
     afkGoldGainSpan.closest('p').style.display = 'block';
     collectAfkRewardsBtn.style.display = 'inline-block'; // Ou 'block' dependendo do seu estilo
 
-    let title, message;
-
-    // Esconde o botão "Próximo Estágio" por padrão no início da função
-    nextStageBtn.style.display = 'none';
+    let title, message, onConfirm;
 
     if (isVictory) {
         title = "Vitória!";
         message = `Você derrotou o monstro do Estágio ${currentAfkStage}!`;
 
-        // Define o comportamento do botão "Confirmar" para vitória
-        confirmCombatResultBtn.onclick = async () => {
-            combatResultModal.style.display = 'none'; // Fecha o modal
-            afkMessage.textContent = "Retornando à tela de aventura AFK.";
-            await window.fetchAndDisplayPlayerInfo(); // Garante que o perfil esteja atualizado
-            calculateAndDisplayAfkRewards();
-            // Reabilita o botão de iniciar aventura se houver tentativas e não atingiu o estágio máximo
-            if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
-                startAdventureBtn.disabled = false;
+        onConfirm = async () => {
+            afkMessage.textContent = "Avançando para o próximo estágio...";
+            const newStage = Math.min(currentAfkStage + 1, MAX_AFK_STAGE); // NOVO: Garante que não exceda o estágio máximo
+            const { error: updateStageError } = await supabaseClient
+                .from('players')
+                .update({ current_afk_stage: newStage, last_afk_start_time: new Date().toISOString() })
+                .eq('id', currentPlayerId);
+            if (updateStageError) {
+                console.error('Erro ao avançar estágio:', updateStageError.message);
+                afkMessage.textContent = `Erro ao avançar estágio: ${updateStageError.message}`;
             } else {
-                startAdventureBtn.disabled = true; // Mantém desabilitado se não houver tentativas ou atingiu o limite
+                currentAfkStage = newStage; // Atualiza localmente
+                afkStageSpan.textContent = currentAfkStage; // Atualiza o display do estágio
+                afkMessage.textContent = `Você avançou para o Estágio ${currentAfkStage}! Coletando XP...`;
+
+                // Recompensas de XP por vitória no estágio
+                const xpForVictory = Math.floor(currentAfkStage * 50); // XP maior por vitória
+                const xpResult = await window.gainXP(currentPlayerId, xpForVictory);
+                let finalMsg = `Vitória! Ganhou ${xpForVictory} XP no Estágio ${currentAfkStage}.`;
+                if (xpResult.leveledUp) {
+                    finalMsg += ` Você subiu para o nível ${xpResult.newLevel}!`;
+                }
+                afkMessage.textContent = finalMsg;
+                // Re-fetch e display para garantir que o perfil esteja atualizado
+                if (typeof window.fetchAndDisplayPlayerInfo === 'function') {
+                    await window.fetchAndDisplayPlayerInfo();
+                }
+                // Atualiza o objeto local (opcional, mas bom para consistência)
+                currentPlayerData.current_afk_stage = newStage; // Corrigido para newStage
+                currentPlayerData.last_afk_start_time = new Date().toISOString();
             }
-            setTimeout(() => { afkMessage.textContent = ''; }, 3000);
+            // Recalcula as recompensas AFK (deve mostrar 0 ou pouco tempo)
+            calculateAndDisplayAfkRewards();
+            startAdventureBtn.disabled = false; // Reabilita o botão após a confirmação
+            setTimeout(() => { afkMessage.textContent = ''; }, 5000); // Limpa a mensagem após um tempo
         };
 
-        // Se vitória E ainda tem tentativas E não atingiu o estágio máximo, mostra o botão "Próximo Estágio"
-        if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
-            nextStageBtn.style.display = 'block'; // Mostra o botão "Próximo Estágio"
-            nextStageBtn.onclick = async () => {
-                combatResultModal.style.display = 'none'; // Fecha o modal
-                afkMessage.textContent = "Avançando para o próximo estágio...";
-
-                const newStage = Math.min(currentAfkStage + 1, MAX_AFK_STAGE); // Garante que não exceda o estágio máximo
-                const { error: updateStageError } = await supabaseClient
-                    .from('players')
-                    .update({ current_afk_stage: newStage, last_afk_start_time: new Date().toISOString() })
-                    .eq('id', currentPlayerId);
-                if (updateStageError) {
-                    console.error('Erro ao avançar estágio:', updateStageError.message);
-                    afkMessage.textContent = `Erro ao avançar estágio: ${updateStageError.message}`;
-                } else {
-                    currentAfkStage = newStage; // Atualiza localmente
-                    afkStageSpan.textContent = currentAfkStage; // Atualiza o display do estágio
-
-                    // Recompensas de XP por vitória no estágio
-                    const xpForVictory = Math.floor(currentAfkStage * 50); // XP maior por vitória
-                    const xpResult = await window.gainXP(currentPlayerId, xpForVictory);
-                    let finalMsg = `Vitória! Ganhou ${xpForVictory} XP no Estágio ${currentAfkStage}.`;
-                    if (xpResult.leveledUp) {
-                        finalMsg += ` Você subiu para o nível ${xpResult.newLevel}!`;
-                    }
-                    afkMessage.textContent = finalMsg;
-                    await window.fetchAndDisplayPlayerInfo(); // Re-fetch e display para garantir que o perfil esteja atualizado
-                    // Atualiza o objeto local (opcional, mas bom para consistência)
-                    currentPlayerData.current_afk_stage = newStage;
-                    currentPlayerData.last_afk_start_time = new Date().toISOString();
-                }
-                calculateAndDisplayAfkRewards();
-                startAdventure(); // Inicia o próximo combate automaticamente
-                setTimeout(() => { afkMessage.textContent = ''; }, 5000);
-            };
-        }
-
-    } else { // Derrota
+    } else {
         title = "Derrota!";
         message = `Você não conseguiu derrotar o monstro em ${MAX_ATTACKS} ataques.<br>Tente novamente!`;
 
-        // Certifica-se de que o botão "Próximo Estágio" está oculto em caso de derrota
-        nextStageBtn.style.display = 'none';
-
-        // Define o comportamento do botão "Confirmar" para derrota (cura e retorna para a tela AFK)
-        confirmCombatResultBtn.onclick = async () => {
-            combatResultModal.style.display = 'none';
+        onConfirm = async () => {
             afkMessage.textContent = "Retornando à base para se curar...";
             const { data: { user } = { user: null } } = await supabaseClient.auth.getUser();
             if (user) {
@@ -438,20 +403,18 @@ async function endCombat(isVictory) {
                     .eq('id', user.id);
             }
             afkMessage.textContent = "Pronto para outra tentativa.";
-            await window.fetchAndDisplayPlayerInfo();
-            calculateAndDisplayAfkRewards();
-            // Reabilita o botão de iniciar aventura se houver tentativas
-            if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
-                startAdventureBtn.disabled = false;
-            } else {
-                startAdventureBtn.disabled = true; // Mantém desabilitado se não houver tentativas
+            // Re-fetch e display para garantir que o perfil esteja atualizado
+            if (typeof window.fetchAndDisplayPlayerInfo === 'function') {
+                await window.fetchAndDisplayPlayerInfo();
             }
-            setTimeout(() => { afkMessage.textContent = ''; }, 5000);
+            // Recalcula as recompensas AFK (deve mostrar 0 ou pouco tempo)
+            calculateAndDisplayAfkRewards();
+            startAdventureBtn.disabled = false; // Reabilita o botão após a confirmação
+            setTimeout(() => { afkMessage.textContent = ''; }, 5000); // Limpa a mensagem após um tempo
         };
     }
 
-    // MOSTRA o modal, garantindo que ele apareça após a configuração dos botões
-    window.showCombatResultModal(title, message);
+    window.showCombatResultModal(title, message, onConfirm);
 }
 
 
@@ -463,12 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
         startAdventureBtn.addEventListener('click', startAdventure);
         console.log("AFK Script: Listener para startAdventureBtn adicionado.");
     }
-    // Chama calculateAndDisplayAfkRewards a cada segundo para o contador de tempo
+    // NOVO: Chama calculateAndDisplayAfkRewards a cada segundo para o contador de tempo
     setInterval(calculateAndDisplayAfkRewards, 1000);
 });
 
 // Inicialização do AFK
+// Esta função será chamada após o carregamento do DOM e o login do usuário
 window.initAfk = async () => {
     // A função onPlayerInfoLoadedForAfk já é chamada pelo script.js
     // garantindo que os dados do jogador estejam disponíveis.
+    // Não precisamos buscar o usuário novamente aqui.
 };

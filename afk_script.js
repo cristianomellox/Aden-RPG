@@ -166,7 +166,7 @@ async function calculateAndDisplayAfkRewards() {
 }
 
 async function collectAfkRewards() {
-    console.log("AFK Script: Coletando recompensas AFK.");
+    console.log("AFK Script: Coletando recompensas... ");
     afkMessage.textContent = 'Coletando recompensas...';
     collectAfkRewardsBtn.disabled = true;
     clearCombatLog();

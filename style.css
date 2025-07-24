@@ -7,7 +7,6 @@ body {
     margin-bottom: 80px; /* Espaço para o menu do rodapé */
     background-color: #f0f2f5; /* Um fundo leve para melhor visualização */
 }
-/* Adicionado #afkContainer aos seletores de estilo gerais */
 #authContainer, #playerInfoDiv, #chatContainer, #afkContainer, #combatContainer {
     border: 1px solid #ccc;
     padding: 20px;

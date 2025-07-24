@@ -500,4 +500,51 @@ function showAfkMenu() {
     }
 }
 
-function sh
+function showMiningMenu() {
+    updateUIVisibility(true, 'playerInfoDiv');
+    showFloatingMessage("Menu de Mineração (Em desenvolvimento)");
+}
+
+function showCastlesMenu() {
+    updateUIVisibility(true, 'playerInfoDiv');
+    showFloatingMessage("Menu de Castelos (Em desenvolvimento)");
+}
+
+// Listeners de Eventos
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('signInBtn').addEventListener('click', signIn);
+    document.getElementById('signUpBtn').addEventListener('click', signUp);
+    document.getElementById('sendChatBtn').addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    if (guildBtn) guildBtn.addEventListener('click', showGuildMenu);
+    if (pvpBtn) pvpBtn.addEventListener('click', showPvPMenu);
+    if (afkBtn) afkBtn.addEventListener('click', showAfkMenu);
+    if (miningBtn) miningBtn.addEventListener('click', showMiningMenu);
+    if (castlesBtn) castlesBtn.addEventListener('click', showCastlesMenu);
+
+    if (chatBubble) {
+        chatBubble.addEventListener('click', () => {
+            if (chatContainer.style.display === 'none') {
+                updateUIVisibility(true, 'chatContainer');
+                loadInitialChatMessages();
+                chatInput.focus();
+            } else {
+                updateUIVisibility(true, 'playerInfoDiv');
+            }
+        });
+    }
+
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            fetchAndDisplayPlayerInfo();
+        } else {
+            updateUIVisibility(false);
+        }
+    });
+});

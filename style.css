@@ -130,7 +130,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Estilos do Rodapé e Chat Flutuante */
 #footerMenu {
     display: flex;
-    justify-content: space-around;
+    justify-content: flex-start; /* Alinha os itens ao início (esquerda) */
     align-items: center;
     position: fixed;
     bottom: 0;
@@ -141,6 +141,9 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
     z-index: 999;
     box-sizing: border-box;
+    overflow-x: auto; /* Permite rolagem horizontal */
+    -webkit-overflow-scrolling: touch; /* Suaviza a rolagem em dispositivos iOS */
+    white-space: nowrap; /* Impede que os botões quebrem linha */
 }
 #footerMenu button {
     background-color: #555;
@@ -151,17 +154,20 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     border-radius: 5px;
     cursor: pointer;
     font-size: 1em;
-    flex-grow: 1;
-    max-width: 120px;
+    flex-shrink: 0; /* Impede que os botões encolham */
+    /* flex-grow: 1; Removido para permitir que os botões tenham o tamanho natural e rolagem */
+    /* max-width: 120px; Removido para permitir que os botões tenham o tamanho natural e rolagem */
 }
 #footerMenu button:hover {
     background-color: #777;
 }
 
+/* Ajustado: Chat Bubble para o lado direito */
 #chatBubble {
     position: fixed;
     bottom: 90px; /* Acima do footerMenu (padding 10px + altura aprox 60px) */
-    left: 20px; /* Alinha à esquerda para evitar colisão com o menu do rodapé */
+    right: 20px; /* Alinha à direita */
+    left: auto; /* Remove alinhamento à esquerda, se houver */
     background-color: #007bff;
     color: white;
     border-radius: 50%;
@@ -198,7 +204,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     transition: opacity 0.5s ease-in-out;
 }
 
-/* NOVO: Estilos para o popup de dano no combate */
+/* Estilos para o popup de dano no combate */
 #combatDamagePopup {
     display: none;
     position: fixed;

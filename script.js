@@ -35,7 +35,8 @@ const afkContainer = document.getElementById('afkContainer');
 const floatingMessageDiv = document.getElementById('floatingMessage');
 // Referência ao novo elemento de popup de dano de combate
 const combatDamagePopupDiv = document.getElementById('combatDamagePopup');
-const popupAttackerNameSpan = document.getElementById('popupAttackerName');
+// Note: popupAttackerNameSpan não será mais usado, mas manteremos o `id` para não quebrar a estrutura existente
+const popupAttackerNameSpan = document.getElementById('popupAttackerName'); // Manter por compatibilidade de referência
 const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
 // Referências ao modal de resultado de combate
 const combatResultModal = document.getElementById('combatResultModal');
@@ -68,23 +69,18 @@ function showFloatingMessage(message, duration = 3000) {
 }
 
 // --- Funções de Popup de Dano (para combate) ---
-function showDamagePopup(attackerName, damageAmount, isCritical) {
+// Esta função agora espera apenas o valor do dano e se é crítico.
+// O "attackerName" pode ser um placeholder ou ignorado na exibição.
+function showDamagePopup(damageAmount, isCritical) { // Removido attackerName dos parâmetros se não for exibido
     if (!combatDamagePopupDiv) {
         console.error("combatDamagePopupDiv não encontrado!");
         return;
     }
 
-    console.log("showDamagePopup called with:", { attackerName, damageAmount, isCritical }); // DEBUG LOG
+    console.log("showDamagePopup called with:", { damageAmount, isCritical }); // DEBUG LOG
 
-    // Certifique-se de que os elementos internos estão sendo corretamente referenciados
-    const attackerSpan = combatDamagePopupDiv.querySelector('#popupAttackerName');
+    // O texto "DANO:" já está no HTML, só precisamos atualizar o span de dano.
     const damageSpan = combatDamagePopupDiv.querySelector('#popupDamageAmount');
-
-    if (attackerSpan) {
-        attackerSpan.textContent = attackerName;
-    } else {
-        console.warn("popupAttackerName span not found inside combatDamagePopupDiv");
-    }
 
     if (damageSpan) {
         damageSpan.textContent = damageAmount;
@@ -479,6 +475,12 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     combatResultModal.style.display = 'none'; // Garante que o modal de combate esteja oculto
     playerHealthDisplay.style.display = 'none'; // Esconde barras de HP
     monsterHealthDisplay.style.display = 'none'; // Esconde barras de HP
+
+    // NOVO: Esconde o botão de ataque e o contador por padrão
+    const attackButton = document.getElementById('attackButton');
+    const attackCountDisplay = document.getElementById('attackCountDisplay');
+    if (attackButton) attackButton.style.display = 'none';
+    if (attackCountDisplay) attackCountDisplay.style.display = 'none';
 
 
     if (showGameUI) {

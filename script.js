@@ -35,8 +35,6 @@ const afkContainer = document.getElementById('afkContainer');
 const floatingMessageDiv = document.getElementById('floatingMessage');
 // Referência ao novo elemento de popup de dano de combate
 const combatDamagePopupDiv = document.getElementById('combatDamagePopup');
-// Note: popupAttackerNameSpan não será mais usado, mas manteremos o `id` para não quebrar a estrutura existente
-const popupAttackerNameSpan = document.getElementById('popupAttackerName'); // Manter por compatibilidade de referência
 const popupDamageAmountSpan = document.getElementById('popupDamageAmount');
 // Referências ao modal de resultado de combate
 const combatResultModal = document.getElementById('combatResultModal');
@@ -44,13 +42,7 @@ const combatResultTitle = document.getElementById('combatResultTitle');
 const combatResultMessage = document.getElementById('combatResultMessage');
 const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
 
-// NOVOS: Elementos das barras de HP
-const playerHealthDisplay = document.getElementById('playerHealthDisplay');
-const playerHealthBar = document.getElementById('playerHealthBar');
-const playerCurrentHealthText = document.getElementById('playerCurrentHealthText');
-const monsterHealthDisplay = document.getElementById('monsterHealthDisplay');
-const monsterHealthBar = document.getElementById('monsterHealthBar');
-const monsterCurrentHealthText = document.getElementById('monsterCurrentHealthText');
+// REMOVIDO: Referências aos elementos de barras de HP (playerHealthDisplay, monsterHealthDisplay, etc.)
 
 
 // --- Funções de Notificação Flutuante (para menus) ---
@@ -69,17 +61,12 @@ function showFloatingMessage(message, duration = 3000) {
 }
 
 // --- Funções de Popup de Dano (para combate) ---
-// Esta função agora espera apenas o valor do dano e se é crítico.
-// O "attackerName" pode ser um placeholder ou ignorado na exibição.
-function showDamagePopup(damageAmount, isCritical) { // Removido attackerName dos parâmetros se não for exibido
+function showDamagePopup(damageAmount, isCritical) {
     if (!combatDamagePopupDiv) {
         console.error("combatDamagePopupDiv não encontrado!");
         return;
     }
 
-    console.log("showDamagePopup called with:", { damageAmount, isCritical }); // DEBUG LOG
-
-    // O texto "DANO:" já está no HTML, só precisamos atualizar o span de dano.
     const damageSpan = combatDamagePopupDiv.querySelector('#popupDamageAmount');
 
     if (damageSpan) {
@@ -111,48 +98,21 @@ function showDamagePopup(damageAmount, isCritical) { // Removido attackerName do
 // EXPOR A FUNÇÃO DE POPUP DE DANO PARA USO PELO AFK SCRIPT
 window.showDamagePopup = showDamagePopup;
 
-// --- Função para Atualizar Barras de HP ---
-function updateHealthBar(elementId, currentHp, maxHp) {
-    const bar = document.getElementById(elementId);
-    // Note: playerCurrentHealthText e monsterCurrentHealthText já são IDs diretos.
-    // A função é mais genérica, mas a lógica de texto é específica para esses casos.
-    const textSpan = document.getElementById(`${elementId.replace('Bar', 'CurrentHealthText')}`);
-
-    if (!bar) {
-        console.warn(`Barra de HP para ${elementId} não encontrada.`);
-        return;
-    }
-    if (!textSpan) {
-        console.warn(`Span de texto para ${elementId.replace('Bar', 'CurrentHealthText')} não encontrado.`);
-    }
-
-    const percentage = (currentHp / maxHp) * 100;
-    bar.style.width = `${Math.max(0, percentage)}%`; // Garante que não vá abaixo de 0%
-    bar.textContent = `${currentHp}/${maxHp}`; // Exibe HP no texto
-
-    // Atualiza o texto fora da barra também
-    if (textSpan) { // Somente atualiza se o span de texto for encontrado
-        textSpan.textContent = `${currentHp}/${maxHp}`;
-    }
-}
-
-// EXPOR A FUNÇÃO DE ATUALIZAÇÃO DE HP PARA USO PELO AFK SCRIPT
-window.updateHealthBar = updateHealthBar;
-
+// REMOVIDO: Função para Atualizar Barras de HP (updateHealthBar)
+// A função updateHealthBar e seus elementos HTML foram removidos.
 
 // --- Funções do Modal de Resultado de Combate ---
 // Esta função será chamada pelo afk_script.js
 window.showCombatResultModal = (title, message, onConfirmCallback) => {
     combatResultTitle.textContent = title;
-    combatResultMessage.innerHTML = message; // Use innerHTML para permitir quebras de linha ou formatação
-    combatResultModal.style.display = 'flex'; // Exibe o modal
+    combatResultMessage.innerHTML = message;
+    combatResultModal.style.display = 'flex';
 
-    // Limpa listeners antigos para evitar chamadas duplicadas
     confirmCombatResultBtn.onclick = null;
     confirmCombatResultBtn.onclick = () => {
-        combatResultModal.style.display = 'none'; // Esconde o modal ao confirmar
+        combatResultModal.style.display = 'none';
         if (onConfirmCallback) {
-            onConfirmCallback(); // Chama o callback para aplicar recompensas e atualizar a UI
+            onConfirmCallback();
         }
     };
 };
@@ -169,7 +129,7 @@ async function signIn() {
         authMessage.textContent = `Erro ao fazer login: ${error.message}`;
         console.error('Erro ao fazer login:', error);
     } else {
-        authMessage.textContent = ''; // Limpa a mensagem de erro
+        authMessage.textContent = '';
         console.log("Login bem-sucedido.");
     }
 }
@@ -196,7 +156,7 @@ async function signOut() {
         console.error('Erro ao sair:', error.message);
     } else {
         console.log("Sessão encerrada.");
-        chatBox.innerHTML = ''; // Limpa o chat
+        chatBox.innerHTML = '';
     }
 }
 
@@ -216,7 +176,7 @@ async function fetchAndDisplayPlayerInfo() {
             profileEditModal.style.display = 'flex';
             editPlayerNameInput.value = player ? player.name : user.email.split('@')[0];
             editPlayerFactionSelect.value = player ? player.faction : 'Aliança da Floresta';
-            updateUIVisibility(false); // Esconde a UI do jogo para garantir que só o modal apareça
+            updateUIVisibility(false);
             footerMenu.style.display = 'none';
             chatBubble.style.display = 'none';
             return;
@@ -237,9 +197,9 @@ async function fetchAndDisplayPlayerInfo() {
         document.getElementById('signOutBtn').onclick = signOut;
 
         console.log("Informações do jogador carregadas. Exibindo UI padrão.");
-        updateUIVisibility(true, 'playerInfoDiv'); // Mostra o playerInfoDiv por padrão
+        updateUIVisibility(true, 'playerInfoDiv');
         subscribeToChat();
-        updateLastActive(user.id); // Atualiza last_active ao fazer login
+        updateLastActive(user.id);
 
         if (typeof window.onPlayerInfoLoadedForAfk === 'function') {
             window.onPlayerInfoLoadedForAfk(player);
@@ -281,8 +241,8 @@ saveProfileBtn.addEventListener('click', async () => {
     } else {
         profileEditMessage.textContent = "Perfil salvo com sucesso!";
         console.log("Perfil salvo com sucesso.");
-        profileEditModal.style.display = 'none'; // Esconde o modal
-        fetchAndDisplayPlayerInfo(); // Atualiza as informações exibidas e a UI
+        profileEditModal.style.display = 'none';
+        fetchAndDisplayPlayerInfo();
     }
 });
 // FUNÇÕES DE PROGRESSÃO DO JOGADOR (ainda necessárias para as recompensas AFK)
@@ -392,18 +352,6 @@ async function sendMessage() {
         return;
     }
 
-    // Verificação de Rank para chat global
-    // if (player.rank !== 'Monarca' && player.rank !== 'Nobre') {
-    //     showFloatingMessage('Apenas Monarcas e Nobres podem escrever no chat global.');
-    //     return;
-    // }
-
-    // Limite de caracteres para mensagens
-    if (messageText.length > 200) {
-        showFloatingMessage('Mensagem muito longa! Máximo de 200 caracteres.');
-        return;
-    }
-
     const playerName = player ? player.name : 'Desconhecido';
     const { error } = await supabaseClient
         .from('chat_messages')
@@ -472,11 +420,9 @@ function updateUIVisibility(showGameUI, activeContainerId = 'playerInfoDiv') {
     chatContainer.style.display = 'none';
     afkContainer.style.display = 'none';
     profileEditModal.style.display = 'none';
-    combatResultModal.style.display = 'none'; // Garante que o modal de combate esteja oculto
-    playerHealthDisplay.style.display = 'none'; // Esconde barras de HP
-    monsterHealthDisplay.style.display = 'none'; // Esconde barras de HP
+    combatResultModal.style.display = 'none';
+    // REMOVIDO: Linhas que ocultavam as barras de HP
 
-    // NOVO: Esconde o botão de ataque e o contador por padrão
     const attackButton = document.getElementById('attackButton');
     const attackCountDisplay = document.getElementById('attackCountDisplay');
     if (attackButton) attackButton.style.display = 'none';

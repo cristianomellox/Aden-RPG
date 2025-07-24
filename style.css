@@ -130,7 +130,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Estilos do Rodapé e Chat Flutuante */
 #footerMenu {
     display: flex;
-    justify-content: flex-start; /* Alinha os itens ao início (esquerda) */
+    /* justify-content: flex-start;  Manter padrão de alinhamento para rolagem */
     align-items: center;
     position: fixed;
     bottom: 0;
@@ -144,6 +144,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     overflow-x: auto; /* Permite rolagem horizontal */
     -webkit-overflow-scrolling: touch; /* Suaviza a rolagem em dispositivos iOS */
     white-space: nowrap; /* Impede que os botões quebrem linha */
+    flex-wrap: nowrap; /* Garante que os itens permaneçam em uma única linha */
 }
 #footerMenu button {
     background-color: #555;
@@ -155,14 +156,13 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     cursor: pointer;
     font-size: 1em;
     flex-shrink: 0; /* Impede que os botões encolham */
-    /* flex-grow: 1; Removido para permitir que os botões tenham o tamanho natural e rolagem */
-    /* max-width: 120px; Removido para permitir que os botões tenham o tamanho natural e rolagem */
+    min-width: 80px; /* Garante uma largura mínima para os botões no menu rolavel */
 }
 #footerMenu button:hover {
     background-color: #777;
 }
 
-/* Ajustado: Chat Bubble para o lado direito */
+/* AJUSTADO: Chat Bubble para o lado direito */
 #chatBubble {
     position: fixed;
     bottom: 90px; /* Acima do footerMenu (padding 10px + altura aprox 60px) */

@@ -54,14 +54,9 @@ window.initAfkDisplay = async () => {
     // Inicializa HP do jogador para combate
     playerMaxHealth = player.health;
     playerCurrentHealth = player.health;
-    window.updateHealthBar('playerHealthBar', playerCurrentHealth, playerMaxHealth);
-
-    currentAfkStage = player.current_afk_stage || 1;
-    lastAfkStartTime = player.last_afk_start_time ? new Date(player.last_afk_start_time) : null;
-
-    afkStageSpan.textContent = currentAfkStage;
-    updateAfkTimeAndRewards();
-    startAfkTimer(); // Inicia o timer de AFK
+    // Não atualiza a barra de HP aqui, pois só é relevante durante o combate
+    // Isso será feito quando o combate iniciar
+    // As barras de HP serão configuradas para 'display: none' por updateUIVisibility
 };
 
 // Função chamada pelo script.js quando as informações do jogador são carregadas
@@ -195,6 +190,7 @@ startAdventureBtn.addEventListener('click', async () => {
     // Exibe as barras de HP
     playerHealthDisplay.style.display = 'flex';
     monsterHealthDisplay.style.display = 'flex';
+    console.log("HP bars display set to flex."); // DEBUG LOG
     window.updateHealthBar('playerHealthBar', playerCurrentHealth, playerMaxHealth);
     window.updateHealthBar('monsterHealthBar', monsterCurrentHealth, monsterMaxHealth);
 
@@ -203,7 +199,7 @@ startAdventureBtn.addEventListener('click', async () => {
         let playerDamage = Math.max(0, playerAttack - monsterDefense); // Dano mínimo de 0
         let playerIsCritical = Math.random() < 0.2; // 20% de chance de crítico
         if (playerIsCritical) {
-            playerDamage *= 2; // Dano dobrado no crítico
+            playerDamage = Math.floor(playerDamage * 2); // Dano dobrado no crítico, arredondado para evitar floats
         }
         monsterCurrentHealth -= playerDamage;
         logCombatMessage(`${playerName} ataca o ${monsterName} causando ${playerDamage} de dano${playerIsCritical ? ' (CRÍTICO!)' : ''}.`, 'player');
@@ -223,7 +219,7 @@ startAdventureBtn.addEventListener('click', async () => {
         let monsterDamage = Math.max(0, monsterAttack - player.defense); // Dano mínimo de 0
         let monsterIsCritical = Math.random() < 0.1; // 10% de chance de crítico para o monstro
         if (monsterIsCritical) {
-            monsterDamage *= 1.5; // Monstro causa 1.5x dano crítico
+            monsterDamage = Math.floor(monsterDamage * 1.5); // Monstro causa 1.5x dano crítico, arredondado
         }
         playerCurrentHealth -= monsterDamage;
         logCombatMessage(`${monsterName} ataca ${playerName} causando ${monsterDamage} de dano${monsterIsCritical ? ' (CRÍTICO!)' : ''}.`, 'monster');
@@ -255,7 +251,7 @@ function logCombatMessage(message, type = 'normal') {
         p.style.fontWeight = 'bold';
     }
     combatLogDiv.prepend(p); // Adiciona as mensagens mais recentes no topo
-    // Manter o scroll no fundo (opcional, já que está pré-pendendo)
+    // Manter o scroll no fundo (opcional, já que está pré-prependendo)
     // combatLogDiv.scrollTop = combatLogDiv.scrollHeight;
 }
 
@@ -264,6 +260,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
     // Esconde as barras de HP
     playerHealthDisplay.style.display = 'none';
     monsterHealthDisplay.style.display = 'none';
+    console.log("HP bars display set to none."); // DEBUG LOG
     combatLogDiv.style.display = 'none'; // Esconde o log de combate
 
     // Reexibe os elementos de recompensa AFK
@@ -322,7 +319,7 @@ async function endCombat(playerWon, playerName, playerCombatPower, monsterName) 
             // Ao perder, não avança estágio e não reseta last_afk_start_time (continua acumulando afk do estágio atual)
             // Apenas cura o jogador para a próxima tentativa
             afkMessage.textContent = "Retornando à base para se curar...";
-            const { data: { user } } = await supabaseClient.auth.getUser();
+            const { data: { user } = { user: null } } = await supabaseClient.auth.getUser(); // Safe destructuring
             if (user) {
                 await supabaseClient
                     .from('players')

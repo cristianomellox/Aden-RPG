@@ -9,10 +9,14 @@ const startAdventureBtn = document.getElementById('startAdventureBtn');
 const afkMessage = document.getElementById('afkMessage');
 const combatLogDiv = document.getElementById('combatLog');
 
-// NOVO: Botão de ataque e contador de ataques
+// Botão de ataque e contador de ataques
 const attackButton = document.getElementById('attackButton');
 const attackCountDisplay = document.getElementById('attackCountDisplay');
 const remainingAttacksSpan = document.getElementById('remainingAttacks');
+
+// NOVO: Elemento para exibir a porcentagem de HP do monstro
+const monsterHealthPercentageSpan = document.getElementById('monsterCurrentHealthDisplay');
+const monsterHealthPercentageDiv = document.getElementById('monsterHealthPercentage'); // O div pai
 
 // Variáveis de estado do AFK
 let currentAfkPlayerId = null;
@@ -20,7 +24,7 @@ let currentAfkStage = 1;
 let lastAfkStartTime = null;
 let afkTimerInterval = null;
 
-// NOVOS: Variáveis de HP para combate
+// Variáveis de HP para combate
 let playerMaxHealth = 0;
 let playerCurrentHealth = 0; // O HP do jogador não será alterado no combate
 let playerAttack = 0; // Guardar o ataque do jogador
@@ -33,11 +37,9 @@ let monsterMaxHealth = 0;
 let monsterCurrentHealth = 0;
 let monsterDefense = 0; // Defesa do monstro
 
-// NOVO: Variáveis para o sistema de ataque limitado
+// Variáveis para o sistema de ataque limitado
 let attackCount = 0;
 const MAX_ATTACKS = 10;
-
-// REMOVIDO: Referências aos elementos de exibição de HP (playerHealthDisplay, monsterHealthDisplay)
 
 
 // Função para inicializar a exibição AFK
@@ -82,7 +84,7 @@ window.initAfkDisplay = async () => {
 
     attackButton.style.display = 'none';
     attackCountDisplay.style.display = 'none';
-    // REMOVIDO: Linhas que ocultavam as barras de HP
+    monsterHealthPercentageDiv.style.display = 'none'; // Esconde a porcentagem de HP do monstro
     combatLogDiv.style.display = 'none';
 
 };
@@ -215,11 +217,11 @@ async function startAdventure() {
 
     logCombatMessage(`Um ${monsterName} apareceu!`, 'system');
 
-    // REMOVIDO: Exibir as barras de HP
-    attackButton.style.display = 'flex';
+    // Exibe a porcentagem de HP do monstro e o botão de ataque
+    monsterHealthPercentageDiv.style.display = 'block'; // Mostra o div pai
+    updateMonsterHealthDisplay(); // Atualiza a porcentagem inicial
+    attackButton.style.display = 'flex'; // Certifica que o botão de ataque aparece
     attackCountDisplay.style.display = 'block';
-
-    // REMOVIDO: Atualizar as barras de HP inicialmente
 
     attackCount = 0;
     remainingAttacksSpan.textContent = MAX_ATTACKS;
@@ -247,8 +249,7 @@ attackButton.addEventListener('click', () => {
 
     logCombatMessage(`${playerName} ataca o ${monsterName} causando ${playerDamage} de dano${playerIsCritical ? ' (CRÍTICO!)' : ''}.`, 'player');
     window.showDamagePopup(playerDamage, playerIsCritical);
-
-    // REMOVIDO: Atualizar barra de HP do monstro
+    updateMonsterHealthDisplay(); // Atualiza a porcentagem de HP do monstro
 
     if (monsterCurrentHealth <= 0) {
         endCombat(true, playerName, playerCombatPower, monsterName);
@@ -260,6 +261,12 @@ attackButton.addEventListener('click', () => {
         attackCountDisplay.style.display = 'none';
     }
 });
+
+// NOVO: Função para atualizar a exibição da porcentagem de HP do monstro
+function updateMonsterHealthDisplay() {
+    const percentage = ((monsterCurrentHealth / monsterMaxHealth) * 100).toFixed(0);
+    monsterHealthPercentageSpan.textContent = `${percentage}%`;
+}
 
 
 function logCombatMessage(message, type = 'normal') {
@@ -280,7 +287,7 @@ function logCombatMessage(message, type = 'normal') {
 
 
 async function endCombat(playerWon, playerName, playerCombatPower, monsterName) {
-    // REMOVIDO: Esconder as barras de HP
+    monsterHealthPercentageDiv.style.display = 'none'; // Esconde a porcentagem de HP do monstro
     combatLogDiv.style.display = 'none';
 
     afkTimeSpan.parentElement.style.display = 'block';

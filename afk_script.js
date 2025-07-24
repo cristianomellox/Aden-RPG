@@ -30,6 +30,19 @@ const dailyAttemptsLeftSpan = document.getElementById('dailyAttemptsLeft'); // N
 // Objeto para armazenar dados do jogador carregados
 let currentPlayerData = null;
 
+// NOVO: Constante para o limite máximo de estágios
+const MAX_AFK_STAGE = 100; // Limite de estágios da aventura PvE
+
+// NOVO: Constante para o limite de tempo de acúmulo AFK (em segundos)
+const MAX_AFK_ACCUMULATION_TIME_SECONDS = 4 * 60 * 60; // 4 horas * 60 minutos * 60 segundos
+
+// NOVO: Taxas base de XP e Ouro por segundo para o modo idle
+// Ouro: 1 a cada 15 minutos = 1 / (15 * 60) = 0.001111... por segundo
+const BASE_GOLD_PER_SECOND = 1 / 900; // 900 segundos = 15 minutos
+// XP: 1 a cada 10 minutos = 1 / (10 * 60) = 0.001666... por segundo
+const BASE_XP_PER_SECOND = 1 / 600; // 600 segundos = 10 minutos
+
+
 // Função chamada pelo script.js quando o jogador faz login ou o perfil é atualizado
 window.onPlayerInfoLoadedForAfk = (player) => {
     console.log("AFK Script: Player info loaded.", player);
@@ -97,7 +110,6 @@ async function checkAndResetDailyAttempts() {
             console.log("Tentativas diárias resetadas com sucesso!");
             currentDailyAttemptsLeft = 5; // Atualiza a variável local
             dailyAttemptsLeftSpan.textContent = currentDailyAttemptsLeft; // Atualiza o display
-            startAdventureBtn.disabled = false; // Reabilita o botão
             afkMessage.textContent = "Suas tentativas diárias de aventura foram resetadas!";
             // Atualiza player data localmente
             if(currentPlayerData) {
@@ -129,17 +141,19 @@ function calculateAndDisplayAfkRewards() {
 
     const lastAfkTime = new Date(currentPlayerData.last_afk_start_time).getTime();
     const currentTime = Date.now();
-    const timeElapsedSeconds = Math.floor((currentTime - lastAfkTime) / 1000);
+    let timeElapsedSeconds = Math.floor((currentTime - lastAfkTime) / 1000);
 
-    // Exemplo simplificado de ganho: 1 XP por segundo, 0.1 ouro por segundo
-    // Isso deve ser ajustado com base no estágio AFK, level do player, etc.
-    const xpPerSecond = currentPlayerData.current_afk_stage * 0.1; // Ex: Aumenta XP por estágio
-    const goldPerSecond = currentPlayerData.current_afk_stage * 0.01; // Ex: Aumenta ouro por estágio
+    // NOVO: Limita o tempo de acúmulo ao máximo definido (4 horas)
+    const cappedTimeElapsed = Math.min(timeElapsedSeconds, MAX_AFK_ACCUMULATION_TIME_SECONDS);
 
-    const estimatedXP = Math.floor(timeElapsedSeconds * xpPerSecond);
-    const estimatedGold = Math.floor(timeElapsedSeconds * goldPerSecond);
+    // NOVO: Calcula o ganho de XP e Ouro baseado nas novas taxas e no estágio atual
+    const xpPerSecond = BASE_XP_PER_SECOND * currentAfkStage;
+    const goldPerSecond = BASE_GOLD_PER_SECOND * currentAfkStage;
 
-    afkTimeSpan.textContent = `${timeElapsedSeconds} segundos`;
+    const estimatedXP = Math.floor(cappedTimeElapsed * xpPerSecond);
+    const estimatedGold = Math.floor(cappedTimeElapsed * goldPerSecond);
+
+    afkTimeSpan.textContent = `${timeElapsedSeconds} segundos (acúmulo máximo: ${MAX_AFK_ACCUMULATION_TIME_SECONDS} segundos)`;
     afkXPGainSpan.textContent = estimatedXP;
     afkGoldGainSpan.textContent = estimatedGold;
 
@@ -152,13 +166,16 @@ async function collectAfkRewards() {
 
     const lastAfkTime = new Date(currentPlayerData.last_afk_start_time).getTime();
     const currentTime = Date.now();
-    const timeElapsedSeconds = Math.floor((currentTime - lastAfkTime) / 1000);
+    let timeElapsedSeconds = Math.floor((currentTime - lastAfkTime) / 1000);
 
-    const xpPerSecond = currentPlayerData.current_afk_stage * 0.1;
-    const goldPerSecond = currentPlayerData.current_afk_stage * 0.01;
+    // NOVO: Limita o tempo de acúmulo ao máximo definido (4 horas) antes de coletar
+    const cappedTimeElapsed = Math.min(timeElapsedSeconds, MAX_AFK_ACCUMULATION_TIME_SECONDS);
 
-    const xpToGain = Math.floor(timeElapsedSeconds * xpPerSecond);
-    const goldToGain = Math.floor(timeElapsedSeconds * goldPerSecond);
+    const xpPerSecond = BASE_XP_PER_SECOND * currentAfkStage;
+    const goldPerSecond = BASE_GOLD_PER_SECOND * currentAfkStage;
+
+    const xpToGain = Math.floor(cappedTimeElapsed * xpPerSecond);
+    const goldToGain = Math.floor(cappedTimeElapsed * goldPerSecond);
 
     if (xpToGain === 0 && goldToGain === 0) {
         afkMessage.textContent = "Nenhuma recompensa para coletar ainda.";
@@ -199,6 +216,13 @@ async function collectAfkRewards() {
 async function startAdventure() {
     if (!currentPlayerId) {
         afkMessage.textContent = "Erro: Informações do jogador não carregadas.";
+        return;
+    }
+
+    // NOVO: Verifica se o estágio atual é o máximo
+    if (currentAfkStage >= MAX_AFK_STAGE) {
+        afkMessage.textContent = `Você já conquistou todos os ${MAX_AFK_STAGE} estágios de aventura!`;
+        startAdventureBtn.disabled = true;
         return;
     }
 
@@ -244,9 +268,11 @@ async function startAdventure() {
 
     combatLog.innerHTML = ''; // Limpa log anterior
 
-    // Definições do monstro (baseadas no estágio atual)
-    const monsterBaseHealth = 100 + (currentAfkStage - 1) * 20; // Aumenta HP por estágio
-    const monsterBaseDefense = 5 + (currentAfkStage - 1) * 1; // Aumenta defesa por estágio
+    // NOVO: Definições do monstro (escalada para 100 estágios)
+    // HP: Base 100, aumentando 50 por estágio para um total de 5000 no estágio 100
+    // Defesa: Base 5, aumentando 1 por estágio para um total de 105 no estágio 100
+    const monsterBaseHealth = 100 + (currentAfkStage - 1) * 50;
+    const monsterBaseDefense = 5 + (currentAfkStage - 1) * 1;
     const monsterName = `Monstro do Estágio ${currentAfkStage}`;
 
     currentMonsterHealth = monsterBaseHealth;
@@ -282,7 +308,9 @@ async function playerAttack() {
     remainingAttacksSpan.textContent = remainingAttacks;
 
     // Calcular dano do jogador (exemplo simples)
-    let damageDealt = Math.max(1, playerAttackPower - (currentAfkStage - 1)); // Dano base - um pouco de redução pela dificuldade do estágio
+    // Dano base - um pouco de redução pela dificuldade do estágio
+    // Ajustado para manter a coerência com a nova escala de 100 estágios
+    let damageDealt = Math.max(1, playerAttackPower - Math.floor(currentAfkStage * 0.5)); 
     const isCritical = Math.random() < 0.2; // 20% de chance de crítico
     if (isCritical) {
         damageDealt *= 2; // Dano crítico dobra
@@ -326,7 +354,7 @@ async function endCombat(isVictory) {
 
         onConfirm = async () => {
             afkMessage.textContent = "Avançando para o próximo estágio...";
-            const newStage = currentAfkStage + 1;
+            const newStage = Math.min(currentAfkStage + 1, MAX_AFK_STAGE); // NOVO: Garante que não exceda o estágio máximo
             const { error: updateStageError } = await supabaseClient
                 .from('players')
                 .update({ current_afk_stage: newStage, last_afk_start_time: new Date().toISOString() })
@@ -398,6 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
         startAdventureBtn.addEventListener('click', startAdventure);
         console.log("AFK Script: Listener para startAdventureBtn adicionado.");
     }
+    // NOVO: Chama calculateAndDisplayAfkRewards a cada segundo para o contador de tempo
+    setInterval(calculateAndDisplayAfkRewards, 1000);
 });
 
 // Inicialização do AFK

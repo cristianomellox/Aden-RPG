@@ -343,7 +343,6 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     transition: none;
 }
 
-
 /* Estilo para a porcentagem de HP do monstro */
 #monsterHealthPercentage {
     text-align: center;

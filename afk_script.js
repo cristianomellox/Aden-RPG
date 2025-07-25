@@ -62,7 +62,6 @@ window.onPlayerInfoLoadedForAfk = (player) => {
         startAdventureBtn.disabled = true;
         afkMessage.textContent = "Você não tem mais tentativas diárias de aventura ou já conquistou todos os estágios!";
     } else {
-        startAdventureBtn.disabled = false;
         afkMessage.textContent = ""; // Limpa a mensagem se houver tentativas
     }
 
@@ -126,6 +125,8 @@ async function checkAndResetDailyAttempts() {
     if (currentDailyAttemptsLeft <= 0 || currentAfkStage >= MAX_AFK_STAGE) { // Adicionado verificação de estágio máximo
         startAdventureBtn.disabled = true;
         afkMessage.textContent = "Você não tem mais tentativas diárias de aventura ou já conquistou todos os estágios!";
+    } else {
+        startAdventureBtn.disabled = false;
     }
 }
 
@@ -268,7 +269,7 @@ async function startAdventure() {
     // Oculta informações AFK e mostra elementos de combate
     afkXPGainSpan.closest('p').style.display = 'none'; // Oculta XP estimado
     afkGoldGainSpan.closest('p').style.display = 'none'; // Oculta Ouro estimado
-    collectAfkRewardsBtn.style.display = 'none'; // Oculta botão de coletar
+    collectAfkRewardsBtn.style.display = 'none';
     
     // Garante que os elementos de combate são mostrados e os de AFK são ocultados
     document.querySelectorAll('#afkContainer > p').forEach(p => {

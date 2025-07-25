@@ -343,7 +343,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Keyframes para a animação de flutuação */
 @keyframes float {
     0% { transform: translateY(0px); }
-    50% { transform: translateY(-4px); } /* ALTERADO: 4px para cima e para baixo */
+    50% { transform: translateY(-8px); } /* ALTERADO: 8px para cima e para baixo */
     100% { transform: translateY(0px); }
 }
 

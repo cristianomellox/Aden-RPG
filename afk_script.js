@@ -26,6 +26,8 @@ const attackCountDisplay = document.getElementById('attackCountDisplay');
 const remainingAttacksSpan = document.getElementById('remainingAttacks');
 const combatLog = document.getElementById('combatLog');
 const dailyAttemptsLeftSpan = document.getElementById('dailyAttemptsLeft'); // Novo elemento para exibir tentativas restantes
+const monsterImage = document.getElementById('monsterImage'); // NOVO: Referência à imagem do monstro
+const afkContainer = document.getElementById('afkContainer'); // Adicionado para controlar a visibilidade do container AFK
 
 // Objeto para armazenar dados do jogador carregados
 let currentPlayerData = null;
@@ -61,7 +63,6 @@ window.onPlayerInfoLoadedForAfk = (player) => {
         startAdventureBtn.disabled = true;
         afkMessage.textContent = "Você não tem mais tentativas diárias de aventura ou já conquistou todos os estágios!";
     } else {
-        startAdventureBtn.disabled = false;
         afkMessage.textContent = ""; // Limpa a mensagem se houver tentativas
     }
 
@@ -125,6 +126,8 @@ async function checkAndResetDailyAttempts() {
     if (currentDailyAttemptsLeft <= 0 || currentAfkStage >= MAX_AFK_STAGE) { // Adicionado verificação de estágio máximo
         startAdventureBtn.disabled = true;
         afkMessage.textContent = "Você não tem mais tentativas diárias de aventura ou já conquistou todos os estágios!";
+    } else {
+        startAdventureBtn.disabled = false;
     }
 }
 
@@ -264,20 +267,17 @@ async function startAdventure() {
     afkMessage.textContent = "Iniciando aventura...";
     startAdventureBtn.disabled = true; // Desabilita o botão para evitar cliques múltiplos durante o combate
 
-    // Oculta informações AFK e mostra elementos de combate
-    afkXPGainSpan.closest('p').style.display = 'none'; // Oculta XP estimado
-    afkGoldGainSpan.closest('p').style.display = 'none'; // Oculta Ouro estimado
-    collectAfkRewardsBtn.style.display = 'none'; // Oculta botão de coletar
+    // Oculta o container principal da aventura AFK para remover todos os seus elementos
+    afkContainer.style.display = 'none';
     
-    // Garante que os elementos de combate são mostrados e os de AFK são ocultados
-    document.querySelectorAll('#afkContainer > p').forEach(p => {
-        if (!['afkStage', 'dailyAttemptsLeft', 'afkMessage'].includes(p.children[0]?.id)) {
-            p.style.display = 'none';
-        }
-    });
-
+    // Garante que os elementos de combate são mostrados
+    // NOTA: Estes elementos devem estar fora do #afkContainer no seu HTML
+    // ou devem ser movidos para um container separado que esteja sempre visível
+    // ou que seja exibido quando o combate inicia.
+    // Assumindo que eles estão em um local separado ou que #afkContainer não é o pai exclusivo:
     monsterHealthPercentageSpan.style.display = 'block';
-    attackButton.style.display = 'flex'; // Usar flex para centralizar
+    attackButton.style.display = 'block';
+    monsterImage.style.display = 'block';
     attackCountDisplay.style.display = 'block';
     combatLog.style.display = 'block';
 
@@ -322,7 +322,7 @@ async function playerAttack() {
     // Calcular dano do jogador (exemplo simples)
     // Dano base - um pouco de redução pela dificuldade do estágio
     // Ajustado para manter a coerência com a nova escala de 100 estágios
-    let damageDealt = Math.max(1, playerAttackPower - Math.floor(currentAfkStage * 0.5)); 
+    let damageDealt = Math.max(1, playerAttackPower - Math.floor(currentAfkStage * 0.5));
     const isCritical = Math.random() < 0.2; // 20% de chance de crítico
     if (isCritical) {
         damageDealt *= 2; // Dano crítico dobra
@@ -350,27 +350,19 @@ attackButton.addEventListener('click', playerAttack);
 async function endCombat(isVictory) {
     // Esconde elementos de combate
     attackButton.style.display = 'none';
+    monsterImage.style.display = 'none';
     attackCountDisplay.style.display = 'none';
     monsterHealthPercentageSpan.style.display = 'none';
     combatLog.style.display = 'none';
 
-    // Reexibir elementos AFK que não são de combate
-    afkXPGainSpan.closest('p').style.display = 'block';
-    afkGoldGainSpan.closest('p').style.display = 'block';
-    collectAfkRewardsBtn.style.display = 'inline-block'; // Ou 'block' dependendo do seu estilo
-    
-    // Garante que os parágrafos relevantes da aventura AFK sejam reexibidos
-    document.querySelectorAll('#afkContainer > p').forEach(p => {
-        if (!p.id || ['afkStage', 'dailyAttemptsLeft', 'afkMessage', 'afkTime', 'afkXPGain', 'afkGoldGain'].some(id => p.querySelector(`#${id}`))) {
-            p.style.display = 'block';
-        }
-    });
+    // Reexibir o container principal da aventura AFK
+    afkContainer.style.display = 'block';
 
     let title, message, onConfirm;
 
     if (isVictory) {
         title = "Vitória!";
-        message = `Você derrotou o monstro do Estágio ${currentAfkStage}!<br>Confirmar para avançar ao próximo estágio.`; // Mensagem ajustada
+        message = `Você derrotou o monstro do Estágio ${currentAfkStage}!<br>Confirmar para avançar ao próximo estágio.`;
 
         onConfirm = async () => {
             afkMessage.textContent = "Avançando para o próximo estágio...";

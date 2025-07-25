@@ -333,14 +333,6 @@ async function playerAttack() {
 
     window.showDamagePopup(damageDealt, isCritical); // Exibe o popup de dano
 
-    // NOVO: Adiciona a classe de tremor à imagem do monstro
-    monsterImage.classList.add('shake-animation');
-
-    // NOVO: Remove a classe após a duração da animação para que possa ser acionada novamente
-    monsterImage.addEventListener('animationend', () => {
-        monsterImage.classList.remove('shake-animation');
-    }, { once: true }); // Usar { once: true } garante que o listener seja removido após uma execução
-
     appendCombatLog(`Você atacou o monstro! Causou ${damageDealt} de dano.`);
     updateMonsterHealthDisplay();
 

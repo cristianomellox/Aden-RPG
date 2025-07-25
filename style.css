@@ -30,239 +30,227 @@ body {
 }
 
 #authContainer, #playerInfoDiv, #chatContainer, #afkContainer {
-    border: 1px solid #ccc;
-    padding: 20px;
-    margin-top: 20px;
-    width: 80%;
-    max-width: 500px;
-    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
     background-color: white;
-    border-radius: 8px;
-    box-sizing: border-box; /* Crucial para o dimensionamento */
-    flex-shrink: 0; /* Impede que estes containers encolham se o flex pai tentar comprimi-los */
-    min-height: 150px; /* Uma altura mínima para garantir que não colapsam */
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    box-sizing: border-box;
 }
+
 h1, h2 {
     color: #333;
 }
-input[type="email"], input[type="password"], input[type="text"] {
-    width: calc(100% - 22px);
+
+input[type="email"],
+input[type="password"],
+input[type="text"],
+select {
+    width: calc(100% - 20px);
     padding: 10px;
     margin-bottom: 10px;
     border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box;
+    border-radius: 5px;
+    box-sizing: border-box; /* Garante que o padding não aumente a largura total */
 }
+
 button {
-    background-color: #4CAF50;
+    background-color: #007bff;
     color: white;
-    padding: 10px 15px;
     border: none;
-    border-radius: 4px;
+    padding: 10px 20px;
+    border-radius: 5px;
     cursor: pointer;
     font-size: 1em;
-    margin: 5px 2px;
+    margin: 5px;
+    transition: background-color 0.3s ease;
 }
+
 button:hover {
-    opacity: 0.9;
+    background-color: #0056b3;
 }
+
 button:disabled {
     background-color: #cccccc;
     cursor: not-allowed;
 }
-p#authMessage, p#profileEditMessage, p#afkMessage {
-    margin-top: 10px;
-    font-size: 0.9em;
+
+#authMessage, #profileEditMessage, #afkMessage {
     color: red;
+    margin-top: 10px;
 }
 
-/* Estilos do Chat */
+#playerInfoDiv p, #afkContainer p {
+    font-size: 1.1em;
+    margin-bottom: 8px;
+}
+
+#playerInfoDiv strong {
+    color: #007bff;
+}
+
+/* Estilos para o chat */
 #chatBox {
+    border: 1px solid #ddd;
     height: 200px;
     overflow-y: scroll;
-    border: 1px solid #eee;
     padding: 10px;
     margin-bottom: 10px;
     background-color: #f9f9f9;
-    border-radius: 4px;
+    text-align: left;
 }
+
 .chat-message {
     margin-bottom: 5px;
-    word-wrap: break-word;
+    word-wrap: break-word; /* Garante que mensagens longas quebrem a linha */
 }
+
 .chat-message strong {
     color: #555;
 }
+
 #chatInput {
-    width: calc(100% - 70px);
+    width: calc(100% - 80px); /* Ajusta a largura para o botão de envio */
     display: inline-block;
-}
-#sendChatBtn {
-    width: 60px;
-    float: right;
-    padding: 10px 0;
+    vertical-align: middle;
 }
 
-/* Estilo para o modal de edição de perfil */
+#sendChatBtn {
+    width: 70px; /* Largura do botão de envio */
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 5px;
+}
+
+/* Estilos para o modal de edição de perfil */
 #profileEditModal {
-    display: none;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.8);
-    z-index: 1000;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
     justify-content: center;
     align-items: center;
+    z-index: 1000;
 }
+
 #profileEditModal > div {
     background: white;
-    padding: 30px;
-    border-radius: 8px;
+    padding: 40px;
+    border-radius: 10px;
     text-align: center;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
     max-width: 400px;
     width: 90%;
     box-sizing: border-box;
 }
-#profileEditModal h2 { margin-top: 0; }
-#profileEditModal input, #profileEditModal select, #profileEditModal button {
-    width: calc(100% - 20px);
-    padding: 10px;
-    margin-bottom: 15px;
-    border-radius: 4px;
-    border: 1px solid #ddd;
-    box-sizing: border-box;
-}
-#profileEditModal button {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-}
-#profileEditModal button:hover {
-    background-color: #0056b3;
-}
-#profileEditMessage {
-    margin-top: 10px;
-    font-size: 0.9em;
-    color: red;
+
+#profileEditModal h2 {
+    color: #333;
+    margin-top: 0;
 }
 
-/* Estilos do Rodapé e Chat Flutuante */
+/* Estilos para o menu do rodapé */
 #footerMenu {
-    display: flex;
-    align-items: center;
     position: fixed;
     bottom: 0;
     left: 0;
     width: 100%;
     background-color: #333;
+    display: flex;
+    justify-content: space-around;
     padding: 10px 0;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
-    z-index: 999;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 100; /* Garante que o menu fique acima de outros elementos */
     box-sizing: border-box;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
-    flex-wrap: nowrap;
-    justify-content: flex-start; /* Garante que o conteúdo comece à esquerda */
 }
+
 #footerMenu button {
-    background-color: #555;
+    background-color: transparent; /* Botões sem fundo */
     color: white;
     border: none;
     padding: 10px 15px;
-    margin: 0 5px;
-    border-radius: 5px;
-    cursor: pointer;
     font-size: 1em;
-    flex-shrink: 0;
-    min-width: 80px;
-}
-#footerMenu button:hover {
-    background-color: #777;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-radius: 5px;
+    flex-grow: 1; /* Faz com que os botões ocupem o espaço disponível igualmente */
+    margin: 0 2px; /* Pequeno espaçamento entre os botões */
 }
 
-/* Chat Bubble para o lado direito */
+#footerMenu button:hover {
+    background-color: #555;
+    color: #ffcc00; /* Cor de destaque ao passar o mouse */
+}
+
+/* Estilos para o balão de chat flutuante */
 #chatBubble {
     position: fixed;
-    bottom: 90px;
+    bottom: 110px; /* Acima do menu do rodapé */
     right: 20px;
-    left: auto;
     background-color: #007bff;
     color: white;
     border-radius: 50%;
-    width: 60px;
-    height: 60px;
+    width: 50px;
+    height: 50px;
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 1.5em;
     cursor: pointer;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    z-index: 1001;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 101; /* Acima do menu do rodapé */
+    transition: background-color 0.3s ease;
 }
+
 #chatBubble:hover {
     background-color: #0056b3;
 }
 
-/* Estilos para a mensagem flutuante do menu */
+/* Estilos para a mensagem flutuante (floatingMessage) */
 #floatingMessage {
-    display: none;
     position: fixed;
-    top: 20px;
+    top: 20px; /* Distância do topo */
     left: 50%;
     transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.75);
+    background-color: rgba(0, 123, 255, 0.9); /* Azul com transparência */
     color: white;
     padding: 10px 20px;
-    border-radius: 5px;
-    z-index: 1002;
-    font-size: 1.1em;
-    white-space: nowrap;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    opacity: 0;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 1000; /* Acima de quase tudo */
+    opacity: 0; /* Começa invisível */
     transition: opacity 0.5s ease-in-out;
+    pointer-events: none; /* Permite clicar através dele */
+    white-space: nowrap; /* Evita que o texto quebre a linha */
 }
 
 /* Estilos para o popup de dano no combate */
 #combatDamagePopup {
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 15px 25px;
-    border-radius: 10px;
-    font-size: 2em;
+    position: absolute; /* Será posicionado dinamicamente pelo JS */
+    font-size: 1.5em;
     font-weight: bold;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    z-index: 1003;
+    color: #ff0000; /* Vermelho para dano */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
     opacity: 0;
-    transition: opacity 0.1s ease-out, transform 0.1s ease-out;
-    text-align: center;
-    min-width: 150px;
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    pointer-events: none;
+    z-index: 50; /* Garante que fique acima de outros elementos de combate */
 }
-#combatDamagePopup.critical {
-    color: yellow;
-    font-size: 2.5em;
-    border: 3px solid yellow;
-    box-shadow: 0 0 15px red;
-}
+
 /* Estilos para o modal de resultado de combate */
 #combatResultModal {
-    display: none;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    display: none; /* Inicialmente oculto */
     background: rgba(0,0,0,0.8);
     z-index: 1004;
     justify-content: center;
@@ -309,12 +297,11 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: white;
     font-size: 1.5em;
     font-weight: bold;
-    justify-content: center;
-    align-items: center;
-    margin: 20px auto;
-    border: 4px solid #d84315;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    transition: background-color 0.2s, transform 0.1s;
+    text-transform: uppercase;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    display: block; /* Garante que o botão ocupe sua própria linha dentro do flex */
+    margin-top: 10px; /* Espaçamento da imagem */
 }
 
 #attackButton:hover {
@@ -323,14 +310,22 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 }
 
 #attackButton:active {
-    background-color: #bf360c;
     transform: scale(0.95);
 }
 
-/* Estilo para a porcentagem de HP do monstro */
-#monsterHealthPercentage {
-    text-align: center;
-    font-weight: bold;
-    margin-top: 10px;
-    color: #333;
+/* Novas regras para a imagem e a área de ataque */
+#attackArea {
+    display: flex; /* Para centralizar os itens horizontalmente */
+    flex-direction: column; /* Para empilhar a imagem e o botão verticalmente */
+    align-items: center; /* Centraliza horizontalmente */
+    justify-content: center; /* Centraliza verticalmente */
+    margin-top: 20px; /* Espaçamento acima da área de ataque */
+}
+
+#attackImage {
+    width: 60px; /* Largura conforme solicitado */
+    height: 120px; /* Altura conforme solicitado */
+    object-fit: contain; /* Para garantir que a imagem se ajuste sem cortar */
+    margin-bottom: 10px; /* Espaçamento entre a imagem e o botão */
+    display: block; /* Garante que a imagem se comporte como um bloco para o margin */
 }

@@ -1,29 +1,31 @@
 html, body {
-    height: 100%;
+    height: 100%; /* Garante que HTML e Body ocupam a altura total da viewport */
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
+    box-sizing: border-box; /* Garante que padding e border não aumentem a largura/altura total */
 }
 
 body {
     font-family: Arial, sans-serif;
     display: flex;
     flex-direction: column;
-    align-items: center; /* Centraliza horizontalmente o conteúdo principal */
-    padding-bottom: 100px; /* Espaço para o footer */
+    align-items: center;
+    /* margin-top: 50px; REMOVIDO: será tratado com padding-top no main-content */
+    padding-bottom: 100px; /* Mais espaço para o menu do rodapé */
     background-color: #f0f2f5;
-    position: relative; /* Para elementos fixos/absolutos dentro */
-    min-height: 100vh; /* Garante que o body ocupe a altura total da viewport */
-    overflow-x: hidden; /* Evita scroll horizontal */
+    position: relative; /* Para posicionar elementos filhos com 'absolute' ou 'fixed' relativos ao body */
+    min-height: 100vh; /* Garante que o body tenha pelo menos a altura da viewport */
+    overflow-x: hidden; /* Previne rolagem horizontal indesejada no body */
 }
 
+/* Um container principal para o conteúdo que não é o rodapé ou chat bubble */
 #mainContentWrapper {
-    flex-grow: 1; /* Permite que o wrapper ocupe o espaço restante */
+    flex-grow: 1; /* Permite que este wrapper ocupe o espaço disponível */
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 50px;
+    padding-top: 50px; /* Para empurrar o conteúdo abaixo de uma potencial barra de título futura ou topo da página */
     box-sizing: border-box;
 }
 
@@ -31,19 +33,19 @@ body {
     border: 1px solid #ccc;
     padding: 20px;
     margin-top: 20px;
-    width: 90%; /* Ajustado para 90% para ser responsivo, mas não tão largo */
-    max-width: 500px; /* Largura máxima para containers */
+    width: 80%;
+    max-width: 500px;
     box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
     margin-bottom: 20px;
     background-color: white;
     border-radius: 8px;
-    box-sizing: border-box;
-    flex-shrink: 0; /* Previne que os itens encolham */
-    min-height: 150px;
-    text-align: center; /* Centraliza o texto e elementos inline */
+    box-sizing: border-box; /* Crucial para o dimensionamento */
+    flex-shrink: 0; /* Impede que estes containers encolham se o flex pai tentar comprimi-los */
+    min-height: 150px; /* Uma altura mínima para garantir que não colapsam */
 }
-
-/* Garante que inputs e buttons se comportem bem dentro dos containers */
+h1, h2 {
+    color: #333;
+}
 input[type="email"], input[type="password"], input[type="text"] {
     width: calc(100% - 22px);
     padding: 10px;
@@ -51,11 +53,7 @@ input[type="email"], input[type="password"], input[type="text"] {
     border: 1px solid #ddd;
     border-radius: 4px;
     box-sizing: border-box;
-    display: block; /* Para que margin: auto possa centralizar */
-    margin-left: auto;
-    margin-right: auto;
 }
-
 button {
     background-color: #4CAF50;
     color: white;
@@ -64,7 +62,7 @@ button {
     border-radius: 4px;
     cursor: pointer;
     font-size: 1em;
-    margin: 5px 2px; /* Margem para botões */
+    margin: 5px 2px;
 }
 button:hover {
     opacity: 0.9;
@@ -77,7 +75,6 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     margin-top: 10px;
     font-size: 0.9em;
     color: red;
-    text-align: center;
 }
 
 /* Estilos do Chat */
@@ -89,9 +86,6 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     margin-bottom: 10px;
     background-color: #f9f9f9;
     border-radius: 4px;
-    width: 100%;
-    box-sizing: border-box;
-    text-align: left; /* Garante que o texto dentro do chatBox não seja centralizado */
 }
 .chat-message {
     margin-bottom: 5px;
@@ -120,7 +114,6 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     height: 100%;
     background: rgba(0,0,0,0.8);
     z-index: 1000;
-    display: flex;
     justify-content: center;
     align-items: center;
 }
@@ -172,11 +165,11 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
     z-index: 999;
     box-sizing: border-box;
-    overflow-x: auto; /* Permite scroll se os botões excederem a largura */
-    -webkit-overflow-scrolling: touch; /* Melhora o scroll em iOS */
-    white-space: nowrap; /* Impede que os botões quebrem a linha */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
     flex-wrap: nowrap;
-    justify-content: center; /* CENTRALIZA OS BOTÕES DO RODAPÉ */
+    justify-content: flex-start; /* Garante que o conteúdo comece à esquerda */
 }
 #footerMenu button {
     background-color: #555;
@@ -187,7 +180,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     border-radius: 5px;
     cursor: pointer;
     font-size: 1em;
-    flex-shrink: 0; /* Previne que os botões encolham */
+    flex-shrink: 0;
     min-width: 80px;
 }
 #footerMenu button:hover {
@@ -199,7 +192,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     position: fixed;
     bottom: 90px;
     right: 20px;
-    left: auto; /* Garante que fique à direita */
+    left: auto;
     background-color: #007bff;
     color: white;
     border-radius: 50%;
@@ -272,7 +265,6 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     height: 100%;
     background: rgba(0,0,0,0.8);
     z-index: 1004;
-    display: flex;
     justify-content: center;
     align-items: center;
 }
@@ -308,34 +300,8 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     background-color: #0056b3;
 }
 
-/* Container para a imagem do monstro e o botão de ataque */
-#monster-attack-section {
-    display: flex; /* Usa flexbox para fácil alinhamento vertical */
-    flex-direction: column; /* Organiza os itens em coluna (um em cima do outro) */
-    align-items: center; /* Centraliza os itens horizontalmente */
-    justify-content: center; /* Centraliza os itens verticalmente, se houver espaço */
-    margin-top: 20px; /* Espaçamento acima da seção de combate */
-    margin-bottom: 20px; /* Espaçamento abaixo da seção de combate */
-    width: 100%; /* Ocupa a largura total do pai */
-}
-
-/* Estilos para a imagem do monstro */
-#monsterImage {
-    width: 60px; /* Largura especificada: 60px */
-    height: 120px; /* Altura especificada: 120px */
-    display: block; /* Garante que a imagem se comporte como um bloco */
-    margin-bottom: 15px; /* Espaçamento entre a imagem e o botão de ataque */
-    object-fit: contain; /* Garante que a imagem se ajuste dentro das dimensões sem distorção */
-    /* Removendo quaisquer estilos de efeito: */
-    filter: none;
-    animation: none;
-    transition: none;
-}
-
-/* Estilos para o botão de ataque (ajuste de margem para o novo layout) */
+/* Estilos para o botão de ataque redondo */
 #attackButton {
-    /* Mantém os estilos existentes do botão, apenas ajustamos a margem */
-    margin-top: 0; /* A margem inferior da imagem já cria o espaçamento */
     width: 100px;
     height: 100px;
     border-radius: 50%;
@@ -343,13 +309,40 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: white;
     font-size: 1.5em;
     font-weight: bold;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    /* Alterado para centralizar com o texto ou imagem acima */
+    display: block; /* Garante que o botão ocupe uma linha inteira e possa ser centralizado com margin: auto */
+    margin: 10px auto 20px auto; /* Reduzida margem superior, adicionada margem inferior */
     border: 4px solid #d84315;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     transition: background-color 0.2s, transform 0.1s;
+    text-align: center; /* Centraliza o texto dentro do botão */
+    line-height: 100px; /* Alinha o texto verticalmente no centro do botão redondo */
+    padding: 0; /* Remove padding padrão que pode afetar o alinhamento do texto */
 }
+
+#attackButton:hover {
+    background-color: #e64a19;
+    transform: scale(1.05);
+}
+
+#attackButton:active {
+    background-color: #bf360c;
+    transform: scale(0.95);
+}
+
+/* Estilo para a imagem do monstro */
+#monsterImage {
+    display: block; /* Para que a imagem ocupe uma linha inteira */
+    width: 60px; /* Largura especificada */
+    height: 120px; /* Altura especificada */
+    margin: 0 auto 10px auto; /* Centraliza horizontalmente e adiciona margem inferior */
+    object-fit: contain; /* Garante que a imagem se ajuste sem distorção */
+    /* Remove quaisquer estilos de efeito para "sem nenhum efeito" */
+    filter: none;
+    animation: none;
+    transition: none;
+}
+
 
 /* Estilo para a porcentagem de HP do monstro */
 #monsterHealthPercentage {

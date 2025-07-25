@@ -347,6 +347,17 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     100% { transform: translateY(0px); }
 }
 
+/* NOVO: Keyframes para a animação de piscar */
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* NOVO: Classe para aplicar a animação de piscar */
+#monsterImage.blinking {
+    animation: blink 0.2s linear; /* Duração curta para um piscar rápido */
+}
 
 /* Estilo para a porcentagem de HP do monstro */
 #monsterHealthPercentage {

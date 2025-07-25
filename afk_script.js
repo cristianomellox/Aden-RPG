@@ -27,7 +27,6 @@ const remainingAttacksSpan = document.getElementById('remainingAttacks');
 const combatLog = document.getElementById('combatLog');
 const dailyAttemptsLeftSpan = document.getElementById('dailyAttemptsLeft'); // Novo elemento para exibir tentativas restantes
 const monsterImage = document.getElementById('monsterImage'); // NOVO: Referência à imagem do monstro
-const afkContainer = document.getElementById('afkContainer'); // Adicionado para controlar a visibilidade do container AFK
 
 // Objeto para armazenar dados do jogador carregados
 let currentPlayerData = null;
@@ -267,14 +266,18 @@ async function startAdventure() {
     afkMessage.textContent = "Iniciando aventura...";
     startAdventureBtn.disabled = true; // Desabilita o botão para evitar cliques múltiplos durante o combate
 
-    // Oculta o container principal da aventura AFK para remover todos os seus elementos
-    afkContainer.style.display = 'none';
+    // Oculta informações AFK específicas e mostra elementos de combate
+    document.querySelector('#afkContainer h2').style.display = 'none'; // Oculta "Aventura AFK"
+    document.querySelector('#afkContainer p:nth-of-type(1)').style.display = 'none'; // Oculta a descrição
+    afkStageSpan.closest('p').style.display = 'none'; // Oculta "Estágio Atual de PvE"
+    dailyAttemptsLeftSpan.closest('p').style.display = 'none'; // Oculta "Tentativas de Estágio Restantes Hoje"
+    startAdventureBtn.style.display = 'none'; // Oculta "Iniciar Combate PvE"
+    afkTimeSpan.closest('p').style.display = 'none'; // Oculta Tempo AFK Acumulado
+    afkXPGainSpan.closest('p').style.display = 'none'; // Oculta XP Estimado
+    afkGoldGainSpan.closest('p').style.display = 'none'; // Oculta Ouro Estimado
+    collectAfkRewardsBtn.style.display = 'none'; // Oculta Coletar Recompensas
     
     // Garante que os elementos de combate são mostrados
-    // NOTA: Estes elementos devem estar fora do #afkContainer no seu HTML
-    // ou devem ser movidos para um container separado que esteja sempre visível
-    // ou que seja exibido quando o combate inicia.
-    // Assumindo que eles estão em um local separado ou que #afkContainer não é o pai exclusivo:
     monsterHealthPercentageSpan.style.display = 'block';
     attackButton.style.display = 'block';
     monsterImage.style.display = 'block';
@@ -355,8 +358,16 @@ async function endCombat(isVictory) {
     monsterHealthPercentageSpan.style.display = 'none';
     combatLog.style.display = 'none';
 
-    // Reexibir o container principal da aventura AFK
-    afkContainer.style.display = 'block';
+    // Reexibir elementos AFK que não são de combate
+    document.querySelector('#afkContainer h2').style.display = 'block'; // Mostra "Aventura AFK"
+    document.querySelector('#afkContainer p:nth-of-type(1)').style.display = 'block'; // Mostra a descrição
+    afkStageSpan.closest('p').style.display = 'block'; // Mostra "Estágio Atual de PvE"
+    dailyAttemptsLeftSpan.closest('p').style.display = 'block'; // Mostra "Tentativas de Estágio Restantes Hoje"
+    startAdventureBtn.style.display = 'inline-block'; // Mostra "Iniciar Combate PvE"
+    afkTimeSpan.closest('p').style.display = 'block'; // Mostra Tempo AFK Acumulado
+    afkXPGainSpan.closest('p').style.display = 'block'; // Mostra XP Estimado
+    afkGoldGainSpan.closest('p').style.display = 'block'; // Mostra Ouro Estimado
+    collectAfkRewardsBtn.style.display = 'inline-block'; // Mostra Coletar Recompensas
 
     let title, message, onConfirm;
 

@@ -347,16 +347,27 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     100% { transform: translateY(0px); }
 }
 
-/* NOVO: Keyframes para a animação de piscar */
-@keyframes blink {
-    0% { opacity: 1; }
-    50% { opacity: 0; }
-    100% { opacity: 1; }
+/* Animação para tremor */
+@keyframes shake {
+    0% { transform: translate(0, 0); }
+    10% { transform: translate(-3px, -3px); }
+    20% { transform: translate(3px, 3px); }
+    30% { transform: translate(-3px, 3px); }
+    40% { transform: translate(3px, -3px); }
+    50% { transform: translate(-3px, -3px); }
+    60% { transform: translate(3px, 3px); }
+    70% { transform: translate(-3px, 3px); }
+    80% { transform: translate(3px, -3px); }
+    90% { transform: translate(-3px, -3px); }
+    100% { transform: translate(0, 0); }
 }
 
-/* NOVO: Classe para aplicar a animação de piscar */
-#monsterImage.blinking {
-    animation: blink 0.2s linear; /* Duração curta para um piscar rápido */
+/* Classe para aplicar a animação de tremor */
+.shake-animation {
+    animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+    transform: translate3d(0, 0, 0); /* Força aceleração de hardware */
+    backface-visibility: hidden; /* Evita tremores em elementos 3D */
+    perspective: 1000px; /* Evita tremores em elementos 3D */
 }
 
 /* Estilo para a porcentagem de HP do monstro */

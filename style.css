@@ -331,8 +331,8 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Estilo para a imagem do monstro */
 #monsterImage {
     display: block;
-    width: 160px; /* Mantido o tamanho dobrado */
-    height: 320px; /* Mantido o tamanho dobrado */
+    width: 160px;
+    height: 320px;
     margin: 0 auto 10px auto;
     object-fit: contain;
     filter: none;
@@ -343,7 +343,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Keyframes para a animação de flutuação */
 @keyframes float {
     0% { transform: translateY(0px); }
-    50% { transform: translateY(-2px); } /* ALTERADO: 2px para cima e para baixo */
+    50% { transform: translateY(-4px); } /* ALTERADO: 4px para cima e para baixo */
     100% { transform: translateY(0px); }
 }
 

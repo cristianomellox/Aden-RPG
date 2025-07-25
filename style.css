@@ -335,10 +335,9 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     height: 320px;
     margin: 0 auto 10px auto;
     object-fit: contain;
+    filter: none; /* Garante que nenhum filtro residual esteja aplicado */
     /* Animação de flutuação */
     animation: float 2s ease-in-out infinite;
-    /* Transição para o filtro de cor, para uma mudança mais suave */
-    transition: filter 0.5s ease-in-out;
 }
 
 /* Keyframes para a animação de flutuação */

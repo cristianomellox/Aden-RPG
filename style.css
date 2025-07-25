@@ -335,18 +335,18 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     height: 320px;
     margin: 0 auto 10px auto;
     object-fit: contain;
-    filter: none;
     /* Animação de flutuação */
     animation: float 2s ease-in-out infinite;
+    /* Transição para o filtro de cor, para uma mudança mais suave */
+    transition: filter 0.5s ease-in-out;
 }
 
 /* Keyframes para a animação de flutuação */
 @keyframes float {
     0% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); } /* ALTERADO: 8px para cima e para baixo */
+    50% { transform: translateY(-8px); }
     100% { transform: translateY(0px); }
 }
-
 
 /* Estilo para a porcentagem de HP do monstro */
 #monsterHealthPercentage {

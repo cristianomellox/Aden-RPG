@@ -278,7 +278,7 @@ async function startAdventure() {
     });
 
     monsterHealthPercentageSpan.style.display = 'block';
-    attackButton.style.display = 'block'; // NOVO: Mantenha 'block' para o botão, o CSS vai centralizá-lo.
+    attackButton.style.display = 'block';
     monsterImage.style.display = 'block'; // NOVO: Exibe a imagem do monstro
     attackCountDisplay.style.display = 'block';
     combatLog.style.display = 'block';
@@ -328,7 +328,7 @@ async function playerAttack() {
     // Calcular dano do jogador (exemplo simples)
     // Dano base - um pouco de redução pela dificuldade do estágio
     // Ajustado para manter a coerência com a nova escala de 100 estágios
-    let damageDealt = Math.max(1, playerAttackPower - Math.floor(currentAfkStage * 0.5)); 
+    let damageDealt = Math.max(1, playerAttackPower - Math.floor(currentAfkStage * 0.5));
     const isCritical = Math.random() < 0.2; // 20% de chance de crítico
     if (isCritical) {
         damageDealt *= 2; // Dano crítico dobra

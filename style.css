@@ -9,7 +9,7 @@ body {
     font-family: Arial, sans-serif;
     display: flex;
     flex-direction: column;
-    align-items: center; /* Centraliza horizontalmente o conteúdo principal */
+    align-items: center; /* Centraliza o conteúdo principal da página */
     padding-bottom: 100px;
     background-color: #f0f2f5;
     position: relative;
@@ -31,8 +31,8 @@ body {
     border: 1px solid #ccc;
     padding: 20px;
     margin-top: 20px;
-    width: 90%; /* Ajuste aqui: 80% estava muito largo em algumas telas */
-    max-width: 500px; /* Mantém o tamanho máximo */
+    width: 90%; /* Ajustado para 90% para não ser tão largo */
+    max-width: 500px;
     box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
     margin-bottom: 20px;
     background-color: white;
@@ -40,11 +40,35 @@ body {
     box-sizing: border-box;
     flex-shrink: 0;
     min-height: 150px;
-    /* IMPORTANTE para centralizar itens internos */
-    display: flex; /* Adicionado para usar flexbox interno */
-    flex-direction: column; /* Coloca os itens em coluna */
-    align-items: center; /* Centraliza horizontalmente os itens dentro do container */
+    /* REMOVIDO: display: flex; flex-direction: column; align-items: center; */
+    /* O problema de "desajuste" pode ter vindo daqui ao aplicar flexbox a todos os containers.
+       Vamos usar text-align para centralizar o texto e margin: auto para blocos.*/
+    text-align: center; /* Centraliza o texto dentro dos containers */
 }
+
+/* Garante que os inputs e botões dentro dos containers tenham largura adequada */
+#authContainer input, #afkContainer input, #chatContainer input,
+#authContainer button, #afkContainer button, #chatContainer button {
+    width: calc(100% - 22px); /* Mantém a largura anterior */
+    display: block; /* Garante que ocupem a linha toda para centralizar com margin:auto */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Ajustes específicos para botões que não devem ser block */
+#sendChatBtn {
+    width: 60px;
+    float: right; /* Mantém o float para alinhamento com o chatInput */
+    margin: 0; /* Remove margens auto para o float funcionar */
+}
+#attackButton {
+    /* ... seu estilo de botão de ataque ... */
+    display: flex; /* Mantém flex para centralizar o texto "Atacar" */
+    justify-content: center;
+    align-items: center;
+    margin: 20px auto; /* Centraliza o botão de ataque */
+}
+
 
 h1, h2 {
     color: #333;
@@ -92,6 +116,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     border-radius: 4px;
     width: 100%; /* Ajustado para preencher o container pai */
     box-sizing: border-box;
+    text-align: left; /* Garante que o texto dentro do chatBox não seja centralizado */
 }
 .chat-message {
     margin-bottom: 5px;
@@ -120,6 +145,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     height: 100%;
     background: rgba(0,0,0,0.8);
     z-index: 1000;
+    display: flex; /* Usa flex para centralizar o conteúdo do modal */
     justify-content: center;
     align-items: center;
 }
@@ -271,6 +297,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     height: 100%;
     background: rgba(0,0,0,0.8);
     z-index: 1004;
+    display: flex; /* Usa flex para centralizar o conteúdo do modal */
     justify-content: center;
     align-items: center;
 }
@@ -315,10 +342,11 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: white;
     font-size: 1.5em;
     font-weight: bold;
-    display: flex; /* MANTEM COMO FLEX PARA CENTRALIZAR CONTEÚDO */
+    /* Mantém o display flex para centralizar o texto "Atacar" */
+    display: flex;
     justify-content: center;
     align-items: center;
-    margin: 20px auto 0 auto; /* Ajusta a margem superior para espaçamento com a imagem, e auto para centralizar */
+    margin: 20px auto; /* Centraliza o botão */
     border: 4px solid #d84315;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     transition: background-color 0.2s, transform 0.1s;
@@ -344,44 +372,43 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 
 /* NOVOS ESTILOS PARA O MONSTRO E NOME */
 #monsterDisplayContainer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 0px; /* Reduz margem para aproximar do botão */
-    margin-top: 10px; /* Adiciona margem superior para afastar de outros textos */
+    /* Usamos 'block' para que ele ocupe a largura total disponível e possa ser centralizado com margin:auto */
+    display: block;
+    margin: 10px auto 0 auto; /* Centraliza o container inteiro */
+    text-align: center; /* Centraliza o texto e a imagem dentro dele */
 }
 
 #monsterNameDisplay {
     font-size: 1.4em;
     font-weight: bold;
     color: #444;
-    margin-bottom: 10px; /* Espaçamento entre nome e imagem */
+    margin-bottom: 10px;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
 #monsterImage {
     width: 150px; /* Ajuste o tamanho conforme necessário */
     height: auto;
-    display: block;
-    /* Removido margin-top, container já controla o espaçamento */
-    animation: float 2s ease-in-out infinite alternate; /* Animação de flutuação */
-    transition: filter 0.5s ease-in-out; /* Transição suave para o filtro de cor */
+    display: block; /* Garante que a imagem se comporte como um bloco para margin:auto */
+    margin: 0 auto; /* Centraliza a imagem dentro de monsterDisplayContainer */
+    animation: float 2s ease-in-out infinite alternate;
+    transition: filter 0.5s ease-in-out;
 }
 
 /* Animação de flutuação */
 @keyframes float {
     from { transform: translateY(0px); }
-    to { transform: translateY(-5px); } /* Flutua 5px para cima */
+    to { transform: translateY(-5px); }
 }
 
 /* Animação de piscar para a imagem do monstro */
 @keyframes flash {
     0% { opacity: 1; }
-    50% { opacity: 0.2; } /* Torna o piscar mais notável */
+    50% { opacity: 0.2; }
     100% { opacity: 1; }
 }
 
 /* Classe para aplicar a animação de piscar */
 #monsterImage.flash-animation {
-    animation: flash 0.2s ease-out; /* Duração curta para um piscar rápido */
+    animation: flash 0.2s ease-out;
 }

@@ -268,10 +268,10 @@ async function startAdventure() {
 
     // Oculta informações AFK específicas e mostra elementos de combate
     document.querySelector('#afkContainer h2').style.display = 'none'; // Oculta "Aventura AFK"
+    document.querySelector('#afkContainer p:nth-of-type(1)').style.display = 'none'; // Oculta a descrição
     afkStageSpan.closest('p').style.display = 'none'; // Oculta "Estágio Atual de PvE"
     dailyAttemptsLeftSpan.closest('p').style.display = 'none'; // Oculta "Tentativas de Estágio Restantes Hoje"
     startAdventureBtn.style.display = 'none'; // Oculta "Iniciar Combate PvE"
-
     afkTimeSpan.closest('p').style.display = 'none'; // Oculta Tempo AFK Acumulado
     afkXPGainSpan.closest('p').style.display = 'none'; // Oculta XP Estimado
     afkGoldGainSpan.closest('p').style.display = 'none'; // Oculta Ouro Estimado
@@ -360,10 +360,10 @@ async function endCombat(isVictory) {
 
     // Reexibir elementos AFK que não são de combate
     document.querySelector('#afkContainer h2').style.display = 'block'; // Mostra "Aventura AFK"
+    document.querySelector('#afkContainer p:nth-of-type(1)').style.display = 'block'; // Mostra a descrição
     afkStageSpan.closest('p').style.display = 'block'; // Mostra "Estágio Atual de PvE"
     dailyAttemptsLeftSpan.closest('p').style.display = 'block'; // Mostra "Tentativas de Estágio Restantes Hoje"
     startAdventureBtn.style.display = 'inline-block'; // Mostra "Iniciar Combate PvE"
-
     afkTimeSpan.closest('p').style.display = 'block'; // Mostra Tempo AFK Acumulado
     afkXPGainSpan.closest('p').style.display = 'block'; // Mostra XP Estimado
     afkGoldGainSpan.closest('p').style.display = 'block'; // Mostra Ouro Estimado

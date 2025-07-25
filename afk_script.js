@@ -1,446 +1,694 @@
-// afk_script.js
+document.addEventListener('DOMContentLoaded', async () => {
+    const afkContainer = document.getElementById('afkContainer');
+    const playerInfoDiv = document.getElementById('playerInfoDiv');
+    const authContainer = document.getElementById('authContainer');
+    const collectAfkRewardsBtn = document.getElementById('collectAfkRewardsBtn');
+    const afkStageSpan = document.getElementById('afkStage');
+    const afkTimeSpan = document.getElementById('afkTime');
+    const afkXPGainSpan = document.getElementById('afkXPGain');
+    const afkGoldGainSpan = document.getElementById('afkGoldGain');
+    const afkMessage = document.getElementById('afkMessage');
+    const dailyAttemptsLeftSpan = document.getElementById('dailyAttemptsLeft');
+    const startAdventureBtn = document.getElementById('startAdventureBtn');
+    const attackButton = document.getElementById('attackButton'); // Referência ao botão agora dentro de #monster-attack-section
+    const monsterHealthPercentage = document.getElementById('monsterHealthPercentage');
+    const monsterCurrentHealthDisplay = document.getElementById('monsterCurrentHealthDisplay');
+    const monsterNameDisplay = document.getElementById('monsterNameDisplay');
+    const monsterImage = document.getElementById('monsterImage');
+    const attackCountDisplay = document.getElementById('attackCountDisplay');
+    const remainingAttacksSpan = document.getElementById('remainingAttacks');
+    const combatLog = document.getElementById('combatLog');
+    const combatDamagePopup = document.getElementById('combatDamagePopup');
+    const popupDamageAmount = document.getElementById('popupDamageAmount');
+    const combatResultModal = document.getElementById('combatResultModal');
+    const combatResultTitle = document.getElementById('combatResultTitle');
+    const combatResultMessage = document.getElementById('combatResultMessage');
+    const confirmCombatResultBtn = document.getElementById('confirmCombatResultBtn');
+    const chatContainer = document.getElementById('chatContainer');
+    const chatBox = document.getElementById('chatBox');
+    const chatInput = document.getElementById('chatInput');
+    const sendChatBtn = document.getElementById('sendChatBtn');
+    const chatBubble = document.getElementById('chatBubble');
+    const footerMenu = document.getElementById('footerMenu');
+    const homeBtn = document.getElementById('homeBtn');
+    const guildBtn = document.getElementById('guildBtn');
+    const pvpBtn = document.getElementById('pvpBtn');
+    const afkBtn = document.getElementById('afkBtn');
+    const miningBtn = document.getElementById('miningBtn');
+    const castlesBtn = document.getElementById('castlesBtn');
+    const floatingMessage = document.getElementById('floatingMessage');
 
-// Variáveis globais para o AFK
-let currentMonsterHealth;
-let playerAttackPower;
-let playerMaxHealth; // Adicionado para cura pós-derrota
-let currentPlayerId; // Para armazenar o ID do jogador logado
-let currentDailyAttemptsLeft; // Para controlar as tentativas diárias
-let currentAfkStage; // Para acompanhar o estágio atual do AFK
-
-const MAX_ATTACKS = 10; // Número de ataques por tentativa de combate
-let remainingAttacks = MAX_ATTACKS;
-
-// Elementos da UI AFK
-const afkStageSpan = document.getElementById('afkStage');
-const afkTimeSpan = document.getElementById('afkTime');
-const afkXPGainSpan = document.getElementById('afkXPGain');
-const afkGoldGainSpan = document.getElementById('afkGoldGain');
-const collectAfkRewardsBtn = document.getElementById('collectAfkRewardsBtn');
-const startAdventureBtn = document.getElementById('startAdventureBtn');
-const afkMessage = document.getElementById('afkMessage');
-const monsterHealthPercentageSpan = document.getElementById('monsterHealthPercentage');
-const monsterCurrentHealthDisplay = document.getElementById('monsterCurrentHealthDisplay');
-// Removida a referência direta a attackButton e alterada para attackArea
-const attackArea = document.getElementById('attackArea'); // NOVA REFERÊNCIA
-const attackButton = document.getElementById('attackButton'); // Mantido para o listener, mas o display será via attackArea
-const attackCountDisplay = document.getElementById('attackCountDisplay');
-const remainingAttacksSpan = document.getElementById('remainingAttacks');
-const combatLog = document.getElementById('combatLog');
-const dailyAttemptsLeftSpan = document.getElementById('dailyAttemptsLeft'); // Novo elemento para exibir tentativas restantes
+    // Referência ao novo container
+    const monsterAttackSection = document.getElementById('monster-attack-section');
 
 
-// Função para calcular recompensas AFK e atualizar UI
-async function calculateAndDisplayAfkRewards() {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        console.log("Usuário não logado, não é possível calcular recompensas AFK.");
-        return;
-    }
-    currentPlayerId = user.id; // Garante que o ID do jogador esteja atualizado
+    let currentMonster = null;
+    let playerDamage = 0;
+    let playerDefense = 0;
+    let attacksRemaining = 0;
+    let combatInterval = null;
+    let userId = null;
+    let playerName = '';
+    let playerFaction = '';
+    let currentGold = 0;
+    let currentXP = 0;
+    let afkLoopInterval = null;
+    let monsterFlashTimeout = null;
+    let xpPerStage = 100; // XP base por estágio
+    let goldPerStage = 50; // Ouro base por estágio
+    let pveStageLevel = 1; // Nível atual do estágio PvE
 
-    const { data: player, error: playerError } = await supabaseClient
-        .from('players')
-        .select('last_afk_start_time, current_afk_stage, xp, gold, daily_attempts_left, last_attempt_reset, health, combat_power')
-        .eq('id', currentPlayerId)
-        .single();
 
-    if (playerError) {
-        console.error('Erro ao buscar dados do jogador para AFK:', playerError.message);
-        return;
-    }
+    // Inicialização do Supabase (substitua com suas próprias chaves)
+    const SUPABASE_URL = 'SUA_SUPABASE_URL'; // Substitua
+    const SUPABASE_ANON_KEY = 'SUA_SUPABASE_ANON_KEY'; // Substitua
+    const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    currentDailyAttemptsLeft = player.daily_attempts_left;
-    dailyAttemptsLeftSpan.textContent = currentDailyAttemptsLeft;
-    currentAfkStage = player.current_afk_stage;
-    afkStageSpan.textContent = currentAfkStage;
-    playerAttackPower = player.combat_power; // Atualiza o poder de ataque do jogador
-    playerMaxHealth = player.health; // Atualiza a vida máxima do jogador
+    // Variáveis de elementos do perfil (do script.js)
+    const profileEditModal = document.getElementById('profileEditModal');
+    const editPlayerNameInput = document.getElementById('editPlayerName');
+    const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
+    const saveProfileBtn = document.getElementById('saveProfileBtn');
+    const profileEditMessage = document.getElementById('profileEditMessage');
 
-    // Reseta tentativas diárias se um novo dia começou
-    const lastResetDate = new Date(player.last_attempt_reset);
-    const now = new Date();
-    if (now.getDate() !== lastResetDate.getDate() ||
-        now.getMonth() !== lastResetDate.getMonth() ||
-        now.getFullYear() !== lastResetDate.getFullYear()) {
-        const { error: resetError } = await supabaseClient
-            .from('players')
-            .update({ daily_attempts_left: 5, last_attempt_reset: now.toISOString() })
-            .eq('id', currentPlayerId);
-        if (resetError) {
-            console.error('Erro ao resetar tentativas diárias:', resetError.message);
+
+    async function updateUI() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            userId = user.id;
+            authContainer.style.display = 'none';
+            playerInfoDiv.style.display = 'block';
+            afkContainer.style.display = 'block';
+            chatContainer.style.display = 'block';
+            chatBubble.style.display = 'flex';
+            footerMenu.style.display = 'flex';
+            await fetchPlayerInfo(userId);
+            await fetchAFKData();
+            startAfkLoop();
+            setupChat();
         } else {
-            currentDailyAttemptsLeft = 5;
-            dailyAttemptsLeftSpan.textContent = 5;
-            console.log('Tentativas diárias resetadas.');
+            authContainer.style.display = 'block';
+            playerInfoDiv.style.display = 'none';
+            afkContainer.style.display = 'none';
+            chatContainer.style.display = 'none';
+            chatBubble.style.display = 'none';
+            footerMenu.style.display = 'none';
+            stopAfkLoop();
         }
     }
 
+    async function fetchPlayerInfo(id) {
+        const { data: playerData, error: playerError } = await supabase
+            .from('players')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-    if (player.last_afk_start_time) {
-        const lastAfkTime = new Date(player.last_afk_start_time);
-        const now = new Date();
-        let afkDurationSeconds = Math.floor((now - lastAfkTime) / 1000);
+        if (playerError && playerError.code === 'PGRST116') { // Nenhum dado encontrado
+            showProfileEditModal(true);
+            return;
+        } else if (playerError) {
+            console.error('Erro ao buscar informações do jogador:', playerError.message);
+            return;
+        }
 
-        // Limita o tempo AFK máximo para evitar cálculos excessivos e abusos
-        const MAX_AFK_HOURS = 24; // Ex: limite de 24 horas de AFK
-        const MAX_AFK_SECONDS = MAX_AFK_HOURS * 3600;
-        afkDurationSeconds = Math.min(afkDurationSeconds, MAX_AFK_SECONDS);
-
-        afkTimeSpan.textContent = `${afkDurationSeconds} segundos`;
-
-        // Lógica de recompensa baseada no tempo AFK e estágio
-        const xpPerSecondPerStage = 0.1; // Ajuste conforme a economia do jogo
-        const goldPerSecondPerStage = 0.05; // Ajuste conforme a economia do jogo
-
-        const estimatedXPGain = Math.floor(afkDurationSeconds * xpPerSecondPerStage * currentAfkStage);
-        const estimatedGoldGain = Math.floor(afkDurationSeconds * goldPerSecondPerStage * currentAfkStage);
-
-        afkXPGainSpan.textContent = estimatedXPGain;
-        afkGoldGainSpan.textContent = estimatedGoldGain;
-
-        collectAfkRewardsBtn.disabled = afkDurationSeconds === 0;
-    } else {
-        afkTimeSpan.textContent = '0 segundos';
-        afkXPGainSpan.textContent = '0';
-        afkGoldGainSpan.textContent = '0';
-        collectAfkRewardsBtn.disabled = true;
+        if (playerData) {
+            playerName = playerData.name;
+            playerFaction = playerData.faction;
+            currentGold = playerData.gold;
+            currentXP = playerData.xp;
+            playerDamage = playerData.damage;
+            playerDefense = playerData.defense;
+            pveStageLevel = playerData.pve_stage_level; // Carrega o nível do estágio
+            displayPlayerInfo(playerData);
+            if (!playerData.name || !playerData.faction) {
+                showProfileEditModal(true);
+            }
+        } else {
+            showProfileEditModal(true);
+        }
     }
 
-    // Habilita/desabilita o botão de iniciar aventura se houver tentativas
-    if (currentDailyAttemptsLeft > 0 && currentAfkStage < MAX_AFK_STAGE) {
-        startAdventureBtn.disabled = false;
-    } else {
-        startAdventureBtn.disabled = true; // Mantém desabilitado se não houver tentativas
-    }
-}
-
-async function collectAfkRewards() {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
-
-    const { data: player, error: playerError } = await supabaseClient
-        .from('players')
-        .select('xp, gold, last_afk_start_time, current_afk_stage')
-        .eq('id', user.id)
-        .single();
-
-    if (playerError) {
-        console.error('Erro ao buscar dados do jogador para coletar recompensas:', playerError.message);
-        afkMessage.textContent = 'Erro ao coletar recompensas.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-        return;
+    function displayPlayerInfo(playerData) {
+        playerInfoDiv.innerHTML = `
+            <h2>Informações do Jogador</h2>
+            <p>Nome: ${playerData.name}</p>
+            <p>Facção: ${playerData.faction}</p>
+            <p>Ouro: ${playerData.gold}</p>
+            <p>XP: ${playerData.xp}</p>
+            <p>Dano: ${playerData.damage}</p>
+            <p>Defesa: ${playerData.defense}</p>
+            <button id="editProfileBtn">Editar Perfil</button>
+            <button id="signOutBtn">Sair</button>
+        `;
+        document.getElementById('editProfileBtn').addEventListener('click', () => showProfileEditModal(false));
+        document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
     }
 
-    if (!player.last_afk_start_time) {
-        afkMessage.textContent = 'Nenhuma recompensa AFK para coletar.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-        return;
+    function showProfileEditModal(isNewUser) {
+        profileEditModal.style.display = 'flex';
+        if (isNewUser) {
+            document.querySelector('#profileEditModal h2').textContent = 'Bem-vindo(a), Aventureiro(a)!';
+            document.querySelector('#profileEditModal p').textContent = 'Seu perfil é novo. Por favor, edite seu nome e escolha sua facção inicial.';
+        } else {
+            document.querySelector('#profileEditModal h2').textContent = 'Editar Perfil';
+            document.querySelector('#profileEditModal p').textContent = ''; // Limpa a mensagem
+            editPlayerNameInput.value = playerName;
+            editPlayerFactionSelect.value = playerFaction;
+        }
     }
 
-    const lastAfkTime = new Date(player.last_afk_start_time);
-    const now = new Date();
-    let afkDurationSeconds = Math.floor((now - lastAfkTime) / 1000);
+    saveProfileBtn.addEventListener('click', async () => {
+        const newName = editPlayerNameInput.value.trim();
+        const newFaction = editPlayerFactionSelect.value;
 
-    const MAX_AFK_HOURS = 24;
-    const MAX_AFK_SECONDS = MAX_AFK_HOURS * 3600;
-    afkDurationSeconds = Math.min(afkDurationSeconds, MAX_AFK_SECONDS);
+        if (!newName) {
+            profileEditMessage.textContent = 'O nome do jogador não pode ser vazio!';
+            return;
+        }
 
-    const xpPerSecondPerStage = 0.1;
-    const goldPerSecondPerStage = 0.05;
+        const { data, error } = await supabase
+            .from('players')
+            .upsert({ id: userId, name: newName, faction: newFaction }, { onConflict: 'id' })
+            .select()
+            .single();
 
-    const xpGained = Math.floor(afkDurationSeconds * xpPerSecondPerStage * player.current_afk_stage);
-    const goldGained = Math.floor(afkDurationSeconds * goldPerSecondPerStage * player.current_afk_stage);
+        if (error) {
+            profileEditMessage.textContent = 'Erro ao salvar perfil: ' + error.message;
+            console.error('Erro ao salvar perfil:', error);
+        } else {
+            profileEditMessage.textContent = 'Perfil salvo com sucesso!';
+            playerName = data.name;
+            playerFaction = data.faction;
+            displayPlayerInfo(data);
+            profileEditModal.style.display = 'none';
+        }
+    });
 
-    // Atualizar XP e Gold do jogador
-    const { error: updateError } = await supabaseClient
-        .from('players')
-        .update({
-            xp: player.xp + xpGained,
-            gold: player.gold + goldGained,
-            last_afk_start_time: null // Reseta o contador AFK
-        })
-        .eq('id', user.id);
-
-    if (updateError) {
-        console.error('Erro ao atualizar XP e Gold:', updateError.message);
-        afkMessage.textContent = 'Erro ao coletar recompensas.';
-    } else {
-        afkMessage.textContent = `Recompensas coletadas! +${xpGained} XP, +${goldGained} Ouro.`;
-        showFloatingMessage(`+${xpGained} XP, +${goldGained} Ouro`);
-        await window.fetchAndDisplayPlayerInfo(); // Atualiza as informações do jogador na UI
-        afkXPGainSpan.textContent = '0';
-        afkGoldGainSpan.textContent = '0';
-        afkTimeSpan.textContent = '0 segundos';
-        collectAfkRewardsBtn.disabled = true;
-    }
-    setTimeout(() => { afkMessage.textContent = ''; }, 5000);
-}
-
-
-const MONSTERS = {
-    1: { name: "Slime Pequeno", health: 100, xp: 10, gold: 5, combat_power_required: 10 },
-    2: { name: "Goblin Jovem", health: 150, xp: 15, gold: 8, combat_power_required: 15 },
-    3: { name: "Lobo Faminto", health: 200, xp: 20, gold: 10, combat_power_required: 20 },
-    4: { name: "Ogro Forte", health: 300, xp: 30, gold: 15, combat_power_required: 30 },
-    5: { name: "Dragão Adormecido", health: 500, xp: 50, gold: 25, combat_power_required: 50 },
-    // Adicione mais estágios e monstros aqui
-};
-
-const MAX_AFK_STAGE = Object.keys(MONSTERS).length; // Define o estágio máximo com base na quantidade de monstros
-
-
-async function startAdventure() {
-    console.log("startAdventure chamado!");
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        afkMessage.textContent = 'Você precisa estar logado para iniciar uma aventura.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-        return;
+    async function handleSignOut() {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Erro ao sair:', error.message);
+        } else {
+            updateUI(); // Atualiza a UI para o estado de não logado
+        }
     }
 
-    const { data: player, error: playerError } = await supabaseClient
-        .from('players')
-        .select('daily_attempts_left, current_afk_stage, combat_power, health')
-        .eq('id', user.id)
-        .single();
+    supabase.auth.onAuthStateChange((event, session) => {
+        updateUI();
+    });
 
-    if (playerError) {
-        console.error('Erro ao buscar dados do jogador para aventura:', playerError.message);
-        afkMessage.textContent = 'Erro ao iniciar aventura.';
-        setTimeout(() => { afkMessage.textContent = ''; }, 3000);
-        return;
+    // Função de registro e login (do script.js)
+    document.getElementById('signUpBtn').addEventListener('click', async () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const { data, error } = await supabase.auth.signUp({ email, password });
+
+        if (error) {
+            document.getElementById('authMessage').textContent = 'Erro no registro: ' + error.message;
+        } else if (data.user) {
+            document.getElementById('authMessage').textContent = 'Registro bem-sucedido! Por favor, verifique seu e-mail para confirmar.';
+            // Criar entrada do jogador na tabela 'players'
+            const { error: playerError } = await supabase
+                .from('players')
+                .insert([
+                    { id: data.user.id, name: '', faction: '', gold: 0, xp: 0, damage: 10, defense: 5, pve_stage_level: 1, last_afk_collect: new Date().toISOString(), daily_pve_attempts: 3 }
+                ]);
+            if (playerError) {
+                console.error('Erro ao criar player:', playerError.message);
+                document.getElementById('authMessage').textContent += ' Erro ao inicializar dados do jogador.';
+            } else {
+                showProfileEditModal(true); // Redireciona para edição de perfil para novo usuário
+            }
+        }
+    });
+
+    document.getElementById('signInBtn').addEventListener('click', async () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            document.getElementById('authMessage').textContent = 'Erro no login: ' + error.message;
+        } else if (data.user) {
+            document.getElementById('authMessage').textContent = 'Login bem-sucedido!';
+            updateUI();
+        }
+    });
+
+    // Funções AFK
+    async function fetchAFKData() {
+        const { data: playerData, error } = await supabase
+            .from('players')
+            .select('last_afk_collect, daily_pve_attempts, pve_stage_level')
+            .eq('id', userId)
+            .single();
+
+        if (error) {
+            console.error('Erro ao buscar dados AFK:', error.message);
+            afkMessage.textContent = 'Erro ao carregar dados AFK.';
+            return;
+        }
+
+        const lastCollectTime = new Date(playerData.last_afk_collect).getTime();
+        const currentTime = new Date().getTime();
+        const afkDurationSeconds = Math.floor((currentTime - lastCollectTime) / 1000);
+
+        // Calcula XP e Ouro baseados no tempo AFK e nível do estágio PvE
+        const currentXPPerSecond = (xpPerStage / 3600) * playerData.pve_stage_level;
+        const currentGoldPerSecond = (goldPerStage / 3600) * playerData.pve_stage_level;
+
+        afkTimeSpan.textContent = formatTime(afkDurationSeconds);
+        afkXPGainSpan.textContent = Math.floor(currentXPPerSecond * afkDurationSeconds);
+        afkGoldGainSpan.textContent = Math.floor(currentGoldPerSecond * afkDurationSeconds);
+        afkStageSpan.textContent = playerData.pve_stage_level;
+        dailyAttemptsLeftSpan.textContent = playerData.daily_pve_attempts;
+
+        // Desabilita o botão se não houver tentativas restantes
+        startAdventureBtn.disabled = playerData.daily_pve_attempts <= 0;
     }
 
-    if (player.daily_attempts_left <= 0) {
-        afkMessage.textContent = 'Você não tem mais tentativas de aventura hoje. Volte amanhã!';
-        startAdventureBtn.disabled = true;
-        setTimeout(() => { afkMessage.textContent = ''; }, 5000);
-        return;
+    function startAfkLoop() {
+        if (afkLoopInterval) {
+            clearInterval(afkLoopInterval);
+        }
+        afkLoopInterval = setInterval(fetchAFKData, 5000); // Atualiza a cada 5 segundos
     }
 
-    if (player.current_afk_stage > MAX_AFK_STAGE) {
-        afkMessage.textContent = 'Você já conquistou todos os estágios PvE disponíveis! Aguarde novas atualizações.';
-        startAdventureBtn.disabled = true;
-        setTimeout(() => { afkMessage.textContent = ''; }, 5000);
-        return;
+    function stopAfkLoop() {
+        if (afkLoopInterval) {
+            clearInterval(afkLoopInterval);
+            afkLoopInterval = null;
+        }
     }
 
-    // Verifica se o poder de combate do jogador é suficiente para o estágio atual
-    const currentMonster = MONSTERS[player.current_afk_stage];
-    if (player.combat_power < currentMonster.combat_power_required) {
-        afkMessage.textContent = `Seu poder de combate (${player.combat_power}) é muito baixo para o estágio ${player.current_afk_stage} (Requerido: ${currentMonster.combat_power_required}). Treine mais!`;
-        startAdventureBtn.disabled = true; // Desabilita o botão se o poder for muito baixo
-        setTimeout(() => { afkMessage.textContent = ''; }, 7000);
-        return;
+    collectAfkRewardsBtn.addEventListener('click', async () => {
+        const collectedXP = parseInt(afkXPGainSpan.textContent);
+        const collectedGold = parseInt(afkGoldGainSpan.textContent);
+
+        const { error } = await supabase
+            .from('players')
+            .update({
+                xp: currentXP + collectedXP,
+                gold: currentGold + collectedGold,
+                last_afk_collect: new Date().toISOString()
+            })
+            .eq('id', userId);
+
+        if (error) {
+            afkMessage.textContent = 'Erro ao coletar recompensas: ' + error.message;
+        } else {
+            afkMessage.textContent = `Recompensas coletadas! +${collectedXP} XP, +${collectedGold} Ouro.`;
+            currentXP += collectedXP;
+            currentGold += collectedGold;
+            // Atualiza imediatamente a UI de AFK e PlayerInfo
+            await fetchPlayerInfo(userId);
+            await fetchAFKData();
+        }
+    });
+
+    function formatTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h}h ${m}m ${s}s`;
     }
 
-    // Inicia o combate
-    currentMonsterHealth = currentMonster.health;
-    remainingAttacks = MAX_ATTACKS;
-    combatLog.innerHTML = ''; // Limpa o log de combate
-    playerAttackPower = player.combat_power; // Assegura que o poder de ataque está atualizado
-    playerMaxHealth = player.health; // Assegura que a vida máxima está atualizada
+    // Funções de Combate PvE
+    startAdventureBtn.addEventListener('click', async () => {
+        const { data: playerData, error } = await supabase
+            .from('players')
+            .select('daily_pve_attempts, pve_stage_level')
+            .eq('id', userId)
+            .single();
 
-    // Exibe a UI de combate
-    attackArea.style.display = 'flex'; // AGORA: Exibe a nova área de ataque
-    monsterHealthPercentageSpan.style.display = 'block';
-    attackCountDisplay.style.display = 'block';
-    combatLog.style.display = 'block';
-    startAdventureBtn.style.display = 'none'; // Esconde o botão de iniciar aventura
-    collectAfkRewardsBtn.style.display = 'none'; // Esconde o botão de coletar
+        if (error) {
+            console.error('Erro ao buscar tentativas diárias:', error.message);
+            afkMessage.textContent = 'Erro ao iniciar aventura.';
+            return;
+        }
 
-    updateMonsterHealthDisplay();
-    updateRemainingAttacksDisplay();
-    addCombatLogMessage(`Um ${currentMonster.name} apareceu!`);
+        if (playerData.daily_pve_attempts <= 0) {
+            afkMessage.textContent = 'Você não tem mais tentativas de aventura para hoje!';
+            return;
+        }
 
-    afkMessage.textContent = 'Em combate...';
-    // O botão Atacar é gerenciado pelo listener de click abaixo
-}
+        // Decrementa uma tentativa diária imediatamente no banco de dados
+        const { error: updateError } = await supabase
+            .from('players')
+            .update({ daily_pve_attempts: playerData.daily_pve_attempts - 1 })
+            .eq('id', userId);
 
+        if (updateError) {
+            console.error('Erro ao decrementar tentativas diárias:', updateError.message);
+            afkMessage.textContent = 'Erro ao decrementar tentativa de aventura.';
+            return;
+        }
 
-function updateMonsterHealthDisplay() {
-    const currentMonster = MONSTERS[currentAfkStage];
-    const percentage = (currentMonsterHealth / currentMonster.health) * 100;
-    monsterCurrentHealthDisplay.textContent = `${Math.max(0, percentage).toFixed(0)}%`;
-}
+        dailyAttemptsLeftSpan.textContent = playerData.daily_pve_attempts - 1; // Atualiza a UI
 
-function updateRemainingAttacksDisplay() {
-    remainingAttacksSpan.textContent = remainingAttacks;
-}
+        afkMessage.textContent = ''; // Limpa mensagens anteriores
+        startAdventureBtn.style.display = 'none';
+        collectAfkRewardsBtn.style.display = 'none';
 
-function addCombatLogMessage(message) {
-    const p = document.createElement('p');
-    p.textContent = message;
-    combatLog.appendChild(p);
-    combatLog.scrollTop = combatLog.scrollHeight; // Rola para o final
-}
+        // NOVO: Exibe o container da seção de ataque
+        monsterAttackSection.style.display = 'flex'; // Use 'flex' para exibir o container
 
-// Nova função para exibir o popup de dano
-function showDamagePopup(damage, targetElement) {
-    const popup = document.getElementById('combatDamagePopup');
-    const popupAmount = document.getElementById('popupDamageAmount');
+        attackCountDisplay.style.display = 'block';
+        combatLog.style.display = 'block';
+        combatLog.innerHTML = ''; // Limpa o log de combate
 
-    popupAmount.textContent = damage;
-    popup.style.opacity = 1;
-    popup.style.transform = 'translate(-50%, 0)'; // Posição inicial
+        // Inicia o combate
+        await startCombat(playerData.pve_stage_level);
+    });
 
-    // Obtém a posição do elemento alvo (monstro ou jogador)
-    const rect = targetElement.getBoundingClientRect();
-    popup.style.left = `${rect.left + rect.width / 2}px`;
-    popup.style.top = `${rect.top - 30}px`; // Acima do elemento
+    async function startCombat(stageLevel) {
+        // Define o monstro com base no nível do estágio
+        const monsterData = getMonsterForStage(stageLevel);
+        currentMonster = { ...monsterData, currentHealth: monsterData.health };
 
-    setTimeout(() => {
-        popup.style.opacity = 0;
-        popup.style.transform = 'translate(-50%, -20px)'; // Move para cima enquanto desaparece
-    }, 800); // Duração do popup
-}
+        monsterNameDisplay.textContent = currentMonster.name;
+        monsterImage.src = currentMonster.image_url;
+        updateMonsterHealthDisplay();
 
+        attacksRemaining = 10; // Número de ataques por combate
+        remainingAttacksSpan.textContent = attacksRemaining;
 
-attackButton.addEventListener('click', async () => {
-    if (remainingAttacks <= 0) {
-        addCombatLogMessage('Você não tem mais ataques nesta tentativa.');
-        return;
+        appendCombatLog(`Um ${currentMonster.name} apareceu! Prepare-se para o combate!`);
+        appendCombatLog(`HP do ${currentMonster.name}: ${currentMonster.health}`);
+
+        // Inicia o loop de combate (se necessário, ou espera por clique do usuário)
+        // Se o combate for por clique do usuário, não precisamos de setInterval aqui.
+        // Se for automático, descomente:
+        // combatInterval = setInterval(performAttack, 1000); // Ataque a cada segundo
     }
 
-    const currentMonster = MONSTERS[currentAfkStage];
-    const damageDealt = Math.max(1, Math.floor(playerAttackPower * (0.8 + Math.random() * 0.4))); // Variação de 80% a 120% do ataque
-
-    currentMonsterHealth -= damageDealt;
-    remainingAttacks--;
-
-    addCombatLogMessage(`Você atacou o ${currentMonster.name} e causou ${damageDealt} de dano!`);
-    showDamagePopup(damageDealt, attackButton); // Exibe popup de dano no botão (simulando no monstro)
-
-    updateMonsterHealthDisplay();
-    updateRemainingAttacksDisplay();
-
-    if (currentMonsterHealth <= 0) {
-        addCombatLogMessage(`Você derrotou o ${currentMonster.name}!`);
-        await handleCombatEnd(true); // Vitória
-    } else if (remainingAttacks === 0) {
-        addCombatLogMessage(`Você ficou sem ataques. O ${currentMonster.name} escapou!`);
-        await handleCombatEnd(false); // Derrota
+    function getMonsterForStage(stage) {
+        // Exemplo simples: monstro mais forte a cada estágio
+        // Você pode expandir isso com um array de monstros ou lookup no DB
+        switch (stage) {
+            case 1:
+                return { name: "Goblin", health: 100, damage: 5, defense: 2, xpReward: 50, goldReward: 20, image_url: "https://drive.google.com/uc?export=view&id=1RUyh2rbNdWdtdHd3jtWw89j0asHh6p_L" };
+            case 2:
+                return { name: "Slime Gigante", health: 150, damage: 8, defense: 3, xpReward: 75, goldReward: 30, image_url: "https://drive.google.com/uc?export=view&id=1RUyh2rbNdWdtdHd3jtWw89j0asHh6p_L" }; // Placeholder
+            // Adicione mais estágios e monstros
+            default:
+                return { name: "Monstro Desconhecido", health: 200, damage: 10, defense: 5, xpReward: 100, goldReward: 40, image_url: "https://drive.google.com/uc?export=view&id=1RUyh2rbNdWdtdHd3jtWw89j0asHh6p_L" }; // Placeholder
+        }
     }
-});
 
-async function handleCombatEnd(isWin) {
-    // Oculta a UI de combate
-    attackArea.style.display = 'none'; // AGORA: Oculta a nova área de ataque
-    monsterHealthPercentageSpan.style.display = 'none';
-    attackCountDisplay.style.display = 'none';
-    combatLog.style.display = 'none';
+    attackButton.addEventListener('click', performAttack);
 
-    // Garante que os botões de controle AFK apareçam
-    startAdventureBtn.style.display = 'inline-block';
-    collectAfkRewardsBtn.style.display = 'inline-block';
+    async function performAttack() {
+        if (!currentMonster || attacksRemaining <= 0) {
+            return;
+        }
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return; // Deveria estar logado neste ponto
+        attacksRemaining--;
+        remainingAttacksSpan.textContent = attacksRemaining;
 
-    let title = '';
-    let message = '';
-    let onConfirm = async () => { }; // Função a ser executada ao confirmar o modal
+        let damageDealt = Math.max(0, playerDamage - currentMonster.defense);
+        const isCritical = Math.random() < 0.2; // 20% de chance de crítico
+        if (isCritical) {
+            damageDealt *= 2; // Dano dobrado no crítico
+        }
 
-    if (isWin) {
-        const currentMonster = MONSTERS[currentAfkStage];
-        const xpGained = currentMonster.xp;
-        const goldGained = currentMonster.gold;
-        const newAfkStage = currentAfkStage + 1;
+        currentMonster.currentHealth -= damageDealt;
+        updateMonsterHealthDisplay();
+        showDamagePopup(damageDealt, isCritical);
+        // flashMonsterImage(); // Descomente se quiser o efeito de flash
 
-        title = 'Vitória!';
-        message = `Você avançou para o Estágio ${newAfkStage}! Ganhou ${xpGained} XP e ${goldGained} Ouro.`;
+        appendCombatLog(`${playerName} atacou o ${currentMonster.name} causando ${damageDealt} de dano! ${isCritical ? '(Crítico!)' : ''}`);
 
-        onConfirm = async () => {
-            const { error: updateError } = await supabaseClient
+        // Ataque do monstro
+        const monsterDamageTaken = Math.max(0, currentMonster.damage - playerDefense);
+        appendCombatLog(`${currentMonster.name} atacou ${playerName} causando ${monsterDamageTaken} de dano!`);
+        // Aqui você precisaria de uma variável de HP do jogador para subtrair o dano
+
+        if (currentMonster.currentHealth <= 0) {
+            currentMonster.currentHealth = 0; // Garante que não mostre HP negativo
+            updateMonsterHealthDisplay();
+            await endCombat(true); // Vitória
+        } else if (attacksRemaining <= 0) {
+            // Se o jogador acabou os ataques e o monstro ainda está vivo
+            await endCombat(false); // Derrota (ou Empate/Fuga)
+        }
+    }
+
+    function updateMonsterHealthDisplay() {
+        const healthPercent = Math.max(0, Math.ceil((currentMonster.currentHealth / currentMonster.health) * 100));
+        monsterCurrentHealthDisplay.textContent = `${healthPercent}%`;
+
+        // Remove a lógica de filtro de cor da imagem para "sem efeitos"
+        // monsterImage.style.filter = 'grayscale(0%)';
+    }
+
+    function showDamagePopup(amount, isCritical) {
+        combatDamagePopup.textContent = `DANO: ${amount}`;
+        combatDamagePopup.classList.remove('critical');
+        if (isCritical) {
+            combatDamagePopup.classList.add('critical');
+        }
+        combatDamagePopup.style.display = 'block';
+        combatDamagePopup.style.opacity = '1';
+        combatDamagePopup.style.transform = 'translate(-50%, -50%) scale(1)';
+
+        setTimeout(() => {
+            combatDamagePopup.style.opacity = '0';
+            combatDamagePopup.style.transform = 'translate(-50%, -70%) scale(0.8)'; // Move para cima enquanto some
+            combatDamagePopup.addEventListener('transitionend', function handler() {
+                combatDamagePopup.style.display = 'none';
+                combatDamagePopup.removeEventListener('transitionend', handler);
+            });
+        }, 800); // Exibe por 0.8 segundos
+    }
+
+    // Função de flash removida para "sem efeitos"
+    // function flashMonsterImage() {
+    //     monsterImage.classList.add('flash-animation');
+    //     if (monsterFlashTimeout) {
+    //         clearTimeout(monsterFlashTimeout);
+    //     }
+    //     monsterFlashTimeout = setTimeout(() => {
+    //         monsterImage.classList.remove('flash-animation');
+    //     }, 200); // Duração da animação de flash
+    // }
+
+    async function endCombat(isVictory) {
+        if (combatInterval) {
+            clearInterval(combatInterval);
+            combatInterval = null;
+        }
+
+        // NOVO: Oculta o container da seção de ataque
+        monsterAttackSection.style.display = 'none';
+
+        // Esses podem ser ocultados ou mantidos visíveis dependendo do que você quer após o combate
+        // monsterHealthPercentage.style.display = 'none'; // Manter visível para ver o HP final
+        attackCountDisplay.style.display = 'none';
+        // combatLog.style.display = 'none'; // Manter visível para revisar o log
+
+        if (isVictory) {
+            const xpEarned = currentMonster.xpReward;
+            const goldEarned = currentMonster.goldReward;
+            const newStageLevel = pveStageLevel + 1; // Avança para o próximo estágio
+
+            appendCombatLog(`Você derrotou o ${currentMonster.name}!`);
+            appendCombatLog(`Recompensas: +${xpEarned} XP, +${goldEarned} Ouro.`);
+            appendCombatLog(`Avançando para o Estágio PvE ${newStageLevel}!`);
+
+            combatResultTitle.textContent = 'VITÓRIA!';
+            combatResultMessage.innerHTML = `Parabéns! Você derrotou o ${currentMonster.name}.<br>Você ganhou ${xpEarned} XP e ${goldEarned} Ouro.<br>Você avançou para o Estágio PvE ${newStageLevel}!`;
+
+            // Atualiza o jogador no banco de dados
+            const { error: updateError } = await supabase
                 .from('players')
                 .update({
-                    xp: currentPlayerData.xp + xpGained,
-                    gold: currentPlayerData.gold + goldGained,
-                    current_afk_stage: newAfkStage,
-                    daily_attempts_left: currentDailyAttemptsLeft - 1, // Decrementa uma tentativa
-                    last_afk_start_time: new Date().toISOString() // Inicia um novo ciclo AFK
+                    xp: currentXP + xpEarned,
+                    gold: currentGold + goldEarned,
+                    pve_stage_level: newStageLevel // Atualiza o nível do estágio
                 })
-                .eq('id', user.id);
+                .eq('id', userId);
 
             if (updateError) {
                 console.error('Erro ao atualizar jogador após vitória:', updateError.message);
-                afkMessage.textContent = 'Erro ao processar vitória.';
+                afkMessage.textContent = 'Erro ao salvar recompensas da vitória.';
             } else {
-                await window.fetchAndDisplayPlayerInfo(); // Atualiza infos do jogador
-                afkStageSpan.textContent = newAfkStage;
-                dailyAttemptsLeftSpan.textContent = currentDailyAttemptsLeft - 1; // Atualiza display
-                showFloatingMessage(`Vitória! +${xpGained} XP, +${goldGained} Ouro.`);
-                afkMessage.textContent = 'Pronto para a próxima aventura!';
+                currentXP += xpEarned;
+                currentGold += goldEarned;
+                pveStageLevel = newStageLevel; // Atualiza a variável local
+                await fetchPlayerInfo(userId); // Atualiza player info display
             }
-            // Habilita o botão de iniciar aventura se houver tentativas
-            if (currentDailyAttemptsLeft - 1 > 0 && newAfkStage <= MAX_AFK_STAGE) {
-                startAdventureBtn.disabled = false;
-            } else {
-                startAdventureBtn.disabled = true; // Mantém desabilitado se não houver tentativas ou se atingiu o estágio máximo
-            }
-            setTimeout(() => { afkMessage.textContent = ''; }, 5000);
-            window.updateUIVisibility(true, 'afkContainer'); // Garante que a tela AFK esteja visível
-        };
-    } else { // Derrota
-        title = 'Derrota!';
-        message = 'Você não conseguiu derrotar o monstro. Volte quando estiver mais forte!';
-
-        onConfirm = async () => {
-            // Se perder, ainda decrementa uma tentativa e cura o jogador
-            const { error: updateError } = await supabaseClient
-                .from('players')
-                .update({
-                    daily_attempts_left: currentDailyAttemptsLeft - 1, // Decrementa uma tentativa
-                    health: playerMaxHealth, // Cura o jogador
-                    last_afk_start_time: new Date().toISOString() // Inicia um novo ciclo AFK
-                })
-                .eq('id', user.id);
-
-            if (updateError) {
-                console.error('Erro ao atualizar jogador após derrota:', updateError.message);
-                afkMessage.textContent = 'Erro ao processar derrota.';
-            } else {
-                await window.fetchAndDisplayPlayerInfo(); // Atualiza infos do jogador
-                dailyAttemptsLeftSpan.textContent = currentDailyAttemptsLeft - 1; // Atualiza display
-                showFloatingMessage('Derrota! Tente novamente.');
-                afkMessage.textContent = 'Derrotado. Tente novamente quando estiver pronto.';
-            }
-            // Habilita o botão de iniciar aventura se houver tentativas
-            if (currentDailyAttemptsLeft - 1 > 0 && currentAfkStage <= MAX_AFK_STAGE) {
-                startAdventureBtn.disabled = false;
-            } else {
-                startAdventureBtn.disabled = true; // Mantém desabilitado se não houver tentativas
-            }
-            setTimeout(() => { afkMessage.textContent = ''; }, 5000);
-            window.updateUIVisibility(true, 'afkContainer'); // Garante que a tela AFK esteja visível
-        };
+        } else {
+            appendCombatLog(`Você não conseguiu derrotar o ${currentMonster.name}.`);
+            combatResultTitle.textContent = 'DERROTA!';
+            combatResultMessage.innerHTML = `O ${currentMonster.name} foi muito forte. Tente novamente!`;
+        }
+        showCombatResultModal();
     }
 
-    window.showCombatResultModal(title, message, onConfirm);
-}
+    function showCombatResultModal() {
+        combatResultModal.style.display = 'flex';
+    }
+
+    confirmCombatResultBtn.addEventListener('click', () => {
+        combatResultModal.style.display = 'none';
+        // Reinicializa a UI para o estado AFK
+        startAdventureBtn.style.display = 'block';
+        collectAfkRewardsBtn.style.display = 'block';
+
+        // NOVO: Oculta o container da seção de ataque ao voltar ao AFK
+        monsterAttackSection.style.display = 'none';
+        monsterHealthPercentage.style.display = 'none'; // Esconde o HP
+        combatLog.style.display = 'none'; // Esconde o log
+        afkMessage.textContent = 'Pronto para a próxima aventura!';
+        fetchAFKData(); // Atualiza os dados AFK e tentativas
+    });
 
 
-// Listeners de Eventos para afk_script.js
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("AFK Script: DOMContentLoaded. Adicionando listeners.");
-    if (collectAfkRewardsBtn) collectAfkRewardsBtn.addEventListener('click', collectAfkRewards);
-    if (startAdventureBtn) {
-        startAdventureBtn.addEventListener('click', startAdventure);
-        console.log("AFK Script: Listener para startAdventureBtn adicionado.");
+    function appendCombatLog(message) {
+        const p = document.createElement('p');
+        p.textContent = message;
+        combatLog.appendChild(p);
+        combatLog.scrollTop = combatLog.scrollHeight; // Scroll para o final
     }
-    // NOVO: Chama calculateAndDisplayAfkRewards a cada segundo para o contador de tempo
-    setInterval(calculateAndDisplayAfkRewards, 1000);
-    // Adiciona o listener para o attackButton
-    if (attackButton) {
-        // O listener já está acima, mas garante que esteja anexado após o DOM
+
+    // Funções de Chat
+    function setupChat() {
+        // Remove listeners antigos para evitar duplicação
+        sendChatBtn.removeEventListener('click', handleSendMessage);
+        chatInput.removeEventListener('keypress', handleChatInputKeyPress);
+
+        // Adiciona novos listeners
+        sendChatBtn.addEventListener('click', handleSendMessage);
+        chatInput.addEventListener('keypress', handleChatInputKeyPress);
+
+        // Inicia a escuta de mensagens do chat
+        supabase
+            .from('chat_messages')
+            .on('INSERT', payload => {
+                const message = payload.new;
+                appendChatMessage(message.sender_name, message.message);
+            })
+            .subscribe();
+
+        fetchChatMessages();
     }
+
+    async function fetchChatMessages() {
+        const { data, error } = await supabase
+            .from('chat_messages')
+            .select('sender_name, message')
+            .order('created_at', { ascending: true })
+            .limit(50); // Pega as últimas 50 mensagens
+
+        if (error) {
+            console.error('Erro ao buscar mensagens do chat:', error.message);
+            return;
+        }
+
+        chatBox.innerHTML = ''; // Limpa antes de adicionar
+        data.forEach(msg => {
+            appendChatMessage(msg.sender_name, msg.message);
+        });
+    }
+
+    function appendChatMessage(sender, message) {
+        const messageElement = document.createElement('p');
+        messageElement.classList.add('chat-message');
+        messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+        chatBox.appendChild(messageElement);
+        chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll
+    }
+
+    async function handleSendMessage() {
+        const message = chatInput.value.trim();
+        if (message && playerName) { // Verifica se há mensagem e nome do jogador
+            const { error } = await supabase
+                .from('chat_messages')
+                .insert([
+                    { sender_id: userId, sender_name: playerName, message: message }
+                ]);
+
+            if (error) {
+                console.error('Erro ao enviar mensagem:', error.message);
+            } else {
+                chatInput.value = ''; // Limpa o input
+            }
+        }
+    }
+
+    function handleChatInputKeyPress(event) {
+        if (event.key === 'Enter') {
+            handleSendMessage();
+        }
+    }
+
+    // Gerenciamento de Visibilidade dos Containers via Botões do Rodapé
+    function hideAllContainers() {
+        playerInfoDiv.style.display = 'none';
+        afkContainer.style.display = 'none';
+        chatContainer.style.display = 'none';
+        // Esconder elementos de combate se estiverem visíveis
+        monsterAttackSection.style.display = 'none'; // Oculta o container principal
+        monsterHealthPercentage.style.display = 'none';
+        attackCountDisplay.style.display = 'none';
+        combatLog.style.display = 'none';
+    }
+
+    homeBtn.addEventListener('click', () => {
+        hideAllContainers();
+        playerInfoDiv.style.display = 'block';
+        showFloatingMessage('Página Inicial');
+    });
+
+    guildBtn.addEventListener('click', () => {
+        hideAllContainers();
+        showFloatingMessage('Funcionalidade de Guilda em Desenvolvimento');
+    });
+
+    pvpBtn.addEventListener('click', () => {
+        hideAllContainers();
+        showFloatingMessage('Arena PvP em Breve!');
+    });
+
+    afkBtn.addEventListener('click', () => {
+        hideAllContainers();
+        afkContainer.style.display = 'block';
+        fetchAFKData(); // Atualiza os dados AFK ao voltar para a aba
+        showFloatingMessage('Aventura AFK');
+    });
+
+    miningBtn.addEventListener('click', () => {
+        hideAllContainers();
+        showFloatingMessage('Mineração em Desenvolvimento');
+    });
+
+    castlesBtn.addEventListener('click', () => {
+        hideAllContainers();
+        showFloatingMessage('Batalhas de Castelo em Breve!');
+    });
+
+    chatBubble.addEventListener('click', () => {
+        hideAllContainers(); // Esconde outros para focar no chat
+        chatContainer.style.display = 'block';
+        showFloatingMessage('Chat Global');
+    });
+
+    function showFloatingMessage(message) {
+        floatingMessage.textContent = message;
+        floatingMessage.style.display = 'block';
+        floatingMessage.style.opacity = '1';
+
+        setTimeout(() => {
+            floatingMessage.style.opacity = '0';
+            floatingMessage.addEventListener('transitionend', function handler() {
+                floatingMessage.style.display = 'none';
+                floatingMessage.removeEventListener('transitionend', handler);
+            });
+        }, 2000); // Mensagem visível por 2 segundos
+    }
+
+    // Inicializa a UI na carga da página
+    updateUI();
 });
-
-// Inicialização do AFK
-// Esta função será chamada após o carregamento do DOM e o login do usuário
-window.initAfk = async () => {
-    // A função onPlayerInfoLoadedForAfk já é chamada pelo script.js
-    // garantindo que os dados do jogador estejam disponíveis.
-    // Não precisamos buscar o usuário novamente aqui.
-};

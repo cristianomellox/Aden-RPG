@@ -1,103 +1,103 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aden RPG</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="style.css">    
-    </head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
 
-    <h1>Aden RPG</h1>
+    <h1>Aden RPG</h1>
 
-    <div id="authContainer">
-        <h2>Login / Registro</h2>
-        <input type="email" id="email" placeholder="Email"><br><br>
-        <input type="password" id="password" placeholder="Senha"><br><br>
-        <button id="signInBtn">Entrar</button>
-        <button id="signUpBtn">Registrar</button>
-        <p id="authMessage"></p>
-    </div>
+    <div id="authContainer">
+        <h2>Login / Registro</h2>
+        <input type="email" id="email" placeholder="Email"><br><br>
+        <input type="password" id="password" placeholder="Senha"><br><br>
+        <button id="signInBtn">Entrar</button>
+        <button id="signUpBtn">Registrar</button>
+        <p id="authMessage"></p>
+    </div>
 
-    <div id="playerInfoDiv" style="display:none;">
-        <h2>Informações do Jogador</h2>
-    </div>
+    <div id="playerInfoDiv" style="display:none;">
+        <h2>Informações do Jogador</h2>
+    </div>
 
-    <div id="afkContainer" style="display:none;">
-        <h2>Aventura AFK</h2>
-        <p>Seu aventureiro está explorando o mundo mesmo quando você não está jogando. Colete as recompensas da sua jornada!</p>
-        <p>Estágio Atual de PvE: <span id="afkStage">N/A</span></p>
-        <p>Tempo AFK Acumulado: <span id="afkTime">0 segundos</span></p>
-        <p>XP Estimado: <span id="afkXPGain">0</span></p>
-        <p>Ouro Estimado: <span id="afkGoldGain">0</span></p>
-        <p>Tentativas de Estágio Restantes Hoje: <span id="dailyAttemptsLeft">N/A</span></p>
-        <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
-        <button id="startAdventureBtn">Iniciar Combate PvE</button>
-        <p id="afkMessage"></p>
+    <div id="afkContainer" style="display:none;">
+        <h2>Aventura AFK</h2>
+        <p>Seu aventureiro está explorando o mundo mesmo quando você não está jogando. Colete as recompensas da sua jornada!</p>
+        <p>Estágio Atual de PvE: <span id="afkStage">N/A</span></p>
+        <p>Tempo AFK Acumulado: <span id="afkTime">0 segundos</span></p>
+        <p>XP Estimado: <span id="afkXPGain">0</span></p>
+        <p>Ouro Estimado: <span id="afkGoldGain">0</span></p>
+        <p>Tentativas de Estágio Restantes Hoje: <span id="dailyAttemptsLeft">N/A</span></p>
+        <button id="collectAfkRewardsBtn">Coletar Recompensas</button>
+        <button id="startAdventureBtn">Iniciar Combate PvE</button>
+        <p id="afkMessage"></p>
 
-        <p id="monsterHealthPercentage" style="display:none;">HP do Monstro: <span id="monsterCurrentHealthDisplay">100%</span></p>
+        <p id="monsterHealthPercentage" style="display:none;">HP do Monstro: <span id="monsterCurrentHealthDisplay">100%</span></p>
 
         <div id="monsterDisplayContainer" style="display:none;">
             <p id="monsterNameDisplay"></p>
             <img id="monsterImage" src="https://drive.google.com/uc?export=view&id=1RUyh2rbNdWdtdHd3jtWw89j0asHh6p_L" alt="Monstro Goblin">
         </div>
 
-        <button id="attackButton" style="display:none;">Atacar</button>
-        <p id="attackCountDisplay" style="display:none; text-align: center; margin-top: 10px; font-weight: bold;">Ataques Restantes: <span id="remainingAttacks">10</span></p>
+        <button id="attackButton" style="display:none;">Atacar</button>
+        <p id="attackCountDisplay" style="display:none; text-align: center; margin-top: 10px; font-weight: bold;">Ataques Restantes: <span id="remainingAttacks">10</span></p>
 
-        <div id="combatLog" style="height: 150px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-top: 10px; background-color: #f9f9f9; display: none;">
-        </div>
-    </div>
-    <div id="chatContainer" style="display:none;">
-        <h2>Chat Global</h2>
-        <div id="chatBox"></div>
-        <input type="text" id="chatInput" placeholder="Digite sua mensagem...">
-        <button id="sendChatBtn">Enviar</button>
-    </div>
+        <div id="combatLog" style="height: 150px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-top: 10px; background-color: #f9f9f9; display: none;">
+        </div>
+    </div>
+    <div id="chatContainer" style="display:none;">
+        <h2>Chat Global</h2>
+        <div id="chatBox"></div>
+        <input type="text" id="chatInput" placeholder="Digite sua mensagem...">
+        <button id="sendChatBtn">Enviar</button>
+    </div>
 
-    <div id="profileEditModal">
-        <div>
-            <h2>Bem-vindo(a), Aventureiro(a)!</h2>
-            <p>Seu perfil é novo. Por favor, edite seu nome e escolha sua facção inicial.</p>
-            <label for="editPlayerName">Nome do Jogador:</label><br>
-            <input type="text" id="editPlayerName" placeholder="Seu nome de aventureiro"><br><br>
+    <div id="profileEditModal">
+        <div>
+            <h2>Bem-vindo(a), Aventureiro(a)!</h2>
+            <p>Seu perfil é novo. Por favor, edite seu nome e escolha sua facção inicial.</p>
+            <label for="editPlayerName">Nome do Jogador:</label><br>
+            <input type="text" id="editPlayerName" placeholder="Seu nome de aventureiro"><br><br>
 
-            <label for="editPlayerFaction">Escolha sua Facção:</label><br>
-            <select id="editPlayerFaction">
-                <option value="Aliança da Floresta">Aliança da Floresta</option>
-                <option value="Horda do Gelo">Horda do Gelo</option>
-            </select><br><br>
+            <label for="editPlayerFaction">Escolha sua Facção:</label><br>
+            <select id="editPlayerFaction">
+                <option value="Aliança da Floresta">Aliança da Floresta</option>
+                <option value="Horda do Gelo">Horda do Gelo</option>
+            </select><br><br>
 
-            <button id="saveProfileBtn">Salvar Perfil</button>
-            <p id="profileEditMessage"></p>
-        </div>
-    </div>
-    <div id="footerMenu" style="display:none;">
-        <button id="homeBtn">Início</button> <button id="guildBtn">Guilda</button>
-        <button id="pvpBtn">PvP</button>
-        <button id="afkBtn">AFK</button>
-        <button id="miningBtn">Mineração</button>
-        <button id="castlesBtn">Castelos</button>
-    </div>
-    <div id="chatBubble" style="display:none;">
-        💬
-    </div>
-    <div id="floatingMessage"></div>
+            <button id="saveProfileBtn">Salvar Perfil</button>
+            <p id="profileEditMessage"></p>
+        </div>
+    </div>
+    <div id="footerMenu" style="display:none;">
+        <button id="homeBtn">Início</button> <button id="guildBtn">Guilda</button>
+        <button id="pvpBtn">PvP</button>
+        <button id="afkBtn">AFK</button>
+        <button id="miningBtn">Mineração</button>
+        <button id="castlesBtn">Castelos</button>
+    </div>
+    <div id="chatBubble" style="display:none;">
+        💬
+    </div>
+    <div id="floatingMessage"></div>
 
-    <div id="combatDamagePopup">
-        DANO: <span id="popupDamageAmount"></span>
-    </div>
+    <div id="combatDamagePopup">
+        DANO: <span id="popupDamageAmount"></span>
+    </div>
 
-    <div id="combatResultModal">
-        <div>
-            <h2 id="combatResultTitle"></h2>
-            <p id="combatResultMessage"></p>
-            <button id="confirmCombatResultBtn">Confirmar</button>
-        </div>
-    </div>
+    <div id="combatResultModal">
+        <div>
+            <h2 id="combatResultTitle"></h2>
+            <p id="combatResultMessage"></p>
+            <button id="confirmCombatResultBtn">Confirmar</button>
+        </div>
+    </div>
 
-    <script src="script.js"></script>
-    <script src="afk_script.js"></script>
+    <script src="script.js"></script>
+    <script src="afk_script.js"></script>
 </body>
 </html>

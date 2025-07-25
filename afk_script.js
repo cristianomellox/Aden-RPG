@@ -333,6 +333,13 @@ async function playerAttack() {
 
     window.showDamagePopup(damageDealt, isCritical); // Exibe o popup de dano
 
+    // NOVO: Adiciona e remove a classe 'blinking' para fazer a imagem piscar
+    monsterImage.classList.add('blinking');
+    setTimeout(() => {
+        monsterImage.classList.remove('blinking');
+    }, 200); // Remove a classe após 200ms (correspondendo à duração da animação)
+
+
     appendCombatLog(`Você atacou o monstro! Causou ${damageDealt} de dano.`);
     updateMonsterHealthDisplay();
 

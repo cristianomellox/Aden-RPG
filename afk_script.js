@@ -295,6 +295,13 @@ async function startAdventure() {
     remainingAttacksSpan.textContent = remainingAttacks;
     updateMonsterHealthDisplay();
 
+    // Lógica para mudar a cor/matiz da imagem do monstro baseada no estágio
+    // Estágio 1: hue-rotate(0deg) - cor original
+    // Outros estágios: Ajustar o hue-rotate. 360 graus para um ciclo completo de cores.
+    // Vamos usar um incremento de 20 graus por estágio para um efeito visível.
+    const hueRotation = (currentAfkStage - 1) * 20; // 0 para estágio 1, 20 para estágio 2, etc.
+    monsterImage.style.filter = `hue-rotate(${hueRotation}deg)`;
+
     appendCombatLog(`Um ${monsterName} apareceu! Prepare-se para o combate!`);
 }
 
@@ -332,6 +339,8 @@ async function playerAttack() {
     currentMonsterHealth -= damageDealt;
 
     window.showDamagePopup(damageDealt, isCritical); // Exibe o popup de dano
+
+    // A funcionalidade de tremor da imagem foi removida conforme sua solicitação.
 
     appendCombatLog(`Você atacou o monstro! Causou ${damageDealt} de dano.`);
     updateMonsterHealthDisplay();

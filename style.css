@@ -331,8 +331,8 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* Estilo para a imagem do monstro */
 #monsterImage {
     display: block;
-    width: 80px; /* Novo tamanho */
-    height: 160px; /* Novo tamanho */
+    width: 160px; /* Novo tamanho: 80px * 2 */
+    height: 320px; /* Novo tamanho: 160px * 2 */
     margin: 0 auto 10px auto;
     object-fit: contain;
     filter: none;

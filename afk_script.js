@@ -266,21 +266,21 @@ async function startAdventure() {
     afkMessage.textContent = "Iniciando aventura...";
     startAdventureBtn.disabled = true; // Desabilita o botão para evitar cliques múltiplos durante o combate
 
-    // Oculta informações AFK e mostra elementos de combate
-    afkXPGainSpan.closest('p').style.display = 'none'; // Oculta XP estimado
-    afkGoldGainSpan.closest('p').style.display = 'none'; // Oculta Ouro estimado
-    collectAfkRewardsBtn.style.display = 'none';
-    
-    // Garante que os elementos de combate são mostrados e os de AFK são ocultados
-    document.querySelectorAll('#afkContainer > p').forEach(p => {
-        if (!['afkStage', 'dailyAttemptsLeft', 'afkMessage'].includes(p.children[0]?.id)) {
-            p.style.display = 'none';
-        }
-    });
+    // Oculta informações AFK específicas e mostra elementos de combate
+    document.querySelector('#afkContainer h2').style.display = 'none'; // Oculta "Aventura AFK"
+    afkStageSpan.closest('p').style.display = 'none'; // Oculta "Estágio Atual de PvE"
+    dailyAttemptsLeftSpan.closest('p').style.display = 'none'; // Oculta "Tentativas de Estágio Restantes Hoje"
+    startAdventureBtn.style.display = 'none'; // Oculta "Iniciar Combate PvE"
 
+    afkTimeSpan.closest('p').style.display = 'none'; // Oculta Tempo AFK Acumulado
+    afkXPGainSpan.closest('p').style.display = 'none'; // Oculta XP Estimado
+    afkGoldGainSpan.closest('p').style.display = 'none'; // Oculta Ouro Estimado
+    collectAfkRewardsBtn.style.display = 'none'; // Oculta Coletar Recompensas
+    
+    // Garante que os elementos de combate são mostrados
     monsterHealthPercentageSpan.style.display = 'block';
     attackButton.style.display = 'block';
-    monsterImage.style.display = 'block'; // NOVO: Exibe a imagem do monstro
+    monsterImage.style.display = 'block';
     attackCountDisplay.style.display = 'block';
     combatLog.style.display = 'block';
 
@@ -297,10 +297,6 @@ async function startAdventure() {
     remainingAttacks = MAX_ATTACKS;
     remainingAttacksSpan.textContent = remainingAttacks;
     updateMonsterHealthDisplay();
-
-    // NOVO: Definir o nome do monstro (se você tiver um elemento para isso)
-    // Se não tiver, pode simplesmente registrar no log.
-    // document.getElementById('monsterNameDisplay').textContent = monsterName; // Se existir um elemento <p id="monsterNameDisplay">
 
     appendCombatLog(`Um ${monsterName} apareceu! Prepare-se para o combate!`);
 }
@@ -357,28 +353,27 @@ attackButton.addEventListener('click', playerAttack);
 async function endCombat(isVictory) {
     // Esconde elementos de combate
     attackButton.style.display = 'none';
-    monsterImage.style.display = 'none'; // NOVO: Oculta a imagem do monstro
+    monsterImage.style.display = 'none';
     attackCountDisplay.style.display = 'none';
     monsterHealthPercentageSpan.style.display = 'none';
     combatLog.style.display = 'none';
 
     // Reexibir elementos AFK que não são de combate
-    afkXPGainSpan.closest('p').style.display = 'block';
-    afkGoldGainSpan.closest('p').style.display = 'block';
-    collectAfkRewardsBtn.style.display = 'inline-block'; // Ou 'block' dependendo do seu estilo
-    
-    // Garante que os parágrafos relevantes da aventura AFK sejam reexibidos
-    document.querySelectorAll('#afkContainer > p').forEach(p => {
-        if (!p.id || ['afkStage', 'dailyAttemptsLeft', 'afkMessage', 'afkTime', 'afkXPGain', 'afkGoldGain'].some(id => p.querySelector(`#${id}`))) {
-            p.style.display = 'block';
-        }
-    });
+    document.querySelector('#afkContainer h2').style.display = 'block'; // Mostra "Aventura AFK"
+    afkStageSpan.closest('p').style.display = 'block'; // Mostra "Estágio Atual de PvE"
+    dailyAttemptsLeftSpan.closest('p').style.display = 'block'; // Mostra "Tentativas de Estágio Restantes Hoje"
+    startAdventureBtn.style.display = 'inline-block'; // Mostra "Iniciar Combate PvE"
+
+    afkTimeSpan.closest('p').style.display = 'block'; // Mostra Tempo AFK Acumulado
+    afkXPGainSpan.closest('p').style.display = 'block'; // Mostra XP Estimado
+    afkGoldGainSpan.closest('p').style.display = 'block'; // Mostra Ouro Estimado
+    collectAfkRewardsBtn.style.display = 'inline-block'; // Mostra Coletar Recompensas
 
     let title, message, onConfirm;
 
     if (isVictory) {
         title = "Vitória!";
-        message = `Você derrotou o monstro do Estágio ${currentAfkStage}!<br>Confirmar para avançar ao próximo estágio.`; // Mensagem ajustada
+        message = `Você derrotou o monstro do Estágio ${currentAfkStage}!<br>Confirmar para avançar ao próximo estágio.`;
 
         onConfirm = async () => {
             afkMessage.textContent = "Avançando para o próximo estágio...";

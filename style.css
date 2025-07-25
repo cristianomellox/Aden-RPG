@@ -10,7 +10,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* margin-top: 50px; REMOVIDO: será tratado com padding-top no main-content */
     padding-bottom: 100px; /* Mais espaço para o menu do rodapé */
     background-color: #f0f2f5;
     position: relative; /* Para posicionar elementos filhos com 'absolute' ou 'fixed' relativos ao body */
@@ -309,15 +308,14 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: white;
     font-size: 1.5em;
     font-weight: bold;
-    /* Alterado para centralizar com o texto ou imagem acima */
-    display: block; /* Garante que o botão ocupe uma linha inteira e possa ser centralizado com margin: auto */
-    margin: 10px auto 20px auto; /* Reduzida margem superior, adicionada margem inferior */
+    display: block;
+    margin: 10px auto 20px auto;
     border: 4px solid #d84315;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     transition: background-color 0.2s, transform 0.1s;
-    text-align: center; /* Centraliza o texto dentro do botão */
-    line-height: 100px; /* Alinha o texto verticalmente no centro do botão redondo */
-    padding: 0; /* Remove padding padrão que pode afetar o alinhamento do texto */
+    text-align: center;
+    line-height: 100px;
+    padding: 0;
 }
 
 #attackButton:hover {
@@ -332,16 +330,23 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 
 /* Estilo para a imagem do monstro */
 #monsterImage {
-    display: block; /* Para que a imagem ocupe uma linha inteira */
-    width: 60px; /* Largura especificada */
-    height: 120px; /* Altura especificada */
-    margin: 0 auto 10px auto; /* Centraliza horizontalmente e adiciona margem inferior */
-    object-fit: contain; /* Garante que a imagem se ajuste sem distorção */
-    /* Remove quaisquer estilos de efeito para "sem nenhum efeito" */
+    display: block;
+    width: 80px; /* Novo tamanho */
+    height: 160px; /* Novo tamanho */
+    margin: 0 auto 10px auto;
+    object-fit: contain;
     filter: none;
-    animation: none;
-    transition: none;
+    /* Animação de flutuação */
+    animation: float 2s ease-in-out infinite;
 }
+
+/* Keyframes para a animação de flutuação */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-2px); } /* 2px para cima e para baixo */
+    100% { transform: translateY(0px); }
+}
+
 
 /* Estilo para a porcentagem de HP do monstro */
 #monsterHealthPercentage {

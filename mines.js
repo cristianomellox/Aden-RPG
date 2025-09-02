@@ -6,6 +6,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.log("O jogador saiu da tela durante um combate. Recarregando o modal...");
       // Chama a função para re-entrar no combate, recarregando o modal
       startCombat(currentMineId);
+      // Toca o som de aviso
+      const soundToPlay = avisoTelaSound.cloneNode();
+      soundToPlay.volume = avisoTelaSound.volume;
+      soundToPlay.play();
+    }
+    // Lógica para quando o jogador retorna à tela
+    if (document.visibilityState === 'visible' && currentMineId) {
+      console.log("O jogador retornou para a tela do combate.");
+      // Toca o som de agradecimento
+      const soundToPlay = obrigadoSound.cloneNode();
+      soundToPlay.volume = obrigadoSound.volume;
+      soundToPlay.play();
     }
   });
 
@@ -13,11 +25,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
   const criticalHitSound = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
   const ambientMusic = new Audio("https://aden-rpg.pages.dev/assets/mina.mp3");
+  const avisoTelaSound = new Audio("https://aden-rpg.pages.dev/assets/avisotela.mp3");
+  const obrigadoSound = new Audio("https://aden-rpg.pages.dev/assets/obrigado.mp3");
 
   normalHitSound.volume = 0.06;
   criticalHitSound.volume = 0.1;
   ambientMusic.volume = 0.05;
   ambientMusic.loop = true;
+  avisoTelaSound.volume = 0.5; // Ajuste o volume se necessário
+  obrigadoSound.volume = 0.5; // Ajuste o volume se necessário
 
   function preloadSounds() {
     console.log("[mines] Pre-carregando sons...");
@@ -27,6 +43,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     criticalHitSound.pause();
     ambientMusic.play().catch(e => console.warn("Erro ao reproduzir música ambiente:", e));
     ambientMusic.pause();
+    avisoTelaSound.play().catch(e => console.warn("Erro ao reproduzir som de aviso:", e));
+    avisoTelaSound.pause();
+    obrigadoSound.play().catch(e => console.warn("Erro ao reproduzir som de agradecimento:", e));
+    obrigadoSound.pause();
   }
 
   // --- Supabase ---
@@ -770,6 +790,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (combatTimerInterval) clearInterval(combatTimerInterval);
   });
 
+  // Variável de estado para garantir que a chamada final seja única
+  let finalCallMade = false;
+
   // --- Lógica para o cronômetro da próxima sessão ---
   function updateCountdown() {
       const now = new Date();
@@ -788,19 +811,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       const diffInMs = nextSessionDate.getTime() - now.getTime();
       const diffInSeconds = Math.floor(diffInMs / 1000);
 
-      if (diffInSeconds <= 0) {
-          // Se a sessão já começou, reseta o cronômetro para a próxima hora par
+      // Lógica para chamadas a cada 5 segundos quando faltam 10 minutos ou menos
+      if (diffInSeconds > 0 && diffInSeconds <= 600) {
+          if (diffInSeconds % 5 === 0) {
+              console.log(`Faltam ${diffInSeconds}s. Chamando loadMines.`);
+              loadMines();
+          }
+          finalCallMade = false; // Reseta a flag para o próximo ciclo
+      }
+
+      // Lógica para a última chamada 5 segundos após a sessão iniciar
+      if (diffInSeconds === -5 && !finalCallMade) {
+          console.log("Chamando loadMines 5 segundos após o início da sessão.");
+          loadMines();
+          finalCallMade = true;
+      }
+      
+      // Lógica para atualizar o display
+      if (diffInSeconds > 0) {
+          const formattedTime = formatTime(diffInSeconds);
+          if (cycleInfoElement) {
+              cycleInfoElement.innerHTML = `Próxima sessão em: <strong>${formattedTime}</strong>`;
+          }
+      } else {
+          // Se a sessão já começou
           if (cycleInfoElement) {
               cycleInfoElement.innerHTML = `Sessão em andamento!`;
           }
-          setTimeout(updateCountdown, 1000); // Tenta atualizar novamente em 1s
-          return;
-      }
-
-      const formattedTime = formatTime(diffInSeconds);
-
-      if (cycleInfoElement) {
-          cycleInfoElement.innerHTML = `Próxima sessão em: <strong>${formattedTime}</strong>`;
       }
   }
 

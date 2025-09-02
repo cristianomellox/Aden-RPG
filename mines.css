@@ -1,0 +1,461 @@
+/* Estilos da barra superior e layout geral (copiados do inventory.css) */
+#playerTopBar {
+    display: flex;
+    position: fixed;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border-bottom: 2px solid #555;
+}
+
+.top-bar-link {
+    color: #e0dccc;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+}
+
+#pageTitle {
+    font-size: 1.2em;
+    font-weight: bold;
+    flex-grow: 1;
+    text-align: center;
+}
+
+#mainContainer {
+    max-width: 600px;
+    min-width: 90vw;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #2e2e2e;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Estilos específicos das Minas */
+#minesContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+    padding: 10px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    
+}
+
+.mine-card {
+    background-color: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://aden-rpg.pages.dev/assets/mina.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    
+}
+
+.mine-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 10px rgba(0,0,0,0.5);
+}
+
+.mine-status {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-top: 10px;
+}
+
+.status-idle { color: #4CAF50; } /* Verde */
+.status-occupied { color: #FFC107; } /* Amarelo */
+.status-exhausted { color: #f44336; } /* Vermelho */
+.status-disputing { color: #2196F3; } /* Azul */
+
+/* Estilos do Modal de Combate */
+.modal-overlay {
+    position: fixed;
+  
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://aden-rpg.pages.dev/assets/minacombate.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+#confirmModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%) !important;
+  z-index: 1000;
+}
+#confirmModal .modal-content {
+  background: #2e2e2e !important;
+  background-image: none !important;
+  text-align: center;
+  margin: 15px 0;
+  white-space: normal;
+  line-height: 1.4em;
+  width: 100%;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 30px;
+    border-radius: 10px;
+    max-width: 450px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0,0,0,0.7);
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('https://aden-rpg.pages.dev/assets/minacombate.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+}
+
+.action-btn {
+    background-color: none;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 12px 24px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+    background-color: none;
+}
+
+#monsterArea {
+    margin: 20px 0;
+}
+
+#monsterImage {
+    width: 180px;
+    height: 240px;
+}
+
+#monsterHpBar {
+    width: 100%;
+    height: 30px;
+    background-color: #333;
+    border-radius: 10px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+#monsterHpFill {
+    height: 100%;
+    background-color: red;
+    transition: width 0.3s;
+}
+
+#damageLog {
+    text-align: left;
+    margin-top: 20px;
+}
+
+#damageList {
+    list-style: none;
+    padding: 0;
+    max-height: 150px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.1);
+    border-radius: 5px;
+    padding: 10px;
+}
+
+#damageList li {
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+p {
+  color: white;
+}
+
+
+/* ... [Restante do código CSS] ... */
+
+/* Estilos para o ranking de dano */
+#damageRankingContainer {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#damageRankingList {
+    list-style-type: none;
+    padding: 0;
+    max-height: 200px; /* Limita a altura para evitar que o modal fique muito grande */
+    overflow-y: auto;
+    text-align: left; /* Alinha o texto das entradas de volta à esquerda */
+    display: inline-block; /* Permite que o ul seja centralizado */
+}
+
+#damageRankingList li {
+    background-color: #3e3e3e;
+    border: 1px solid #555;
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 250px;
+}
+
+#damageRankingList li .player-name {
+    font-weight: bold;
+    color: #ffd700;
+}
+
+#damageRankingList li .player-damage {
+    color: #fff;
+}
+
+/* Estilos para os números de dano flutuantes */
+#monsterArea {
+    position: relative; /* Adicionado para posicionar os números de dano flutuantes corretamente */
+    margin: 20px 0;
+}
+
+.damage-number {
+  font-family: Georgia, serif;
+    position: absolute;
+    font-size: 40px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 2px 2px 4px #000;
+    animation: floating-damage 1.5s ease-out forwards;
+}
+
+.crit-damage-number {
+  font-family: Georgia, serif;
+  font-size: 50px;
+    color: red;
+    /* Contorno amarelo */
+    text-shadow:
+        -1px -1px 0 yellow,
+        1px -1px 0 yellow,
+        -1px 1px 0 yellow,
+        1px 1px 0 yellow,
+        -2px -2px 0 yellow,
+        2px -2px 0 yellow,
+        -2px 2px 0 yellow,
+        2px 2px 0 yellow;
+    position: absolute;
+    left: 50%;
+    animation: floating-damage-crit 1.5s ease-out forwards;
+}
+
+@keyframes floating-damage {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+}
+
+@keyframes floating-damage-crit {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1.0);
+    }
+    50% {
+        transform: translateY(-25px) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-50px) scale(1.0);
+    }
+}
+#monsterHpBar {
+            position: relative; /* Isso é crucial para que o texto fique dentro da barra */
+        }
+        #monsterHpTextOverlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            vertical-align: -4px;
+            transform: translate(-50%, -50%);
+            color: yellow;
+            font-weight: bold;
+            text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+            white-space: nowrap;
+            z-index: 2; 
+        }
+#combatTimer {
+  font-size: 30px;
+  color: blue;
+  text-shadow:
+        -1px -1px 0 white,
+        1px -1px 0 white,
+        -1px 1px 0 white,
+        1px 1px 0 white,
+        -2px -2px 0 white,
+        2px -2px 0 white,
+        -2px 2px 0 white,
+        2px 2px 0 white;
+}
+
+.mine-card.aberta    { 
+  border: 4px solid white; 
+}
+.mine-card.disputando { 
+  border: 4px solid #3399ff; 
+}
+.mine-card.ocupada   {
+  border: 4px solid #9f7f00;
+}
+.mine-card.esgotada  {
+  border: 4px solid #ff3333;
+  background-image: url('https://aden-rpg.pages.dev/assets/minaesgotada.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+}
+.mine-card.aberta p:nth-of-type(1) {
+  color: white;
+  font-weight: bold;
+}
+.mine-card.disputando p:nth-of-type(1) {
+  color: #3399ff;
+  font-weight: bold;
+}
+.mine-card.ocupada p:nth-of-type(1) {
+  color: #ffcc00;
+  font-weight: bold;
+}
+.mine-card.esgotada p:nth-of-type(1) {
+  color: #ff8c8c;
+  font-weight: bold;
+  text-shadow:
+        1px 1px 2px #000,
+        -1px -1px 2px #000,
+        1px -1px 2px #000,
+        -1px 1px 2px #000, 
+        0 0 4px #000,
+        0 0 8px #000;
+}
+
+#buyAttackBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -6px;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+}
+#buyModal .modal-content p {
+  text-align: center;
+  margin: 15px 0;
+  white-space: normal;
+  line-height: 1.4em;
+  width: 100%;
+}
+.confirmabuy-btn {
+  flex: 0 0 auto;
+  min-width: 160px;
+  max-width: 170px;
+  padding: 8px 14px;
+  font-size: 0.80em!important;
+}
+#buyDecreaseQtyBtn, #buyIncreaseQtyBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+}
+#buyModal .modal-content {
+ background: #2e2e2e !important;
+  background-image: none !important; 
+  width: 97%;
+}
+
+#playerTopBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border-bottom: 2px solid #555;
+}
+
+.top-bar-link {
+    color: #e0dccc;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+}
+
+#pageTitle {
+    font-size: 1.2em;
+    font-weight: bold;
+    flex-grow: 1;
+    text-align: center;
+}
+
+#refreshBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}

@@ -1,14 +1,160 @@
 <!DOCTYPE html>
+
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aden RPG</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="style.css">    
-   <h1> EM BREVE!</h1> 
-
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Aden RPG</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="style.css" rel="stylesheet"/>
 </head>
 <body>
+<div id="playerTopBar">
+<div id="playerAvatarContainer">
+<img alt="Avatar" id="playerAvatar" src=""/>
+<span id="playerLevel">Nv. 1</span>
+</div>
+<div id="playerTopInfo">
+<div id="playerNameRow">
+<span id="playerNameText">Nome</span>
+<img alt="Editar" id="editProfileIcon" src="https://aden-rpg.pages.dev/edit_peefil.webp"/>
+</div>
+<div id="playerEmblemsRow">
+<div id="playerCombatPower">
+<img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="playerPower">0</span></div>
+</div>
+<div id="playerStatsRow">
+<div id="playerGold"><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 17px; height: 17px"> 0</div>
+<div id="playerCrystals"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 17px; height: 17px"> 0</div></div>
+<div id="emblemas">
+<span class="emblema">👑</span>
+<span class="emblema">⚔️ ️ </span>
+<span class="emblema">🏅️ </span>
+<span class="emblema">🛡️ </span>
+</div>
+<div id="xpBarContainer">
+<div id="xpBar"></div>
+<div id="xpText">0 / 100</div>
+</div>
+</div>
+</div>
+<div id="authContainer">
+<div id="caixaLogin">
+<h2>Login / Cadastro</h2>
+<input id="emailInput" placeholder="Seu e-mail" type="email"/>
+<input id="passwordInput" placeholder="Sua senha" type="password"/>
+<div id="otpInputContainer" style="display:none;">
+<input id="otpInput" placeholder="Código de confirmação" type="text"/>
+<button id="verifyOtpBtn">Confirmar Código</button>
+</div>
+<div id="btnReg">
+<button id="signInBtn">Entrar</button>
+<button id="signUpBtn">Registrar</button>
+</div>
+<a style="background-color: rgba(51, 51, 51, 0.8); color: white; border-radius: 5px; position: flex; width: 85vw;" href="#" id="forgotPasswordLink">Esqueceu a senha?</a>
+
+<div id="forgotPasswordModal" class="modal-container" style="display: none;">
+    <div class="modal-content">
+        <h2>Recuperação de Senha</h2>
+        <p>Insira seu e-mail para receber o código de recuperação.</p>
+        <input type="email" id="forgotPasswordEmailInput" placeholder="Seu e-mail" required>
+        <button id="sendRecoveryCodeBtn">Enviar Código</button>
+        <button id="closeForgotPasswordModalBtn">Fechar</button>
+        <p id="forgotPasswordMessage"></p>
+    </div>
+</div>
+
+<div id="verifyRecoveryModal" class="modal-container" style="display: none;">
+    <div class="modal-content">
+        <h2>Verificar Código</h2>
+        <p>Digite o código de recuperação que foi enviado para o seu e-mail e sua nova senha. Se você não recebeu, verifique a caixa de spam do e-mail.</p>
+        <input type="email" id="recoveryEmailDisplay" placeholder="E-mail" required readonly>
+        <input type="text" id="recoveryCodeInput" placeholder="Código de 6 dígitos" required>
+        <input type="password" id="newPasswordInput" placeholder="Nova senha" required>
+        <button id="updatePasswordBtn">Atualizar Senha</button>
+        <button id="closeVerifyRecoveryModalBtn">Fechar</button>
+        <p id="verifyRecoveryMessage"></p>
+    
+</div></div>
+<p id="authMessage"></p>
+ <p style="background-color: rgba(51, 51, 51, 0.8); text-align: justify; border-radius: 5px; position: flex; width: 85vw;">Ao se registrar você concorda com os Termos de Uso e Política de Privacidade.</p>
+</div>
+</div>
+<div id="welcomeContainer" style="display:none;">
+<h2>Bem-vindo(a) de volta, Aventureiro(a)!</h2>
+<p>Prepare-se para novas aventuras em Aden!</p>
+<p>Clique nos botões do menu abaixo para explorar.</p>
+</div>
+<div id="playerInfoDiv" style="display:none;">
+<h2>Informações do Jogador</h2>
+</div>
+
+<div id="chatContainer" style="display:none;">
+<h2>Chat Global</h2>
+<div id="chatBox"></div>
+<input id="chatInput" placeholder="Digite sua mensagem..." type="text"/>
+<button id="sendChatBtn">Enviar</button>
+</div>
+<div id="profileEditModal">
+<div>
+<h2>Bem-vindo(a), Aventureiro(a)!</h2>
+<label for="editPlayerName">Nome do Jogador:</label><br/>
+<input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text"/><br/>
+<label for="editPlayerFaction">Escolha sua Facção:</label><br/> <select id="editPlayerFaction">
+<option value="Aliança da Floresta">Aliança da Floresta</option>
+<option value="Guerreiros do Gelo">Guerreiros do Gelo</option>
+<option value="Sentinelas do Fogo">Sentinelas do Fogo</option>
+<option value="Horda Sombria">Horda Sombria</option>
+</select><br/>
+<label>Escolha seu Avatar:</label><br/>
+<div class="avatar-grid" id="avatarSelection"></div>
+<input id="selectedAvatarUrl" type="hidden"/>
+<button id="saveProfileBtn">Salvar Perfil</button>
+<button id="closeProfileModalBtn">Fechar</button>
+<p id="profileEditMessage"></p>
+</div>
+</div>
+<div id="footerMenu" style="display:none;">
+<button id="homeBtn">Início</button> <button id="guildBtn">Guilda</button>
+<button id="pvpBtn">PvP</button>
+<button id="afkBtn" onclick="window.location.href='afk.html';">AFK</button>
+<button id="miningBtn">Mineração</button>
+<button id="castlesBtn">Castelos</button>
+</div>
+<div id="chatBubble" style="display:none;">
+        💬
+    </div>
+<div id="floatingMessage"></div>
+<div id="combatDamagePopup">
+<span id="popupDamageAmount"></span>
+</div>
+<div id="combatResultModal">
+<div>
+<h2 id="combatResultTitle"></h2>
+<p id="combatResultMessage"></p>
+<button id="confirmCombatResultBtn">Confirmar</button>
+</div>
+</div>
+<script src="script.js"></script>
+
+<script src="number_format.js"></script>
+<div class="modal" id="playerInfoModal" style="display: none;">
+<div class="modal-content">
+<h2>Informações do Jogador</h2>
+<div id="modalPlayerInfoContent"></div>
+<button id="closePlayerInfoBtn">Fechar</button>
+</div>
+</div>
+<div id="loading-overlay">
+  <div id="loading-container">
+    <h2>Carregando...</h2>
+    <div id="progress-bar-container">
+      <div id="progress-bar"></div>
+    </div>
+    <span id="progress-text">0%</span>
+  </div>
+</div>
+<script src="loading.js"></script>
+<script src="perfil_edit.js"></script>
 </body>
 </html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minas de Cristal - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="mines.css" />
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <span id="pageTitle">Minas de Cristal</span>
+        <a href="#" class="top-bar-link" id="refreshBtn" title="Recarregar">
+            <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
+        </a>
+    </div>
+
+    <div id="mainContainer">
+        <div id="mineHeader">
+           <p><strong>Guilda Dominante:</strong><br>
+           Nenhuma.</p>
+            <p id="cycleInfo"></p>
+        </div>
+
+        <div id="minesContainer">
+            </div>
+    </div>
+
+    <div id="combatModal" class="modal-overlay" style="display: none;">
+    
+        <div class="modal-content">
+            <h3 id="combatModalTitle">
+              
+              Disputa pela</h3>
+            <div id="combatInfo">
+                <p><span id="combatTimer">5:00</span></p>
+                
+            </div>
+            
+            <div id="monsterArea">
+                <img id="monsterImage" src="https://aden-rpg.pages.dev/assets/monstromina1.webp" alt="Monstro da Mina">
+                <div id="monsterHpBar">
+                    <div id="monsterHpFill"></div>
+                    <span id="monsterHpTextOverlay"></span>
+                </div>
+            </div>
+
+            <button id="attackBtn" class="action-btn">Atacar!</button>
+            <p>Ataques: <span id="playerAttacks"></span><button id="buyAttackBtn" class="btn btn-gold">+</button><br>
+  <span id="attackCooldown"></span>
+  </p>
+            <div id="damageRankingContainer">
+                <h4></h4>
+                <ul id="damageRankingList"></ul>
+            </div>
+              <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+    <button id="backBtn" class="action-btn">Voltar</button>
+</div>
+        </div>
+    </div>
+
+    
+    <div id="buyModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Confirmar Compra</h3>
+            <p id="buyPlayerGoldInfo"><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 17px; height: 17px"></p>
+            <p>Os ataques só poderão ser usados na sessão atual, eles não serão acumulados para a próxima sessão.</p>
+
+            <p>Quantidade de ataques:</p>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
+              <div style="background: #333; border-radius: 8px; border: white; width: 140px; justify-content: center; align-items: center;">
+                <button id="buyDecreaseQtyBtn" class="action-btn">-</button>
+                <span id="buyAttackQty" style="font-size: 2em; color: yellow;">1</span>
+                <button id="buyIncreaseQtyBtn" class="action-btn">+</button>
+            </div>
+            </div>
+            <p id="buyAttackCostInfo">Custo total: 0 Ouro</p>
+            <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <button id="buyCancelBtn" class="action-btn confirmabuy-btn">Cancelar</button>
+                <button id="buyConfirmBtn" class="action-btn confirmabuy-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <p id="confirmMessage"></p>
+            <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <button id="confirmCancelBtn" class="action-btn">Cancelar</button>
+                <button id="confirmActionBtn" class="action-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="mines.js"></script>
+</body>
+</html>

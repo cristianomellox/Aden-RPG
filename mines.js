@@ -45,6 +45,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const MINES_REFRESH_MS = 60000;
   let minesRefreshInterval = null;
 
+  // Ranking auto-refresh interval (during combat)
+  let rankingInterval = null;
+  const RANKING_REFRESH_MS = 30000; // 30 seconds as requested
+
   // --- DOM ---
   const minesContainer = document.getElementById("minesContainer");
   const combatModal = document.getElementById("combatModal");
@@ -67,7 +71,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const buyAttackQtySpan = document.getElementById("buyAttackQty");
   const buyAttackCostInfo = document.getElementById("buyAttackCostInfo");
   const buyDecreaseQtyBtn = document.getElementById("buyDecreaseQtyBtn");
-  const buyIncreaseQtyBtn = document = document.getElementById("buyIncreaseQtyBtn");
+  const buyIncreaseQtyBtn = document.getElementById("buyIncreaseQtyBtn");
   const buyCancelBtn = document.getElementById("buyCancelBtn");
   const buyConfirmBtn = document.getElementById("buyConfirmBtn");
 
@@ -147,17 +151,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function fetchAndRenderDamageRanking() {
     if (!currentMineId || !damageRankingList) return;
-    const { data, error } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-    if (error) {
-      console.warn("[mines] get_mine_damage_ranking falhou:", error.message);
-      return;
-    }
-    damageRankingList.innerHTML = "";
-    for (const row of (data || [])) {
-      const li = document.createElement("li");
-      li.innerHTML = `<span class="player-name">${esc(row.player_name)}</span>
-                      <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>`;
-      damageRankingList.appendChild(li);
+    try {
+      const { data, error } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
+      if (error) {
+        console.warn("[mines] get_mine_damage_ranking falhou:", error.message);
+        return;
+      }
+      damageRankingList.innerHTML = "";
+      for (const row of (data || [])) {
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="player-name">${esc(row.player_name)}</span>
+                        <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>`;
+        damageRankingList.appendChild(li);
+      }
+    } catch (e) {
+      console.error("[mines] fetchAndRenderDamageRanking erro:", e);
     }
   }
 
@@ -180,6 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (user) {
       const { data: player, error } = await supabase.from('players').select('gold, crystals').eq('id', user.id).single();
       if (player) {
+        // optional local updates
       }
     }
   }
@@ -231,8 +240,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       const expiradas = (mines || []).filter(m => m.status === "disputando" && m.competition_end_time && new Date(m.competition_end_time) <= now);
       if (expiradas.length) {
         console.log("[mines] Fechando combates expirados:", expiradas.map(m => m.id).join(","));
+        // call end_mine_combat_session for each expired cavern (the SQL handles idempotency/cleanup)
         await Promise.all(expiradas.map(m => supabase.rpc("end_mine_combat_session", { _mine_id: m.id })));
-        
+
         // Recarrega a lista após resolver expiradas
         const res2 = await supabase
           .from("mining_caverns")
@@ -347,7 +357,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       
       if (combatModal) combatModal.style.display = "flex";
-      fetchAndRenderDamageRanking();
+      // busca ranking imediatamente
+      await fetchAndRenderDamageRanking();
+      
+      // INÍCIO DA ALTERAÇÃO
+      // Inicia auto-refresh do ranking enquanto o modal de combate estiver aberto
+      if (rankingInterval) clearInterval(rankingInterval);
+      rankingInterval = setInterval(fetchAndRenderDamageRanking, RANKING_REFRESH_MS);
+      // FIM DA ALTERAÇÃO
+
       ambientMusic.play(); // Inicia a música de ambiente
 
     } catch (e) {
@@ -380,12 +398,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function onCombatTimerEnd() {
     try {
       if (!currentMineId) return;
+      // chama o backend para encerrar a sessão e obter o dono final
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
-      if (error) throw error;
-      if (data?.new_owner_id) {
-        showModalAlert(data.new_owner_id === userId ? "Você causou o maior dano e conquistou a mina!" : "O tempo acabou! Outro jogador conquistou a mina.");
+      if (error) {
+        console.error("[mines] end_mine_combat_session erro:", error);
+        showModalAlert("Erro ao encerrar a sessão de combate.");
       } else {
-        showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
+        const newOwnerId = data?.new_owner_id || null;
+        const newOwnerName = data?.new_owner_name || null;
+        if (newOwnerId) {
+          if (newOwnerId === userId) {
+            showModalAlert("Você causou o maior dano e conquistou a mina!");
+          } else {
+            showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
+          }
+        } else {
+          showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
+        }
       }
     } catch (e) {
       console.error("[mines] onCombatTimerEnd erro:", e);
@@ -478,6 +507,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       displayDamageNumber(data.damage_dealt, !!data.is_crit);
       updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
+      // atualiza ranking local imediatamente após o ataque
       fetchAndRenderDamageRanking();
 
       // 🎵 Toca o som de ataque usando cloneNode() para evitar bloqueio
@@ -503,11 +533,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       if (data.owner_set) {
+        // caso a sessão tenha sido finalizada por esse ataque (monstro morreu)
         await new Promise(r => setTimeout(r, 1200));
-        if (data.new_owner_id === userId) {
-          showModalAlert("Você derrotou o monstro e conquistou a mina!");
-        } else if (data.new_owner_id) {
-          showModalAlert("O monstro foi derrotado por outro jogador!");
+        if (data.new_owner_id) {
+          if (data.new_owner_id === userId) {
+            showModalAlert("Você derrotou o monstro e conquistou a mina!");
+          } else {
+            showModalAlert(`O monstro foi derrotado! ${data.new_owner_name || 'Outro jogador'} conquistou a mina.`);
+          }
         } else {
           showModalAlert("O monstro foi derrotado, mas a mina foi resetada.");
         }
@@ -540,6 +573,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (buyAttackBtn) {
         buyAttackBtn.disabled = true;
     }
+
+    // limpa intervalo de ranking
+    if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
   }
 
   // --- PvP: desafiar dono ---

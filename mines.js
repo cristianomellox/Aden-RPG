@@ -1,6 +1,10 @@
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[mines] DOM ready");
+history.pushState(null, null, location.href);
 
+window.addEventListener('popstate', function(event) {
+    history.pushState(null, null, location.href);
+});
   // --- Sons ---
   const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
   const criticalHitSound = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");

@@ -1,26 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[mines] DOM ready");
 
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === 'hidden' && currentMineId) {
-      console.log("O jogador saiu da tela durante um combate. Recarregando o modal...");
-      // Chama a função para re-entrar no combate, recarregando o modal
-      startCombat(currentMineId);
-      // Toca o som de aviso
-      const soundToPlay = avisoTelaSound.cloneNode();
-      soundToPlay.volume = avisoTelaSound.volume;
-      soundToPlay.play();
-    }
-    // Lógica para quando o jogador retorna à tela
-    if (document.visibilityState === 'visible' && currentMineId) {
-      console.log("O jogador retornou para a tela do combate.");
-      // Toca o som de agradecimento
-      const soundToPlay = obrigadoSound.cloneNode();
-      soundToPlay.volume = obrigadoSound.volume;
-      soundToPlay.play();
-    }
-  });
-
   // --- Sons ---
   const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
   const criticalHitSound = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
@@ -35,19 +15,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   avisoTelaSound.volume = 0.5; // Ajuste o volume se necessário
   obrigadoSound.volume = 0.5; // Ajuste o volume se necessário
 
-  function preloadSounds() {
-    console.log("[mines] Pre-carregando sons...");
-    normalHitSound.play().catch(e => console.warn("Erro ao reproduzir som normal:", e));
-    normalHitSound.pause();
-    criticalHitSound.play().catch(e => console.warn("Erro ao reproduzir som crítico:", e));
-    criticalHitSound.pause();
-    ambientMusic.play().catch(e => console.warn("Erro ao reproduzir música ambiente:", e));
-    ambientMusic.pause();
-    avisoTelaSound.play().catch(e => console.warn("Erro ao reproduzir som de aviso:", e));
-    avisoTelaSound.pause();
-    obrigadoSound.play().catch(e => console.warn("Erro ao reproduzir som de agradecimento:", e));
-    obrigadoSound.pause();
-  }
+  // Desbloqueia a reprodução de áudio no primeiro clique do usuário
+  // Isso é essencial para que os sons de aviso e retorno possam tocar
+  document.addEventListener("click", () => {
+    avisoTelaSound.play().then(() => {
+      avisoTelaSound.pause();
+      avisoTelaSound.currentTime = 0;
+    }).catch(() => {});
+    
+    obrigadoSound.play().then(() => {
+      obrigadoSound.pause();
+      obrigadoSound.currentTime = 0;
+    }).catch(() => {});
+  }, { once: true });
+  
+  document.addEventListener("visibilitychange", () => {
+    if (!currentMineId) {
+      return;
+    }
+
+    if (document.visibilityState === 'hidden') {
+      console.log("O jogador saiu da tela durante um combate. Recarregando o modal...");
+      startCombat(currentMineId);
+      avisoTelaSound.currentTime = 0;
+      avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
+    }
+    
+    if (document.visibilityState === 'visible') {
+      console.log("O jogador retornou para a tela do combate.");
+      obrigadoSound.currentTime = 0;
+      obrigadoSound.play().catch(e => console.warn("Falha ao tocar obrigado:", e));
+    }
+  });
+
 
   // --- Supabase ---
   const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -308,7 +308,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const start = new Date(mine.open_time || new Date());
         const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
         const crystals = Math.min(1500, Math.floor(seconds * (1500.0 / 6600))); // UI apenas
-        collectingHtml = `<p>Coletando: ${crystals} cristais</p>`;
+        collectingHtml = `<p>${crystals} cristais</p>`;
       }
 
       let isClickable = true;
@@ -331,12 +331,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       card.innerHTML = `
         <h3 style="color: yellow;">${esc(mine.name)}</h3>
         <p>${esc(mine.status || "Fechada")}</p>
-        ${ownerName ? `<p><strong>Dono:</strong> ${esc(ownerName)}</p>` : "<p><strong>Sem Dono</strong></p>"}
+        ${ownerName ? `<p><strong>${esc(ownerName)}</strong></p>` : "<p><strong>Sem Dono</strong></p>"}
         ${collectingHtml}`;
       
       if (isClickable) {
         card.addEventListener("click", () => {
-          preloadSounds(); // Chama a função para pré-carregar os sons no primeiro clique
           if (actionType === "startCombat") {
             startCombat(mine.id);
           } else if (actionType === "challengeMine") {
@@ -790,9 +789,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (combatTimerInterval) clearInterval(combatTimerInterval);
   });
 
-  // Variável de estado para garantir que a chamada final seja única
-  let finalCallMade = false;
-
   // --- Lógica para o cronômetro da próxima sessão ---
   function updateCountdown() {
       const now = new Date();
@@ -810,34 +806,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const diffInMs = nextSessionDate.getTime() - now.getTime();
       const diffInSeconds = Math.floor(diffInMs / 1000);
-
-      // Lógica para chamadas a cada 5 segundos quando faltam 10 minutos ou menos
-      if (diffInSeconds > 0 && diffInSeconds <= 600) {
-          if (diffInSeconds % 5 === 0) {
-              console.log(`Faltam ${diffInSeconds}s. Chamando loadMines.`);
-              loadMines();
-          }
-          finalCallMade = false; // Reseta a flag para o próximo ciclo
+      
+      // Recarrega quando faltarem 9 minutos e 57 segundos (597 segundos)
+      if (diffInSeconds === 597) {
+          console.log("Faltam 9m57s! Recarregando a página...");
+          window.location.reload();
       }
 
-      // Lógica para a última chamada 5 segundos após a sessão iniciar
-      if (diffInSeconds === -5 && !finalCallMade) {
-          console.log("Chamando loadMines 5 segundos após o início da sessão.");
-          loadMines();
-          finalCallMade = true;
+      const formattedTime = formatTime(diffInSeconds);
+
+      if (cycleInfoElement) {
+          cycleInfoElement.innerHTML = `Próxima sessão em: <strong>${formattedTime}</strong>`;
       }
       
-      // Lógica para atualizar o display
-      if (diffInSeconds > 0) {
-          const formattedTime = formatTime(diffInSeconds);
-          if (cycleInfoElement) {
-              cycleInfoElement.innerHTML = `Próxima sessão em: <strong>${formattedTime}</strong>`;
-          }
-      } else {
-          // Se a sessão já começou
-          if (cycleInfoElement) {
-              cycleInfoElement.innerHTML = `Sessão em andamento!`;
-          }
+      // Recarrega 3 segundos após o início da sessão (quando diffInSeconds é -3)
+      if (diffInSeconds === -3) {
+          console.log("Sessão iniciada há 3s! Recarregando a página...");
+          window.location.reload();
       }
   }
 

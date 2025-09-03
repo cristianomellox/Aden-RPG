@@ -459,3 +459,36 @@ p {
     cursor: pointer;
     padding: 0;
 }
+/* NOVO: Estilos para o avatar do dono da mina */
+.mine-owner-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 10px;
+  color: white;
+  font-weight: bold;
+  background: rgba(0,0,0,0.4);
+  border-radius: 8px;
+}
+
+.owner-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid yellow;
+  object-fit: cover;
+}
+
+.ranking-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ranking-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}

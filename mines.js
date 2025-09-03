@@ -188,8 +188,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       damageRankingList.innerHTML = "";
       for (const row of (data || [])) {
         const li = document.createElement("li");
-        li.innerHTML = `<span class="player-name">${esc(row.player_name)}</span>
-                        <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>`;
+        li.innerHTML = `
+  <div class="ranking-entry">
+    <img src="${esc(row.avatar_url || '/assets/default_avatar.png')}" 
+         alt="Avatar" 
+         class="ranking-avatar">
+    <span class="player-name">${esc(row.player_name)}</span>
+    <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>
+  </div>`;
         damageRankingList.appendChild(li);
       }
     } catch (e) {
@@ -281,12 +287,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // --- ALTERAÇÃO AQUI: Buscar nomes dos donos ANTES de renderizar ---
+      // --- ALTERAÇÃO AQUI: Buscar nomes e avatares dos donos ANTES de renderizar ---
       const ownerIds = Array.from(new Set((mines || []).map(m => m.owner_player_id).filter(Boolean)));
       const ownersMap = {};
       if (ownerIds.length) {
-        const { data: ownersData } = await supabase.from("players").select("id, name").in("id", ownerIds);
-        (ownersData || []).forEach(p => ownersMap[p.id] = p.name);
+        // Adicionando avatar_url à seleção
+        const { data: ownersData } = await supabase.from("players").select("id, name, avatar_url").in("id", ownerIds);
+        (ownersData || []).forEach(p => ownersMap[p.id] = p);
       }
       
       renderMines(mines || [], ownersMap);
@@ -302,7 +309,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderMines(mines, ownersMap) {
     minesContainer.innerHTML = "";
     for (const mine of mines) {
-      const ownerName = mine.owner_player_id ? (ownersMap[mine.owner_player_id] || "Desconhecido") : null;
+      // Pega o objeto do dono para acessar nome e avatar
+      const owner = ownersMap[mine.owner_player_id];
+      const ownerName = owner ? (owner.name || "Desconhecido") : null;
+      // Adiciona uma nova variável para o HTML do avatar
+      const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
+
       let collectingHtml = "";
       if (mine.owner_player_id) {
         const start = new Date(mine.open_time || new Date());
@@ -328,10 +340,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const card = document.createElement("div");
       card.className = `mine-card ${mine.status || ""} ${isClickable ? 'clickable' : ''} ${cardClass}`;
+      // AQUI, A ESTRUTURA DO HTML FOI ALTERADA PARA INCLUIR O AVATAR E O NOME JUNTOS
       card.innerHTML = `
         <h3 style="color: yellow;">${esc(mine.name)}</h3>
         <p>${esc(mine.status || "Fechada")}</p>
-        ${ownerName ? `<p><strong>${esc(ownerName)}</strong></p>` : "<p><strong>Sem Dono</strong></p>"}
+        ${ownerName ? `
+          <div class="mine-owner-container">
+            ${ownerAvatarHtml}
+            <span>${esc(ownerName)}</span>
+          </div>`
+        : "<p><strong>Sem Dono</strong></p>"}
         ${collectingHtml}`;
       
       if (isClickable) {
@@ -347,6 +365,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       minesContainer.appendChild(card);
     }
   }
+  // Função utilitária para converter status para texto amigável
+  function getStatusText(status) {
+    switch(status) {
+        case "aberta": return "Mina Aberta";
+        case "dominada": return "Dominada";
+        case "disputando": return "Em Disputa!";
+        case "esgotada": return "Esgotada";
+        default: return "Desconhecido";
+    }
+  }
+
 
   // --- Entrar/Iniciar Combate ---
   async function startCombat(mineId) {

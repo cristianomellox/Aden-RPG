@@ -70,12 +70,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   let combatTimeLeft = 0;
 
   // Refresh da página de minas
-  const MINES_REFRESH_MS = 60000;
+  const MINES_REFRESH_MS = 20000; // 60 segundos
   let minesRefreshInterval = null;
 
   // Ranking auto-refresh interval (during combat)
   let rankingInterval = null;
-  const RANKING_REFRESH_MS = 30000; // 30 seconds as requested
+  const RANKING_REFRESH_MS = 20000; // 20 seconds as requested
 
   // --- DOM ---
   const minesContainer = document.getElementById("minesContainer");
@@ -476,7 +476,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error("[mines] onCombatTimerEnd erro:", e);
     } finally {
       resetCombatUI();
-      await loadMines();
+      // --- Supabase Realtime ---
+    console.log("[mines] Iniciando subscriptions Realtime...");
+
+    // Escuta mudanças no ranking (dano dos jogadores)
+    const rankingChannel = supabase.channel("damage-changes")
+      .on("postgres_changes", 
+          { event: "*", schema: "public", table: "mining_session_damage" }, 
+          (payload) => {
+            console.log("[mines] Evento ranking:", payload);
+            if (currentMineId) {
+              fetchAndRenderDamageRanking(); // atualiza ranking em tempo real
+            }
+          }
+      ).subscribe();
+    await loadMines();
     }
   }
 
@@ -836,22 +850,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       const diffInMs = nextSessionDate.getTime() - now.getTime();
       const diffInSeconds = Math.floor(diffInMs / 1000);
       
-      // Recarrega quando faltarem 9 minutos e 57 segundos (597 segundos)
-      if (diffInSeconds === 597) {
-          console.log("Faltam 9m57s! Recarregando a página...");
-          window.location.reload();
-      }
-
       const formattedTime = formatTime(diffInSeconds);
 
       if (cycleInfoElement) {
           cycleInfoElement.innerHTML = `Próxima sessão em: <strong>${formattedTime}</strong>`;
-      }
-      
-      // Recarrega 3 segundos após o início da sessão (quando diffInSeconds é -3)
-      if (diffInSeconds === -3) {
-          console.log("Sessão iniciada há 3s! Recarregando a página...");
-          window.location.reload();
       }
   }
 

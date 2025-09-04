@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const audioFiles = {
     normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
     critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
+    evade: "https://aden-rpg.pages.dev/assets/evade.mp3",
     ambient: "https://aden-rpg.pages.dev/assets/mina.mp3",
     avisoTela: "https://aden-rpg.pages.dev/assets/avisotela.mp3",
     obrigado: "https://aden-rpg.pages.dev/assets/obrigado.mp3"
@@ -41,6 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Preload dos sons curtos que serão disparados com frequência
   preload('normal');
   preload('critical');
+  preload('evade');
 
   // Mantemos ambient e avisos em HTMLAudio (loop e desbloqueio fácil)
   const ambientMusic = new Audio(audioFiles.ambient);
@@ -102,6 +104,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   let minesRefreshInterval = null;
   let rankingInterval = null;
   const RANKING_REFRESH_MS = 20000;
+  
+  // --- Controladores de auto-refresh de minas ---
+  function startMinesAutoRefresh() {
+    // evita múltiplos intervalos
+    if (minesRefreshInterval) return;
+    // só inicia se não estivermos em um combate (currentMineId === null)
+    if (currentMineId) return;
+    minesRefreshInterval = setInterval(() => {
+      // antes de chamar loadMines checamos se o usuário ainda está na tela das minas e a página visível
+      if (!document.hidden && !currentMineId) {
+        loadMines().catch(e => console.warn("[mines] auto loadMines falhou:", e));
+      }
+    }, MINES_REFRESH_MS);
+    // faz um primeiro carregamento imediato (opcional)
+    // loadMines().catch(()=>{});
+  }
+
+  function stopMinesAutoRefresh() {
+    if (minesRefreshInterval) {
+      clearInterval(minesRefreshInterval);
+      minesRefreshInterval = null;
+    }
+  }
 
   // --- DOM ---
   const minesContainer = document.getElementById("minesContainer") || document.getElementById("minasContainer");
@@ -179,12 +204,39 @@ document.addEventListener("DOMContentLoaded", async () => {
       monsterHpTextOverlay.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
     }
   }
+  
+  // --- Funções de atualização da barra de vida PvP ---
+  function updatePvpHpBar(element, textElement, current, max) {
+    const c = Math.max(0, Number(current || 0));
+    const m = Math.max(1, Number(max || 1));
+    const pct = Math.max(0, Math.min(100, (c / m) * 100));
+    if (element) {
+        element.style.width = `${pct}%`;
+    }
+    if (textElement) {
+        textElement.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
+    }
+  }
 
-  function displayDamageNumber(damage, isCrit, targetElement) {
+  function displayDamageNumber(damage, isCrit, isEvaded, targetElement) {
     if (!targetElement) return;
     const el = document.createElement("div");
-    el.textContent = Number(damage).toLocaleString();
-    el.className = isCrit ? "crit-damage-number" : "damage-number";
+    
+    // **CORREÇÃO AQUI**
+    if (isEvaded) {
+        el.textContent = "Desviou";
+        el.className = "evade-text";
+        playSound('evade', { volume: 0.3 });
+    } else {
+        el.textContent = Number(damage).toLocaleString();
+        el.className = isCrit ? "crit-damage-number" : "damage-number";
+        // Som do ataque (PvE/PvP)
+        try {
+          if (isCrit) playSound('critical', { volume: 0.1 });
+          else playSound('normal', { volume: 0.06 });
+        } catch(_) {}
+    }
+
     el.style.position = "absolute";
     el.style.top = `50%`;
     el.style.left = `50%`;
@@ -440,6 +492,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // --- Entrar/Iniciar Combate PvE ---
   async function startCombat(mineId) {
     showLoading();
+    // interrompe o auto refresh ao entrar em combate PvE
+    stopMinesAutoRefresh();
     try {
       const sel = await supabase
         .from("mining_caverns")
@@ -539,15 +593,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (error) { showModalAlert("Erro ao atacar: " + error.message); return; }
       if (data.success === false) { showModalAlert(data.message); await updatePlayerAttacksUI(); return; }
 
-      displayDamageNumber(data.damage_dealt, !!data.is_crit, monsterArea);
+      displayDamageNumber(data.damage_dealt, !!data.is_crit, false, monsterArea);
       updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
       fetchAndRenderDamageRanking();
-
-      // Som do ataque (PvE)
-      try {
-        if (data.is_crit) playSound('critical', { volume: 0.1 });
-        else playSound('normal', { volume: 0.06 });
-      } catch(_) {}
 
       attacksLeft = data.attacks_left;
       if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
@@ -632,9 +680,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   // --- Inicia e simula o combate PvP ---
   async function startPvpCombat(mineId, ownerId, ownerName, ownerAvatar) {
     showLoading();
+    // assegura que as minas não fiquem sendo recarregadas durante a simulação PvP
+    stopMinesAutoRefresh();
     try {
-        const { data: challengerData, error: challengerError } = await supabase.from('players').select('name, avatar_url').eq('id', userId).single();
+        // Busca os stats de combate do desafiante
+        const { data: challengerData, error: challengerError } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
         if (challengerError) throw challengerError;
+        if (!challengerData?.success) {
+            showModalAlert(challengerData?.message || "Erro ao obter os atributos do desafiante.");
+            return;
+        }
+        
+        // Busca os stats de combate do defensor
+        const { data: defenderData, error: defenderError } = await supabase.rpc('get_player_combat_stats', { p_player_id: ownerId });
+        if (defenderError) throw defenderError;
+        if (!defenderData?.success) {
+            showModalAlert(defenderData?.message || "Erro ao obter os atributos do defensor.");
+            return;
+        }
+        
+        // Busca o avatar do desafiante separadamente, pois a função RPC não o retorna
+        const { data: challengerInfo, error: challengerInfoError } = await supabase.from('players').select('avatar_url').eq('id', userId).single();
+        if (challengerInfoError) throw challengerInfoError;
+
+        const challengerMaxHp = Number(challengerData.health || 0);
+        const defenderMaxHp = Number(defenderData.health || 0);
+        
+        let challengerCurrentHp = challengerMaxHp;
+        let defenderCurrentHp = defenderMaxHp;
 
         const { data, error } = await supabase.rpc("capture_mine", { p_challenger_id: userId, p_mine_id: mineId });
         if (error) throw error;
@@ -645,8 +718,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         challengerName.textContent = challengerData.name || "Desafiante";
         defenderName.textContent = ownerName || "Dono";
-        challengerAvatar.src = challengerData.avatar_url || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
+        // Usa o URL do avatar buscado separadamente
+        challengerAvatar.src = challengerInfo.avatar_url || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         defenderAvatar.src = ownerAvatar || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
+
+        const challengerHpFill = document.getElementById("challengerHpFill");
+        const defenderHpFill = document.getElementById("defenderHpFill");
+        const challengerHpText = document.getElementById("challengerHpText");
+        const defenderHpText = document.getElementById("defenderHpText");
+        
+        updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
+        updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
 
         pvpCombatModal.style.display = 'flex';
         ambientMusic.play();
@@ -662,16 +744,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (const turn of combatLog) {
             const targetElement = turn.attacker_id === ownerId ? challengerSide : defenderSide;
             
-            displayDamageNumber(turn.damage, turn.critical, targetElement);
-            
-            // Som do ataque (PvP)
-            try {
-              // no seu código o boolean p/ crítico é `turn.critical` (conforme displayDamageNumber usa)
-              if (turn.critical) playSound('critical', { volume: 0.1 });
-              else playSound('normal', { volume: 0.06 });
-            } catch(_) {}
+            if (turn.attacker_id === ownerId) {
+                // Defender atacou, desafiante recebeu dano
+                challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(turn.damage));
+                updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
+            } else {
+                // Desafiante atacou, defensor recebeu dano
+                defenderCurrentHp = Math.max(0, defenderCurrentHp - Number(turn.damage));
+                updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
+            }
 
-            // Atualização: 1 segundo de intervalo entre os ataques
+            // **CORREÇÃO AQUI**: Passando a flag 'evaded'
+            displayDamageNumber(turn.damage, turn.critical, turn.evaded, targetElement);
+            
             await new Promise(r => setTimeout(r, 1000));
         }
 
@@ -691,6 +776,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     } finally {
         if(pvpCombatModal) pvpCombatModal.style.display = 'none';
         hideLoading();
+        // reinicia auto refresh após PvP
+        startMinesAutoRefresh();
         await loadMines();
     }
   }
@@ -709,9 +796,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentMineId = null;
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
     if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
-    if (buyAttackBtn) buyAttackBtn.disabled = true;
+    if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     ambientMusic.pause();
     ambientMusic.currentTime = 0;
+
+    // reinicia o auto refresh quando o combate termina / UI é resetada
+    startMinesAutoRefresh();
   }
 
   // --- Listeners globais ---
@@ -727,14 +817,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     userId = user.id;
     await loadMines();
     await refreshPlayerStats();
-    minesRefreshInterval = setInterval(loadMines, MINES_REFRESH_MS);
+    // inicia o auto refresh somente se a página estiver visível
+    if (!document.hidden) startMinesAutoRefresh();
   } catch (e) {
     console.error("[mines] auth erro:", e);
     window.location.href = "login.html";
   }
 
   window.addEventListener("beforeunload", () => {
-    if (minesRefreshInterval) clearInterval(minesRefreshInterval);
+    stopMinesAutoRefresh();
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     if (cooldownInterval) clearInterval(cooldownInterval);
     if (rankingInterval) clearInterval(rankingInterval);
@@ -761,15 +852,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   setInterval(updateCountdown, 1000);
 
   document.addEventListener("visibilitychange", () => {
-    if (!currentMineId) return;
     if (document.visibilityState === 'hidden') {
-      startCombat(currentMineId);
+      // pausa auto-refresh ao ocultar a aba/tela
+      stopMinesAutoRefresh();
+
+      // se estivermos em combate, tenta reconectar/ativar startCombat (com cuidado)
+      if (currentMineId) {
+        // mantive teu comportamento existente: chamar startCombat(currentMineId) ao ocultar
+        startCombat(currentMineId);
+      }
+
       avisoTelaSound.currentTime = 0;
       avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
+      return;
     }
-    if (document.visibilityState === 'visible') {
-      obrigadoSound.currentTime = 0;
-      obrigadoSound.play().catch(e => console.warn("Falha ao tocar obrigado:", e));
-    }
+
+    // ao voltar para visível
+    obrigadoSound.currentTime = 0;
+    obrigadoSound.play().catch(e => console.warn("Falha ao tocar obrigado:", e));
+
+    // só reinicia auto refresh se não estivermos em combate
+    if (!currentMineId) startMinesAutoRefresh();
+
+    // opcional: faz um carregamento imediato para atualizar UI ao retornar
+    loadMines().catch(e => console.warn("[mines] loadMines on visibilitychange falhou:", e));
   });
 });

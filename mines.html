@@ -99,23 +99,31 @@
     <div id="pvpCombatModal" class="modal-overlay" style="display: none;">
     <div class="modal-content">
         <h3 id="pvpCombatTitle">Desafio pela Mina</h3>
-        <div id="pvpArena">
-            <div id="challengerSide" class="player-side">
-                <span id="challengerName" class="player-name-pvp"></span>
-                <div id="challengerAvatarContainer" class="avatar-container">
-                    <img id="challengerAvatar" src="" alt="Avatar do Desafiante" class="player-avatar-pvp">
-                </div>
-            </div>
-            
-            <div class="vs-separator">VS</div>
-
-            <div id="defenderSide" class="player-side">
-                <span id="defenderName" class="player-name-pvp"></span>
-                <div id="defenderAvatarContainer" class="avatar-container">
-                    <img id="defenderAvatar" src="" alt="Avatar do Dono da Mina" class="player-avatar-pvp">
-                </div>
-            </div>
+       <div id="pvpArena">
+    <div id="challengerSide" class="player-side">
+        <span id="challengerName" class="player-name-pvp"></span>
+        <div id="challengerAvatarContainer" class="avatar-container">
+            <img id="challengerAvatar" src="" alt="Avatar do Desafiante" class="player-avatar-pvp">
         </div>
+        <div id="challengerHpBar" class="player-hp-bar">
+            <div id="challengerHpFill" class="player-hp-fill"></div>
+            <span id="challengerHpText" class="hp-text-overlay"></span>
+        </div>
+    </div>
+    
+    <div class="vs-separator">VS</div>
+
+    <div id="defenderSide" class="player-side">
+        <span id="defenderName" class="player-name-pvp"></span>
+        <div id="defenderAvatarContainer" class="avatar-container">
+            <img id="defenderAvatar" src="" alt="Avatar do Dono da Mina" class="player-avatar-pvp">
+        </div>
+        <div id="defenderHpBar" class="player-hp-bar">
+            <div id="defenderHpFill" class="player-hp-fill"></div>
+            <span id="defenderHpText" class="hp-text-overlay"></span>
+        </div>
+    </div>
+</div>
         <p id="pvpCountdown" style="font-size: 1.5em; color: yellow;"></p>
     </div>
 </div>

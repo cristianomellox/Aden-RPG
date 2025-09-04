@@ -180,6 +180,7 @@
     border-radius: 10px;
     margin-top: 10px;
     overflow: hidden;
+    border: 1px solid yellow;
 }
 
 #monsterHpFill {
@@ -259,7 +260,7 @@ p {
 .damage-number {
   font-family: Georgia, serif;
     position: absolute;
-    font-size: 40px;
+    font-size: 23px;
     font-weight: bold;
     color: #fff;
     text-shadow: 2px 2px 4px #000;
@@ -268,7 +269,7 @@ p {
 
 .crit-damage-number {
   font-family: Georgia, serif;
-  font-size: 50px;
+  font-size: 27px;
     color: red;
     /* Contorno amarelo */
     text-shadow:
@@ -567,4 +568,144 @@ p {
   align-items: center;
   height: 100%;
 
+}
+
+
+/* --- Adicione essas classes em 'mines.css' --- */
+
+.player-hp-bar {position: relative;
+    width: 135px;
+    height: 20px;
+    background-color: #333;
+    border: 1px solid yellow;
+    border-radius: 8px;
+    margin-top: 10px;
+    overflow: hidden;
+    
+}
+
+.player-hp-fill {
+    height: 100%;
+    background-color: red; /* Cor verde para o HP */
+    transition: width 0.3s;
+}
+
+/* Você pode adicionar mais estilos se quiser, como a cor da borda, etc. */
+.player-side {
+    position: relative;
+    /* ... mantenha os estilos existentes */
+}
+ 
+.damage-number, .crit-damage-number, .evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+}
+
+.hp-text-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 98%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+    font-size: 0.6em;
+    white-space: nowrap;
+}
+
+.evade-text {
+    color: white; /* Cor azul claro para destaque */
+    font-size: 1.4em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    animation: damage-animation 2s forwards; /* Reutiliza a animação existente */
+}
+
+
+
+@keyframes damage-animation {
+    0% {
+        opacity: 2;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -150%) scale(1.5);
+    }
+}
+
+/* --- Ajuste para os textos de Dano e Desvio --- */
+.damage-number,
+.crit-damage-number,
+.evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* O transform move o elemento para a esquerda pela metade do seu próprio tamanho,
+       garantindo a centralização exata. */
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    font-weight: bold;
+    white-space: nowrap; /* Impede que o texto quebre em várias linhas */
+    text-shadow: 2px 2px 4px #000;
+}
+
+.damage-number {
+  font-family: Georgia, serif;
+  font-size: 23px;
+  color: #fff;
+  animation: floating-damage 1.5s ease-out forwards;
+}
+
+.crit-damage-number {
+  font-family: Georgia, serif;
+  font-size: 27px;
+  color: red;
+  /* Contorno amarelo */
+  text-shadow:
+      -1px -1px 0 yellow,
+      1px -1px 0 yellow,
+      -1px 1px 0 yellow,
+      1px 1px 0 yellow,
+      -2px -2px 0 yellow,
+      2px -2px 0 yellow,
+      -2px 2px 0 yellow,
+      2px 2px 0 yellow;
+  animation: floating-damage-crit 1.5s ease-out forwards;
+}
+
+.evade-text {
+    font-size: 1.4em;
+    color: white; /* Cor branca para destaque */
+    animation: floating-damage 2s forwards; /* Reutiliza a animação existente */
+}
+
+/* Animação dos textos de dano */
+@keyframes floating-damage {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -150%) scale(1.5);
+    }
+}
+
+@keyframes floating-damage-crit {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.0);
+    }
+    50% {
+        transform: translate(-50%, -75%) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -150%) scale(1.0);
+    }
 }

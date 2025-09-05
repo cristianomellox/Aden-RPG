@@ -7,6 +7,25 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="mines.css" />
+    <style>
+        .history-button-container {
+            position: relative;
+        }
+
+        .new-log-indicator {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: red;
+            color: white;
+            font-size: 0.7em;
+            font-weight: bold;
+            border-radius: 4px;
+            padding: 2px 5px;
+            display: none;
+            z-index: 10;
+        }
+    </style>
 </head>
 <body>
 
@@ -127,6 +146,54 @@
         <p id="pvpCountdown" style="font-size: 1.5em; color: yellow;"></p>
     </div>
 </div>
-   <script src="mines.js" type="module"></script>
+
+<div id="playerFooterBar">
+        <a href="#" class="footer-bar-link" id="playerPVPAttemptsBtn">
+           ⚔️  <span id="playerPVPAttemptsLeft"> 0</span> 
+            <button id="buyPVPAttemptsBtn" class="buy-btn">+</button>
+        </a>
+        <a href="#" class="footer-bar-link" id="playerMineLink">
+            <span id="playerOwnedMine">Nenhuma</span>
+        </a>
+        <a href="#" class="footer-bar-link history-button-container" id="openHistoryBtn" title="Histórico PvP">
+            Histórico
+            <span class="new-log-indicator">Novo</span>
+        </a>
+    </div>
+
+    <div id="historyModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Histórico de Ataques à sua Mina</h3>
+            <ul id="historyList">
+                </ul>
+            <button id="closeHistoryBtn" class="action-btn">Fechar</button>
+        </div>
+    </div>
+
+
+   <script src="mines.js"></script>
+
+    <div id="buyPvpModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <h3>Comprar Tentativas PvP</h3>
+        <p id="buyPvpPlayerGoldInfo"></p>
+        <p>As tentativas compradas só poderão ser usadas no dia atual.</p>
+
+        <p>Quantidade de tentativas:</p>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
+          <div style="background: #333; border-radius: 8px; border: white; width: 140px; justify-content: center; align-items: center;">
+            <button id="buyPvpDecreaseQtyBtn" class="buy-btn">-</button>
+            <span id="buyPvpQty" style="font-size: 2em; color: yellow;">1</span>
+            <button id="buyPvpIncreaseQtyBtn" class="buy-btn">+</button>
+          </div>
+        </div>
+        <p id="buyPvpCostInfo">Custo total: 0 Ouro</p>
+        <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+          <button id="buyPvpCancelBtn" class="action-btn confirmabuy-btn">Cancelar</button>
+          <button id="buyPvpConfirmBtn" class="action-btn confirmabuy-btn">Confirmar</button>
+        </div>
+      </div>
+    </div>
+    
 </body>
 </html>

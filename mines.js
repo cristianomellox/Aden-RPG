@@ -94,6 +94,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Estado ---
   let userId = null;
+  let monsterHpInterval = null;
+  let historyCache = [];
+  let logsPollInterval = null;
+  let buyMode = 'attack';
+  let playerOwnedMineId = null;
   let currentMineId = null;
   let maxMonsterHealth = 1;
   let attacksLeft = 0;
@@ -105,7 +110,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   let rankingInterval = null;
   const RANKING_REFRESH_MS = 20000;
   
-  // --- Controladores de auto-refresh de minas ---
+    let hasAttackedOnce = false; // <<--- NOVO FLAG
+// --- Controladores de auto-refresh de minas ---
   function startMinesAutoRefresh() {
     // evita múltiplos intervalos
     if (minesRefreshInterval) return;
@@ -151,6 +157,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cycleInfoElement = document.getElementById("cycleInfo");
   const refreshBtn = document.getElementById("refreshBtn");
   
+  // --- Footer & History DOM elements ---
+  const playerAttemptsSpan = document.getElementById("playerPVPAttemptsLeft");
+  const buyPVPAttemptsBtn = document.getElementById("buyPVPAttemptsBtn");
+  const playerMineSpan = document.getElementById("playerOwnedMine");
+  const historyModal = document.getElementById("historyModal");
+  const historyList = document.getElementById("historyList");
+  const openHistoryBtn = document.getElementById("openHistoryBtn");
+  const closeHistoryBtn = document.getElementById("closeHistoryBtn");
+  const newLogIndicator = document.querySelector(".new-log-indicator");
+  
   // --- Elementos do Modal PvP ---
   const pvpCombatModal = document.getElementById("pvpCombatModal");
   const pvpCountdown = document.getElementById("pvpCountdown");
@@ -160,8 +176,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const defenderName = document.getElementById("defenderName");
   const challengerAvatar = document.getElementById("challengerAvatar");
   const defenderAvatar = document.getElementById("defenderAvatar");
+  const challengerHpFill = document.getElementById("challengerHpFill");
+  const defenderHpFill = document.getElementById("defenderHpFill");
+  const challengerHpText = document.getElementById("challengerHpText");
+  const defenderHpText = document.getElementById("defenderHpText");
   
-  // Modal de compra
+  // Modal de compra PvE
   const buyModal = document.getElementById("buyModal");
   const buyPlayerGoldInfo = document.getElementById("buyPlayerGoldInfo");
   const buyAttackQtySpan = document.getElementById("buyAttackQty");
@@ -297,7 +317,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let buyQty = 1;
   let buyPlayerGold = 0;
   let buyBaseBoughtCount = 0;
-
+    
   function calcTotalCost(qty, baseCount) {
     let total = 0;
     for (let i = 0; i < qty; i++) {
@@ -317,11 +337,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function openBuyModal() {
-    if (!userId) { showModalAlert("Faça login para comprar ataques."); return; }
+    buyMode = 'attack'; // Garante que este modal é apenas para ataques PvE
+    if (!userId) { showModalAlert("Faça login para comprar."); return; }
     try {
-      const { data: player, error } = await supabase
-        .from("players").select("gold, attacks_bought_count").eq("id", userId).single();
+      const { data: player, error } = await supabase.from("players").select("gold, attacks_bought_count").eq("id", userId).single();
       if (error) throw error;
+      
       buyPlayerGold = player.gold || 0;
       buyBaseBoughtCount = player.attacks_bought_count || 0;
       buyQty = 1;
@@ -332,6 +353,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       showModalAlert("Erro ao abrir modal de compra.");
     }
   }
+
   function closeBuyModal() { if (buyModal) buyModal.style.display = "none"; }
 
   if (buyIncreaseQtyBtn) buyIncreaseQtyBtn.addEventListener("click", () => { buyQty += 1; refreshBuyModalUI(); });
@@ -343,21 +365,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     let purchased = 0;
     let spent = 0;
     try {
-      for (let i = 0; i < buyQty; i++) {
-        const { data, error } = await supabase.rpc('buy_mine_attack', { p_player_id: userId });
-        if (error || !data?.success) {
-          if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
-          break;
+        const rpcFunction = 'buy_mine_attack'; // Apenas para PvE
+        for (let i = 0; i < buyQty; i++) {
+            const { data, error } = await supabase.rpc(rpcFunction, { p_player_id: userId });
+            if (error || !data?.success) {
+                if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
+                break;
+            }
+            purchased += 1;
+            spent += (data.cost || 0);
+            buyPlayerGold = Math.max(0, (buyPlayerGold || 0) - (data.cost || 0));
         }
-        purchased += 1;
-        spent += (data.cost || 0);
-        buyPlayerGold = Math.max(0, (buyPlayerGold || 0) - (data.cost || 0));
-      }
-      if (purchased > 0) {
-        showModalAlert(`Comprados ${purchased} ataque(s) por ${spent} Ouro.`);
-        await refreshPlayerStats();
-        await updatePlayerAttacksUI();
-      }
+        if (purchased > 0) {
+            showModalAlert(`Comprado(s) ${purchased} ataque(s) PvE por ${spent} Ouro.`);
+            await refreshPlayerStats();
+            await updatePlayerAttacksUI();
+        }
     } catch (e) {
       console.error("[mines] buyConfirm erro:", e);
       showModalAlert("Erro inesperado durante a compra.");
@@ -365,6 +388,159 @@ document.addEventListener("DOMContentLoaded", async () => {
       hideLoading();
     }
   });
+
+
+  // --- Funções do Rodapé e Histórico ---
+  const buyPvpModal = document.getElementById('buyPvpModal');
+  const buyPvpPlayerGoldInfo = document.getElementById('buyPvpPlayerGoldInfo');
+  const buyPvpQtySpan = document.getElementById('buyPvpQty');
+  const buyPvpCostInfo = document.getElementById('buyPvpCostInfo');
+  const buyPvpDecreaseQtyBtn = document.getElementById('buyPvpDecreaseQtyBtn');
+  const buyPvpIncreaseQtyBtn = document.getElementById('buyPvpIncreaseQtyBtn');
+  const buyPvpCancelBtn = document.getElementById('buyPvpCancelBtn');
+  const buyPvpConfirmBtn = document.getElementById('buyPvpConfirmBtn');
+  let buyPvpQty = 1;
+  let buyPvpPlayerGold = 0;
+  let buyPvpBaseBoughtCount = 0;
+
+  function calcPvpCost(qty, baseCount) {
+    let total = 0;
+    for (let i = 0; i < qty; i++) {
+      const group = Math.floor((baseCount + i) / 5); // a cada 5 compras aumenta
+      const cost = 30 + group * 5;
+      total += cost;
+    }
+    return total;
+  }
+
+  function refreshBuyPvpModalUI() {
+    if (!buyPvpModal) return;
+    buyPvpQtySpan.textContent = String(buyPvpQty);
+    const total = calcPvpCost(buyPvpQty, buyPvpBaseBoughtCount);
+    buyPvpCostInfo.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
+    buyPvpPlayerGoldInfo.innerHTML = `Você tem: <br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(buyPvpPlayerGold || 0).toLocaleString()}</strong>`;
+    buyPvpConfirmBtn.disabled = (total > buyPvpPlayerGold);
+  }
+
+  async function openBuyPvpModal() {
+    if (!userId) { showModalAlert("Faça login para comprar."); return; }
+    try {
+        const { data: player, error } = await supabase.from("players").select("gold, mine_pvp_attempts_bought_count").eq("id", userId).single();
+        if (error) throw error;
+
+        buyPvpPlayerGold = player.gold || 0;
+        buyPvpBaseBoughtCount = player.mine_pvp_attempts_bought_count || 0;
+        buyPvpQty = 1;
+        refreshBuyPvpModalUI();
+        if (buyPvpModal) buyPvpModal.style.display = 'flex';
+    } catch (e) {
+        console.error("[mines] openBuyPvpModal erro:", e);
+        showModalAlert("Erro ao abrir modal de compra PvP.");
+    }
+  }
+
+  function closeBuyPvpModal() {
+      if (buyPvpModal) buyPvpModal.style.display = 'none';
+  }
+
+  async function checkForNewPvpLogs() {
+    if (!userId || !newLogIndicator) return;
+    try {
+        // CORREÇÃO: Removido o parâmetro p_limit que causava o erro
+        const { data, error } = await supabase.rpc('get_pvp_history', { p_player_id: userId });
+        if (error) {
+            console.warn("[mines] Falha ao checar novos logs:", error.message);
+            return;
+        }
+        
+        if (data && data.length > 0) {
+            newLogIndicator.style.display = 'block';
+        } else {
+            newLogIndicator.style.display = 'none';
+        }
+    } catch (e) {
+        console.error("[mines] Erro em checkForNewPvpLogs:", e);
+    }
+  }
+  
+  async function updatePVPAttemptsUI() {
+    if (!userId) return;
+    try {
+        const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
+        if (error) throw error;
+        if (playerAttemptsSpan) {
+            playerAttemptsSpan.textContent = data.mine_pvp_attempts_left || 0;
+        }
+    } catch (e) {
+        console.warn("[mines] updatePVPAttemptsUI failed:", e);
+    }
+  }
+
+  async function updatePlayerMineUI() {
+    if (!userId) return;
+    try {
+        const { data, error } = await supabase.from('mining_caverns').select('name, id').eq('owner_player_id', userId).single();
+        if (error && error.code !== 'PGRST116') { // PGRST116 = linha não encontrada
+            throw error;
+        }
+        if (playerMineSpan) {
+            playerMineSpan.textContent = data ? data.name : 'Nenhuma';
+        }
+    } catch (e) {
+        console.warn("[mines] updatePlayerMineUI failed:", e);
+    }
+  }
+
+  async function fetchAndRenderHistory() {
+    showLoading();
+    try {
+        if (newLogIndicator) newLogIndicator.style.display = 'none';
+
+        const { data, error } = await supabase.rpc('get_pvp_history', { p_player_id: userId });
+        if (error) throw error;
+        historyCache = data || [];
+        
+        localStorage.setItem('pvpHistory', JSON.stringify(historyCache));
+        
+        await supabase.rpc('clear_pvp_history', { p_player_id: userId });
+
+        historyList.innerHTML = "";
+        if (historyCache.length === 0) {
+            historyList.innerHTML = "<li>Nenhum ataque registrado.</li>";
+        } else {
+            for (const entry of historyCache.slice(0, 10)) {
+                const li = document.createElement("li");
+                const date = new Date(entry.attack_time).toLocaleString();
+                let resultText, resultColor;
+                if (entry.damage_dealt_by_defender >= entry.damage_dealt_by_attacker) {
+                    resultText = "Você venceu";
+                    resultColor = "green";
+                } else {
+                    resultText = "Você perdeu";
+                    resultColor = "red";
+                }
+                li.innerHTML = `
+                    <span><strong>Data:</strong> ${date}</span>
+                    <span><strong>Atacante:</strong> ${esc(entry.attacker_name)}</span>
+                    <span><strong>Dano Recebido:</strong> ${entry.damage_dealt_by_attacker.toLocaleString()}</span>
+                    <span><strong>Dano Causado:</strong> ${entry.damage_dealt_by_defender.toLocaleString()}</span>
+                    <span><strong>Resultado:</strong> <strong style="color: ${resultColor};">${resultText}</strong></span>
+                `;
+                historyList.appendChild(li);
+            }
+        }
+        historyModal.style.display = 'flex';
+    } catch (e) {
+        console.error("[mines] Erro ao carregar histórico:", e);
+        showModalAlert("Erro ao carregar histórico.");
+    } finally {
+        hideLoading();
+    }
+  }
+
+  function closeHistory() {
+      if (historyModal) historyModal.style.display = 'none';
+  }
 
   // --- UI ataques/cooldown ---
   async function updatePlayerAttacksUI() {
@@ -376,6 +552,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const timeToNextAttack = player.time_to_next_attack;
 
       if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
+      updatePVPAttemptsUI(); // Atualiza a barra do footer também
       if (cooldownInterval) clearInterval(cooldownInterval);
 
       if (attacksLeft < 5) {
@@ -394,7 +571,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         if (attackCooldownSpan) attackCooldownSpan.textContent = "";
       }
-      if (buyAttackBtn) buyAttackBtn.textContent = `+`;
+      if (buyAttackBtn) buyAttackBtn.disabled = false;
     } catch (e) {
       console.warn("[mines] updatePlayerAttacksUI:", e?.message || e);
     }
@@ -430,6 +607,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       renderMines(mines || [], ownersMap);
+      await checkForNewPvpLogs();
+      await updatePVPAttemptsUI();   // Atualiza tentativas PvP no footer
+      await updatePlayerMineUI();    // Atualiza a mina do jogador no footer
     } catch (err) {
       console.error("[mines] loadMines erro:", err);
       minesContainer.innerHTML = `<p>Erro ao carregar minas: ${esc(err.message || err)}</p>`;
@@ -594,6 +774,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (data.success === false) { showModalAlert(data.message); await updatePlayerAttacksUI(); return; }
 
       displayDamageNumber(data.damage_dealt, !!data.is_crit, false, monsterArea);
+      if (!hasAttackedOnce) { hasAttackedOnce = true; }
       updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
       fetchAndRenderDamageRanking();
 
@@ -721,11 +902,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Usa o URL do avatar buscado separadamente
         challengerAvatar.src = challengerInfo.avatar_url || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         defenderAvatar.src = ownerAvatar || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
-
-        const challengerHpFill = document.getElementById("challengerHpFill");
-        const defenderHpFill = document.getElementById("defenderHpFill");
-        const challengerHpText = document.getElementById("challengerHpText");
-        const defenderHpText = document.getElementById("defenderHpText");
         
         updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
         updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
@@ -807,8 +983,52 @@ document.addEventListener("DOMContentLoaded", async () => {
   // --- Listeners globais ---
   if (attackBtn) attackBtn.addEventListener("click", attack);
   if (backBtn) backBtn.addEventListener("click", endCombat);
-  if (buyAttackBtn) { buyAttackBtn.addEventListener("click", openBuyModal); buyAttackBtn.disabled = true; }
+  if (buyAttackBtn) {
+    buyAttackBtn.addEventListener("click", () => {
+      if (!hasAttackedOnce) {
+        showModalAlert("A compra de ataques só é possível após você realizar o primeiro ataque.");
+        return;
+      }
+      openBuyModal();
+    });
+  }
+  if (buyPVPAttemptsBtn) buyPVPAttemptsBtn.addEventListener("click", () => openBuyPvpModal());
+  if (openHistoryBtn) openHistoryBtn.addEventListener("click", fetchAndRenderHistory);
+  if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", closeHistory);
   if (refreshBtn) refreshBtn.addEventListener("click", () => { loadMines(); });
+
+  if (buyPvpIncreaseQtyBtn) buyPvpIncreaseQtyBtn.addEventListener("click", () => { buyPvpQty += 1; refreshBuyPvpModalUI(); });
+  if (buyPvpDecreaseQtyBtn) buyPvpDecreaseQtyBtn.addEventListener("click", () => { if (buyPvpQty > 1) buyPvpQty -= 1; refreshBuyPvpModalUI(); });
+  if (buyPvpCancelBtn) buyPvpCancelBtn.addEventListener("click", closeBuyPvpModal);
+  if (buyPvpConfirmBtn) buyPvpConfirmBtn.addEventListener("click", async () => {
+    closeBuyPvpModal();
+    showLoading();
+    let purchased = 0;
+    let spent = 0;
+    try {
+        // CORREÇÃO: Voltando ao método de loop com a função correta
+        for (let i = 0; i < buyPvpQty; i++) {
+            const { data, error } = await supabase.rpc("buy_mine_pvp_attack", { p_player_id: userId });
+            if (error || !data?.success) {
+                if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
+                break;
+            }
+            purchased++;
+            spent += (data.cost || 0);
+            buyPvpPlayerGold = Math.max(0, (buyPvpPlayerGold || 0) - (data.cost || 0));
+        }
+        if (purchased > 0) {
+            showModalAlert(`Comprado(s) ${purchased} tentativa(s) PvP por ${spent} Ouro.`);
+            await refreshPlayerStats();
+            await updatePVPAttemptsUI();
+        }
+    } catch (e) {
+        console.error("[mines] buyPvpConfirm erro:", e);
+        showModalAlert("Erro inesperado durante a compra PvP.");
+    } finally {
+        hideLoading();
+    }
+  });
 
   // --- Boot ---
   try {
@@ -817,7 +1037,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     userId = user.id;
     await loadMines();
     await refreshPlayerStats();
-    // inicia o auto refresh somente se a página estiver visível
+    await updatePVPAttemptsUI();
+    await updatePlayerMineUI(); 
+    await checkForNewPvpLogs();
     if (!document.hidden) startMinesAutoRefresh();
   } catch (e) {
     console.error("[mines] auth erro:", e);
@@ -860,16 +1082,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (currentMineId) {
         // mantive teu comportamento existente: chamar startCombat(currentMineId) ao ocultar
         startCombat(currentMineId);
+        avisoTelaSound.currentTime = 0;
+        avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
       }
-
-      avisoTelaSound.currentTime = 0;
-      avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
       return;
     }
 
     // ao voltar para visível
-    obrigadoSound.currentTime = 0;
-    obrigadoSound.play().catch(e => console.warn("Falha ao tocar obrigado:", e));
+    if (currentMineId) {
+        obrigadoSound.currentTime = 0;
+        obrigadoSound.play().catch(e => console.warn("Falha ao tocar obrigado:", e));
+    }
 
     // só reinicia auto refresh se não estivermos em combate
     if (!currentMineId) startMinesAutoRefresh();

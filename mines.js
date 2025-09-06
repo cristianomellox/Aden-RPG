@@ -748,7 +748,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!currentMineId) return;
 
   try {
-    // Primeiro consulta o estado REAL da mina
+    // Consulta o estado real da mina
     const { data: cavern, error: selError } = await supabase
       .from("mining_caverns")
       .select("id, status, owner_player_id, competition_end_time")
@@ -756,11 +756,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       .single();
 
     if (selError) throw selError;
-
     const now = new Date();
 
-    // Se a competição realmente acabou e a mina ainda está em disputa, aí sim finaliza no servidor
     if (cavern.status === "disputando" && cavern.competition_end_time && new Date(cavern.competition_end_time) <= now) {
+      // 🔹 Só chama end_mine_combat_session se ainda está em disputa
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
       if (error) throw error;
 
@@ -771,17 +770,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (newOwnerId === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
         else showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
       } else {
-        showModalAlert("Tempo esgotado: ninguém elegível. A mina foi resetada.");
+        showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
       }
     } else {
-      // Apenas sincroniza sem chamar reset
+      // 🔹 Já está ocupada (alguém ganhou antes)
       if (cavern.owner_player_id) {
-        if (cavern.owner_player_id === userId) showModalAlert("Você já é o dono desta mina.");
-        else showModalAlert("Outro jogador conquistou esta mina.");
+        if (cavern.owner_player_id === userId) {
+          showModalAlert("Você causou o maior dano e conquistou a mina!");
+        } else {
+          const { data: owner } = await supabase
+            .from("players")
+            .select("name")
+            .eq("id", cavern.owner_player_id)
+            .single();
+          showModalAlert(`O tempo acabou! ${owner?.name || "Outro jogador"} conquistou a mina.`);
+        }
+      } else {
+        showModalAlert("A mina foi resetada.");
       }
     }
   } catch (e) {
     console.error("[mines] onCombatTimerEnd erro:", e);
+    showModalAlert("Erro ao encerrar a sessão de combate.");
   } finally {
     resetCombatUI();
     await loadMines();

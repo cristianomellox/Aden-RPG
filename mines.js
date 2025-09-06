@@ -307,7 +307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase.from('players').select('gold, crystals').eq('id', user.id).single();
+      await supabase.from('players').select('gold, crystals').eq('id', user.id').single();
     } catch (e) {
       console.warn("[mines] refreshPlayerStats:", e?.message || e);
     }
@@ -623,6 +623,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       await checkForNewPvpLogs();
       await updatePVPAttemptsUI();   // Atualiza tentativas PvP no footer
       await updatePlayerMineUI();    // Atualiza a mina do jogador no footer
+
+      // **NOVO TRECHO:**
+      // Verifica se o jogador está em um combate ativo (checa o status da mina no servidor)
+      const myActiveMine = mines.find(m => m.status === 'disputando' && m.owner_player_id === userId);
+      if (myActiveMine) {
+          // Se sim, entra no combate novamente com os dados do servidor
+          // Isso irá forçar a UI a sincronizar
+          await startCombat(myActiveMine.id);
+      }
     } catch (err) {
       console.error("[mines] loadMines erro:", err);
       minesContainer.innerHTML = `<p>Erro ao carregar minas: ${esc(err.message || err)}</p>`;
@@ -744,6 +753,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function onCombatTimerEnd() {
+    // **NOVO TRECHO:**
+    // Evita a execução caso o cronômetro tenha sido resetado ou o tempo seja negativo
+    if (combatTimeLeft > 0) return;
+
     try {
       if (!currentMineId) return;
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });

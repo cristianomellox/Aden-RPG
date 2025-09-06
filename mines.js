@@ -463,13 +463,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
   
+  // -- FUNÇÃO CORRIGIDA --
   async function updatePVPAttemptsUI() {
     if (!userId) return;
     try {
-        const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
+        // CORREÇÃO: Lê o valor diretamente da tabela 'players'
+        const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left, last_mine_pvp_reset').eq('id', userId).single();
         if (error) throw error;
+        
+        let attemptsLeft = data?.mine_pvp_attempts_left || 0;
+        const lastResetDate = data?.last_mine_pvp_reset ? new Date(data.last_mine_pvp_reset).getUTCDate() : null;
+        const todayDate = new Date().getUTCDate();
+
+        // Se o dia do último reset for diferente de hoje, chama a função de reset
+        if (lastResetDate !== todayDate) {
+            const { error: resetError } = await supabase.rpc('reset_daily_pvp_attempts', { p_player_id: userId });
+            if (resetError) throw resetError;
+            attemptsLeft = 5; // Define o valor de exibição para 5 após o reset
+        }
+
         if (playerAttemptsSpan) {
-            playerAttemptsSpan.textContent = data.mine_pvp_attempts_left || 0;
+            playerAttemptsSpan.textContent = attemptsLeft;
         }
     } catch (e) {
         console.warn("[mines] updatePVPAttemptsUI failed:", e);

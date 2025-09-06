@@ -771,6 +771,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Ataque PvE ---
   async function attack() {
+    if (attackBtn) {
+        // Remove a classe para garantir que a animação possa ser reativada
+        attackBtn.classList.remove('attack-anim');
+        // Força o navegador a reiniciar a animação (reflow)
+        void attackBtn.offsetWidth;
+        // Adiciona a classe para iniciar a animação de zoom
+        attackBtn.classList.add('attack-anim');
+    }
+    
     if (!currentMineId) return;
     if (attackBtn) attackBtn.disabled = true;
     try {

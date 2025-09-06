@@ -528,7 +528,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 let resultText, resultColor;
                 if (entry.damage_dealt_by_defender >= entry.damage_dealt_by_attacker) {
                     resultText = "Você venceu";
-                    resultColor = "green";
+                    resultColor = "yellow";
                 } else {
                     resultText = "Você perdeu";
                     resultColor = "red";
@@ -745,29 +745,48 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function onCombatTimerEnd() {
-    try {
-      if (!currentMineId) return;
+  if (!currentMineId) return;
+
+  try {
+    // Primeiro consulta o estado REAL da mina
+    const { data: cavern, error: selError } = await supabase
+      .from("mining_caverns")
+      .select("id, status, owner_player_id, competition_end_time")
+      .eq("id", currentMineId)
+      .single();
+
+    if (selError) throw selError;
+
+    const now = new Date();
+
+    // Se a competição realmente acabou e a mina ainda está em disputa, aí sim finaliza no servidor
+    if (cavern.status === "disputando" && cavern.competition_end_time && new Date(cavern.competition_end_time) <= now) {
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
-      if (error) {
-        console.error("[mines] end_mine_combat_session erro:", error);
-        showModalAlert("Erro ao encerrar a sessão de combate.");
+      if (error) throw error;
+
+      const newOwnerId = data?.new_owner_id;
+      const newOwnerName = data?.new_owner_name;
+
+      if (newOwnerId) {
+        if (newOwnerId === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
+        else showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
       } else {
-        const newOwnerId = data?.new_owner_id || null;
-        const newOwnerName = data?.new_owner_name || null;
-        if (newOwnerId) {
-          if (newOwnerId === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
-          else showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
-        } else {
-          showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
-        }
+        showModalAlert("Tempo esgotado: ninguém elegível. A mina foi resetada.");
       }
-    } catch (e) {
-      console.error("[mines] onCombatTimerEnd erro:", e);
-    } finally {
-      resetCombatUI();
-      await loadMines();
+    } else {
+      // Apenas sincroniza sem chamar reset
+      if (cavern.owner_player_id) {
+        if (cavern.owner_player_id === userId) showModalAlert("Você já é o dono desta mina.");
+        else showModalAlert("Outro jogador conquistou esta mina.");
+      }
     }
+  } catch (e) {
+    console.error("[mines] onCombatTimerEnd erro:", e);
+  } finally {
+    resetCombatUI();
+    await loadMines();
   }
+}
 
   // --- Ataque PvE ---
   async function attack() {

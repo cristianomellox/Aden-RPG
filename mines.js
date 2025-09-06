@@ -744,7 +744,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 1000);
   }
 
-  async function onCombatTimerEnd() {
+  
+async function onCombatTimerEnd() {
   if (!currentMineId) return;
 
   try {
@@ -759,7 +760,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const now = new Date();
 
     if (cavern.status === "disputando" && cavern.competition_end_time && new Date(cavern.competition_end_time) <= now) {
-      // 🔹 Só chama end_mine_combat_session se ainda está em disputa
+      // Ainda está em disputa e o tempo já passou -> finaliza no servidor
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
       if (error) throw error;
 
@@ -767,26 +768,56 @@ document.addEventListener("DOMContentLoaded", async () => {
       const newOwnerName = data?.new_owner_name;
 
       if (newOwnerId) {
-        if (newOwnerId === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
-        else showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
+        if (newOwnerId === userId) {
+          showModalAlert("Você causou o maior dano e conquistou a mina!");
+        } else {
+          showModalAlert(`${newOwnerName || 'Outro jogador'} causou o maior dano e conquistou a mina!`);
+        }
       } else {
         showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
       }
     } else {
-      // 🔹 Já está ocupada (alguém ganhou antes)
+      // Já não está em disputa. Tentamos obter o dono de forma confiável.
       if (cavern.owner_player_id) {
-        if (cavern.owner_player_id === userId) {
-          showModalAlert("Você causou o maior dano e conquistou a mina!");
+        // Se já tem owner no registro, busca o nome e mostra a mensagem
+        const { data: owner, error: ownerError } = await supabase.from("players").select("name").eq("id", cavern.owner_player_id).single();
+        if (!ownerError && owner?.name) {
+          if (cavern.owner_player_id === userId) {
+            showModalAlert("Você causou o maior dano e conquistou a mina!");
+          } else {
+            showModalAlert(`${owner.name} causou o maior dano e conquistou a mina!`);
+          }
         } else {
-          const { data: owner } = await supabase
-            .from("players")
-            .select("name")
-            .eq("id", cavern.owner_player_id)
-            .single();
-          showModalAlert(`O tempo acabou! ${owner?.name || "Outro jogador"} conquistou a mina.`);
+          // Falha ao obter owner nome — exibe fallback genérico
+          if (cavern.owner_player_id === userId) {
+            showModalAlert("Você causou o maior dano e conquistou a mina!");
+          } else {
+            showModalAlert("Outro jogador conquistou a mina!");
+          }
         }
       } else {
-        showModalAlert("A mina foi resetada.");
+        // Se não contém owner, fazemos rápido loop de retry (aguardar pequenas janelas de propagação)
+        let foundOwner = null;
+        for (let i = 0; i < 4; i++) {
+          // espera curta (não fica dependente de ação do usuário)
+          await new Promise(r => setTimeout(r, 300));
+          const { data: c2, error: e2 } = await supabase.from("mining_caverns").select("owner_player_id").eq("id", currentMineId).single();
+          if (e2) continue;
+          if (c2 && c2.owner_player_id) { foundOwner = c2.owner_player_id; break; }
+        }
+
+        if (foundOwner) {
+          const { data: owner2 } = await supabase.from("players").select("name").eq("id", foundOwner).single();
+          if (owner2?.name) {
+            if (foundOwner === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
+            else showModalAlert(`${owner2.name} causou o maior dano e conquistou a mina!`);
+          } else {
+            showModalAlert("Outro jogador conquistou a mina!");
+          }
+        } else {
+          // Se mesmo depois de retries não achamos owner, mostramos mensagem de reset
+          showModalAlert("A mina foi resetada.");
+        }
       }
     }
   } catch (e) {
@@ -797,6 +828,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadMines();
   }
 }
+
 
   // --- Ataque PvE ---
   async function attack() {

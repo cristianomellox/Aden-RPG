@@ -595,22 +595,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadMines() {
     showLoading();
     try {
+      // Chama a função RPC para finalizar todas as sessões expiradas
+      const { data: endData, error: endError } = await supabase.rpc("end_all_expired_mine_sessions");
+      if (endError) {
+        console.warn("[mines] end_all_expired_mine_sessions falhou:", endError.message);
+      } else {
+        console.log(`[mines] ${endData.count} sessões expiradas finalizadas.`);
+      }
+
+      // Recarrega a lista de minas do estado atualizado
       let { data: mines, error } = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
         .order("name", { ascending: true });
       if (error) throw error;
 
-      const now = new Date();
-      const expiradas = (mines || []).filter(m => m.status === "disputando" && m.competition_end_time && new Date(m.competition_end_time) <= now);
-      if (expiradas.length) {
-        await Promise.all(expiradas.map(m => supabase.rpc("end_mine_combat_session", { _mine_id: m.id })));
-        const res2 = await supabase
-          .from("mining_caverns")
-          .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
-          .order("name", { ascending: true });
-        if (!res2.error) mines = res2.data || [];
-      }
 
       const ownerIds = Array.from(new Set((mines || []).map(m => m.owner_player_id).filter(Boolean)));
       const ownersMap = {};
@@ -744,91 +743,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 1000);
   }
 
-  
-async function onCombatTimerEnd() {
-  if (!currentMineId) return;
-
-  try {
-    // Consulta o estado real da mina
-    const { data: cavern, error: selError } = await supabase
-      .from("mining_caverns")
-      .select("id, status, owner_player_id, competition_end_time")
-      .eq("id", currentMineId)
-      .single();
-
-    if (selError) throw selError;
-    const now = new Date();
-
-    if (cavern.status === "disputando" && cavern.competition_end_time && new Date(cavern.competition_end_time) <= now) {
-      // Ainda está em disputa e o tempo já passou -> finaliza no servidor
+  async function onCombatTimerEnd() {
+    try {
+      if (!currentMineId) return;
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
-      if (error) throw error;
-
-      const newOwnerId = data?.new_owner_id;
-      const newOwnerName = data?.new_owner_name;
-
-      if (newOwnerId) {
-        if (newOwnerId === userId) {
-          showModalAlert("Você causou o maior dano e conquistou a mina!");
-        } else {
-          showModalAlert(`${newOwnerName || 'Outro jogador'} causou o maior dano e conquistou a mina!`);
-        }
+      if (error) {
+        console.error("[mines] end_mine_combat_session erro:", error);
+        showModalAlert("Erro ao encerrar a sessão de combate.");
       } else {
-        showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
-      }
-    } else {
-      // Já não está em disputa. Tentamos obter o dono de forma confiável.
-      if (cavern.owner_player_id) {
-        // Se já tem owner no registro, busca o nome e mostra a mensagem
-        const { data: owner, error: ownerError } = await supabase.from("players").select("name").eq("id", cavern.owner_player_id).single();
-        if (!ownerError && owner?.name) {
-          if (cavern.owner_player_id === userId) {
-            showModalAlert("Você causou o maior dano e conquistou a mina!");
-          } else {
-            showModalAlert(`${owner.name} causou o maior dano e conquistou a mina!`);
-          }
+        const newOwnerId = data?.new_owner_id || null;
+        const newOwnerName = data?.new_owner_name || null;
+        if (newOwnerId) {
+          if (newOwnerId === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
+          else showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
         } else {
-          // Falha ao obter owner nome — exibe fallback genérico
-          if (cavern.owner_player_id === userId) {
-            showModalAlert("Você causou o maior dano e conquistou a mina!");
-          } else {
-            showModalAlert("Outro jogador conquistou a mina!");
-          }
-        }
-      } else {
-        // Se não contém owner, fazemos rápido loop de retry (aguardar pequenas janelas de propagação)
-        let foundOwner = null;
-        for (let i = 0; i < 4; i++) {
-          // espera curta (não fica dependente de ação do usuário)
-          await new Promise(r => setTimeout(r, 300));
-          const { data: c2, error: e2 } = await supabase.from("mining_caverns").select("owner_player_id").eq("id", currentMineId).single();
-          if (e2) continue;
-          if (c2 && c2.owner_player_id) { foundOwner = c2.owner_player_id; break; }
-        }
-
-        if (foundOwner) {
-          const { data: owner2 } = await supabase.from("players").select("name").eq("id", foundOwner).single();
-          if (owner2?.name) {
-            if (foundOwner === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
-            else showModalAlert(`${owner2.name} causou o maior dano e conquistou a mina!`);
-          } else {
-            showModalAlert("Outro jogador conquistou a mina!");
-          }
-        } else {
-          // Se mesmo depois de retries não achamos owner, mostramos mensagem de reset
-          showModalAlert("A mina foi resetada.");
+          showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
         }
       }
+    } catch (e) {
+      console.error("[mines] onCombatTimerEnd erro:", e);
+    } finally {
+      resetCombatUI();
+      await loadMines();
     }
-  } catch (e) {
-    console.error("[mines] onCombatTimerEnd erro:", e);
-    showModalAlert("Erro ao encerrar a sessão de combate.");
-  } finally {
-    resetCombatUI();
-    await loadMines();
   }
-}
-
 
   // --- Ataque PvE ---
   async function attack() {
@@ -1055,6 +993,7 @@ async function onCombatTimerEnd() {
     if (damageRankingList) damageRankingList.innerHTML = "";
     currentMineId = null;
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
+    if (cooldownInterval) clearInterval(cooldownInterval);
     if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     ambientMusic.pause();
@@ -1161,11 +1100,9 @@ async function onCombatTimerEnd() {
     if (document.visibilityState === 'hidden') {
       // pausa auto-refresh ao ocultar a aba/tela
       stopMinesAutoRefresh();
-
-      // se estivermos em combate, tenta reconectar/ativar startCombat (com cuidado)
+      
+      // se estivermos em combate, toca o som de aviso para o usuário
       if (currentMineId) {
-        // mantive teu comportamento existente: chamar startCombat(currentMineId) ao ocultar
-        startCombat(currentMineId);
         avisoTelaSound.currentTime = 0;
         avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
       }

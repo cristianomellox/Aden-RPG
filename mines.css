@@ -811,3 +811,13 @@ p {
   padding: 0;
   margin-left: 6px;
 }
+
+@keyframes attack-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.attack-anim {
+    animation: attack-pulse 0.2s ease-in-out;
+}

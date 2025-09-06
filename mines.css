@@ -788,7 +788,7 @@ p {
 
 .new-log-indicator {
     position: absolute;
-    top: -10px;
+    margin-top: -10px;
     right: -5px;
     background-color: red;
     color: white;

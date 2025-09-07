@@ -33,7 +33,8 @@
         <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
-        <span id="pageTitle">Minas de Cristal</span>
+       <div> <span id="pageTitle">Minas de Cristal</span>
+        <img id="minatuto" src="https://aden-rpg.pages.dev/assets/refresh.webp" style="width:30px; height:30px;"></div>
         <a href="#" class="top-bar-link" id="refreshBtn" title="Recarregar">
             <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
         </a>
@@ -194,6 +195,72 @@
         </div>
       </div>
     </div>
+
+    <div id="tutorialModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>Tutorial Completo: O Guia de Mineração</h3>
+            <p>Aqui você encontrará todas as informações para dominar o sistema de mineração.</p>
+            <hr>
+
+            <h4>1. Capturando uma Mina: Combate contra Monstros</h4>
+            <p>Esta é a forma principal de obter uma mina que não tem dono.</p>
+            <ul>
+                <li><strong>Iniciando o Combate:</strong> Para começar a disputar uma mina, você precisa iniciar um combate contra o monstro que a protege. Um jogador **não pode** iniciar um combate se já for dono de uma mina. O status da mina muda de **'aberta'** para **'disputando'** quando o combate começa.</li>
+                <li><strong>Atacando o Monstro:</strong> O ataque é um processo contínuo, onde o dano que você causa é registrado. O sistema mantém um **ranking de dano** para cada mina em disputa, crucial para determinar o novo dono.</li>
+                <li><strong>Finalizando a Sessão:</strong> Quando a vida do monstro chega a zero, a sessão de combate termina. O sistema verifica o ranking de dano para encontrar um novo dono. O jogador com o maior dano elegível se torna o novo proprietário. Após a captura, o ranking é zerado e a mina muda para **'ocupada'**. Se ninguém for elegível, a mina é resetada.</li>
+            </ul>
+            <hr>
+
+            <h4>2. Capturando uma Mina: Combate PvP</h4>
+            <p>Depois que uma mina é capturada por um jogador, ela pode ser disputada através de um combate PvP.</p>
+            <ul>
+                <li><strong>Desafiando o Dono:</strong> Qualquer jogador pode desafiar o dono de uma mina. Você não pode desafiar a si mesmo. O combate PvP consome uma tentativa, que pode ser comprada.</li>
+                <li><strong>Simulação da Batalha:</strong> O combate é uma simulação por turnos. O dono da mina ataca primeiro, seguido pelo desafiante. A batalha continua até que um dos jogadores chegue a zero de vida.</li>
+                <li><strong>Consequências da Batalha:</strong> Se o **desafiante vencer**, ele se torna o novo dono. Se o **dono atual defender**, ele mantém a mina. O histórico de ataques à mina fica disponível para o dono ver.</li>
+            </ul>
+            <hr>
+
+            <h4>3. Sessões e Recompensas</h4>
+            <ul>
+                <li><strong>Sessão:</strong> O sistema de mineração possui sessões que duram **1 hora e 50 minutos**. Um cronômetro na interface mostra quando a próxima sessão começa (em toda hora par).</li>
+                <li><strong>Recompensas:</strong> Ao conquistar uma mina, você passa a coletar cristais passivamente. O máximo de cristais que você pode coletar é de **1500**, equivalente ao tempo da sessão. Se um jogador capturar sua mina, você receberá os cristais coletados até aquele momento.</li>
+            </ul>
+            <hr>
+
+            <h4>4. Guilda Dominante</h4>
+            <p>A guilda que tiver mais membros como donos de mina, aparecerá no topo como **Guilda Dominante**.</p>
+            
+            <button id="closeTutorialBtn" class="action-btn">Fechar</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const minatutoImg = document.getElementById("minatuto");
+            const tutorialModal = document.getElementById("tutorialModal");
+            const closeTutorialBtn = document.getElementById("closeTutorialBtn");
+
+            if (minatutoImg) {
+                minatutoImg.addEventListener("click", () => {
+                    tutorialModal.style.display = "flex";
+                });
+            }
+
+            if (closeTutorialBtn) {
+                closeTutorialBtn.addEventListener("click", () => {
+                    tutorialModal.style.display = "none";
+                });
+            }
+
+            if (tutorialModal) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tutorialModal) {
+                        tutorialModal.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
     
 </body>
 </html>

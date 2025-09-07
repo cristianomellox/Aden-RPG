@@ -107,11 +107,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   let combatTimeLeft = 0;
   const MINES_REFRESH_MS = 20000;
   let minesRefreshInterval = null;
-  let rankingInterval = null;
   const RANKING_REFRESH_MS = 20000;
+  let rankingInterval = null;
   
   let hasAttackedOnce = false;
-// --- Controladores de auto-refresh de minas ---
+  
+  // --- Controladores de auto-refresh de minas ---
   function startMinesAutoRefresh() {
     // evita múltiplos intervalos
     if (minesRefreshInterval) return;
@@ -187,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const buyAttackQtySpan = document.getElementById("buyAttackQty");
   const buyAttackCostInfo = document.getElementById("buyAttackCostInfo");
   const buyDecreaseQtyBtn = document.getElementById("buyDecreaseQtyBtn");
-  const buyIncreaseQtyBtn = document.getElementById("buyIncreaseQtyBtn");
+  const buyIncreaseQtyBtn = document = document.getElementById("buyIncreaseQtyBtn");
   const buyCancelBtn = document.getElementById("buyCancelBtn");
   const buyConfirmBtn = document.getElementById("buyConfirmBtn");
 
@@ -446,7 +447,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function checkForNewPvpLogs() {
     if (!userId || !newLogIndicator) return;
     try {
-        // CORREÇÃO: Removido o parâmetro p_limit que causava o erro
         const { data, error } = await supabase.rpc('get_pvp_history', { p_player_id: userId });
         if (error) {
             console.warn("[mines] Falha ao checar novos logs:", error.message);
@@ -463,24 +463,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
   
-  // -- FUNÇÃO CORRIGIDA --
   async function updatePVPAttemptsUI() {
     if (!userId) return;
     try {
-        // CORREÇÃO: Lê o valor diretamente da tabela 'players'
-        const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left, last_mine_pvp_reset').eq('id', userId).single();
+        const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
         if (error) throw error;
         
-        let attemptsLeft = data?.mine_pvp_attempts_left || 0;
-        const lastResetDate = data?.last_mine_pvp_reset ? new Date(data.last_mine_pvp_reset).getUTCDate() : null;
-        const todayDate = new Date().getUTCDate();
-
-        // Se o dia do último reset for diferente de hoje, chama a função de reset
-        if (lastResetDate !== todayDate) {
-            const { error: resetError } = await supabase.rpc('reset_daily_pvp_attempts', { p_player_id: userId });
-            if (resetError) throw resetError;
-            attemptsLeft = 5; // Define o valor de exibição para 5 após o reset
-        }
+        const attemptsLeft = data?.mine_pvp_attempts_left || 0;
 
         if (playerAttemptsSpan) {
             playerAttemptsSpan.textContent = attemptsLeft;
@@ -566,7 +555,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const timeToNextAttack = player.time_to_next_attack;
 
       if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
-      updatePVPAttemptsUI(); // Atualiza a barra do footer também
       if (cooldownInterval) clearInterval(cooldownInterval);
 
       if (attacksLeft < 5) {
@@ -622,8 +610,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       renderMines(mines || [], ownersMap);
       await checkForNewPvpLogs();
-      await updatePVPAttemptsUI();   // Atualiza tentativas PvP no footer
-      await updatePlayerMineUI();    // Atualiza a mina do jogador no footer
+      await updatePVPAttemptsUI();
+      await updatePlayerMineUI();
     } catch (err) {
       console.error("[mines] loadMines erro:", err);
       minesContainer.innerHTML = `<p>Erro ao carregar minas: ${esc(err.message || err)}</p>`;
@@ -686,12 +674,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // --- Entrar/Iniciar Combate PvE ---
   async function startCombat(mineId) {
     showLoading();
-    // Interrompe o auto refresh ao entrar em combate PvE
+    // interrompe o auto refresh ao entrar em combate PvE
     stopMinesAutoRefresh();
+    // AQUI: Reseta o estado do ataque para a nova disputa
+    hasAttackedOnce = false;
     try {
-      // RESETA O FLAG AQUI para cada novo combate
-      hasAttackedOnce = false;
-
       const sel = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
@@ -841,17 +828,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     showLoading();
     try {
-        const { data: player, error } = await supabase.from('players').select('mine_pvp_attempts_left, last_mine_pvp_reset').eq('id', userId).single();
+        const { data: player, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
         if (error) throw error;
         
         let attemptsLeft = player.mine_pvp_attempts_left;
-        const lastResetDate = player.last_mine_pvp_reset ? new Date(player.last_mine_pvp_reset).getUTCDate() : null;
-        const todayDate = new Date().getUTCDate();
-
-        if (lastResetDate !== todayDate) {
-            attemptsLeft = 5;
-        }
-
+        
         if (attemptsLeft <= 0) {
             showModalAlert("Você não tem mais tentativas de captura hoje.");
             return;
@@ -956,7 +937,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
             }
 
-            // **CORREÇÃO AQUI**: Passando a flag 'evaded'
             displayDamageNumber(turn.damage, turn.critical, turn.evaded, targetElement);
             
             await new Promise(r => setTimeout(r, 1000));
@@ -986,9 +966,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Encerrar manualmente ---
   async function endCombat() {
-    // RESETA O FLAG AQUI para cada novo combate
-    hasAttackedOnce = false;
     resetCombatUI();
+    // AQUI: Reseta o estado do ataque ao sair do combate
+    hasAttackedOnce = false;
     await loadMines();
   }
 
@@ -999,6 +979,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (damageRankingList) damageRankingList.innerHTML = "";
     currentMineId = null;
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
+    if (cooldownInterval) clearInterval(cooldownInterval);
     if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     ambientMusic.pause();
@@ -1034,7 +1015,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     let purchased = 0;
     let spent = 0;
     try {
-        // CORREÇÃO: Voltando ao método de loop com a função correta
         for (let i = 0; i < buyPvpQty; i++) {
             const { data, error } = await supabase.rpc("buy_mine_pvp_attack", { p_player_id: userId });
             if (error || !data?.success) {
@@ -1063,6 +1043,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { window.location.href = "login.html"; return; }
     userId = user.id;
+
+    // --- Nova Lógica de Reset ---
+    // Chama a função RPC para redefinir as tentativas de PvP antes de carregar o resto da página
+    await supabase.rpc('get_player_pvp_state', { p_player_id: userId });
+    
+    // Agora que o reset foi executado (se necessário), atualiza a interface e carrega as minas
     await loadMines();
     await refreshPlayerStats();
     await updatePVPAttemptsUI();
@@ -1101,45 +1087,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateCountdown();
   setInterval(updateCountdown, 1000);
 
-  
-  document.addEventListener("visibilitychange", () => {
+  document.addEventListener("visibilitychange", async () => {
+    // Se a aba ficar oculta
     if (document.visibilityState === 'hidden') {
-      // pausa auto-refresh ao ocultar a aba/tela
       stopMinesAutoRefresh();
-
+      // Se estiver em um combate, toca um aviso de saída
       if (currentMineId) {
-        // ao sair durante combate, apenas toca aviso
         avisoTelaSound.currentTime = 0;
         avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
       }
       return;
     }
 
-    // ao voltar para visível
+    // Se a aba voltar a ficar visível
     if (currentMineId) {
-      // Pega nome da mina em disputa e mostra alerta
-      supabase.from("mining_caverns")
-        .select("name")
-        .eq("id", currentMineId)
-        .single()
-        .then(({ data }) => {
-          const mineName = data?.name || "mina desconhecida";
-          resetCombatUI(); // força fechar modal
-          showModalAlert(`Você saiu da tela durante a disputa pela ${mineName}.`);
-        })
-        .catch(() => {
-          resetCombatUI();
-          showModalAlert("Você saiu da tela durante a disputa por uma mina.");
-        });
+        // Busca o nome da mina para a mensagem de alerta
+        const { data: mineData, error: mineError } = await supabase
+            .from("mining_caverns")
+            .select("name")
+            .eq("id", currentMineId)
+            .single();
 
-      obrigadoSound.currentTime = 0;
-      obrigadoSound.play().catch(e => console.warn("Falha ao tocar obrigado:", e));
-    } else {
-      startMinesAutoRefresh(); // só reinicia se não houver combate
+        const mineName = mineData ? mineData.name : "Desconhecida";
+
+        // Exibe o alerta e reseta a UI
+        showModalAlert(`Você saiu da tela durante a disputa pela ${esc(mineName)}.`);
+        resetCombatUI(); // Isso fechará o modal de combate
     }
 
-    // Atualiza interface imediatamente
-    loadMines().catch(e => console.warn("[mines] loadMines on visibilitychange falhou:", e));
+    // Reinicia auto refresh apenas se não estiver em um combate
+    if (!currentMineId) {
+      startMinesAutoRefresh();
+      // Opcional: faz um carregamento imediato para atualizar a UI ao retornar
+      loadMines().catch(e => console.warn("[mines] loadMines on visibilitychange falhou:", e));
+    }
   });
-
 });

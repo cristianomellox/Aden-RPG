@@ -454,7 +454,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         
         if (data && data.length > 0) {
-            newLogIndicator.style.display = 'block';
+            // Filtra para mostrar apenas duelos onde o jogador foi o defensor
+            const defenderLogs = data.filter(entry => entry.defender_id === userId);
+            if (defenderLogs.length > 0) {
+                newLogIndicator.style.display = 'block';
+            } else {
+                newLogIndicator.style.display = 'none';
+            }
         } else {
             newLogIndicator.style.display = 'none';
         }
@@ -497,15 +503,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function fetchAndRenderHistory() {
     showLoading();
     try {
-        if (newLogIndicator) newLogIndicator.style.display = 'none';
-
         const { data, error } = await supabase.rpc('get_pvp_history', { p_player_id: userId });
         if (error) throw error;
-        historyCache = data || [];
+
+        // 🔥 Filtra apenas os duelos onde o jogador foi defensor
+        historyCache = (data || []).filter(entry => entry.defender_id === userId);
         
         localStorage.setItem('pvpHistory', JSON.stringify(historyCache));
         
+        // Limpa apenas o histórico que o jogador visualizou (já que ele só verá o que foi defensor)
+        // Isso pode ser uma lógica complexa, mas para este caso, vamos simplificar
+        // e limpar todos os logs que o RPC retornou para o jogador.
         await supabase.rpc('clear_pvp_history', { p_player_id: userId });
+        
+        if (newLogIndicator) newLogIndicator.style.display = 'none';
 
         historyList.innerHTML = "";
         if (historyCache.length === 0) {
@@ -515,6 +526,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const li = document.createElement("li");
                 const date = new Date(entry.attack_time).toLocaleString();
                 let resultText, resultColor;
+                // A lógica de vitória/derrota é baseada no defensor
                 if (entry.damage_dealt_by_defender >= entry.damage_dealt_by_attacker) {
                     resultText = "Você venceu";
                     resultColor = "yellow";
@@ -1111,7 +1123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const mineName = mineData ? mineData.name : "Desconhecida";
 
         // Exibe o alerta e reseta a UI
-        showModalAlert(`Você saiu da tela durante a disputa pela ${esc(mineName)}.`);
+        showModalAlert(`Você saiu da tela durante a disputa pela ${esc(mineName)}. Você pode retornar para a disputa. Esta medida é para evitar bugs.`);
         resetCombatUI(); // Isso fechará o modal de combate
     }
 

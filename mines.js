@@ -452,18 +452,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.warn("[mines] Falha ao checar novos logs:", error.message);
             return;
         }
-        
-        if (data && data.length > 0) {
-            // Filtra para mostrar apenas duelos onde o jogador foi o defensor
-            const defenderLogs = data.filter(entry => entry.defender_id === userId);
-            if (defenderLogs.length > 0) {
-                newLogIndicator.style.display = 'block';
-            } else {
-                newLogIndicator.style.display = 'none';
-            }
+
+        const defenderLogs = (data || []).filter(entry => entry.defender_id === userId);
+        const storedHistory = JSON.parse(localStorage.getItem('pvpHistory') || '[]');
+
+        // Compara a quantidade de logs no banco de dados com a do armazenamento local
+        if (defenderLogs.length > 0 && defenderLogs.length > storedHistory.length) {
+            newLogIndicator.style.display = 'block';
         } else {
             newLogIndicator.style.display = 'none';
         }
+
     } catch (e) {
         console.error("[mines] Erro em checkForNewPvpLogs:", e);
     }
@@ -511,11 +510,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         localStorage.setItem('pvpHistory', JSON.stringify(historyCache));
         
-        // Limpa apenas o histórico que o jogador visualizou (já que ele só verá o que foi defensor)
-        // Isso pode ser uma lógica complexa, mas para este caso, vamos simplificar
-        // e limpar todos os logs que o RPC retornou para o jogador.
-        await supabase.rpc('clear_pvp_history', { p_player_id: userId });
-        
+        // Esconde o aviso "Novo" imediatamente após carregar o histórico
         if (newLogIndicator) newLogIndicator.style.display = 'none';
 
         historyList.innerHTML = "";
@@ -644,7 +639,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const start = new Date(mine.open_time || new Date());
         const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
         const crystals = Math.min(1500, Math.floor(seconds * (1500.0 / 6600)));
-        collectingHtml = `<p>${crystals} cristais</p>`;
+        collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
       }
 
       let actionType = null;

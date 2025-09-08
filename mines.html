@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
     <title>Minas de Cristal - Aden RPG</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css" />
@@ -34,7 +36,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
        <div> <span id="pageTitle">Minas de Cristal</span>
-        <img id="minatuto" src="https://aden-rpg.pages.dev/assets/refresh.webp" style="width:30px; height:30px;"></div>
+        <img id="minatuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:20px; height:20px; vertical-align: 5px; right: 3px;"></div>
         <a href="#" class="top-bar-link" id="refreshBtn" title="Recarregar">
             <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
         </a>
@@ -261,6 +263,29 @@
             }
         });
     </script>
+   <script>
+
+document.addEventListener('contextmenu', event => event.preventDefault());
+
+document.addEventListener('keydown', event => { 
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 't' || event.key === 'n')) {
+
+        event.preventDefault();
+    }
+});
+
+    document.addEventListener("DOMContentLoaded", () => {
     
+        history.pushState(null, null, location.href + '#!stop');
+
+        window.addEventListener("popstate", () => {
+          
+            history.pushState(null, null, location.href);
+            location.reload(false); 
+        });
+    });
+
+</script> 
 </body>
 </html>

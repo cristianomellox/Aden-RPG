@@ -111,6 +111,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   let rankingInterval = null;
   
   let hasAttackedOnce = false;
+
+let sessionCheckInterval = null;
+
+async function checkExpiredSessions() {
+  if (!userId) return;
+  try {
+    const { error } = await supabase.rpc("resolve_expired_mine_sessions", { p_player_id: userId });
+    if (error) console.warn("[mines] checkExpiredSessions erro:", error.message);
+  } catch (e) {
+    console.error("[mines] checkExpiredSessions exception:", e);
+  }
+}
+
   
   // --- Controladores de auto-refresh de minas ---
   function startMinesAutoRefresh() {
@@ -717,6 +730,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       rankingInterval = setInterval(fetchAndRenderDamageRanking, RANKING_REFRESH_MS);
 
       ambientMusic.play();
+      if (sessionCheckInterval) clearInterval(sessionCheckInterval);
+      sessionCheckInterval = setInterval(checkExpiredSessions, 1000);
     } catch (e) {
       console.error("[mines] startCombat erro:", e);
       showModalAlert("Erro ao entrar no combate.");
@@ -922,6 +937,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         pvpCombatModal.style.display = 'flex';
         ambientMusic.play();
+      if (sessionCheckInterval) clearInterval(sessionCheckInterval);
+      sessionCheckInterval = setInterval(checkExpiredSessions, 15000);
 
         pvpCountdown.style.display = 'block';
         for (let i = 4; i > 0; i--) {
@@ -992,6 +1009,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ambientMusic.pause();
     ambientMusic.currentTime = 0;
 
+    if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
     // reinicia o auto refresh quando o combate termina / UI é resetada
     startMinesAutoRefresh();
   }

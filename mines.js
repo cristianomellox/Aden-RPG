@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let combatTimeLeft = 0;
   const MINES_REFRESH_MS = 20000;
   let minesRefreshInterval = null;
-  const RANKING_REFRESH_MS = 20000;
+  const RANKING_REFRESH_MS = 10000; // ALTERADO PARA 10s
   let rankingInterval = null;
   
   let hasAttackedOnce = false;
@@ -296,13 +296,31 @@ async function checkExpiredSessions() {
   async function fetchAndRenderDamageRanking() {
     if (!currentMineId || !damageRankingList) return;
     try {
-      const { data, error } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      if (error) {
-        console.warn("[mines] get_mine_damage_ranking falhou:", error.message);
+      // 1. Busca os dados do ranking de dano
+      const { data: rankingData, error: rankingError } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
+      if (rankingError) {
+        console.warn("[mines] get_mine_damage_ranking falhou:", rankingError.message);
         return;
       }
+
+      // 2. Busca o HP atual do monstro
+      const { data: mineData, error: mineError } = await supabase
+        .from("mining_caverns")
+        .select("monster_health, initial_monster_health")
+        .eq("id", currentMineId)
+        .single();
+      if (mineError) {
+        console.warn("[mines] Falha ao buscar HP da mina:", mineError.message);
+      } else {
+        // 3. Atualiza a barra de vida com os dados recém-obtidos
+        const monsterHealth = mineData.monster_health;
+        const initialMonsterHealth = mineData.initial_monster_health;
+        updateHpBar(monsterHealth, initialMonsterHealth || maxMonsterHealth);
+      }
+
+      // 4. Renderiza o ranking de dano
       damageRankingList.innerHTML = "";
-      for (const row of (data || [])) {
+      for (const row of (rankingData || [])) {
         const li = document.createElement("li");
         li.innerHTML = `
           <div class="ranking-entry">

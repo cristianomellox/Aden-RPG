@@ -489,11 +489,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
       try {
-        const { data, error } = await supabase.rpc('search_guilds', {
+        // tenta RPC primeiro
+        let { data, error } = await supabase.rpc('search_guilds', {
           p_query: query,
           p_limit: 20
         });
-        if (error) throw error;
+        if (error || !data || data.length === 0) {
+          // fallback para query direta caso o RPC não exista ou falhe
+          try {
+            const res = await supabase
+              .from('guilds')
+              .select('id, name, description, flag_url, members_count, max_members')
+              .ilike('name', `%${query}%`)
+              .order('members_count', { ascending: false })
+              .limit(20);
+            if (res.error) throw res.error;
+            data = res.data;
+          } catch (innerErr) {
+            throw (error || innerErr || new Error('Erro ao buscar guildas'));
+          }
+        }
+
         if (!data || data.length === 0) {
           if (searchGuildResults) searchGuildResults.innerHTML = '<li>Nenhuma guilda encontrada.</li>';
           return;
@@ -511,7 +527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <div>
                   <strong>${g.name}</strong>
                   <div style="font-size:0.9em;color:#666;">${g.description || ''}</div>
-                  <div style="font-size:0.85em;">Membros: ${g.members_count}/${g.max_members}</div>
+                  <div style="font-size:0.85em;">Membros: ${g.members_count || 0}/${g.max_members || 0}</div>
                 </div>
             </div>
           `;
@@ -546,11 +562,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   };
 
-  // --- Fechar modais ao clicar fora (apenas uma vez) ---
+  // --- Adiciona listener do botão de fechar do modal de edição (faltava) ---
+  if (editCloseBtn) {
+    editCloseBtn.addEventListener('click', () => {
+      if (editGuildModal) editGuildModal.style.display = 'none';
+    });
+  }
+
+  // --- Fechar modais ao clicar fora ---
   window.addEventListener('click', (event) => {
     try {
       if (event.target === createGuildModal) {
-        createGuildModal.style.display = 'none';
+        if (createGuildModal) createGuildModal.style.display = 'none';
         if (createGuildMessage) createGuildMessage.textContent = '';
         if (newGuildNameInput) newGuildNameInput.value = '';
       }

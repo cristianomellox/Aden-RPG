@@ -4,6 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
 <title>Aden RPG</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="style.css" rel="stylesheet"/>
@@ -115,10 +117,10 @@
 </div>
 </div>
 <div id="footerMenu" style="display:none;">
-<button id="homeBtn">Início</button> <button id="guildBtn">Guilda</button>
+<button id="homeBtn">Início</button> <button id="guildBtn" onclick="window.location.href='guild.html';">Guilda</button>
 <button id="pvpBtn">PvP</button>
 <button id="afkBtn" onclick="window.location.href='afk.html';">AFK</button>
-<a href="mines.html"><button id="miningBtn">Mineração</button></a>
+<button id="miningBtn" onclick="window.location.href='mines.html';">Mineração</button>
 <button id="castlesBtn">Castelos</button>
 </div>
 <div id="chatBubble" style="display:none;">

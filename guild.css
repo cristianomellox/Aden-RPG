@@ -1,0 +1,249 @@
+/* Estilos para o menu de abas */
+#tabMenu {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 20px;
+    background-color: #2e2e2e;
+    border-radius: 8px;
+    padding: 10px;
+    overflow: hidden;
+  
+}
+
+.tab-btn {
+    flex-grow: 1;
+    padding: 4px 5px;
+    /* Remove todos os estilos padrão de botão */
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    outline: inherit;
+
+    /* Estilos para criar a aparência de abas */
+    background-color: #444;
+    color: white;
+    font-size: 0.7em;
+    transition: background-color 0.2s, color 0.2s;
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    top: 10px;
+}
+
+/* Bordas entre as abas para separar visualmente */
+.tab-btn:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.tab-btn:hover:not(.active) {
+    background-color: #555;
+}
+
+.tab-btn.active {
+    background-color: #c9a94a;
+    color: #1a1a1a;
+    font-weight: bold;
+    z-index: 2;
+    border-top: 2px solid #c9a94a;
+}
+
+/* Arredonda as pontas do menu */
+.tab-btn:first-child {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.tab-btn:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+/* Esconde as abas de conteúdo por padrão */
+.tab-pane {
+    display: none;
+    font-size: 1em;
+    background-color: #2e2e2e;
+    border-radius: 8px;
+    text-align: left;
+    color: white;
+}
+
+/* Mostra apenas a aba ativa */
+.tab-pane.active {
+    display: block;
+}
+
+/* Estilos para a seção de informações da guilda */
+#guildInfoContainer {
+    text-align: center;
+}
+
+#guildName {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+#guildLevel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.xp-bar-container {
+    width: 200px;
+    height: 20px;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.xp-bar-fill {
+    height: 100%;
+    background-color: #4caf50;
+    transition: width 0.3s;
+}
+
+.member-list-container {
+    margin-top: 20px;
+}
+
+#guildMemberList {
+    list-style: none;
+    padding: 0;
+}
+
+#guildMemberList li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #444;
+}
+
+#guildMemberList li:last-child {
+    border-bottom: none;
+}
+
+.member-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid #888;
+}
+
+.member-name {
+    font-weight: bold;
+    flex-grow: 1;
+}
+
+.member-role {
+    font-size: 0.8em;
+    color: #ccc;
+}
+
+#guildRankingList li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #444;
+}
+
+#guildRankingList li:last-child {
+    border-bottom: none;
+}
+
+.ranking-guild-name {
+    font-weight: bold;
+}
+
+/* Estilos para o Modal de Criação de Guilda */
+.modal {
+    display: none; /* Oculto por padrão */
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    justify-content: center;
+    align-items: center;
+    padding-top: 50px;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border: 1px solid #555;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 400px;
+    text-align: center;
+    position: relative;
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: #e0dccc;
+    text-decoration: none;
+}
+
+#newGuildNameInput {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin: 10px 0;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    color: #e0dccc;
+    border-radius: 5px;
+}
+
+.action-btn {
+    padding: 10px 20px;
+    margin-top: 10px;
+    border: none;
+    background-color: #c9a94a;
+    color: #1a1a1a;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+    background-color: #a98d3e;
+}
+
+.message {
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+.message.error {
+    color: #ff6347; /* Vermelho claro */
+}
+
+.message.success {
+    color: #4caf50; /* Verde */
+}
+p {
+  color: white;
+}

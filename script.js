@@ -6,7 +6,6 @@ const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Define o tempo de expiração do cache em milissegundos (ex: 24 horas)
-const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000;
 
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
@@ -121,8 +120,7 @@ async function signOut() {
     if (error) {
         console.error('Erro ao sair:', error.message);
     }
-    localStorage.removeItem('playerData_' + supabaseClient.auth.user().id);
-    window.location.reload();
+        window.location.reload();
 }
 
 // Função helper para renderizar a UI com os dados do jogador
@@ -194,28 +192,12 @@ function applyItemBonuses(player, equippedItems) {
 }
 
 // Função principal para buscar e exibir as informações do jogador
-async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
+
+async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         updateUIVisibility(false);
         return;
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const isRefreshParam = urlParams.get('refresh');
-    const shouldRefresh = isRefreshParam === 'true' || forceRefresh;
-
-    const cachedData = localStorage.getItem('playerData_' + user.id);
-    if (cachedData && !shouldRefresh) {
-        const { data, timestamp } = JSON.parse(cachedData);
-        if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
-            renderPlayerUI(data, preserveActiveContainer);
-            if (data.name === 'Nome') {
-                document.getElementById('editPlayerName').value = '';
-                profileEditModal.style.display = 'flex';
-            }
-            return;
-        }
     }
 
     const { data: player, error: playerError } = await supabaseClient
@@ -228,7 +210,6 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // Busca os itens equipados do jogador
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
         .select(`
@@ -256,13 +237,10 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     if (itemsError) {
         console.error('Erro ao buscar itens equipados:', itemsError.message);
-        return;
+        // continue without equipped items
     }
 
-    // Aplica os bônus dos itens para calcular os atributos totais
     const playerWithEquips = applyItemBonuses(player, equippedItems || []);
-
-    // Calcula o combat power com base nos atributos totais
     playerWithEquips.combat_power = Math.floor(
         (playerWithEquips.attack * 12.5) +
         (playerWithEquips.min_attack * 1.5) +
@@ -273,8 +251,6 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         (playerWithEquips.evasion * 1)
     );
 
-    // Salva o novo estado no cache e renderiza a UI
-    localStorage.setItem('playerData_' + user.id, JSON.stringify({ data: playerWithEquips, timestamp: Date.now() }));
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
 
     if (playerWithEquips.name === 'Nome') {
@@ -464,4 +440,13 @@ if (closeProfileModalBtn) {
     closeProfileModalBtn.onclick = () => {
         profileEditModal.style.display = 'none';
     };
+}
+
+// --- Service Worker ---
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw_afk.js")
+            .then(reg => console.log("Service Worker registrado:", reg.scope))
+            .catch(err => console.error("Erro ao registrar Service Worker:", err));
+    });
 }

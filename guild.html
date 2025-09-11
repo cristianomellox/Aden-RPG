@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="mines.css" />
     <link rel="stylesheet" href="guild.css" />
+
 </head>
 <body>
 
@@ -35,12 +36,15 @@
         <div id="tabContent">
             <div id="guilda" class="tab-pane active">
                 <div id="guildInfoContainer" style="display:none;">
-                    <div id="guildInfoHeader" style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3>Informações da Guilda</h3>
-                        <button id="editGuildBtn" class="action-btn small" style="display:none;">Editar</button>
+                   
+              <div class="icon-container"><img id="editGuildBtn" src="https://aden-rpg.pages.dev/assets/notifica.webp" style="width:38px;height:38px;border-radius:4px; display: none;"></img></div>     
+                    <div id="guildInfoHeader" style="display:flex; justify-content:center; align-items:center;">
+                  
+                        
                     </div>
                     <div id="guildName"></div>
-                    <div id="guildMemberCount"></div>
+                    <div id="guildDescription" style="margin:6px 0;color:white;"></div>
+                    
                     <div id="guildLevel">
                         <span>Nível <span id="guildLevelValue"></span></span>
                         <div class="xp-bar-container">
@@ -48,7 +52,7 @@
                         </div>
                     </div>
                     <div class="member-list-container">
-                        <h4>Membros</h4>
+                        <h4>Membros (<span id="guildMemberCountHeader">0</span>)</h4>
                         <ul id="guildMemberList"></ul>
                     </div>
                 </div>
@@ -84,7 +88,7 @@
             <h3>Criar Nova Guilda</h3>
             <p>Custo: <strong class="crystals-cost">2000</strong> Cristais</p>
             <p>Nível Mínimo: <strong class="level-min">10</strong></p>
-            <input type="text" id="newGuildNameInput" placeholder="Nome da Guilda" maxlength="25">
+            <input type="text" id="newGuildNameInput" placeholder="Nome da Guilda" maxlength="12">
             <button id="confirmCreateGuildBtn" class="action-btn">Criar</button>
             <p id="createGuildMessage" class="message"></p>
         </div>
@@ -94,24 +98,59 @@
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <h3>Editar Guilda</h3>
-            
-            <label>Nome da Guilda (1x a cada 30 dias):</label>
-            <input type="text" id="editGuildName" maxlength="25">
-            <p id="editNameInfo" class="message"></p>
-            
-            <label>Descrição:</label>
-            <textarea id="editGuildDescription"></textarea>
-            
-            <label>Bandeira (URL):</label>
-            <input type="text" id="editGuildFlagUrl" placeholder="https://...">
 
-            <button id="saveGuildChangesBtn" class="action-btn">Salvar Alterações</button>
+           <div id="editTabMenu" class="tab-scroll">
+    <span class="edit-tab-btn" data-tab="tab-edit">Editar</span>
+    <span class="edit-tab-btn" data-tab="tab-requests">Solicitações</span>
+    <span class="edit-tab-btn" data-tab="tab-manage">Gerenciar</span>
+    <span class="edit-tab-btn" data-tab="tab-notice">Quadro de Aviso</span>
+    <span class="edit-tab-btn" data-tab="tab-chest">Baú</span>
+</div>
 
-            <h4>Gerenciar Membros</h4>
-            <ul id="manageMembersList"></ul>
 
-            <h4>Solicitações Pendentes</h4>
-            <ul id="guildRequestsList"></ul>
+            <div id="editTabContent">
+                <div id="tab-edit" class="edit-tab-pane" style="display:none;">
+                    <label>Nome da Guilda (1x a cada 30 dias):</label>
+                    <input type="text" id="editGuildName" maxlength="25">
+                    <p id="editNameInfo" class="message"></p>
+
+                    <label>Descrição:</label>
+                    <textarea id="editGuildDescription" maxlength="100"></textarea>
+
+                    <label>Bandeira (URL):</label>
+                    <input type="text" id="editGuildFlagUrl" placeholder="https://...">
+
+                    <button id="saveGuildChangesBtn" class="action-btn">Salvar Alterações</button>
+                </div>
+
+                <div id="tab-requests" class="edit-tab-pane" style="display:none;">
+                    <h4>Solicitações Pendentes</h4>
+                    <ul id="guildRequestsList"></ul>
+                </div>
+
+                <div id="tab-manage" class="edit-tab-pane" style="display:none;">
+                    <h4>Gerenciar Membros</h4>
+                    <ul id="manageMembersList"></ul>
+                </div>
+
+                <div id="tab-notice" class="edit-tab-pane" style="display:none;">
+                    <h4>Aviso Atual</h4>
+                    <div id="guildNotice" style="padding:8px;border:1px solid #ddd;border-radius:6px;background:#444;"></div>
+                    <div id="noticeInfo" style="font-size:0.9em;color:white;margin-top:6px;"></div>
+                    <div id="noticeEditor" style="margin-top:8px;display:none;">
+                        <textarea id="editGuildNotice" placeholder="Escreva um aviso breve..." maxlength="150"></textarea>
+                        <button id="saveGuildNoticeBtn" class="action-btn">Atualizar Aviso</button>
+                    </div>
+                    <hr style="margin:10px 0;">
+                    <h4>Registro de Atividades</h4>
+                    <ul id="guildLogsList"></ul>
+                </div>
+
+                <div id="tab-chest" class="edit-tab-pane" style="display:none;">
+                    <h4>Baú</h4>
+                    <p>Em breve.</p>
+                </div>
+            </div>
         </div>
     </div>
 

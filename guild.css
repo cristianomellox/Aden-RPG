@@ -294,27 +294,31 @@ body {
     z-index: 9; 
 }
 
-/* Bolinha usada dentro do modal (inline ao lado do texto da aba) */
-.notif-dot {
-  display:inline-block;
-  position: relative;   /* não é fixo! */
-  width:10px;
-  height:10px;
-  background:red;
-  border-radius:50%;
-  margin-left:6px;
-  vertical-align:middle;
-  border:1px solid white;
+/* As abas do modal precisam ser referência para a bolinha */
+.edit-tab-btn {
+  position: relative;
 }
 
-/* Bolinha usada na tela inicial sobre o ícone "notifica.webp" */
+/* bolinha inline para abas do modal */
+.notif-dot {
+  position: absolute;
+  top: 40%;
+  right: -2px;          /* empurra pra direita do texto */
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  background: red;
+  border-radius: 50%;
+  border: 1px solid white;
+}
+/* bolinha fixa da tela inicial sobre o ícone "notifica.webp" */
 .notif-dot-main {
-  position: fixed;      /* aqui sim é fixo */
-  width:10px;
-  height:10px;
-  background:red;
-  border-radius:50%;
-  border:1px solid white;
-  right:16px;
-  top:96px;
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  background: red;
+  border-radius: 50%;
+  border: 1px solid white;
+  right: 16px;
+  top: 96px;
 }

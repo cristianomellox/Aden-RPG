@@ -216,7 +216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const sorted = (guildData.players || []).slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
         sorted.forEach(m => {
           const li = document.createElement('li');
-          li.innerHTML = '<img src="' + (m.avatar_url||'/assets/default_avatar.png') + '" style="width:38px;height:38px;border-radius:6px;margin-right:8px;"> <span>' + m.name + '</span> <small style="margin-left:8px;color:gold">' + traduzCargo(m.rank) + '</small>';
+          li.innerHTML = '<img src="' + (m.avatar_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:38px;height:38px;border-radius:6px;margin-right:8px;"> <span>' + m.name + '</span> <small style="margin-left:8px;color:gold">' + traduzCargo(m.rank) + '</small>';
           guildMemberListElement.appendChild(li);
         });
       }

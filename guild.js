@@ -527,7 +527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         data.forEach(g => {
           const li = document.createElement('li');
           li.style.display = 'flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.padding='8px 0';
-          li.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><img src="' + (g.flag_url||'/assets/default_guild_flag.png') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
+          li.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
           const btn = document.createElement('button'); btn.className = 'action-btn small'; btn.textContent = 'Solicitar Entrada';
           btn.onclick = () => requestJoinGuild(g.id, g.name);
           li.appendChild(btn);

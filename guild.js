@@ -127,31 +127,42 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function checkGuildNotifications(guildData){
     if (!editGuildBtn) return;
     let hasRequests = false, hasNotice = false;
-
-    try {
-      const { data: reqs, error } = await supabase.from('guild_join_requests').select('id').eq('guild_id', guildData.id).limit(1);
-      if (!error && reqs && reqs.length > 0) hasRequests = true;
-    } catch(e){ console.error('check requests', e); }
-
-    try {
-      if (guildData.last_notice_update){
-        const last = new Date(guildData.last_notice_update);
-        const diffMs = Date.now() - last.getTime();
-        if (diffMs < 24*3600*1000) hasNotice = true;
-      }
-    } catch(e){ console.error('check notice', e); }
-
-    // verificar se já foi lido
+    
     const readRequests = localStorage.getItem(`guild_${guildData.id}_tab-requests_read`);
-    const readNotice   = localStorage.getItem(`guild_${guildData.id}_tab-notice_read`);
+    const readNotice = localStorage.getItem(`guild_${guildData.id}_tab-notice_read`);
 
-    if (hasRequests && !readRequests) markTabNotification('tab-requests', true);
-    else markTabNotification('tab-requests', false);
+    // Check for new notices
+    if (guildData.last_notice_update) {
+        const lastNoticeUpdate = new Date(guildData.last_notice_update).getTime();
+        const lastReadNotice = readNotice ? parseInt(readNotice, 10) : 0;
+        if (lastNoticeUpdate > lastReadNotice) {
+            hasNotice = true;
+        }
+    }
 
-    if (hasNotice && !readNotice) markTabNotification('tab-notice', true);
-    else markTabNotification('tab-notice', false);
+    // Check for new requests
+    try {
+        const { data: mostRecentRequest, error } = await supabase.from('guild_join_requests')
+            .select('created_at')
+            .eq('guild_id', guildData.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
-    updateGuildNotifications(((!readRequests && hasRequests) || (!readNotice && hasNotice)));
+        if (!error && mostRecentRequest) {
+            const lastRequestDate = new Date(mostRecentRequest.created_at).getTime();
+            const lastReadRequests = readRequests ? parseInt(readRequests, 10) : 0;
+            if (lastRequestDate > lastReadRequests) {
+                hasRequests = true;
+            }
+        }
+    } catch(e) {
+        console.error('Erro ao checar solicitações recentes', e);
+    }
+    
+    markTabNotification('tab-requests', hasRequests);
+    markTabNotification('tab-notice', hasNotice);
+    updateGuildNotifications(hasRequests || hasNotice);
   }
 
   function markTabNotification(tabId, show){
@@ -202,7 +213,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       currentGuildData = guildData;
+      
+      // Update XP bar here
       try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }
+      
       const me = (guildData.players || []).find(p => p.id === userId);
       userRank = me ? me.rank : 'member';
 
@@ -346,18 +360,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             const promImg = document.createElement('img');
             promImg.src = "https://aden-rpg.pages.dev/assets/promover.webp";
             promImg.alt = "Promover";
-            promImg.onclick = () => promoteToCoLeader(m.id);
+            promImg.onclick = () => promoteToCoLeader(m.id, m.name);
             actions.appendChild(promImg);
           } else if (m.rank === 'co-leader'){
             const revokeImg = document.createElement('img');
             revokeImg.src = "https://aden-rpg.pages.dev/assets/rebaixar.webp";
             revokeImg.alt = "Revogar";
-            revokeImg.onclick = () => revokeCoLeader(m.id);
+            revokeImg.onclick = () => revokeCoLeader(m.id, m.name);
 
             const transferImg = document.createElement('img');
             transferImg.src = "https://aden-rpg.pages.dev/assets/transferlider.webp";
             transferImg.alt = "Transferir";
-            transferImg.onclick = () => transferLeadership(m.id);
+            transferImg.onclick = () => transferLeadership(m.id, m.name);
 
             actions.appendChild(revokeImg);
             actions.appendChild(transferImg);
@@ -427,7 +441,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // --- Actions: promote/revoke/transfer/expel/accept/reject ---
-  async function promoteToCoLeader(targetId){
+  async function promoteToCoLeader(targetId, targetName){
+    if (!confirm(`Tem certeza que deseja promover ${targetName} para co-líder?`)) return;
     try {
       const { error } = await supabase.rpc('promote_to_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
       if (error) throw error;
@@ -438,7 +453,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch(e){ alert('Erro ao promover: ' + (e.message || e)); console.error(e); }
   }
 
-  async function revokeCoLeader(targetId){
+  async function revokeCoLeader(targetId, targetName){
+    if (!confirm(`Tem certeza que deseja revogar co-líder de ${targetName}?`)) return;
     try {
       const { error } = await supabase.rpc('revoke_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
       if (error) throw error;
@@ -449,7 +465,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch(e){ alert('Erro ao revogar: ' + (e.message || e)); console.error(e); }
   }
 
-  async function transferLeadership(targetId){
+  async function transferLeadership(targetId, targetName){
+    if (!confirm(`Tem certeza que deseja transferir a liderança da guilda para ${targetName}? Esta ação é irreversível!`)) return;
     try {
       const { error } = await supabase.rpc('transfer_leadership', { p_guild_id: userGuildId, p_old_leader_id: userId, p_new_leader_id: targetId });
       if (error) throw error;
@@ -698,28 +715,3 @@ function updateGuildXpBar(guildData){
     console.error('updateGuildXpBar error', e); 
   }
 }
-
-
-
-
-const originalLoadGuildInfo = loadGuildInfo;
-loadGuildInfo = async function(){
-  await originalLoadGuildInfo();
-  if (currentGuildData){
-    updateGuildXpBar(currentGuildData);
-  }
-}
-
-// Fallback: attempt to update XP bar after loadGuildInfo runs (safety net)
-(function attachGuildXpHook(){
-  try{
-    // wrap a global loadGuildInfo if available
-    if (typeof window.loadGuildInfo === 'function'){
-      const orig = window.loadGuildInfo;
-      window.loadGuildInfo = async function(){
-        await orig();
-        try{ if (typeof updateGuildXpBar === 'function') updateGuildXpBar(window.currentGuildData || null); }catch(e){}
-      }
-    }
-  }catch(e){}
-})();

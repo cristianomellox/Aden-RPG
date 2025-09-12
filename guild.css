@@ -221,12 +221,11 @@
     padding: 10px 20px;
     margin-top: 10px;
     border: none;
-    background-color: #c9a94a;
-    color: #1a1a1a;
-    border-radius: 5px;
+    color: white;
     font-weight: bold;
     cursor: pointer;
     transition: background-color 4s;
+    font-size: 0.8em;
 }
 
 .action-btn:hover {
@@ -469,7 +468,7 @@ body {
 
 /* Informação do jogador/solicitação sempre colada à esquerda */
 .request-info,
-.member-info {
+.member-info, #searchGuildResults {
   flex: 1 1 auto;
   text-align: left;
 }

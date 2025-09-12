@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", async () => {
   const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
@@ -203,11 +202,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       currentGuildData = guildData;
+      try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }
       const me = (guildData.players || []).find(p => p.id === userId);
       userRank = me ? me.rank : 'member';
 
       const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-      if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:150px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
+      if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
       if (guildDescriptionEl) guildDescriptionEl.textContent = guildData.description || '';
 
       if (guildMemberListElement){
@@ -216,7 +216,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const sorted = (guildData.players || []).slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
         sorted.forEach(m => {
           const li = document.createElement('li');
-          li.innerHTML = '<img src="' + (m.avatar_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:38px;height:38px;border-radius:6px;margin-right:8px;"> <span>' + m.name + '</span> <small style="margin-left:8px;color:gold">' + traduzCargo(m.rank) + '</small>';
+          li.innerHTML = `
+  <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+       style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
+  <span>${m.name}</span> 
+  <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
+  <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>
+`;
           guildMemberListElement.appendChild(li);
         });
       }
@@ -231,18 +237,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         const membersFromPlayers = (guildData.players && guildData.players.length) ? guildData.players.length : 0;
         if (lvlEl) lvlEl.textContent = (guildData.level !== undefined && guildData.level !== null) ? guildData.level : (guildData.level || '1');
         if (memberCountEl) memberCountEl.textContent = (guildData.members_count !== undefined && guildData.members_count !== null) ? guildData.members_count : membersFromPlayers;
-        if (memberCountHeader) memberCountHeader.textContent = (guildData.members_count !== undefined && guildData.members_count !== null) ? guildData.members_count : membersFromPlayers;
+        if (memberCountHeader) {
+  const currentMembers = (guildData.members_count !== undefined && guildData.members_count !== null) 
+      ? guildData.members_count 
+      : membersFromPlayers;
+  const maxMembers = guildData.max_members || getMaxMembers(guildData.level || 1);
+  memberCountHeader.textContent = `${currentMembers} / ${maxMembers}`;
+}
       }catch(e){console.error('set guild counts', e)}
 
 
       if (editGuildBtn){
-        if (guildData.leader_id === userId){
-          editGuildBtn.style.display = 'inline-block';
-          editGuildBtn.onclick = () => openEditGuildModal(guildData);
-        } else {
-          editGuildBtn.style.display = 'none';
-        }
-      }
+  editGuildBtn.style.display = 'inline-block';
+  editGuildBtn.onclick = () => openEditGuildModal(guildData);
+}
+
 
       // check notifications
       if (editGuildBtn) checkGuildNotifications(guildData);
@@ -296,14 +305,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else {
           requests.forEach(r => {
             const li = document.createElement('li');
-            li.style.display = 'flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.padding='6px 0';
-            li.innerHTML = '<div><strong>' + (r.player_name || '') + '</strong><div style="font-size:0.9em;color:#666">' + (r.message || '') + '</div></div>';
+            li.className = 'request-item';
+            li.innerHTML = '<div class="request-info"><strong>' + (r.player_name || '') + '</strong><div class="request-message">' + (r.message || '') + '</div></div>';
             const actions = document.createElement('div');
-            const acceptBtn = document.createElement('button'); acceptBtn.className = 'action-btn small'; acceptBtn.textContent = 'Aceitar';
-            acceptBtn.onclick = () => acceptRequest(r.id);
-            const rejectBtn = document.createElement('button'); rejectBtn.className = 'action-btn small danger'; rejectBtn.textContent = 'Rejeitar';
-            rejectBtn.onclick = () => rejectRequest(r.id);
-            actions.appendChild(acceptBtn); actions.appendChild(rejectBtn); li.appendChild(actions);
+            actions.className = 'request-actions';
+            const acceptImg = document.createElement('img');
+            acceptImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
+            acceptImg.alt = "Aceitar";
+            acceptImg.onclick = () => acceptRequest(r.id);
+
+            const rejectImg = document.createElement('img');
+            rejectImg.src = "https://aden-rpg.pages.dev/assets/recusar.webp";
+            rejectImg.alt = "Recusar";
+            rejectImg.onclick = () => rejectRequest(r.id);
+
+            actions.appendChild(acceptImg);
+            actions.appendChild(rejectImg);
+            li.appendChild(actions);
             guildRequestsList.appendChild(li);
           });
         }
@@ -319,30 +337,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     members.forEach(m => {
       if (!manageMembersList) return;
       const li = document.createElement('li');
-      li.style.display='flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.padding='6px 0';
-      li.innerHTML = '<div><strong>' + m.name + '</strong> <small style="margin-left:8px;color:#666">' + traduzCargo(m.rank) + '</small></div>';
+      li.innerHTML = '<div class="member-info"><strong>' + m.name + '</strong> <small class="member-rank">' + traduzCargo(m.rank) + '</small></div>';
       const actions = document.createElement('div');
+      actions.className = 'member-actions';
       if (m.id !== userId){
         if (isLeader){
           if (m.rank === 'member'){
-            const promBtn = document.createElement('button'); promBtn.className = 'action-btn small'; promBtn.textContent = 'Promover a Co-Líder';
-            promBtn.onclick = () => promoteToCoLeader(m.id);
-            actions.appendChild(promBtn);
+            const promImg = document.createElement('img');
+            promImg.src = "https://aden-rpg.pages.dev/assets/promover.webp";
+            promImg.alt = "Promover";
+            promImg.onclick = () => promoteToCoLeader(m.id);
+            actions.appendChild(promImg);
           } else if (m.rank === 'co-leader'){
-            const revokeBtn = document.createElement('button'); revokeBtn.className = 'action-btn small'; revokeBtn.textContent = 'Revogar Co-Líder';
-            revokeBtn.onclick = () => revokeCoLeader(m.id);
-            actions.appendChild(revokeBtn);
-            const transferBtn = document.createElement('button'); transferBtn.className = 'action-btn small'; transferBtn.textContent = 'Transferir Liderança';
-            transferBtn.onclick = () => transferLeadership(m.id);
-            actions.appendChild(transferBtn);
+            const revokeImg = document.createElement('img');
+            revokeImg.src = "https://aden-rpg.pages.dev/assets/rebaixar.webp";
+            revokeImg.alt = "Revogar";
+            revokeImg.onclick = () => revokeCoLeader(m.id);
+
+            const transferImg = document.createElement('img');
+            transferImg.src = "https://aden-rpg.pages.dev/assets/transferlider.webp";
+            transferImg.alt = "Transferir";
+            transferImg.onclick = () => transferLeadership(m.id);
+
+            actions.appendChild(revokeImg);
+            actions.appendChild(transferImg);
           }
-          const expelBtn = document.createElement('button'); expelBtn.className = 'action-btn small danger'; expelBtn.textContent = 'Expulsar';
-          expelBtn.onclick = () => expelMember(m.id);
-          actions.appendChild(expelBtn);
+          const expelImg = document.createElement('img');
+          expelImg.src = "https://aden-rpg.pages.dev/assets/expulsar.webp";
+          expelImg.alt = "Expulsar";
+          expelImg.onclick = () => expelMember(m.id);
+          actions.appendChild(expelImg);
         } else if (isCoLeader && m.rank === 'member'){
-          const expelBtn = document.createElement('button'); expelBtn.className = 'action-btn small danger'; expelBtn.textContent = 'Expulsar';
-          expelBtn.onclick = () => expelMember(m.id);
-          actions.appendChild(expelBtn);
+          const expelImg = document.createElement('img');
+          expelImg.src = "https://aden-rpg.pages.dev/assets/expulsar.webp";
+          expelImg.alt = "Expulsar";
+          expelImg.onclick = () => expelMember(m.id);
+          actions.appendChild(expelImg);
         }
       } else {
         const meSpan = document.createElement('span'); meSpan.textContent = '(Você)'; actions.appendChild(meSpan);
@@ -410,7 +440,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function revokeCoLeader(targetId){
     try {
-      const { error } = await supabase.from('players').update({ rank: 'member' }).eq('id', targetId);
+      const { error } = await supabase.rpc('revoke_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
       if (error) throw error;
       await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'demote', p_message:null });
       alert('Revogado');
@@ -526,8 +556,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (searchGuildResults) searchGuildResults.innerHTML = '';
         data.forEach(g => {
           const li = document.createElement('li');
-          li.style.display = 'flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.padding='8px 0';
-          li.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
+            li.className = 'request-item';
+          li.innerHTML = '<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
           const btn = document.createElement('button'); btn.className = 'action-btn small'; btn.textContent = 'Solicitar Entrada';
           btn.onclick = () => requestJoinGuild(g.id, g.name);
           li.appendChild(btn);
@@ -624,3 +654,72 @@ document.getElementById('guildRequestsBtn')?.addEventListener('click', () => {
 document.getElementById('guildNoticeBtn')?.addEventListener('click', () => {
     updateGuildNotifications(false);
 });
+
+// --- Guild Level System ---
+function calculateGuildXpNeeded(level){
+  return Math.floor(300 * Math.pow(level, 1.5));
+}
+
+function getMaxCoLeaders(level){
+  if (level >= 8) return 3;
+  if (level >= 5) return 2;
+  return 1;
+}
+
+function getMaxMembers(level){
+  return 10 + (level - 1) * 2;
+}
+
+// Atualizar barra de XP dinamicamente
+function updateGuildXpBar(guildData){
+  try {
+    const xpFill = document.querySelector('.xp-bar-fill'); // barra verde
+    const xpText = document.getElementById('guildXpFill'); // texto centralizado
+    if (!xpFill || !xpText) return;
+
+    const currentXp = Number((guildData && guildData.experience) ? guildData.experience : 0);
+    const currentLevel = Number((guildData && guildData.level) ? guildData.level : 1);
+    const neededXp = (typeof calculateGuildXpNeeded === 'function') 
+        ? calculateGuildXpNeeded(currentLevel) 
+        : Math.floor(300 * Math.pow(currentLevel, 1.5));
+
+    const percent = (neededXp > 0 && !isNaN(neededXp)) 
+        ? Math.max(0, Math.min(100, Math.floor((currentXp / neededXp) * 100))) 
+        : 0;
+
+    // Atualiza a largura da barra verde
+    xpFill.style.width = percent + '%';
+
+    // Atualiza o texto centralizado
+    xpText.textContent = currentXp + ' / ' + neededXp;
+    xpText.setAttribute('aria-valuenow', currentXp);
+    xpText.setAttribute('aria-valuemax', neededXp);
+  } catch(e){ 
+    console.error('updateGuildXpBar error', e); 
+  }
+}
+
+
+
+
+const originalLoadGuildInfo = loadGuildInfo;
+loadGuildInfo = async function(){
+  await originalLoadGuildInfo();
+  if (currentGuildData){
+    updateGuildXpBar(currentGuildData);
+  }
+}
+
+// Fallback: attempt to update XP bar after loadGuildInfo runs (safety net)
+(function attachGuildXpHook(){
+  try{
+    // wrap a global loadGuildInfo if available
+    if (typeof window.loadGuildInfo === 'function'){
+      const orig = window.loadGuildInfo;
+      window.loadGuildInfo = async function(){
+        await orig();
+        try{ if (typeof updateGuildXpBar === 'function') updateGuildXpBar(window.currentGuildData || null); }catch(e){}
+      }
+    }
+  }catch(e){}
+})();

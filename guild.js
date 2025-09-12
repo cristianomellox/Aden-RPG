@@ -489,24 +489,66 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch(e){ alert('Erro ao expulsar: ' + (e.message || e)); console.error(e); }
   }
 
-  async function acceptRequest(requestId){
+  
+    async function acceptRequest(requestId){
     try {
-      // fetch the request to obtain the player id for logging
-      const { data: req, error: reqErr } = await supabase.from('guild_join_requests').select('player_id').eq('id', requestId).single();
+      const { data: req, error: reqErr } = await supabase
+        .from('guild_join_requests')
+        .select('player_id')
+        .eq('id', requestId)
+        .single();
       if (reqErr) throw reqErr;
       if (!req) throw new Error('Solicitação não encontrada');
 
-      const { error } = await supabase.rpc('accept_guild_join_request', { p_guild_id: userGuildId, p_request_id: requestId, p_requester_id: userId });
+      // chama RPC
+      const { error } = await supabase.rpc('accept_guild_join_request', {
+        p_guild_id: userGuildId,
+        p_request_id: requestId,
+        p_requester_id: userId
+      });
       if (error) throw error;
 
-      // log with the actual target player id (fixes "Null entrou na guilda")
-      await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: req.player_id, p_action: 'join', p_message: null });
+      // checa se o jogador realmente entrou na guilda
+      const { data: target } = await supabase
+        .from('players')
+        .select('guild_id')
+        .eq('id', req.player_id)
+        .single();
 
-      alert('Aceito');
+      if (target && target.guild_id === userGuildId) {
+        // entrou de verdade
+        await supabase.rpc('log_guild_action',{
+          p_guild_id: userGuildId,
+          p_actor_id: userId,
+          p_target_id: req.player_id,
+          p_action: 'join',
+          p_message: null
+        });
+        alert('Solicitação aceita');
+      } else {
+        // foi apenas excluída → registrar como rejeição
+        await supabase.rpc('log_guild_action',{
+          p_guild_id: userGuildId,
+          p_actor_id: userId,
+          p_target_id: req.player_id,
+          p_action: 'reject',
+          p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe)'
+        });
+        alert('Solicitação removida (jogador já está em outra guilda ou não existe).');
+      }
+
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
-    } catch(e){ alert('Erro ao aceitar: ' + (e.message || e)); console.error(e); }
+
+    } catch(e){
+      alert('Erro ao aceitar: ' + (e.message || e));
+      console.error(e);
+      await loadGuildInfo();
+      openEditGuildModal(currentGuildData);
+    }
   }
+
+
 
   async function rejectRequest(requestId){
     try {

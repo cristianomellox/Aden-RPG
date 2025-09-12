@@ -25,7 +25,7 @@
     background-color: #444;
     color: white;
     font-size: 0.7em;
-    transition: background-color 0.2s, color 0.2s;
+    transition: background-color 0.5s, color 0.2s;
     position: relative;
     z-index: 1;
     text-align: center;
@@ -95,10 +95,10 @@
 }
 
 .xp-bar-container {
-    width: 200px;
+    width: 80%;
     height: 20px;
     background-color: #1a1a1a;
-    border: 1px solid #555;
+    border: 1px solid yellow;
     border-radius: 5px;
     overflow: hidden;
 }
@@ -116,6 +116,7 @@
 #guildMemberList {
     list-style: none;
     padding: 0;
+    font-size: 0.8em;
 }
 
 #guildMemberList li {
@@ -123,7 +124,7 @@
     align-items: center;
     gap: 10px;
     padding: 10px;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid #777;
 }
 
 #guildMemberList li:last-child {
@@ -186,7 +187,7 @@
     border-radius: 10px;
     width: 80%;
     max-width: 400px;
-    text-align: center;
+  
     position: relative;
 }
 
@@ -225,7 +226,7 @@
     border-radius: 5px;
     font-weight: bold;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 4s;
 }
 
 .action-btn:hover {
@@ -254,6 +255,11 @@ p {
   border-bottom: 1px solid #ccc;
   margin-bottom: 10px;
 }
+
+/* esconder apenas a barra, mas manter o scroll funcional */
+#editTabMenu::-webkit-scrollbar { height: 0px; }
+#editTabMenu { scrollbar-width: none; } /* Firefox */
+
 #editTabMenu::-webkit-scrollbar { height: 6px; }
 #editTabMenu::-webkit-scrollbar-thumb { background: #999; border-radius: 4px; }
 
@@ -282,6 +288,7 @@ p {
 
 #mainContainer {
   width: 90%;
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
 }
 body {
   width: 99vw;
@@ -321,4 +328,164 @@ body {
   border: 1px solid white;
   right: 16px;
   top: 96px;
+}
+.xp-bar-container {
+  position: relative;
+}
+
+#guildXpFill {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;          /* ocupa toda a largura da barra */
+  text-align: center;   /* centraliza o texto */
+  pointer-events: none; /* evita atrapalhar cliques */
+  font-size: 0.9em;
+  color: white;
+  text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 4px black,
+        0 0 8px black;
+}
+
+
+.member-actions img,
+.request-actions img {
+  width: 20px !important;
+  height: 20px !important;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+
+/* Forçar: esconder barra de rolagem horizontal mas manter scrolling */
+#editTabMenu {
+  overflow-x: auto !important;
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;     /* Firefox */
+}
+#editTabMenu::-webkit-scrollbar { height: 0 !important; }
+
+/* Garantir tamanho dos ícones de ação (força 35x35) */
+.member-actions img,
+.request-actions img {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  
+}
+
+/* Alinhar o conteúdo (nomes/mensagens) à esquerda nas listas do modal */
+#manageMembersList li div,
+#guildRequestsList li div {
+  text-align: left !important;
+  flex: 1 1 auto !important;
+}
+
+/* Garante que o <li> seja flex e os itens fiquem alinhados corretamente */
+#manageMembersList li,
+#guildRequestsList li {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 8px;
+}
+
+/* Espaçamento extra para os actions */
+.member-actions,
+.request-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start!important;
+  min-width: 120px;
+  left: 0;
+  
+}
+
+/* ---- Ajustes novos para requests e members ---- */
+
+/* Solicitações */
+.request-item {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.request-info {
+  flex: 1;
+  text-align: left;
+}
+
+.request-message {
+  font-size: 0.9em;
+  color: white;
+}
+
+/* Membros */
+.member-item {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.member-info {
+  flex: 1;
+  text-align: left;
+}
+
+.member-rank {
+  margin-left: 8px;
+  color: white;
+}
+
+/* Forçar que as listas usem 100% da largura disponível */
+#manageMembersList,
+#guildRequestsList {
+  width: 100% !important;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+}
+
+/* Cada item ocupa toda a largura */
+#manageMembersList li,
+#guildRequestsList li {
+  width: 100% !important;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Informação do jogador/solicitação sempre colada à esquerda */
+.request-info,
+.member-info {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+/* Botões de ação ficam colados logo após o texto */
+.request-actions,
+.member-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+}
+.modal-content {
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+}
+#tabContent #guilda, #tabContent #taverna, #tabContent #ranking, #tabContent #boss, #tabContent #batalhas {
+  background: none;
+  background-color: none;
 }

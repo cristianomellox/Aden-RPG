@@ -213,6 +213,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       currentGuildData = guildData;
+    // 🔹 verifica se é líder para mostrar/ocultar o botão deletar guilda
+    const deleteGuildBtn = document.getElementById('deleteguild');
+    if (deleteGuildBtn) {
+      if (guildData.leader_id === userId) {
+        deleteGuildBtn.style.display = 'block';
+      } else {
+        deleteGuildBtn.style.display = 'none';
+      }
+    }
+
       
       // Update XP bar here
       try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }

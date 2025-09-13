@@ -295,7 +295,7 @@ body {
 
 #editGuildBtn {
     position: fixed;
-    top: 94px;
+    top: 97px;
     right: 13px;
     z-index: 9; 
 }
@@ -315,18 +315,19 @@ body {
   height: 10px;
   background: red;
   border-radius: 50%;
-  border: 1px solid white;
+  border: 2px solid white;
 }
 /* bolinha fixa da tela inicial sobre o ícone "notifica.webp" */
 .notif-dot-main {
   position: fixed;
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   background: red;
   border-radius: 50%;
-  border: 1px solid white;
-  right: 16px;
-  top: 96px;
+  border: 2px solid white;
+  right: 13px;
+  top: 92px;
+  z-index: 10;
 }
 .xp-bar-container {
   position: relative;

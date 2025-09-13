@@ -150,11 +150,14 @@
 
 #guildRankingList li {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;   /* tudo alinhado à esquerda */
     align-items: center;
+    gap: 10px;                     /* espaçamento entre itens */
     padding: 10px;
     border-bottom: 1px solid #444;
+    text-align: left;              /* força alinhamento do texto */
 }
+
 
 #guildRankingList li:last-child {
     border-bottom: none;
@@ -506,4 +509,18 @@ body {
 .modal-content {
   max-height: 85%;
   margin-top: 25px;
+}
+#guildRankingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+}
+
+#guildRankingList li {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 3px !important;
+  width: 95% !important;
 }

@@ -1,3 +1,4 @@
+
 document.addEventListener("DOMContentLoaded", async () => {
   const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
@@ -48,6 +49,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const editCloseBtn = editGuildModal ? editGuildModal.querySelector('.close-btn') : null;
   const searchCloseBtn = searchGuildModal ? searchGuildModal.querySelector('.close-btn') : null;
   const refreshBtn = $('#refreshBtn');
+  const guildPowerEl = $('#guildPower');
+  const guildRankingList = $('#guildRankingList');
 
   // --- Main tabs (tela inicial) ---
   function activateMainTab(tabId){
@@ -78,6 +81,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       const tab = btn.dataset.tab;
       if (!tab) return;
       activateMainTab(tab);
+      // se abrir aba ranking, carregue o ranking
+      if (tab === 'ranking') {
+        loadGuildRanking();
+      }
     });
   }
 
@@ -234,6 +241,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
       if (guildDescriptionEl) guildDescriptionEl.textContent = guildData.description || '';
 
+      // Novo: Calcular poder total da guilda via RPC (inclui equipamentos equipados)
+      let guildPowerValue = null;
+      try {
+        const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: userGuildId });
+        if (!powerError && powerData) {
+          // supabase pode retornar array de rows ou objeto/valor direto
+          if (Array.isArray(powerData) && powerData.length > 0 && powerData[0].total_power !== undefined) {
+            guildPowerValue = Number(powerData[0].total_power);
+          } else if (powerData.total_power !== undefined) {
+            guildPowerValue = Number(powerData.total_power);
+          } else if (typeof powerData === 'number' || typeof powerData === 'string') {
+            guildPowerValue = Number(powerData);
+          }
+        }
+      } catch(e){
+        console.error('Erro ao chamar get_guild_power RPC', e);
+      }
+
+      // fallback: caso RPC não exista ou falhe, soma o campo combat_power (menos preciso)
+      if (guildPowerValue === null) {
+        try {
+          guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+        } catch(e){ guildPowerValue = 0; }
+      }
+
+      if (guildPowerEl) guildPowerEl.textContent = ` ${guildPowerValue.toLocaleString('pt-BR')}`;
+
       if (guildMemberListElement){
         guildMemberListElement.innerHTML = '';
         const roles = ['leader','co-leader','member'];
@@ -282,6 +316,48 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     } catch(e){
       console.error('Erro loadGuildInfo', e);
+    }
+  }
+
+  // --- Carregar Ranking ---
+  async function loadGuildRanking(){
+    try {
+      const { data, error } = await supabase.rpc('get_guilds_ranking', { limit_count: 100 });
+      if (error) throw error;
+
+      const listEl = document.getElementById('guildRankingList');
+      if (listEl){
+        listEl.innerHTML = '';
+        data.forEach((g, idx)=>{
+  const power = Number(g.total_power || 0);
+  const compactPower = formatNumberCompact(power);
+  const li = document.createElement('li');
+  li.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left;">
+      <span style="width:28px;text-align:right;">${idx+1}º</span>
+      <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+           style="width:48px;height:48px;border-radius:6px;margin-left:8px;">
+      <div style="flex:1;text-align:left;">
+        <strong style="color:white">${g.name}</strong>
+      </div>
+      <img alt="poder" id="cpIcon" style="width: 20px; height: 28px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/><div style="color:orange;font-weight:bold;min-width:90px; font-size: 1.3em;">${compactPower}</div>
+    </div>`;
+  
+  // 🔹 Estilos especiais para o Top 3
+  if (idx === 0) {
+    li.style.background = "linear-gradient(90deg, rgba(255,215,0,0.3), rgba(255,215,0,0.1))"; // dourado
+  } else if (idx === 1) {
+    li.style.background = "linear-gradient(90deg, rgba(192,192,192,0.3), rgba(192,192,192,0.1))"; // prata
+  } else if (idx === 2) {
+    li.style.background = "linear-gradient(90deg, rgba(205,127,50,0.3), rgba(205,127,50,0.1))"; // bronze
+  }
+
+  listEl.appendChild(li);
+});
+      }
+    } catch(e){
+      console.error('Erro ao carregar ranking', e);
+      if (guildRankingList) guildRankingList.innerHTML = '<li>Erro ao carregar ranking.</li>';
     }
   }
 
@@ -477,14 +553,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function transferLeadership(targetId, targetName){
     if (!confirm(`Tem certeza que deseja transferir a liderança da guilda para ${targetName}? Esta ação é irreversível!`)) return;
-    try {
-      const { error } = await supabase.rpc('transfer_leadership', { p_guild_id: userGuildId, p_old_leader_id: userId, p_new_leader_id: targetId });
-      if (error) throw error;
-      await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
-      alert('Transferida');
-      await loadGuildInfo();
-      editGuildModal.style.display = 'none';
-    } catch(e){ alert('Erro: ' + (e.message || e)); console.error(e); }
+  try {
+    const { error } = await supabase.rpc('transfer_leadership', { p_guild_id: userGuildId, p_old_leader_id: userId, p_new_leader_id: targetId });
+    if (error) throw error;
+    await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
+    alert('Transferida');
+    await loadGuildInfo();
+    editGuildModal.style.display = 'none';
+  } catch(e){ alert('Erro: ' + (e.message || e)); console.error(e); }
   }
 
   async function expelMember(targetId){

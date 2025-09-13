@@ -668,6 +668,46 @@ document.addEventListener("DOMContentLoaded", async () => {
   const ok = await getUserSession();
   if (ok) await loadGuildInfo();
 
+
+  // --- Botões: Deletar / Sair da guilda ---
+  const deleteGuildBtn = document.getElementById('deleteguild');
+  const leaveGuildBtn = document.getElementById('leaveguild');
+
+  // Deletar guilda (apenas líder)
+  if (deleteGuildBtn) {
+    deleteGuildBtn.addEventListener('click', async (ev) => {
+      ev?.preventDefault();
+      if (!userGuildId) {
+        alert('Erro: guilda não encontrada no contexto. Recarregue a página.');
+        return;
+      }
+      if (!confirm("Tem certeza que deseja deletar a guilda? Esta ação é irreversível. Todos os dados da guilda serão excluídos! Você só poderá entrar em outra guilda após 24 horas.")) return;
+      try {
+        const res = await supabase.rpc('delete_guild', { p_guild_id: userGuildId, p_player_id: userId });
+        if (res?.error) throw res.error;
+        alert('Guilda deletada.');
+        userGuildId = null;
+        await loadGuildInfo();
+      } catch(e) { alert('Erro: ' + (e.message || e)); console.error(e); }
+    });
+  }
+
+  // Sair da guilda (membros, exceto líder)
+  if (leaveGuildBtn) {
+    leaveGuildBtn.addEventListener('click', async (ev) => {
+      ev?.preventDefault();
+      if (!confirm("Tem certeza que você quer sair da guilda? Esta ação é irreversível. Você só poderá entrar em outra guilda após 24 horas.")) return;
+      try {
+        const res = await supabase.rpc('leave_guild', { p_player_id: userId });
+        if (res?.error) throw res.error;
+        alert('Você saiu da guilda.');
+        userGuildId = null;
+        await loadGuildInfo();
+      } catch(e) { alert('Erro: ' + (e.message || e)); console.error(e); }
+    });
+  }
+
+
 }); // end DOMContentLoaded
 
 

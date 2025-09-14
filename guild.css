@@ -502,9 +502,49 @@ body {
 #playerTopBar {
   z-index: 800;
 }
-
 #risco {
-  background: linear-gradient(to bottom, #ff3041 0%, red 50%, #ff3041 100%); 
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 102, 102, 0.5), rgba(255, 102, 102, 0.2));
+  height: 97px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  gap: 5px; /* Espaço entre o título e os botões */
+}
+
+#risco h3 {
+  margin: 0; /* Remove a margem do título */
+  font-size: 1em;
+  padding: 0;
+}
+
+#risco > div {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  gap: 60px; 
+  font-size: 0.8em;
+  font-weight: bold;
+}
+#deleteguild, #leaveguild {
+  border: 5px solid grey;
+  border-radius: 8px;
+  width: 110px;
+}
+
+#risco img {
+  width: 40px;
+  height: 40px;
+}
+
+#deleteguild, #leaveguild {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centraliza a imagem e o texto horizontalmente */
+  text-align: center;
 }
 .modal-content {
   max-height: 85%;
@@ -522,5 +562,103 @@ body {
   justify-content: flex-start !important;
   align-items: center !important;
   gap: 3px !important;
-  width: 95% !important;
+  width: 100% !important;
+}
+#guildRankingList li span:first-child {
+  font-size: 0.9em; 
+  font-weight: bold;
+}
+
+/* Container principal de cada item do ranking */
+.ranking-item-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 0;
+    border-bottom: 1px solid white;
+    text-align: left;
+}
+
+/* Posição do ranking (1º, 2º, etc.) */
+.ranking-position {
+    width: 28px;
+    text-align: right;
+    font-size: 0.9em; 
+    font-weight: bold;
+}
+
+/* Bandeira da guilda */
+.ranking-flag {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    margin-left: 8px;
+}
+
+/* Novo contêiner para nome e poder */
+.ranking-info {
+    flex: 1; /* Permite que ocupe o espaço restante */
+    display: flex;
+    flex-direction: column; /* Empilha os itens verticalmente */
+    text-align: left;
+    white-space: nowrap; /* Evita que o nome quebre a linha */
+    overflow: hidden; /* Oculta qualquer texto que exceda a largura */
+    text-overflow: ellipsis; /* Adiciona "..." ao final de nomes longos */
+}
+
+/* Nome da guilda */
+.ranking-name {
+    color: white;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+/* Contêiner para a imagem e o valor do poder */
+.ranking-power {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Ícone de poder */
+.cp-icon {
+    width: 18px;
+    height: 25px;
+    vertical-align: -3px;
+}
+
+/* Valor do poder */
+.power-value {
+    color: orange;
+    font-weight: bold;
+    font-size: 1.3em;
+}
+
+/* Remova ou ajuste as regras antigas para #guildRankingList */
+#guildRankingList li {
+    padding: 0;
+    border-bottom: none;
+}
+
+#guildRankingList li img {
+    margin-left: 0;
+}
+
+
+
+
+#searchGuildResults {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+}
+
+#searchGuildResults li {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 3px !important;
+  width: 100% !important;
 }

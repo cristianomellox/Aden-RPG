@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", async () => {
   const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
@@ -266,7 +265,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch(e){ guildPowerValue = 0; }
       }
 
-      if (guildPowerEl) guildPowerEl.textContent = ` ${guildPowerValue.toLocaleString('pt-BR')}`;
+      // Aplica a formatação compacta ao valor do poder de combate na tela inicial
+      const compactPower = formatNumberCompact(guildPowerValue);
+      if (guildPowerEl) guildPowerEl.textContent = ` ${compactPower}`;
 
       if (guildMemberListElement){
         guildMemberListElement.innerHTML = '';
@@ -333,23 +334,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   const compactPower = formatNumberCompact(power);
   const li = document.createElement('li');
   li.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;width:100%;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left;">
-      <span style="width:28px;text-align:right;">${idx+1}º</span>
-      <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
-           style="width:48px;height:48px;border-radius:6px;margin-left:8px;">
-      <div style="flex:1;text-align:left;">
-        <strong style="color:white">${g.name}</strong>
-      </div>
-      <img alt="poder" id="cpIcon" style="width: 20px; height: 28px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/><div style="color:orange;font-weight:bold;min-width:90px; font-size: 1.3em;">${compactPower}</div>
-    </div>`;
+            <div class="ranking-item-content">
+                <span class="ranking-position">${idx+1}º</span>
+                <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+                     class="ranking-flag">
+                <div class="ranking-info">
+                    <strong class="ranking-name">${g.name}</strong>
+                    <div class="ranking-power">
+                        <img alt="poder" class="cp-icon" style="margin-top: -5px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/>
+                        <span class="power-value">${compactPower}</span>
+                    </div>
+                </div>
+            </div>`;
   
   // 🔹 Estilos especiais para o Top 3
   if (idx === 0) {
-    li.style.background = "linear-gradient(90deg, rgba(255,215,0,0.3), rgba(255,215,0,0.1))"; // dourado
+    li.style.background = "linear-gradient(180deg, rgba(255,215,0,0.5), rgba(255,215,0,0.1))"; // dourado
   } else if (idx === 1) {
-    li.style.background = "linear-gradient(90deg, rgba(192,192,192,0.3), rgba(192,192,192,0.1))"; // prata
+    li.style.background = "linear-gradient(180deg, rgba(192,192,192,0.6), rgba(169,169,169,0.1))"; // prata
   } else if (idx === 2) {
-    li.style.background = "linear-gradient(90deg, rgba(205,127,50,0.3), rgba(205,127,50,0.1))"; // bronze
+    li.style.background = "linear-gradient(180deg, rgba(205,127,50,0.4), rgba(210,180,40,0.1))"; // bronze
   }
 
   listEl.appendChild(li);
@@ -703,9 +707,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           const li = document.createElement('li');
             li.className = 'request-item';
           li.innerHTML = '<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
-          const btn = document.createElement('button'); btn.className = 'action-btn small'; btn.textContent = 'Solicitar Entrada';
-          btn.onclick = () => requestJoinGuild(g.id, g.name);
-          li.appendChild(btn);
+          
+          const btnImg = document.createElement('img');
+          btnImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
+          btnImg.alt = "Solicitar Entrada";
+          btnImg.style.cssText = "width: 30px; height: 30px; vertical-align: -1px; margin-left: 5px; cursor: pointer;";
+          btnImg.onclick = () => requestJoinGuild(g.id, g.name);
+
+          li.appendChild(btnImg);
           searchGuildResults.appendChild(li);
         });
       } catch(e){ console.error('Erro search', e); if (searchGuildResults) searchGuildResults.innerHTML = '<li>Erro ao buscar guildas.</li>'; }

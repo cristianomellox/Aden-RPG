@@ -59,7 +59,9 @@
                         <h4>Membros (<span id="guildMemberCountHeader">0</span>)</h4>
                         <ul id="guildMemberList"></ul>
                     </div>
-                    <br><br><br><div id="risco">
+                    <br><br><br>
+                    <div style="border-bottom: 5px solid grey; border-radius: 8px;"></div>
+                    <div id="risco">
   <h3>Área de Risco</h3>
   <div>
     <div id="deleteguild">
@@ -181,6 +183,30 @@
         <ul id="searchGuildResults"></ul>
       </div>
     </div>
+    <div id="viewGuildModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-btn" id="viewGuildCloseBtn">&times;</span>
+        <div id="guildViewContainer">
+            <div id="guildViewHeader" style="display:flex; justify-content:center; align-items:center;"></div>
+            <div id="guildViewName" style="text-align: center;"></div>
+            <div style="text-align: center;">
+                <img alt="poder" id="cpIcon" style="width: 28px; height: 37px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/>
+                <span id="guildViewPower" style="color:orange; font-weight:bold; font-size:1.8em; margin-top:4px;"></span>
+            </div>
+            <div id="guildViewDescription" style="margin:6px 0;color:white; font-size: 0.8em; text-align: center;"></div>
+            <div style="text-align: center;">
+                <span style="color: yellow; font-weight: bold; font-size: 0.9em;">Nv. <span id="guildViewLevelValue"></span></span>
+            </div>
+            <div class="member-list-container">
+                <h4>Membros (<span id="guildViewMemberCountHeader">0</span>)</h4>
+                <ul id="guildViewMemberList"></ul>
+            </div>
+            <div id="guildViewActions" style="text-align: center; margin-top: 20px;">
+                <button id="viewJoinGuildBtn" class="action-btn">Entrar na Guilda</button>
+            </div>
+        </div>
+    </div>
+</div>
    <script src="number_format.js"></script>
     <script src="guild.js"></script>
 </body>

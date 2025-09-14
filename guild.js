@@ -50,6 +50,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const refreshBtn = $('#refreshBtn');
   const guildPowerEl = $('#guildPower');
   const guildRankingList = $('#guildRankingList');
+  
+  // Novas referências DOM para o modal de visualização de guilda
+  const viewGuildModal = $('#viewGuildModal');
+  const viewGuildCloseBtn = $('#viewGuildCloseBtn');
+  const guildViewContainer = $('#guildViewContainer');
+  const guildViewName = $('#guildViewName');
+  const guildViewPower = $('#guildViewPower');
+  const guildViewDescription = $('#guildViewDescription');
+  const guildViewLevelValue = $('#guildViewLevelValue');
+  const guildViewMemberCountHeader = $('#guildViewMemberCountHeader');
+  const guildViewMemberList = $('#guildViewMemberList');
+  const viewJoinGuildBtn = $('#viewJoinGuildBtn');
 
   // --- Main tabs (tela inicial) ---
   function activateMainTab(tabId){
@@ -128,6 +140,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function formatDateTime(dt){
     try { return new Date(dt).toLocaleString(); } catch(e){ return dt; }
+  }
+
+  function formatNumberCompact(num) {
+    if (num < 1000) return num;
+    const units = ['', 'K', 'M', 'B', 'T'];
+    const unitIndex = Math.floor(Math.log10(num) / 3);
+    const compactValue = (num / Math.pow(1000, unitIndex)).toFixed(1);
+    return compactValue + units[unitIndex];
   }
 
   async function checkGuildNotifications(guildData){
@@ -319,6 +339,57 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error('Erro loadGuildInfo', e);
     }
   }
+  
+  // Função para buscar e exibir os dados da guilda em um modal
+  async function fetchAndDisplayGuildInfo(guildId) {
+    if (!viewGuildModal) return;
+    try {
+        // Busca dados da guilda e membros
+        const { data: guildData, error: guildError } = await supabase
+            .from('guilds')
+            .select('*, players!players_guild_id_fkey(*)')
+            .eq('id', guildId)
+            .single();
+
+        if (guildError || !guildData) {
+            console.error('Erro ao buscar dados da guilda', guildError);
+            return;
+        }
+
+        // Popula o modal com as informações da guilda
+        const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+        guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
+        guildViewDescription.textContent = guildData.description || '';
+        guildViewLevelValue.textContent = guildData.level || 1;
+        guildViewMemberCountHeader.textContent = `${(guildData.players || []).length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
+        
+        // Recalcula o poder da guilda
+        let guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+        guildViewPower.textContent = formatNumberCompact(guildPowerValue);
+
+        // Lista de membros
+        guildViewMemberList.innerHTML = '';
+        const roles = ['leader', 'co-leader', 'member'];
+        const sorted = (guildData.players || []).slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
+        sorted.forEach(m => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+                     style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
+                <span>${m.name}</span> 
+                <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
+                <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>
+            `;
+            guildViewMemberList.appendChild(li);
+        });
+
+        // Exibe o modal
+        viewGuildModal.style.display = 'flex';
+    } catch (e) {
+        console.error('Erro ao exibir modal da guilda', e);
+    }
+  }
+
 
   // --- Carregar Ranking ---
   async function loadGuildRanking(){
@@ -333,6 +404,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const power = Number(g.total_power || 0);
   const compactPower = formatNumberCompact(power);
   const li = document.createElement('li');
+  // Adicione a classe para o cursor e o atributo de ID
+  li.className = 'ranking-item-clickable';
+  li.dataset.guildId = g.id;
   li.innerHTML = `
             <div class="ranking-item-content">
                 <span class="ranking-position">${idx+1}º</span>
@@ -358,6 +432,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   listEl.appendChild(li);
 });
+      // Adicione o event listener após a lista ser carregada
+      listEl.addEventListener('click', (ev) => {
+          const item = ev.target.closest('li');
+          if (item && item.dataset.guildId) {
+              fetchAndDisplayGuildInfo(item.dataset.guildId);
+          }
+      });
       }
     } catch(e){
       console.error('Erro ao carregar ranking', e);
@@ -705,7 +786,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (searchGuildResults) searchGuildResults.innerHTML = '';
         data.forEach(g => {
           const li = document.createElement('li');
-            li.className = 'request-item';
+          // Adicione o atributo de ID e a classe clicável
+          li.className = 'search-item-clickable';
+          li.dataset.guildId = g.id;
           li.innerHTML = '<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
           
           const btnImg = document.createElement('img');
@@ -720,6 +803,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       } catch(e){ console.error('Erro search', e); if (searchGuildResults) searchGuildResults.innerHTML = '<li>Erro ao buscar guildas.</li>'; }
     });
   }
+  
+  // Adicione o event listener para os resultados de busca
+  if (searchGuildResults) {
+    searchGuildResults.addEventListener('click', (ev) => {
+        const item = ev.target.closest('li');
+        if (item && item.dataset.guildId) {
+            // Esconde o modal de busca
+            searchGuildModal.style.display = 'none';
+            // Abre o modal de visualização da guilda
+            fetchAndDisplayGuildInfo(item.dataset.guildId);
+        }
+    });
+  }
 
   window.requestJoinGuild = async function(guildId, guildName){
     try {
@@ -731,12 +827,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch(e){ alert('Erro ao enviar solicitação: ' + (e.message || e)); console.error(e); }
   };
 
-  // close modal handlers (edit & create & search)
+  // close modal handlers (edit & create & search & view)
   if (editCloseBtn) editCloseBtn.addEventListener('click', ()=>{ if (editGuildModal) editGuildModal.style.display = 'none'; });
+  if (viewGuildCloseBtn) viewGuildCloseBtn.addEventListener('click', () => { viewGuildModal.style.display = 'none'; });
   window.addEventListener('click', (ev) => {
     if (ev.target === editGuildModal) editGuildModal.style.display = 'none';
     if (ev.target === searchGuildModal) searchGuildModal.style.display = 'none';
     if (ev.target === createGuildModal) createGuildModal.style.display = 'none';
+    if (ev.target === viewGuildModal) viewGuildModal.style.display = 'none';
   });
 
   // create guild simple handlers

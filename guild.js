@@ -621,7 +621,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           else if (l.action === 'expel') text = actor + ' expulsou ' + target + ' às ' + formatDateTime(l.created_at);
           else if (l.action === 'join') text = target + ' entrou na guilda às ' + formatDateTime(l.created_at);
           else if (l.action === 'leave') text = target + ' saiu da guilda às ' + formatDateTime(l.created_at);
-          else if (l.action === 'reject') text = actor + ' rejeitou ' + target + ' às ' + formatDateTime(l.created_at);
+          else if (l.action === 'reject') {
+            // Usa a mensagem do banco de dados, que já deve estar correta
+            text = l.message + ' às ' + formatDateTime(l.created_at);
+          }
           else if (l.action === 'notice') text = 'Aviso atualizado por ' + actor + ' às ' + formatDateTime(l.created_at) + ': ' + (l.message || '');
           else text = (l.action || '') + ' - ' + (l.message || '') + ' @ ' + formatDateTime(l.created_at);
 
@@ -751,12 +754,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 
-
-  async function rejectRequest(requestId){
+async function rejectRequest(requestId){
     try {
       const { error } = await supabase.rpc('reject_guild_join_request', { p_request_id: requestId, p_requester_id: userId });
       if (error) throw error;
-      await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: null, p_action: 'reject', p_message: requestId });
+      // This is the line to remove or comment out to prevent the duplicate log.
+      // await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: null, p_action: 'reject', p_message: requestId });
       alert('Rejeitado');
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);

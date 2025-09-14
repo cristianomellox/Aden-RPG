@@ -648,17 +648,20 @@ body {
 
 
 
-#searchGuildResults {
+#searchGuildResults, #guildViewMemberList {
   list-style: none;
   margin: 0;
   padding: 0;
   text-align: left !important;
 }
 
-#searchGuildResults li {
+#searchGuildResults li, #guildViewMemberList li {
   display: flex !important;
   justify-content: flex-start !important;
   align-items: center !important;
   gap: 3px !important;
   width: 100% !important;
+}
+#guildViewMemberList {
+  font-size: 0.8em;
 }

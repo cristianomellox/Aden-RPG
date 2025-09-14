@@ -363,9 +363,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         guildViewLevelValue.textContent = guildData.level || 1;
         guildViewMemberCountHeader.textContent = `${(guildData.players || []).length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
-        // Recalcula o poder da guilda
-        let guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
-        guildViewPower.textContent = formatNumberCompact(guildPowerValue);
+        // --- NOVO: RECALCULA O PODER DA GUILDA USANDO O RPC ---
+        let guildPowerValue = null;
+        try {
+          const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: guildId });
+          if (!powerError && powerData) {
+            if (Array.isArray(powerData) && powerData.length > 0 && powerData[0].total_power !== undefined) {
+              guildPowerValue = Number(powerData[0].total_power);
+            } else if (powerData.total_power !== undefined) {
+              guildPowerValue = Number(powerData.total_power);
+            } else if (typeof powerData === 'number' || typeof powerData === 'string') {
+              guildPowerValue = Number(powerData);
+            }
+          }
+        } catch(e){
+          console.error('Erro ao chamar get_guild_power RPC para o modal', e);
+        }
+
+        // Fallback: se o RPC falhar, usa a soma do combat_power (menos preciso)
+        if (guildPowerValue === null) {
+          try {
+            guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+          } catch(e){ guildPowerValue = 0; }
+        }
+
+        const compactPower = formatNumberCompact(guildPowerValue);
+        guildViewPower.textContent = compactPower;
 
         // Lista de membros
         guildViewMemberList.innerHTML = '';
@@ -401,13 +424,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (listEl){
         listEl.innerHTML = '';
         data.forEach((g, idx)=>{
-  const power = Number(g.total_power || 0);
-  const compactPower = formatNumberCompact(power);
-  const li = document.createElement('li');
-  // Adicione a classe para o cursor e o atributo de ID
-  li.className = 'ranking-item-clickable';
-  li.dataset.guildId = g.id;
-  li.innerHTML = `
+          // AVISO: Se a guilda não tem um ID válido, o problema está na função do banco de dados (RPC).
+          if (!g.guild_id) {
+            console.error('AVISO: Guilda com ID inválido encontrada. O registro não será clicável. Por favor, verifique a função `get_guilds_ranking` no seu Supabase.', g);
+          }
+          
+          const power = Number(g.total_power || 0);
+          const compactPower = formatNumberCompact(power);
+          const li = document.createElement('li');
+          
+          li.className = 'ranking-item-clickable';
+          if (g.guild_id) {
+              li.dataset.guildId = g.guild_id;
+          }
+          
+          li.innerHTML = `
             <div class="ranking-item-content">
                 <span class="ranking-position">${idx+1}º</span>
                 <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
@@ -420,18 +451,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                     </div>
                 </div>
             </div>`;
-  
-  // 🔹 Estilos especiais para o Top 3
-  if (idx === 0) {
-    li.style.background = "linear-gradient(180deg, rgba(255,215,0,0.5), rgba(255,215,0,0.1))"; // dourado
-  } else if (idx === 1) {
-    li.style.background = "linear-gradient(180deg, rgba(192,192,192,0.6), rgba(169,169,169,0.1))"; // prata
-  } else if (idx === 2) {
-    li.style.background = "linear-gradient(180deg, rgba(205,127,50,0.4), rgba(210,180,40,0.1))"; // bronze
-  }
+          
+          // 🔹 Estilos especiais para o Top 3
+          if (idx === 0) {
+            li.style.background = "linear-gradient(180deg, rgba(255,215,0,0.5), rgba(255,215,0,0.1))"; // dourado
+          } else if (idx === 1) {
+            li.style.background = "linear-gradient(180deg, rgba(192,192,192,0.6), rgba(169,169,169,0.1))"; // prata
+          } else if (idx === 2) {
+            li.style.background = "linear-gradient(180deg, rgba(205,127,50,0.4), rgba(210,180,40,0.1))"; // bronze
+          }
+          listEl.appendChild(li);
+        });
 
-  listEl.appendChild(li);
-});
       // Adicione o event listener após a lista ser carregada
       listEl.addEventListener('click', (ev) => {
           const item = ev.target.closest('li');
@@ -703,7 +734,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           p_actor_id: userId,
           p_target_id: req.player_id,
           p_action: 'reject',
-          p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe)'
+          p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe).'
         });
         alert('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
@@ -788,7 +819,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           const li = document.createElement('li');
           // Adicione o atributo de ID e a classe clicável
           li.className = 'search-item-clickable';
-          li.dataset.guildId = g.id;
+          if (g.id) {
+            li.dataset.guildId = g.id;
+          } else {
+            console.error('Guilda inválida encontrada nos resultados de busca:', g);
+            return;
+          }
           li.innerHTML = '<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
           
           const btnImg = document.createElement('img');

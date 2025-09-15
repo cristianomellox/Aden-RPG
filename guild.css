@@ -862,6 +862,7 @@ body {
 #promptModal .modal-content {
     max-width: 400px;
     text-align: center;
+    
 }
 
 #promptModalMessage {
@@ -881,4 +882,40 @@ body {
     font-family: inherit;
     font-size: 1em;
     resize: vertical; 
+}
+
+
+#playerItemDetailsModal {
+  z-index: 99999;
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  z-index: 99999;
+}
+
+#playerItemImageContainer img {
+  width: 64px;
+  height: 64px;
+  border: 2px solid #888;
+  border-radius: 8px;
+  margin-right: 10px;
+}
+
+.item-box {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+#playerItemStats p,
+#playerItemRefineRows div {
+  margin: 4px 0;
+}
+.modal-overlay {
+  background-image: none;
 }

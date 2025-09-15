@@ -51,18 +51,59 @@ document.addEventListener("DOMContentLoaded", async () => {
   const confirmModalCancelBtn = document.getElementById('confirmModalCancelBtn');
   const confirmModalCloseBtn = confirmModal.querySelector('.close-btn');
   const closeConfirmModal = () => { confirmModal.style.display = 'none'; };
-  function showConfirmModal(message, onConfirm) {
+  function showConfirmModal(message, onConfirm, withCooldown = false) {
     confirmModalMessage.textContent = message;
     const newConfirmBtn = confirmModalConfirmBtn.cloneNode(true);
     confirmModalConfirmBtn.parentNode.replaceChild(newConfirmBtn, confirmModalConfirmBtn);
     confirmModalConfirmBtn = newConfirmBtn;
-    confirmModalConfirmBtn.addEventListener('click', () => {
-      closeConfirmModal();
-      onConfirm();
-    }, { once: true });
-    confirmModal.style.display = 'flex';
+
+    // limpar qualquer intervalo anterior salvo no botão
+    if (confirmModalConfirmBtn._countdownInterval) {
+        clearInterval(confirmModalConfirmBtn._countdownInterval);
+        confirmModalConfirmBtn._countdownInterval = null;
+    }
+
+    if (withCooldown) {
+        let timeLeft = 60;
+        confirmModalConfirmBtn.disabled = true;
+        confirmModalConfirmBtn.classList.add("disabled-btn");
+        confirmModalConfirmBtn.textContent = `Aguarde ${timeLeft}s`;
+
+        const interval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft > 0) {
+                confirmModalConfirmBtn.textContent = `Aguarde ${timeLeft}s`;
+            } else {
+                clearInterval(interval);
+                confirmModalConfirmBtn.disabled = false;
+                confirmModalConfirmBtn.classList.remove("disabled-btn");
+                confirmModalConfirmBtn.textContent = "Confirmar";
+            }
+        }, 1000);
+
+        confirmModalConfirmBtn._countdownInterval = interval;
+    } else {
+        confirmModalConfirmBtn.disabled = false;
+        confirmModalConfirmBtn.classList.remove("disabled-btn");
+        confirmModalConfirmBtn.textContent = "Confirmar";
+    }
+
+    confirmModalConfirmBtn.addEventListener(
+        "click",
+        () => {
+            closeConfirmModal();
+            if (confirmModalConfirmBtn._countdownInterval) {
+                clearInterval(confirmModalConfirmBtn._countdownInterval);
+                confirmModalConfirmBtn._countdownInterval = null;
+            }
+            onConfirm();
+        },
+        { once: true }
+    );
+
+    confirmModal.style.display = "flex";
     confirmModalConfirmBtn.focus();
-  }
+}
   confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
   confirmModalCloseBtn.addEventListener('click', closeConfirmModal);
   confirmModal.addEventListener('click', (event) => { if (event.target === confirmModal) { closeConfirmModal(); } });
@@ -903,7 +944,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           showInfoModal('Erro ao deletar guilda: ' + (e.message || e), 'error');
           console.error(e);
         }
-      });
+      }, true);
     });
   }
 
@@ -922,7 +963,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           showInfoModal('Erro ao sair da guilda: ' + (e.message || e), 'error');
           console.error(e);
         }
-      });
+      }, true);
     });
   }
 

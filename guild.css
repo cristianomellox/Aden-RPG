@@ -916,3 +916,8 @@ playerItemDetailsModal {
 #playerItemRefineRows div {
   margin: 4px 0;
 }
+.disabled-btn {
+  filter: grayscale(100%) brightness(83%);
+  cursor: not-allowed !important;
+  pointer-events: none;
+}

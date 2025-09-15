@@ -845,12 +845,10 @@ body {
     color: white;
 }
 #confirmModal .modal-content {
-    max-width: 90%;
-    min-width: 90%;
+    max-width: 95%;
+    min-width: 95%;
     max-height: 580px;
     text-align: center;
-    background: none;
-    background-color: none;
 }
 
 #confirmModalMessage {
@@ -859,6 +857,28 @@ body {
     color: white;
 }
 #confirmModal {
-  max-height: 500px;
-  width: 90%;
+  width: 100vw;
+}
+#promptModal .modal-content {
+    max-width: 400px;
+    text-align: center;
+}
+
+#promptModalMessage {
+    margin: 10px 0 15px 0;
+    font-size: 1em;
+    color: #e0dccc;
+}
+
+#promptModalInput {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 20px;
+    background-color: #1a1a1a;
+    border: 1px solid #555;
+    color: #e0dccc;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 1em;
+    resize: vertical; 
 }

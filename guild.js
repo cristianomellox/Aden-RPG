@@ -68,6 +68,46 @@ document.addEventListener("DOMContentLoaded", async () => {
   confirmModal.addEventListener('click', (event) => { if (event.target === confirmModal) { closeConfirmModal(); } });
   // --- FIM: LÓGICA DO MODAL DE CONFIRMAÇÃO ---
 
+  // --- INÍCIO: LÓGICA DO MODAL DE PROMPT (SUBSTITUTO DO PROMPT) ---
+    document.body.insertAdjacentHTML('beforeend', `
+    <div id="promptModal" class="modal" style="display: none; z-index: 1700;">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <p id="promptModalMessage"></p>
+        <textarea id="promptModalInput" rows="3" placeholder="Mensagem (opcional)"></textarea>
+        <div class="prompt-modal-actions">
+          <button id="promptModalCancelBtn" class="action-btn">Cancelar</button>
+          <button id="promptModalConfirmBtn" class="action-btn">Enviar</button>
+        </div>
+      </div>
+    </div>
+  `);
+  const promptModal = document.getElementById('promptModal');
+  const promptModalMessage = document.getElementById('promptModalMessage');
+  const promptModalInput = document.getElementById('promptModalInput');
+  let promptModalConfirmBtn = document.getElementById('promptModalConfirmBtn');
+  const promptModalCancelBtn = document.getElementById('promptModalCancelBtn');
+  const promptModalCloseBtn = promptModal.querySelector('.close-btn');
+  const closePromptModal = () => { promptModal.style.display = 'none'; };
+  function showPromptModal(message, onConfirm) {
+    promptModalMessage.textContent = message;
+    promptModalInput.value = ''; // Limpa o campo de texto
+    const newConfirmBtn = promptModalConfirmBtn.cloneNode(true);
+    promptModalConfirmBtn.parentNode.replaceChild(newConfirmBtn, promptModalConfirmBtn);
+    promptModalConfirmBtn = newConfirmBtn;
+    promptModalConfirmBtn.addEventListener('click', () => {
+      const inputValue = promptModalInput.value.trim();
+      closePromptModal();
+      onConfirm(inputValue); // Passa o valor do input para o callback
+    }, { once: true });
+    promptModal.style.display = 'flex';
+    promptModalInput.focus();
+  }
+  promptModalCancelBtn.addEventListener('click', closePromptModal);
+  promptModalCloseBtn.addEventListener('click', closePromptModal);
+  promptModal.addEventListener('click', (event) => { if (event.target === promptModal) { closePromptModal(); } });
+  // --- FIM: LÓGICA DO MODAL DE PROMPT ---
+
   let userId = null;
   let userGuildId = null;
   let currentGuildData = null;
@@ -129,34 +169,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Main tabs (tela inicial) ---
   function activateMainTab(tabId){
-    // tabs
     $$(`#tabMenu .tab-btn`).forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
-    // panes
     $$('#tabContent .tab-pane').forEach(p => {
-      if (p.id === tabId) {
-        p.classList.add('active');
-        p.style.display = ''; // let CSS decide (default)
-      } else {
-        p.classList.remove('active');
-        p.style.display = 'none';
-      }
+      p.style.display = (p.id === tabId) ? 'block' : 'none';
     });
   }
 
   const tabMenuEl = $('#tabMenu');
   if (tabMenuEl){
-    // Initialize default active if none
     const activeBtn = tabMenuEl.querySelector('.tab-btn.active') || tabMenuEl.querySelector('.tab-btn');
     if (activeBtn) activateMainTab(activeBtn.dataset.tab);
 
-    // Event delegation: works for <span>, <button>, etc.
     tabMenuEl.addEventListener('click', (ev) => {
       const btn = ev.target.closest('.tab-btn');
       if (!btn) return;
       const tab = btn.dataset.tab;
       if (!tab) return;
       activateMainTab(tab);
-      // se abrir aba ranking, carregue o ranking
       if (tab === 'ranking') {
         loadGuildRanking();
       }
@@ -165,16 +194,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Edit modal tabs (supports #editTabMenu or legacy #editTabs) ---
   function activateEditTab(tabId){
-    // panes
     $$('#editTabContent .edit-tab-pane').forEach(p => {
       p.style.display = (p.id === tabId) ? 'block' : 'none';
     });
-    // buttons styling
     $$('#editTabMenu .edit-tab-btn, #editTabs .edit-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
 
-    // limpar notificação da aba ao abrir
     markTabNotification(tabId, false);
-    // se abrir requests/notice, também remove o ponto no ícone principal
     if (tabId === 'tab-requests' || tabId === 'tab-notice'){
       updateGuildNotifications(false);
       if (userGuildId) localStorage.setItem(`guild_${userGuildId}_${tabId}_read`, Date.now());
@@ -183,7 +208,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const editTabMenuEl = $('#editTabMenu') || $('#editTabs');
   if (editTabMenuEl){
-    // set default if any already active
     const activeEditBtn = editTabMenuEl.querySelector('.edit-tab-btn.active') || editTabMenuEl.querySelector('.edit-tab-btn');
     if (activeEditBtn) activateEditTab(activeEditBtn.dataset.tab);
 
@@ -221,7 +245,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const readRequests = localStorage.getItem(`guild_${guildData.id}_tab-requests_read`);
     const readNotice = localStorage.getItem(`guild_${guildData.id}_tab-notice_read`);
 
-    // Check for new notices
     if (guildData.last_notice_update) {
         const lastNoticeUpdate = new Date(guildData.last_notice_update).getTime();
         const lastReadNotice = readNotice ? parseInt(readNotice, 10) : 0;
@@ -230,7 +253,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Check for new requests
     try {
         const { data: mostRecentRequest, error } = await supabase.from('guild_join_requests')
             .select('created_at')
@@ -268,14 +290,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // --- Session and main loading ---
   async function getUserSession(){
     try {
       const { data } = await supabase.auth.getSession();
       const session = data ? data.session : null;
       if (session){ userId = session.user.id; return true; }
     } catch(e){ console.error('getSession error', e); }
-    // redirect to login if no session
     window.location.href = 'index.html';
     return false;
   }
@@ -293,7 +313,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         userGuildId = playerData.guild_id;
       }
 
-      // fetch guild with players
       const { data: guildData, error: guildError } = await supabase.from('guilds').select('*, players!players_guild_id_fkey(*)').eq('id', userGuildId).single();
       if (guildError || !guildData){
         console.error('Erro guildData', guildError);
@@ -303,18 +322,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       currentGuildData = guildData;
-    // 🔹 verifica se é líder para mostrar/ocultar o botão deletar guilda
-    const deleteGuildBtn = document.getElementById('deleteguild');
-    if (deleteGuildBtn) {
-      if (guildData.leader_id === userId) {
-        deleteGuildBtn.style.display = 'block';
-      } else {
-        deleteGuildBtn.style.display = 'none';
+      const deleteGuildBtn = document.getElementById('deleteguild');
+      if (deleteGuildBtn) {
+        deleteGuildBtn.style.display = (guildData.leader_id === userId) ? 'block' : 'none';
       }
-    }
 
-      
-      // Update XP bar here
       try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }
       
       const me = (guildData.players || []).find(p => p.id === userId);
@@ -324,12 +336,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
       if (guildDescriptionEl) guildDescriptionEl.textContent = guildData.description || '';
 
-      // Novo: Calcular poder total da guilda via RPC (inclui equipamentos equipados)
       let guildPowerValue = null;
       try {
         const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: userGuildId });
         if (!powerError && powerData) {
-          // supabase pode retornar array de rows ou objeto/valor direto
           if (Array.isArray(powerData) && powerData.length > 0 && powerData[0].total_power !== undefined) {
             guildPowerValue = Number(powerData[0].total_power);
           } else if (powerData.total_power !== undefined) {
@@ -342,14 +352,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error('Erro ao chamar get_guild_power RPC', e);
       }
 
-      // fallback: caso RPC não exista ou falhe, soma o campo combat_power (menos preciso)
       if (guildPowerValue === null) {
         try {
           guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
         } catch(e){ guildPowerValue = 0; }
       }
 
-      // Aplica a formatação compacta ao valor do poder de combate na tela inicial
       const compactPower = formatNumberCompact(guildPowerValue);
       if (guildPowerEl) guildPowerEl.textContent = ` ${compactPower}`;
 
@@ -360,55 +368,44 @@ document.addEventListener("DOMContentLoaded", async () => {
         sorted.forEach(m => {
           const li = document.createElement('li');
           li.innerHTML = `
-  <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
-       style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
-  <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
-  <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
-  <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>
-`;
+            <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+                 style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
+            <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
+            <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
+            <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>`;
           guildMemberListElement.appendChild(li);
         });
       }
 
       if (guildInfoContainer) guildInfoContainer.style.display='block';
       if (noGuildContainer) noGuildContainer.style.display='none';
-      // update displayed guild level and member counts
+      
       try{
         const lvlEl = document.getElementById('guildLevelValue');
-        const memberCountEl = document.getElementById('guildMemberCount');
         const memberCountHeader = document.getElementById('guildMemberCountHeader');
         const membersFromPlayers = (guildData.players && guildData.players.length) ? guildData.players.length : 0;
-        if (lvlEl) lvlEl.textContent = (guildData.level !== undefined && guildData.level !== null) ? guildData.level : (guildData.level || '1');
-        if (memberCountEl) memberCountEl.textContent = (guildData.members_count !== undefined && guildData.members_count !== null) ? guildData.members_count : membersFromPlayers;
+        if (lvlEl) lvlEl.textContent = guildData.level || '1';
         if (memberCountHeader) {
-  const currentMembers = (guildData.members_count !== undefined && guildData.members_count !== null) 
-      ? guildData.members_count 
-      : membersFromPlayers;
-  const maxMembers = guildData.max_members || getMaxMembers(guildData.level || 1);
-  memberCountHeader.textContent = `${currentMembers} / ${maxMembers}`;
-}
+            const currentMembers = guildData.members_count ?? membersFromPlayers;
+            const maxMembers = guildData.max_members || getMaxMembers(guildData.level || 1);
+            memberCountHeader.textContent = `${currentMembers} / ${maxMembers}`;
+        }
       }catch(e){console.error('set guild counts', e)}
-
 
       if (editGuildBtn){
         editGuildBtn.style.display = 'inline-block';
         editGuildBtn.onclick = () => openEditGuildModal(guildData);
       }
 
-
-      // check notifications
       if (editGuildBtn) checkGuildNotifications(guildData);
-
     } catch(e){
       console.error('Erro loadGuildInfo', e);
     }
   }
   
-  // Função para buscar e exibir os dados da guilda em um modal
   async function fetchAndDisplayGuildInfo(guildId) {
     if (!viewGuildModal) return;
     try {
-        // Busca dados da guilda e membros
         const { data: guildData, error: guildError } = await supabase
             .from('guilds')
             .select('*, players!players_guild_id_fkey(*)')
@@ -420,14 +417,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // Popula o modal com as informações da guilda
         const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
         guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
         guildViewDescription.textContent = guildData.description || '';
         guildViewLevelValue.textContent = guildData.level || 1;
         guildViewMemberCountHeader.textContent = `${(guildData.players || []).length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
-        // --- NOVO: RECALCULA O PODER DA GUILDA USANDO O RPC ---
         let guildPowerValue = null;
         try {
           const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: guildId });
@@ -444,7 +439,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           console.error('Erro ao chamar get_guild_power RPC para o modal', e);
         }
 
-        // Fallback: se o RPC falhar, usa a soma do combat_power (menos preciso)
         if (guildPowerValue === null) {
           try {
             guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
@@ -454,7 +448,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const compactPower = formatNumberCompact(guildPowerValue);
         guildViewPower.textContent = compactPower;
 
-        // Lista de membros
         guildViewMemberList.innerHTML = '';
         const roles = ['leader', 'co-leader', 'member'];
         const sorted = (guildData.players || []).slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
@@ -465,20 +458,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
                 <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
                 <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
-                <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>
-            `;
+                <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>`;
             guildViewMemberList.appendChild(li);
         });
 
-        // Exibe o modal
         viewGuildModal.style.display = 'flex';
     } catch (e) {
         console.error('Erro ao exibir modal da guilda', e);
     }
   }
 
-
-  // --- Carregar Ranking ---
   async function loadGuildRanking(){
     try {
       const { data, error } = await supabase.rpc('get_guilds_ranking', { limit_count: 100 });
@@ -488,9 +477,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (listEl){
         listEl.innerHTML = '';
         data.forEach((g, idx)=>{
-          // AVISO: Se a guilda não tem um ID válido, o problema está na função do banco de dados (RPC).
           if (!g.guild_id) {
-            console.error('AVISO: Guilda com ID inválido encontrada. O registro não será clicável. Por favor, verifique a função `get_guilds_ranking` no seu Supabase.', g);
+            console.error('AVISO: Guilda com ID inválido no ranking.', g);
           }
           
           const power = Number(g.total_power || 0);
@@ -505,8 +493,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           li.innerHTML = `
             <div class="ranking-item-content">
                 <span class="ranking-position">${idx+1}º</span>
-                <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
-                     class="ranking-flag">
+                <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" class="ranking-flag">
                 <div class="ranking-info">
                     <strong class="ranking-name">${g.name}</strong>
                     <div class="ranking-power">
@@ -516,18 +503,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </div>
             </div>`;
           
-          // 🔹 Estilos especiais para o Top 3
-          if (idx === 0) {
-            li.style.background = "linear-gradient(180deg, rgba(255,215,0,0.5), rgba(255,215,0,0.1))"; // dourado
-          } else if (idx === 1) {
-            li.style.background = "linear-gradient(180deg, rgba(192,192,192,0.6), rgba(169,169,169,0.1))"; // prata
-          } else if (idx === 2) {
-            li.style.background = "linear-gradient(180deg, rgba(205,127,50,0.4), rgba(210,180,40,0.1))"; // bronze
-          }
+          if (idx === 0) li.style.background = "linear-gradient(180deg, rgba(255,215,0,0.5), rgba(255,215,0,0.1))";
+          else if (idx === 1) li.style.background = "linear-gradient(180deg, rgba(192,192,192,0.6), rgba(169,169,169,0.1))";
+          else if (idx === 2) li.style.background = "linear-gradient(180deg, rgba(205,127,50,0.4), rgba(210,180,40,0.1))";
+          
           listEl.appendChild(li);
         });
 
-      // Adicione o event listener após a lista ser carregada
       listEl.addEventListener('click', (ev) => {
           const item = ev.target.closest('li');
           if (item && item.dataset.guildId) {
@@ -541,21 +523,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // --- Modal open / logic ---
   async function openEditGuildModal(guildData){
     if (!editGuildModal) return;
     const isLeader = (guildData.leader_id === userId);
     const isCoLeader = ((guildData.players || []).find(p => p.id === userId) || {}).rank === 'co-leader';
 
-    // control which edit tabs are visible
     $$('#editTabMenu .edit-tab-btn, #editTabs .edit-tab-btn').forEach(btn => {
       const tab = btn.dataset.tab;
-      if (tab === 'tab-edit') btn.style.display = isLeader ? 'inline-block' : 'none';
-      if (tab === 'tab-requests' || tab === 'tab-manage') btn.style.display = (isLeader || isCoLeader) ? 'inline-block' : 'none';
-      if (tab === 'tab-notice' || tab === 'tab-chest') btn.style.display = 'inline-block';
+      let display = 'none';
+      if (tab === 'tab-notice' || tab === 'tab-chest' || tab === 'tab-logs') display = 'inline-block';
+      if (tab === 'tab-requests' || tab === 'tab-manage') display = (isLeader || isCoLeader) ? 'inline-block' : 'none';
+      if (tab === 'tab-edit') display = isLeader ? 'inline-block' : 'none';
+      btn.style.display = display;
     });
 
-    // populate edit fields if leader
     if (isLeader){
       if (editGuildName) editGuildName.value = guildData.name || '';
       if (editGuildDescription) editGuildDescription.value = guildData.description || '';
@@ -564,17 +545,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (guildData.last_name_change && editGuildName){
         const last = new Date(guildData.last_name_change);
         const diff = Date.now() - last.getTime();
-        if (diff < 30*24*60*60*1000){
-          const next = new Date(last.getTime() + 30*24*60*60*1000);
+        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+        if (diff < thirtyDays){
+          const next = new Date(last.getTime() + thirtyDays);
           editGuildName.disabled = true;
-          editNameInfo.textContent = 'Nome só pode ser alterado novamente em ' + next.toLocaleDateString();
+          if (editNameInfo) editNameInfo.textContent = 'Nome só pode ser alterado novamente em ' + next.toLocaleDateString();
         } else {
           editGuildName.disabled = false;
         }
       }
     }
 
-    // requests (leader or co-leader)
     if (isLeader || isCoLeader){
       if (guildRequestsList) guildRequestsList.innerHTML = '';
       try {
@@ -586,19 +567,17 @@ document.addEventListener("DOMContentLoaded", async () => {
           requests.forEach(r => {
             const li = document.createElement('li');
             li.className = 'request-item';
-            li.innerHTML = '<div class="request-info"><strong>' + (r.player_name || '') + '</strong><div class="request-message">' + (r.message || '') + '</div></div>';
+            li.innerHTML = `<div class="request-info"><strong>${r.player_name || ''}</strong><div class="request-message">${r.message || ''}</div></div>`;
             const actions = document.createElement('div');
             actions.className = 'request-actions';
             const acceptImg = document.createElement('img');
             acceptImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
             acceptImg.alt = "Aceitar";
             acceptImg.onclick = () => acceptRequest(r.id);
-
             const rejectImg = document.createElement('img');
             rejectImg.src = "https://aden-rpg.pages.dev/assets/recusar.webp";
             rejectImg.alt = "Recusar";
             rejectImg.onclick = () => rejectRequest(r.id);
-
             actions.appendChild(acceptImg);
             actions.appendChild(rejectImg);
             li.appendChild(actions);
@@ -611,46 +590,38 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
 
-    // manage members
     if (manageMembersList) manageMembersList.innerHTML = '';
     const members = (guildData.players || []).slice().sort((a,b)=> a.rank === b.rank ? a.name.localeCompare(b.name) : (a.rank === 'leader' ? -1 : (b.rank === 'leader' ? 1 : (a.rank === 'co-leader' ? -1 : 1))));
     members.forEach(m => {
       if (!manageMembersList) return;
       const li = document.createElement('li');
-      li.innerHTML = '<div class="member-info"><strong>' + m.name + '</strong> <small class="member-rank">' + traduzCargo(m.rank) + '</small></div>';
+      li.innerHTML = `<div class="member-info"><strong>${m.name}</strong> <small class="member-rank">${traduzCargo(m.rank)}</small></div>`;
       const actions = document.createElement('div');
       actions.className = 'member-actions';
       if (m.id !== userId){
         if (isLeader){
           if (m.rank === 'member'){
             const promImg = document.createElement('img');
-            promImg.src = "https://aden-rpg.pages.dev/assets/promover.webp";
-            promImg.alt = "Promover";
+            promImg.src = "https://aden-rpg.pages.dev/assets/promover.webp"; promImg.alt = "Promover";
             promImg.onclick = () => promoteToCoLeader(m.id, m.name);
             actions.appendChild(promImg);
           } else if (m.rank === 'co-leader'){
             const revokeImg = document.createElement('img');
-            revokeImg.src = "https://aden-rpg.pages.dev/assets/rebaixar.webp";
-            revokeImg.alt = "Revogar";
+            revokeImg.src = "https://aden-rpg.pages.dev/assets/rebaixar.webp"; revokeImg.alt = "Revogar";
             revokeImg.onclick = () => revokeCoLeader(m.id, m.name);
-
             const transferImg = document.createElement('img');
-            transferImg.src = "https://aden-rpg.pages.dev/assets/transferlider.webp";
-            transferImg.alt = "Transferir";
+            transferImg.src = "https://aden-rpg.pages.dev/assets/transferlider.webp"; transferImg.alt = "Transferir";
             transferImg.onclick = () => transferLeadership(m.id, m.name);
-
             actions.appendChild(revokeImg);
             actions.appendChild(transferImg);
           }
           const expelImg = document.createElement('img');
-          expelImg.src = "https://aden-rpg.pages.dev/assets/expulsar.webp";
-          expelImg.alt = "Expulsar";
+          expelImg.src = "https://aden-rpg.pages.dev/assets/expulsar.webp"; expelImg.alt = "Expulsar";
           expelImg.onclick = () => expelMember(m.id);
           actions.appendChild(expelImg);
         } else if (isCoLeader && m.rank === 'member'){
           const expelImg = document.createElement('img');
-          expelImg.src = "https://aden-rpg.pages.dev/assets/expulsar.webp";
-          expelImg.alt = "Expulsar";
+          expelImg.src = "https://aden-rpg.pages.dev/assets/expulsar.webp"; expelImg.alt = "Expulsar";
           expelImg.onclick = () => expelMember(m.id);
           actions.appendChild(expelImg);
         }
@@ -660,13 +631,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       li.appendChild(actions); manageMembersList.appendChild(li);
     });
 
-    // notice & logs
     if (guildNoticeEl) guildNoticeEl.textContent = guildData.notice || '(Nenhum aviso)';
     if (noticeInfoEl) noticeInfoEl.textContent = guildData.last_notice_update ? 'Última atualização: ' + formatDateTime(guildData.last_notice_update) : 'Aviso ainda não atualizado.';
     if (noticeEditor) noticeEditor.style.display = (isLeader || isCoLeader) ? 'block' : 'none';
     if (noticeEditor && editGuildNotice) editGuildNotice.value = '';
 
-    // logs
     if (guildLogsList) guildLogsList.innerHTML = '';
     try {
       const { data: logs, error } = await supabase.rpc('get_guild_logs', { p_guild_id: guildData.id, p_limit: 50 });
@@ -676,21 +645,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         logs.forEach(l => {
           const li = document.createElement('li');
-          let actor = l.actor_name || l.actor_id;
-          let target = l.target_name || l.target_id;
-          let text = '';
-
-          if (l.action === 'promote') text = actor + ' promoveu ' + target + ' às ' + formatDateTime(l.created_at);
-          else if (l.action === 'demote') text = actor + ' revogou ' + target + ' às ' + formatDateTime(l.created_at);
-          else if (l.action === 'expel') text = actor + ' expulsou ' + target + ' às ' + formatDateTime(l.created_at);
-          else if (l.action === 'join') text = target + ' entrou na guilda às ' + formatDateTime(l.created_at);
-          else if (l.action === 'leave') text = target + ' saiu da guilda às ' + formatDateTime(l.created_at);
-          else if (l.action === 'reject') {
-            text = l.message + ' às ' + formatDateTime(l.created_at);
-          }
-          else if (l.action === 'notice') text = 'Aviso atualizado por ' + actor + ' às ' + formatDateTime(l.created_at) + ': ' + (l.message || '');
-          else text = (l.action || '') + ' - ' + (l.message || '') + ' @ ' + formatDateTime(l.created_at);
-
+          const actor = l.actor_name || l.actor_id;
+          const target = l.target_name || l.target_id;
+          let text = `${l.action || ''} - ${l.message || ''} @ ${formatDateTime(l.created_at)}`;
+          if (l.action === 'promote') text = `${actor} promoveu ${target} às ${formatDateTime(l.created_at)}`;
+          else if (l.action === 'demote') text = `${actor} revogou ${target} às ${formatDateTime(l.created_at)}`;
+          else if (l.action === 'expel') text = `${actor} expulsou ${target} às ${formatDateTime(l.created_at)}`;
+          else if (l.action === 'join') text = `${target} entrou na guilda às ${formatDateTime(l.created_at)}`;
+          else if (l.action === 'leave') text = `${target} saiu da guilda às ${formatDateTime(l.created_at)}`;
+          else if (l.action === 'reject') text = `${l.message} às ${formatDateTime(l.created_at)}`;
+          else if (l.action === 'notice') text = `Aviso atualizado por ${actor} às ${formatDateTime(l.created_at)}: ${l.message || ''}`;
           li.textContent = text;
           guildLogsList.appendChild(li);
         });
@@ -700,7 +664,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.error(e);
     }
 
-    // show modal and set default tab based on role
     editGuildModal.style.display = 'flex';
     let defaultTab = 'tab-notice';
     if (isLeader) defaultTab = 'tab-edit';
@@ -708,7 +671,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     activateEditTab(defaultTab);
   }
 
-  // --- Actions: promote/revoke/transfer/expel/accept/reject ---
   async function promoteToCoLeader(targetId, targetName){
     showConfirmModal(`Tem certeza que deseja promover ${targetName} para co-líder?`, async () => {
       try {
@@ -761,57 +723,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  
-    async function acceptRequest(requestId){
+  async function acceptRequest(requestId){
     try {
-      const { data: req, error: reqErr } = await supabase
-        .from('guild_join_requests')
-        .select('player_id')
-        .eq('id', requestId)
-        .single();
+      const { data: req, error: reqErr } = await supabase.from('guild_join_requests').select('player_id').eq('id', requestId).single();
       if (reqErr) throw reqErr;
       if (!req) throw new Error('Solicitação não encontrada');
-
-      // chama RPC
-      const { error } = await supabase.rpc('accept_guild_join_request', {
-        p_guild_id: userGuildId,
-        p_request_id: requestId,
-        p_requester_id: userId
-      });
+      const { error } = await supabase.rpc('accept_guild_join_request', { p_guild_id: userGuildId, p_request_id: requestId, p_requester_id: userId });
       if (error) throw error;
-
-      // checa se o jogador realmente entrou na guilda
-      const { data: target } = await supabase
-        .from('players')
-        .select('guild_id')
-        .eq('id', req.player_id)
-        .single();
-
+      const { data: target } = await supabase.from('players').select('guild_id').eq('id', req.player_id).single();
       if (target && target.guild_id === userGuildId) {
-        // entrou de verdade
-        await supabase.rpc('log_guild_action',{
-          p_guild_id: userGuildId,
-          p_actor_id: userId,
-          p_target_id: req.player_id,
-          p_action: 'join',
-          p_message: null
-        });
+        await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: req.player_id, p_action: 'join', p_message: null });
         showInfoModal('Solicitação aceita!', 'success');
       } else {
-        // foi apenas excluída → registrar como rejeição
-        await supabase.rpc('log_guild_action',{
-          p_guild_id: userGuildId,
-          p_actor_id: userId,
-          p_target_id: req.player_id,
-          p_action: 'reject',
-          p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe).'
-        });
+        await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: req.player_id, p_action: 'reject', p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe).' });
         showInfoModal('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
-
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
-
     } catch(e){
       showInfoModal('Erro ao aceitar: ' + (e.message || e), 'error');
       console.error(e);
@@ -820,8 +748,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-
-async function rejectRequest(requestId){
+  async function rejectRequest(requestId){
     try {
       const { error } = await supabase.rpc('reject_guild_join_request', { p_request_id: requestId, p_requester_id: userId });
       if (error) throw error;
@@ -831,7 +758,6 @@ async function rejectRequest(requestId){
     } catch(e){ showInfoModal('Erro ao rejeitar: ' + (e.message || e), 'error'); console.error(e); }
   }
 
-  // --- Save guild changes & notice handlers ---
   if (saveGuildChangesBtn){
     saveGuildChangesBtn.addEventListener('click', async () => {
       try {
@@ -860,7 +786,6 @@ async function rejectRequest(requestId){
     });
   }
 
-  // --- Search modal handlers ---
   if (searchGuildBtn && searchGuildModal){
     searchGuildBtn.addEventListener('click', ()=>{ searchGuildModal.style.display = 'flex'; if (searchGuildResults) searchGuildResults.innerHTML = ''; if (searchGuildInput) searchGuildInput.value = ''; });
   }
@@ -886,20 +811,14 @@ async function rejectRequest(requestId){
         data.forEach(g => {
           const li = document.createElement('li');
           li.className = 'search-item-clickable';
-          if (g.id) {
-            li.dataset.guildId = g.id;
-          } else {
-            console.error('Guilda inválida encontrada nos resultados de busca:', g);
-            return;
-          }
-          li.innerHTML = '<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="' + (g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp') + '" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>' + g.name + '</strong><div style="font-size:0.9em;color:white;">' + (g.description||'') + '</div><div style="font-size:0.85em; color: white;">Membros: ' + (g.members_count||0) + '/' + (g.max_members||0) + '</div></div></div>';
-          
+          if (g.id) { li.dataset.guildId = g.id; }
+          else { console.error('Guilda inválida nos resultados de busca:', g); return; }
+          li.innerHTML = `<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="${g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>${g.name}</strong><div style="font-size:0.9em;color:white;">${g.description||''}</div><div style="font-size:0.85em; color: white;">Membros: ${g.members_count||0}/${g.max_members||0}</div></div></div>`;
           const btnImg = document.createElement('img');
           btnImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
           btnImg.alt = "Solicitar Entrada";
           btnImg.style.cssText = "width: 30px; height: 30px; vertical-align: -1px; margin-left: 5px; cursor: pointer;";
-          btnImg.onclick = () => requestJoinGuild(g.id, g.name);
-
+          btnImg.onclick = (e) => { e.stopPropagation(); requestJoinGuild(g.id, g.name); };
           li.appendChild(btnImg);
           searchGuildResults.appendChild(li);
         });
@@ -918,13 +837,17 @@ async function rejectRequest(requestId){
   }
 
   window.requestJoinGuild = async function(guildId, guildName){
-    try {
-      const message = prompt('Mensagem para a guilda ' + guildName + ' (opcional):') || '';
-      const { error } = await supabase.rpc('create_guild_join_request', { p_guild_id: guildId, p_player_id: userId, p_message: message });
-      if (error) throw error;
-      showInfoModal('Solicitação enviada com sucesso!', 'success');
-      if (searchGuildModal) searchGuildModal.style.display = 'none';
-    } catch(e){ showInfoModal('Erro ao enviar solicitação: ' + (e.message || e), 'error'); console.error(e); }
+    showPromptModal(`Enviar solicitação para a guilda ${guildName}:`, async (message) => {
+        try {
+            const { error } = await supabase.rpc('create_guild_join_request', { p_guild_id: guildId, p_player_id: userId, p_message: message });
+            if (error) throw error;
+            showInfoModal('Solicitação enviada com sucesso!', 'success');
+            if (searchGuildModal) searchGuildModal.style.display = 'none';
+        } catch(e){ 
+            showInfoModal('Erro ao enviar solicitação: ' + (e.message || e), 'error'); 
+            console.error(e); 
+        }
+    });
   };
 
   if (editCloseBtn) editCloseBtn.addEventListener('click', ()=>{ if (editGuildModal) editGuildModal.style.display = 'none'; });
@@ -954,7 +877,6 @@ async function rejectRequest(requestId){
 
   if (refreshBtn) refreshBtn.addEventListener('click', ()=> loadGuildInfo());
 
-  // --- Botões: Deletar / Sair da guilda ---
   const deleteGuildBtn = document.getElementById('deleteguild');
   const leaveGuildBtn = document.getElementById('leaveguild');
 
@@ -1000,27 +922,24 @@ async function rejectRequest(requestId){
     });
   }
 
-  // initial load
   const ok = await getUserSession();
   if (ok) await loadGuildInfo();
 
-}); // end DOMContentLoaded
+});
 
-
-// PUBLIC helpers (used by some inline handlers)
+// PUBLIC helpers
 function updateGuildNotifications(show) {
     try {
         const editGuildBtn = document.getElementById('editGuildBtn');
         if (!editGuildBtn) return;
-
+        const dot = editGuildBtn.nextElementSibling;
         if (show) {
-            const next = editGuildBtn.nextElementSibling;
-            if (!next || !next.classList || !next.classList.contains('notif-dot-main')) {
+            if (!dot || !dot.classList.contains('notif-dot-main')) {
                 editGuildBtn.insertAdjacentHTML('afterend', '<span class="notif-dot-main"></span>');
             }
         } else {
-            if (editGuildBtn.nextElementSibling && editGuildBtn.nextElementSibling.classList && editGuildBtn.nextElementSibling.classList.contains('notif-dot-main')) {
-                editGuildBtn.nextElementSibling.remove();
+            if (dot && dot.classList.contains('notif-dot-main')) {
+                dot.remove();
             }
         }
     } catch (e) {
@@ -1044,31 +963,27 @@ function markTabNotificationGlobal(tabId, show){
 document.getElementById('guildRequestsBtn')?.addEventListener('click', () => {
     updateGuildNotifications(false);
 });
+
 document.getElementById('guildNoticeBtn')?.addEventListener('click', () => {
     updateGuildNotifications(false);
-
-  // --- Permitir abrir o modal do jogador também no modal de informações da guilda ---
-  const guildViewMemberListEl = document.getElementById('guildViewMemberList');
-  if (guildViewMemberListEl) {
-    guildViewMemberListEl.addEventListener('click', (e) => {
-      const link = e.target.closest('.player-link');
-      if (!link) return;
-      const playerId = link.dataset.playerId;
-      if (!playerId) return;
-
-      const playerModal = document.getElementById('playerModal');
-      if (playerModal) {
-        playerModal.style.display = 'flex';
-      }
-
-      if (typeof clearModalContent === "function") clearModalContent();
-      if (typeof fetchPlayerData === "function") fetchPlayerData(playerId);
-    });
-  }
-
+    const guildViewMemberListEl = document.getElementById('guildViewMemberList');
+    if (guildViewMemberListEl) {
+        guildViewMemberListEl.addEventListener('click', (e) => {
+            const link = e.target.closest('.player-link');
+            if (!link) return;
+            const playerId = link.dataset.playerId;
+            if (!playerId) return;
+            const playerModal = document.getElementById('playerModal');
+            if (playerModal) {
+                playerModal.style.display = 'flex';
+            }
+            if (typeof clearModalContent === "function") clearModalContent();
+            if (typeof fetchPlayerData === "function") fetchPlayerData(playerId);
+        });
+    }
 });
 
-// --- Guild Level System ---
+// Guild Level System
 function calculateGuildXpNeeded(level){
   return Math.floor(300 * Math.pow(level, 1.5));
 }
@@ -1088,19 +1003,12 @@ function updateGuildXpBar(guildData){
     const xpFill = document.querySelector('.xp-bar-fill');
     const xpText = document.getElementById('guildXpFill');
     if (!xpFill || !xpText) return;
-
-    const currentXp = Number((guildData && guildData.experience) ? guildData.experience : 0);
-    const currentLevel = Number((guildData && guildData.level) ? guildData.level : 1);
-    const neededXp = (typeof calculateGuildXpNeeded === 'function') 
-        ? calculateGuildXpNeeded(currentLevel) 
-        : Math.floor(300 * Math.pow(currentLevel, 1.5));
-
-    const percent = (neededXp > 0 && !isNaN(neededXp)) 
-        ? Math.max(0, Math.min(100, Math.floor((currentXp / neededXp) * 100))) 
-        : 0;
-
+    const currentXp = Number(guildData?.experience || 0);
+    const currentLevel = Number(guildData?.level || 1);
+    const neededXp = calculateGuildXpNeeded(currentLevel);
+    const percent = neededXp > 0 ? Math.max(0, Math.min(100, Math.floor((currentXp / neededXp) * 100))) : 0;
     xpFill.style.width = percent + '%';
-    xpText.textContent = currentXp + ' / ' + neededXp;
+    xpText.textContent = `${currentXp} / ${neededXp}`;
     xpText.setAttribute('aria-valuenow', currentXp);
     xpText.setAttribute('aria-valuemax', neededXp);
   } catch(e){ 

@@ -567,7 +567,11 @@ document.addEventListener("DOMContentLoaded", async () => {
           requests.forEach(r => {
             const li = document.createElement('li');
             li.className = 'request-item';
-            li.innerHTML = `<div class="request-info"><strong>${r.player_name || ''}</strong><div class="request-message">${r.message || ''}</div></div>`;
+            li.innerHTML = `
+  <div class="request-info">
+    <span class="player-link" data-player-id="${r.player_id}">${r.player_name || ''}</span>
+    <div class="request-message">${r.message || ''}</div>
+  </div>`;
             const actions = document.createElement('div');
             actions.className = 'request-actions';
             const acceptImg = document.createElement('img');

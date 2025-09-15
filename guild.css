@@ -885,7 +885,7 @@ body {
 }
 
 
-#playerItemDetailsModal {
+playerItemDetailsModal {
   z-index: 99999;
 }
 
@@ -915,7 +915,4 @@ body {
 #playerItemStats p,
 #playerItemRefineRows div {
   margin: 4px 0;
-}
-.modal-overlay {
-  background-image: none;
 }

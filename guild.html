@@ -43,7 +43,7 @@
                         
                     </div>
                    <div id="guildName"></div>
-<img alt="poder" id="cpIcon" style="width: 28px; height: 37px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="guildPower" style="color:orange; font-weight:bold; font-size:1.8em; margin-top:4px;"></span>
+<img alt="poder" id="cpIcon" style="width: 24px; height: 35px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="guildPower" style="color:orange; font-weight:bold; font-size:1.8em; margin-top:4px;"></span>
 
                     <div id="guildDescription" style="margin:6px 0;color:white; font-size: 0.8em;"></div>
                     
@@ -77,12 +77,13 @@
                    
                 </div>
                 <div id="noGuildContainer" style="display:none;">
+                  <div id="criar">
                     <p>Você não faz parte de uma guilda.</p>
-                    <button class="action-btn" id="searchGuildBtn" style="color: white;">Buscar Guilda</button>
-                    <button class="action-btn" id="createGuildBtn"style="color: white;">Criar Guilda</button>
+                    <button class="action-btn" id="searchGuildBtn" style="color: white;"><span style="font-size: 1em;">Buscar <br>Guilda</span></button>
+                    <button class="action-btn" id="createGuildBtn"style="color: white;"><span style="font-size: 1em;">Criar <br>Guilda</span></button>
                 </div>
             </div>
-
+</div>
             <div id="taverna" class="tab-pane">
                 <p>Conteúdo da Taverna será adicionado aqui.</p>
             </div>
@@ -207,7 +208,95 @@
         </div>
     </div>
 </div>
+
+
+<!-- Modal: Player -->
+<div id="playerModal" class="modal" style="display:none; width: 92%;">
+  <div class="modal-content">
+    <span id="closePlayerModal" class="close-btn">&times;</span>
+
+    <h3 id="playerName">Jogador</h3>
+    <div id="playerLevel">Nv. 0</div>
+
+    <div id="equipmentAndAvatarContainer">
+      <div class="equipment-column">
+        <div id="weapon-slot" class="equipment-slot" data-slot="weapon"></div>
+        <div id="ring-slot" class="equipment-slot" data-slot="ring"></div>
+        <div id="helm-slot" class="equipment-slot" data-slot="helm"></div>
+        <div id="special1-slot" class="equipment-slot" data-slot="special1"></div>
+      </div>
+
+      <div id="playerAvatarEquipContainer">
+        <div class="guild-header">
+          <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Bandeira" onerror="this.style.display='none'">
+          <div id="playerGuildName">Nome da Guilda</div>
+        </div>
+
+        <img id="playerAvatarEquip" src="https://via.placeholder.com/100" alt="Avatar do Jogador">
+        <div style="display: flex; flex-wrap: nowrap; width: 100%; gap: 12px;">
+        <img alt="poder" id="cpIcon" style="width: 18px; height: 30px; vertical-align: 4px; position: relative; margin-top: 11px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/><div id="playerCombatPower">0 </div>
+      </div>
+</div>
+      <div class="equipment-column">
+        <div id="amulet-slot" class="equipment-slot" data-slot="amulet"></div>
+        <div id="wing-slot" class="equipment-slot" data-slot="wing"></div>
+        <div id="armor-slot" class="equipment-slot" data-slot="armor"></div>
+        <div id="special2-slot" class="equipment-slot" data-slot="special2"></div>
+      </div>
+    </div>
+
+    <div id="attributesSection">
+      <div class="attribute-row">
+        <div class="attribute-item">
+          <span class="attribute-label">ATK</span>
+          <span id="playerAttack" class="attribute-value">0 - 0</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">TAXA CRIT</span>
+          <span id="playerCritChance" class="attribute-value">0%</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">DANO CRIT</span>
+          <span id="playerCritDamage" class="attribute-value">0%</span>
+        </div>
+      </div>
+
+      <div class="attribute-row">
+        <div class="attribute-item">
+          <span class="attribute-label">HP</span>
+          <span id="playerHealth" class="attribute-value">0</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">DEFESA</span>
+          <span id="playerDefense" class="attribute-value">0</span>
+        </div>
+        <div class="attribute-item">
+          <span class="attribute-label">EVASÃO</span>
+          <span id="playerEvasion" class="attribute-value">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- FIM Modal: Player -->
+
+
+
+<div id="loading-overlay" style="background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;">
+  <div id="loading-container">
+    <h2>Carregando...</h2>
+    <div id="progress-bar-container">
+      <div id="progress-bar"></div>
+    </div>
+    <span id="progress-text">0%</span>
+  </div>
+</div>
+<script src="loading.js"></script>
    <script src="number_format.js"></script>
     <script src="guild.js"></script>
+    <script src="playerModal.js"></script>
 </body>
 </html>

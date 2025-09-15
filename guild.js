@@ -4,6 +4,70 @@ document.addEventListener("DOMContentLoaded", async () => {
   const supabase = window.supabase && window.supabase.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
   if (!supabase) { console.error("Supabase não iniciado"); return; }
 
+  // --- INÍCIO: LÓGICA DO MODAL DE INFORMAÇÕES (SUBSTITUTO DO ALERT) ---
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="infoModal" class="modal" style="display: none; z-index: 1500;">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <p id="infoModalMessage" class="message"></p>
+        <button id="infoModalOkBtn" class="action-btn">OK</button>
+      </div>
+    </div>
+  `);
+  const infoModal = document.getElementById('infoModal');
+  const infoModalMessage = document.getElementById('infoModalMessage');
+  const infoModalOkBtn = document.getElementById('infoModalOkBtn');
+  const infoModalCloseBtn = infoModal.querySelector('.close-btn');
+  const closeInfoModal = () => { infoModal.style.display = 'none'; };
+  function showInfoModal(message, type = 'info') {
+    infoModalMessage.textContent = message;
+    infoModalMessage.className = 'message';
+    if (type === 'success') { infoModalMessage.classList.add('success'); }
+    else if (type === 'error') { infoModalMessage.classList.add('error'); }
+    infoModal.style.display = 'flex';
+    infoModalOkBtn.focus();
+  }
+  infoModalOkBtn.addEventListener('click', closeInfoModal);
+  infoModalCloseBtn.addEventListener('click', closeInfoModal);
+  infoModal.addEventListener('click', (event) => { if (event.target === infoModal) { closeInfoModal(); } });
+  // --- FIM: LÓGICA DO MODAL DE INFORMAÇÕES ---
+
+  // --- INÍCIO: LÓGICA DO MODAL DE CONFIRMAÇÃO (SUBSTITUTO DO CONFIRM) ---
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="confirmModal" class="modal" style="display: none; z-index: 1600;">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <p id="confirmModalMessage"></p>
+        <div class="confirm-modal-actions">
+          <button id="confirmModalCancelBtn" class="action-btn">Cancelar</button>
+          <button id="confirmModalConfirmBtn" class="action-btn">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  `);
+  const confirmModal = document.getElementById('confirmModal');
+  const confirmModalMessage = document.getElementById('confirmModalMessage');
+  let confirmModalConfirmBtn = document.getElementById('confirmModalConfirmBtn');
+  const confirmModalCancelBtn = document.getElementById('confirmModalCancelBtn');
+  const confirmModalCloseBtn = confirmModal.querySelector('.close-btn');
+  const closeConfirmModal = () => { confirmModal.style.display = 'none'; };
+  function showConfirmModal(message, onConfirm) {
+    confirmModalMessage.textContent = message;
+    const newConfirmBtn = confirmModalConfirmBtn.cloneNode(true);
+    confirmModalConfirmBtn.parentNode.replaceChild(newConfirmBtn, confirmModalConfirmBtn);
+    confirmModalConfirmBtn = newConfirmBtn;
+    confirmModalConfirmBtn.addEventListener('click', () => {
+      closeConfirmModal();
+      onConfirm();
+    }, { once: true });
+    confirmModal.style.display = 'flex';
+    confirmModalConfirmBtn.focus();
+  }
+  confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
+  confirmModalCloseBtn.addEventListener('click', closeConfirmModal);
+  confirmModal.addEventListener('click', (event) => { if (event.target === confirmModal) { closeConfirmModal(); } });
+  // --- FIM: LÓGICA DO MODAL DE CONFIRMAÇÃO ---
+
   let userId = null;
   let userGuildId = null;
   let currentGuildData = null;
@@ -298,7 +362,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           li.innerHTML = `
   <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
        style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
-  <span>${m.name}</span> 
+  <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
   <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
   <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>
 `;
@@ -327,9 +391,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
       if (editGuildBtn){
-  editGuildBtn.style.display = 'inline-block';
-  editGuildBtn.onclick = () => openEditGuildModal(guildData);
-}
+        editGuildBtn.style.display = 'inline-block';
+        editGuildBtn.onclick = () => openEditGuildModal(guildData);
+      }
 
 
       // check notifications
@@ -399,7 +463,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
-                <span>${m.name}</span> 
+                <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
                 <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
                 <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>
             `;
@@ -622,7 +686,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           else if (l.action === 'join') text = target + ' entrou na guilda às ' + formatDateTime(l.created_at);
           else if (l.action === 'leave') text = target + ' saiu da guilda às ' + formatDateTime(l.created_at);
           else if (l.action === 'reject') {
-            // Usa a mensagem do banco de dados, que já deve estar correta
             text = l.message + ' às ' + formatDateTime(l.created_at);
           }
           else if (l.action === 'notice') text = 'Aviso atualizado por ' + actor + ' às ' + formatDateTime(l.created_at) + ': ' + (l.message || '');
@@ -647,51 +710,55 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Actions: promote/revoke/transfer/expel/accept/reject ---
   async function promoteToCoLeader(targetId, targetName){
-    if (!confirm(`Tem certeza que deseja promover ${targetName} para co-líder?`)) return;
-    try {
-      const { error } = await supabase.rpc('promote_to_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
-      if (error) throw error;
-      await supabase.rpc('log_guild_action', { p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action: 'promote', p_message: null });
-      alert('Promovido');
-      await loadGuildInfo();
-      openEditGuildModal(currentGuildData);
-    } catch(e){ alert('Erro ao promover: ' + (e.message || e)); console.error(e); }
+    showConfirmModal(`Tem certeza que deseja promover ${targetName} para co-líder?`, async () => {
+      try {
+        const { error } = await supabase.rpc('promote_to_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
+        if (error) throw error;
+        await supabase.rpc('log_guild_action', { p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action: 'promote', p_message: null });
+        showInfoModal('Promovido com sucesso!', 'success');
+        await loadGuildInfo();
+        openEditGuildModal(currentGuildData);
+      } catch(e){ showInfoModal('Erro ao promover: ' + (e.message || e), 'error'); console.error(e); }
+    });
   }
 
   async function revokeCoLeader(targetId, targetName){
-    if (!confirm(`Tem certeza que deseja revogar co-líder de ${targetName}?`)) return;
-    try {
-      const { error } = await supabase.rpc('revoke_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
-      if (error) throw error;
-      await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'demote', p_message:null });
-      alert('Revogado');
-      await loadGuildInfo();
-      openEditGuildModal(currentGuildData);
-    } catch(e){ alert('Erro ao revogar: ' + (e.message || e)); console.error(e); }
+    showConfirmModal(`Tem certeza que deseja revogar co-líder de ${targetName}?`, async () => {
+      try {
+        const { error } = await supabase.rpc('revoke_co_leader', { p_guild_id: userGuildId, p_requester_id: userId, p_target_id: targetId });
+        if (error) throw error;
+        await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'demote', p_message:null });
+        showInfoModal('Cargo de Co-Líder revogado.', 'success');
+        await loadGuildInfo();
+        openEditGuildModal(currentGuildData);
+      } catch(e){ showInfoModal('Erro ao revogar: ' + (e.message || e), 'error'); console.error(e); }
+    });
   }
 
   async function transferLeadership(targetId, targetName){
-    if (!confirm(`Tem certeza que deseja transferir a liderança da guilda para ${targetName}? Esta ação é irreversível!`)) return;
-  try {
-    const { error } = await supabase.rpc('transfer_leadership', { p_guild_id: userGuildId, p_old_leader_id: userId, p_new_leader_id: targetId });
-    if (error) throw error;
-    await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
-    alert('Transferida');
-    await loadGuildInfo();
-    editGuildModal.style.display = 'none';
-  } catch(e){ alert('Erro: ' + (e.message || e)); console.error(e); }
+    showConfirmModal(`Tem certeza que deseja transferir a liderança da guilda para ${targetName}? Esta ação é irreversível!`, async () => {
+      try {
+        const { error } = await supabase.rpc('transfer_leadership', { p_guild_id: userGuildId, p_old_leader_id: userId, p_new_leader_id: targetId });
+        if (error) throw error;
+        await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
+        showInfoModal('Liderança transferida com sucesso!', 'success');
+        await loadGuildInfo();
+        editGuildModal.style.display = 'none';
+      } catch(e){ showInfoModal('Erro ao transferir liderança: ' + (e.message || e), 'error'); console.error(e); }
+    });
   }
 
   async function expelMember(targetId){
-    if (!confirm('Confirmar expulsão?')) return;
-    try {
-      const { error } = await supabase.rpc('expel_member', { p_guild_id: userGuildId, p_requester_id: userId, p_member_id: targetId });
-      if (error) throw error;
-      await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'expel', p_message:null });
-      alert('Expulso');
-      await loadGuildInfo();
-      openEditGuildModal(currentGuildData);
-    } catch(e){ alert('Erro ao expulsar: ' + (e.message || e)); console.error(e); }
+    showConfirmModal('Confirmar expulsão?', async () => {
+      try {
+        const { error } = await supabase.rpc('expel_member', { p_guild_id: userGuildId, p_requester_id: userId, p_member_id: targetId });
+        if (error) throw error;
+        await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'expel', p_message:null });
+        showInfoModal('Membro expulso.', 'success');
+        await loadGuildInfo();
+        openEditGuildModal(currentGuildData);
+      } catch(e){ showInfoModal('Erro ao expulsar: ' + (e.message || e), 'error'); console.error(e); }
+    });
   }
 
   
@@ -729,7 +796,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           p_action: 'join',
           p_message: null
         });
-        alert('Solicitação aceita');
+        showInfoModal('Solicitação aceita!', 'success');
       } else {
         // foi apenas excluída → registrar como rejeição
         await supabase.rpc('log_guild_action',{
@@ -739,14 +806,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           p_action: 'reject',
           p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe).'
         });
-        alert('Solicitação removida (jogador já está em outra guilda ou não existe).');
+        showInfoModal('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
 
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
 
     } catch(e){
-      alert('Erro ao aceitar: ' + (e.message || e));
+      showInfoModal('Erro ao aceitar: ' + (e.message || e), 'error');
       console.error(e);
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
@@ -758,12 +825,10 @@ async function rejectRequest(requestId){
     try {
       const { error } = await supabase.rpc('reject_guild_join_request', { p_request_id: requestId, p_requester_id: userId });
       if (error) throw error;
-      // This is the line to remove or comment out to prevent the duplicate log.
-      // await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: null, p_action: 'reject', p_message: requestId });
-      alert('Rejeitado');
+      showInfoModal('Solicitação rejeitada.', 'success');
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
-    } catch(e){ alert('Erro ao rejeitar: ' + (e.message || e)); console.error(e); }
+    } catch(e){ showInfoModal('Erro ao rejeitar: ' + (e.message || e), 'error'); console.error(e); }
   }
 
   // --- Save guild changes & notice handlers ---
@@ -775,10 +840,10 @@ async function rejectRequest(requestId){
         const newFlag = editGuildFlagUrl ? editGuildFlagUrl.value.trim() : null;
         const { error } = await supabase.rpc('update_guild_info', { p_guild_id: userGuildId, p_player_id: userId, p_name: newName, p_description: newDesc, p_flag_url: newFlag });
         if (error) throw error;
-        alert('Guilda atualizada');
+        showInfoModal('Guilda atualizada com sucesso!', 'success');
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
-      } catch(e){ alert('Erro: ' + (e.message || e)); console.error(e); }
+      } catch(e){ showInfoModal('Erro ao atualizar a guilda: ' + (e.message || e), 'error'); console.error(e); }
     });
   }
 
@@ -788,10 +853,10 @@ async function rejectRequest(requestId){
         const notice = editGuildNotice ? editGuildNotice.value.trim() : '';
         const { error } = await supabase.rpc('update_guild_notice', { p_guild_id: userGuildId, p_player_id: userId, p_notice: notice });
         if (error) throw error;
-        alert('Aviso atualizado');
+        showInfoModal('Aviso da guilda atualizado!', 'success');
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
-      } catch(e){ alert('Erro ao atualizar aviso: ' + (e.message || e)); console.error(e); }
+      } catch(e){ showInfoModal('Erro ao atualizar aviso: ' + (e.message || e), 'error'); console.error(e); }
     });
   }
 
@@ -805,7 +870,7 @@ async function rejectRequest(requestId){
     searchGuildConfirmBtn.addEventListener('click', async ()=>{
       if (!searchGuildInput) return;
       const q = searchGuildInput.value.trim();
-      if (!q){ alert('Digite um nome para buscar.'); return; }
+      if (!q){ showInfoModal('Digite um nome para buscar.'); return; }
       try {
         let { data, error } = await supabase.rpc('search_guilds', { p_query: q, p_limit: 20 });
         if (error || !data || data.length === 0){
@@ -820,7 +885,6 @@ async function rejectRequest(requestId){
         if (searchGuildResults) searchGuildResults.innerHTML = '';
         data.forEach(g => {
           const li = document.createElement('li');
-          // Adicione o atributo de ID e a classe clicável
           li.className = 'search-item-clickable';
           if (g.id) {
             li.dataset.guildId = g.id;
@@ -843,14 +907,11 @@ async function rejectRequest(requestId){
     });
   }
   
-  // Adicione o event listener para os resultados de busca
   if (searchGuildResults) {
     searchGuildResults.addEventListener('click', (ev) => {
         const item = ev.target.closest('li');
         if (item && item.dataset.guildId) {
-            // Esconde o modal de busca
             searchGuildModal.style.display = 'none';
-            // Abre o modal de visualização da guilda
             fetchAndDisplayGuildInfo(item.dataset.guildId);
         }
     });
@@ -861,14 +922,13 @@ async function rejectRequest(requestId){
       const message = prompt('Mensagem para a guilda ' + guildName + ' (opcional):') || '';
       const { error } = await supabase.rpc('create_guild_join_request', { p_guild_id: guildId, p_player_id: userId, p_message: message });
       if (error) throw error;
-      alert('Solicitação enviada');
+      showInfoModal('Solicitação enviada com sucesso!', 'success');
       if (searchGuildModal) searchGuildModal.style.display = 'none';
-    } catch(e){ alert('Erro ao enviar solicitação: ' + (e.message || e)); console.error(e); }
+    } catch(e){ showInfoModal('Erro ao enviar solicitação: ' + (e.message || e), 'error'); console.error(e); }
   };
 
-  // close modal handlers (edit & create & search & view)
   if (editCloseBtn) editCloseBtn.addEventListener('click', ()=>{ if (editGuildModal) editGuildModal.style.display = 'none'; });
-  if (viewGuildCloseBtn) viewGuildCloseBtn.addEventListener('click', () => { viewGuildModal.style.display = 'none'; });
+  if (viewGuildCloseBtn) viewGuildCloseBtn.addEventListener('click', () => { if (viewGuildModal) viewGuildModal.style.display = 'none'; });
   window.addEventListener('click', (ev) => {
     if (ev.target === editGuildModal) editGuildModal.style.display = 'none';
     if (ev.target === searchGuildModal) searchGuildModal.style.display = 'none';
@@ -876,7 +936,6 @@ async function rejectRequest(requestId){
     if (ev.target === viewGuildModal) viewGuildModal.style.display = 'none';
   });
 
-  // create guild simple handlers
   if (createGuildBtn && createGuildModal) createGuildBtn.addEventListener('click', ()=> createGuildModal.style.display = 'flex');
   if (confirmCreateGuildBtn){
     confirmCreateGuildBtn.addEventListener('click', async ()=>{
@@ -893,52 +952,57 @@ async function rejectRequest(requestId){
     });
   }
 
-  // refresh button
   if (refreshBtn) refreshBtn.addEventListener('click', ()=> loadGuildInfo());
-
-  // initial load
-  const ok = await getUserSession();
-  if (ok) await loadGuildInfo();
-
 
   // --- Botões: Deletar / Sair da guilda ---
   const deleteGuildBtn = document.getElementById('deleteguild');
   const leaveGuildBtn = document.getElementById('leaveguild');
 
-  // Deletar guilda (apenas líder)
   if (deleteGuildBtn) {
-    deleteGuildBtn.addEventListener('click', async (ev) => {
+    deleteGuildBtn.addEventListener('click', (ev) => {
       ev?.preventDefault();
       if (!userGuildId) {
-        alert('Erro: guilda não encontrada no contexto. Recarregue a página.');
+        showInfoModal('Erro: guilda não encontrada no contexto. Recarregue a página.', 'error');
         return;
       }
-      if (!confirm("Tem certeza que deseja deletar a guilda? Esta ação é irreversível. Todos os dados da guilda serão excluídos! Você só poderá entrar em outra guilda após 24 horas.")) return;
-      try {
-        const res = await supabase.rpc('delete_guild', { p_guild_id: userGuildId, p_player_id: userId });
-        if (res?.error) throw res.error;
-        alert('Guilda deletada.');
-        userGuildId = null;
-        await loadGuildInfo();
-      } catch(e) { alert('Erro: ' + (e.message || e)); console.error(e); }
+      showConfirmModal("Tem certeza que deseja deletar a guilda? Esta ação é irreversível. Todos os dados serão excluídos e você só poderá entrar em outra guilda após 24 horas.", async () => {
+        try {
+          const { error } = await supabase.rpc('delete_guild', { p_guild_id: userGuildId, p_player_id: userId });
+          if (error) throw error;
+          showInfoModal('Guilda deletada com sucesso.', 'success');
+          userGuildId = null;
+          currentGuildData = null;
+          await loadGuildInfo();
+        } catch (e) {
+          showInfoModal('Erro ao deletar guilda: ' + (e.message || e), 'error');
+          console.error(e);
+        }
+      });
     });
   }
 
-  // Sair da guilda (membros, exceto líder)
   if (leaveGuildBtn) {
-    leaveGuildBtn.addEventListener('click', async (ev) => {
+    leaveGuildBtn.addEventListener('click', (ev) => {
       ev?.preventDefault();
-      if (!confirm("Tem certeza que você quer sair da guilda? Esta ação é irreversível. Você só poderá entrar em outra guilda após 24 horas.")) return;
-      try {
-        const res = await supabase.rpc('leave_guild', { p_player_id: userId });
-        if (res?.error) throw res.error;
-        alert('Você saiu da guilda.');
-        userGuildId = null;
-        await loadGuildInfo();
-      } catch(e) { alert('Erro: ' + (e.message || e)); console.error(e); }
+      showConfirmModal("Tem certeza que você quer sair da guilda? Esta ação é irreversível e você só poderá entrar em outra guilda após 24 horas.", async () => {
+        try {
+          const { error } = await supabase.rpc('leave_guild', { p_player_id: userId });
+          if (error) throw error;
+          showInfoModal('Você saiu da guilda.', 'success');
+          userGuildId = null;
+          currentGuildData = null;
+          await loadGuildInfo();
+        } catch (e) {
+          showInfoModal('Erro ao sair da guilda: ' + (e.message || e), 'error');
+          console.error(e);
+        }
+      });
     });
   }
 
+  // initial load
+  const ok = await getUserSession();
+  if (ok) await loadGuildInfo();
 
 }); // end DOMContentLoaded
 
@@ -964,7 +1028,6 @@ function updateGuildNotifications(show) {
     }
 }
 
-// alternative global function in case page uses a different selector for tabs
 function markTabNotificationGlobal(tabId, show){
   try {
     const tabBtn = document.querySelector(`#editTabMenu .edit-tab-btn[data-tab="${tabId}"]`);
@@ -978,12 +1041,31 @@ function markTabNotificationGlobal(tabId, show){
   } catch(e){ console.error(e); }
 }
 
-// Reset notifications when player opens requests or notices (legacy buttons)
 document.getElementById('guildRequestsBtn')?.addEventListener('click', () => {
     updateGuildNotifications(false);
 });
 document.getElementById('guildNoticeBtn')?.addEventListener('click', () => {
     updateGuildNotifications(false);
+
+  // --- Permitir abrir o modal do jogador também no modal de informações da guilda ---
+  const guildViewMemberListEl = document.getElementById('guildViewMemberList');
+  if (guildViewMemberListEl) {
+    guildViewMemberListEl.addEventListener('click', (e) => {
+      const link = e.target.closest('.player-link');
+      if (!link) return;
+      const playerId = link.dataset.playerId;
+      if (!playerId) return;
+
+      const playerModal = document.getElementById('playerModal');
+      if (playerModal) {
+        playerModal.style.display = 'flex';
+      }
+
+      if (typeof clearModalContent === "function") clearModalContent();
+      if (typeof fetchPlayerData === "function") fetchPlayerData(playerId);
+    });
+  }
+
 });
 
 // --- Guild Level System ---
@@ -1001,11 +1083,10 @@ function getMaxMembers(level){
   return 10 + (level - 1) * 2;
 }
 
-// Atualizar barra de XP dinamicamente
 function updateGuildXpBar(guildData){
   try {
-    const xpFill = document.querySelector('.xp-bar-fill'); // barra verde
-    const xpText = document.getElementById('guildXpFill'); // texto centralizado
+    const xpFill = document.querySelector('.xp-bar-fill');
+    const xpText = document.getElementById('guildXpFill');
     if (!xpFill || !xpText) return;
 
     const currentXp = Number((guildData && guildData.experience) ? guildData.experience : 0);
@@ -1018,10 +1099,7 @@ function updateGuildXpBar(guildData){
         ? Math.max(0, Math.min(100, Math.floor((currentXp / neededXp) * 100))) 
         : 0;
 
-    // Atualiza a largura da barra verde
     xpFill.style.width = percent + '%';
-
-    // Atualiza o texto centralizado
     xpText.textContent = currentXp + ' / ' + neededXp;
     xpText.setAttribute('aria-valuenow', currentXp);
     xpText.setAttribute('aria-valuemax', neededXp);

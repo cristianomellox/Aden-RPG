@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- INÍCIO: LÓGICA DO MODAL DE CONFIRMAÇÃO (SUBSTITUTO DO CONFIRM) ---
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="confirmModal" class="modal" style="display: none; z-index: 1600;">
+    <div id="confirmModal" class="modal" style="display: none; z-index: 1600; background: none!important;">
       <div class="modal-content">
         <span class="close-btn">&times;</span>
         <p id="confirmModalMessage"></p>

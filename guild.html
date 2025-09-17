@@ -2,7 +2,9 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
     <meta name="robots" content="noindex, nofollow">
     <meta name="googlebot" content="noindex, nofollow">
     <title>Guilda - Aden RPG</title>
@@ -30,7 +32,7 @@
             <span class="tab-btn active" data-tab="guilda">Guilda</span>
             <span class="tab-btn" data-tab="taverna">Taverna</span>
             <span class="tab-btn" data-tab="ranking">Ranking</span>
-            <span class="tab-btn" data-tab="boss">Boss</span>
+            <span class="tab-btn" data-tab="raid">raid</span>
             <span class="tab-btn" data-tab="batalhas">Batalhas</span>
         </div>
 
@@ -44,7 +46,7 @@
                         
                     </div>
                    <div id="guildName"></div>
-<img alt="poder" id="cpIcon" style="width: 24px; height: 35px; vertical-align: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="guildPower" style="color:orange; font-weight:bold; font-size:1.8em; margin-top:4px;"></span>
+<img alt="poder" id="cpIcon" style="width: 20px; height: 32px; margin-top: -4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="guildPower" style="color:orange; font-weight:bold; font-size:1.8em; margin-top:4px;"></span>
 
                     <div id="guildDescription" style="margin:6px 0;color:white; font-size: 0.8em;"></div>
                     
@@ -94,8 +96,8 @@
                 <ul id="guildRankingList"></ul>
             </div>
 
-            <div id="boss" class="tab-pane">
-                <p>Conteúdo do Boss será adicionado aqui.</p>
+            <div id="raid" class="tab-pane">
+                <p>Conteúdo da raid será adicionado aqui.</p>
             </div>
 
             <div id="batalhas" class="tab-pane">
@@ -119,6 +121,7 @@
     <div id="editGuildModal" class="modal" style="display:none;">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
+            <span style="position: fixed; margin-top: 3.7rem; right: 3rem; font-weight: bold; color: gold; font-size: 1.2em;">>>></span>
             <h3>Editar Guilda</h3>
 
            <div id="editTabMenu" class="tab-scroll">
@@ -313,6 +316,38 @@
         O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1.5rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+
+
+
+
 <script src="loading.js"></script>
    <script src="number_format.js"></script>
     <script src="guild.js"></script>

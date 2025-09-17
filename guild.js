@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (withCooldown) {
-        let timeLeft = 60;
+        let timeLeft = 40;
         confirmModalConfirmBtn.disabled = true;
         confirmModalConfirmBtn.classList.add("disabled-btn");
         confirmModalConfirmBtn.textContent = `Aguarde ${timeLeft}s`;
@@ -409,11 +409,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         sorted.forEach(m => {
           const li = document.createElement('li');
           li.innerHTML = `
-            <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+            <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}"
                  style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
-            <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
-            <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
-            <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>`;
+            <div class="member-details">
+              <span class="player-link" data-player-id="${m.id}">${m.name}</span>
+              <span class="member-level">Nv. ${m.level || 1}</span>
+            </div>
+            <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
           guildMemberListElement.appendChild(li);
         });
       }
@@ -497,9 +499,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
-                <span class="player-link" data-player-id="${m.id}">${m.name}</span> 
-                <small style="margin-left:8px;color:lightblue">Nv. ${m.level || 1}</small>
-                <small style="margin-left:8px;color:gold">${traduzCargo(m.rank)}</small>`;
+                <div class="member-details">
+                    <span class="player-link" data-player-id="${m.id}">${m.name}</span>
+                    <span class="member-level">Nv. ${m.level || 1}</span>
+                </div>
+                <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
             guildViewMemberList.appendChild(li);
         });
 
@@ -530,19 +534,27 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (g.guild_id) {
               li.dataset.guildId = g.guild_id;
           }
-          
           li.innerHTML = `
-            <div class="ranking-item-content">
-                <span class="ranking-position">${idx+1}º</span>
-                <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" class="ranking-flag">
-                <div class="ranking-info">
-                    <strong class="ranking-name">${g.name}</strong>
-                    <div class="ranking-power">
-                        <img alt="poder" class="cp-icon" style="margin-top: -5px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/>
-                        <span class="power-value">${compactPower}</span>
-                    </div>
-                </div>
-            </div>`;
+  <div class="ranking-item-content">
+      <span class="ranking-position">${idx+1}º</span>
+      <img src="${g.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" class="ranking-flag">
+      <div class="ranking-info">
+          <div class="member-details">
+              <strong class="ranking-name">${g.name}</strong>
+              <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
+                  <div style="display:flex; align-items:center; gap:4px;">
+                      <img alt="poder" src="https://aden-rpg.pages.dev/assets/CPicon.webp" style="width:18px; height:28px; margin-top:-2px;">
+                      <span style="color:orange; font-weight:bold; font-size:1.1em;">${compactPower}</span>
+                  </div>
+                  <span class="member-level" 
+                        style="font-weight: bold; color: lightblue; padding-left:10px; border-left:2px solid #777; font-size: 1em;">
+                        Nv. ${g.level || 1}
+                  </span>
+              </div>
+          </div>
+      </div>
+  </div>`;
+
           
           if (idx === 0) li.style.background = "linear-gradient(180deg, rgba(255,215,0,0.5), rgba(255,215,0,0.1))";
           else if (idx === 1) li.style.background = "linear-gradient(180deg, rgba(192,192,192,0.6), rgba(169,169,169,0.1))";

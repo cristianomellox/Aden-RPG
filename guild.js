@@ -543,7 +543,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               <strong class="ranking-name">${g.name}</strong>
               <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
                   <div style="display:flex; align-items:center; gap:4px;">
-                      <img alt="poder" src="https://aden-rpg.pages.dev/assets/CPicon.webp" style="width:18px; height:28px; margin-top:-2px;">
+                      <img alt="poder" src="https://aden-rpg.pages.dev/assets/CPicon.webp" style="width:18px; height:24px; margin-top:-2px;">
                       <span style="color:orange; font-weight:bold; font-size:1.1em;">${compactPower}</span>
                   </div>
                   <span class="member-level" 

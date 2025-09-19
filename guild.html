@@ -30,9 +30,9 @@
     <div id="mainContainer">
         <div id="tabMenu">
             <span class="tab-btn active" data-tab="guilda">Guilda</span>
-            <span class="tab-btn" data-tab="taverna">Taverna</span>
+            <span class="tab-btn" data-tab="sala">Sala</span>
             <span class="tab-btn" data-tab="ranking">Ranking</span>
-            <span class="tab-btn" data-tab="raid">raid</span>
+            <span class="tab-btn" data-tab="raid">Raid</span>
             <span class="tab-btn" data-tab="batalhas">Batalhas</span>
         </div>
 
@@ -87,8 +87,8 @@
                 </div>
             </div>
 </div>
-            <div id="taverna" class="tab-pane">
-                <p>Conteúdo da Taverna será adicionado aqui.</p>
+            <div id="sala" class="tab-pane">
+                <p>Conteúdo da Sala será adicionado aqui.</p>
             </div>
 
             <div id="ranking" class="tab-pane">
@@ -96,8 +96,61 @@
                 <ul id="guildRankingList"></ul>
             </div>
 
-            <div id="raid" class="tab-pane">
-                <p>Conteúdo da raid será adicionado aqui.</p>
+            <div id="raid" class="tab-pane" style="background: none;">
+              <center><h3>Raid de Guilda</h3></center>
+              <div id="raid_1">
+                <img id="tdd" src="https://aden-rpg.pages.dev/assets/tdd.webp" style="width: 90vw; height: 180px; background: none;">
+            
+<!-- Modal para iniciar Raid -->
+<div id="raidModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close-btn">&times;</span>
+    <h3>Torre da Desolação</h3>
+    <p>Duração: 1 hora</p>
+    <button id="startRaidBtn" class="action-btn">Iniciar Raid</button>
+    <button id="cancelRaidBtn" class="action-btn">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal de combate da Raid -->
+<div id="raidCombatModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h3 id="raidCombatTitle">Andar 1</h3>
+    <div id="raidMonsterArea">
+      <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/monstromina1.webp" style="width:120px;">
+      <div id="raidMonsterHpBar">
+        <div id="raidMonsterHpFill"></div>
+        <span id="raidMonsterHpText"></span>
+      </div>
+    </div>
+    <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:70px;height:70px;cursor:pointer;">
+    <p>
+      Ataques: <span id="raidPlayerAttacks">0</span>
+      <button id="raidBuyAttackBtn" class="btn btn-gold">+</button><br>
+      <span id="raidAttackCooldown"></span>
+    </p>
+    <div id="raidDamageRankingContainer">
+      <h4>Ranking de Dano</h4>
+      <ul id="raidDamageRankingList"></ul>
+    </div>
+    <div style="display:flex;justify-content:space-around;margin-top:20px;">
+      <button id="raidBackBtn" class="action-btn">Voltar</button>
+    </div>
+  </div>
+</div>
+<div id="lastRaidResultModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Resultado da Última Raid</h3>
+        <p>Na sua última incursão na Torre da Desolação, sua guilda alcançou:</p>
+        <h2 id="lastRaidFloorResult" style="color: yellow; font-size: 2em; margin: 10px 0;">Andar 0</h2>
+        <button id="startNewRaidFromLastResultBtn" class="action-btn">Iniciar Nova Raid</button>
+        <button id="closeLastResultBtn" class="action-btn">Fechar</button>
+    </div>
+</div>
+
+
+
+                </div>
             </div>
 
             <div id="batalhas" class="tab-pane">
@@ -352,5 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
    <script src="number_format.js"></script>
     <script src="guild.js"></script>
     <script src="playerModal.js"></script>
+    <script src="guild_raid.js"></script>
+
 </body>
 </html>

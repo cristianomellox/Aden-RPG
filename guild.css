@@ -956,4 +956,51 @@ body {
 #editGuildModal {
   font-size: 0.8em;
 }
+@keyframes floatY {
+  0%   { transform: translateY(0px); }
+  50%  { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+#raidMonsterImage {
+  animation: floatY 2s ease-in-out infinite;
+}
+
+#raidMonsterHpBar {
+  width: 90%;
+  max-width: 400px;
+  background: #333;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 10px auto;
+  height: 24px;
+  position: relative;
+}
+#raidMonsterHpFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff4444, #ffbb44);
+  transition: width 0.3s ease;
+}
+
+#raidPlayerHpFill {
+  background: linear-gradient(90deg, #6bff6b, #86ffb8);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;   /* centraliza o texto */
+  font-weight: bold;
+  font-size: 0.9em;
+  color: #000;
+  transition: width 0.3s ease;
+}
+
+#raidPlayerHpText {
+  position: absolute;         /* fixa no centro */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  font-size: 0.9em;
+  color: #000;
+}
 

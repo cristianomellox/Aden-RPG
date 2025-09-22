@@ -974,12 +974,18 @@ body {
   margin: 10px auto;
   height: 24px;
   position: relative;
+  border: 1px solid #777!important;
 }
 #raidMonsterHpFill {
   height: 100%;
   width: 100%;
   background: linear-gradient(90deg, #ff4444, #ffbb44);
   transition: width 0.3s ease;
+  border: 1px solid yellow!important;
+}
+
+#raidPlayerHpBar {
+  border: 1px solid #777!important;
 }
 
 #raidPlayerHpFill {
@@ -990,8 +996,9 @@ body {
   justify-content: center;   /* centraliza o texto */
   font-weight: bold;
   font-size: 0.9em;
-  color: #000;
+  color: white;
   transition: width 0.3s ease;
+  border: 1px solid yellow!important;
 }
 
 #raidPlayerHpText {
@@ -1000,7 +1007,18 @@ body {
   top: 50%;
   transform: translate(-50%, -50%);
   font-weight: bold;
-  font-size: 0.9em;
-  color: #000;
+  font-size: 0.7em;
+  color: white!important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
+#raidPlayerReviveText {
+  margin-top: 25px;
+}
+#raidMonsterHpText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.7em;
+}

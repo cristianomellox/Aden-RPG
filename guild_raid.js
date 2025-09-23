@@ -1,3 +1,4 @@
+
 console.log("guild_raid.js atualizado (correções de estado e UI) ✅");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
@@ -492,9 +493,31 @@ async function performAttack() {
     await refreshRanking();
 
     if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
-    
+
     if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
-      // ... (código do modal de recompensa)
+      // tenta usar valor vindo do servidor
+      let xp = (typeof payload.gained_xp !== 'undefined') ? payload.gained_xp : (typeof payload.gained_experience !== 'undefined' ? payload.gained_experience : undefined);
+      let crystals = (typeof payload.gained_crystals !== 'undefined') ? payload.gained_crystals : (typeof payload.gained_crystal !== 'undefined' ? payload.gained_crystal : undefined);
+
+      // se servidor não retornou, faz fallback consultando guild_raid_monsters pelo andar atual (usando currentFloor)
+      if (typeof xp === 'undefined' && typeof crystals === 'undefined') {
+        console.log("RPC não retornou gained_xp/gained_crystals — buscando recompensas do DB (fallback).");
+        try {
+          const { data: mrow } = await supabase.from('guild_raid_monsters').select('*').eq('floor', currentFloor).limit(1).single();
+          xp = mrow?.xp_reward ?? mrow?.gained_xp ?? mrow?.xp ?? mrow?.reward_xp ?? 0;
+          crystals = mrow?.crystals_reward ?? mrow?.gained_crystals ?? mrow?.crystals ?? mrow?.reward_crystals ?? 0;
+          console.log("fallback rewards from guild_raid_monsters:", xp, crystals);
+        } catch (e) {
+          console.warn("Erro ao buscar guild_raid_monsters para rewards:", e);
+          xp = 0;
+          crystals = 0;
+        }
+      }
+
+      showRewardModal(xp, crystals, () => {
+        setTimeout(() => loadRaid().catch(()=>{}), 200);
+      });
+      return;
     }
   } catch (e) {
     console.error("performAttack erro:", e);
@@ -502,6 +525,30 @@ async function performAttack() {
     if (attackBtn) attackBtn.style.pointerEvents = "";
   }
 }
+
+// --------- Recompensa modal helper (adicionado para restaurar UI de recompensas) ----------
+function showRewardModal(xp, crystals, onOk) {
+  console.log("showRewardModal => XP:", xp, "Crystals:", crystals);
+  const xpEl = $id("rewardXpText");
+  const crEl = $id("rewardCrystalsText");
+  const modal = $id("raidRewardModal");
+  const okBtn = $id("rewardOkBtn");
+  if (!modal) {
+    console.warn("Modal de recompensa não encontrado.");
+    if (onOk) onOk();
+    return;
+  }
+  if (xpEl) xpEl.textContent = `${Number(xp || 0).toLocaleString()} XP`;
+  if (crEl) crEl.textContent = `${Number(crystals || 0).toLocaleString()} Cristais`;
+  modal.style.display = "flex";
+  if (okBtn) {
+    okBtn.onclick = () => {
+      modal.style.display = "none";
+      if (onOk) onOk();
+    };
+  }
+}
+// -------------------------------------------------------------------------------
 
 // =================================================================
 // FUNÇÃO DO ATAQUE DO CHEFE - ATUALIZADA
@@ -513,7 +560,7 @@ async function tryBossAttackForPlayer() {
   try {
     // A chamada RPC volta a ser como na versão original, passando o ID do jogador
     const { data, error } = await supabase.rpc("guild_raid_boss_attack", { p_raid_id: currentRaidId, p_player_id: userId });
-    
+
     if (error) {
       console.warn("boss attack rpc erro:", error);
       return;
@@ -526,10 +573,10 @@ async function tryBossAttackForPlayer() {
       const dmg = payload.damage || 0;
       const newHp = payload.player_new_hp ?? 0;
       const maxHp = payload.player_max_health ?? 1;
-      
+
       const playerArea = $id("raidPlayerArea");
       displayFloatingDamageOver(playerArea, dmg, false);
-      
+
       _playerReviveUntil = payload.player_revive_until || null;
       updatePlayerHpUi(newHp, maxHp);
       if (_playerReviveUntil && new Date(_playerReviveUntil) > new Date()) {
@@ -706,7 +753,7 @@ function bindEvents() {
     });
   }
 
-  
+
   $id("startNewRaidFromLastResultBtn")?.addEventListener("click", () => {
     openRaidModal();
     const m = $id("lastRaidResultModal"); if (m) m.style.display = "none";

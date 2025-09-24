@@ -1,4 +1,3 @@
-
 console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) ✅");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
@@ -615,13 +614,32 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
             .update({ claimed: true, claimed_at: new Date().toISOString() })
             .eq("id", rewardId);
         } else {
+          // --- INÍCIO DA CORREÇÃO ---
+          // Esta parte (para o jogador finalizador) precisa ser corrigida.
+          // Primeiro, buscamos a recompensa pendente mais recente para este jogador na raid.
           if (currentRaidId && userId) {
-            await supabase.from("guild_raid_rewards")
-              .update({ claimed: true, claimed_at: new Date().toISOString() })
+            const { data: latestReward, error } = await supabase
+              .from("guild_raid_rewards")
+              .select("id")
               .eq("raid_id", currentRaidId)
               .eq("player_id", userId)
-              .eq("claimed", false);
+              .eq("claimed", false)
+              .order("created_at", { ascending: false }) // Ordena pela mais recente
+              .limit(1)
+              .single();
+
+            if (error) {
+              console.error("Erro ao buscar a recompensa mais recente:", error);
+            }
+
+            // Se uma recompensa foi encontrada, atualiza usando seu ID específico.
+            if (latestReward) {
+              await supabase.from("guild_raid_rewards")
+                .update({ claimed: true, claimed_at: new Date().toISOString() })
+                .eq("id", latestReward.id); // Reivindica apenas a recompensa específica
+            }
           }
+          // --- FIM DA CORREÇÃO ---
         }
       } catch (e) {
         console.error("Erro ao marcar reward como claimed no clique:", e);
@@ -814,13 +832,13 @@ function startRaidTimer() {
 }
 function clearRaidTimer() { if (raidTimerInterval) clearInterval(raidTimerInterval); raidTimerInterval = null; }
 
-function closeCombatModal(){ 
-  const m = $id("raidCombatModal"); 
-  if (m) m.style.display = "none"; 
-  stopPolling(); 
-  stopUISecondTicker(); 
-  clearRaidTimer(); 
-  stopBossChecker(); 
+function closeCombatModal(){
+  const m = $id("raidCombatModal");
+  if (m) m.style.display = "none";
+  stopPolling();
+  stopUISecondTicker();
+  clearRaidTimer();
+  stopBossChecker();
   stopReviveTicker();
 }
 

@@ -27,15 +27,8 @@ let bossCheckInterval = null;
 let reviveTickerInterval = null;
 let refreshAttemptsPending = false;
 
-
-// Carrega IDs já vistos do localStorage (persistente entre recarregamentos)
-let shownRewardIds = new Set(JSON.parse(localStorage.getItem("shownRewardIds") || "[]"));
-
-function markRewardAsShown(id) {
-  shownRewardIds.add(id);
-  localStorage.setItem("shownRewardIds", JSON.stringify([...shownRewardIds]));
-}
-
+// O localStorage agora será tratado dentro da função checkPendingRaidRewards
+// para garantir que seja específico para cada raid. A variável global foi removida.
 
 // audio
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -607,16 +600,15 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
   if (okBtn) {
     okBtn.onclick = async () => {
       modal.style.display = "none";
-      // Marca imediatamente como claimed no clique para evitar reabertura por polling
       try {
         if (rewardId) {
+          // Esta parte (para outros jogadores via polling) já está correta
           await supabase.from("guild_raid_rewards")
             .update({ claimed: true, claimed_at: new Date().toISOString() })
             .eq("id", rewardId);
         } else {
           // --- INÍCIO DA CORREÇÃO ---
-          // Esta parte (para o jogador finalizador) precisa ser corrigida.
-          // Primeiro, buscamos a recompensa pendente mais recente para este jogador na raid.
+          // Esta parte (para o jogador finalizador) foi corrigida para reivindicar apenas a recompensa mais recente.
           if (currentRaidId && userId) {
             const { data: latestReward, error } = await supabase
               .from("guild_raid_rewards")
@@ -759,6 +751,12 @@ async function refreshRaidState() {
 async function checkPendingRaidRewards() {
   if (!currentRaidId || !userId) return;
   try {
+    // --- INÍCIO DA CORREÇÃO DO LOCALSTORAGE ---
+    // Carrega o histórico de recompensas vistas APENAS para a raid atual
+    const storageKey = `shownRewardIds_${currentRaidId}`;
+    const shownRewardIds = new Set(JSON.parse(localStorage.getItem(storageKey) || "[]"));
+    // --- FIM DA CORREÇÃO DO LOCALSTORAGE ---
+
     const { data, error } = await supabase
       .from("guild_raid_rewards")
       .select("id, xp, crystals")
@@ -777,13 +775,17 @@ async function checkPendingRaidRewards() {
       if (shownRewardIds.has(reward.id)) {
         return;
       }
-      markRewardAsShown(reward.id);
-showRewardModal(reward.xp, reward.crystals, async () => {
-        try {
-          await supabase.from("guild_raid_rewards").update({ claimed: true }).eq("id", reward.id);
-        } catch (e) {
-          console.error("Erro ao marcar reward como claimed:", e);
-        }
+      
+      // --- INÍCIO DA CORREÇÃO DO LOCALSTORAGE ---
+      // Adiciona o ID ao histórico da raid ATUAL e salva
+      shownRewardIds.add(reward.id);
+      localStorage.setItem(storageKey, JSON.stringify([...shownRewardIds]));
+      // --- FIM DA CORREÇÃO DO LOCALSTORAGE ---
+      
+      // O callback dentro de showRewardModal foi simplificado,
+      // pois a lógica de claim já está no próprio modal.
+      showRewardModal(reward.xp, reward.crystals, async () => {
+        // Apenas recarrega o estado da raid após o modal ser fechado.
         await loadRaid().catch(()=>{});
       }, reward.id);
     }

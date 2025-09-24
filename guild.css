@@ -975,7 +975,7 @@ body {
 #raidMonsterHpFill {
   height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #ff4444, #ffbb44);
+  background: linear-gradient(to right, #ff4433, red);
   transition: width 0.3s ease;
   border: 1px solid yellow!important;
 }
@@ -1111,7 +1111,7 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('
   justify-content: center;
   width: 100%;
 }
-#raidCombatModal #raidDamageRankingContainer {
+#raidCombatModal #raidDamageRankingContainer2 {
   flex: 1 1 auto;
   overflow-y: auto;
   max-height: 35%; /* ranking limitado a parte da tela */

@@ -1,3 +1,4 @@
+
 console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) ✅");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
@@ -26,6 +27,9 @@ let raidTimerInterval = null;
 let bossCheckInterval = null;
 let reviveTickerInterval = null;
 let refreshAttemptsPending = false;
+
+
+let shownRewardIds = new Set(); // controla rewards já mostradas nesta sessão
 
 // audio
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -225,9 +229,11 @@ function formatTime(totalSeconds) {
   return result.trim();
 }
 
+// -------- ALTERADO: floor canto esquerdo + timer central ----------
 function setRaidTitleFloorAndTimer(floor, endsAt) {
   currentFloor = floor || 1;
 
+  // procura elementos; se não existirem, tenta criar um header dentro do modal
   let floorBox = $id("raidFloorInfo");
   let timerBox = $id("raidTimerInfo");
 
@@ -243,6 +249,7 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
         header.style.justifyContent = "center";
         header.style.alignItems = "center";
         header.style.padding = "8px 0";
+        // insere no topo do modal
         combatModal.insertBefore(header, combatModal.firstChild);
       }
 
@@ -282,6 +289,7 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
     }
   }
 }
+// -----------------------------------------------------------------
 
 async function initSession() {
   try {
@@ -540,9 +548,11 @@ async function performAttack() {
     if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
 
     if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
+      // tenta usar valor vindo do servidor (mantemos undefined quando não vier)
       let xp = (typeof payload.xp_reward !== 'undefined') ? payload.xp_reward : (typeof payload.gained_xp !== 'undefined' ? payload.gained_xp : (typeof payload.gained_experience !== 'undefined' ? payload.gained_experience : undefined));
       let crystals = (typeof payload.crystals_reward !== 'undefined') ? payload.crystals_reward : (typeof payload.gained_crystals !== 'undefined' ? payload.gained_crystals : (typeof payload.gained_crystal !== 'undefined' ? payload.gained_crystal : undefined));
 
+      // se algum dos campos não vier, busca o fallback apenas para o campo ausente
       if (typeof xp === 'undefined' || typeof crystals === 'undefined') {
         console.log("RPC não retornou xp/crystals completos — buscando recompensas do DB (fallback) para campos ausentes.");
         try {
@@ -573,6 +583,7 @@ async function performAttack() {
   }
 }
 
+// --------- Recompensa modal helper (adicionado para restaurar UI de recompensas) ----------
 function showRewardModal(xp, crystals, onOk, rewardId) {
   console.log("showRewardModal => XP:", xp, "Crystals:", crystals);
   const xpEl = $id("rewardXpText");
@@ -590,6 +601,7 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
   if (okBtn) {
     okBtn.onclick = async () => {
       modal.style.display = "none";
+      // Marca imediatamente como claimed no clique para evitar reabertura por polling
       try {
         if (rewardId) {
           await supabase.from("guild_raid_rewards")
@@ -597,25 +609,11 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
             .eq("id", rewardId);
         } else {
           if (currentRaidId && userId) {
-            const { data: latestReward, error } = await supabase
-              .from("guild_raid_rewards")
-              .select("id")
+            await supabase.from("guild_raid_rewards")
+              .update({ claimed: true, claimed_at: new Date().toISOString() })
               .eq("raid_id", currentRaidId)
               .eq("player_id", userId)
-              .eq("claimed", false)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .single();
-
-            if (error) {
-              console.error("Erro ao buscar a recompensa mais recente:", error);
-            }
-
-            if (latestReward) {
-              await supabase.from("guild_raid_rewards")
-                .update({ claimed: true, claimed_at: new Date().toISOString() })
-                .eq("id", latestReward.id);
-            }
+              .eq("claimed", false);
           }
         }
       } catch (e) {
@@ -626,11 +624,13 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
   }
 }
 
+// -------------------------------------------------------------------------------
 async function tryBossAttackForPlayer() {
   if (!currentRaidId || !userId) return;
   if ((currentFloor % 5) !== 0) return;
 
   try {
+    // A chamada RPC volta a ser como na versão original, passando o ID do jogador
     const { data, error } = await supabase.rpc("guild_raid_boss_attack", { p_raid_id: currentRaidId, p_player_id: userId });
 
     if (error) {
@@ -640,6 +640,7 @@ async function tryBossAttackForPlayer() {
     const payload = Array.isArray(data) ? data[0] : data;
     if (!payload || !payload.success) return;
 
+    // A lógica de UI é restaurada para dar feedback ao jogador
     if (payload.action === "attacked") {
       const dmg = payload.damage || 0;
       const newHp = payload.player_new_hp ?? 0;
@@ -662,6 +663,7 @@ async function tryBossAttackForPlayer() {
     console.error("tryBossAttackForPlayer", e);
   }
 }
+// =================================================================
 
 function startBossChecker() {
   stopBossChecker();
@@ -696,11 +698,16 @@ function stopReviveTicker() {
   reviveTickerInterval = null;
 }
 
+// =================================================================
+// FUNÇÃO DE ATUALIZAÇÃO DE ESTADO - ATUALIZADA
+// =================================================================
 async function refreshRaidState() {
   if (!currentRaidId) return;
   try {
+    // Chama a nova função para verificar e finalizar a raid se o tempo acabou
     await supabase.rpc('end_expired_raid', { p_raid_id: currentRaidId });
 
+    // Continua buscando os dados da raid
     const { data, error } = await supabase.from("guild_raids").select("*").eq("id", currentRaidId).single();
 
     if (error || !data || !data.active) {
@@ -710,6 +717,7 @@ async function refreshRaidState() {
     }
 
     if (data.current_floor !== currentFloor) {
+      // Recarrega tudo se o andar mudou
       await loadRaid();
     } else {
       setRaidTitleFloorAndTimer(data.current_floor || 1, data.ends_at);
@@ -719,13 +727,13 @@ async function refreshRaidState() {
     console.error("refreshRaidState", e);
   }
 }
+// =================================================================
 
+// --- polling / timers control ---
+// --- Verifica recompensas pendentes (para que todos que participaram recebam o modal) ---
 async function checkPendingRaidRewards() {
   if (!currentRaidId || !userId) return;
   try {
-    const storageKey = `shownRewardIds_${currentRaidId}`;
-    const shownRewardIds = new Set(JSON.parse(localStorage.getItem(storageKey) || "[]"));
-
     const { data, error } = await supabase
       .from("guild_raid_rewards")
       .select("id, xp, crystals")
@@ -744,16 +752,19 @@ async function checkPendingRaidRewards() {
       if (shownRewardIds.has(reward.id)) {
         return;
       }
-      
       shownRewardIds.add(reward.id);
-      localStorage.setItem(storageKey, JSON.stringify([...shownRewardIds]));
-      
-      showRewardModal(reward.xp, reward.crystals, async () => {
+showRewardModal(reward.xp, reward.crystals, async () => {
+        try {
+          await supabase.from("guild_raid_rewards").update({ claimed: true }).eq("id", reward.id);
+        } catch (e) {
+          console.error("Erro ao marcar reward como claimed:", e);
+        }
         await loadRaid().catch(()=>{});
       }, reward.id);
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }
 }
+// -----------------------------------------------------------------------------
 
 function startPolling() {
   stopPolling();
@@ -788,7 +799,7 @@ function startRaidTimer() {
     const diff = Math.floor((new Date(raidEndsAt) - new Date()) / 1000);
     if (diff <= 0) {
       clearRaidTimer();
-      refreshRaidState();
+      refreshRaidState(); // Força uma última atualização
       return;
     }
     setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
@@ -796,20 +807,22 @@ function startRaidTimer() {
 }
 function clearRaidTimer() { if (raidTimerInterval) clearInterval(raidTimerInterval); raidTimerInterval = null; }
 
-function closeCombatModal(){
-  const m = $id("raidCombatModal");
-  if (m) m.style.display = "none";
-  stopPolling();
-  stopUISecondTicker();
-  clearRaidTimer();
-  stopBossChecker();
+function closeCombatModal(){ 
+  const m = $id("raidCombatModal"); 
+  if (m) m.style.display = "none"; 
+  stopPolling(); 
+  stopUISecondTicker(); 
+  clearRaidTimer(); 
+  stopBossChecker(); 
   stopReviveTicker();
 }
 
+// --- Modals open/close helpers (unchanged)
 function openRaidModal() { const m = $id("raidModal"); if (m) m.style.display = "flex"; }
 function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = "none"; }
 function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; }
 
+// bind events
 function bindEvents() {
   const tdd = $id("tdd");
   if (tdd) {
@@ -848,13 +861,16 @@ function bindEvents() {
     });
   }
 
+
   $id("startNewRaidFromLastResultBtn")?.addEventListener("click", () => {
     openRaidModal();
     const m = $id("lastRaidResultModal"); if (m) m.style.display = "none";
   });
   $id("closeLastResultBtn")?.addEventListener("click", () => { const m=$id("lastRaidResultModal"); if(m) m.style.display="none"; });
 
+
   $id("startRaidBtn")?.addEventListener("click", async () => {
+
     if (userRank !== "leader" && userRank !== "co-leader") { alert("Apenas líder/co-líder"); return; }
     const startBtn = $id("startRaidBtn");
     startBtn.disabled = true;
@@ -879,22 +895,12 @@ function bindEvents() {
   $id("raidBackBtn")?.addEventListener("click", () => closeCombatModal());
 }
 
+// init
 async function mainInit() {
   await initSession();
   bindEvents();
+  // Tenta carregar uma raid ativa ao iniciar a página, caso o jogador tenha fechado a aba no meio de uma.
   await loadRaid();
 }
-
-// --- INÍCIO DA NOVA LÓGICA DE SINCRONIZAÇÃO ---
-// Adiciona um "ouvinte" que reage a mudanças no localStorage feitas por outras abas.
-window.addEventListener('storage', (event) => {
-  // Verifica se a mudança foi na chave de recompensas de uma raid ativa
-  if (currentRaidId && event.key === `shownRewardIds_${currentRaidId}`) {
-    console.log('Sincronização de localStorage detectada. Verificando recompensas...');
-    // Roda a verificação de recompensas imediatamente para sincronizar o estado.
-    checkPendingRaidRewards();
-  }
-});
-// --- FIM DA NOVA LÓGICA DE SINCRONIZAÇÃO ---
 
 document.addEventListener("DOMContentLoaded", mainInit);

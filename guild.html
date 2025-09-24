@@ -99,8 +99,11 @@
             <div id="raid" class="tab-pane" style="background: none;">
               <center><h3>Raid de Guilda</h3></center>
               <div id="raid_1">
-                <img id="tdd" src="https://aden-rpg.pages.dev/assets/tdd.webp" style="width: 90vw; height: 180px; background: none;">
-            
+                <div id="raid_torre">
+                  <h3 class="tdd_h3">Torre da Desolação</h3>
+                  <span class="tdd_desc">De Segunda à Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
+                <img id="tdd" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
+      </div>      
 <!-- Modal para iniciar Raid -->
 <div id="raidModal" class="modal" style="display:none;">
   <div class="modal-content">
@@ -115,15 +118,25 @@
 <!-- Modal de combate da Raid -->
 <div id="raidCombatModal" class="modal" style="display:none;">
   <div class="modal-content">
-    <h3 id="raidCombatTitle">Andar 1</h3>
+   <div id="raidHeader" style="position:relative; display:flex; justify-content:center; align-items:center; padding:8px 0;">
+  <div id="raidFloorInfo" style="position:absolute; left:-2px; margin-top: -28px; text-align:center;text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;"></div>
+  <div id="raidTimerInfo" style="font-weight:bold; font-size:1.1em;"></div>
+</div>
+
     <div id="raidMonsterArea">
-      <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/monstromina1.webp" style="width:120px;">
+      <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/monstromina1.webp" style="width:120px; height: 300px;">
       <div id="raidMonsterHpBar">
         <div id="raidMonsterHpFill"></div>
         <span id="raidMonsterHpText"></span>
       </div>
     </div>
-    <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:70px;height:70px;cursor:pointer;">
+   <center> <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:70px;height:70px;cursor:pointer; margin-top: 15px;"></center>
     <p>
       Ataques: <span id="raidPlayerAttacks">0</span>
       <button id="raidBuyAttackBtn" class="btn btn-gold">+</button><br>

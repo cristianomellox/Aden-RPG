@@ -28,9 +28,6 @@ let bossCheckInterval = null;
 let reviveTickerInterval = null;
 let refreshAttemptsPending = false;
 
-
-let shownRewardIds = new Set(); // controla rewards já mostradas nesta sessão
-
 // audio
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
 const audioCrit = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
@@ -584,7 +581,7 @@ async function performAttack() {
 }
 
 // --------- Recompensa modal helper (adicionado para restaurar UI de recompensas) ----------
-function showRewardModal(xp, crystals, onOk, rewardId) {
+function showRewardModal(xp, crystals, onOk) {
   console.log("showRewardModal => XP:", xp, "Crystals:", crystals);
   const xpEl = $id("rewardXpText");
   const crEl = $id("rewardCrystalsText");
@@ -599,31 +596,12 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
   if (crEl) crEl.textContent = `${Number(crystals || 0).toLocaleString()} Cristais`;
   modal.style.display = "flex";
   if (okBtn) {
-    okBtn.onclick = async () => {
+    okBtn.onclick = () => {
       modal.style.display = "none";
-      // Marca imediatamente como claimed no clique para evitar reabertura por polling
-      try {
-        if (rewardId) {
-          await supabase.from("guild_raid_rewards")
-            .update({ claimed: true, claimed_at: new Date().toISOString() })
-            .eq("id", rewardId);
-        } else {
-          if (currentRaidId && userId) {
-            await supabase.from("guild_raid_rewards")
-              .update({ claimed: true, claimed_at: new Date().toISOString() })
-              .eq("raid_id", currentRaidId)
-              .eq("player_id", userId)
-              .eq("claimed", false);
-          }
-        }
-      } catch (e) {
-        console.error("Erro ao marcar reward como claimed no clique:", e);
-      }
       if (onOk) onOk();
     };
   }
 }
-
 // -------------------------------------------------------------------------------
 async function tryBossAttackForPlayer() {
   if (!currentRaidId || !userId) return;
@@ -749,18 +727,14 @@ async function checkPendingRaidRewards() {
     }
     if (data && data.length > 0) {
       const reward = data[0];
-      if (shownRewardIds.has(reward.id)) {
-        return;
-      }
-      shownRewardIds.add(reward.id);
-showRewardModal(reward.xp, reward.crystals, async () => {
+      showRewardModal(reward.xp, reward.crystals, async () => {
         try {
           await supabase.from("guild_raid_rewards").update({ claimed: true }).eq("id", reward.id);
         } catch (e) {
           console.error("Erro ao marcar reward como claimed:", e);
         }
         await loadRaid().catch(()=>{});
-      }, reward.id);
+      });
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }
 }

@@ -1,4 +1,3 @@
-
 console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) ✅");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
@@ -28,7 +27,7 @@ let bossCheckInterval = null;
 let reviveTickerInterval = null;
 let refreshAttemptsPending = false;
 
-
+// CORRIGIDO: Este Set deve ser re-inicializado a cada raid, não a cada sessão.
 let shownRewardIds = new Set(); // controla rewards já mostradas nesta sessão
 
 // audio
@@ -546,36 +545,6 @@ async function performAttack() {
     await refreshRanking();
 
     if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
-
-    if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
-      // tenta usar valor vindo do servidor (mantemos undefined quando não vier)
-      let xp = (typeof payload.xp_reward !== 'undefined') ? payload.xp_reward : (typeof payload.gained_xp !== 'undefined' ? payload.gained_xp : (typeof payload.gained_experience !== 'undefined' ? payload.gained_experience : undefined));
-      let crystals = (typeof payload.crystals_reward !== 'undefined') ? payload.crystals_reward : (typeof payload.gained_crystals !== 'undefined' ? payload.gained_crystals : (typeof payload.gained_crystal !== 'undefined' ? payload.gained_crystal : undefined));
-
-      // se algum dos campos não vier, busca o fallback apenas para o campo ausente
-      if (typeof xp === 'undefined' || typeof crystals === 'undefined') {
-        console.log("RPC não retornou xp/crystals completos — buscando recompensas do DB (fallback) para campos ausentes.");
-        try {
-          const { data: mrow } = await supabase.from('guild_raid_monsters').select('*').eq('floor', currentFloor).limit(1).single();
-          if (typeof xp === 'undefined') {
-            xp = mrow?.xp_reward ?? mrow?.gained_xp ?? mrow?.xp ?? mrow?.reward_xp ?? 0;
-          }
-          if (typeof crystals === 'undefined') {
-            crystals = mrow?.crystals_reward ?? mrow?.gained_crystals ?? mrow?.crystals ?? mrow?.reward_crystals ?? 0;
-          }
-          console.log("fallback rewards from guild_raid_monsters:", xp, crystals);
-        } catch (e) {
-          console.warn("Erro ao buscar guild_raid_monsters para rewards:", e);
-          if (typeof xp === 'undefined') xp = 0;
-          if (typeof crystals === 'undefined') crystals = 0;
-        }
-      }
-
-      showRewardModal(xp, crystals, () => {
-        setTimeout(() => loadRaid().catch(()=>{}), 200);
-      });
-      return;
-    }
   } catch (e) {
     console.error("performAttack erro:", e);
   } finally {
@@ -753,9 +722,9 @@ async function checkPendingRaidRewards() {
         return;
       }
       shownRewardIds.add(reward.id);
-showRewardModal(reward.xp, reward.crystals, async () => {
+      showRewardModal(reward.xp, reward.crystals, async () => {
         try {
-          await supabase.from("guild_raid_rewards").update({ claimed: true }).eq("id", reward.id);
+          // A função showRewardModal já marca como claimed no clique
         } catch (e) {
           console.error("Erro ao marcar reward como claimed:", e);
         }
@@ -772,7 +741,7 @@ function startPolling() {
     refreshRaidState().catch(()=>{});
     refreshRanking().catch(()=>{});
     loadPlayerCombatState().catch(()=>{});
-    checkPendingRaidRewards().catch(()=>{});
+    checkPendingRaidRewards().catch(()=>{}); // ADICIONADO: Verifica recompensas pendentes
   }, RAID_POLL_MS);
 }
 function stopPolling() {
@@ -815,6 +784,7 @@ function closeCombatModal(){
   clearRaidTimer(); 
   stopBossChecker(); 
   stopReviveTicker();
+  shownRewardIds.clear(); // LIMPA O SET AQUI
 }
 
 // --- Modals open/close helpers (unchanged)

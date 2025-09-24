@@ -765,8 +765,10 @@ async function checkPendingRaidRewards() {
           } catch (e) {
             console.error("Erro ao marcar reward como claimed:", e);
           } finally {
-            // Remove do conjunto de exibidas para não bloquear futuras recompensas (mesma sessão)
-            shownRewardIds.delete(reward.id);
+        await supabase.from("guild_raid_rewards")
+  .update({ claimed: true, claimed_at: new Date().toISOString() })
+  .eq("id", reward.id);
+
           }
           // Recarrega o estado da raid após o clique (mantém compatibilidade atual)
           await loadRaid().catch(()=>{});

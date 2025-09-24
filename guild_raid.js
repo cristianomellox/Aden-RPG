@@ -1,5 +1,5 @@
 
-console.log("guild_raid.js atualizado (correções de estado e UI) ✅");
+console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) ✅");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -51,7 +51,7 @@ const $id = id => document.getElementById(id);
 function displayFloatingDamageOver(targetEl, val, isCrit) {
   if (!targetEl) return;
   const el = document.createElement("div");
-  el.textContent = isCrit ? `✦ ${Number(val).toLocaleString()}` : String(val);
+  el.textContent = isCrit ? `${Number(val).toLocaleString()}` : String(val);
   el.className = isCrit ? "crit-damage-number" : "damage-number";
   el.style.position = "absolute";
   el.style.left = "50%";
@@ -226,17 +226,67 @@ function formatTime(totalSeconds) {
   return result.trim();
 }
 
+// -------- ALTERADO: floor canto esquerdo + timer central ----------
 function setRaidTitleFloorAndTimer(floor, endsAt) {
-  const title = $id("raidCombatTitle");
-  if (!title) return;
   currentFloor = floor || 1;
-  let timerText = "";
-  if (endsAt) {
-    const diff = Math.max(0, Math.floor((new Date(endsAt) - new Date()) / 1000));
-    timerText = ` — Tempo restante: ${formatTime(diff)}`;
+
+  // procura elementos; se não existirem, tenta criar um header dentro do modal
+  let floorBox = $id("raidFloorInfo");
+  let timerBox = $id("raidTimerInfo");
+
+  if (!floorBox || !timerBox) {
+    const combatModal = $id("raidCombatModal");
+    if (combatModal) {
+      let header = $id("raidHeader");
+      if (!header) {
+        header = document.createElement("div");
+        header.id = "raidHeader";
+        header.style.position = "relative";
+        header.style.display = "flex";
+        header.style.justifyContent = "center";
+        header.style.alignItems = "center";
+        header.style.padding = "8px 0";
+        // insere no topo do modal
+        combatModal.insertBefore(header, combatModal.firstChild);
+      }
+
+      if (!floorBox) {
+        floorBox = document.createElement("div");
+        floorBox.id = "raidFloorInfo";
+        floorBox.style.position = "absolute";
+        floorBox.style.left = "3px";
+        floorBox.style.top = "2px";
+        floorBox.style.textAlign = "center";
+        header.appendChild(floorBox);
+      }
+
+      if (!timerBox) {
+        timerBox = document.createElement("div");
+        timerBox.id = "raidTimerInfo";
+        timerBox.style.fontWeight = "bold";
+        timerBox.style.fontSize = "1.1em";
+        header.appendChild(timerBox);
+      }
+    }
   }
-  title.textContent = `Andar ${floor}${timerText}`;
+
+  if (floorBox) {
+    floorBox.innerHTML = `<div style="text-align:center; line-height:1.1;">
+      <div style="font-weight:bold; font-size:0.9em;">${floor}°</div>
+      <div style="font-size:0.6em;">Andar</div>
+    </div>`;
+  }
+
+  if (timerBox) {
+    if (endsAt) {
+      const diff = Math.max(0, Math.floor((new Date(endsAt) - new Date()) / 1000));
+      timerBox.textContent = formatTime(diff);
+    } else {
+      timerBox.textContent = "";
+    }
+  }
 }
+// -----------------------------------------------------------------
 
 async function initSession() {
   try {
@@ -495,22 +545,26 @@ async function performAttack() {
     if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
 
     if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
-      // tenta usar valor vindo do servidor
-      let xp = (typeof payload.gained_xp !== 'undefined') ? payload.gained_xp : (typeof payload.gained_experience !== 'undefined' ? payload.gained_experience : undefined);
-      let crystals = (typeof payload.gained_crystals !== 'undefined') ? payload.gained_crystals : (typeof payload.gained_crystal !== 'undefined' ? payload.gained_crystal : undefined);
+      // tenta usar valor vindo do servidor (mantemos undefined quando não vier)
+      let xp = (typeof payload.xp_reward !== 'undefined') ? payload.xp_reward : (typeof payload.gained_xp !== 'undefined' ? payload.gained_xp : (typeof payload.gained_experience !== 'undefined' ? payload.gained_experience : undefined));
+      let crystals = (typeof payload.crystals_reward !== 'undefined') ? payload.crystals_reward : (typeof payload.gained_crystals !== 'undefined' ? payload.gained_crystals : (typeof payload.gained_crystal !== 'undefined' ? payload.gained_crystal : undefined));
 
-      // se servidor não retornou, faz fallback consultando guild_raid_monsters pelo andar atual (usando currentFloor)
-      if (typeof xp === 'undefined' && typeof crystals === 'undefined') {
-        console.log("RPC não retornou gained_xp/gained_crystals — buscando recompensas do DB (fallback).");
+      // se algum dos campos não vier, busca o fallback apenas para o campo ausente
+      if (typeof xp === 'undefined' || typeof crystals === 'undefined') {
+        console.log("RPC não retornou xp/crystals completos — buscando recompensas do DB (fallback) para campos ausentes.");
         try {
           const { data: mrow } = await supabase.from('guild_raid_monsters').select('*').eq('floor', currentFloor).limit(1).single();
-          xp = mrow?.xp_reward ?? mrow?.gained_xp ?? mrow?.xp ?? mrow?.reward_xp ?? 0;
-          crystals = mrow?.crystals_reward ?? mrow?.gained_crystals ?? mrow?.crystals ?? mrow?.reward_crystals ?? 0;
+          if (typeof xp === 'undefined') {
+            xp = mrow?.xp_reward ?? mrow?.gained_xp ?? mrow?.xp ?? mrow?.reward_xp ?? 0;
+          }
+          if (typeof crystals === 'undefined') {
+            crystals = mrow?.crystals_reward ?? mrow?.gained_crystals ?? mrow?.crystals ?? mrow?.reward_crystals ?? 0;
+          }
           console.log("fallback rewards from guild_raid_monsters:", xp, crystals);
         } catch (e) {
           console.warn("Erro ao buscar guild_raid_monsters para rewards:", e);
-          xp = 0;
-          crystals = 0;
+          if (typeof xp === 'undefined') xp = 0;
+          if (typeof crystals === 'undefined') crystals = 0;
         }
       }
 
@@ -549,10 +603,6 @@ function showRewardModal(xp, crystals, onOk) {
   }
 }
 // -------------------------------------------------------------------------------
-
-// =================================================================
-// FUNÇÃO DO ATAQUE DO CHEFE - ATUALIZADA
-// =================================================================
 async function tryBossAttackForPlayer() {
   if (!currentRaidId || !userId) return;
   if ((currentFloor % 5) !== 0) return;
@@ -658,12 +708,45 @@ async function refreshRaidState() {
 // =================================================================
 
 // --- polling / timers control ---
+// --- Verifica recompensas pendentes (para que todos que participaram recebam o modal) ---
+async function checkPendingRaidRewards() {
+  if (!currentRaidId || !userId) return;
+  try {
+    const { data, error } = await supabase
+      .from("guild_raid_rewards")
+      .select("id, xp, crystals")
+      .eq("raid_id", currentRaidId)
+      .eq("player_id", userId)
+      .eq("claimed", false)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (error) {
+      console.warn("checkPendingRaidRewards error", error);
+      return;
+    }
+    if (data && data.length > 0) {
+      const reward = data[0];
+      showRewardModal(reward.xp, reward.crystals, async () => {
+        try {
+          await supabase.from("guild_raid_rewards").update({ claimed: true }).eq("id", reward.id);
+        } catch (e) {
+          console.error("Erro ao marcar reward como claimed:", e);
+        }
+        await loadRaid().catch(()=>{});
+      });
+    }
+  } catch (e) { console.error("checkPendingRaidRewards", e); }
+}
+// -----------------------------------------------------------------------------
+
 function startPolling() {
   stopPolling();
   pollInterval = setInterval(() => {
     refreshRaidState().catch(()=>{});
     refreshRanking().catch(()=>{});
     loadPlayerCombatState().catch(()=>{});
+    checkPendingRaidRewards().catch(()=>{});
   }, RAID_POLL_MS);
 }
 function stopPolling() {
@@ -708,7 +791,6 @@ function closeCombatModal(){
   stopReviveTicker();
 }
 
-// ... o resto do código (bindEvents, init, etc.) permanece o mesmo
 // --- Modals open/close helpers (unchanged)
 function openRaidModal() { const m = $id("raidModal"); if (m) m.style.display = "flex"; }
 function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = "none"; }

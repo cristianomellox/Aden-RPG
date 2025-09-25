@@ -704,6 +704,8 @@ function stopReviveTicker() {
 async function refreshRaidState() {
   if (!currentRaidId) return;
   try {
+    // aplica os ticks atrasados do chefe em todas as raids (persistência server-side)
+    await supabase.rpc("tick_raid_boss_attack");
     // Chama a nova função para verificar e finalizar a raid se o tempo acabou
     await supabase.rpc('end_expired_raid', { p_raid_id: currentRaidId });
 
@@ -785,6 +787,7 @@ function startPolling() {
     refreshRanking().catch(()=>{});
     loadPlayerCombatState().catch(()=>{});
     checkPendingRaidRewards().catch(()=>{});
+    tryBossAttackForPlayer().catch(()=>{});
   }, RAID_POLL_MS);
 }
 function stopPolling() {

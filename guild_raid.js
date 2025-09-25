@@ -457,27 +457,6 @@ async function loadPlayerCombatState() {
     }
 
     const maxHp = playerDetails.health || 1;
-
-// Se a vida de raid do jogador não estiver inicializada, força restauração no servidor
-// Se a vida de raid do jogador não estiver inicializada ou estiver zerada, força restauração no servidor
-if (playerState.raid_player_health === null || playerState.raid_player_health >= 0) {
-  try {
-    await supabase.rpc("restore_player_raid_health", { p_player_id: userId });
-    // Recarrega estado após restaurar
-    const { data: refreshedState } = await supabase
-      .from("players")
-      .select("raid_player_health")
-      .eq("id", userId)
-      .single();
-    if (refreshedState && refreshedState.raid_player_health !== null) {
-      playerState.raid_player_health = refreshedState.raid_player_health;
-    }
-  } catch (e) {
-    console.error("Erro ao restaurar vida do jogador:", e);
-  }
-}
-
-
     const curHp = (playerState.raid_player_health !== null && playerState.raid_player_health !== undefined) ? playerState.raid_player_health : maxHp;
     _playerReviveUntil = playerState.revive_until;
     const av = $id("raidPlayerAvatar");
@@ -752,6 +731,7 @@ async function refreshRaidState() {
 
 // --- polling / timers control ---
 // --- Verifica recompensas pendentes (para que todos que participaram recebam o modal) ---
+
 async function checkPendingRaidRewards() {
   if (!currentRaidId || !userId) return;
   try {
@@ -761,32 +741,43 @@ async function checkPendingRaidRewards() {
       .eq("raid_id", currentRaidId)
       .eq("player_id", userId)
       .eq("claimed", false)
-      .order("created_at", { ascending: true })
-      .limit(1);
+      .order("created_at", { ascending: true });
 
     if (error) {
       console.warn("checkPendingRaidRewards error", error);
       return;
     }
-    if (data && data.length > 0) {
-      const reward = data[0];
-      if (shownRewardIds.has(reward.id)) {
-        return;
-      }
+
+    // Exibe todas as recompensas pendentes em ordem cronológica, uma a uma
+    for (const reward of (data || [])) {
+      // Evita exibir a mesma recompensa múltiplas vezes em chamadas concorrentes
+      if (shownRewardIds.has(reward.id)) continue;
       shownRewardIds.add(reward.id);
-showRewardModal(reward.xp, reward.crystals, async () => {
-        try {
-          await supabase.from("guild_raid_rewards").update({ claimed: true }).eq("id", reward.id);
-        } catch (e) {
-          console.error("Erro ao marcar reward como claimed:", e);
-        }
-        await loadRaid().catch(()=>{});
-      }, reward.id);
+
+      // Aguarda o jogador clicar em OK no modal antes de continuar para a próxima recompensa
+      await new Promise(resolve => {
+        showRewardModal(reward.xp, reward.crystals, async () => {
+          try {
+            // Marca apenas a recompensa atual como claimed
+            await supabase.from("guild_raid_rewards")
+              .update({ claimed: true, claimed_at: new Date().toISOString() })
+              .eq("id", reward.id);
+          } catch (e) {
+            console.error("Erro ao marcar reward como claimed:", e);
+          } finally {
+        await supabase.from("guild_raid_rewards")
+  .update({ claimed: true, claimed_at: new Date().toISOString() })
+  .eq("id", reward.id);
+
+          }
+          // Recarrega o estado da raid após o clique (mantém compatibilidade atual)
+          await loadRaid().catch(()=>{});
+          resolve();
+        }, reward.id);
+      });
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }
 }
-// -----------------------------------------------------------------------------
-
 function startPolling() {
   stopPolling();
   pollInterval = setInterval(() => {

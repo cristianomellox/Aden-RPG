@@ -1,4 +1,3 @@
-
 console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) ✅");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
@@ -339,7 +338,9 @@ async function loadRaid() {
     startPolling();
     startUISecondTicker();
     startRaidTimer();
-    startBossChecker();
+    // ---------------------- ALTERADO/FOCADO AQUI ----------------------
+    startBossChecker(); // Agora condicional, ativa o timer de 10s apenas no andar de chefe
+    // ------------------------------------------------------------------
     startReviveTicker();
     openCombatModal();
   } catch (e) {
@@ -627,10 +628,10 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
 // -------------------------------------------------------------------------------
 async function tryBossAttackForPlayer() {
   if (!currentRaidId || !userId) return;
+  // A verificação do andar de chefe permanece aqui. Se não for chefe, a função retorna imediatamente.
   if ((currentFloor % 5) !== 0) return;
 
   try {
-    // A chamada RPC volta a ser como na versão original, passando o ID do jogador
     const { data, error } = await supabase.rpc("guild_raid_boss_attack", { p_raid_id: currentRaidId, p_player_id: userId });
 
     if (error) {
@@ -640,7 +641,6 @@ async function tryBossAttackForPlayer() {
     const payload = Array.isArray(data) ? data[0] : data;
     if (!payload || !payload.success) return;
 
-    // A lógica de UI é restaurada para dar feedback ao jogador
     if (payload.action === "attacked") {
       const dmg = payload.damage || 0;
       const newHp = payload.player_new_hp ?? 0;
@@ -665,12 +665,25 @@ async function tryBossAttackForPlayer() {
 }
 // =================================================================
 
+/**
+ * NOVO COMPORTAMENTO:
+ * Inicia o Boss Checker APENAS se o andar atual for um andar de chefe (múltiplo de 5).
+ * Caso contrário, garante que ele esteja parado.
+ */
 function startBossChecker() {
   stopBossChecker();
-  bossCheckInterval = setInterval(() => {
-    tryBossAttackForPlayer().catch(()=>{});
-  }, BOSS_CHECK_MS);
+  // ---------------------- ALTERADO/FOCADO AQUI ----------------------
+  if (currentFloor % 5 === 0) {
+    bossCheckInterval = setInterval(() => {
+      tryBossAttackForPlayer().catch(()=>{});
+    }, BOSS_CHECK_MS);
+    console.log(`Boss Checker iniciado no Andar ${currentFloor}.`);
+  } else {
+    console.log(`Boss Checker parado (Andar ${currentFloor} não é de chefe).`);
+  }
+  // ------------------------------------------------------------------
 }
+
 function stopBossChecker() {
   if (bossCheckInterval) clearInterval(bossCheckInterval);
   bossCheckInterval = null;
@@ -724,6 +737,10 @@ async function refreshRaidState() {
     } else {
       setRaidTitleFloorAndTimer(data.current_floor || 1, data.ends_at);
       updateHpBar(data.monster_health, data.initial_monster_health || maxMonsterHealth);
+      // ---------------------- ALTERADO/FOCADO AQUI ----------------------
+      // NOVO: Chama o startBossChecker, que irá iniciar ou parar o interval de 10s
+      startBossChecker(); 
+      // ------------------------------------------------------------------
     }
   } catch (e) {
     console.error("refreshRaidState", e);
@@ -780,6 +797,11 @@ async function checkPendingRaidRewards() {
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }
 }
+
+/**
+ * COMPORTAMENTO ORIGINAL RESTAURADO:
+ * Mantém a chamada a tryBossAttackForPlayer(), que fará a checagem do andar internamente (multiplo de 5).
+ */
 function startPolling() {
   stopPolling();
   pollInterval = setInterval(() => {
@@ -787,9 +809,12 @@ function startPolling() {
     refreshRanking().catch(()=>{});
     loadPlayerCombatState().catch(()=>{});
     checkPendingRaidRewards().catch(()=>{});
-    tryBossAttackForPlayer().catch(()=>{});
+    // ---------------------- ALTERADO/FOCADO AQUI ----------------------
+    tryBossAttackForPlayer().catch(()=>{}); // MANTIDO
+    // ------------------------------------------------------------------
   }, RAID_POLL_MS);
 }
+
 function stopPolling() {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = null;

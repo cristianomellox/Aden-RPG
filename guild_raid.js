@@ -8,7 +8,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 12;
 const RAID_POLL_MS = 2000;
-const BOSS_CHECK_MS = 20000;
+const BOSS_CHECK_MS = 1000;
 const REVIVE_CHECK_MS = 1000;
 
 let userId = null;

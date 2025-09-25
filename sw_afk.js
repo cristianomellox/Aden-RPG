@@ -1,5 +1,5 @@
 // Nome do cache
-const CACHE_NAME = "aden-rpg-sw-v1";
+const CACHE_NAME = "aden-rpg-sw-v5";
 
 // Arquivos para cachear (sons, músicas, imagens e itens)
 const FILES_TO_CACHE = [
@@ -80,8 +80,20 @@ const FILES_TO_CACHE = [
   "https://aden-rpg.pages.dev/assets/refresh.webp",
   "https://aden-rpg.pages.dev/assets/refund.webp",
   "https://aden-rpg.pages.dev/assets/tutorialbtn.webp",
+"https://aden-rpg.pages.dev/assets/notifica.webp",
+"https://aden-rpg.pages.dev/assets/guildaflag.webp",
+"https://aden-rpg.pages.dev/assets/expulsar.webp",
+"https://aden-rpg.pages.dev/assets/transferlider.webp",
+"https://aden-rpg.pages.dev/assets/rebaixar.webp",
+"https://aden-rpg.pages.dev/assets/promover.webp",
+"https://aden-rpg.pages.dev/assets/recusar.webp",
+"https://aden-rpg.pages.dev/assets/aceitar.webp",
+"https://aden-rpg.pages.dev/assets/config.webp",
+"https://aden-rpg.pages.dev/assets/guildhall.webp",
+"https://aden-rpg.pages.dev/assets/tddbanner.webp",
+"https://aden-rpg.pages.dev/assets/tdd_andar.webp",
 
-  // itens
+  // itens=================================================================================================
   "https://aden-rpg.pages.dev/assets/itens/amuleto_oculto.webp",
   "https://aden-rpg.pages.dev/assets/itens/amuleto_oculto_0estrelas.webp",
   "https://aden-rpg.pages.dev/assets/itens/amuleto_oculto_1estrelas.webp",

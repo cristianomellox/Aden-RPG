@@ -459,7 +459,7 @@ async function loadPlayerCombatState() {
     const maxHp = playerDetails.health || 1;
 
 // Se a vida de raid do jogador não estiver inicializada, força restauração no servidor
-if (playerState.raid_player_health === null) {
+if (playerState.raid_player_health === null || playerState.raid_player_health => 0) {
   try {
     await supabase.rpc("restore_player_raid_health", { p_player_id: userId });
     // Recarrega estado após restaurar

@@ -459,12 +459,16 @@ async function loadPlayerCombatState() {
     const maxHp = playerDetails.health || 1;
 
 // Se a vida de raid do jogador não estiver inicializada, força restauração no servidor
-if (playerState.raid_player_health === null || playerState.raid_player_health => 0) {
+// Se a vida de raid do jogador não estiver inicializada ou estiver zerada, força restauração no servidor
+if (playerState.raid_player_health === null || playerState.raid_player_health >= 0) {
   try {
     await supabase.rpc("restore_player_raid_health", { p_player_id: userId });
     // Recarrega estado após restaurar
-    const { data: refreshedState } = await supabase.from("players")
-      .select("raid_player_health").eq("id", userId).single();
+    const { data: refreshedState } = await supabase
+      .from("players")
+      .select("raid_player_health")
+      .eq("id", userId)
+      .single();
     if (refreshedState && refreshedState.raid_player_health !== null) {
       playerState.raid_player_health = refreshedState.raid_player_health;
     }
@@ -472,6 +476,7 @@ if (playerState.raid_player_health === null || playerState.raid_player_health =>
     console.error("Erro ao restaurar vida do jogador:", e);
   }
 }
+
 
     const curHp = (playerState.raid_player_health !== null && playerState.raid_player_health !== undefined) ? playerState.raid_player_health : maxHp;
     _playerReviveUntil = playerState.revive_until;

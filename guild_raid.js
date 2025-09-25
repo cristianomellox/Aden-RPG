@@ -1,5 +1,5 @@
 
-console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) ✅");
+console.log("guild_raid.js atualizado (andar canto sup. esq + timer central + cristais proporcionais) âœ…");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -29,7 +29,7 @@ let reviveTickerInterval = null;
 let refreshAttemptsPending = false;
 
 
-let shownRewardIds = new Set(); // controla rewards já mostradas nesta sessão
+let shownRewardIds = new Set(); // controla rewards jÃ¡ mostradas nesta sessÃ£o
 
 // audio
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -233,7 +233,7 @@ function formatTime(totalSeconds) {
 function setRaidTitleFloorAndTimer(floor, endsAt) {
   currentFloor = floor || 1;
 
-  // procura elementos; se não existirem, tenta criar um header dentro do modal
+  // procura elementos; se nÃ£o existirem, tenta criar um header dentro do modal
   let floorBox = $id("raidFloorInfo");
   let timerBox = $id("raidTimerInfo");
 
@@ -275,7 +275,7 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
 
   if (floorBox) {
     floorBox.innerHTML = `<div style="text-align:center; line-height:1.1;">
-      <div style="font-weight:bold; font-size:0.9em;">${floor}°</div>
+      <div style="font-weight:bold; font-size:0.9em;">${floor}Â°</div>
       <div style="font-size:0.6em;">Andar</div>
     </div>`;
   }
@@ -374,7 +374,7 @@ async function refreshRanking() {
     ul.innerHTML = "";
     (data || []).forEach(r => {
       const li = document.createElement("li");
-      li.textContent = `${r.players?.name || "??"} — ${Number(r.damage || 0).toLocaleString()}`;
+      li.textContent = `${r.players?.name || "??"} â€” ${Number(r.damage || 0).toLocaleString()}`;
       ul.appendChild(li);
     });
   } catch (e) { console.error("refreshRanking", e); }
@@ -427,7 +427,7 @@ function updateAttackUI() {
 
   const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
   attacksEl.textContent = `${shownAttacks} / ${MAX_ATTACKS}`;
-  cooldownEl.textContent = secondsToNext > 0 ? `Próx recarga em ${formatTime(secondsToNext)}` : "";
+  cooldownEl.textContent = secondsToNext > 0 ? `PrÃ³x recarga em ${formatTime(secondsToNext)}` : "";
 
   const playerDead = isPlayerDeadLocal();
   if (playerDead) {
@@ -500,7 +500,7 @@ async function performAttack() {
   if (!currentRaidId || !userId) return;
 
   if (isPlayerDeadLocal()) {
-    alert("Você está morto. Aguarde reviver.");
+    alert("VocÃª estÃ¡ morto. Aguarde reviver.");
     return;
   }
 
@@ -509,7 +509,7 @@ async function performAttack() {
     await refreshAttemptsServerSideOnceIfNeeded();
     const recalc = computeShownAttacksAndRemaining();
     if (recalc.shownAttacks <= 0) {
-      alert("Sem ataques. Aguarde regeneração.");
+      alert("Sem ataques. Aguarde regeneraÃ§Ã£o.");
       return;
     }
   }
@@ -527,7 +527,7 @@ async function performAttack() {
 
     const payload = Array.isArray(data) ? data[0] : data;
     if (!payload || payload.success === false) {
-      alert(payload?.message || "Ataque não realizado");
+      alert(payload?.message || "Ataque nÃ£o realizado");
       await loadAttempts();
       return;
     }
@@ -548,13 +548,13 @@ async function performAttack() {
     if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
 
     if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
-      // tenta usar valor vindo do servidor (mantemos undefined quando não vier)
+      // tenta usar valor vindo do servidor (mantemos undefined quando nÃ£o vier)
       let xp = (typeof payload.xp_reward !== 'undefined') ? payload.xp_reward : (typeof payload.gained_xp !== 'undefined' ? payload.gained_xp : (typeof payload.gained_experience !== 'undefined' ? payload.gained_experience : undefined));
       let crystals = (typeof payload.crystals_reward !== 'undefined') ? payload.crystals_reward : (typeof payload.gained_crystals !== 'undefined' ? payload.gained_crystals : (typeof payload.gained_crystal !== 'undefined' ? payload.gained_crystal : undefined));
 
-      // se algum dos campos não vier, busca o fallback apenas para o campo ausente
+      // se algum dos campos nÃ£o vier, busca o fallback apenas para o campo ausente
       if (typeof xp === 'undefined' || typeof crystals === 'undefined') {
-        console.log("RPC não retornou xp/crystals completos — buscando recompensas do DB (fallback) para campos ausentes.");
+        console.log("RPC nÃ£o retornou xp/crystals completos â€” buscando recompensas do DB (fallback) para campos ausentes.");
         try {
           const { data: mrow } = await supabase.from('guild_raid_monsters').select('*').eq('floor', currentFloor).limit(1).single();
           if (typeof xp === 'undefined') {
@@ -591,7 +591,7 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
   const modal = $id("raidRewardModal");
   const okBtn = $id("rewardOkBtn");
   if (!modal) {
-    console.warn("Modal de recompensa não encontrado.");
+    console.warn("Modal de recompensa nÃ£o encontrado.");
     if (onOk) onOk();
     return;
   }
@@ -630,7 +630,7 @@ async function tryBossAttackForPlayer() {
   if ((currentFloor % 5) !== 0) return;
 
   try {
-    // A chamada RPC volta a ser como na versão original, passando o ID do jogador
+    // A chamada RPC volta a ser como na versÃ£o original, passando o ID do jogador
     const { data, error } = await supabase.rpc("guild_raid_boss_attack", { p_raid_id: currentRaidId, p_player_id: userId });
 
     if (error) {
@@ -640,7 +640,7 @@ async function tryBossAttackForPlayer() {
     const payload = Array.isArray(data) ? data[0] : data;
     if (!payload || !payload.success) return;
 
-    // A lógica de UI é restaurada para dar feedback ao jogador
+    // A lÃ³gica de UI Ã© restaurada para dar feedback ao jogador
     if (payload.action === "attacked") {
       const dmg = payload.damage || 0;
       const newHp = payload.player_new_hp ?? 0;
@@ -699,14 +699,12 @@ function stopReviveTicker() {
 }
 
 // =================================================================
-// FUNÇÃO DE ATUALIZAÇÃO DE ESTADO - ATUALIZADA
+// FUNÃ‡ÃƒO DE ATUALIZAÃ‡ÃƒO DE ESTADO - ATUALIZADA
 // =================================================================
 async function refreshRaidState() {
   if (!currentRaidId) return;
   try {
-    // aplica os ticks atrasados do chefe em todas as raids (persistência server-side)
-    await supabase.rpc("tick_raid_boss_attack");
-    // Chama a nova função para verificar e finalizar a raid se o tempo acabou
+    // Chama a nova funÃ§Ã£o para verificar e finalizar a raid se o tempo acabou
     await supabase.rpc('end_expired_raid', { p_raid_id: currentRaidId });
 
     // Continua buscando os dados da raid
@@ -750,13 +748,13 @@ async function checkPendingRaidRewards() {
       return;
     }
 
-    // Exibe todas as recompensas pendentes em ordem cronológica, uma a uma
+    // Exibe todas as recompensas pendentes em ordem cronolÃ³gica, uma a uma
     for (const reward of (data || [])) {
-      // Evita exibir a mesma recompensa múltiplas vezes em chamadas concorrentes
+      // Evita exibir a mesma recompensa mÃºltiplas vezes em chamadas concorrentes
       if (shownRewardIds.has(reward.id)) continue;
       shownRewardIds.add(reward.id);
 
-      // Aguarda o jogador clicar em OK no modal antes de continuar para a próxima recompensa
+      // Aguarda o jogador clicar em OK no modal antes de continuar para a prÃ³xima recompensa
       await new Promise(resolve => {
         showRewardModal(reward.xp, reward.crystals, async () => {
           try {
@@ -772,7 +770,7 @@ async function checkPendingRaidRewards() {
   .eq("id", reward.id);
 
           }
-          // Recarrega o estado da raid após o clique (mantém compatibilidade atual)
+          // Recarrega o estado da raid apÃ³s o clique (mantÃ©m compatibilidade atual)
           await loadRaid().catch(()=>{});
           resolve();
         }, reward.id);
@@ -787,7 +785,7 @@ function startPolling() {
     refreshRanking().catch(()=>{});
     loadPlayerCombatState().catch(()=>{});
     checkPendingRaidRewards().catch(()=>{});
-    tryBossAttackForPlayer().catch(()=>{});
+    fetchBossLogs().catch(()=>{});
   }, RAID_POLL_MS);
 }
 function stopPolling() {
@@ -814,7 +812,7 @@ function startRaidTimer() {
     const diff = Math.floor((new Date(raidEndsAt) - new Date()) / 1000);
     if (diff <= 0) {
       clearRaidTimer();
-      refreshRaidState(); // Força uma última atualização
+      refreshRaidState(); // ForÃ§a uma Ãºltima atualizaÃ§Ã£o
       return;
     }
     setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
@@ -886,11 +884,11 @@ function bindEvents() {
 
   $id("startRaidBtn")?.addEventListener("click", async () => {
 
-    if (userRank !== "leader" && userRank !== "co-leader") { alert("Apenas líder/co-líder"); return; }
+    if (userRank !== "leader" && userRank !== "co-leader") { alert("Apenas lÃ­der/co-lÃ­der"); return; }
     const startBtn = $id("startRaidBtn");
     startBtn.disabled = true;
     try {
-      const { data, error } = await supabase.rpc("start_guild_raid", { p_guild_id: userGuildId, p_player_id: userId, p_name: "Torre da Desolação" });
+      const { data, error } = await supabase.rpc("start_guild_raid", { p_guild_id: userGuildId, p_player_id: userId, p_name: "Torre da DesolaÃ§Ã£o" });
       if (error) {
         alert(error.message || "Erro ao iniciar raid");
         return;
@@ -914,8 +912,37 @@ function bindEvents() {
 async function mainInit() {
   await initSession();
   bindEvents();
-  // Tenta carregar uma raid ativa ao iniciar a página, caso o jogador tenha fechado a aba no meio de uma.
+  // Tenta carregar uma raid ativa ao iniciar a pÃ¡gina, caso o jogador tenha fechado a aba no meio de uma.
   await loadRaid();
 }
 
 document.addEventListener("DOMContentLoaded", mainInit);
+
+// Busca e exibe logs de dano do boss
+async function fetchBossLogs() {
+  if (!currentRaidId || !userId) return;
+  const playerArea = $id("raidPlayerArea");
+  const { data: logs, error } = await supabase
+    .from("guild_raid_boss_logs")
+    .select("*")
+    .eq("raid_id", currentRaidId)
+    .eq("player_id", userId)
+    .eq("seen", false)
+    .order("created_at", { ascending: true });
+
+  if (error) return;
+
+  logs.forEach(log => {
+    if (log.evaded) {
+      displayFloatingDamageOver(playerArea, "Esquivou!", true);
+    } else {
+      displayFloatingDamageOver(playerArea, log.damage, false);
+    }
+  });
+
+  if (logs.length > 0) {
+    await supabase.from("guild_raid_boss_logs")
+      .update({ seen: true })
+      .in("id", logs.map(l => l.id));
+  }
+}

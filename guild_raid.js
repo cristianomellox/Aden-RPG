@@ -5,7 +5,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ATTACKS = 3;
-const ATTACK_COOLDOWN_SECONDS = 12;
+const ATTACK_COOLDOWN_SECONDS = 60;
 const RAID_POLL_MS = 2000;
 const BOSS_CHECK_MS = 1000;
 const REVIVE_CHECK_MS = 1000;
@@ -657,7 +657,7 @@ async function tryBossAttackForPlayer() {
       updateAttackUI();
     } else if (payload.action === "evaded") {
       const playerArea = $id("raidPlayerArea");
-      displayFloatingDamageOver(playerArea, "Esquivou!", false);
+      displayFloatingDamageOver(playerArea, "Desviou", false);
     }
   } catch (e) {
     console.error("tryBossAttackForPlayer", e);
@@ -740,6 +740,26 @@ async function refreshRaidState() {
       // ---------------------- ALTERADO/FOCADO AQUI ----------------------
       // NOVO: Chama o startBossChecker, que irá iniciar ou parar o interval de 10s
       startBossChecker(); 
+      // ---------------------- GUILD LEVEL REFRESH CHECK (ADICIONADO) ----------------------
+      try {
+        if (userGuildId) {
+          const { data: gdata, error: gerr } = await supabase.from('guilds').select('level').eq('id', userGuildId).single();
+          if (!gerr && gdata && typeof gdata.level !== 'undefined') {
+            const currentGuildLevel = Number(gdata.level);
+            if (window._lastKnownGuildLevel === undefined) {
+              window._lastKnownGuildLevel = currentGuildLevel;
+            } else if (currentGuildLevel > window._lastKnownGuildLevel) {
+              window._lastKnownGuildLevel = currentGuildLevel;
+              const refreshBtn = document.getElementById("refreshBtn");
+              if (refreshBtn) {
+                try { refreshBtn.click(); } catch (err) { console.warn('failed to click refreshBtn', err); }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('guild level check failed', err);
+      }
       // ------------------------------------------------------------------
     }
   } catch (e) {

@@ -951,6 +951,7 @@ body {
 }
 #editGuildModal {
   font-size: 0.8em;
+  z-index: 998;
 }
 @keyframes floatY {
   0%   { transform: translateY(0px); }

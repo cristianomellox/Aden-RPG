@@ -837,7 +837,7 @@ async function checkPendingRaidRewards() {
   try {
     const { data, error } = await supabase
       .from("guild_raid_rewards")
-      .select("id, xp, crystals")
+      .select("id, xp, crystals, items_dropped")
       .eq("raid_id", currentRaidId)
       .eq("player_id", userId)
       .eq("claimed", false)
@@ -873,7 +873,7 @@ async function checkPendingRaidRewards() {
           // Recarrega o estado da raid após o clique (mantém compatibilidade atual)
           await loadRaid().catch(()=>{});
           resolve();
-        }, reward.id);
+        }, reward.id, reward.items_dropped);
       });
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }

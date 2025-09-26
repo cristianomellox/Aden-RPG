@@ -1118,3 +1118,19 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('
   max-height: 35%; /* ranking limitado a parte da tela */
   width: 100%;
 }
+
+#raidRewardModal #rewardItemsContainer {
+    align-items: center!important; 
+    justify-content: center!important;
+}
+#raidRewardModal #rewardItemsContainer ul li span {
+    font-size: 1.3em!important;
+}
+#raidRewardModal #rewardItemsContainer ul {
+    width: fit-content!important;
+    display: block!important; 
+}
+#raidRewardModal #rewardItemsContainer {
+  display: flex!important;
+    flex-direction: column!important;
+}

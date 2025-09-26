@@ -585,7 +585,7 @@ async function performAttack() {
   }
 }
 
-// --------- Recompensa modal helper (adicionado para restaurar UI de recompensas) ----------
+// --------- Recompensa modal helper (MODIFICADO PARA REMOVER O NOME DO ITEM E CORRIGIR CONFLITO) ----------
 function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
   console.log("showRewardModal => XP:", xp, "Crystals:", crystals, "Items:", itemsDropped);
   const xpEl = $id("rewardXpText");
@@ -597,8 +597,24 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
     if (onOk) onOk();
     return;
   }
-  if (xpEl) xpEl.textContent = `${Number(xp || 0).toLocaleString()} XP`;
-  if (crEl) crEl.textContent = `${Number(crystals || 0).toLocaleString()} Cristais`;
+
+  // XP - imagem à esquerda + quantidade
+  if (xpEl) {
+    xpEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px; justify-content: center; text-align: center;">
+        <img src="https://aden-rpg.pages.dev/assets/exp.webp" alt="XP" style="width:70px;height:70px;object-fit:contain;">
+        x <span style="font-weight:bold; font-size: 1.3em;">${Number(xp || 0).toLocaleString()}</span>
+      </div>`;
+  }
+
+  // Cristais - imagem à esquerda + quantidade
+  if (crEl) {
+    crEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px; justify-content: center; text-align: center;">
+        <img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width:70px;height:70px;object-fit:contain;">
+        x <span style="font-weight:bold; font-size: 1.3em;">${Number(crystals || 0).toLocaleString()}</span>
+      </div>`;
+  }
 
   // cria/atualiza container de itens dentro do modal para exibir drops
   const itemsContainerId = "rewardItemsContainer";
@@ -621,40 +637,82 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
   }
   itemsContainer.innerHTML = "";
 
-  if (Array.isArray(itemsDropped) && itemsDropped.length > 0) {
+  // normaliza itemsDropped (pode vir como string ou array/objeto)
+  let itemsArray = itemsDropped;
+  try {
+    if (typeof itemsDropped === "string") {
+      itemsArray = JSON.parse(itemsDropped);
+    }
+    // Garante que itemsArray é um array
+    if (!Array.isArray(itemsArray)) {
+        itemsArray = [];
+    }
+  } catch (e) {
+    itemsArray = [];
+  }
+
+  if (Array.isArray(itemsArray) && itemsArray.length > 0) {
     itemsContainer.style.display = "block";
     const ul = document.createElement("ul");
     ul.style.listStyle = "none";
     ul.style.padding = "0";
     ul.style.margin = "6px 0 0 0";
 
-    // cria entradas iniciais (com item_id) e depois tenta resolver nomes via DB
-    itemsDropped.forEach(it => {
+    // cria entradas iniciais com placeholder para imagem
+    itemsArray.forEach(it => {
       const li = document.createElement("li");
-      li.textContent = `Item ${it.item_id} x ${it.quantity}`;
+      li.style.display = "flex";
+      li.style.alignItems = "center";
+      li.style.gap = "8px";
+      li.style.padding = "6px 0";
+
+      const img = document.createElement("img");
+      img.src = "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
+      img.style.width = "70px";
+      img.style.height = "70px";
+      img.style.objectFit = "contain";
+      img.alt = `Item ${it.item_id}`;
+
+      const span = document.createElement("span");
+      span.style.fontWeight = "bold";
+      // MODIFICADO: Apenas a quantidade x (SEM NOME)
+      span.textContent = `x ${it.quantity}`;
+
+      li.appendChild(img);
+      li.appendChild(span);
       ul.appendChild(li);
     });
     itemsContainer.appendChild(ul);
 
-    // tenta buscar nomes dos itens para mostrar algo amigável
+    // busca nomes dos itens para montar a URL da imagem
     try {
-      const ids = itemsDropped.map(i => i.item_id);
+      const ids = itemsArray.map(i => i.item_id);
       supabase.from('items').select('item_id, display_name, name').in('item_id', ids).then(res => {
         if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
           const map = {};
           res.data.forEach(r => {
-            map[r.item_id] = r.display_name || r.name || (`#${r.item_id}`);
+            map[r.item_id] = {
+              name: r.name,
+              display_name: r.display_name || r.name || (`#${r.item_id}`)
+            };
           });
           const lis = ul.querySelectorAll('li');
           let idx = 0;
-          itemsDropped.forEach(it => {
-            const name = map[it.item_id] || `Item ${it.item_id}`;
-            if (lis[idx]) lis[idx].textContent = `${name} x ${it.quantity}`;
+          itemsArray.forEach(it => {
+            const entry = map[it.item_id];
+            const li = lis[idx];
+            if (!li) { idx++; return; }
+            const img = li.querySelector('img');
+            const span = li.querySelector('span');
+            const imageUrl = entry && entry.name ? `https://aden-rpg.pages.dev/assets/itens/${entry.name}.webp` : "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
+            if (img) img.src = imageUrl;
+            // MODIFICADO: Apenas a quantidade x (SEM NOME)
+            if (span) span.textContent = `x ${it.quantity}`;
             idx++;
           });
         }
-      }).catch(e => { /* silencioso */ });
-    } catch(e) { /* silencioso */ }
+      }).catch(e => { console.warn('Erro ao buscar itens para rewards:', e); });
+    } catch(e) { console.warn('Erro ao processar itemsDropped:', e); }
   } else {
     itemsContainer.style.display = "none";
   }
@@ -663,7 +721,8 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
   if (okBtn) {
     okBtn.onclick = async () => {
       modal.style.display = "none";
-      // Marca imediatamente como claimed no clique para evitar reabertura por polling
+      // CORREÇÃO DE SINTAXE E FLUXO: Remove o bloco finally aninhado incorretamente.
+      // A lógica de marcar como claimed é mantida e limpa.
       try {
         if (rewardId) {
           await supabase.from("guild_raid_rewards")
@@ -685,7 +744,6 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
     };
   }
 }
-
 // -------------------------------------------------------------------------------
 async function tryBossAttackForPlayer() {
   if (!currentRaidId || !userId) return;
@@ -857,23 +915,11 @@ async function checkPendingRaidRewards() {
       // Aguarda o jogador clicar em OK no modal antes de continuar para a próxima recompensa
       await new Promise(resolve => {
         showRewardModal(reward.xp, reward.crystals, async () => {
-          try {
-            // Marca apenas a recompensa atual como claimed
-            await supabase.from("guild_raid_rewards")
-              .update({ claimed: true, claimed_at: new Date().toISOString() })
-              .eq("id", reward.id);
-          } catch (e) {
-            console.error("Erro ao marcar reward como claimed:", e);
-          } finally {
-        await supabase.from("guild_raid_rewards")
-  .update({ claimed: true, claimed_at: new Date().toISOString() })
-  .eq("id", reward.id);
-
-          }
-          // Recarrega o estado da raid após o clique (mantém compatibilidade atual)
+          // O `onOk` passado para showRewardModal é o que é executado após o clique no botão.
+          // O showRewardModal já marca como claimed, então aqui só precisamos dar o loadRaid e resolver.
           await loadRaid().catch(()=>{});
           resolve();
-        }, reward.id, reward.items_dropped);
+        }, reward.id, reward.items_dropped); // PASSANDO items_dropped AQUI
       });
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }

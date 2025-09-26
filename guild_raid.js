@@ -572,9 +572,10 @@ async function performAttack() {
         }
       }
 
+      // Passa também os itens droppados retornados pelo servidor (se houver)
       showRewardModal(xp, crystals, () => {
         setTimeout(() => loadRaid().catch(()=>{}), 200);
-      });
+      }, undefined, payload.items_dropped);
       return;
     }
   } catch (e) {
@@ -585,8 +586,8 @@ async function performAttack() {
 }
 
 // --------- Recompensa modal helper (adicionado para restaurar UI de recompensas) ----------
-function showRewardModal(xp, crystals, onOk, rewardId) {
-  console.log("showRewardModal => XP:", xp, "Crystals:", crystals);
+function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
+  console.log("showRewardModal => XP:", xp, "Crystals:", crystals, "Items:", itemsDropped);
   const xpEl = $id("rewardXpText");
   const crEl = $id("rewardCrystalsText");
   const modal = $id("raidRewardModal");
@@ -598,6 +599,66 @@ function showRewardModal(xp, crystals, onOk, rewardId) {
   }
   if (xpEl) xpEl.textContent = `${Number(xp || 0).toLocaleString()} XP`;
   if (crEl) crEl.textContent = `${Number(crystals || 0).toLocaleString()} Cristais`;
+
+  // cria/atualiza container de itens dentro do modal para exibir drops
+  const itemsContainerId = "rewardItemsContainer";
+  let itemsContainer = $id(itemsContainerId);
+  if (!itemsContainer) {
+    itemsContainer = document.createElement("div");
+    itemsContainer.id = itemsContainerId;
+    itemsContainer.style.marginTop = "8px";
+    itemsContainer.style.display = "none";
+    itemsContainer.style.flexDirection = "column";
+    itemsContainer.style.gap = "6px";
+    itemsContainer.style.maxHeight = "180px";
+    itemsContainer.style.overflowY = "auto";
+    // tenta inserir antes do botão OK se existente, senão no final do modal
+    if (okBtn && okBtn.parentNode) {
+      okBtn.parentNode.insertBefore(itemsContainer, okBtn);
+    } else {
+      modal.appendChild(itemsContainer);
+    }
+  }
+  itemsContainer.innerHTML = "";
+
+  if (Array.isArray(itemsDropped) && itemsDropped.length > 0) {
+    itemsContainer.style.display = "block";
+    const ul = document.createElement("ul");
+    ul.style.listStyle = "none";
+    ul.style.padding = "0";
+    ul.style.margin = "6px 0 0 0";
+
+    // cria entradas iniciais (com item_id) e depois tenta resolver nomes via DB
+    itemsDropped.forEach(it => {
+      const li = document.createElement("li");
+      li.textContent = `Item ${it.item_id} x ${it.quantity}`;
+      ul.appendChild(li);
+    });
+    itemsContainer.appendChild(ul);
+
+    // tenta buscar nomes dos itens para mostrar algo amigável
+    try {
+      const ids = itemsDropped.map(i => i.item_id);
+      supabase.from('items').select('item_id, display_name, name').in('item_id', ids).then(res => {
+        if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
+          const map = {};
+          res.data.forEach(r => {
+            map[r.item_id] = r.display_name || r.name || (`#${r.item_id}`);
+          });
+          const lis = ul.querySelectorAll('li');
+          let idx = 0;
+          itemsDropped.forEach(it => {
+            const name = map[it.item_id] || `Item ${it.item_id}`;
+            if (lis[idx]) lis[idx].textContent = `${name} x ${it.quantity}`;
+            idx++;
+          });
+        }
+      }).catch(e => { /* silencioso */ });
+    } catch(e) { /* silencioso */ }
+  } else {
+    itemsContainer.style.display = "none";
+  }
+
   modal.style.display = "flex";
   if (okBtn) {
     okBtn.onclick = async () => {

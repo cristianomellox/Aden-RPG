@@ -18,7 +18,7 @@
 }
 
 #pageTitle {
-    font-size: 1.2em;
+    font-size: 1em;
     font-weight: bold;
     flex-grow: 1;
     text-align: center;
@@ -180,13 +180,14 @@
     border-radius: 10px;
     margin-top: 10px;
     overflow: hidden;
-    border: 1px solid yellow;
+    border: 1px solid #777;
 }
 
 #monsterHpFill {
     height: 100%;
-    background-color: red;
-    transition: width 0.3s;
+    background: linear-gradient(to right, #ff4433, red);
+  transition: width 0.3s ease;
+  border: 1px solid yellow!important;
 }
 
 #damageLog {
@@ -381,8 +382,8 @@ p {
         -1px -1px 2px #000,
         1px -1px 2px #000,
         -1px 1px 2px #000, 
-        0 0 4px #000,
-        0 0 8px #000;
+        0 0 2px #000,
+        0 0 4px #000;
 }
 
 #buyAttackBtn {
@@ -577,7 +578,7 @@ p {
     width: 135px;
     height: 20px;
     background-color: #333;
-    border: 1px solid yellow;
+    border: 1px solid #777;
     border-radius: 8px;
     margin-top: 10px;
     overflow: hidden;
@@ -586,8 +587,9 @@ p {
 
 .player-hp-fill {
     height: 100%;
-    background-color: red; /* Cor verde para o HP */
-    transition: width 0.3s;
+    background: linear-gradient(90deg, #6bff6b, #86ffb8);
+  transition: width 0.3s ease;
+  border: 1px solid yellow!important;
 }
 
 /* Você pode adicionar mais estilos se quiser, como a cor da borda, etc. */
@@ -820,4 +822,25 @@ p {
 
 .attack-anim {
     animation: attack-pulse 0.2s ease-in-out;
+}
+
+
+.modal-overlay2 {
+    position: fixed;
+  
+    width: 100%;
+    height: 100%;
+   background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+  
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
 }

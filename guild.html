@@ -101,7 +101,7 @@
               <div id="raid_1">
                 <div id="raid_torre">
                   <h3 class="tdd_h3">Torre da Desolação</h3>
-                  <span class="tdd_desc">De Segunda à Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
+                  <span class="tdd_desc">De Segunda a Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
                 <img id="tdd" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
       </div>      
 <!-- Modal para iniciar Raid -->
@@ -119,7 +119,7 @@
 <div id="raidCombatModal" class="modal" style="display:none;">
   <div class="modal-content">
    <div id="raidHeader" style="position:relative; display:flex; justify-content:center; align-items:center; padding:8px 0;">
-  <div id="raidFloorInfo" style="position:absolute; left:-2px; margin-top: -28px; text-align:center;text-shadow:
+  <div id="raidFloorInfo" style="position:absolute; left:-2px; margin-top: -24px; text-align:center;text-shadow:
         1px 1px 2px black,
         -1px -1px 2px black,
         1px -1px 2px black,
@@ -128,6 +128,15 @@
         0 0 4px black;"></div>
   <div id="raidTimerInfo" style="font-weight:bold; font-size:1.1em;"></div>
 </div>
+<div id="raidBackBtn" style="position:absolute; right:6px; margin-top: -16px; text-align:center;text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center;"> <img src="https://aden-rpg.pages.dev/assets/sair.webp" style="width:22px; height: 28px;">
+        <small style="font-size: 0.6em;">voltar</small>
+        </div>
 
     <div id="raidMonsterArea">
       <img id="raidMonsterImage" src="https://aden-rpg.pages.dev/assets/monstromina1.webp" style="width:200px; height: 300px;">
@@ -146,9 +155,7 @@
       <h4>Ranking de Dano</h4>
       <ul id="raidDamageRankingList"></ul>
     </div>
-    <div style="display:flex;justify-content:space-around;margin-top:20px;">
-      <button id="raidBackBtn" class="action-btn">Voltar</button>
-    </div>
+   
   </div>
 </div>
 

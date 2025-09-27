@@ -275,7 +275,7 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
   if (floorBox) {
     floorBox.innerHTML = `<div style="text-align:center; line-height:1.1;">
       <div style="font-weight:bold; font-size:0.9em;">${floor}°</div>
-      <div style="font-size:0.6em;">Andar</div>
+      <div style="font-size:0.6em; font-weight: bold;">Andar</div>
     </div>`;
   }
 

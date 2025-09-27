@@ -348,19 +348,45 @@ async function loadRaid() {
   }
 }
 
+
 async function loadMonsterForFloor(floor) {
   if (!floor) return;
   try {
-    const { data, error } = await supabase.from("guild_raid_monsters").select("image_url, base_health, name").eq("floor", floor).single();
+    const { data, error } = await supabase
+      .from("guild_raid_monsters")
+      .select("image_url, base_health, name")
+      .eq("floor", floor)
+      .single();
+
     if (!error && data) {
       const img = $id("raidMonsterImage");
       if (img) img.src = data.image_url;
+
+      // apenas adiciona o nome do monstro acima
+      let monsterNameEl = $id("raidMonsterName");
+      if (!monsterNameEl) {
+        monsterNameEl = document.createElement("div");
+        monsterNameEl.id = "raidMonsterName";
+        monsterNameEl.style.textAlign = "center";
+        monsterNameEl.style.fontWeight = "bold";
+        monsterNameEl.style.fontSize = "1em";
+        monsterNameEl.style.color = "#fff";
+        monsterNameEl.style.marginTop = "-5px";
+        monsterNameEl.style.textShadow = "2px 2px 4px #000";
+        const monsterArea = $id("raidMonsterArea");
+        if (monsterArea) {
+          monsterArea.insertBefore(monsterNameEl, monsterArea.firstChild);
+        }
+      }
+      monsterNameEl.textContent = data.name || "Monstro";
+
       if (data.base_health) maxMonsterHealth = Number(data.base_health);
     }
   } catch (e) {
     console.error("loadMonsterForFloor", e);
   }
 }
+
 
 async function refreshRanking() {
   if (!currentRaidId) return;

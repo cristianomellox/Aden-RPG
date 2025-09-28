@@ -959,7 +959,7 @@ body {
   100% { transform: translateY(0px); }
 }
 #raidMonsterImage {
-  animation: floatY 2s ease-in-out infinite;
+  animation: floatY 3s ease-in-out infinite;
 }
 
 #raidMonsterHpBar {
@@ -1142,8 +1142,11 @@ hr {
 }
 #raidMonsterImage {
   position: absolute!important;
-  top: 2%;
+  top: -2px;
   z-index: 0!important;
-  width: 320px!important;
-  height: 420px!important;
+  width: 370px!important;
+  height: 440px!important;
+}
+.crit-damage-number, .damage-number {
+  font-size: 1.8em!important;
 }

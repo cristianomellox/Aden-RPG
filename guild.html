@@ -147,10 +147,10 @@
         <span id="raidMonsterHpText"></span>
       </div>
     </div>
-   <center> <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:70px;height:70px;cursor:pointer; margin-top: 15px;"></center>
-    <p>
+   <center> <img id="raidAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp" style="width:70px;height:70px;cursor:pointer; margin-top: 9px;"></center>
+    <p style="font-size: 0.8em; font-weight: bold; margin-top: -18px">
       Ataques: <span id="raidPlayerAttacks">0</span>
-      <button id="raidBuyAttackBtn" class="btn btn-gold">+</button><br>
+      <button id="raidBuyAttackBtn" class="btn btn-gold" style="vertical-align: -5px">+</button><br>
       <span id="raidAttackCooldown"></span>
     </p>
     <div id="raidDamageRankingContainer">
@@ -372,6 +372,30 @@
   </div>
 </div>
 <!-- FIM Modal: Player -->
+
+<!-- Modal de compra de ataques (mesmo visual da Mina) -->
+<div id="buyModal" class="modal" style="display: none; z-index: 13501;">
+  <div class="modal-content">
+    <h3>Confirmar Compra</h3>
+    <p id="buyPlayerGoldInfo"><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 17px; height: 17px"></p>
+    <p>Os ataques comprados só poderão ser usados na Raid atual.</p>
+
+    <p>Quantidade de ataques:</p>
+    <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
+      <div style="background: #333; border-radius: 8px; border: white; width: 140px; display:flex; justify-content: center; align-items: center;">
+        <button id="buyDecreaseQtyBtn" class="action-btn">-</button>
+        <span id="buyAttackQty" style="font-size: 2em; color: yellow; margin: 0 12px;">1</span>
+        <button id="buyIncreaseQtyBtn" class="action-btn">+</button>
+      </div>
+    </div>
+    <p id="buyAttackCostInfo">Custo total: 0 Ouro</p>
+    <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+      <button id="buyCancelBtn" class="action-btn confirmabuy-btn">Cancelar</button>
+      <button id="buyConfirmBtn" class="action-btn confirmabuy-btn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 
 
 

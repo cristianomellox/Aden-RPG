@@ -432,12 +432,17 @@ async function loadAttempts() {
 
 function computeShownAttacksAndRemaining() {
   const now = new Date();
+  // se não houver lastAttackAt, retorna o stored attacksLeft (pode ser > MAX_ATTACKS quando comprado)
   if (!lastAttackAt) {
     return { shownAttacks: attacksLeft, secondsToNext: 0 };
   }
   const elapsed = Math.floor((now - new Date(lastAttackAt)) / 1000);
   const recovered = Math.floor(elapsed / ATTACK_COOLDOWN_SECONDS);
-  let shown = Math.min(MAX_ATTACKS, attacksLeft + recovered);
+  // Se o jogador já tem mais que o máximo (comprou), mostramos esse valor e não aplicamos o teto.
+  if (Number(attacksLeft || 0) > MAX_ATTACKS) {
+    return { shownAttacks: Number(attacksLeft || 0), secondsToNext: 0 };
+  }
+  let shown = Math.min(MAX_ATTACKS, Number(attacksLeft || 0) + recovered);
   let secondsToNext = 0;
   if (shown < MAX_ATTACKS) {
     const sinceLast = elapsed % ATTACK_COOLDOWN_SECONDS;
@@ -454,7 +459,7 @@ function updateAttackUI() {
 
   const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
   attacksEl.textContent = `${shownAttacks} / ${MAX_ATTACKS}`;
-  cooldownEl.textContent = secondsToNext > 0 ? `Próx recarga em ${formatTime(secondsToNext)}` : "";
+  cooldownEl.textContent = secondsToNext > 0 ? `+ 1 em ${formatTime(secondsToNext)}` : "";
 
   const playerDead = isPlayerDeadLocal();
   if (playerDead) {
@@ -1097,3 +1102,93 @@ async function mainInit() {
 }
 
 document.addEventListener("DOMContentLoaded", mainInit);
+
+
+// --- Compra de ataques Raid ---
+let raidBuyQty = 1;
+let raidBuyPlayerGold = 0;
+let raidBuyBaseBoughtCount = 0;
+
+function calcRaidTotalCost(qty, baseCount) {
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    const cost = 10 + (Math.floor((baseCount + i) / 5) * 5);
+    total += cost;
+  }
+  return total;
+}
+
+function refreshRaidBuyModalUI() {
+  const buyModal = $id("buyModal");
+  if (!buyModal) return;
+  const qtyEl = $id("buyAttackQty");
+  const costEl = $id("buyAttackCostInfo");
+  const goldEl = $id("buyPlayerGoldInfo");
+  const confirmBtn = $id("buyConfirmBtn");
+  if (qtyEl) qtyEl.textContent = String(raidBuyQty);
+  const total = calcRaidTotalCost(raidBuyQty, raidBuyBaseBoughtCount);
+  if (costEl) costEl.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
+  if (goldEl) goldEl.innerHTML = `Você tem:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(raidBuyPlayerGold || 0).toLocaleString()}</strong>`;
+  if (confirmBtn) confirmBtn.disabled = (total > (raidBuyPlayerGold || 0));
+}
+
+async function openRaidBuyModal() {
+  if (!userId) { alert("Faça login para comprar."); return; }
+  try {
+    const { data: player, error } = await supabase.from("players").select("gold, raid_attacks_bought_count, raid_last_attack_time").eq("id", userId).single();
+    if (error) { console.error("openRaidBuyModal", error); alert("Erro ao abrir modal de compra."); return; }
+    raidBuyPlayerGold = player.gold || 0;
+    const lastDate = player.raid_last_attack_time ? new Date(player.raid_last_attack_time).toDateString() : null;
+    raidBuyBaseBoughtCount = (lastDate === new Date().toDateString()) ? (player.raid_attacks_bought_count || 0) : 0;
+    raidBuyQty = 1;
+    refreshRaidBuyModalUI();
+    const buyModal = $id("buyModal");
+    if (buyModal) buyModal.style.display = "flex";
+  } catch (e) {
+    console.error("[raid] openRaidBuyModal erro:", e);
+    alert("Erro ao abrir modal de compra.");
+  }
+}
+
+function closeRaidBuyModal() { const m = $id("buyModal"); if (m) m.style.display = "none"; }
+
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    const launchBtn = $id("raidBuyAttackBtn");
+    if (launchBtn) launchBtn.addEventListener("click", openRaidBuyModal);
+    const inc = $id("buyIncreaseQtyBtn");
+    if (inc) inc.addEventListener("click", () => { raidBuyQty++; refreshRaidBuyModalUI(); });
+    const dec = $id("buyDecreaseQtyBtn");
+    if (dec) dec.addEventListener("click", () => { if (raidBuyQty > 1) raidBuyQty--; refreshRaidBuyModalUI(); });
+    const cancel = $id("buyCancelBtn");
+    if (cancel) cancel.addEventListener("click", closeRaidBuyModal);
+    const confirm = $id("buyConfirmBtn");
+    if (confirm) confirm.addEventListener("click", async () => {
+      closeRaidBuyModal();
+      let purchased = 0;
+      let spent = 0;
+      try {
+        for (let i = 0; i < raidBuyQty; i++) {
+          const { data, error } = await supabase.rpc("buy_raid_attack", { p_player_id: userId });
+          if (error || !(data && (data.success === true || data.success === 't'))) {
+            if (purchased === 0) alert(error?.message || (data && data.message) || "Compra não pôde ser concluída.");
+            break;
+          }
+          const payload = Array.isArray(data) ? data[0] : data;
+          purchased++;
+          spent += (payload.cost || 0);
+          raidBuyPlayerGold = Math.max(0, (raidBuyPlayerGold || 0) - (payload.cost || 0));
+        }
+        if (purchased > 0) {
+          alert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
+          if (typeof loadAttempts === 'function') await loadAttempts();
+        }
+      } catch (e) {
+        console.error("[raid] buyConfirm erro:", e);
+        alert("Erro inesperado na compra.");
+      }
+    });
+  } catch (e) {
+    console.error("[raid] buy modal attach erro", e);
+  }
+});

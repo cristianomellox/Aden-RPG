@@ -955,7 +955,7 @@ body {
 }
 @keyframes floatY {
   0%   { transform: translateY(0px); }
-  50%  { transform: translateY(-10px); }
+  50%  { transform: translateY(-20px); }
   100% { transform: translateY(0px); }
 }
 #raidMonsterImage {
@@ -1109,14 +1109,10 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('
   top: 0;
   left: 0;
   padding: 0 !important;
-  align-items: stretch !important;
   height: 100vh;
   z-index:  12000;
   width: 100vw;
-  display: flex;
-  flex-grow: 1;
   align-items: center;
-  overflow: hidden;
 }
 
 
@@ -1149,4 +1145,16 @@ hr {
 }
 .crit-damage-number, .damage-number {
   font-size: 1.8em!important;
+}
+#buyModal .modal {
+  background: none;
+  background-color: none;
+}
+.confirmabuy-btn {
+  align-items: center!important;
+  justify-content: center!important;
+  text-align: center!important;
+  font-size: 0.7em!important;
+  padding: 2 0!important;
+  margin: 0!important;
 }

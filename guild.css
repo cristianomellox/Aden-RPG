@@ -1158,3 +1158,15 @@ hr {
   padding: 2 0!important;
   margin: 0!important;
 }
+
+/* Garante que o player esteja sempre invisível por padrão */
+#videoPlayer { 
+    visibility: hidden!important;
+    opacity: 0!important;
+    transition: opacity 0.5s!important;
+}
+
+/* Garante que o container do vídeo, se houver, não fique com a imagem de fundo do placeholder */
+#videoContainer { 
+    background-color: black!important;
+}

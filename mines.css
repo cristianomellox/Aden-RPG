@@ -413,7 +413,7 @@ p {
   padding: 8px 14px;
   font-size: 0.80em!important;
 }
-#buyDecreaseQtyBtn, #buyIncreaseQtyBtn {
+#buyDecreaseQtyBtn, #buyIncreaseQtyBtn, #raidBuyAttackBtn {
   width: 32px;
   height: 32px;
   border-radius: 50%;

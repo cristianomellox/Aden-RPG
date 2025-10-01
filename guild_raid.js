@@ -1207,3 +1207,63 @@ document.addEventListener("DOMContentLoaded", () => {
     console.error("[raid] buy modal attach erro", e);
   }
 });
+
+
+
+async function continueLoadingRaid(raidData) {
+    currentRaidId = raidData.id;
+    currentFloor = raidData.current_floor || 1; 
+    maxMonsterHealth = Number(raidData.initial_monster_health) || 1;
+    raidEndsAt = raidData.ends_at;
+
+    const startsAt = raidData.starts_at ? new Date(raidData.starts_at) : null;
+    const now = new Date();
+
+    if (startsAt && now < startsAt) {
+        openCombatModal();
+        showRaidPreparationScreen(raidData, startsAt);
+        return; 
+    }
+
+    setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
+    updateHpBar(raidData.monster_health, maxMonsterHealth);
+    await loadMonsterForFloor(currentFloor);
+    await refreshRanking();
+    await loadAttempts();
+    await loadPlayerCombatState();
+    
+    startPolling();
+    startUISecondTicker();
+    startRaidTimer();
+    startBossChecker();
+    startReviveTicker();
+    startFloorMusic();
+    openCombatModal();
+}
+
+function showRaidPreparationScreen(raidData, startsAt) {
+    const modal = $id("raidCombatModal");
+    if (!modal) return;
+
+    modal.style.display = "flex";
+    const area = $id("raidMonsterArea");
+    if (area) {
+        area.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;text-align:center;">
+                <h1 style="color:yellow;">${raidData.name} começará em:</h1>
+                <h2 id="raidPrepCountdown" style="color:white;font-size:2em;margin-top:10px;"></h2>
+            </div>
+        `;
+    }
+
+    function updateCountdown() {
+        const diff = Math.max(0, Math.floor((startsAt - new Date()) / 1000));
+        if (diff <= 0) {
+            loadRaid();
+            return;
+        }
+        $id("raidPrepCountdown").textContent = formatTime(diff);
+    }
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+}

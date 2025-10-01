@@ -104,7 +104,6 @@
                   <span class="tdd_desc">De Segunda a Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
                 <img id="tddimg" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
       </div>      
-<!-- Modal para iniciar Raid -->
 <div id="raidModal" class="modal" style="display:none;">
   <div class="modal-content">
     <span class="close-btn">&times;</span>
@@ -115,9 +114,12 @@
   </div>
 </div>
 
-<!-- Modal de combate da Raid -->
 <div id="raidCombatModal" class="modal" style="display:none;">
   <div class="modal-content">
+   <div id="raidCountdownContainer" style="display:none; text-align:center; padding: 40px 10px; color: white;">
+        <h1 id="raidCountdownMessage" style="font-size: 1.4em; color: yellow; line-height: 1.5;"></h1>
+        <div id="raidCountdownTimer" style="font-size: 3em; font-weight: bold; margin-top: 20px;"></div>
+    </div>
    <div id="raidHeader" style="position:relative; display:flex; justify-content:center; align-items:center; padding:8px 0;">
   <div id="raidFloorInfo" style="position:absolute; left:-2px; margin-top: -24px; text-align:center;text-shadow:
         1px 1px 2px black,
@@ -172,7 +174,6 @@
     </div>
 </div>
 
-<!-- Modal de Recompensa ao derrotar monstro -->
 <div id="raidRewardModal" class="modal" style="display:none; z-index: 12500">
   <div class="modal-content">
     <h3>Recompensa de Andar</h3>
@@ -301,7 +302,6 @@
 </div>
 
 
-<!-- Modal: Player -->
 <div id="playerModal" class="modal" style="display:none; width: 92%;">
   <div class="modal-content">
     <span id="closePlayerModal" class="close-btn">&times;</span>
@@ -371,9 +371,6 @@
     </div>
   </div>
 </div>
-<!-- FIM Modal: Player -->
-
-<!-- Modal de compra de ataques (mesmo visual da Mina) -->
 <div id="buyModal" class="modal" style="display: none; z-index: 13501;">
   <div class="modal-content">
     <h3>Confirmar Compra</h3>

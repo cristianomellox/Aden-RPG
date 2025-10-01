@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v5) com intro de raid, música de chefe e correções ✅");
+console.log("guild_raid.js (v8.2) - Correção definitiva de async/await");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -12,8 +12,7 @@ const REVIVE_CHECK_MS = 1000;
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 
 // URLs de Mídia
-// PONTO 3: Adicione a URL correta para o vídeo de introdução da RAID
-const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm"; // <-- SUBSTITUIR URL
+const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
 const BOSS_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossintro.webm";
 const BOSS_DEATH_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossoutro.webm";
 const BOSS_ATTACK_VIDEO_URLS = [
@@ -24,14 +23,13 @@ const BOSS_ATTACK_VIDEO_URLS = [
 const AMBIENT_AUDIO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3", "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3", "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3", "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3", "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
 ];
-// PONTO 4: Adicione a URL correta para a MÚSICA do chefe
 const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
 
 // Variáveis de estado
 let userId = null, userGuildId = null, userRank = "member";
 let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1;
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
-let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, bossCheckInterval = null, reviveTickerInterval = null;
+let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, bossCheckInterval = null, reviveTickerInterval = null, countdownInterval = null;
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
 
@@ -41,7 +39,7 @@ let isProcessingAction = false;
 let isMediaUnlocked = false;
 let ambientAudioInterval = null;
 let ambientAudioPlayer = null; 
-let bossMusicPlayer = null; // PONTO 4: Player de música do chefe
+let bossMusicPlayer = null;
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
 // Áudio de Efeitos
@@ -82,14 +80,9 @@ function createMediaPlayers() {
         overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 20000; display: none; justify-content: center; align-items: center;`;
         const video = document.createElement('video');
         video.id = 'raidVideoPlayer';
-        // avoid showing browser poster/placeholder; keep hidden until loaded
         video.style.cssText = 'width: 100%; height: 100%; background: none; object-fit: cover; visibility: hidden;';
         video.setAttribute('playsinline', '');
         video.setAttribute('preload', 'auto');
-        try { video.removeAttribute('poster'); } catch(e){}
-        video.addEventListener('loadeddata', () => {
-            try { video.style.visibility = 'visible'; } catch(e){}
-        }, { once: true });
         overlay.appendChild(video);
         document.body.appendChild(overlay);
     }
@@ -97,7 +90,6 @@ function createMediaPlayers() {
         ambientAudioPlayer = new Audio();
         ambientAudioPlayer.volume = 0.3;
     }
-    // PONTO 4: Cria o player de música do chefe
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
         bossMusicPlayer.volume = 0.05;
@@ -114,60 +106,84 @@ function playVideo(src, onVideoEndCallback) {
         return;
     }
 
-    try {
-        videoPlayer.style.visibility = 'hidden';
-        videoPlayer.setAttribute('poster', '');
-        videoPlayer.muted = !isMediaUnlocked;
-        videoPlayer.src = src;
-    } catch(e) { console.warn('playVideo prepare erro', e); }
+    videoPlayer.style.visibility = 'hidden';
+    videoPlayer.src = src;
+    videoPlayer.load(); 
 
     videoOverlay.style.display = 'flex';
 
-    const onLoaded = () => {
-        try {
-            videoPlayer.style.visibility = 'visible';
-            videoPlayer.play().catch(()=>{});
-        } catch(e){}
+    const onCanPlay = () => {
+        videoPlayer.style.visibility = 'visible';
+        const playPromise = videoPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn("Autoplay bloqueado, tentando com som desativado.", error);
+                videoPlayer.muted = true;
+                videoPlayer.play();
+            });
+        }
     };
-    videoPlayer.addEventListener('loadeddata', onLoaded, { once: true });
+    
+    videoPlayer.addEventListener('canplay', onCanPlay, { once: true });
 
     const endPlayback = () => {
-        try {
-            videoPlayer.removeEventListener('ended', endPlayback);
-            videoPlayer.pause();
-            videoPlayer.currentTime = 0;
-        } catch(e){}
-        try { videoOverlay.style.display = 'none'; } catch(e){}
+        videoPlayer.removeEventListener('ended', endPlayback);
+        videoPlayer.pause();
+        videoPlayer.currentTime = 0;
+        videoOverlay.style.display = 'none';
         if (onVideoEndCallback) onVideoEndCallback();
         isProcessingAction = false;
         processNextAction();
     };
     videoPlayer.addEventListener('ended', endPlayback, { once: true });
-}function unlockMedia() {
+}
+
+function unlockMedia() {
     if (isMediaUnlocked) return;
     
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.warn("AudioContext resume falhou", e));
     }
 
+    const videoPlayer = $id('raidVideoPlayer');
+    if (videoPlayer) {
+        videoPlayer.muted = false;
+    }
+    
     const audiosToUnlock = [audioNormal, audioCrit, ambientAudioPlayer, bossMusicPlayer];
     audiosToUnlock.forEach(audio => {
-        if (audio) {
-            const wasPaused = audio.paused;
-            if (wasPaused) {
-                audio.play().then(() => {
-                    audio.pause();
-                    audio.currentTime = 0;
-                }).catch(() => {});
-            }
+        if (audio && audio.paused) {
+            audio.play().then(() => audio.pause()).catch(() => {});
         }
     });
     
-    const videoPlayer = $id('raidVideoPlayer');
-    if (videoPlayer) videoPlayer.muted = false;
     isMediaUnlocked = true;
     console.log("Mídia desbloqueada pela interação do usuário.");
 }
+
+function primeMedia() {
+    console.log("Preparando mídia para autoplay...");
+    unlockMedia(); 
+    const videoPlayer = $id('raidVideoPlayer');
+    if (videoPlayer) {
+        videoPlayer.src = RAID_INTRO_VIDEO_URL; 
+        videoPlayer.load();
+        videoPlayer.muted = true; 
+        const playPromise = videoPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    videoPlayer.pause();
+                    console.log("Mídia preparada com sucesso.");
+                    if(isMediaUnlocked) videoPlayer.muted = false;
+                })
+                .catch(err => {
+                    console.warn("Falha ao preparar a mídia. A reprodução pode ser silenciosa.", err);
+                });
+        }
+    }
+}
+
 
 function playRandomAmbientAudio() {
     if (!isMediaUnlocked || isProcessingAction || document.visibilityState !== 'visible') return;
@@ -176,7 +192,6 @@ function playRandomAmbientAudio() {
     ambientAudioPlayer.play().catch(e => console.warn("Falha no play do áudio ambiente:", e));
 }
 
-// PONTO 4: Sistema de música de fundo
 function stopAllFloorMusic() {
     if (ambientAudioInterval) {
         clearInterval(ambientAudioInterval);
@@ -192,7 +207,6 @@ function startFloorMusic() {
     if (!isMediaUnlocked) return;
 
     if (currentFloor % 5 === 0) {
-        // Boss floor
         if (ambientAudioInterval) {
             clearInterval(ambientAudioInterval);
             ambientAudioInterval = null;
@@ -201,10 +215,8 @@ function startFloorMusic() {
             bossMusicPlayer.play().catch(e => console.warn("Falha no play da música do chefe:", e));
         }
     } else {
-        // Normal floors
         if (bossMusicPlayer && !bossMusicPlayer.paused) {
             bossMusicPlayer.pause();
-            // não resetamos currentTime para não reiniciar música
         }
         if (!ambientAudioInterval) {
             try { playRandomAmbientAudio(); } catch(e) { console.warn("Falha no ambient inicial", e); }
@@ -213,8 +225,6 @@ function startFloorMusic() {
     }
 }
 
-// O restante do código permanece o mesmo, com pequenas alterações para chamar as novas funções de música
-// ... (código de UI, HP, etc., sem alterações) ...
 function displayFloatingDamageOver(targetEl, val, isCrit) {
   if (!targetEl) return;
   const el = document.createElement("div");
@@ -234,12 +244,10 @@ function ensurePlayerHpUi() {
   const container = $id("raidMonsterArea");
   if (!container) return;
   if ($id("raidPlayerArea")) return;
-
   const hr = document.createElement("hr");
   hr.style.width = "90%";
   hr.style.margin = "12px auto";
   container.appendChild(hr);
-
   const pArea = document.createElement("div");
   pArea.id = "raidPlayerArea";
   pArea.style.display = "flex";
@@ -247,7 +255,6 @@ function ensurePlayerHpUi() {
   pArea.style.alignItems = "center";
   pArea.style.gap = "8px";
   pArea.style.position = "relative";
-
   const reviveText = document.createElement("div");
   reviveText.id = "raidPlayerReviveText";
   reviveText.style.position = "absolute";
@@ -260,7 +267,6 @@ function ensurePlayerHpUi() {
   reviveText.style.textShadow = "1px 1px 2px #000";
   reviveText.style.zIndex = "1000";
   pArea.appendChild(reviveText);
-
   const avatarWrap = document.createElement("div");
   avatarWrap.style.position = "relative";
   avatarWrap.style.width = "80px";
@@ -272,7 +278,6 @@ function ensurePlayerHpUi() {
   avatarWrap.style.justifyContent = "center";
   avatarWrap.style.background = "#222";
   avatarWrap.id = "raidPlayerAvatarWrap";
-
   const avatar = document.createElement("img");
   avatar.id = "raidPlayerAvatar";
   avatar.src = "https://via.placeholder.com/80";
@@ -281,7 +286,6 @@ function ensurePlayerHpUi() {
   avatar.style.borderRadius = "50%";
   avatar.style.objectFit = "cover";
   avatarWrap.appendChild(avatar);
-
   const reviveOverlay = document.createElement("div");
   reviveOverlay.id = "raidPlayerReviveOverlay";
   reviveOverlay.style.position = "absolute";
@@ -292,7 +296,6 @@ function ensurePlayerHpUi() {
   reviveOverlay.style.display = "none";
   reviveOverlay.style.background = "rgba(0,0,0,0.6)";
   avatarWrap.appendChild(reviveOverlay);
-
   const pHpContainer = document.createElement("div");
   pHpContainer.id = "raidPlayerHpBar";
   pHpContainer.style.width = "86%";
@@ -302,7 +305,6 @@ function ensurePlayerHpUi() {
   pHpContainer.style.overflow = "hidden";
   pHpContainer.style.position = "relative";
   pHpContainer.style.height = "22px";
-
   const pFill = document.createElement("div");
   pFill.id = "raidPlayerHpFill";
   pFill.style.height = "100%";
@@ -314,13 +316,11 @@ function ensurePlayerHpUi() {
   pFill.style.fontWeight = "bold";
   pFill.style.color = "#000";
   pFill.style.background = "linear-gradient(90deg,#ff6b6b,#ffb86b)";
-
   const pText = document.createElement("span");
   pText.id = "raidPlayerHpText";
   pText.style.fontSize = "0.9em";
   pText.style.color = "#000";
   pFill.appendChild(pText);
-
   pHpContainer.appendChild(pFill);
   pArea.appendChild(avatarWrap);
   pArea.appendChild(pHpContainer);
@@ -351,7 +351,6 @@ function setPlayerReviveOverlayText(remainingSeconds) {
   const overlay = $id("raidPlayerReviveOverlay");
   const reviveText = $id("raidPlayerReviveText");
   if (!overlay || !reviveText) return;
-
   if (remainingSeconds <= 0) {
     overlay.style.display = "none";
     reviveText.innerHTML = "";
@@ -392,13 +391,10 @@ function formatTime(totalSeconds) {
   return result.trim();
 }
 
-
 function setRaidTitleFloorAndTimer(floor, endsAt) {
   const displayFloor = floor || currentFloor || 1;
-
   let floorBox = $id("raidFloorInfo");
   let timerBox = $id("raidTimerInfo");
-
   if (!floorBox || !timerBox) {
     const combatModal = $id("raidCombatModal");
     if (combatModal) {
@@ -413,7 +409,6 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
         header.style.padding = "8px 0";
         combatModal.insertBefore(header, combatModal.firstChild);
       }
-
       if (!floorBox) {
         floorBox = document.createElement("div");
         floorBox.id = "raidFloorInfo";
@@ -423,7 +418,6 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
         floorBox.style.textAlign = "center";
         header.appendChild(floorBox);
       }
-
       if (!timerBox) {
         timerBox = document.createElement("div");
         timerBox.id = "raidTimerInfo";
@@ -433,14 +427,12 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
       }
     }
   }
-
   if (floorBox) {
     floorBox.innerHTML = `<div style="text-align:center; line-height:1.1;">
       <div style="font-weight:bold; font-size:0.9em;">${displayFloor}°</div>
       <div style="font-size:0.6em; font-weight: bold;">Andar</div>
     </div>`;
   }
-
   if (timerBox) {
     if (endsAt) {
       const diff = Math.max(0, Math.floor((new Date(endsAt) - new Date()) / 1000));
@@ -468,6 +460,51 @@ async function initSession() {
   } catch (e) { console.error("initSession", e); }
 }
 
+function clearCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = null;
+}
+
+async function handleRaidCountdown(raidData) {
+    clearCountdown();
+    openCombatModal();
+    ['raidHeader', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
+        const el = $id(id);
+        if (el) el.style.display = 'none';
+    });
+    const attackPara = $id('raidPlayerAttacks')?.parentNode;
+    if (attackPara) attackPara.style.display = 'none';
+    const countdownContainer = $id('raidCountdownContainer');
+    if (countdownContainer) countdownContainer.style.display = 'block';
+    let starterName = 'O líder da guilda';
+    try {
+        const { data: logData, error } = await supabase.from('guild_logs').select('players(name)').eq('guild_id', raidData.guild_id).eq('action', 'start_guild_raid').order('created_at', { ascending: false }).limit(1).single();
+        if (!error && logData?.players?.name) starterName = logData.players.name;
+    } catch(e) {
+        console.warn("Não foi possível buscar o nome de quem iniciou a raid.", e);
+    }
+    const msgEl = $id('raidCountdownMessage');
+    if (msgEl) msgEl.innerHTML = `<strong>${starterName}</strong> ativou a Raid.<br>A Torre da Desolação começará em:`;
+    const timerEl = $id('raidCountdownTimer');
+    const startTime = new Date(raidData.starts_at);
+    const updateTimer = () => {
+        const diff = Math.max(0, Math.floor((startTime - new Date()) / 1000));
+        const minutes = String(Math.floor(diff / 60)).padStart(2, '0');
+        const seconds = String(diff % 60).padStart(2, '0');
+        if (timerEl) timerEl.textContent = `${minutes}:${seconds}`;
+        if (diff <= 0) {
+            clearCountdown();
+            if (countdownContainer) countdownContainer.style.display = 'none';
+            queueAction(() => {
+                playVideo(RAID_INTRO_VIDEO_URL, () => {
+                    loadRaid(); 
+                });
+            });
+        }
+    };
+    updateTimer();
+    countdownInterval = setInterval(updateTimer, 1000);
+}
 
 async function loadRaid() {
     if (!userGuildId) return;
@@ -479,11 +516,17 @@ async function loadRaid() {
             closeCombatModal();
             return;
         }
-        const isNewFloor = data.current_floor !== currentFloor;
-        const isEnteringBossFloor = isNewFloor && (data.current_floor % 5 === 0);
-        await continueLoadingRaid(data);
-        if (isEnteringBossFloor) {
-            queueAction(() => playVideo(BOSS_INTRO_VIDEO_URL));
+        const now = new Date();
+        const startTime = new Date(data.starts_at);
+        if (now < startTime) {
+            await handleRaidCountdown(data);
+        } else {
+            const isNewFloor = data.current_floor !== currentFloor;
+            const isEnteringBossFloor = isNewFloor && (data.current_floor % 5 === 0);
+            await continueLoadingRaid(data);
+            if (isEnteringBossFloor) {
+                queueAction(() => playVideo(BOSS_INTRO_VIDEO_URL));
+            }
         }
     } catch (e) {
         console.error("loadRaid erro:", e);
@@ -495,14 +538,19 @@ async function continueLoadingRaid(raidData) {
     currentFloor = raidData.current_floor || 1; 
     maxMonsterHealth = Number(raidData.initial_monster_health) || 1;
     raidEndsAt = raidData.ends_at;
-
+    $id('raidCountdownContainer').style.display = 'none';
+    ['raidHeader', 'raidMonsterArea', 'raidAttackBtn', 'raidDamageRankingContainer'].forEach(id => {
+        const el = $id(id);
+        if (el) el.style.display = ''; 
+    });
+    const attackPara = $id('raidPlayerAttacks')?.parentNode;
+    if (attackPara) attackPara.style.display = '';
     setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
     updateHpBar(raidData.monster_health, maxMonsterHealth);
     await loadMonsterForFloor(currentFloor);
     await refreshRanking();
     await loadAttempts();
     await loadPlayerCombatState();
-    
     startPolling();
     startUISecondTicker();
     startRaidTimer();
@@ -657,7 +705,6 @@ async function refreshAttemptsServerSideOnceIfNeeded() {
   }
 }
 
-// PONTO 1: Lógica de ataque e morte do monstro corrigida
 async function performAttack() {
     if (!currentRaidId || !userId || isProcessingAction) return;
     if (isPlayerDeadLocal()) {
@@ -689,24 +736,20 @@ async function performAttack() {
         await refreshRanking();
         if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
         
-        // Se o monstro morreu
         if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
-            const floorDefeated = currentFloor; // Guarda o andar que acabou de ser derrotado
+            const floorDefeated = currentFloor; 
             const wasBoss = floorDefeated % 5 === 0;
             const rewardCallback = () => {
                 showRewardModal(payload.xp_reward, payload.crystals_reward, () => {
                     setTimeout(() => loadRaid().catch(()=>{}), 200);
                 }, undefined, payload.items_dropped);
             };
-
             if (wasBoss) {
-                // Se era um chefe, toca o vídeo de morte e depois mostra a recompensa
                 queueAction(() => playVideo(BOSS_DEATH_VIDEO_URL, rewardCallback));
             } else {
-                // Se era um monstro normal, apenas mostra a recompensa e carrega o próximo
                 rewardCallback();
             }
-            return; // Encerra a função aqui
+            return;
         }
     } catch (e) {
         console.error("performAttack erro:", e);
@@ -968,6 +1011,7 @@ function closeCombatModal(){
   stopBossChecker(); 
   stopReviveTicker();
   stopAllFloorMusic();
+  clearCountdown();
   actionQueue = [];
   isProcessingAction = false;
 }
@@ -976,10 +1020,15 @@ function openRaidModal() { const m = $id("raidModal"); if (m) m.style.display = 
 function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = "none"; }
 function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; }
 
+
 function bindEvents() {
   const tdd = $id("tdd");
   if (tdd) {
+    // AQUI ESTÁ A CORREÇÃO PRINCIPAL:
+    // A função de callback do evento de clique PRECISA ser 'async' para usar 'await' dentro dela.
     tdd.addEventListener("click", async () => {
+      try { primeMedia(); } catch(e) { console.warn('Erro ao preparar mídia no clique do tdd', e); }
+
       if (!userGuildId) return;
 
       const { data: activeRaid } = await supabase
@@ -1014,7 +1063,6 @@ function bindEvents() {
     });
   }
 
-  // re-anexa botões do modal de último resultado (restaurado)
   $id("startNewRaidFromLastResultBtn")?.addEventListener("click", () => {
     openRaidModal();
     const m = $id("lastRaidResultModal"); if (m) m.style.display = "none";
@@ -1022,6 +1070,8 @@ function bindEvents() {
   $id("closeLastResultBtn")?.addEventListener("click", () => { const m = $id("lastRaidResultModal"); if (m) m.style.display = "none"; });
 
   $id("startRaidBtn")?.addEventListener("click", async () => {
+    try { primeMedia(); } catch(e) { console.warn('Erro ao preparar mídia no início da raid', e); }
+
     if (userRank !== "leader" && userRank !== "co-leader") { alert("Apenas líder/co-líder"); return; }
     const startBtn = $id("startRaidBtn");
     startBtn.disabled = true;
@@ -1032,12 +1082,7 @@ function bindEvents() {
             return;
         }
         closeRaidModal();
-        // PONTO 3: Enfileira o vídeo de introdução da raid
-        queueAction(() => {
-            playVideo(RAID_INTRO_VIDEO_URL, () => {
-                loadRaid(); // Carrega a raid após o vídeo
-            });
-        });
+        await loadRaid();
     } catch(e) {
       console.error("startRaid", e);
       alert("Erro ao iniciar raid");
@@ -1050,75 +1095,20 @@ function bindEvents() {
     try { unlockMedia(); } catch(e) { console.warn('unlockMedia error', e); }
     try { await performAttack(); } catch(err) { console.error('performAttack error', err); }
 });
-  // ... outros listeners ...
+
   $id("cancelRaidBtn")?.addEventListener("click", closeRaidModal);
   $id("raidBackBtn")?.addEventListener("click", () => closeCombatModal());
 }
 
-// --- Verificação ao entrar na página: alerta e entrada forçada caso haja raid ativa ---
-async function checkActiveRaidOnEntry() {
-  try {
-    // Aguarda o userGuildId ser definido (até 3s), pois initSession() pode demorar.
-    let waited = 0;
-    while (!userGuildId && waited < 3000) {
-      await new Promise(r => setTimeout(r, 100));
-      waited += 100;
-    }
-    if (!userGuildId) return;
-
-    // Tenta buscar raid ativa
-    const { data: activeRaid, error } = await supabase
-      .from("guild_raids")
-      .select("id")
-      .eq("guild_id", userGuildId)
-      .eq("active", true)
-      .limit(1)
-      .single();
-
-    if (error || !activeRaid) return;
-
-    // Pequeno atraso para não conflitar com qualquer fechamento de modal pendente
-    await new Promise(r => setTimeout(r, 300));
-
-    // Apenas mostra o alerta, sem abrir automaticamente o combate
-    try {
-      alert("Há uma Raid em andamento. Vá verificar!");
-    } catch (e) {
-      console.warn('alert falhou:', e);
-    }
-
-  } catch (e) {
-    console.error("checkActiveRaidOnEntry error:", e);
-  }
-}
-
-// --- fim da verificação ---
-
-
 async function mainInit() {
   createMediaPlayers();
-  document.addEventListener("click", unlockMedia, { once: true });
   await initSession();
   bindEvents();
-
-  // não carrega a raid automaticamente — só abre se o jogador clicar
   closeCombatModal();
-
-  // Agendamos a verificação de raid ativa com atraso para não conflitar com o fechamento imediato do modal.
-  // Isso preserva o comportamento de fechar o modal logo ao carregar (evita vídeos enfileirados),
-  // mas ainda assim mostra o alert e força a entrada caso exista uma raid ativa.
-  try {
-    setTimeout(() => { checkActiveRaidOnEntry().catch(()=>{}); }, 800);
-  } catch (e) { console.warn('failed to schedule active raid check', e); }
-
 }
-
-
 
 document.addEventListener("DOMContentLoaded", mainInit);
 
-
-// 
 // --- Compra de ataques Raid ---
 let raidBuyQty = 1;
 let raidBuyPlayerGold = 0;
@@ -1207,63 +1197,3 @@ document.addEventListener("DOMContentLoaded", () => {
     console.error("[raid] buy modal attach erro", e);
   }
 });
-
-
-
-async function continueLoadingRaid(raidData) {
-    currentRaidId = raidData.id;
-    currentFloor = raidData.current_floor || 1; 
-    maxMonsterHealth = Number(raidData.initial_monster_health) || 1;
-    raidEndsAt = raidData.ends_at;
-
-    const startsAt = raidData.starts_at ? new Date(raidData.starts_at) : null;
-    const now = new Date();
-
-    if (startsAt && now < startsAt) {
-        openCombatModal();
-        showRaidPreparationScreen(raidData, startsAt);
-        return; 
-    }
-
-    setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
-    updateHpBar(raidData.monster_health, maxMonsterHealth);
-    await loadMonsterForFloor(currentFloor);
-    await refreshRanking();
-    await loadAttempts();
-    await loadPlayerCombatState();
-    
-    startPolling();
-    startUISecondTicker();
-    startRaidTimer();
-    startBossChecker();
-    startReviveTicker();
-    startFloorMusic();
-    openCombatModal();
-}
-
-function showRaidPreparationScreen(raidData, startsAt) {
-    const modal = $id("raidCombatModal");
-    if (!modal) return;
-
-    modal.style.display = "flex";
-    const area = $id("raidMonsterArea");
-    if (area) {
-        area.innerHTML = `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;text-align:center;">
-                <h1 style="color:yellow;">${raidData.name} começará em:</h1>
-                <h2 id="raidPrepCountdown" style="color:white;font-size:2em;margin-top:10px;"></h2>
-            </div>
-        `;
-    }
-
-    function updateCountdown() {
-        const diff = Math.max(0, Math.floor((startsAt - new Date()) / 1000));
-        if (diff <= 0) {
-            loadRaid();
-            return;
-        }
-        $id("raidPrepCountdown").textContent = formatTime(diff);
-    }
-    updateCountdown();
-    setInterval(updateCountdown, 1000);
-}

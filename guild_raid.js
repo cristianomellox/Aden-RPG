@@ -189,13 +189,27 @@ function stopAllFloorMusic() {
 }
 
 function startFloorMusic() {
-    stopAllFloorMusic();
     if (!isMediaUnlocked) return;
 
     if (currentFloor % 5 === 0) {
-        bossMusicPlayer.play().catch(e => console.warn("Falha no play da música do chefe:", e));
+        // Boss floor
+        if (ambientAudioInterval) {
+            clearInterval(ambientAudioInterval);
+            ambientAudioInterval = null;
+        }
+        if (bossMusicPlayer && bossMusicPlayer.paused) {
+            bossMusicPlayer.play().catch(e => console.warn("Falha no play da música do chefe:", e));
+        }
     } else {
-        ambientAudioInterval = setInterval(playRandomAmbientAudio, AMBIENT_AUDIO_INTERVAL_MS);
+        // Normal floors
+        if (bossMusicPlayer && !bossMusicPlayer.paused) {
+            bossMusicPlayer.pause();
+            // não resetamos currentTime para não reiniciar música
+        }
+        if (!ambientAudioInterval) {
+            try { playRandomAmbientAudio(); } catch(e) { console.warn("Falha no ambient inicial", e); }
+            ambientAudioInterval = setInterval(playRandomAmbientAudio, AMBIENT_AUDIO_INTERVAL_MS);
+        }
     }
 }
 
@@ -625,6 +639,7 @@ async function loadPlayerCombatState() {
 async function refreshAttemptsServerSideOnceIfNeeded() {
   if (!currentRaidId || !userId || refreshAttemptsPending) return;
   const { shownAttacks } = computeShownAttacksAndRemaining();
+  const shouldRefresh = (shownAttacks > attacksLeft);
   if (!shouldRefresh) return;
   refreshAttemptsPending = true;
   try {
@@ -962,16 +977,49 @@ function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = 
 function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; }
 
 function bindEvents() {
-  $id("tdd")?.addEventListener("click", async () => {
+  const tdd = $id("tdd");
+  if (tdd) {
+    tdd.addEventListener("click", async () => {
       if (!userGuildId) return;
-      const { data: activeRaid } = await supabase.from("guild_raids").select("id").eq("guild_id", userGuildId).eq("active", true).limit(1).single();
+
+      const { data: activeRaid } = await supabase
+        .from("guild_raids")
+        .select("id")
+        .eq("guild_id", userGuildId)
+        .eq("active", true)
+        .limit(1)
+        .single();
+
       if (activeRaid) {
-          await loadRaid();
+        await loadRaid();
       } else {
-          // ... (código de resultado da última raid) ...
+        const { data: lastRaid } = await supabase
+          .from("guild_raids")
+          .select("current_floor, active")
+          .eq("guild_id", userGuildId)
+          .order("ends_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (lastRaid && !lastRaid.active) {
+          const modal = $id("lastRaidResultModal");
+          if (modal) {
+            $id("lastRaidFloorResult").textContent = `Andar ${lastRaid.current_floor || 0}`;
+            modal.style.display = "flex";
+          }
+        } else {
           openRaidModal();
+        }
       }
+    });
+  }
+
+  // re-anexa botões do modal de último resultado (restaurado)
+  $id("startNewRaidFromLastResultBtn")?.addEventListener("click", () => {
+    openRaidModal();
+    const m = $id("lastRaidResultModal"); if (m) m.style.display = "none";
   });
+  $id("closeLastResultBtn")?.addEventListener("click", () => { const m = $id("lastRaidResultModal"); if (m) m.style.display = "none"; });
 
   $id("startRaidBtn")?.addEventListener("click", async () => {
     if (userRank !== "leader" && userRank !== "co-leader") { alert("Apenas líder/co-líder"); return; }
@@ -1000,7 +1048,6 @@ function bindEvents() {
 
   $id("raidAttackBtn")?.addEventListener("click", async (e) => {
     try { unlockMedia(); } catch(e) { console.warn('unlockMedia error', e); }
-    try { startFloorMusic(); } catch(e) { console.warn('startFloorMusic error', e); }
     try { await performAttack(); } catch(err) { console.error('performAttack error', err); }
 });
   // ... outros listeners ...
@@ -1008,14 +1055,66 @@ function bindEvents() {
   $id("raidBackBtn")?.addEventListener("click", () => closeCombatModal());
 }
 
+// --- Verificação ao entrar na página: alerta e entrada forçada caso haja raid ativa ---
+async function checkActiveRaidOnEntry() {
+  try {
+    // Aguarda o userGuildId ser definido (até 3s), pois initSession() pode demorar.
+    let waited = 0;
+    while (!userGuildId && waited < 3000) {
+      await new Promise(r => setTimeout(r, 100));
+      waited += 100;
+    }
+    if (!userGuildId) return;
+
+    // Tenta buscar raid ativa
+    const { data: activeRaid, error } = await supabase
+      .from("guild_raids")
+      .select("id")
+      .eq("guild_id", userGuildId)
+      .eq("active", true)
+      .limit(1)
+      .single();
+
+    if (error || !activeRaid) return;
+
+    // Pequeno atraso para não conflitar com qualquer fechamento de modal pendente
+    await new Promise(r => setTimeout(r, 300));
+
+    // Mostra alert bloqueante; ao confirmar, carrega a raid e abre o modal de combate
+    try {
+      alert("Há uma Raid ativa! Você será levado automaticamente para a batalha.");
+    } catch (e) {
+      console.warn('alert falhou:', e);
+    }
+
+    await loadRaid();
+    openCombatModal();
+  } catch (e) {
+    console.error("checkActiveRaidOnEntry error:", e);
+  }
+}
+// --- fim da verificação ---
+
+
 async function mainInit() {
   createMediaPlayers();
-  // PONTO 2: Adiciona o ouvinte global para desbloquear a mídia
   document.addEventListener("click", unlockMedia, { once: true });
   await initSession();
   bindEvents();
-  await loadRaid();
+
+  // não carrega a raid automaticamente — só abre se o jogador clicar
+  closeCombatModal();
+
+  // Agendamos a verificação de raid ativa com atraso para não conflitar com o fechamento imediato do modal.
+  // Isso preserva o comportamento de fechar o modal logo ao carregar (evita vídeos enfileirados),
+  // mas ainda assim mostra o alert e força a entrada caso exista uma raid ativa.
+  try {
+    setTimeout(() => { checkActiveRaidOnEntry().catch(()=>{}); }, 800);
+  } catch (e) { console.warn('failed to schedule active raid check', e); }
+
 }
+
+
 
 document.addEventListener("DOMContentLoaded", mainInit);
 

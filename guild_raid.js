@@ -1054,48 +1054,6 @@ function bindEvents() {
   $id("cancelRaidBtn")?.addEventListener("click", closeRaidModal);
   $id("raidBackBtn")?.addEventListener("click", () => closeCombatModal());
 }
-
-// --- Verificação ao entrar na página: alerta e entrada forçada caso haja raid ativa ---
-async function checkActiveRaidOnEntry() {
-  try {
-    // Aguarda o userGuildId ser definido (até 3s), pois initSession() pode demorar.
-    let waited = 0;
-    while (!userGuildId && waited < 3000) {
-      await new Promise(r => setTimeout(r, 100));
-      waited += 100;
-    }
-    if (!userGuildId) return;
-
-    // Tenta buscar raid ativa
-    const { data: activeRaid, error } = await supabase
-      .from("guild_raids")
-      .select("id")
-      .eq("guild_id", userGuildId)
-      .eq("active", true)
-      .limit(1)
-      .single();
-
-    if (error || !activeRaid) return;
-
-    // Pequeno atraso para não conflitar com qualquer fechamento de modal pendente
-    await new Promise(r => setTimeout(r, 300));
-
-    // Mostra alert bloqueante; ao confirmar, carrega a raid e abre o modal de combate
-    try {
-      alert("Há uma Raid ativa! Você será levado automaticamente para a batalha.");
-    } catch (e) {
-      console.warn('alert falhou:', e);
-    }
-
-    await loadRaid();
-    openCombatModal();
-  } catch (e) {
-    console.error("checkActiveRaidOnEntry error:", e);
-  }
-}
-// --- fim da verificação ---
-
-
 async function mainInit() {
   createMediaPlayers();
   document.addEventListener("click", unlockMedia, { once: true });
@@ -1104,14 +1062,6 @@ async function mainInit() {
 
   // não carrega a raid automaticamente — só abre se o jogador clicar
   closeCombatModal();
-
-  // Agendamos a verificação de raid ativa com atraso para não conflitar com o fechamento imediato do modal.
-  // Isso preserva o comportamento de fechar o modal logo ao carregar (evita vídeos enfileirados),
-  // mas ainda assim mostra o alert e força a entrada caso exista uma raid ativa.
-  try {
-    setTimeout(() => { checkActiveRaidOnEntry().catch(()=>{}); }, 800);
-  } catch (e) { console.warn('failed to schedule active raid check', e); }
-
 }
 
 

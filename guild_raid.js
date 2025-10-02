@@ -26,12 +26,17 @@ const AMBIENT_AUDIO_URLS = [
 const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
 
 // Variáveis de estado
-let userId = null, userGuildId = null, userRank = "member";
+let userId = null, userGuildId = null, userRank = "member", userName = null;
 let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1;
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
 let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, bossCheckInterval = null, reviveTickerInterval = null, countdownInterval = null;
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
+
+// --- NOVO: Variáveis de estado para notificação de morte ---
+let deathNotificationQueue = [];
+let isDisplayingDeathNotification = false;
+let lastDeathCheckTimestamp = null;
 
 // Sistema de Fila de Ações e Controle de Mídia
 let actionQueue = [];
@@ -443,13 +448,137 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
   }
 }
 
+// --- INÍCIO: Novas Funções para Notificação de Morte ---
+
+/**
+ * Cria os elementos de UI necessários para a notificação de morte.
+ */
+function createDeathNotificationUI() {
+    if ($id('raidDeathNotification')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'raidDeathNotification';
+
+    const style = document.createElement('style');
+    // ALTERADO: Ajustado o tempo e a lógica da animação para um slide contínuo e lento.
+    style.textContent = `
+        #raidDeathNotification {
+            position: fixed;
+            top: 50px;
+            transform: translateX(100%);
+            right: 0;
+            background-color: rgba(200, 0, 0, 0.85);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px 0 0 5px;
+            z-index: 25000;
+            font-weight: bold;
+            white-space: nowrap;
+            text-shadow: 1px 1px 2px #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #raidDeathNotification.show {
+            opacity: 1;
+            animation: slideAcrossContinuous 20s linear forwards;
+        }
+        @keyframes slideAcrossContinuous {
+            0% {
+                /* Começa totalmente fora da tela, à direita */
+                transform: translateX(100%);
+            }
+            100% {
+                /* Termina totalmente fora da tela, à esquerda */
+                transform: translateX(calc(-100vw - 100%));
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(banner);
+}
+
+/**
+ * Exibe um banner de notificação de morte para um jogador.
+ */
+function displayDeathNotification(playerName) {
+    const banner = $id('raidDeathNotification');
+    if (!banner) return;
+
+    const monsterNameEl = $id("raidMonsterName");
+    const bossName = monsterNameEl ? monsterNameEl.textContent : "Imperador Veinur";
+
+    banner.textContent = `${playerName} foi derrotado(a) pelo ${bossName}!`;
+    banner.classList.add('show');
+
+    const onAnimationEnd = () => {
+        banner.classList.remove('show');
+        banner.removeEventListener('animationend', onAnimationEnd);
+        isDisplayingDeathNotification = false;
+        // Atraso mínimo para o próximo banner não aparecer abruptamente
+        setTimeout(() => processDeathNotificationQueue(), 200);
+    };
+    banner.addEventListener('animationend', onAnimationEnd, { once: true });
+}
+
+/**
+ * Processa o próximo item na fila de notificações de morte.
+ */
+function processDeathNotificationQueue() {
+    if (isDisplayingDeathNotification || deathNotificationQueue.length === 0) {
+        return;
+    }
+    isDisplayingDeathNotification = true;
+    const playerName = deathNotificationQueue.shift();
+    displayDeathNotification(playerName);
+}
+
+/**
+ * Verifica no banco de dados por novas mortes de outros jogadores.
+ */
+async function checkOtherPlayerDeaths() {
+    if (!currentRaidId || !userGuildId || !lastDeathCheckTimestamp) return;
+
+    try {
+        // ATENÇÃO: O backend precisa registrar um log com action = 'raid_boss_kill' para isso funcionar.
+        const { data, error } = await supabase
+            .from('guild_logs')
+            .select('created_at, players:target_id(name)')
+            .eq('action', 'raid_boss_kill') // Ação esperada do backend
+            .eq('guild_id', userGuildId)
+            .neq('target_id', userId) // Evita notificar a própria morte duas vezes
+            .gt('created_at', lastDeathCheckTimestamp)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.warn("Erro ao verificar morte de outros jogadores:", error.message);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            lastDeathCheckTimestamp = data[data.length - 1].created_at;
+            data.forEach(log => {
+                if (log.players && log.players.name) {
+                    deathNotificationQueue.push(log.players.name);
+                }
+            });
+            processDeathNotificationQueue();
+        }
+    } catch (e) {
+        console.error("Exceção em checkOtherPlayerDeaths:", e);
+    }
+}
+
+// --- FIM: Novas Funções para Notificação de Morte ---
+
 async function initSession() {
   try {
     const { data } = await supabase.auth.getSession();
     if (!data?.session) return;
     userId = data.session.user.id;
-    const { data: player, error } = await supabase.from("players").select("guild_id, rank, avatar_url").eq("id", userId).single();
+    const { data: player, error } = await supabase.from("players").select("name, guild_id, rank, avatar_url").eq("id", userId).single();
     if (!error && player) {
+      userName = player.name;
       userGuildId = player.guild_id;
       userRank = player.rank || "member";
       if (player.avatar_url) {
@@ -551,6 +680,12 @@ async function continueLoadingRaid(raidData) {
     await refreshRanking();
     await loadAttempts();
     await loadPlayerCombatState();
+
+    // --- NOVO: Resetar estado da notificação de morte ao carregar a raid ---
+    deathNotificationQueue = [];
+    isDisplayingDeathNotification = false;
+    lastDeathCheckTimestamp = new Date().toISOString();
+
     startPolling();
     startUISecondTicker();
     startRaidTimer();
@@ -869,6 +1004,12 @@ async function tryBossAttackForPlayer() {
             setPlayerReviveOverlayText(Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000));
           }
           updateAttackUI();
+          
+          // NOVO: Verifica se o jogador morreu e adiciona à fila de notificação
+          if (payload.player_new_hp <= 0 && userName) {
+              deathNotificationQueue.push(userName);
+              processDeathNotificationQueue();
+          }
         });
       });
     } else if (payload.action === "evaded") {
@@ -966,6 +1107,9 @@ function startPolling() {
     refreshRanking().catch(()=>{});
     loadPlayerCombatState().catch(()=>{});
     checkPendingRaidRewards().catch(()=>{});
+    if (currentFloor % 5 === 0) {
+        checkOtherPlayerDeaths().catch(()=>{});
+    }
   }, RAID_POLL_MS);
 }
 
@@ -1005,6 +1149,20 @@ function clearRaidTimer() { if (raidTimerInterval) clearInterval(raidTimerInterv
 function closeCombatModal(){ 
   const m = $id("raidCombatModal"); 
   if (m) m.style.display = "none"; 
+
+  // --- NOVO: Limpa e esconde o banner de notificação ao fechar a raid ---
+  const banner = $id('raidDeathNotification');
+  if (banner) {
+      banner.classList.remove('show');
+      // Força a remoção da animação para o caso de o modal fechar no meio dela
+      banner.style.animation = 'none';
+      banner.offsetHeight; // Trigger reflow
+      banner.style.animation = null; 
+  }
+  deathNotificationQueue = [];
+  isDisplayingDeathNotification = false;
+  lastDeathCheckTimestamp = null;
+
   stopPolling(); 
   stopUISecondTicker(); 
   clearRaidTimer(); 
@@ -1024,8 +1182,6 @@ function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.dis
 function bindEvents() {
   const tdd = $id("tdd");
   if (tdd) {
-    // AQUI ESTÁ A CORREÇÃO PRINCIPAL:
-    // A função de callback do evento de clique PRECISA ser 'async' para usar 'await' dentro dela.
     tdd.addEventListener("click", async () => {
       try { primeMedia(); } catch(e) { console.warn('Erro ao preparar mídia no clique do tdd', e); }
 
@@ -1102,6 +1258,8 @@ function bindEvents() {
 
 async function mainInit() {
   createMediaPlayers();
+  // --- NOVO: Cria os elementos para a notificação de morte na inicialização ---
+  createDeathNotificationUI();
   await initSession();
   bindEvents();
   closeCombatModal();

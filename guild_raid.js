@@ -477,14 +477,14 @@ function createDeathNotificationUI() {
         }
         #raidDeathNotification.show {
             opacity: 1;
-            animation: slideAcrossContinuous 20s linear forwards;
+            animation: slideAcrossContinuous 13s linear forwards;
         }
         @keyframes slideAcrossContinuous {
             0% {
                 transform: translateX(100%);
             }
             100% {
-                transform: translateX(calc(-100vw - 100%));
+                transform: translateX(calc(-100% - 1%));
             }
         }
     `;
@@ -499,7 +499,7 @@ function displayDeathNotification(playerName) {
     const monsterNameEl = $id("raidMonsterName");
     const bossName = monsterNameEl ? monsterNameEl.textContent : "Imperador Veinur";
 
-    banner.textContent = `${playerName} foi derrotado(a) pelo ${bossName}!`;
+    banner.innerHTML = `<span style="color: yellow">${playerName}</span> foi derrotado(a) pelo <span style="color: lightblue">${bossName}</span>!`;
     banner.classList.add('show');
 
     const onAnimationEnd = () => {

@@ -617,7 +617,7 @@ async function handleRaidCountdown(raidData) {
         console.warn("Não foi possível buscar o nome de quem iniciou a raid.", e);
     }
     const msgEl = $id('raidCountdownMessage');
-    if (msgEl) msgEl.innerHTML = `<strong>${starterName}</strong> ativou a Raid.<br>A Torre da Desolação começará em:`;
+    if (msgEl) msgEl.innerHTML = `A Raid foi iniciada.<br>A Torre da Desolação começará em:`;
     const timerEl = $id('raidCountdownTimer');
     const startTime = new Date(raidData.starts_at);
     const updateTimer = () => {

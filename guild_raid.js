@@ -33,10 +33,10 @@ let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, boss
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
 
-// --- NOVO: Variáveis de estado para notificação de morte ---
+// --- Variáveis de estado para notificação de morte ---
 let deathNotificationQueue = [];
 let isDisplayingDeathNotification = false;
-let lastDeathCheckTimestamp = null;
+let processedDeathTimestamps = new Set(); // ALTERADO: Controle para não exibir mortes repetidas
 
 // Sistema de Fila de Ações e Controle de Mídia
 let actionQueue = [];
@@ -448,11 +448,8 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
   }
 }
 
-// --- INÍCIO: Novas Funções para Notificação de Morte ---
+// --- Funções para Notificação de Morte ---
 
-/**
- * Cria os elementos de UI necessários para a notificação de morte.
- */
 function createDeathNotificationUI() {
     if ($id('raidDeathNotification')) return;
 
@@ -460,7 +457,6 @@ function createDeathNotificationUI() {
     banner.id = 'raidDeathNotification';
 
     const style = document.createElement('style');
-    // ALTERADO: Ajustado o tempo e a lógica da animação para um slide contínuo e lento.
     style.textContent = `
         #raidDeathNotification {
             position: fixed;
@@ -485,11 +481,9 @@ function createDeathNotificationUI() {
         }
         @keyframes slideAcrossContinuous {
             0% {
-                /* Começa totalmente fora da tela, à direita */
                 transform: translateX(100%);
             }
             100% {
-                /* Termina totalmente fora da tela, à esquerda */
                 transform: translateX(calc(-100vw - 100%));
             }
         }
@@ -498,9 +492,6 @@ function createDeathNotificationUI() {
     document.body.appendChild(banner);
 }
 
-/**
- * Exibe um banner de notificação de morte para um jogador.
- */
 function displayDeathNotification(playerName) {
     const banner = $id('raidDeathNotification');
     if (!banner) return;
@@ -515,15 +506,11 @@ function displayDeathNotification(playerName) {
         banner.classList.remove('show');
         banner.removeEventListener('animationend', onAnimationEnd);
         isDisplayingDeathNotification = false;
-        // Atraso mínimo para o próximo banner não aparecer abruptamente
         setTimeout(() => processDeathNotificationQueue(), 200);
     };
     banner.addEventListener('animationend', onAnimationEnd, { once: true });
 }
 
-/**
- * Processa o próximo item na fila de notificações de morte.
- */
 function processDeathNotificationQueue() {
     if (isDisplayingDeathNotification || deathNotificationQueue.length === 0) {
         return;
@@ -533,43 +520,60 @@ function processDeathNotificationQueue() {
     displayDeathNotification(playerName);
 }
 
-/**
- * Verifica no banco de dados por novas mortes de outros jogadores.
- */
+// ALTERADO: Lógica de verificação de mortes totalmente refeita
 async function checkOtherPlayerDeaths() {
-    if (!currentRaidId || !userGuildId || !lastDeathCheckTimestamp) return;
+    if (!currentRaidId) return;
 
     try {
-        // ATENÇÃO: O backend precisa registrar um log com action = 'raid_boss_kill' para isso funcionar.
-        const { data, error } = await supabase
-            .from('guild_logs')
-            .select('created_at, players:target_id(name)')
-            .eq('action', 'raid_boss_kill') // Ação esperada do backend
-            .eq('guild_id', userGuildId)
-            .neq('target_id', userId) // Evita notificar a própria morte duas vezes
-            .gt('created_at', lastDeathCheckTimestamp)
-            .order('created_at', { ascending: true });
+        const { data: raidData, error: raidError } = await supabase
+            .from('guild_raids')
+            .select('recent_deaths')
+            .eq('id', currentRaidId)
+            .single();
 
-        if (error) {
-            console.warn("Erro ao verificar morte de outros jogadores:", error.message);
+        if (raidError || !raidData || !Array.isArray(raidData.recent_deaths)) {
+            if(raidError) console.warn("Erro ao buscar mortes da raid:", raidError.message);
             return;
         }
 
-        if (data && data.length > 0) {
-            lastDeathCheckTimestamp = data[data.length - 1].created_at;
-            data.forEach(log => {
-                if (log.players && log.players.name) {
-                    deathNotificationQueue.push(log.players.name);
-                }
-            });
-            processDeathNotificationQueue();
+        const allDeaths = raidData.recent_deaths;
+        const newDeaths = allDeaths.filter(death => !processedDeathTimestamps.has(death.timestamp) && death.player_id !== userId);
+
+        if (newDeaths.length === 0) {
+            return;
         }
+
+        // Marcar todas as novas mortes como processadas imediatamente para evitar re-enfileiramento
+        newDeaths.forEach(death => processedDeathTimestamps.add(death.timestamp));
+        
+        const newPlayerIds = newDeaths.map(death => death.player_id);
+
+        const { data: players, error: playersError } = await supabase
+            .from('players')
+            .select('id, name')
+            .in('id', newPlayerIds);
+
+        if (playersError) {
+            console.warn("Erro ao buscar nomes dos jogadores:", playersError.message);
+            return;
+        }
+
+        const playerNamesMap = new Map(players.map(p => [p.id, p.name]));
+        
+        // Adiciona os nomes à fila na ordem correta
+        newDeaths.forEach(death => {
+            const name = playerNamesMap.get(death.player_id);
+            if (name) {
+                deathNotificationQueue.push(name);
+            }
+        });
+
+        processDeathNotificationQueue();
+
     } catch (e) {
         console.error("Exceção em checkOtherPlayerDeaths:", e);
     }
 }
-
-// --- FIM: Novas Funções para Notificação de Morte ---
 
 async function initSession() {
   try {
@@ -662,6 +666,7 @@ async function loadRaid() {
     }
 }
 
+// ALTERADO: Limpa o controle de mortes processadas ao carregar a raid
 async function continueLoadingRaid(raidData) {
     currentRaidId = raidData.id;
     currentFloor = raidData.current_floor || 1; 
@@ -681,10 +686,9 @@ async function continueLoadingRaid(raidData) {
     await loadAttempts();
     await loadPlayerCombatState();
 
-    // --- NOVO: Resetar estado da notificação de morte ao carregar a raid ---
     deathNotificationQueue = [];
     isDisplayingDeathNotification = false;
-    lastDeathCheckTimestamp = new Date().toISOString();
+    processedDeathTimestamps.clear(); // Limpa o controle de mortes da raid anterior
 
     startPolling();
     startUISecondTicker();
@@ -1005,10 +1009,15 @@ async function tryBossAttackForPlayer() {
           }
           updateAttackUI();
           
-          // NOVO: Verifica se o jogador morreu e adiciona à fila de notificação
+          // Verifica se o jogador morreu e adiciona à fila de notificação
           if (payload.player_new_hp <= 0 && userName) {
-              deathNotificationQueue.push(userName);
-              processDeathNotificationQueue();
+              const timestamp = payload.player_revive_until; 
+              // Garante que a morte do próprio jogador não seja processada duas vezes
+              if (timestamp && !processedDeathTimestamps.has(timestamp)) {
+                processedDeathTimestamps.add(timestamp);
+                deathNotificationQueue.push(userName);
+                processDeathNotificationQueue();
+              }
           }
         });
       });
@@ -1150,18 +1159,16 @@ function closeCombatModal(){
   const m = $id("raidCombatModal"); 
   if (m) m.style.display = "none"; 
 
-  // --- NOVO: Limpa e esconde o banner de notificação ao fechar a raid ---
   const banner = $id('raidDeathNotification');
   if (banner) {
       banner.classList.remove('show');
-      // Força a remoção da animação para o caso de o modal fechar no meio dela
       banner.style.animation = 'none';
       banner.offsetHeight; // Trigger reflow
       banner.style.animation = null; 
   }
   deathNotificationQueue = [];
   isDisplayingDeathNotification = false;
-  lastDeathCheckTimestamp = null;
+  processedDeathTimestamps.clear();
 
   stopPolling(); 
   stopUISecondTicker(); 
@@ -1258,7 +1265,6 @@ function bindEvents() {
 
 async function mainInit() {
   createMediaPlayers();
-  // --- NOVO: Cria os elementos para a notificação de morte na inicialização ---
   createDeathNotificationUI();
   await initSession();
   bindEvents();

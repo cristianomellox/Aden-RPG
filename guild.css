@@ -1040,16 +1040,28 @@ body {
   background-color: black;
 }
 #tddimg {
+  max-width: 400px;
     background: none;
     border-radius: 8px;
     box-shadow: 
         0 0 5px 5px gold,
         inset 0 0 10px 2px rgba(255, 255, 255, 0.5);
 }
+#raid_1 {
+  position: relative!important;
+  width:100%;
+  height: 100%;
+  display: flex;
+  align-items: center!important;
+  justify-content: center!important;
+}
 #tdd {
   position: relative!important;
   width:100%;
   height: 100%;
+  display: flex;
+  align-items: center!important;
+  justify-content: center!important;
 }
 
 .tdd_desc {
@@ -1062,7 +1074,7 @@ body {
     0 0 2px black,
     0 0 4px black;
   position: absolute!important;
-  left: 8px!important;
+  margin-left: -120px!important;
   top: 50px!important;
   background: none!important;
     border-radius: none!important;
@@ -1079,7 +1091,8 @@ font-size: 0.9em;
     0 0 2px black,
     0 0 4px black;
   position: absolute;
-  left: 8px;
+  text-align: left;
+  margin-left: -100px;
   top: -10px;
 }
 #raidCombatModal .modal-content {

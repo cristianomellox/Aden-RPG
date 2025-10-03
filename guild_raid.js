@@ -64,6 +64,25 @@ function playHitSound(isCrit) {
 
 const $id = id => document.getElementById(id);
 
+function showRaidAlert(message) {
+  const modal = $id("raidAlertModal");
+  const msgEl = $id("raidAlertMessage");
+  const okBtn = $id("raidAlertOkBtn");
+
+  if (!modal || !msgEl || !okBtn) {
+    console.warn("Modal de alerta não encontrado.");
+    return;
+  }
+
+  msgEl.innerHTML = message;
+  modal.style.display = "flex";
+
+  okBtn.onclick = () => {
+    modal.style.display = "none";
+  };
+}
+
+
 // --- Sistema de Fila de Ações ---
 function processNextAction() {
     if (isProcessingAction || actionQueue.length === 0) return;
@@ -477,7 +496,7 @@ function createDeathNotificationUI() {
         }
         #raidDeathNotification.show {
             opacity: 1;
-            animation: slideAcrossContinuous 13s linear forwards;
+            animation: slideAcrossContinuous 15s linear forwards;
         }
         @keyframes slideAcrossContinuous {
             0% {
@@ -847,14 +866,14 @@ async function refreshAttemptsServerSideOnceIfNeeded() {
 async function performAttack() {
     if (!currentRaidId || !userId || isProcessingAction) return;
     if (isPlayerDeadLocal()) {
-        alert("Você está morto. Aguarde reviver.");
+        showRaidAlert("Você está morto. Aguarde reviver.");
         return;
     }
     const { shownAttacks } = computeShownAttacksAndRemaining();
     if (shownAttacks <= 0) {
         await refreshAttemptsServerSideOnceIfNeeded();
         if (computeShownAttacksAndRemaining().shownAttacks <= 0) {
-            alert("Sem ataques. Aguarde regeneração.");
+            showRaidAlert("Sem ataques. Aguarde regeneração.");
             return;
         }
     }
@@ -863,7 +882,7 @@ async function performAttack() {
     try {
         const { data: payload, error } = await supabase.rpc("perform_raid_attack", { p_raid_id: currentRaidId, p_player_id: userId });
         if (error || !payload?.success) {
-            alert(error?.message || payload?.message || "Ataque não realizado");
+            showRaidAlert(error?.message || payload?.message || "Ataque não realizado");
             await loadAttempts();
             return;
         }
@@ -1073,7 +1092,7 @@ async function refreshRaidState() {
     const { data, error } = await supabase.from("guild_raids").select("*").eq("id", currentRaidId).single();
     if (error || !data || !data.active) {
       closeCombatModal();
-      alert("A Raid terminou.");
+      showRaidAlert("A Raid terminou.");
       return;
     }
     if (data.current_floor !== currentFloor) {
@@ -1235,20 +1254,20 @@ function bindEvents() {
   $id("startRaidBtn")?.addEventListener("click", async () => {
     try { primeMedia(); } catch(e) { console.warn('Erro ao preparar mídia no início da raid', e); }
 
-    if (userRank !== "leader" && userRank !== "co-leader") { alert("Apenas líder/co-líder"); return; }
+    if (userRank !== "leader" && userRank !== "co-leader") { showRaidAlert("Apenas líder/co-líder"); return; }
     const startBtn = $id("startRaidBtn");
     startBtn.disabled = true;
     try {
         const { error } = await supabase.rpc("start_guild_raid", { p_guild_id: userGuildId, p_player_id: userId, p_name: "Torre da Desolação" });
         if (error) {
-            alert(error.message || "Erro ao iniciar raid");
+            showRaidAlert(error.message || "Erro ao iniciar raid");
             return;
         }
         closeRaidModal();
         await loadRaid();
     } catch(e) {
       console.error("startRaid", e);
-      alert("Erro ao iniciar raid");
+      showRaidAlert("Erro ao iniciar raid");
     } finally {
       startBtn.disabled = false;
     }
@@ -1302,10 +1321,10 @@ function refreshRaidBuyModalUI() {
 }
 
 async function openRaidBuyModal() {
-  if (!userId) { alert("Faça login para comprar."); return; }
+  if (!userId) { showRaidAlert("Faça login para comprar."); return; }
   try {
     const { data: player, error } = await supabase.from("players").select("gold, raid_attacks_bought_count, raid_last_attack_time").eq("id", userId).single();
-    if (error) { console.error("openRaidBuyModal", error); alert("Erro ao abrir modal de compra."); return; }
+    if (error) { console.error("openRaidBuyModal", error); showRaidAlert("Erro ao abrir modal de compra."); return; }
     raidBuyPlayerGold = player.gold || 0;
     const lastDate = player.raid_last_attack_time ? new Date(player.raid_last_attack_time).toDateString() : null;
     raidBuyBaseBoughtCount = (lastDate === new Date().toDateString()) ? (player.raid_attacks_bought_count || 0) : 0;
@@ -1315,7 +1334,7 @@ async function openRaidBuyModal() {
     if (buyModal) buyModal.style.display = "flex";
   } catch (e) {
     console.error("[raid] openRaidBuyModal erro:", e);
-    alert("Erro ao abrir modal de compra.");
+    showRaidAlert("Erro ao abrir modal de compra.");
   }
 }
 
@@ -1340,7 +1359,7 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let i = 0; i < raidBuyQty; i++) {
           const { data, error } = await supabase.rpc("buy_raid_attack", { p_player_id: userId });
           if (error || !(data && (data.success === true || data.success === 't'))) {
-            if (purchased === 0) alert(error?.message || (data && data.message) || "Compra não pôde ser concluída.");
+            if (purchased === 0) showRaidAlert(error?.message || (data && data.message) || "Compra não pôde ser concluída.");
             break;
           }
           const payload = Array.isArray(data) ? data[0] : data;
@@ -1349,15 +1368,56 @@ document.addEventListener("DOMContentLoaded", () => {
           raidBuyPlayerGold = Math.max(0, (raidBuyPlayerGold || 0) - (payload.cost || 0));
         }
         if (purchased > 0) {
-          alert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
+          showRaidAlert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
           if (typeof loadAttempts === 'function') await loadAttempts();
         }
       } catch (e) {
         console.error("[raid] buyConfirm erro:", e);
-        alert("Erro inesperado na compra.");
+        showRaidAlert("Erro inesperado na compra.");
       }
     });
   } catch (e) {
     console.error("[raid] buy modal attach erro", e);
   }
 });
+
+
+// --- Verificação ao entrar na página: alerta e entrada forçada caso haja raid ativa ---
+async function checkActiveRaidOnEntry() {
+  try {
+    // Aguarda o userGuildId ser definido (até 3s), pois initSession() pode demorar.
+    let waited = 0;
+    while (!userGuildId && waited < 3000) {
+      await new Promise(r => setTimeout(r, 100));
+      waited += 100;
+    }
+    if (!userGuildId) return;
+
+    // Tenta buscar raid ativa
+    const { data: activeRaid, error } = await supabase
+      .from("guild_raids")
+      .select("id")
+      .eq("guild_id", userGuildId)
+      .eq("active", true)
+      .limit(1)
+      .single();
+
+    if (error || !activeRaid) return;
+
+    // Pequeno atraso para não conflitar com qualquer fechamento de modal pendente
+    await new Promise(r => setTimeout(r, 300));
+
+    // Apenas mostra o alerta
+    try {
+      showRaidAlert("Há uma Raid em andamento. Vá verificar!");
+    } catch (e) {
+      console.warn('alert falhou:', e);
+    }
+
+  } catch (e) {
+    console.error("checkActiveRaidOnEntry error:", e);
+  }
+}
+
+
+setTimeout(() => { checkActiveRaidOnEntry().catch(()=>{}); }, 800);

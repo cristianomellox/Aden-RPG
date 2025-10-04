@@ -1,5 +1,5 @@
 // Nome do cache
-const CACHE_NAME = "aden-rpg-sw-v5";
+const CACHE_NAME = "aden-rpg-sw-v7";
 
 // Arquivos para cachear (sons, músicas, imagens e itens)
 const FILES_TO_CACHE = [

@@ -479,10 +479,10 @@ function createDeathNotificationUI() {
     style.textContent = `
         #raidDeathNotification {
             position: fixed;
-            top: 50px;
+            top: 10px;
             transform: translateX(100%);
             right: 0;
-            background-color: rgba(200, 0, 0, 0.85);
+            background-color: rgba(80, 80, 255, 0.85);
             color: white;
             padding: 10px 20px;
             border-radius: 5px 0 0 5px;
@@ -518,7 +518,7 @@ function displayDeathNotification(playerName) {
     const monsterNameEl = $id("raidMonsterName");
     const bossName = monsterNameEl ? monsterNameEl.textContent : "Imperador Veinur";
 
-    banner.innerHTML = `<span style="color: yellow">${playerName}</span> foi derrotado(a) pelo <span style="color: lightblue">${bossName}</span>!`;
+    banner.innerHTML = `<span style="color: yellow">${playerName}</span> foi derrotado(a) pelo <span style="color: grey">${bossName}</span>!`;
     banner.classList.add('show');
 
     const onAnimationEnd = () => {

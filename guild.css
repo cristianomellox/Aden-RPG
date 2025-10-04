@@ -1180,3 +1180,6 @@ hr {
 #videoContainer { 
     background-color: black!important;
 }
+#raidPlayerAvatar {
+  border: 2px solid yellow;
+}

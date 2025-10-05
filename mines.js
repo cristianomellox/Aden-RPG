@@ -28,7 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function preload(name) {
     try {
-      const res = await fetch(audioFiles[name], { cache: 'force-cache' });
+      const res = await fetch(audioFiles[name], { cache: 'reload' });
       if (!res.ok) throw new Error("fetch " + res.status);
       const ab = await res.arrayBuffer();
       audioBuffers[name] = await decodeAudioDataCompat(ab);
@@ -267,7 +267,7 @@ async function checkExpiredSessions() {
         // Som do ataque (PvE/PvP)
         try {
           if (isCrit) playSound('critical', { volume: 0.1 });
-          else playSound('normal', { volume: 0.06 });
+          else playSound('normal', { volume: 0.5 });
         } catch(_) {}
     }
 
@@ -1089,6 +1089,8 @@ async function checkExpiredSessions() {
 
     // --- Nova Lógica de Reset ---
     // Chama a função RPC para redefinir as tentativas de PvP antes de carregar o resto da página
+    await supabase.rpc('reset_player_pvp_attempts');
+
     await supabase.rpc('get_player_pvp_state', { p_player_id: userId });
     
     // Agora que o reset foi executado (se necessário), atualiza a interface e carrega as minas

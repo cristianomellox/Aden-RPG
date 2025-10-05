@@ -18,7 +18,11 @@ const BOSS_DEATH_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossoutro.web
 const BOSS_ATTACK_VIDEO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddbossatk01.webm", "https://aden-rpg.pages.dev/assets/tddbossatk02.webm",
     "https://aden-rpg.pages.dev/assets/tddbossatk03.webm", "https://aden-rpg.pages.dev/assets/tddbossatk04.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk05.webm"
+    "https://aden-rpg.pages.dev/assets/tddbossatk05.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk06.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk07.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk08.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk09.webm"
 ];
 const AMBIENT_AUDIO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3", "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3", "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3", "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3", "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
@@ -50,7 +54,7 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Áudio de Efeitos
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
 const audioCrit = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
-audioNormal.volume = 0.06;
+audioNormal.volume = 0.5;
 audioCrit.volume = 0.1;
 
 function playHitSound(isCrit) {
@@ -112,11 +116,11 @@ function createMediaPlayers() {
     }
     if (!ambientAudioPlayer) {
         ambientAudioPlayer = new Audio();
-        ambientAudioPlayer.volume = 0.3;
+        ambientAudioPlayer.volume = 0.5;
     }
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
-        bossMusicPlayer.volume = 0.05;
+        bossMusicPlayer.volume = 0.06;
         bossMusicPlayer.loop = true;
     }
 }
@@ -482,7 +486,7 @@ function createDeathNotificationUI() {
             top: 10px;
             transform: translateX(100%);
             right: 0;
-            background-color: rgba(80, 80, 255, 0.85);
+            background-color: rgb(0, 0, 255);
             color: white;
             padding: 10px 20px;
             border-radius: 5px 0 0 5px;
@@ -518,7 +522,7 @@ function displayDeathNotification(playerName) {
     const monsterNameEl = $id("raidMonsterName");
     const bossName = monsterNameEl ? monsterNameEl.textContent : "Imperador Veinur";
 
-    banner.innerHTML = `<span style="color: yellow">${playerName}</span> foi derrotado(a) pelo <span style="color: grey">${bossName}</span>!`;
+    banner.innerHTML = `<span style="color: yellow;">${playerName}</span> foi derrotado(a) pelo <span style="color: lightgreen;">${bossName}</span>!`;
     banner.classList.add('show');
 
     const onAnimationEnd = () => {
@@ -891,6 +895,13 @@ async function performAttack() {
         updateAttackUI();
         displayFloatingDamageOver($id("raidMonsterArea"), payload.damage_dealt ?? 0, payload.is_crit === true);
         playHitSound(payload.is_crit === true);
+        
+        const monsterImg = $id("raidMonsterImage");
+        if (monsterImg) {
+            monsterImg.classList.add('shake-animation');
+            setTimeout(() => monsterImg.classList.remove('shake-animation'), 1000);
+        }
+
         await refreshRanking();
         if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
         
@@ -1021,6 +1032,13 @@ async function tryBossAttackForPlayer() {
       queueAction(() => {
         playVideo(randomAttackVideo, () => {
           displayFloatingDamageOver($id("raidPlayerArea"), payload.damage || 0, false);
+          
+          const playerAvatar = $id("raidPlayerAvatar");
+          if (playerAvatar) {
+              playerAvatar.classList.add('shake-animation');
+              setTimeout(() => playerAvatar.classList.remove('shake-animation'), 1000);
+          }
+
           _playerReviveUntil = payload.player_revive_until || null;
           updatePlayerHpUi(payload.player_new_hp ?? 0, payload.player_max_health ?? 1);
           if (_playerReviveUntil && new Date(_playerReviveUntil) > new Date()) {

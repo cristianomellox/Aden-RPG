@@ -7,6 +7,7 @@
 <meta name="googlebot" content="noindex, nofollow">
     <title>Minas de Cristal - Aden RPG</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="mines.css" />
     <style>
@@ -45,7 +46,7 @@
     <div id="mainContainer">
         <div id="mineHeader">
            <p><strong>Guilda Dominante:</strong><br>
-           Nenhuma.</p>
+           <span id="guilddom">Nenhuma.</span></p>
             <p id="cycleInfo"></p>
         </div>
 
@@ -287,5 +288,49 @@ document.addEventListener('keydown', event => {
     });
 
 </script> 
+
+
+<div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">
+    <h1 id="maintenance-title">Aviso de Manutenção</h1>
+    <p id="maintenance-message" style="font-size: 1.2em; max-width: 80%;"></p>
+    <p style="font-size: 0.9em; margin-top: 20px;">Obrigado pela sua paciência.</p>
+</div>
+<div id="countdown-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; padding: 10px; background-color: rgba(0, 0, 0, 0.9); color: white; text-align: center; z-index: 9999; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold;">
+    <div style="font-size: 1.5em; font-weight: bold;">
+        <span id="countdown-timer"></span>
+    </div>
+    <div style="font-size: 0.9em; margin-top: 5px;">
+        O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1.3rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
 </body>
 </html>

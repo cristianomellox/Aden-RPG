@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+  <title>Modo AFK - Combate</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script src="maintenance.js"></script>
+  <script src="monster_stages.js"></script> 
+  <script defer src="afk_page.js"></script>
+  <script defer src="number_format.js"></script>
+  <style>
+
+/* Balão de Level Up */
+.level-up-balloon {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffd700;
+  color: #000;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+  width: 80%;
+  z-index: 9999;
+        background-image: url('https://aden-rpg.pages.dev/assets/aventura.webp'); 
+        background-repeat: no-repeat;
+        background-position: center center; 
+        background-size: contain; 
+        display: flex; 
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      border: none; /* Remove a borda */
+  box-shadow: none; /* Remove a sombra */
+  outline: none;
+        box-sizing: border-box; 
+        background-color: transparent; 
+        max-width: none; 
+        margin: 0; 
+  
+  animation: fadeInOut 6s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, -20px); }
+  10% { opacity: 1; transform: translate(-50%, 0); }
+  90% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -20px); }
+}
+
+
+/* Modal de Level Up */
+.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: black;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  max-height: 80vh;  
+  overflow-y: auto;   
+}
+
+#tutorial-modal .modal-content::-webkit-scrollbar {
+        width: 0;  
+        background: transparent;
+    }
+     #tutorial-modal .modal-content {
+    scrollbar-width: none;  
+    -ms-overflow-style: none;
+}
+    
+
+    /* Seus estilos CSS existentes aqui (mantidos do seu arquivo style.css) */
+    body {
+      background-color: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      /* Remova padding e ajuste display para permitir que #idle-screen ocupe tudo */
+      padding: 0; 
+      display: flex; /* Mantém a estrutura flex, mas será sobreposta por #idle-screen */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      max-height: 100vh;
+      max-width: 100vw;
+      margin: 0; /* Garante que não há margens no body */
+      overflow-x: hidden; /* Evita rolagem horizontal indesejada */
+    }
+
+    .afk-container, #combat-screen {
+      /* Estas divs internas não devem ter backgrounds ou margens que conflitem com o background de tela cheia */
+      max-width: 400px;
+      width: 100%;
+      margin: 20px auto; /* Mantenha margem auto para centralizar o conteúdo, se desejar */
+      background-color: transparent; /* Torna o fundo transparente */
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: none; /* Remove a sombra, pois a imagem é o background */
+      box-sizing: border-box; /* Garante que padding não aumente o tamanho total */
+    }
+#afk-status p {
+font-size: 18px;
+color: white;
+font-weight: bold;
+text-shadow: 2px 2px 2px black;
+background-color: rgba(0, 0, 0, 0.4);
+box-shadow: 7px 1px 10px rgba(0,0,0,0.2); 
+border-radius: 12px;
+}
+#start-afk-cooldown-display {
+font-weight: bold;
+font-size: 18px; 
+}
+#afk-stage, #player-total-xp, #player-total-gold, #afk-xp, #afk-gold, #afk-timer, #daily-attempts-left {
+color: yellow;
+}
+    h1, h2, p {
+      margin: 10px 0;
+    }
+  
+
+    .btn {
+      background-color: none;
+      color: white;
+      padding: 5px 47px;
+      
+      cursor: pointer;
+      font-size: 1em;
+      margin: 3px;
+      text-decoration: none; /* Para botões que são links */
+      display: inline-block;
+    }
+
+    .btn:hover:not(:disabled) {
+      background-color: none;
+    
+    }
+
+    .btn:disabled {
+      color: white;
+      font-size: 12px;
+      background-color: none;
+      cursor: not-allowed;
+      padding: 5px 47px;
+      opacity: 0.6;
+      
+    }
+
+    /* Estilos da barra de HP do monstro */
+    #monster-hp-bar {
+      position: relative; /* Adicionado para posicionar o texto de HP sobre ele */
+      width: 80%;
+      height: 25px;
+      background: #333;
+      border: 1px solid #444;
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 15px auto;
+    }
+
+    #monster-hp-fill {
+      height: 100%;
+      background-color: #dc3545; /* Cor vermelha para HP */
+      width: 100%; /* Começa cheio */
+      transition: width 0.3s ease-out;
+    }
+
+    #monsterImage {
+      max-width: 90%;
+    max-height: 90%;
+      margin: 15px 0;
+      border-radius: 8px;
+    }
+
+    /* Modal de Resultados */
+    #result-modal {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #333;
+      color: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      text-align: center;
+      min-width: 280px;
+    }
+    #result-modal p {
+      font-size: 1.2em;
+      margin-bottom: 20px;
+      color: white;
+    }
+    #result-modal button {
+      padding: 12px 25px;
+      font-size: 1.1em;
+      background-color: #28a745;
+    }
+    #result-modal button:hover {
+      background-color: #218838;
+    }
+
+    /* Estilos para as telas */
+    #idle-screen, #combat-screen {
+        display: flex; /* Garante que os itens fiquem em coluna */
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        gap: 0.75rem;
+    }
+
+/* Para centralizar a imagem do monstro */
+#monsterImage {
+    display: block; /* Garante que a imagem se comporte como um bloco */
+    margin-left: auto; /* Centraliza horizontalmente */
+    margin-right: auto; /* Centraliza horizontalmente */
+    max-width: 80%; /* Ajuste o tamanho máximo se necessário */
+    
+    /* Outros estilos existentes da imagem */
+    position: relative; /* Importante para posicionar os números de dano em relação a ele */
+    z-index: 1; /* Garante que a imagem fique atrás dos números de dano */
+}
+
+/* Estilos básicos para os números de dano flutuantes */
+.normal-damage-number, .crit-damage-number {
+    position: absolute;
+    font-family: 'Georgia', serif; /* Exemplo de fonte 'em flor' */
+    font-weight: bold;
+    pointer-events: none; /* Ignora eventos de clique no número */
+    white-space: nowrap; /* Impede que o texto quebre linha */
+    text-align: center;
+    z-index: 10; /* Garante que o dano apareça acima de outros elementos */
+}
+
+.normal-damage-number {
+    font-size: 40px;
+    color: white;
+    /* Contorno preto */
+    text-shadow:
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000;
+}
+
+.crit-damage-number {
+    font-size: 57px;
+    color: red;
+    /* Contorno amarelo */
+    text-shadow:
+        -1px -1px 0 yellow,
+        1px -1px 0 yellow,
+        -1px 1px 0 yellow,
+        1px 1px 0 yellow,
+        -2px -2px 0 yellow,
+        2px -2px 0 yellow,
+        -2px 2px 0 yellow,
+        2px 2px 0 yellow; /* Para um contorno mais pronunciado */
+}
+
+/* Animação para flutuar e desaparecer */
+@keyframes floatAndFade {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, 0); /* Começa centralizado, sem movimento vertical */
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50px); /* Move para cima 50px e some */
+    }
+}
+
+/* NOVOS ESTILOS PARA O TEXTO DE HP NA BARRA */
+#monster-hp-text-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* Centraliza o texto */
+  color: white; /* Cor do texto em branco */
+  font-weight: bold; /* Deixa o texto em negrito */
+  z-index: 1; /* Garante que o texto fique acima da barra de preenchimento */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8); /* Sombra para melhor legibilidade */
+  pointer-events: none; /* Permite cliques através do texto para elementos abaixo, se houver */
+}
+
+    /* ESTILOS PARA #idle-screen COM BACKGROUND DE TELA CHEIA */
+    #idle-screen {
+        width: 100vw;
+        height: 100vh; 
+        max-height: 100vh;
+        background-image: url('https://aden-rpg.pages.dev/assets/divperga.webp'); 
+        background-repeat: no-repeat;
+        background-position: center center; 
+        background-size: cover; 
+        display: flex; 
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px; 
+        box-sizing: border-box; 
+        background-color: transparent; 
+        max-width: none; 
+        margin: 0; 
+        box-shadow: none; 
+        border-radius: 0; 
+    }
+    #combat-screen {
+        width: 100vw;
+        min-height: 100vh;
+        
+        background-image: url('https://aden-rpg.pages.dev/assets/amasmorra.webp'); /* Nova imagem da masmorra */
+        background-repeat: no-repeat;
+        background-position: center center;
+        background-size: cover;
+        
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+
+        background-color: transparent; 
+        max-width: none;
+        margin: 0;
+        box-shadow: none;
+        border-radius: 0;
+        position: relative; 
+        z-index: 1; 
+    }
+    p {
+      font-weight: bold;
+    }
+    #saiba-mais {
+      color: white;
+      font-weight: bold;
+    }
+    
+    @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+    100% { transform: translateY(0px); }
+}
+
+#monsterImage {
+    animation: float 2s ease-in-out infinite;
+    /* Certifique-se de que não há outras animações aqui */
+}
+#result-modal, .modal, #music-permission-modal {
+background-image: url('https://aden-rpg.pages.dev/assets/divperga.webp'); 
+        background-repeat: no-repeat;
+        background-position: center center; 
+        background-size: cover; 
+      font-weight: bold;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      color: #white!important;
+        box-sizing: border-box; 
+        background-color: transparent; 
+        max-width: none; 
+        margin: 0; 
+        border: none;
+        box-shadow: none;
+        text-shadow: 2px 2px 2px black;
+        }
+       
+        #levelUpBalloon {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        }
+        
+  </style>
+</head>
+<body>
+
+  <div id="idle-screen">
+    <h1>Aventura AFK</h1>
+ <p style="text-shadow: 2px 2px 2px black;">Você continua coletando recursos mesmo offline.<br>
+ <span id="saiba-mais">  <img src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; vertical-align: 5px; right: 3px;"> </span></p>
+ <div id="tutorial-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h2>Coletando</h2>
+      <p style="text-align: justify;">Você coleta XP (garantido) e Ouro (se houver evento em andamento) mesmo estando offline com um limite de 4 horas.<br> Após essas 4 horas, a coleta é interrompida até você coletar as recompensas.<br> O tempo mínimo para coletar é de 1 hora, ou seja, você só pode fazer uma coleta após ter passado pelo menos 1 hora.</p> <br>
+<h1>Combate</h1>
+<p style="text-align: justify;">Ao iniciar aventura, o modo combate é ativado e um monstro aleatório aparecerá para você desafiar.<br> Neste modo de Aventura AFK o monstro não ataca. A batalha ocorre automaticamente e seu personagem desfere 10 golpes.<br> Se nesses 10 golpes você conseguir  eliminar o  monstro, então será vitória, e você ganhará XP (garantido) e Ouro (se houver evento em andamento) como recompensa de estágio e, consequentemente, aumentará a coleta no modo afk.<br>
+Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21h (de Brasília).</p>
+      <button id="close-tutorial-btn" class="btn">Entendi!</button>
+    </div>
+  </div>
+
+    <div id="afk-status">
+      <p>Estágio Atual: <span id="afk-stage">--</span></p>
+      <p style="display: none">XP Total: <span id="player-total-xp">0</span></p>
+      <p style="display: none">Ouro Total: <span id="player-total-gold">0</span></p>
+      
+      <p><img src="https://aden-rpg.pages.dev/assets/exp.webp" style="width: 40px; height: 35px; vertical-align: -12px;"> <span id="afk-xp">0</span></p>
+      <p style="display: none;"><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width: 40px; height: 35px; vertical-align: -10px;"> <span id="afk-gold">0</span> <span style="font-size: 0.7em;; vertical-align: 7px;">(evento)</span></p>
+      <p><video width="30" height="30" autoplay loop muted playsinline style="border-radius: 58%; vertical-align: -8px;">
+  <source src="https://aden-rpg.pages.dev/assets/ampulheta.webm" type="video/webm">
+  Seu navegador não suporta o formato de vídeo WebM.
+</video> <span id="afk-timer">04:00:00</span></p>
+      <p>Tentativas Diárias Restantes: <span id="daily-attempts-left">--</span></p>
+    </div>
+
+    <div id="afk-buttons">
+      <button id="collect-rewards-idle" class="btn">Coletar Recompensas</button>
+      <button id="start-afk" class="btn">Iniciar Aventura</button>
+      <span id="start-afk-cooldown-display" style="color: white; margin-left: 2px; position: fixed; display: none;"></span>
+      <a href="index.html?refresh=true" id="return-main-idle" class="btn">Voltar</a>
+    </div>
+  </div>
+
+  <div id="combat-screen" style="display:none; position: relative;">
+    <h1>Combate</h1>
+
+    <div id="battle-countdown" style="display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 2.5em; font-weight: bold; color: white; text-shadow: 2px 2px 4px black; z-index: 10;"></div>
+
+    <div id="afk-status">
+      <p><strong>Desafiando</strong> <span id="monster-name">---</span></p>
+      <img id="monsterImage" src="" alt="Monstro" />
+      <div id="monster-hp-bar">
+        <div id="monster-hp-fill"></div>
+        <span id="monster-hp-text-overlay"> <span id="monster-hp-value"></span></span>
+      </div>
+      <p><strong></strong> <span id="dps"></span></p>
+      <p><strong>Ataques restantes:</strong> <span id="time-left">0</span></p>
+    </div>
+
+    <div id="afk-buttons">
+     
+    </div>
+  </div>
+
+  <div id="result-modal">
+    <p id="result-text"></p>
+    <button id="confirm-btn" class="btn">Confirmar</button>
+  </div>
+
+
+<div id="levelUpModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>🎉 Nível Up!</h2>
+    <p id="levelUpMessage"></p>
+    <button onclick="closeLevelUpModal()">Confirmar</button>
+  </div>
+</div>
+
+
+<div id="levelUpBalloon" class="level-up-balloon" style="display:none;"><br>
+  <h1>Nível</h1><h1 id="levelUpBalloonText"></h1><span stylr="color: white!important; font-weight: bold;"></span>
+</div>
+
+<div id="music-permission-modal" class="modal" style="display: flex;">
+  <div class="modal">
+   <h1>Ajude-nos!</h1>
+    <p>Monstros estão invadindo o <br>continente de Aden! <br>Ajude a derrotá-los!</p>
+    <button id="music-permission-btn" class="btn">ENTRAR!</button>
+  </div>
+</div>
+<div id="loading-overlay">
+  <div id="loading-container">
+    <h2>Carregando...</h2>
+    <div id="progress-bar-container">
+      <div id="progress-bar"></div>
+    </div>
+    <span id="progress-text">0%</span>
+  </div>
+</div>
+
+
+<div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">
+    <h1 id="maintenance-title">Aviso de Manutenção</h1>
+    <p id="maintenance-message" style="font-size: 1.2em; max-width: 80%;"></p>
+    <p style="font-size: 0.9em; margin-top: 20px;">Obrigado pela sua paciência.</p>
+</div>
+<div id="countdown-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; padding: 10px; background-color: rgba(0, 0, 0, 0.9); color: white; text-align: center; z-index: 9999; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold;">
+    <div style="font-size: 1.5em; font-weight: bold;">
+        <span id="countdown-timer"></span>
+    </div>
+    <div style="font-size: 0.9em; margin-top: 5px;">
+        O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
+    </div>
+</div>
+<script src="loading.js"></script>
+</body>
+
+</html>

@@ -1,6 +1,15 @@
-// Este é o arquivo script.js otimizado com cache no localStorage e cálculo do Combat Power no cliente.
+if ('serviceWorker' in navigator) {
+  try {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (let reg of registrations) {
+        reg.unregister().then(success => {
+          if (success) console.log('Service Worker removido:', reg);
+        }).catch(()=>{});
+      }
+    }).catch(()=>{});
+  } catch(e) {}
+}
 
-// Configuração do Supabase
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -442,11 +451,3 @@ if (closeProfileModalBtn) {
     };
 }
 
-// --- Service Worker ---
-if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-        navigator.serviceWorker.register("sw_afk.js")
-            .then(reg => console.log("Service Worker registrado:", reg.scope))
-            .catch(err => console.error("Erro ao registrar Service Worker:", err));
-    });
-}

@@ -74,7 +74,7 @@ button, .btn {
         background-color: none;
         border: none;
         cursor: pointer;
-    
+
 }
 button:hover {
     opacity: 0.9;
@@ -379,13 +379,13 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     object-fit: contain;
     filter: none;
     /* Animação de flutuação */
-    animation: float 2s ease-in-out infinite;
+    animation: float 3s ease-in-out infinite;
 }
 
 /* Keyframes para a animação de flutuação */
 @keyframes float {
     0% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); } /* ALTERADO: 8px para cima e para baixo */
+    50% { transform: translateY(-20px); } /* ALTERADO: 8px para cima e para baixo */
     100% { transform: translateY(0px); }
 }
 

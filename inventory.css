@@ -1,0 +1,672 @@
+/* Estilos do Top Bar e Layout Principal */
+        #playerTopBar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: #1a1a1a;
+            border-bottom: 2px solid #555;
+        }
+
+        .top-bar-link {
+            color: #e0dccc;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+        }
+
+        #pageTitle {
+            font-size: 1.2em;
+            font-weight: bold;
+            flex-grow: 1;
+            text-align: center;
+        }
+
+        #mainContainer {
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        #equipmentAndAvatarContainer {
+            display: flex;
+            position: relative;
+            justify-content: space-around;
+            align-items: center;
+            padding: 20px;
+            background-color: linear-gradient(to bottom, #2e2e2e, #1a1a1a);
+            border-bottom: 2px solid #555;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border-radius: 8px;
+        }
+
+        .equipment-column {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .equipment-slot {
+            width: 60px;
+            height: 60px;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative; /* Adicionado para posicionamento do nível */
+        }
+        
+        .equipment-slot img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        #playerAvatarEquipContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #playerAvatarEquip {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 3px solid gold;
+            object-fit: cover;
+        }
+
+        #attributesSection {
+            background: #181818;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .attribute-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .attribute-item {
+          font-size:  0.7em;
+            text-align: center;
+            padding: 0;
+        }
+
+        .attribute-label {
+            font-family: 'Cinzel', serif;
+            font-size: 1em!important;
+            color: white;
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .attribute-value {
+            font-family: 'Cinzel', serif;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: white;
+        }
+
+        #bagSection {
+            margin-top: 20px;
+        }
+
+        #bagTabs {
+            display: flex;
+            max-width: 99vw;
+            justify-content: space-around;
+            background-color: #333;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+.fragspanx {
+  position: absolute;
+  align-items: center;
+  top: 2px;
+  right: 25px;
+  justify-content: center;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+#closeFragmentModal {
+  max-width: 2px!important;
+}
+        .modal-icon {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+        }
+        .modal-text {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;        
+            position: relative;
+        }
+
+        .tab-button {
+            flex-grow: 1;
+            background: none;
+            border: none;
+            padding: 11px;
+            color: #e0dccc;
+            font-family: 'Cinzel', serif;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .tab-button.active {
+            background-color: #444;
+            border-bottom: 2px solid gold;
+        }
+
+        #bagItemsGrid {
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 0 0 8px 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 10px;
+        }
+        
+        .inventory-item {
+            width: 70px;
+            height: 70px;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative; /* Adicionado para posicionamento do nível */
+        }
+        
+        .inventory-item img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .item-quantity {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 0.8em;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        /* Estilos para o Modal de Detalhes do Item */
+        .modal-overlay {
+            display: none; /* Inicia oculto */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 10;
+            max-width: 99vw;
+            width: 100%;
+            height: 100%;
+            max-height: 98vh;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+#itemDetailsModal {
+  top: 10px;
+}
+        .modal-content {
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
+            color: #e0dccc;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+            max-width: 350px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            border: 2px solid #777;
+            top: 40px;
+        }
+        .modal-content p { font-weight: bold; }
+        .modal-content span { color: yellow; }
+
+#craftingContent .btn {
+    top: -10px;
+    right: 0px;
+}
+        .btn {
+            position: absolute;
+            top: 10px;
+            right: 2px;
+            color: #fff!important;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 50px;
+            height: 50px;
+            line-height: 35px;
+            text-align: center;
+            
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: background-color 0.2s;            
+        }
+        
+        .close-btn:hover {
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+
+        #itemHeader {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        #itemImageContainer {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
+            border: 2px solid #777;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #detailItemImage {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+        }
+
+        #itemHeaderText {
+            text-align: left;
+        }
+
+        #detailItemName {
+            margin: 0;
+            font-size: 1.5em;
+            line-height: 1.2;
+        }
+
+        #detailItemRarity {
+            color: gold;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        #itemStars {
+            font-size: 1.2em;
+            color: yellow;
+            margin-bottom: 5px;
+        }
+
+        #itemInfoSection {
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #777;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        #itemLevelPower {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #detailItemLevel {
+            font-size: 1.1em;
+            font-weight: normal;
+        }
+
+        #equipBtnContainer {
+            width: 40px;
+            height: 40px;
+            margin-right: 16px;
+        }
+
+        #equipBtnModal {
+            background-color: #5d3f6a;
+            color: yellow;
+            font-weight: bold;
+            border: 1px solid #777;
+            border-radius: 5px;
+            padding: 12px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        #equipBtnModal:hover { 
+            background-color: #7b1fa2; 
+        }
+
+
+        #itemStats { text-align: left; color: #e0dccc; margin-top: 10px; }
+        #itemStats p { margin: 5px 0; }
+
+        .refine-row {
+            display: flex;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        .refine-icon { width: 24px; height: 24px; }
+#itemActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+#itemActions button {
+    flex: 1 1 45%; /* sempre 2 botões por linha */
+    min-width: 120px;
+}
+
+
+        #itemActions button {
+            background-color: none;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 12px 0;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        #itemActions button:hover { background-color: #7b1fa2; }
+
+        /* Estilos para a barra de progresso */
+        .progress-bar-container {
+            width: 100%;
+            height: 18px;
+            background-color: #333;
+            border-radius: 9px;
+            margin: 10px 0;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #777;
+        }
+
+        #levelXpBar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(to right, #4CAF50, #8BC34A);
+            transition: width 0.5s ease-in-out;
+        }
+
+        .progress-bar-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e0dccc!important;
+            font-size: 1em;
+            font-weight: bold;
+            text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+        }
+        
+        /* Estilos do modal de crafting */
+        #craftingModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #craftingContent {
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.7);
+            max-width: 350px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            border: 2px solid #777;
+        }
+
+        #craftingInfo { margin: 20px 0; }
+        
+        .crafting-item-preview {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .item-icon {
+            width: 80px;
+            height: 80px;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 5px;
+            object-fit: contain;
+            display: flex;
+            flex-direction:  column;
+        }
+
+        .crafting-costs p { margin: 5px 0; }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        /* --------- ESTILOS DO MODAL DE SELEÇÃO DE FRAGMENTOS --------- */
+        /* --------- ESTILOS DO MODAL DE REFINO --------- */
+        #refineFragmentList { max-height: 200px; overflow-y: auto; margin-bottom: 15px; }
+        #refineFragmentList li.inventory-item {
+            width: auto;
+            height: auto;
+            background: #2a2a2a;
+            border: 1px solid #666;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        #refineFragmentList li.selected {
+            border: 2px solid yellow;
+            box-shadow: 0 0 8px rgba(255, 255, 0, 0.4);
+        }
+        #refineFragmentList .fragment-quantity-input {
+            width: 70px;
+            padding: 4px 6px;
+            background: #1c1c1c;
+            color: #e0dccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+
+        #fragmentList { max-height: 200px; overflow-y: auto; margin-bottom: 15px; }
+
+        /* Reestiliza os <li> dentro do modal para não herdarem o tamanho de quadrado da bolsa */
+        #fragmentList li.inventory-item {
+            width: auto;
+            height: auto;
+            background: #2a2a2a;
+            border: 1px solid #666;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Destaque de seleção */
+        #fragmentList li.selected {
+            border: 2px solid yellow;
+            box-shadow: 0 0 8px rgba(255, 255, 0, 0.4);
+        }
+
+        /* Ajustes de inputs no modal */
+        #fragmentList .fragment-quantity-input {
+            width: 70px;
+            padding: 4px 6px;
+            background: #1c1c1c;
+            color: #e0dccc;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+
+        #selectedFragmentPreview {
+            display: none;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        #selectedFragmentImage {
+            width: 60px; height: 60px; object-fit: contain;
+        }
+        
+        /* Estilos para o Modal de Alerta Customizado */
+        #customAlertModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        #customAlertContent {
+            background: linear-gradient(180deg, #4a148c, #311b92);
+            color: #e0dccc;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.7);
+            max-width: 350px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            border: 2px solid #9c27b0;
+        }
+        
+        #customAlertMessage {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+        
+        #customAlertActions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .custom-alert-btn {
+            background-color: #5d3f6a;
+            color: #fff;
+            border: 1px solid #9c27b0;
+            border-radius: 5px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .custom-alert-btn:hover {
+            background-color: #7b1fa2;
+        }
+  
+/* Estilos para o novo elemento de nível */
+.item-level {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    font-weight: bold;
+    color: white;
+    
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+
+.reforge-slot {
+  border: 1px solid #666;
+  border-radius: 6px;
+  padding: 6px;
+  margin: 4px 0;
+  background: #1c1c1c;
+  color: white;
+}
+
+.attr-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0;
+}
+
+.rarity-bar {
+  margin-top: 2px;
+}
+
+.modal-overlay2 {
+    position: fixed;
+  
+    width: 100%;
+    height: 100%;
+   background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+  color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}

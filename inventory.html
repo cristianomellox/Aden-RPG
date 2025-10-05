@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noindex, nofollow">
+    <title>Inventário - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
+    <link href="style.css" rel="stylesheet"/>
+    <link href="inventory.css" rel="stylesheet"/>
+    <style>
+      /* Pequenos ajustes úteis para seleção múltipla */
+      #fragmentList, #refineFragmentList {
+        display: grid; 
+        gap: 10px;
+        grid-template-columns: repeat(auto-fill,minmax(240px,1fr));
+        max-height: 55vh;
+        overflow: auto;
+        padding: 6px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.25);
+      }
+      #fragmentList li, #refineFragmentList li {
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.2);
+        cursor: pointer;
+        display: flex;
+      }
+      #fragmentList li.selected, #refineFragmentList li.selected {
+        outline: 2px solid #e0dccc;
+        background: rgba(255,255,255,0.08);
+      }
+      .fragment-quantity-input {
+        width: 72px;
+      }
+      .fragspanx.btn, .fragspanx {
+        cursor: pointer;
+      }
+      #selectedFragmentPreview { 
+        display: none;
+        margin: 8px 0 12px 0;
+        padding: 8px;
+        border: 1px dashed rgba(255,255,255,0.2);
+        border-radius: 10px;
+      }
+      .modal-overlay { display:none; }
+
+      #itemDescription {
+          margin-top: 10px;
+          padding: 10px;
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+      }
+      .empty-inventory-message {
+        color: white;
+      }
+      #customAlertModal {
+  z-index: 9999 !important;
+}
+
+.shimmer {
+  position: relative;
+  color: transparent; /* texto oculto até revelar */
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.2) 25%,
+    rgba(255,255,255,0.8) 50%,
+    rgba(255,255,255,0.2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerAnim 1.2s infinite;
+  border-radius: 4px;
+  min-height: 18px; /* altura mínima para a barra branca */
+}
+
+@keyframes shimmerAnim {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+@keyframes zoomInOut {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.zoom-border {
+    border: 3px solid #FFD700 !important; /* Borda amarela */
+    animation: zoomInOut 1.5s infinite; /* Aplica a animação */
+}
+
+#background-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; 
+   opacity: 0.9;
+  z-index: -1; 
+}
+    </style>
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <div><span id="pageTitle">Bolsa</span><img id="openTutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:20px; height:20px; vertical-align: 5px; padding-left: 5px;"></div>
+       <a href="#" class="top-bar-link" id="refreshBtn" title="Recarregar">
+    <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
+</a>
+    </div>
+
+    <div id="mainContainer">
+        <div id="equipmentAndAvatarContainer">
+          <video autoplay muted loop playsinline id="background-video">
+    <source src="https://aden-rpg.pages.dev/assets/divbolsa.webm" type="video/webm">
+  </video>
+            <div class="equipment-column">
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_espada.webp'); background-size: cover;" id="weapon-slot" class="equipment-slot" data-slot="weapon"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_anel.webp'); background-size: cover;" id="ring-slot" class="equipment-slot" data-slot="ring"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_elmo.webp'); background-size: cover;" id="helm-slot" class="equipment-slot" data-slot="helm"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_mais.webp'); background-size: cover;" id="special1-slot" class="equipment-slot" data-slot="special1"></div>
+            </div>
+
+            <div id="playerAvatarEquipContainer">
+                <img id="playerAvatarEquip" src="caminho/para/avatar_padrao.webp" alt="Avatar do Jogador">
+            </div>
+
+            <div class="equipment-column">
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_colar.webp'); background-size: cover;" id="amulet-slot" class="equipment-slot" data-slot="amulet"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_asa.webp'); background-size: cover;" id="wing-slot" class="equipment-slot" data-slot="wing"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_armadura.webp'); background-size: cover;" id="armor-slot" class="equipment-slot" data-slot="armor"></div>
+                <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_mais.webp'); background-size: cover;" id="special2-slot" class="equipment-slot" data-slot="special2"></div>
+            </div>
+        </div>
+        
+        <div id="attributesSection">
+            <div class="attribute-row">
+                <div class="attribute-item">
+                    <span class="attribute-label">ATK</span>
+                    <span id="playerAttack" class="attribute-value">0 - 0</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">TAXA CRIT</span>
+                    <span id="playerCritChance" class="attribute-value">0%</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">DANO CRIT</span>
+                    <span id="playerCritDamage" class="attribute-value">0%</span>
+                </div>
+            </div>
+            <div class="attribute-row">
+                <div class="attribute-item">
+                    <span class="attribute-label">HP</span>
+                    <span id="playerHealth" class="attribute-value">0</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">DEFESA</span>
+                    <span id="playerDefense" class="attribute-value">0</span>
+                </div>
+                <div class="attribute-item">
+                    <span class="attribute-label">EVASÃO</span>
+                    <span id="playerEvasion" class="attribute-value">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="bagSection">
+            <div id="bagTabs">
+                <button class="tab-button active" id="tab-all">Tudo</button>
+                <button class="tab-button" id="tab-equipment">Equips.</button>
+                <button class="tab-button" id="tab-fragments">Frags.</button>
+                <button class="tab-button" id="tab-others">Outros</button>
+            </div>
+            <div id="bagItemsGrid"></div>
+        </div>
+    </div>
+
+    <div id="itemDetailsModal" class="modal-overlay">
+        <div id="itemDetailsContent" class="modal-content">
+            <span id="closeDetailsModal" class="btn">x</span>
+            
+            <div id="itemHeader">
+                <div id="itemImageContainer">
+                    <img id="detailItemImage" src="" alt="Imagem do Item">
+                </div>
+                <div id="itemHeaderText">
+                    <div id="itemStars"></div>
+                    <span id="detailItemRarity"></span>
+                    <h2 id="detailItemName">Nome do Item</h2>
+                </div>
+            </div>
+ <div id="itemDescription"></div>
+            <div id="itemInfoSection">
+                <div id="itemLevelPower">
+                    <p id="detailItemLevel">Nv. 1</p>
+                    <div id="equipBtnModal"></div>
+                </div>
+                
+                <div class="progress-bar-container">
+                    <div id="levelXpBar" class="progress-bar"></div>
+                    <span id="levelXpText" class="progress-bar-text">0/15</span>
+                </div>
+
+                <div id="itemStats"></div>
+            </div>
+            <div id="itemRefineSection">
+              <div id="itemInfoSection">
+                <h3>Refundição</h3>
+    <div id="refineRow1" class="refine-row">
+        <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon">
+        <p style="font-size: 0.7em;">Refine para 4 estrelas para desbloquear</p>
+    </div>
+    <div id="refineRow2" class="refine-row">
+        <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon">
+        <p>Refine para 5 estrelas para desbloquear</p>
+    </div>
+    </div>
+</div>
+           
+
+            <div id="itemActions">
+                <button id="levelUpBtn" class="action-btn">Evoluir</button>
+                <button id="refineBtn" class="action-btn">Refinar</button>
+                <button id="reforgeItemBtn" class="action-btn">Refundir</button>
+               <button 
+    id="deconstructBtn" 
+    class="action-btn"
+    style="background-color: grey; background-image: none; opacity: 0.8;" onclick="handleDeconstruct(selectedItem.id)"
+>
+    Desconstruir
+</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="craftingModal" class="modal-overlay">
+        <div id="craftingContent" class="modal-content">
+            <span id="closeCraftingModal" class="btn">x</span>
+           
+            <div class="modal-header">
+                <div class="modal-text">
+                    <h2 id="craftingFragmentName">Nome do Fragmento</h2>
+                </div>
+                <img id="craftingFragmentImage" src="" alt="Fragmento" class="item-icon">
+                <p>Necessários:<br> <span id="fragmentsNeeded"></span></p>
+                <span style="display: none" id="craftingFragmentQuantity"></span>
+               <div id="craftingCostContainer" style="margin-top:8px;">
+  <p style="margin:0;">Custo:</p>
+  <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+    <img src="https://aden-rpg.pages.dev/assets/cristais.webp" width="30" height="30"> X <span id="crystalCost" style="font-weight: bold;">0</span>
+  </div>
+</div>
+
+            </div>
+
+            <h2>Resultado</h2>
+            <div id="craftingInfo">
+                <div class="crafting-item-preview">
+                    <img id="craftingTargetImage" src="" alt="Item a Ser Construído" class="item-icon">
+                    <div class="crafting-costs"></div>
+                </div>
+            </div>
+
+            <div id="craftingActions">
+                <button id="craftBtn" class="action-btn">Construir</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fragmentSelectModal" class="modal-overlay">
+        <div class="modal-content">
+            <span id="closeFragmentModal" class="fragspanx">X</span>
+            <h2>Selecione Fragmentos (múltiplos permitidos)</h2>
+
+            <div id="selectedFragmentPreview">
+                <p>Dica: você pode marcar vários fragmentos e definir quantidades diferentes.</p>
+            </div>
+
+            <div id="fragmentList"></div>
+            <button id="confirmFragmentSelection" class="action-btn" style="width:100%;">Usar Fragmentos</button>
+        </div>
+    </div>
+
+    <div id="refineFragmentModal" class="modal-overlay">
+        <div class="modal-content">
+            <span id="closeRefineFragmentModal" class="btn">x</span>
+            <h2>Refinar Item</h2><h3>(múltiplos permitidos)</h3>
+            <p id="refineCostsText" style="margin:10px 0 14px 0; font-weight:bold;"></p>
+            <div id="refineFragmentList"></div>
+            <button id="confirmRefineSelectionRefine" class="action-btn" style="width:100%;">Refinar</button>
+        </div>
+    </div>
+
+    <div id="customAlertModal" class="modal-overlay">
+      <div class="modal-content">
+        <p id="customAlertMessage">Mensagem</p>
+        <button id="customAlertOkBtn" class="action-btn">OK</button>
+      </div>
+    </div>
+
+    <div id="customConfirmModal" class="modal-overlay">
+      <div class="modal-content">
+        <p id="customConfirmMessage">Tem certeza?</p>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button id="customConfirmNoBtn" class="action-btn">Não</button>
+          <button id="customConfirmYesBtn" class="action-btn">Sim</button>
+        </div>
+      </div>
+    </div>
+    <div id="reforgeModal" class="modal-overlay">
+    <div class="modal-content">
+        <span id="closeReforgeModal" class="btn">x</span>
+        <h2>Refundir Equipamento</h2>
+
+        <div id="reforgeSlotsContainer" class="reforge-slots-container">
+            </div>
+
+        <div id="rolledAttributesContainer">
+            </div>
+
+        <p id="reforgeMessage" style="margin-top: 10px;"></p>
+
+        <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+            <button id="reforgeBtn" class="action-btn">REFUNDIR</button>
+            <button id="applyReforgeBtn" class="action-btn" style="display: none;">Aplicar Atributos</button>
+        </div>
+    </div>
+</div>
+<div id="deconstructConfirmModal" class="modal-overlay">
+  <div class="modal-content">
+    <p style="margin-bottom:10px;">Tem certeza que deseja desconstruir este item? <br>Esta ação é <b>irreversível</b>.</p>
+
+    <div style="margin:10px 0; display:flex; align-items:center; gap:6px;">
+      <img src="https://aden-rpg.pages.dev/assets/cristais.webp" width="35" height="35">
+      <span>X400</span>
+    </div>
+
+    <div id="deconstructFragmentPreview" style="margin:10px 0; display:flex; align-items:center; gap:6px;">
+      <!-- preenchido pelo JS -->
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
+      <button id="deconstructCancelBtn" class="action-btn">Cancelar</button>
+      <button id="deconstructConfirmBtn" class="action-btn" style="background-image: none; background-color: grey; opacity: 0.8;">Confirmar</button>
+    </div>
+  </div>
+</div>
+<div id="loading-overlay">
+  <div id="loading-container">
+    <h2>Carregando...</h2>
+    <div id="progress-bar-container">
+      <div id="progress-bar"></div>
+    </div>
+    <span id="progress-text">0%</span>
+  </div>
+</div>
+<script src="loading.js"></script>
+<script src="inventory.js"></script>
+    <script src="desconstruir.js"></script>
+    <script src="refundir.js"></script>
+    
+
+<div id="tutorialModal" class="modal-overlay2" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h1>Tutorial</h1>
+            
+        </div>
+        
+        <p>Bem-vindo, aventureiro(a)! Este tutorial irá guiá-lo por todas as mecânicas de jogo, do inventário à refundição, para que você possa se tornar um mestre em Aden RPG.</p>
+
+        <hr>
+
+        <h2>1. Visão Geral do seu Inventário</h2>
+        <p>Seu inventário é o coração da sua jornada. É onde você gerencia todos os seus itens, incluindo equipamentos e fragmentos.</p>
+        <ul>
+            <li><strong>Itens Equipados</strong>: Ficam na parte superior da tela. Representam os itens que estão ativamente sendo usados pelo seu personagem.</li>
+            <li><strong>Seus Status</strong>: Seus atributos (Ataque, Defesa, HP, etc.) são calculados com base em seu equipamento e níveis.</li>
+            <li><strong>Lista de Itens</strong>: Abaixo dos status, você tem acesso a todo o seu arsenal e itens em geral, podendo filtrá-los por tipo.</li>
+        </ul>
+
+        <hr>
+
+        <h2>2. Equipando e Desequipando Itens</h2>
+        <p>Para equipar um item, basta selecioná-lo na sua lista e clicar no botão de equipar. Lembre-se:</p>
+        <ul>
+            <li><strong>Um por Slot</strong>: Você só pode ter um item equipado por slot (ex: uma arma por vez). Se você equipar uma nova arma, a anterior é automaticamente desequipada.</li>
+        </ul>
+
+        <hr>
+
+        <h2>3. Melhorando seu Equipamento</h2>
+        <p>Existem duas maneiras de tornar seus itens mais poderosos: <strong>Evoluir</strong> e <strong>Refinar</strong>.</p>
+        <h3>Evoluir</h3>
+        <p>Evoluir aumenta o nível do seu item e melhora seus bônus. Para isso, você usa <strong>fragmentos</strong> de itens como experiência.</p>
+        <h3>Refinar</h3>
+        <p>O refino aumenta a raridade do seu item. Ele exige <strong>fragmentos da mesma raridade</strong> e <strong>cristais</strong>. O custo exato é calculado pelo jogo, e você precisa ter os recursos necessários para o refino ser bem-sucedido.</p>
+
+        <hr>
+
+        <h2>4. Criando e Desconstruindo Itens</h2>
+        <h3>Criar Itens</h3>
+        <p>A criação permite construir novos equipamentos a partir de materiais. Cada item tem um custo fixo de <strong>cristais</strong> (baseado na raridade: R: 100, SR: 300, SSR: 600) e <strong>30 fragmentos</strong>. Se você tiver os recursos, o jogo os subtrai e adiciona o novo item ao seu inventário.</p>
+        <h3>Desconstruir Itens</h3>
+        <p>Desconstruir um item o destrói, mas devolve uma parte dos recursos que você investiu nele. O processo custa <strong>400 cristais</strong>.</p>
+        <ul>
+            <li><strong>Retorno</strong>: Você recebe de volta uma porcentagem da XP gasta para evoluir e dos fragmentos usados para refinar o item.</li>
+            <li><strong>Prévia</strong>: É possível ver o retorno de fragmentos e cristais antes de confirmar a desconstrução.</li>
+        </ul>
+
+        <hr>
+
+        <h2>5. Refundindo Itens</h2>
+        <p>A refundição permite que você altere os atributos de um item para obter novos bônus. É uma ótima forma de otimizar seus equipamentos!</p>
+        <ul>
+            <li><strong>Requisitos</strong>: O item precisa ter no mínimo <strong>4 estrelas</strong>.</li>
+            <li><strong>Custo</strong>: Você precisará de <strong>pedras de refundição</strong> (5 pedras para itens de 4 estrelas e 10 para itens de 5 estrelas ou mais).</li>
+            <li><strong>Processo</strong>: O jogo irá gerar novos atributos aleatoriamente. Você pode ver esses novos atributos e escolher se deseja aplicá-los.</li>
+        </ul>
+        <button class="close-btn" id="closeTutorialBtn">Fechar</button>
+        <br><br><br>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('tutorialModal');
+        const openBtn = document.getElementById('openTutorialBtn');
+        const closeBtn = document.getElementById('closeTutorialBtn');
+
+        // Função para abrir o modal
+        function openModal() {
+            modal.style.display = 'flex';
+        }
+
+        // Função para fechar o modal
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Adiciona os eventos de clique
+        if (openBtn) {
+            openBtn.addEventListener('click', openModal);
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+
+        // Opcional: Fechar o modal clicando fora dele
+        window.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+    });
+</script>
+
+
+<div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">
+    <h1 id="maintenance-title">Aviso de Manutenção</h1>
+    <p id="maintenance-message" style="font-size: 1.2em; max-width: 80%;"></p>
+    <p style="font-size: 0.9em; margin-top: 20px;">Obrigado pela sua paciência.</p>
+</div>
+<div id="countdown-banner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; padding: 10px; background-color: rgba(0, 0, 0, 0.9); color: white; text-align: center; z-index: 9999; font-family: Arial, sans-serif; box-shadow: 0 4px 8px rgba(0,0,0,0.3); font-weight: bold;">
+    <div style="font-size: 1.5em; font-weight: bold;">
+        <span id="countdown-timer"></span>
+    </div>
+    <div style="font-size: 0.9em; margin-top: 5px;">
+        O servidor entrará em manutenção dentro de instantes. Por favor, não inicie alguma operação no jogo para não ter risco de perda de dados. Obrigado pela paciência!
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1.3rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+</body>
+</html>

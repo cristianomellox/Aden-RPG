@@ -6,10 +6,10 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
-const RAID_POLL_MS = 2000;
-const BOSS_CHECK_MS = 1000;
+const RAID_POLL_MS = 10000;
 const REVIVE_CHECK_MS = 1000;
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
+const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -33,14 +33,18 @@ const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
 let userId = null, userGuildId = null, userRank = "member", userName = null;
 let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1;
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
-let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, bossCheckInterval = null, reviveTickerInterval = null, countdownInterval = null;
+let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, reviveTickerInterval = null, countdownInterval = null;
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
 
 // --- Variáveis de estado para notificação de morte ---
 let deathNotificationQueue = [];
 let isDisplayingDeathNotification = false;
-let processedDeathTimestamps = new Set(); // ALTERADO: Controle para não exibir mortes repetidas
+let processedDeathTimestamps = new Set(); 
+
+// --- NOVO: Variáveis para o ataque visual do chefe ---
+let visualBossAttackInterval = null;
+let nextBossAttackAt = null;
 
 // Sistema de Fila de Ações e Controle de Mídia
 let actionQueue = [];
@@ -543,7 +547,6 @@ function processDeathNotificationQueue() {
     displayDeathNotification(playerName);
 }
 
-// ALTERADO: Lógica de verificação de mortes totalmente refeita
 async function checkOtherPlayerDeaths() {
     if (!currentRaidId) return;
 
@@ -560,13 +563,13 @@ async function checkOtherPlayerDeaths() {
         }
 
         const allDeaths = raidData.recent_deaths;
-        const newDeaths = allDeaths.filter(death => !processedDeathTimestamps.has(death.timestamp) && death.player_id !== userId);
+        // ALTERADO: Removido '&& death.player_id !== userId' para que a função processe a morte de todos, incluindo a do próprio jogador.
+        const newDeaths = allDeaths.filter(death => !processedDeathTimestamps.has(death.timestamp));
 
         if (newDeaths.length === 0) {
             return;
         }
 
-        // Marcar todas as novas mortes como processadas imediatamente para evitar re-enfileiramento
         newDeaths.forEach(death => processedDeathTimestamps.add(death.timestamp));
         
         const newPlayerIds = newDeaths.map(death => death.player_id);
@@ -583,7 +586,6 @@ async function checkOtherPlayerDeaths() {
 
         const playerNamesMap = new Map(players.map(p => [p.id, p.name]));
         
-        // Adiciona os nomes à fila na ordem correta
         newDeaths.forEach(death => {
             const name = playerNamesMap.get(death.player_id);
             if (name) {
@@ -689,7 +691,6 @@ async function loadRaid() {
     }
 }
 
-// ALTERADO: Limpa o controle de mortes processadas ao carregar a raid
 async function continueLoadingRaid(raidData) {
     currentRaidId = raidData.id;
     currentFloor = raidData.current_floor || 1; 
@@ -711,12 +712,12 @@ async function continueLoadingRaid(raidData) {
 
     deathNotificationQueue = [];
     isDisplayingDeathNotification = false;
-    processedDeathTimestamps.clear(); // Limpa o controle de mortes da raid anterior
+    processedDeathTimestamps.clear(); 
 
     startPolling();
     startUISecondTicker();
     startRaidTimer();
-    startBossChecker();
+    startVisualBossAttackTicker(raidData.last_boss_attack_at);
     startReviveTicker();
     startFloorMusic();
     openCombatModal();
@@ -1021,64 +1022,81 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
   }
 }
 
-async function tryBossAttackForPlayer() {
-  if (!currentRaidId || !userId || isProcessingAction) return;
-  if ((currentFloor % 5) !== 0) return;
-  try {
-    const { data: payload, error } = await supabase.rpc("guild_raid_boss_attack", { p_raid_id: currentRaidId, p_player_id: userId });
-    if (error || !payload?.success) return;
-    if (payload.action === "attacked") {
-      const randomAttackVideo = BOSS_ATTACK_VIDEO_URLS[Math.floor(Math.random() * BOSS_ATTACK_VIDEO_URLS.length)];
-      queueAction(() => {
+// --- NOVO: Lógica para simulação de ataque e sincronização ---
+
+function getSimulatedBossDamage() {
+    // Mesma lógica do backend para o dano base: 2% da vida máxima do monstro.
+    const baseDamage = Math.max(1, Math.floor(maxMonsterHealth * 0.02));
+    // Não simulamos a defesa do jogador, pois o dano é apenas visual.
+    // O HP real será corrigido pelo poll principal de qualquer maneira.
+    return baseDamage;
+}
+
+function simulateLocalBossAttack() {
+    if (isProcessingAction || isPlayerDeadLocal()) return;
+
+    const randomAttackVideo = BOSS_ATTACK_VIDEO_URLS[Math.floor(Math.random() * BOSS_ATTACK_VIDEO_URLS.length)];
+    queueAction(() => {
         playVideo(randomAttackVideo, () => {
-          displayFloatingDamageOver($id("raidPlayerArea"), payload.damage || 0, false);
-          
-          const playerAvatar = $id("raidPlayerAvatar");
-          if (playerAvatar) {
-              playerAvatar.classList.add('shake-animation');
-              setTimeout(() => playerAvatar.classList.remove('shake-animation'), 1000);
-          }
-
-          _playerReviveUntil = payload.player_revive_until || null;
-          updatePlayerHpUi(payload.player_new_hp ?? 0, payload.player_max_health ?? 1);
-          if (_playerReviveUntil && new Date(_playerReviveUntil) > new Date()) {
-            setPlayerReviveOverlayText(Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000));
-          }
-          updateAttackUI();
-          
-          // Verifica se o jogador morreu e adiciona à fila de notificação
-          if (payload.player_new_hp <= 0 && userName) {
-              const timestamp = payload.player_revive_until; 
-              // Garante que a morte do próprio jogador não seja processada duas vezes
-              if (timestamp && !processedDeathTimestamps.has(timestamp)) {
-                processedDeathTimestamps.add(timestamp);
-                deathNotificationQueue.push(userName);
-                processDeathNotificationQueue();
-              }
-          }
+            const visualDamage = getSimulatedBossDamage();
+            displayFloatingDamageOver($id("raidPlayerArea"), visualDamage, false);
+            
+            const playerAvatar = $id("raidPlayerAvatar");
+            if (playerAvatar) {
+                playerAvatar.classList.add('shake-animation');
+                setTimeout(() => playerAvatar.classList.remove('shake-animation'), 1000);
+            }
         });
-      });
-    } else if (payload.action === "evaded") {
-      displayFloatingDamageOver($id("raidPlayerArea"), "Desviou", false);
+    });
+}
+
+function syncBossAttackTimer(lastAttackAtFromServer) {
+    if (!lastAttackAtFromServer) {
+        // Se o chefe nunca atacou, o primeiro ataque será 30s após o início do andar.
+        // Como não temos esse tempo, uma aproximação segura é não agendar nada até o primeiro poll.
+        nextBossAttackAt = null; 
+        return;
     }
-  } catch (e) {
-    console.error("tryBossAttackForPlayer", e);
-  }
+
+    const now = new Date().getTime();
+    const lastAttackTime = new Date(lastAttackAtFromServer).getTime();
+    const intervalMs = BOSS_ATTACK_INTERVAL_SECONDS * 1000;
+
+    const timeSinceLast = now - lastAttackTime;
+    if (timeSinceLast < 0) { // O último ataque está no futuro, relógio dessincronizado?
+        nextBossAttackAt = new Date(lastAttackTime + intervalMs);
+        return;
+    }
+
+    const ticksPassed = Math.floor(timeSinceLast / intervalMs);
+    const nextAttackTimestamp = lastAttackTime + (ticksPassed + 1) * intervalMs;
+    nextBossAttackAt = new Date(nextAttackTimestamp);
 }
 
-function startBossChecker() {
-  stopBossChecker();
-  if (currentFloor % 5 === 0) {
-    bossCheckInterval = setInterval(() => {
-      tryBossAttackForPlayer().catch(()=>{});
-    }, BOSS_CHECK_MS);
-  }
+function startVisualBossAttackTicker(lastAttackAtFromServer) {
+    stopVisualBossAttackTicker();
+    if (currentFloor % 5 !== 0) return;
+
+    syncBossAttackTimer(lastAttackAtFromServer);
+
+    visualBossAttackInterval = setInterval(() => {
+        if (!nextBossAttackAt || isProcessingAction) return;
+
+        if (new Date() >= nextBossAttackAt) {
+            simulateLocalBossAttack();
+            // Agenda o próximo ataque a partir do horário que este deveria ter ocorrido.
+            nextBossAttackAt = new Date(nextBossAttackAt.getTime() + (BOSS_ATTACK_INTERVAL_SECONDS * 1000));
+        }
+    }, 500); // Verificação leve a cada 500ms
 }
 
-function stopBossChecker() {
-  if (bossCheckInterval) clearInterval(bossCheckInterval);
-  bossCheckInterval = null;
+function stopVisualBossAttackTicker() {
+    if (visualBossAttackInterval) clearInterval(visualBossAttackInterval);
+    visualBossAttackInterval = null;
+    nextBossAttackAt = null;
 }
+
+// --- Fim da nova lógica ---
 
 function startReviveTicker() {
   stopReviveTicker();
@@ -1118,7 +1136,7 @@ async function refreshRaidState() {
     } else {
       setRaidTitleFloorAndTimer(data.current_floor || 1, data.ends_at);
       updateHpBar(data.monster_health, data.initial_monster_health || maxMonsterHealth);
-      startBossChecker(); 
+      syncBossAttackTimer(data.last_boss_attack_at);
     }
   } catch (e) {
     console.error("refreshRaidState", e);
@@ -1210,7 +1228,7 @@ function closeCombatModal(){
   stopPolling(); 
   stopUISecondTicker(); 
   clearRaidTimer(); 
-  stopBossChecker(); 
+  stopVisualBossAttackTicker();
   stopReviveTicker();
   stopAllFloorMusic();
   clearCountdown();

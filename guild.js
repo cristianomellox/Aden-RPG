@@ -627,7 +627,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                               <span style="color:orange; font-weight:bold; font-size:1.1em;">${compactPower}</span>
                           </div>
                           <span class="member-level" 
-                                style="font-weight: bold; color: lightblue; padding-left:10px; border-left:2px solid #777; font-size: 1em;">
+                                style="font-weight: bold; color: lightblue; padding-left:10px; border-left:2px solid #777; font-size: 0.8em;">
                                 Nv. ${g.level || 1}
                           </span>
                       </div>

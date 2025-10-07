@@ -1041,7 +1041,7 @@ body {
 }
 #tddimg {
   z-index: 1!important;
-  max-width: 400px;
+  max-width: 360px;
     background: none;
     border-radius: 8px;
     box-shadow: 
@@ -1081,7 +1081,7 @@ body {
     box-shadow: none!important;
     z-index: 2;
 }
-#raidtuto {
+#tddbuttons {
 position: absolute!important;
   z-index: 4;
   top: 130px!important;
@@ -1089,6 +1089,8 @@ position: absolute!important;
     border-radius: none!important;
     box-shadow: none!important;
     left: 12px;
+    gap: 20px;
+    display: flex;
 }
 
 .tdd_h3 {
@@ -1219,7 +1221,7 @@ hr {
   text-align: left;      /* Garante que cada item também seja alinhado à esquerda */
 }
 /* === Correção do modal de tutorial da Raid === */
-#tutorialModalRaid {
+#tutorialModalRaid, #tddModalStory {
   overflow-y: auto!important;
   top: 0 !important;
   width: 97% !important;
@@ -1238,4 +1240,25 @@ hr {
 #tutorialModalRaid .modal-content2 h3,
 #tutorialModalRaid .modal-content2 h4 {
   color: white;
+}
+#tddModalStory .modal-content2 {
+  padding: 0 !important; 
+  margin: 0 !important; 
+  width: 100vw !important;
+  height: 100vh !important; display: block !important; 
+  overflow-y: auto !important; 
+  background: black !important;
+}
+#videoContainer {
+  width: 100% !important;
+  height: 100vh !important; 
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+  
+#tddStoryVideo {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important; 
 }

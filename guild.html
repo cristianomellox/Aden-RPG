@@ -106,7 +106,11 @@
                 <div id="tdd">
                   <h3 class="tdd_h3">Torre da Desolação</h3>
                   <span class="tdd_desc">De Segunda a Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
-                   <img id="raidtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;"> 
+                  <div id="tddbuttons">
+                   <img id="raidtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;">
+                    <img id="tddstory" src="https://aden-rpg.pages.dev/assets/tddstory.webp" style="width:45px; height:45px;">
+                      <img src="https://aden-rpg.pages.dev/assets/tddstart.webp" style="width:45px; height:45px;">
+                   </div>
                 <img id="tddimg" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
       </div>      
 <div id="raidModal" class="modal" style="display:none;">
@@ -410,7 +414,7 @@
 
 
 <div id="tutorialModalRaid" class="modal-overlay2" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content2">
            <center><h3>Guia Completo da Torre da Desolação (Raid)</h3></center>
 <p>A Torre da Desolação (Raid) é um desafio cooperativo onde sua Guilda deve trabalhar em conjunto para derrotar monstros em andares progressivamente mais difíceis e conquistar recompensas.</p>
             <hr>
@@ -420,7 +424,8 @@
 <li><strong>Quem Inicia:</strong> Apenas o <strong>Líder</strong> ou <strong>Co-Líder</strong> da Guilda pode começar a Raid.</li>
 <li><strong>Quando Iniciar:</strong> A Raid só pode ser iniciada de <strong>Segunda a Sexta-feira</strong>.</li>
 <li><strong>Frequência:</strong> Sua Guilda pode iniciar a Raid <strong>apenas uma vez por dia</strong>.</li>
-<li><strong>Preparo:</strong> Ao ser iniciada, a <strong>Vida</strong> de <strong>todos os membros</strong> da Guilda é instantaneamente restaurada ao máximo.</li></ul>
+<li><strong>Preparo:</strong> Ao ser iniciada, a <strong>Vida</strong> de <strong>todos os membros</strong> da Guilda é instantaneamente restaurada ao máximo.<br>
+O tempo de preparação é de 10 minutos.</li></ul>
             <hr>
 <center><h4>2. Ataques e Tentativas</h4></center>
 <p>Sua capacidade de ataque é limitada e se recupera com o tempo.</p>
@@ -446,9 +451,26 @@
 <li><strong>Fim da Raid:</strong> A Torre da Desolação é concluída após o <strong>Andar 40</strong> ou após o tempo de <strong>1 hora</strong>.</li>
 </ul>
 <p>Acompanhe sua vida e use seus ataques com sabedoria para maximizar sua contribuição! </p>
-<center> <button id="closeRaidTutorialBtn" class="action-btn">Fechar</button></center>
+<center><button id="closeRaidTutorialBtn" class="action-btn">Fechar</button></center>
         </div>
     </div>
+    <div id="tddModalStory" class="modal-overlay2" style="display: none;">
+    <div class="modal-content2">
+        <div id="videoContainer">
+            <iframe 
+                id="tddStoryVideo"
+                width="100%" 
+                height="100%" 
+                src="https://www.youtube.com/embed/170dw1ciqAk?autoplay=0&controls=1&modestbranding=1&rel=0" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" 
+                allowfullscreen>
+            </iframe>
+        </div>
+        
+        <center><button id="closetddstoryBtn" class="action-btn">Fechar</button></center>       
+    </div>
+</div>
     
      <script>
         document.addEventListener("DOMContentLoaded", () => {
@@ -477,6 +499,36 @@
             }
         });
     </script>
+
+  <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const tddstory = document.getElementById("tddstory");
+            const tddstorymodal = document.getElementById("tddModalStory");
+            const closetddstoryBtn = document.getElementById("closetddstoryBtn");
+
+            if (tddstory) {
+                tddstory.addEventListener("click", () => {
+                    tddstorymodal.style.display = "flex";
+                });
+            }
+
+            if (closetddstoryBtn) {
+                closetddstoryBtn.addEventListener("click", () => {
+                    tddstorymodal.style.display = "none";
+                });
+            }
+
+            if (tddstorymodal) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tddstorymodal) {
+                        tddstorymodal.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
+
+
 
 
 

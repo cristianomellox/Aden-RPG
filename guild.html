@@ -30,7 +30,7 @@
     <div id="mainContainer">
         <div id="tabMenu">
             <span class="tab-btn active" data-tab="guilda">Guilda</span>
-            <span class="tab-btn" data-tab="sala">Sala</span>
+            <span class="tab-btn" data-tab="taverna">Taverna</span>
             <span class="tab-btn" data-tab="ranking">Ranking</span>
             <span class="tab-btn" data-tab="raid">Raid</span>
             <span class="tab-btn" data-tab="batalhas">Batalhas</span>
@@ -87,8 +87,18 @@
                 </div>
             </div>
 </div>
-            <div id="sala" class="tab-pane">
-                <p>Conteúdo da Sala será adicionado aqui.</p>
+            <div id="taverna" class="tab-pane">
+                <div id="tavernContainer">
+  <h3 id="tavernTitle"></h3>
+  <div id="tavernSeats" class="tavern-seats"></div>
+  <div id="tavernListeners"></div>
+  <div id="tavernChat" class="tavern-chat"></div>
+  <div id="tavernChatInput">
+    <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem...">
+    <button id="tavernSendBtn">Enviar</button>
+  </div>
+</div>
+
             </div>
 
             <div id="ranking" class="tab-pane">
@@ -597,6 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <script src="guild.js"></script>
     <script src="playerModal.js"></script>
     <script src="guild_raid.js"></script>
+<script src="guild_tavern.js"></script>
 
 </body>
 </html>

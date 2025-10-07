@@ -102,9 +102,11 @@
             <div id="raid" class="tab-pane" style="background: none;">
               <center><h3>Raid de Guilda</h3></center>
               <div id="raid_1">
+               
                 <div id="tdd">
                   <h3 class="tdd_h3">Torre da Desolação</h3>
                   <span class="tdd_desc">De Segunda a Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
+                   <img id="raidtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;"> 
                 <img id="tddimg" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
       </div>      
 <div id="raidModal" class="modal" style="display:none;">
@@ -406,6 +408,75 @@
   </div>
 </div>
 
+
+<div id="tutorialModalRaid" class="modal-overlay2" style="display: none;">
+        <div class="modal-content">
+           <center><h3>Guia Completo da Torre da Desolação (Raid)</h3></center>
+<p>A Torre da Desolação (Raid) é um desafio cooperativo onde sua Guilda deve trabalhar em conjunto para derrotar monstros em andares progressivamente mais difíceis e conquistar recompensas.</p>
+            <hr>
+<center><h4>1. Início da Raid</h4></center>
+<p>A Raid não é automática. Ela precisa ser iniciada por alguém na sua Guilda.</p>
+<ul>
+<li><strong>Quem Inicia:</strong> Apenas o <strong>Líder</strong> ou <strong>Co-Líder</strong> da Guilda pode começar a Raid.</li>
+<li><strong>Quando Iniciar:</strong> A Raid só pode ser iniciada de <strong>Segunda a Sexta-feira</strong>.</li>
+<li><strong>Frequência:</strong> Sua Guilda pode iniciar a Raid <strong>apenas uma vez por dia</strong>.</li>
+<li><strong>Preparo:</strong> Ao ser iniciada, a <strong>Vida</strong> de <strong>todos os membros</strong> da Guilda é instantaneamente restaurada ao máximo.</li></ul>
+            <hr>
+<center><h4>2. Ataques e Tentativas</h4></center>
+<p>Sua capacidade de ataque é limitada e se recupera com o tempo.</p>
+<ul>
+<li><strong>Limite de Ataques:</strong> Você pode acumular um máximo de <strong>3 ataques</strong> disponíveis de uma vez.</li>
+<li><strong>Recuperação:</strong> Você recupera <strong>1 ataque</strong> a cada <strong>60 segundos</strong> (1 minuto).</li>
+<li><strong>Comprando Ataques Extras (Ouro):</strong> O preço aumenta progressivamente a cada 5 ataques comprados no dia. O custo reseta diariamente.</li>
+</ul>
+<hr>
+<center><h4>3. Batalhas de Chefe e Morte</h4></center>
+<p>A cada 5 andares, você enfrentará um Chefe (Boss) que luta de volta.</p>
+<ul>
+<li><strong>Andares de Chefe:</strong> O Boss aparece nos andares múltiplos de 5 (Andar 5, Andar 10, etc.).</li>
+<li><strong>Ataque do Chefe:</strong> O Boss ataca <strong>todos</strong> os jogadores ativos na Raid a cada <strong>30 segundos</strong>.</li>
+<li><strong>Morte em Raid e Reviver:</strong> Se sua <strong>Vida</strong> chegar a zero, você é derrotado. Após um período de espera, sua Vida é restaurada ao máximo, permitindo que você retorne.</li>
+</ul>
+<hr>
+<center><h4>4. Recompensas e Progresso</h4></center>
+<p>O trabalho em equipe é a chave para as recompensas e o avanço.</p>
+<ul>
+<li><strong>Recompensas:</strong> Você recebe <strong>Cristais</strong> e <strong>Experiência (XP)</strong> proporcionais ao seu dano total no monstro.<br>A guilda também ganha XP.<br>Há chance de receber outros <strong>Itens</strong> como recompensa.</li>
+<li><strong>Avanço:</strong> Após derrotar o monstro, o ranking de dano é zerado e a Guilda avança para o próximo andar.</li>
+<li><strong>Fim da Raid:</strong> A Torre da Desolação é concluída após o <strong>Andar 40</strong> ou após o tempo de <strong>1 hora</strong>.</li>
+</ul>
+<p>Acompanhe sua vida e use seus ataques com sabedoria para maximizar sua contribuição! </p>
+<center> <button id="closeRaidTutorialBtn" class="action-btn">Fechar</button></center>
+        </div>
+    </div>
+    
+     <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const raidtutoImg = document.getElementById("raidtuto");
+            const tutorialModal = document.getElementById("tutorialModalRaid");
+            const closeRaidTutorialBtn = document.getElementById("closeRaidTutorialBtn");
+
+            if (raidtutoImg) {
+                raidtutoImg.addEventListener("click", () => {
+                    tutorialModalRaid.style.display = "flex";
+                });
+            }
+
+            if (closeRaidTutorialBtn) {
+                closeRaidTutorialBtn.addEventListener("click", () => {
+                    tutorialModalRaid.style.display = "none";
+                });
+            }
+
+            if (tutorialModalRaid) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tutorialModalRaid) {
+                        tutorialModalRaid.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
 
 
 

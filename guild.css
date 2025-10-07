@@ -1040,6 +1040,7 @@ body {
   background-color: black;
 }
 #tddimg {
+  z-index: 1!important;
   max-width: 400px;
     background: none;
     border-radius: 8px;
@@ -1057,11 +1058,10 @@ body {
 }
 #tdd {
   position: relative!important;
-  width:100%;
-  height: 100%;
   display: flex;
   align-items: center!important;
   justify-content: center!important;
+  z-index: 2!important;
 }
 
 .tdd_desc {
@@ -1075,10 +1075,20 @@ body {
     0 0 4px black;
   position: absolute!important;
   margin-left: -120px!important;
-  top: 50px!important;
+  top: 40px!important;
   background: none!important;
     border-radius: none!important;
     box-shadow: none!important;
+    z-index: 2;
+}
+#raidtuto {
+position: absolute!important;
+  z-index: 4;
+  top: 130px!important;
+  background: none!important;
+    border-radius: none!important;
+    box-shadow: none!important;
+    left: 12px;
 }
 
 .tdd_h3 {
@@ -1094,6 +1104,7 @@ font-size: 0.9em;
   text-align: left;
   margin-left: -100px;
   top: -10px;
+  z-index: 2;
 }
 #raidCombatModal .modal-content {
 background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/tdd_andar.webp');
@@ -1206,4 +1217,25 @@ hr {
 
 #raidDamageRankingList li {
   text-align: left;      /* Garante que cada item também seja alinhado à esquerda */
+}
+/* === Correção do modal de tutorial da Raid === */
+#tutorialModalRaid {
+  overflow-y: auto!important;
+  top: 0 !important;
+  width: 97% !important;
+  height: 100vh !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%) !important; 
+  z-index: 13000 !important;
+}
+
+#tutorialModalRaid .modal-content2 p,
+#tutorialModalRaid .modal-content2 li {
+  text-align: left !important;
+  color: white;
+}
+#tutorialModalRaid .modal-content2 h3,
+#tutorialModalRaid .modal-content2 h4 {
+  color: white;
 }

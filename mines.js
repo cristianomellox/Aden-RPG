@@ -112,17 +112,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   let hasAttackedOnce = false;
 
-let sessionCheckInterval = null;
+  let sessionCheckInterval = null;
 
-async function checkExpiredSessions() {
-  if (!userId) return;
-  try {
-    const { error } = await supabase.rpc("resolve_expired_mine_sessions", { p_player_id: userId });
-    if (error) console.warn("[mines] checkExpiredSessions erro:", error.message);
-  } catch (e) {
-    console.error("[mines] checkExpiredSessions exception:", e);
+  async function checkExpiredSessions() {
+    if (!userId) return;
+    try {
+      const { error } = await supabase.rpc("resolve_expired_mine_sessions", { p_player_id: userId });
+      if (error) console.warn("[mines] checkExpiredSessions erro:", error.message);
+    } catch (e) {
+      console.error("[mines] checkExpiredSessions exception:", e);
+    }
   }
-}
 
   
   // --- Controladores de auto-refresh de minas ---
@@ -201,7 +201,7 @@ async function checkExpiredSessions() {
   const buyAttackQtySpan = document.getElementById("buyAttackQty");
   const buyAttackCostInfo = document.getElementById("buyAttackCostInfo");
   const buyDecreaseQtyBtn = document.getElementById("buyDecreaseQtyBtn");
-  const buyIncreaseQtyBtn = document = document.getElementById("buyIncreaseQtyBtn");
+  const buyIncreaseQtyBtn = document.getElementById("buyIncreaseQtyBtn");
   const buyCancelBtn = document.getElementById("buyCancelBtn");
   const buyConfirmBtn = document.getElementById("buyConfirmBtn");
 
@@ -616,6 +616,64 @@ async function checkExpiredSessions() {
       console.warn("[mines] updatePlayerAttacksUI:", e?.message || e);
     }
   }
+  
+  // --- NOVA FUNÇÃO: Guilda Dominante ---
+  async function updateDominantGuild(mines, ownersMap) {
+      const guilddomSpan = document.getElementById("guilddom");
+      if (!guilddomSpan) return;
+
+      const guildCounts = {};
+      
+      // Itera sobre as minas para contar quantos donos cada guilda tem
+      for (const mine of mines) {
+          if (mine.owner_player_id) {
+              const owner = ownersMap[mine.owner_player_id];
+              if (owner && owner.guild_id) {
+                  guildCounts[owner.guild_id] = (guildCounts[owner.guild_id] || 0) + 1;
+              }
+          }
+      }
+
+      let dominantGuildId = null;
+      let maxMines = 0;
+
+      // Encontra a guilda com o maior número de minas
+      for (const guildId in guildCounts) {
+          if (guildCounts[guildId] > maxMines) {
+              maxMines = guildCounts[guildId];
+              dominantGuildId = guildId;
+          }
+      }
+
+      if (dominantGuildId) {
+          try {
+              // Busca os detalhes da guilda dominante
+              const { data: guild, error } = await supabase
+                  .from('guilds')
+                  .select('name, flag_url')
+                  .eq('id', dominantGuildId)
+                  .single();
+
+              if (error) throw error;
+              
+              if (guild) {
+                  const flagUrl = guild.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+                  guilddomSpan.innerHTML = `
+                      <img src="${esc(flagUrl)}" style="width:50px; height:50px; border-radius: 4px; vertical-align: middle; margin-right: 8px;">
+                      <span style="font-weight: bold; color: yellow;">${esc(guild.name)}</span>
+                  `;
+              } else {
+                  guilddomSpan.textContent = 'Nenhuma.';
+              }
+          } catch (e) {
+              console.warn("[mines] Erro ao buscar guilda dominante:", e);
+              guilddomSpan.textContent = 'Nenhuma.';
+          }
+      } else {
+          guilddomSpan.textContent = 'Nenhuma.';
+      }
+  }
+
 
   // --- Carregar minas + finalizar combates expirados ---
   async function loadMines() {
@@ -641,12 +699,16 @@ async function checkExpiredSessions() {
       const ownerIds = Array.from(new Set((mines || []).map(m => m.owner_player_id).filter(Boolean)));
       const ownersMap = {};
       if (ownerIds.length) {
-        const { data: ownersData, error: ownersError } = await supabase.from("players").select("id, name, avatar_url").in("id", ownerIds);
+        const { data: ownersData, error: ownersError } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
         if (ownersError) throw ownersError;
         (ownersData || []).forEach(p => ownersMap[p.id] = p);
       }
 
       renderMines(mines || [], ownersMap);
+      
+      // Chama a nova função para atualizar a guilda dominante
+      await updateDominantGuild(mines || [], ownersMap);
+
       await checkForNewPvpLogs();
       await updatePVPAttemptsUI();
       await updatePlayerMineUI();

@@ -623,7 +623,13 @@ p {
     color: white; /* Cor azul claro para destaque */
     font-size: 1.4em;
     font-weight: bold;
-    text-shadow: 1px 1px 2px #000;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
     animation: damage-animation 2s forwards; /* Reutiliza a animação existente */
 }
 

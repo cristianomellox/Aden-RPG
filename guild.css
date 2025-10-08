@@ -1402,3 +1402,12 @@ hr {
   padding: 4px 6px;
   font-size: 0.65em;
 }
+.tavern-popover .pop-item {
+  color: white;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.tavern-popover .pop-item:hover {
+  background: rgba(201,169,74,0.3);
+}

@@ -30,8 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Variáveis de Estado ---
     let userId = null;
     let guildId = null;
+    let userRole = 'member';
+    let myPlayerData = {}; // NOVO: Armazena dados como nome e avatar para uso na UI
     let currentRoom = null;
-    let myMemberInfo = null; // { player_id, seat_number, ... }
+    let myMemberInfo = null;
     let joined = false;
 
     let statePollId = null;
@@ -49,23 +51,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return false;
         userId = session.user.id;
-        const { data: player } = await supabase.from('players').select('guild_id').eq('id', userId).single();
+        const { data: player } = await supabase.from('players').select('guild_id, rank, name, avatar_url').eq('id', userId).single();
         if (!player) return false;
         guildId = player.guild_id;
+        userRole = player.rank;
+        myPlayerData = { name: player.name, avatar_url: player.avatar_url }; // Salva dados do jogador
         return true;
     }
 
     async function ensureRoom() {
         const { data } = await supabase.from('tavern_rooms').select('*').eq('guild_id', guildId).limit(1);
-        currentRoom = (data && data.length) ? data[0] : (await supabase.rpc('create_tavern_room', { p_guild_id: guildId, p_name: 'Taverna', p_open: false })).data[0];
+        if (data && data.length) {
+            currentRoom = data[0];
+        } else {
+            const { data: created } = await supabase.rpc('create_tavern_room', { p_guild_id: guildId, p_name: 'Taverna', p_open: false });
+            currentRoom = created[0];
+        }
     }
 
     async function joinRoom() {
         if (!currentRoom || joined) return;
         joined = true;
-
         await supabase.rpc('join_tavern_room', { p_room_id: currentRoom.id, p_player_id: userId });
-
         tActiveArea.style.display = 'block';
         tSendBtn.disabled = false;
         startPolling();
@@ -74,7 +81,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function leaveRoom() {
         if (!currentRoom || !joined) return;
         await supabase.rpc('leave_tavern_room', { p_room_id: currentRoom.id, p_player_id: userId });
-
         joined = false;
         stopPolling();
         cleanupAll();
@@ -82,51 +88,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         tSendBtn.disabled = true;
     }
 
+    // ALTERADO: A função agora só envia o comando para o servidor.
     async function moveSeat(seatNumber) {
         if (!joined) return;
-        // Se o seatNumber for nulo, significa "Sair do Assento"
+        // Não chama mais pollForState daqui.
         await supabase.rpc('move_tavern_seat', { p_room_id: currentRoom.id, p_player_id: userId, p_new_seat: seatNumber });
-        // O poll de estado vai cuidar do resto
     }
 
     // --- Lógica de Polling ---
-
     function startPolling() {
-        // Poll rápido para sinais WebRTC
-        signalPollId = setInterval(pollForSignals, 4000); // 4 segundos
-        // Poll mais lento para estado geral (membros e chat)
-        statePollId = setInterval(pollForState, 15000); // 15 segundos
-        // Executa uma vez imediatamente para carregar o estado inicial
+        stopPolling();
+        signalPollId = setInterval(pollForSignals, 4000);
+        statePollId = setInterval(pollForState, 15000);
         pollForState();
     }
 
     function stopPolling() {
         clearInterval(signalPollId);
         clearInterval(statePollId);
-        signalPollId = null;
-        statePollId = null;
     }
-
+    
     async function pollForState() {
         if (!joined) return;
-        
-        // 1. Buscar todos os membros na sala
         const { data: members } = await supabase.from('tavern_members').select('*').eq('room_id', currentRoom.id);
         if (!members) return;
 
+        const oldSeat = myMemberInfo?.seat_number;
         myMemberInfo = members.find(m => m.player_id === userId);
-        if (!myMemberInfo) { // Fui kickado ou saí
-            leaveRoom();
+        
+        if (!myMemberInfo) {
+            if (joined) leaveRoom();
             return;
         }
 
-        // 2. Renderizar a UI
-        await renderUI(members);
-
-        // 3. Atualizar conexões WebRTC com base no estado atual
-        await updateConnections(members);
+        // Se o poll detectar uma mudança de assento, atualiza as conexões
+        if (oldSeat !== myMemberInfo.seat_number) {
+            await updateConnections(members);
+        }
         
-        // 4. Atualizar chat de texto
+        await renderUI(members);
         await updateChat();
     }
 
@@ -142,20 +142,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     }
-    
+
     // --- Lógica WebRTC ---
-
     async function updateConnections(members) {
-        const amISpeaker = myMemberInfo && myMemberInfo.seat_number != null;
+        if (!myMemberInfo) return;
+        const amISpeaker = myMemberInfo.seat_number != null;
 
-        // Ativa/desativa microfone conforme o papel
         if (amISpeaker && !localStream) {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (err) {
                 console.warn('Permissão de microfone negada.', err);
-                // Força o usuário a sair do assento se negar o microfone
                 await moveSeat(null);
+                return; // Importante sair aqui para evitar mais processamento
             }
         } else if (!amISpeaker && localStream) {
             localStream.getTracks().forEach(track => track.stop());
@@ -163,27 +162,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const speakers = members.filter(m => m.seat_number != null);
-
-        // Para quem eu devo me conectar?
-        let peersToConnect = [];
-        if (amISpeaker) {
-            // Locutores se conectam a outros locutores
-            peersToConnect = speakers.filter(s => s.player_id !== userId);
-        } else {
-            // Ouvintes se conectam a todos os locutores
-            peersToConnect = speakers;
-        }
-        
+        let peersToConnect = amISpeaker ? speakers.filter(s => s.player_id !== userId) : speakers;
         const peerIdsToConnect = new Set(peersToConnect.map(p => p.player_id));
 
-        // Criar conexões para novos peers
         for (const peer of peersToConnect) {
             if (!peerConnections[peer.player_id]) {
-                createPeerConnection(peer.player_id, true); // Sou o iniciador
+                createPeerConnection(peer.player_id, true);
             }
         }
         
-        // Remover conexões de peers que saíram ou mudaram de papel
         for (const existingPeerId in peerConnections) {
             if (!peerIdsToConnect.has(existingPeerId)) {
                 peerConnections[existingPeerId]?.close();
@@ -193,14 +180,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     }
-
+    
+    // (O resto da lógica WebRTC como createPeerConnection e handleSignal permanece a mesma)
     function createPeerConnection(peerId, isInitiator) {
         if (peerConnections[peerId]) return;
-
         const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
         peerConnections[peerId] = pc;
 
-        // Adiciona stream local APENAS se eu for um locutor
         if (localStream) {
             localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
         }
@@ -245,7 +231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let pc = peerConnections[peerId];
         
         if (signal.type === 'offer' && !pc) {
-            createPeerConnection(peerId, false); // Não sou o iniciador
+            createPeerConnection(peerId, false);
             pc = peerConnections[peerId];
         }
 
@@ -270,28 +256,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Funções de UI e Limpeza ---
+    function renderControls() {
+        const canManage = userRole === 'leader' || userRole === 'co-leader';
+        let adminButtonHtml = '';
+        if (canManage && currentRoom) {
+            const buttonText = currentRoom.is_open_to_all ? 'Aberta a Todos' : 'Somente Guilda';
+            adminButtonHtml = `<button id="toggleOpenBtn" class="action-btn">${buttonText}</button>`;
+        }
+
+        tControls.innerHTML = `
+            <button id="joinTavernBtn" class="action-btn">Entrar na Taverna</button>
+            <button id="leaveTavernBtn" class="action-btn">Sair</button>
+            ${adminButtonHtml}
+        `;
+
+        document.getElementById('joinTavernBtn').onclick = joinRoom;
+        document.getElementById('leaveTavernBtn').onclick = leaveRoom;
+        if (canManage) {
+            document.getElementById('toggleOpenBtn').onclick = async () => {
+                const newStatus = !currentRoom.is_open_to_all;
+                await supabase.rpc('toggle_tavern_room_open', { p_room_id: currentRoom.id, p_open: newStatus });
+                currentRoom.is_open_to_all = newStatus;
+                renderControls();
+            };
+        }
+    }
 
     async function renderUI(members) {
+        // A lógica de renderização principal não muda.
         tSeats.innerHTML = '';
         const playersData = (await supabase.from('players').select('id, name, avatar_url').in('id', members.map(m => m.player_id))).data;
+        if (!playersData) return;
         const playersMap = new Map(playersData.map(p => [p.id, p]));
-
         const memberMap = new Map(members.map(m => [m.seat_number, m]));
 
         for (let i = 1; i <= 15; i++) {
             const el = document.createElement('div');
             el.className = 'tavern-seat';
             el.dataset.seat = i;
-
             const member = memberMap.get(i);
-            if (member) { // Assento Ocupado
+            if (member) {
                 const player = playersMap.get(member.player_id);
                 el.innerHTML = `<img src="${player?.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" alt="${player?.name}" /><div class="seat-number">${i}</div>`;
                 if (member.player_id === userId) {
                     el.classList.add('my-seat');
                     el.title = "Sair do assento";
                 }
-            } else { // Assento Livre
+            } else {
                 el.classList.add('empty');
                 el.innerHTML = `<div class="seat-number">${i}</div><div style="color:white;opacity:.6;">Livre</div>`;
             }
@@ -309,7 +320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 div.innerHTML = `<img src="${m.player_avatar || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" /><div><b>${m.player_name}</b><div class="bubble">${m.message}</div></div>`;
                 tChat.appendChild(div);
             });
-            if(tChat.scrollHeight - tChat.scrollTop < tChat.clientHeight + 100) {
+            if(tChat.scrollHeight - tChat.scrollTop < tChat.clientHeight + 150) {
                 tChat.scrollTop = tChat.scrollHeight;
             }
         }
@@ -329,23 +340,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Handlers de Eventos ---
 
+    // ALTERADO: Lógica de Atualização Otimista
     tSeats.onclick = async (ev) => {
         const seatEl = ev.target.closest('.tavern-seat');
         if (!seatEl) return;
-
+    
+        const myCurrentSeatEl = tSeats.querySelector('.my-seat');
+        const seatNumber = parseInt(seatEl.dataset.seat);
+    
         if (seatEl.classList.contains('my-seat')) {
-            await moveSeat(null); // Sair do assento
+            // Sair do assento
+            if (myCurrentSeatEl) {
+                myCurrentSeatEl.classList.remove('my-seat');
+                myCurrentSeatEl.classList.add('empty');
+                myCurrentSeatEl.innerHTML = `<div class="seat-number">${myCurrentSeatEl.dataset.seat}</div><div style="color:white;opacity:.6;">Livre</div>`;
+            }
+            // Envia o comando em segundo plano
+            moveSeat(null).then(() => pollForState());
+    
         } else if (seatEl.classList.contains('empty')) {
-            const num = parseInt(seatEl.dataset.seat);
-            await moveSeat(num); // Entrar em um assento
+            // Sair do assento antigo, se houver
+            if (myCurrentSeatEl) {
+                myCurrentSeatEl.classList.remove('my-seat');
+                myCurrentSeatEl.classList.add('empty');
+                myCurrentSeatEl.innerHTML = `<div class="seat-number">${myCurrentSeatEl.dataset.seat}</div><div style="color:white;opacity:.6;">Livre</div>`;
+            }
+            // Entrar no novo assento
+            seatEl.classList.remove('empty');
+            seatEl.classList.add('my-seat');
+            seatEl.innerHTML = `<img src="${myPlayerData.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" alt="${myPlayerData.name}" /><div class="seat-number">${seatNumber}</div>`;
+            seatEl.title = "Sair do assento";
+            // Envia o comando em segundo plano
+            moveSeat(seatNumber).then(() => pollForState());
         }
     };
 
     tSendBtn.onclick = async () => {
         const txt = tMessageInput.value.trim();
         if (!txt || !joined) return;
-        const { data: p } = await supabase.from('players').select('name, avatar_url').eq('id', userId).single();
-        await supabase.rpc('post_tavern_message', { p_room_id: currentRoom.id, p_player_id: userId, p_player_name: p.name, p_player_avatar: p.avatar_url, p_message: txt });
+        await supabase.rpc('post_tavern_message', { p_room_id: currentRoom.id, p_player_id: userId, p_player_name: myPlayerData.name, p_player_avatar: myPlayerData.avatar_url, p_message: txt });
         tMessageInput.value = '';
         await updateChat();
     };
@@ -358,9 +391,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await ensureRoom();
         tTitle.textContent = currentRoom?.name || 'Taverna';
-        tControls.innerHTML = `<button id="joinTavernBtn" class="action-btn">Entrar na Taverna</button><button id="leaveTavernBtn" class="action-btn">Sair</button>`;
-        document.getElementById('joinTavernBtn').onclick = joinRoom;
-        document.getElementById('leaveTavernBtn').onclick = leaveRoom;
+        renderControls();
     }
 
     initialize();

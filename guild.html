@@ -88,16 +88,23 @@
             </div>
 </div>
             <div id="taverna" class="tab-pane">
-                <div id="tavernContainer">
+               <div id="tavernContainer" class="tavern-container">
   <h3 id="tavernTitle"></h3>
-  <div id="tavernSeats" class="tavern-seats"></div>
-  <div id="tavernListeners"></div>
-  <div id="tavernChat" class="tavern-chat"></div>
-  <div id="tavernChatInput">
-    <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem...">
-    <button id="tavernSendBtn">Enviar</button>
+  <div id="tavernControls" style="margin-bottom:8px;"></div>
+
+  <!-- Área ativa da Taverna (escondida até entrar) -->
+  <div id="tavernActiveArea" style="display:none;">
+    <div id="tavernSeats" class="tavern-seats"></div>
+    <div id="tavernListeners"></div>
+
+    <div id="tavernChat" class="tavern-chat"></div>
+    <div id="tavernChatInput">
+      <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem..." />
+      <button id="tavernSendBtn" disabled>Enviar</button>
+    </div>
   </div>
 </div>
+
 
             </div>
 
@@ -601,13 +608,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-
+ <script src="guild_raid.js"></script>
 <script src="loading.js"></script>
    <script src="number_format.js"></script>
     <script src="guild.js"></script>
     <script src="playerModal.js"></script>
-    <script src="guild_raid.js"></script>
-<script src="guild_tavern.js"></script>
+   
+<script defer src="guild_tavern.js"></script>
+
 
 </body>
 </html>

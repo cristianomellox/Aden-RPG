@@ -99,14 +99,17 @@
 
     <div id="tavernChat" class="tavern-chat"></div>
     <div id="tavernChatInput">
-      <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem..." />
+      <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem..." maxlength="200" />
       <button id="tavernSendBtn" disabled>Enviar</button>
     </div>
   </div>
 </div>
-
-
             </div>
+            
+            <div id="tavernPopoverTemplate" style="display: none; position: absolute; background: #333; border: 1px solid #555; border-radius: 8px; z-index: 100;" class="tavern-popover">
+    </div>
+    
+    
 
             <div id="ranking" class="tab-pane">
               <center>  <h3>Ranking das Guildas</h3>

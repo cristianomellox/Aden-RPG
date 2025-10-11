@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!currentRoom || joined) return;
         
         try {
-            await supabase.rpc('cleanup_inactive_tavern_members');
+            await supabase.rpc('cleanup_inactive_ tavern_members');
             await supabase.rpc('cleanup_old_tavern_signals');
             await supabase.rpc('cleanup_old_tavern_messages');
         } catch(e) {
@@ -222,9 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const { data: members } = await supabase.from('tavern_members').select('*').eq('room_id', currentRoom.id);
         if (!members) return;
-
-        // **MODIFICAÇÃO AQUI**
-        // Atualiza o contador no botão usando a lista já carregada pelo polling.
+        
         if (tMembersCount) {
             tMembersCount.textContent = members.length;
         }
@@ -242,8 +240,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        if (oldSeat !== myMemberInfo.seat_number || oldMuteStatus !== myMemberInfo.is_muted) {
-            await updateConnections(members);
+        // CORREÇÃO: Verifica se o meu status de mudo ou assento mudou para forçar a reconstrução da conexão
+        const myStateChanged = oldSeat !== myMemberInfo.seat_number || oldMuteStatus !== myMemberInfo.is_muted;
+        if (myStateChanged) {
+            // O segundo parâmetro `true` força a renegociação de todas as conexões
+            await updateConnections(members, true);
         }
         
         await renderUI(members);
@@ -264,8 +265,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // --- Lógica WebRTC e UI ---
-    async function updateConnections(members) {
+    async function updateConnections(members, forceRenegotiate = false) {
         if (!myMemberInfo) return;
+
+        // CORREÇÃO: Se forçado, derruba todas as conexões existentes para recriá-las
+        if (forceRenegotiate) {
+            for (const peerId in peerConnections) {
+                peerConnections[peerId]?.close();
+                const audioEl = document.getElementById(`audio-${peerId}`);
+                if (audioEl) audioEl.remove();
+            }
+            peerConnections = {};
+        }
+
         const amISpeaker = myMemberInfo.seat_number != null && !myMemberInfo.is_muted;
 
         if (amISpeaker && !localStream) {
@@ -603,11 +615,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             mySeatEl.innerHTML = `<div class="seat-number" style="bottom: 1px;">${mySeatEl.dataset.seat}</div><div style="color:white;opacity:.6;">Livre</div>`;
         }
         await moveSeat(null);
-        pollForState(); // Força a atualização do estado
+        pollForState();
     }
     
     async function handleMute(targetId, shouldMute, seatEl) {
-        // Atualização visual instantânea
         const img = seatEl.querySelector('img');
         const existingIcon = seatEl.querySelector('.mute-icon');
 
@@ -627,20 +638,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         await supabase.rpc('mute_tavern_member', { p_room_id: currentRoom.id, p_target_player_id: targetId, p_mute: shouldMute });
-        pollForState(); // AJUSTE 1: Força a atualização do estado
+        pollForState();
     }
 
     async function handleKick(targetId) {
         await supabase.rpc('kick_tavern_member', { p_room_id: currentRoom.id, p_target_player_id: targetId });
         showNotification("Jogador removido da Taverna.", 3000);
-        pollForState(); // Força a atualização do estado
+        pollForState();
     }
 
     tSendBtn.onclick = async () => {
         const txt = tMessageInput.value.trim();
         if (!txt || !joined) return;
 
-        // Atualização otimista: mostra a mensagem na UI imediatamente
         const div = document.createElement('div');
         div.className = 'tavern-message';
         div.innerHTML = `<img src="${myPlayerData.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" /><div><b>${myPlayerData.name}</b><div class="bubble">${txt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div></div>`;
@@ -651,7 +661,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         tMessageInput.value = '';
 
         try {
-            // AJUSTE 2: Captura o retorno da chamada para atualizar o timestamp
             const { data: newMessages, error } = await supabase.rpc('post_tavern_message', { 
                 p_room_id: currentRoom.id, 
                 p_player_id: userId, 
@@ -662,17 +671,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (error) throw error;
             
-            // Atualiza o timestamp local com o do servidor, prevenindo duplicatas
             if (newMessages && newMessages.length > 0) {
                 lastMessageTimestamp = newMessages[0].created_at;
             }
 
         } catch(e) {
             console.error("Falha ao enviar mensagem:", e);
-            // Em caso de falha, remove a mensagem otimista
             div.remove();
             showNotification("Sua mensagem não pôde ser enviada.", 3000);
-            tMessageInput.value = messageToSend; // Devolve o texto ao input
+            tMessageInput.value = messageToSend;
         }
     };
     
@@ -701,9 +708,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tMembersList.innerHTML = `<li>Erro ao carregar lista: ${error.message}</li>`;
                 return;
             }
-
-            // A contagem no botão principal já é atualizada pelo pollForState,
-            // mas manter aqui garante que o número esteja certo no momento do clique, caso haja um delay.
+            
             if (tMembersCount) {
                  tMembersCount.textContent = data.length;
             }

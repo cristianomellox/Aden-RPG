@@ -28,6 +28,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tAudioContainer = document.getElementById('tavernListeners');
     const tNotifContainer = document.getElementById('tavernNotificationContainer') || document.body;
     const tPopoverTemplate = document.getElementById('tavernPopoverTemplate');
+    
+    // --- Novas Referências do DOM (para o Modal de Membros) ---
+    const tShowMembersBtn = document.getElementById('showMembersBtn');
+    const tMembersCount = document.getElementById('membersCount');
+    const tMembersModal = document.getElementById('membersModal');
+    const tCloseMembersModal = document.getElementById('closeMembersModal');
+    const tMembersList = document.getElementById('membersList');
 
 
     // --- Variáveis de Estado ---
@@ -54,7 +61,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Funções de UX ---
     function showNotification(message, duration = 5000) {
-        // (código existente sem alterações)
         const notifEl = document.createElement('div');
         notifEl.className = 'tavern-notification';
         notifEl.textContent = message;
@@ -71,7 +77,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, duration);
     }
 
-    // ALTERADO: Shimmer com cronômetro de 60 segundos
     function showShimmerOverlay() {
         const existingShimmer = document.getElementById('shimmerOverlay');
         if (existingShimmer) existingShimmer.remove();
@@ -93,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         let countdown = 60;
         const updateTimer = () => {
-            textSpan.textContent = `Estabelecendo conexão de áudio com criptografia de ponta a ponta. Por favor, aguarde: (${countdown}s)`;
+            textSpan.textContent = `Estabelecendo conexão de áudio com criptografia de ponta a ponta. Por favor, não saia desta tela: (${countdown}s)`;
             countdown--;
         };
         updateTimer();
@@ -105,12 +110,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearInterval(timerId);
             shimmerEl.remove();
             style.remove();
-        }, 60000); // Efeito dura 60 segundos
+        }, 60000);
     }
     
     // --- Funções de Gerenciamento de Estado ---
     async function getSession() {
-        // (código existente sem alterações)
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return false;
         userId = session.user.id;
@@ -132,7 +136,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function ensureRoom() {
-        // (código existente sem alterações)
         const { data } = await supabase.from('tavern_rooms').select('*').eq('guild_id', guildId).limit(1);
         if (data && data.length) {
             currentRoom = data[0];
@@ -145,7 +148,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function joinRoom() {
         if (!currentRoom || joined) return;
         
-        // ALTERADO: Limpezas executadas ao entrar
         try {
             await supabase.rpc('cleanup_inactive_tavern_members');
             await supabase.rpc('cleanup_old_tavern_signals');
@@ -164,7 +166,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function leaveRoom() {
-        // (código existente sem alterações)
         if (!currentRoom || !joined) return;
         await supabase.rpc('leave_tavern_room', { p_room_id: currentRoom.id, p_player_id: userId });
         joined = false;
@@ -176,7 +177,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function moveSeat(seatNumber) {
-        // (código existente sem alterações)
         if (!joined) return;
         await supabase.rpc('move_tavern_seat', { p_room_id: currentRoom.id, p_player_id: userId, p_new_seat: seatNumber });
     }
@@ -194,10 +194,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function startPolling() {
         stopPolling();
         
-        // ALTERADO: Novos intervalos de polling
-        signalPollId = setInterval(pollForSignals, 30000);   // A cada 30 segundos
-        statePollId = setInterval(pollForState, 90000);     // A cada 90 segundos
-        activityPollId = setInterval(updateMyActivity, 3540000); // A cada 59 minutos
+        signalPollId = setInterval(pollForSignals, 60000);
+        statePollId = setInterval(pollForState, 90000);
+        activityPollId = setInterval(updateMyActivity, 3540000);
 
         pollForState();
         pollForSignals();
@@ -224,6 +223,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { data: members } = await supabase.from('tavern_members').select('*').eq('room_id', currentRoom.id);
         if (!members) return;
 
+        // **MODIFICAÇÃO AQUI**
+        // Atualiza o contador no botão usando a lista já carregada pelo polling.
+        if (tMembersCount) {
+            tMembersCount.textContent = members.length;
+        }
+
         const oldSeat = myMemberInfo?.seat_number;
         const oldMuteStatus = myMemberInfo?.is_muted;
         
@@ -242,7 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         await renderUI(members);
-        await updateChat(); // ALTERADO: Chat agora atualiza junto com o estado
+        await updateChat();
     }
 
     async function pollForSignals() {
@@ -256,11 +261,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }
-        // ALTERADO: Chamada para updateChat foi removida daqui
     }
     
-    // --- Lógica WebRTC e UI (sem alterações) ---
-    // (O restante do código, incluindo WebRTC, Popover, Mute, etc., permanece o mesmo)
+    // --- Lógica WebRTC e UI ---
     async function updateConnections(members) {
         if (!myMemberInfo) return;
         const amISpeaker = myMemberInfo.seat_number != null && !myMemberInfo.is_muted;
@@ -272,7 +275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch (err) {
                 document.getElementById('shimmerOverlay')?.remove(); 
                 console.warn('Permissão de microfone negada.', err);
-                tSeats.insertAdjacentHTML('beforebegin', '<div id="mic_error" style="color:orange;padding:10px;text-align:center;">🔴 Microfone bloqueado. Conceda a permissão e sente-se novamente.</div>');
+                tSeats.insertAdjacentHTML('beforebegin', '<div id="mic_error" style="color:orange;padding:10px;text-align:center;background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);">🔴 Microfone bloqueado. Conceda permissão de acesso ao microfone ao app e sente-se novamente.</div>');
                 await moveSeat(null);
                 return; 
             }
@@ -439,7 +442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tSeats.appendChild(el);
         }
     }
-
+    
     async function updateChat() {
         if (!joined) return;
         const { data: msgs } = await supabase
@@ -600,10 +603,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             mySeatEl.innerHTML = `<div class="seat-number" style="bottom: 1px;">${mySeatEl.dataset.seat}</div><div style="color:white;opacity:.6;">Livre</div>`;
         }
         await moveSeat(null);
-        pollForState();
+        pollForState(); // Força a atualização do estado
     }
     
     async function handleMute(targetId, shouldMute, seatEl) {
+        // Atualização visual instantânea
         const img = seatEl.querySelector('img');
         const existingIcon = seatEl.querySelector('.mute-icon');
 
@@ -623,20 +627,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         await supabase.rpc('mute_tavern_member', { p_room_id: currentRoom.id, p_target_player_id: targetId, p_mute: shouldMute });
+        pollForState(); // AJUSTE 1: Força a atualização do estado
     }
 
     async function handleKick(targetId) {
         await supabase.rpc('kick_tavern_member', { p_room_id: currentRoom.id, p_target_player_id: targetId });
         showNotification("Jogador removido da Taverna.", 3000);
-        pollForState();
+        pollForState(); // Força a atualização do estado
     }
 
-    // ALTERADO: Lógica de envio de mensagem otimista
     tSendBtn.onclick = async () => {
         const txt = tMessageInput.value.trim();
         if (!txt || !joined) return;
 
-        // 1. Renderiza a mensagem localmente IMEDIATAMENTE
+        // Atualização otimista: mostra a mensagem na UI imediatamente
         const div = document.createElement('div');
         div.className = 'tavern-message';
         div.innerHTML = `<img src="${myPlayerData.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" /><div><b>${myPlayerData.name}</b><div class="bubble">${txt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div></div>`;
@@ -646,20 +650,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         const messageToSend = txt;
         tMessageInput.value = '';
 
-        // 2. Envia para o Supabase em segundo plano
         try {
-            await supabase.rpc('post_tavern_message', { 
+            // AJUSTE 2: Captura o retorno da chamada para atualizar o timestamp
+            const { data: newMessages, error } = await supabase.rpc('post_tavern_message', { 
                 p_room_id: currentRoom.id, 
                 p_player_id: userId, 
                 p_player_name: myPlayerData.name, 
                 p_player_avatar: myPlayerData.avatar_url, 
                 p_message: messageToSend 
             });
+
+            if (error) throw error;
+            
+            // Atualiza o timestamp local com o do servidor, prevenindo duplicatas
+            if (newMessages && newMessages.length > 0) {
+                lastMessageTimestamp = newMessages[0].created_at;
+            }
+
         } catch(e) {
             console.error("Falha ao enviar mensagem:", e);
-            // Opcional: Adicionar um indicador de falha na UI
+            // Em caso de falha, remove a mensagem otimista
+            div.remove();
+            showNotification("Sua mensagem não pôde ser enviada.", 3000);
+            tMessageInput.value = messageToSend; // Devolve o texto ao input
         }
-        // Não chama mais o updateChat aqui.
     };
     
     tMessageInput.addEventListener('keydown', (e) => {
@@ -668,6 +682,79 @@ document.addEventListener('DOMContentLoaded', async () => {
             tSendBtn.click();
         }
     });
+
+
+    // --- NOVA FUNÇÃO: Carregamento de Membros (ACESSADA APENAS VIA MODAL) ---
+    async function fetchTavernMembers() {
+        if (!currentRoom || !currentRoom.id) {
+            tMembersList.innerHTML = '<li>Erro: Sala da Taverna não encontrada.</li>';
+            return;
+        }
+
+        tMembersList.innerHTML = '<li>Carregando membros...</li>';
+        
+        try {
+            const { data, error } = await supabase.rpc('get_tavern_members', { p_room_id: currentRoom.id });
+
+            if (error) {
+                console.error('Erro ao buscar membros da Taverna:', error);
+                tMembersList.innerHTML = `<li>Erro ao carregar lista: ${error.message}</li>`;
+                return;
+            }
+
+            // A contagem no botão principal já é atualizada pelo pollForState,
+            // mas manter aqui garante que o número esteja certo no momento do clique, caso haja um delay.
+            if (tMembersCount) {
+                 tMembersCount.textContent = data.length;
+            }
+
+            if (data.length === 0) {
+                tMembersList.innerHTML = '<li>Nenhum membro ativo na taverna.</li>';
+                return;
+            }
+
+            tMembersList.innerHTML = data.map(member => `
+                <li style="display: flex; align-items: center; margin-bottom: 8px; padding-bottom: 5px;">
+                    <img src="${member.player_avatar || 'default_avatar.png'}" alt="${member.player_name}" style="width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; object-fit: cover;">
+                    <span style="font-size: 0.6em;">
+                        <strong>${member.player_name}</strong> (Assento #${member.seat_number || 'Livre'}) 
+                        ${member.is_muted ? '<span style="color: orange; margin-left: 5px;">[MUTADO]</span>' : ''}
+                    </span>
+                </li>
+                <hr>
+            `).join('');
+
+        } catch (e) {
+            console.error('Erro inesperado ao buscar membros:', e);
+            tMembersList.innerHTML = `<li>Erro inesperado ao carregar lista.</li>`;
+        }
+    }
+
+
+    // --- NOVOS LISTENERS DO MODAL ---
+    if (tShowMembersBtn) {
+        tShowMembersBtn.addEventListener('click', async () => {
+            if (tMembersModal) {
+                tMembersModal.style.display = 'block';
+                await fetchTavernMembers();
+            }
+        });
+    }
+
+    if (tCloseMembersModal) {
+        tCloseMembersModal.addEventListener('click', () => {
+            tMembersModal.style.display = 'none';
+        });
+    }
+
+    if (tMembersModal) {
+        tMembersModal.addEventListener('click', (e) => {
+            if (e.target === tMembersModal) {
+                tMembersModal.style.display = 'none';
+            }
+        });
+    }
+
 
     async function initialize() {
         if (!(await getSession())) {

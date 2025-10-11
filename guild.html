@@ -89,7 +89,10 @@
 </div>
             <div id="taverna" class="tab-pane">
                <div id="tavernContainer" class="tavern-container">
-  <h3 id="tavernTitle" style="margin-top: -20px;"></h3>
+  <h3 id="tavernTitle" style="margin-top: 110px;">Taverna da Guilda</h3>
+  <button id="showMembersBtn" class="tavernSendBtn">
+    Membros na Taverna (<span id="membersCount">0</span>)
+</button>
   <div id="tavernControls" style="margin-bottom:8px;"></div>
 
   <!-- Área ativa da Taverna (escondida até entrar) -->
@@ -100,15 +103,25 @@
     <div id="tavernChat" class="tavern-chat"></div>
     <div id="tavernChatInput">
       <input type="text" id="tavernMessageInput" placeholder="Digite uma mensagem..." maxlength="200" />
-      <button id="tavernSendBtn" disabled>Enviar</button>
+      <button id="tavernSendBtn" style="margin-top: -6px;" disabled>Enviar</button>
     </div>
   </div>
 </div>
-            </div>
+</div>
             
             <div id="tavernPopoverTemplate" style="display: none; position: absolute; background: #333; border: 1px solid #555; border-radius: 8px; z-index: 100;" class="tavern-popover">
     </div>
     
+<div id="membersModal" class="modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 1000; overflow: auto;">
+    <div class="modal-content" style="background-color: #333; color: white; margin: 10% auto; padding: 20px; border: 1px solid #444; width: 80%; max-width: 450px; border-radius: 8px; position: relative;">
+        <span class="close-button" id="closeMembersModal" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+        <h2 style="margin-top: 0;">Membros na Taverna</h2>
+        <ul id="membersList" style="list-style: none; padding: 0;">
+            <li>Carregando...</li>
+        </ul>
+    </div>
+</div>
+
     
 
             <div id="ranking" class="tab-pane">

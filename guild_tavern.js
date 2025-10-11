@@ -1,4 +1,4 @@
-// guild_tavern.js - Refatorado para Baixo Consumo
+// guild_tavern.js - Versão com Cache Local de Mensagens
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Bloco de Inicialização Seguro ---
     let supabase;
@@ -8,10 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         supabase = (window.supabase && window.supabase.createClient) ?
             window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) :
             null;
-
-        if (!supabase) {
-            throw new Error('Cliente Supabase não pôde ser inicializado.');
-        }
+        if (!supabase) throw new Error('Cliente Supabase não pôde ser inicializado.');
     } catch (error) {
         console.error("Erro fatal na inicialização:", error);
         return;
@@ -20,97 +17,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Referências do DOM ---
     const tTitle = document.getElementById('tavernTitle');
     const tControls = document.getElementById('tavernControls');
-    const tSeats = document.getElementById('tavernSeats');
     const tChat = document.getElementById('tavernChat');
     const tMessageInput = document.getElementById('tavernMessageInput');
     const tSendBtn = document.getElementById('tavernSendBtn');
     const tActiveArea = document.getElementById('tavernActiveArea');
-    const tAudioContainer = document.getElementById('tavernListeners');
     const tNotifContainer = document.getElementById('tavernNotificationContainer') || document.body;
-    const tPopoverTemplate = document.getElementById('tavernPopoverTemplate');
-    
-    // --- Novas Referências do DOM (para o Modal de Membros) ---
     const tShowMembersBtn = document.getElementById('showMembersBtn');
     const tMembersCount = document.getElementById('membersCount');
     const tMembersModal = document.getElementById('membersModal');
     const tCloseMembersModal = document.getElementById('closeMembersModal');
     const tMembersList = document.getElementById('membersList');
 
-
     // --- Variáveis de Estado ---
     let userId = null;
     let guildId = null;
-    let userRole = 'member';
     let myPlayerData = {};
     let currentRoom = null;
-    let myMemberInfo = null;
     let joined = false;
-
-    let statePollId = null;
-    let signalPollId = null;
-    let activityPollId = null; 
-
-    let localStream = null;
-    let peerConnections = {};
-    let processedSignalIds = new Set();
-    
+    let tavernPollId = null;
     const playersCache = new Map();
+    let messageCache = []; // NOVO: Cache local para as mensagens
+
+    // --- Notificações de entradas (cache/local) ---
+    let lastSeenEntries = []; // array of { player_name, timestamp }
+    const recentEntryQueue = []; // FIFO queue for new entries
+    let processingEntryQueue = false;
     let lastMessageTimestamp = new Date(0).toISOString();
 
-    const STUN_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-
     // --- Funções de UX ---
-    function showNotification(message, duration = 5000) {
-        const notifEl = document.createElement('div');
-        notifEl.className = 'tavern-notification';
-        notifEl.textContent = message;
-        notifEl.style.cssText = `position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: 300px; text-align: center; background: #222; color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 9999; opacity: 0; transition: opacity 0.5s, transform 0.5s;`;
-        tNotifContainer.appendChild(notifEl);
-        setTimeout(() => {
-            notifEl.style.opacity = 1;
-            notifEl.style.transform = 'translateX(-50%) translateY(0)';
-        }, 10);
-        setTimeout(() => {
-            notifEl.style.opacity = 0;
-            notifEl.style.transform = 'translateX(-50%) translateY(-20px)';
-            setTimeout(() => notifEl.remove(), 500);
-        }, duration);
+    
+    function showNotification(message, duration = 3000) {
+        // returns a Promise that resolves when the notif is removed
+        return new Promise((resolve) => {
+            const notifEl = document.createElement('div');
+            notifEl.className = 'tavern-notification';
+            notifEl.textContent = message;
+            notifEl.style.cssText = `position: fixed; top: 10px; left: 50%; transform: translateX(-50%) translateY(-10px); width: 320px; max-width: 90vw; text-align: center; background: rgba(34,34,34,0.95); color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); z-index: 99999; opacity: 0;`;
+            (tNotifContainer || document.body).appendChild(notifEl);
+            // force a frame so transition applies
+            requestAnimationFrame(() => {
+                notifEl.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                notifEl.style.opacity = '1';
+                notifEl.style.transform = 'translateX(-50%) translateY(0)';
+            });
+            // remove after duration
+            setTimeout(() => {
+                notifEl.style.opacity = '0';
+                notifEl.style.transform = 'translateX(-50%) translateY(-20px)';
+                setTimeout(() => {
+                    try { notifEl.remove(); } catch(e){}
+                    resolve();
+                }, 360);
+            }, duration);
+        });
     }
 
-    function showShimmerOverlay() {
-        const existingShimmer = document.getElementById('shimmerOverlay');
-        if (existingShimmer) existingShimmer.remove();
 
-        const shimmerEl = document.createElement('div');
-        shimmerEl.id = 'shimmerOverlay';
-        
-        const textSpan = document.createElement('span');
-        textSpan.className = 'shimmer-text';
-        
-        shimmerEl.innerHTML = `<div class="shimmer-content"></div><div class="shimmer-bar"></div>`;
-        shimmerEl.querySelector('.shimmer-content').appendChild(textSpan);
-
-        shimmerEl.style.cssText = `position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.9); z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; font-size: 1.2rem; text-align: center;`;
-        
-        const style = document.createElement('style');
-        style.textContent = `#shimmerOverlay .shimmer-content { max-width: 80%; padding: 20px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(2px); } #shimmerOverlay .shimmer-bar { height: 4px; width: 100%; background: linear-gradient(to right, transparent, #fff, transparent); animation: shimmerAnim 1.5s infinite linear; margin-top: 10px; border-radius: 2px; } @keyframes shimmerAnim { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`;
-        document.head.appendChild(style);
-        
-        let countdown = 60;
-        const updateTimer = () => {
-            textSpan.textContent = `Estabelecendo conexão de áudio com criptografia de ponta a ponta. Por favor, não saia desta tela: (${countdown}s)`;
-            countdown--;
-        };
-        updateTimer();
-        const timerId = setInterval(updateTimer, 1000);
-
-        tActiveArea.appendChild(shimmerEl);
-
-        setTimeout(() => {
-            clearInterval(timerId);
-            shimmerEl.remove();
-            style.remove();
-        }, 60000);
+    // NOVA FUNÇÃO: Renderiza mensagens na tela para evitar repetição de código
+    function renderMessages(messagesToRender) {
+        messagesToRender.forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'tavern-message';
+            // Sanitiza a mensagem para evitar injeção de HTML
+            const sanitizedMessage = m.message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            div.innerHTML = `<img src="${m.player_avatar || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" alt="${m.player_name}" /><div><b>${m.player_name}</b><div class="bubble">${sanitizedMessage}</div></div>`;
+            tChat.appendChild(div);
+        });
     }
     
     // --- Funções de Gerenciamento de Estado ---
@@ -118,24 +90,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return false;
         userId = session.user.id;
-        if (!playersCache.has(userId)) {
-             const { data: player } = await supabase.from('players').select('guild_id, rank, name, avatar_url').eq('id', userId).single();
-             if (!player) return false;
-             guildId = player.guild_id;
-             userRole = player.rank;
-             myPlayerData = { name: player.name, avatar_url: player.avatar_url };
-             playersCache.set(userId, myPlayerData);
-        } else {
-            const player = (await supabase.from('players').select('guild_id, rank').eq('id', userId).single()).data;
-            if (!player) return false;
-            guildId = player.guild_id;
-            userRole = player.rank;
-            myPlayerData = playersCache.get(userId);
-        }
+        const { data: player } = await supabase.from('players').select('guild_id, name, avatar_url').eq('id', userId).single();
+        if (!player) return false;
+        guildId = player.guild_id;
+        myPlayerData = { name: player.name, avatar_url: player.avatar_url };
+        playersCache.set(userId, myPlayerData);
         return true;
     }
 
     async function ensureRoom() {
+        // ... (função mantida como estava)
         const { data } = await supabase.from('tavern_rooms').select('*').eq('guild_id', guildId).limit(1);
         if (data && data.length) {
             currentRoom = data[0];
@@ -145,262 +109,93 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // ATUALIZADO: para incluir inicialização do chat
     async function joinRoom() {
         if (!currentRoom || joined) return;
         
-        try {
-            await supabase.rpc('cleanup_inactive_ tavern_members');
-            await supabase.rpc('cleanup_old_tavern_signals');
-            await supabase.rpc('cleanup_old_tavern_messages');
-        } catch(e) {
-            console.warn("Falha na limpeza inicial:", e);
-        }
-
-        joined = true;
         await supabase.rpc('join_tavern_room', { p_room_id: currentRoom.id, p_player_id: userId });
-        showNotification(`${myPlayerData.name} entrou na Taverna.`, 5000);
+        
+        joined = true;
+        showNotification(`${myPlayerData.name} entrou na Taverna.`);
         tActiveArea.style.display = 'block';
         tSendBtn.disabled = false;
+        
+        await initializeChat(); // Puxa o histórico inicial de mensagens
+        
         renderControls();
         startPolling();
     }
 
+    // ATUALIZADO: para limpar o cache ao sair
     async function leaveRoom() {
         if (!currentRoom || !joined) return;
         await supabase.rpc('leave_tavern_room', { p_room_id: currentRoom.id, p_player_id: userId });
         joined = false;
         stopPolling();
-        cleanupAll();
         tActiveArea.style.display = 'none';
         tSendBtn.disabled = true;
         renderControls();
+        
+        // Limpa a tela e o cache local
+        tChat.innerHTML = '';
+        messageCache = [];
+        lastMessageTimestamp = new Date(0).toISOString();
     }
 
-    async function moveSeat(seatNumber) {
-        if (!joined) return;
-        await supabase.rpc('move_tavern_seat', { p_room_id: currentRoom.id, p_player_id: userId, p_new_seat: seatNumber });
-    }
-    
-    // --- Lógica de Polling ---
-    async function updateMyActivity() {
-        if (!joined || !currentRoom || !userId) return;
-        try {
-            await supabase.rpc('update_tavern_member_activity', { p_room_id: currentRoom.id, p_player_id: userId });
-        } catch (e) {
-            console.warn('Falha ao atualizar atividade na taverna:', e);
-        }
-    }
+    // NOVA FUNÇÃO: Busca o histórico inicial de mensagens
+    async function initializeChat() {
+        tChat.innerHTML = '';
+        messageCache = [];
 
-    function startPolling() {
-        stopPolling();
-        
-        signalPollId = setInterval(pollForSignals, 60000);
-        statePollId = setInterval(pollForState, 90000);
-        activityPollId = setInterval(updateMyActivity, 3540000);
+        const { data: initialMsgs, error } = await supabase
+            .from('tavern_messages')
+            .select('player_name, player_avatar, message, created_at')
+            .eq('room_id', currentRoom.id)
+            .order('created_at', { ascending: false })
+            .limit(100);
 
-        pollForState();
-        pollForSignals();
-        updateMyActivity(); 
-    }
-
-    function stopPolling() {
-        clearInterval(signalPollId);
-        clearInterval(statePollId);
-        clearInterval(activityPollId);
-    }
-    
-    async function pollForState() {
-        if (!joined) return;
-        
-        try {
-            await supabase.rpc('cleanup_inactive_tavern_members');
-            await supabase.rpc('cleanup_old_tavern_signals');
-            await supabase.rpc('cleanup_old_tavern_messages');
-        } catch (e) {
-            console.warn("Falha na limpeza do Supabase:", e);
-        }
-
-        const { data: members } = await supabase.from('tavern_members').select('*').eq('room_id', currentRoom.id);
-        if (!members) return;
-        
-        if (tMembersCount) {
-            tMembersCount.textContent = members.length;
-        }
-
-        const oldSeat = myMemberInfo?.seat_number;
-        const oldMuteStatus = myMemberInfo?.is_muted;
-        
-        myMemberInfo = members.find(m => m.player_id === userId);
-        
-        if (!myMemberInfo) {
-            if (joined) {
-                console.log("Desconectado da taverna por inatividade ou remoção.");
-                leaveRoom();
-            }
+        if (error) {
+            console.error("Erro ao buscar histórico do chat:", error);
             return;
         }
 
-        // CORREÇÃO: Verifica se o meu status de mudo ou assento mudou para forçar a reconstrução da conexão
-        const myStateChanged = oldSeat !== myMemberInfo.seat_number || oldMuteStatus !== myMemberInfo.is_muted;
-        if (myStateChanged) {
-            // O segundo parâmetro `true` força a renegociação de todas as conexões
-            await updateConnections(members, true);
+        if (initialMsgs && initialMsgs.length > 0) {
+            initialMsgs.reverse(); // Coloca na ordem cronológica correta
+            messageCache = initialMsgs;
+            renderMessages(messageCache);
+            lastMessageTimestamp = messageCache[messageCache.length - 1].created_at;
+            tChat.scrollTop = tChat.scrollHeight; // Rola para a mensagem mais recente
         }
-        
-        await renderUI(members);
-        await updateChat();
+    }
+    
+    // --- Lógica de Polling ---
+    function startPolling() {
+        stopPolling();
+        tavernPollId = setInterval(pollTavernState, 30000);
+        pollTavernState();
     }
 
-    async function pollForSignals() {
+    function stopPolling() {
+        clearInterval(tavernPollId);
+    }
+    
+    async function pollTavernState() {
         if (!joined) return;
-        const { data: signals } = await supabase.from('tavern_signals').select('*').eq('to_player', userId);
-        if (signals) {
-            for (const signal of signals) {
-                if (!processedSignalIds.has(signal.id)) {
-                    handleSignal(signal); 
-                    processedSignalIds.add(signal.id);
-                }
-            }
-        }
-    }
-    
-    // --- Lógica WebRTC e UI ---
-    async function updateConnections(members, forceRenegotiate = false) {
-        if (!myMemberInfo) return;
-
-        // CORREÇÃO: Se forçado, derruba todas as conexões existentes para recriá-las
-        if (forceRenegotiate) {
-            for (const peerId in peerConnections) {
-                peerConnections[peerId]?.close();
-                const audioEl = document.getElementById(`audio-${peerId}`);
-                if (audioEl) audioEl.remove();
-            }
-            peerConnections = {};
-        }
-
-        const amISpeaker = myMemberInfo.seat_number != null && !myMemberInfo.is_muted;
-
-        if (amISpeaker && !localStream) {
-            showShimmerOverlay(); 
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            } catch (err) {
-                document.getElementById('shimmerOverlay')?.remove(); 
-                console.warn('Permissão de microfone negada.', err);
-                tSeats.insertAdjacentHTML('beforebegin', '<div id="mic_error" style="color:orange;padding:10px;text-align:center;background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);">🔴 Microfone bloqueado. Conceda permissão de acesso ao microfone ao app e sente-se novamente.</div>');
-                await moveSeat(null);
-                return; 
-            }
-        } else if (!amISpeaker && localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
-        }
-        
-        const errorDiv = document.getElementById('mic_error');
-        if (errorDiv) errorDiv.remove();
-
-        const speakers = members.filter(m => m.seat_number != null && !m.is_muted);
-        let peersToConnect = amISpeaker ? speakers.filter(s => s.player_id !== userId) : speakers;
-        const peerIdsToConnect = new Set(peersToConnect.map(p => p.player_id));
-
-        for (const peer of peersToConnect) {
-            if (!peerConnections[peer.player_id]) {
-                createPeerConnection(peer.player_id, true);
-            }
-        }
-        
-        for (const existingPeerId in peerConnections) {
-            if (!peerIdsToConnect.has(existingPeerId)) {
-                peerConnections[existingPeerId]?.close();
-                delete peerConnections[existingPeerId];
-                const audioEl = document.getElementById(`audio-${existingPeerId}`);
-                if (audioEl) audioEl.remove();
-            }
-        }
-    }
-    
-    function createPeerConnection(peerId, isInitiator) {
-        if (peerConnections[peerId]) return;
-        const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS }); 
-        peerConnections[peerId] = pc;
-
-        if (localStream) {
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-        }
-
-        pc.ontrack = (event) => {
-            let audioEl = document.getElementById(`audio-${peerId}`);
-            if (!audioEl) {
-                audioEl = document.createElement('audio');
-                audioEl.id = `audio-${peerId}`;
-                audioEl.autoplay = true;
-                tAudioContainer.appendChild(audioEl);
-            }
-            audioEl.srcObject = event.streams[0];
-        };
-
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                supabase.from('tavern_signals').insert({ room_id: currentRoom.id, from_player: userId, to_player: peerId, type: 'candidate', payload: event.candidate }).then();
-            }
-        };
-
-        pc.onconnectionstatechange = () => {
-             if (['disconnected', 'closed', 'failed'].includes(pc.connectionState)) {
-                pc.close();
-                delete peerConnections[peerId];
-                const audioEl = document.getElementById(`audio-${peerId}`);
-                if (audioEl) audioEl.remove();
-            }
-        };
-        
-        if (isInitiator) {
-            pc.createOffer()
-                .then(offer => pc.setLocalDescription(offer))
-                .then(() => {
-                    supabase.from('tavern_signals').insert({ room_id: currentRoom.id, from_player: userId, to_player: peerId, type: 'offer', payload: pc.localDescription }).then();
-                });
-        }
-    }
-
-    async function handleSignal(signal) {
-        const peerId = signal.from_player;
-        let pc = peerConnections[peerId];
-        
-        if (signal.type === 'offer' && !pc) {
-            createPeerConnection(peerId, false);
-            pc = peerConnections[peerId];
-        }
-
-        if (!pc) return;
-
-        switch (signal.type) {
-            case 'offer':
-                await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                await supabase.from('tavern_signals').insert({ room_id: currentRoom.id, from_player: userId, to_player: peerId, type: 'answer', payload: pc.localDescription });
-                break;
-            case 'answer':
-                await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
-                break;
-            case 'candidate':
-                if (signal.payload) {
-                    await pc.addIceCandidate(new RTCIceCandidate(signal.payload));
-                }
-                break;
-        }
-        
         try {
-            await supabase.from('tavern_signals').delete().eq('id', signal.id);
-            processedSignalIds.delete(signal.id); 
+            await supabase.rpc('cleanup_inactive_tavern_members');
+            await supabase.rpc('cleanup_old_tavern_messages');
+            const { count } = await supabase.from('tavern_members').select('*', { count: 'exact', head: true }).eq('room_id', currentRoom.id);
+            if (tMembersCount) tMembersCount.textContent = count || 0;
+            await updateChat();
+            await checkRecentEntries();
         } catch (e) {
-            console.error("Erro ao deletar o sinal do Supabase:", e);
+            console.warn("Falha no polling da Taverna:", e);
         }
     }
 
     function renderControls() {
-        if (joined) {
+        // ... (função mantida como estava)
+         if (joined) {
             tControls.innerHTML = `<button id="leaveTavernBtn" class="tavernSendBtn">Sair</button>`;
             document.getElementById('leaveTavernBtn').onclick = leaveRoom;
         } else {
@@ -409,257 +204,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    async function fetchPlayersData(playerIds) {
-        const idsToFetch = playerIds.filter(id => !playersCache.has(id));
-        if (idsToFetch.length > 0) {
-            const { data, error } = await supabase.from('players').select('id, name, avatar_url').in('id', idsToFetch);
-            if (error) {
-                console.error("Erro ao buscar dados dos jogadores:", error);
-                return;
-            }
-            data.forEach(player => playersCache.set(player.id, player));
-        }
-    }
-
-    async function renderUI(members) {
-        tSeats.innerHTML = '';
-        const playerIds = members.map(m => m.player_id);
-        await fetchPlayersData(playerIds);
-
-        const memberMap = new Map(members.map(m => [m.seat_number, m]));
-
-        for (let i = 1; i <= 5; i++) {
-            const el = document.createElement('div');
-            el.className = 'tavern-seat';
-            el.dataset.seat = i;
-            const member = memberMap.get(i);
-            
-            if (member) {
-                const player = playersCache.get(member.player_id);
-                const isMuted = member.is_muted;
-                const mutedClass = isMuted ? 'muted-player' : '';
-                const muteIcon = isMuted ? '<span class="mute-icon">🔇</span>' : '';
-
-                el.innerHTML = `<img src="${player?.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" alt="${player?.name}" class="${mutedClass}" />
-                                <div class="seat-number">${i}</div>
-                                ${muteIcon}`;
-                
-                if (member.player_id === userId) {
-                    el.classList.add('my-seat');
-                }
-            } else {
-                el.classList.add('empty');
-                el.innerHTML = `<div class="seat-number" style="bottom: 1px;">${i}</div><div style="color:yellow;font-size: 0.7em; margin-top: -5px;">Livre</div>`;
-            }
-            tSeats.appendChild(el);
-        }
-    }
-    
+    // ATUALIZADO: para adicionar novas mensagens ao cache
     async function updateChat() {
         if (!joined) return;
-        const { data: msgs } = await supabase
+        const { data: newMsgs } = await supabase
             .from('tavern_messages')
-            .select('id, player_name, player_avatar, message, created_at')
+            .select('player_name, player_avatar, message, created_at')
             .eq('room_id', currentRoom.id)
             .gt('created_at', lastMessageTimestamp)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true })
+            .limit(100); // Limite de 100 novas mensagens por busca
 
-        if (msgs && msgs.length > 0) {
-            msgs.forEach(m => {
-                const div = document.createElement('div');
-                div.className = 'tavern-message';
-                
-                const img = document.createElement('img');
-                img.src = m.player_avatar || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-
-                const contentDiv = document.createElement('div');
-                const nameB = document.createElement('b');
-                nameB.textContent = m.player_name;
-                
-                const bubbleDiv = document.createElement('div');
-                bubbleDiv.className = 'bubble';
-                bubbleDiv.textContent = m.message;
-                
-                contentDiv.appendChild(nameB);
-                contentDiv.appendChild(bubbleDiv);
-                
-                div.appendChild(img);
-                div.appendChild(contentDiv);
-                
-                tChat.appendChild(div);
-            });
+        if (newMsgs && newMsgs.length > 0) {
+            const shouldScroll = (tChat.scrollHeight - tChat.scrollTop < tChat.clientHeight + 250);
             
-            lastMessageTimestamp = msgs[msgs.length - 1].created_at;
+            messageCache.push(...newMsgs); // Adiciona ao cache local
+            renderMessages(newMsgs); // Renderiza apenas as novas
+            
+            lastMessageTimestamp = newMsgs[newMsgs.length - 1].created_at;
 
-            if(tChat.scrollHeight - tChat.scrollTop < tChat.clientHeight + 250) {
+            if(shouldScroll) {
                 tChat.scrollTop = tChat.scrollHeight;
             }
         }
     }
     
-    function cleanupAll() {
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
-        }
-        Object.values(peerConnections).forEach(pc => pc.close());
-        peerConnections = {};
-        tAudioContainer.innerHTML = '';
-        processedSignalIds.clear();
-        myMemberInfo = null;
-        lastMessageTimestamp = new Date(0).toISOString();
-        tChat.innerHTML = '';
-    }
-
-    tSeats.onclick = async (ev) => {
-        const seatEl = ev.target.closest('.tavern-seat');
-        if (!seatEl) return;
-        
-        const seatNumber = parseInt(seatEl.dataset.seat, 10);
-
-        if (seatEl.classList.contains('empty')) {
-             const myCurrentSeatEl = tSeats.querySelector('.my-seat');
-             if (myCurrentSeatEl) {
-                myCurrentSeatEl.classList.remove('my-seat');
-                myCurrentSeatEl.classList.add('empty');
-                myCurrentSeatEl.innerHTML = `<div class="seat-number" style="bottom: 1px;">${myCurrentSeatEl.dataset.seat}</div><div style="color:white;opacity:.6;">Livre</div>`;
-            }
-            seatEl.classList.remove('empty');
-            seatEl.classList.add('my-seat');
-            seatEl.innerHTML = `<img src="${myPlayerData.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" alt="${myPlayerData.name}" /><div class="seat-number">${seatNumber}</div>`;
-            seatEl.title = "Sair do assento";
-            await moveSeat(seatNumber);
-            pollForState();
-
-        } else {
-            const { data: members } = await supabase.from('tavern_members').select('*').eq('room_id', currentRoom.id).eq('seat_number', seatNumber);
-            if (members && members.length > 0) {
-                const targetMember = members[0];
-                const targetPlayer = playersCache.get(targetMember.player_id);
-                showSeatPopover(seatEl, targetMember, targetPlayer);
-            }
-        }
-    };
-    
-    function showSeatPopover(seatEl, targetMember, targetPlayer) {
-        closePopover(); 
-        
-        const popover = tPopoverTemplate.cloneNode(true);
-        popover.id = 'tavernPopoverActive';
-        popover.style.display = 'block';
-        
-        const rect = seatEl.getBoundingClientRect();
-        popover.style.top = `${rect.bottom + window.scrollY + 5}px`;
-        popover.style.left = `${rect.left + window.scrollX}px`;
-        
-        const canManage = userRole === 'leader' || userRole === 'co-leader';
-        const isSelf = targetMember.player_id === userId;
-
-        let content = '';
-        if (isSelf) {
-            const muteText = targetMember.is_muted ? 'Dissilenciar' : 'Silenciar-se';
-            content += `<div class="pop-item" data-action="mute" data-target-id="${targetMember.player_id}" data-muted="${targetMember.is_muted}">${muteText}</div>`;
-            content += `<div class="pop-item" data-action="leave">Sair do Assento</div>`;
-        } else if (canManage) {
-            const muteText = targetMember.is_muted ? 'Dissilenciar Jogador' : 'Silenciar Jogador';
-            content += `<div class="pop-item" data-action="mute" data-target-id="${targetMember.player_id}" data-muted="${targetMember.is_muted}">${muteText}</div>`;
-            content += `<div class="pop-item" data-action="kick" data-target-id="${targetMember.player_id}">Remover da Taverna</div>`;
-        } else {
-            return;
-        }
-
-        popover.innerHTML = content;
-        document.body.appendChild(popover);
-
-        popover.onclick = (ev) => {
-            const actionEl = ev.target.closest('.pop-item');
-            if (!actionEl) return;
-            
-            const action = actionEl.dataset.action;
-            const targetId = actionEl.dataset.targetId;
-            const isMuted = actionEl.dataset.muted === 'true';
-
-            switch (action) {
-                case 'leave':
-                    handleLeaveSeat();
-                    break;
-                case 'mute':
-                    handleMute(targetId, !isMuted, seatEl);
-                    break;
-                case 'kick':
-                    handleKick(targetId);
-                    break;
-            }
-            closePopover();
-        };
-
-        setTimeout(() => document.addEventListener('click', closePopover, { once: true }), 0);
-    }
-    
-    function closePopover(event) {
-        const popover = document.getElementById('tavernPopoverActive');
-        if (event && popover && popover.contains(event.target)) {
-            setTimeout(() => document.addEventListener('click', closePopover, { once: true }), 0);
-            return;
-        }
-        if (popover) {
-            popover.remove();
-        }
-    }
-    
-    async function handleLeaveSeat() {
-        const mySeatEl = tSeats.querySelector('.my-seat');
-        if (mySeatEl) {
-            mySeatEl.classList.remove('my-seat');
-            mySeatEl.classList.add('empty');
-            mySeatEl.innerHTML = `<div class="seat-number" style="bottom: 1px;">${mySeatEl.dataset.seat}</div><div style="color:white;opacity:.6;">Livre</div>`;
-        }
-        await moveSeat(null);
-        pollForState();
-    }
-    
-    async function handleMute(targetId, shouldMute, seatEl) {
-        const img = seatEl.querySelector('img');
-        const existingIcon = seatEl.querySelector('.mute-icon');
-
-        if (shouldMute) {
-            img.classList.add('muted-player');
-            if (!existingIcon) {
-                const muteIcon = document.createElement('span');
-                muteIcon.className = 'mute-icon';
-                muteIcon.textContent = '🔇';
-                seatEl.appendChild(muteIcon);
-            }
-        } else {
-            img.classList.remove('muted-player');
-            if (existingIcon) {
-                existingIcon.remove();
-            }
-        }
-        
-        await supabase.rpc('mute_tavern_member', { p_room_id: currentRoom.id, p_target_player_id: targetId, p_mute: shouldMute });
-        pollForState();
-    }
-
-    async function handleKick(targetId) {
-        await supabase.rpc('kick_tavern_member', { p_room_id: currentRoom.id, p_target_player_id: targetId });
-        showNotification("Jogador removido da Taverna.", 3000);
-        pollForState();
-    }
-
     tSendBtn.onclick = async () => {
+        // ... (função mantida como na última versão, a lógica de cache não precisa ser tocada aqui)
         const txt = tMessageInput.value.trim();
         if (!txt || !joined) return;
 
+        const messageToSend = txt;
+        tMessageInput.value = '';
+        
         const div = document.createElement('div');
         div.className = 'tavern-message';
-        div.innerHTML = `<img src="${myPlayerData.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" /><div><b>${myPlayerData.name}</b><div class="bubble">${txt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div></div>`;
+        div.innerHTML = `<img src="${myPlayerData.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" /><div><b>${myPlayerData.name}</b><div class="bubble">${messageToSend.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div></div>`;
         tChat.appendChild(div);
         tChat.scrollTop = tChat.scrollHeight;
         
-        const messageToSend = txt;
-        tMessageInput.value = '';
-
         try {
             const { data: newMessages, error } = await supabase.rpc('post_tavern_message', { 
                 p_room_id: currentRoom.id, 
@@ -674,11 +257,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (newMessages && newMessages.length > 0) {
                 lastMessageTimestamp = newMessages[0].created_at;
             }
+            await supabase.rpc('update_tavern_member_activity', { p_room_id: currentRoom.id, p_player_id: userId });
 
         } catch(e) {
             console.error("Falha ao enviar mensagem:", e);
             div.remove();
-            showNotification("Sua mensagem não pôde ser enviada.", 3000);
+            showNotification("Sua mensagem não pôde ser enviada.");
             tMessageInput.value = messageToSend;
         }
     };
@@ -690,78 +274,125 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-
-    // --- NOVA FUNÇÃO: Carregamento de Membros (ACESSADA APENAS VIA MODAL) ---
+    // --- Lógica do Modal de Membros ---
+    // ... (função fetchTavernMembers e listeners mantidos como estavam)
     async function fetchTavernMembers() {
-        if (!currentRoom || !currentRoom.id) {
-            tMembersList.innerHTML = '<li>Erro: Sala da Taverna não encontrada.</li>';
-            return;
-        }
-
+        if (!currentRoom?.id) return;
         tMembersList.innerHTML = '<li>Carregando membros...</li>';
-        
         try {
             const { data, error } = await supabase.rpc('get_tavern_members', { p_room_id: currentRoom.id });
-
-            if (error) {
-                console.error('Erro ao buscar membros da Taverna:', error);
-                tMembersList.innerHTML = `<li>Erro ao carregar lista: ${error.message}</li>`;
-                return;
-            }
-            
-            if (tMembersCount) {
-                 tMembersCount.textContent = data.length;
-            }
-
+            if (error) throw error;
+            if (tMembersCount) tMembersCount.textContent = data.length;
             if (data.length === 0) {
-                tMembersList.innerHTML = '<li>Nenhum membro ativo na taverna.</li>';
+                tMembersList.innerHTML = '<li>Ninguém na taverna.</li>';
                 return;
             }
-
-            tMembersList.innerHTML = data.map(member => `
-                <li style="display: flex; align-items: center; margin-bottom: 8px; padding-bottom: 5px;">
-                    <img src="${member.player_avatar || 'default_avatar.png'}" alt="${member.player_name}" style="width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; object-fit: cover;">
-                    <span style="font-size: 0.6em;">
-                        <strong>${member.player_name}</strong> (Assento #${member.seat_number || 'Livre'}) 
-                        ${member.is_muted ? '<span style="color: orange; margin-left: 5px;">[MUTADO]</span>' : ''}
+            const playerIdsToFetch = data.map(m => m.player_id).filter(id => !playersCache.has(id));
+            if (playerIdsToFetch.length > 0) {
+                const { data: players, error: playerError } = await supabase.from('players').select('id, name, avatar_url').in('id', playerIdsToFetch);
+                if (playerError) throw playerError;
+                players.forEach(p => playersCache.set(p.id, p));
+            }
+            tMembersList.innerHTML = data.map(member => {
+                const player = playersCache.get(member.player_id);
+                return `
+                <li style="display: flex; align-items: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #555;">
+                    <img src="${player?.avatar_url || 'default_avatar.png'}" alt="${player?.name}" style="width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; object-fit: cover;">
+                    <span style="font-size: 0.8em;">
+                        <strong>${player?.name || 'Carregando...'}</strong>
                     </span>
-                </li>
-                <hr>
-            `).join('');
-
+                </li>`;
+            }).join('');
         } catch (e) {
-            console.error('Erro inesperado ao buscar membros:', e);
-            tMembersList.innerHTML = `<li>Erro inesperado ao carregar lista.</li>`;
+            console.error('Erro ao buscar membros:', e);
+            tMembersList.innerHTML = `<li>Erro ao carregar a lista.</li>`;
+        }
+    }
+    if (tShowMembersBtn) tShowMembersBtn.addEventListener('click', () => { if (tMembersModal) { tMembersModal.style.display = 'block'; fetchTavernMembers(); } });
+    if (tCloseMembersModal) tCloseMembersModal.addEventListener('click', () => { tMembersModal.style.display = 'none'; });
+    if (tMembersModal) tMembersModal.addEventListener('click', (e) => { if (e.target === tMembersModal) { tMembersModal.style.display = 'none'; } });
+
+    // --- Inicialização ---
+    
+    // --- Funções para gerenciar fila de notificações de entrada ---
+    function enqueueEntry(entry) {
+        // entry: { player_name, timestamp }
+        recentEntryQueue.push(entry);
+        processEntryQueue();
+    }
+
+    async function processEntryQueue() {
+        if (processingEntryQueue) return;
+        processingEntryQueue = true;
+        try {
+            while (recentEntryQueue.length > 0) {
+                const entry = recentEntryQueue.shift();
+                // mostra a notificação (espera terminar antes de mostrar a próxima)
+                try {
+                    await showNotification(`${entry.player_name} entrou na Taverna.`, 3000);
+                } catch (e) {
+                    // falha silenciosa para não travar a fila
+                    console.warn("Erro ao mostrar notificação de entrada:", e);
+                }
+            }
+        } finally {
+            processingEntryQueue = false;
         }
     }
 
-
-    // --- NOVOS LISTENERS DO MODAL ---
-    if (tShowMembersBtn) {
-        tShowMembersBtn.addEventListener('click', async () => {
-            if (tMembersModal) {
-                tMembersModal.style.display = 'block';
-                await fetchTavernMembers();
+    async function loadRecentEntries() {
+        if (!currentRoom?.id) return;
+        try {
+            const { data, error } = await supabase
+                .from('tavern_rooms')
+                .select('recent_entries')
+                .eq('id', currentRoom.id)
+                .maybeSingle();
+            if (error) {
+                console.warn("Erro ao carregar recent_entries:", error);
+                return;
             }
-        });
-    }
-
-    if (tCloseMembersModal) {
-        tCloseMembersModal.addEventListener('click', () => {
-            tMembersModal.style.display = 'none';
-        });
-    }
-
-    if (tMembersModal) {
-        tMembersModal.addEventListener('click', (e) => {
-            if (e.target === tMembersModal) {
-                tMembersModal.style.display = 'none';
+            if (data && Array.isArray(data.recent_entries)) {
+                lastSeenEntries = data.recent_entries.slice();
+            } else {
+                lastSeenEntries = [];
             }
-        });
+        } catch (e) {
+            console.error("Falha em loadRecentEntries:", e);
+        }
     }
 
+    async function checkRecentEntries() {
+        if (!currentRoom?.id || !joined) return;
+        try {
+            const { data, error } = await supabase
+                .from('tavern_rooms')
+                .select('recent_entries')
+                .eq('id', currentRoom.id)
+                .maybeSingle();
+            if (error) {
+                console.warn("Erro ao buscar entradas recentes:", error);
+                return;
+            }
+            const entries = (data && Array.isArray(data.recent_entries)) ? data.recent_entries : [];
+            // Ordena por timestamp (asc)
+            entries.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            // Filtra apenas as novas (não vistas)
+            const newEntries = entries.filter(e => {
+                return !lastSeenEntries.some(seen => seen.player_name === e.player_name && seen.timestamp === e.timestamp);
+            });
+            // Enfileira novas entradas (exceto a própria entrada do usuário)
+            newEntries.forEach(e => {
+                if (e.player_name !== myPlayerData.name) enqueueEntry(e);
+            });
+            // Atualiza o cache local para o estado do servidor
+            lastSeenEntries = entries;
+        } catch (e) {
+            console.error("Falha ao verificar entradas recentes:", e);
+        }
+    }
 
-    async function initialize() {
+async function initialize() {
         if (!(await getSession())) {
             tControls.innerHTML = '<p>Você precisa estar logado e em uma guilda para usar a Taverna.</p>';
             return;
@@ -771,6 +402,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         await ensureRoom();
+        await loadRecentEntries();
         tTitle.textContent = currentRoom?.name || 'Taverna';
         renderControls();
     }

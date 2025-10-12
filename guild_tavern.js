@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await ensureRoom();
 
         // Correção: Mostrar notificação para si mesmo imediatamente
-        showNotification(`${myPlayerData.name} está online`, 3000);
+        showNotification(`${myPlayerData.name} está online`, 5000);
 
         window.bc = new BroadcastChannel('guild_' + guildId);
         bc.onmessage = (ev) => {

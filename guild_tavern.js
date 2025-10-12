@@ -33,9 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentRoom = null;
     
     // --- Polling Inteligente ---
-    let pollingInterval = 5000; // 5 segundos (mínimo)
+    let pollingInterval = 15000; // 15 segundos (mínimo)
     const MAX_POLLING_INTERVAL = 300000; // 5 minutos
-    const INTERVAL_INCREMENT = 15000; // Aumenta em 15 segundos
+    const INTERVAL_INCREMENT = 25000; // Aumenta em 25 segundos
     let pollingTimer = null;
 
     const PLAYERS_CACHE_KEY = 'tavern_players_cache_v1';
@@ -57,7 +57,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch { }
 
     let lastMessageTimestamp = localStorage.getItem(LAST_TS_KEY) || new Date(0).toISOString();
-    let lastSync = parseInt(localStorage.getItem(LAST_SYNC_KEY) || "0", 10); // Mantido por compatibilidade
+    let lastSync = parseInt(localStorage.getItem(LAST_SYNC_KEY) || "0", 10);
+
+    // --- Notificação especial para "online" ---
+    const ONLINE_PREFIX = '@@USER_ONLINE::';
 
     // --- UX ---
     function showNotification(message, duration = 4000) {
@@ -84,17 +87,48 @@ document.addEventListener('DOMContentLoaded', async () => {
                          <div><b>${playerName}</b><div class="bubble">${safeMsg}</div></div>`;
         tChat.appendChild(div);
     }
+    
+    // Função unificada para processar e adicionar mensagens (evita duplicação)
+    function processAndDisplayMessage(m) {
+        // Correção 1: Lógica para notificações globais de "online"
+        if (m.message && m.message.startsWith(ONLINE_PREFIX)) {
+            if (m.player_id !== userId) { // Não mostrar notificação para si mesmo
+                const playerName = m.message.substring(ONLINE_PREFIX.length);
+                showNotification(`${playerName} está online`, 5000);
+            }
+            return; // Não renderizar como uma mensagem de chat
+        }
+
+        // Correção 2: Guarda contra duplicação
+        if (messagesCache.some(cachedMsg => cachedMsg.id === m.id)) {
+            return;
+        }
+
+        renderMessageDOM(m);
+        messagesCache.push(m);
+        tChat.scrollTop = tChat.scrollHeight;
+    }
+
 
     function renderCachedMessages() {
         tChat.innerHTML = '';
-        if (messagesCache.length) messagesCache.forEach(renderMessageDOM);
+        if (messagesCache.length) {
+            messagesCache.forEach(m => {
+                // Não renderizar mensagens de status do cache
+                if (m.message && !m.message.startsWith(ONLINE_PREFIX)) {
+                    renderMessageDOM(m);
+                }
+            });
+        }
         tChat.scrollTop = tChat.scrollHeight;
     }
 
     function persistCaches() {
         try {
+            // Filtra mensagens de status antes de salvar no cache para não poluir
+            const cleanMessages = messagesCache.filter(m => m.message && !m.message.startsWith(ONLINE_PREFIX));
             localStorage.setItem(PLAYERS_CACHE_KEY, JSON.stringify(Array.from(playersCache.entries())));
-            localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(messagesCache));
+            localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(cleanMessages));
             localStorage.setItem(LAST_TS_KEY, lastMessageTimestamp);
             localStorage.setItem(LAST_SYNC_KEY, String(lastSync));
         } catch { }
@@ -120,9 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             avatar_url: player.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'
         };
         playersCache.set(userId, myPlayerData);
-        persistCaches();
 
-        // Corrige mensagens antigas
         messagesCache = messagesCache.map(m =>
             m.player_id === userId ? { ...m, player_name: myPlayerData.name, player_avatar: myPlayerData.avatar_url } : m
         );
@@ -151,7 +183,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (pollingTimer) clearTimeout(pollingTimer); 
 
         if (resetInterval) {
-          
             pollingInterval = 10000;
         }
         
@@ -159,33 +190,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const initialLastMessageTimestamp = lastMessageTimestamp;
                 await updateChat();
-
-              
                 const hasNewMessages = initialLastMessageTimestamp !== lastMessageTimestamp;
 
                 if (hasNewMessages) {
-              
                     pollingInterval = 10000;
                 } else {
-                
                     pollingInterval = Math.min(pollingInterval + INTERVAL_INCREMENT, MAX_POLLING_INTERVAL);
                 }
                 
-              
                 pollingTimer = setTimeout(checkAndPoll, pollingInterval);
-                
-              
                 lastSync = Date.now();
                 persistCaches();
 
             } catch(e) {
                 console.warn('Erro durante o Polling com Backoff:', e);
-              
                 pollingTimer = setTimeout(checkAndPoll, 25000);
             }
         };
         
-    
         pollingTimer = setTimeout(checkAndPoll, pollingInterval);
     }
   
@@ -201,26 +223,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (error || !msgs?.length) return;
 
-            const unknownIds = [];
+            // Processa as mensagens em sequência para garantir a ordem das notificações
             for (const m of msgs) {
-                if (m.player_id && !playersCache.has(m.player_id)) {
-                    playersCache.set(m.player_id, {
-                        name: m.player_name || 'Jogador',
-                        avatar_url: m.player_avatar || null
-                    });
-                    unknownIds.push(m.player_id);
-                }
-            }
-
-            if (unknownIds.length) {
-                const { data: players } = await supabase
-                    .from('players').select('id,name,avatar_url')
-                    .in('id', unknownIds);
-                if (players?.length)
-                    players.forEach(p => playersCache.set(p.id, { name: p.name, avatar_url: p.avatar_url }));
-            }
-
-            msgs.forEach(m => {
                 const cached = playersCache.get(m.player_id);
                 const normalized = {
                     id: m.id,
@@ -234,13 +238,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     message: m.message,
                     created_at: m.created_at
                 };
-                renderMessageDOM(normalized);
-                messagesCache.push(normalized);
-            });
+                processAndDisplayMessage(normalized);
+            }
 
             lastMessageTimestamp = msgs[msgs.length - 1].created_at;
             persistCaches();
-            tChat.scrollTop = tChat.scrollHeight;
+
         } catch (e) { console.warn('updateChat falhou:', e); }
     }
 
@@ -262,15 +265,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderMessageDOM(msgData);
         messagesCache.push(msgData);
-        persistCaches();
         tChat.scrollTop = tChat.scrollHeight;
 
-        // Broadcast local instantâneo
         if (window.bc) {
             bc.postMessage({ type: 'newMessage', guildId, data: msgData });
         }
 
-        // Envio Supabase real
         try {
             const { data: newMsg, error } = await supabase.rpc('post_tavern_message', {
                 p_room_id: currentRoom.id,
@@ -280,12 +280,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 p_message: txt
             });
             if (error) throw error;
+            
             const msg = Array.isArray(newMsg) ? newMsg[0] : newMsg;
-            const idx = messagesCache.findIndex(m => m.id === msgData.id);
-            if (idx !== -1) messagesCache[idx] = msg;
-            persistCaches();
-          
 
+            // Correção 2: Substituir a mensagem otimista pela real no cache
+            const idx = messagesCache.findIndex(m => m.id === msgData.id);
+            if (idx !== -1) {
+                messagesCache[idx] = msg;
+            }
+            persistCaches();
         } catch (e) {
             showNotification("Falha ao enviar mensagem", 3000);
             console.warn(e);
@@ -313,31 +316,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await ensureRoom();
 
-        // --- BroadcastChannel setup ---
         window.bc = new BroadcastChannel('guild_' + guildId);
         bc.onmessage = (ev) => {
             if (!ev.data || ev.data.guildId !== guildId) return;
             if (ev.data.type === 'newMessage') {
-                const m = ev.data.data;
-                renderMessageDOM(m);
-                messagesCache.push(m);
+                processAndDisplayMessage(ev.data.data);
                 persistCaches();
-                tChat.scrollTop = tChat.scrollHeight;
             }
         };
 
-        // --- Lazy pull inicial + Polling Inteligente (Backoff) ---
         await updateChat();
         startPollingWithBackoff(true);
-
-        // --- RPC única de limpeza inicial ---
+        
         try { await supabase.rpc('cleanup_old_tavern_messages'); } catch { }
 
-        // --- Exibir área ---
+        // Correção 1: Enviar evento "online" para outros jogadores
+        try {
+            await supabase.from('tavern_messages').insert({
+                room_id: currentRoom.id,
+                player_id: userId,
+                player_name: myPlayerData.name, // O nome é necessário para a notificação
+                message: `${ONLINE_PREFIX}${myPlayerData.name}`
+            });
+        } catch(e) {
+            console.warn("Não foi possível notificar entrada na taverna:", e);
+        }
+
+
         tTitle.textContent = currentRoom?.name || 'Taverna';
         tActiveArea.style.display = 'block';
         tSendBtn.disabled = false;
-        showNotification(`${myPlayerData.name} está online`, 5000);
     }
 
     initialize();

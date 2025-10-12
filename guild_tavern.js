@@ -26,289 +26,323 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tNotifContainer = document.getElementById('tavernNotificationContainer') || document.body;
     const tShowMembersBtn = document.getElementById('showMembersBtn');
 
-    // --- Estado ---
+    // --- Estado e Cooldown ---
     let userId = null;
-    let guildId = null;
-    let myPlayerData = {};
+    let myPlayerData = null;
     let currentRoom = null;
-    
-    // --- Polling Inteligente ---
-    let pollingInterval = 15000; // 15 segundos (mínimo)
-    const MAX_POLLING_INTERVAL = 300000; // 5 minutos
-    const INTERVAL_INCREMENT = 25000; // Aumenta em 25 segundos
-    let pollingTimer = null;
-
-    const PLAYERS_CACHE_KEY = 'tavern_players_cache_v1';
-    const MESSAGES_CACHE_KEY = 'tavern_messages_cache_v1';
-    const LAST_TS_KEY = 'tavern_last_message_ts_v1';
-    const LAST_SYNC_KEY = 'tavern_last_sync_v1';
-
-    // --- Caches ---
-    const playersCache = new Map();
-    try {
-        const raw = localStorage.getItem(PLAYERS_CACHE_KEY);
-        if (raw) JSON.parse(raw).forEach(([k, v]) => playersCache.set(k, v));
-    } catch { }
-
+    let guildId = null;
     let messagesCache = [];
-    try {
-        const raw = localStorage.getItem(MESSAGES_CACHE_KEY);
-        if (raw) messagesCache = JSON.parse(raw);
-    } catch { }
-
-    let lastMessageTimestamp = localStorage.getItem(LAST_TS_KEY) || new Date(0).toISOString();
-    let lastSync = parseInt(localStorage.getItem(LAST_SYNC_KEY) || "0", 10);
-
-    // --- Notificação especial para "online" ---
-    const ONLINE_PREFIX = '@@USER_ONLINE::';
-
-    // --- UX ---
-    function showNotification(message, duration = 4000) {
-        const el = document.createElement('div');
-        el.className = 'tavern-notification';
-        el.textContent = message;
-        el.style.cssText = `position:fixed;top:18px;left:50%;transform:translateX(-50%);
-        width: 300px;
-        text-align: center;
-             background:#222;color:#fff;padding:10px 20px;border-radius:8px;
-             box-shadow:0 4px 10px rgba(0,0,0,0.5);opacity:0;transition:opacity .4s;z-index:99999`;
-        tNotifContainer.appendChild(el);
-        setTimeout(() => el.style.opacity = 1, 10);
-        setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.remove(), 400); }, duration);
-    }
-
-    function renderMessageDOM(m) {
-        const div = document.createElement('div');
-        div.className = 'tavern-message';
-        const avatar = m.player_avatar || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-        const safeMsg = (m.message || '').replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const playerName = m.player_name && m.player_name.trim() !== '' ? m.player_name : 'Jogador';
-        div.innerHTML = `<img src="${avatar}" alt="${playerName}">
-                         <div><b>${playerName}</b><div class="bubble">${safeMsg}</div></div>`;
-        tChat.appendChild(div);
-    }
+    let lastPolledMessageId = 0;
+    // Cooldown: Inicializa para um tempo muito antigo para que o botão esteja ATIVO inicialmente
+    let lastMessageTime = Date.now() - (60 * 1000 + 100); 
+    const CHAT_COOLDOWN_MS = 60 * 1000;
+    const originalSendBtnHTML = tSendBtn ? tSendBtn.innerHTML : 'Enviar';
+    let countdownInterval = null;
+    const ONLINE_PREFIX = 'PLAYER_ONLINE_SIGNAL:';
+    let pollingBackoff = 0;
+    let pollingInterval = null;
     
-    // Função unificada para processar e adicionar mensagens (evita duplicação)
-    function processAndDisplayMessage(m) {
-        // Lógica para notificações globais de "online" para OS OUTROS
-        if (m.message && m.message.startsWith(ONLINE_PREFIX)) {
-            if (m.player_id !== userId) { // Mostrar notificação apenas sobre os outros
-                const playerName = m.message.substring(ONLINE_PREFIX.length);
-                showNotification(`${playerName} está online`, 3000);
+    // --- Funções de Ajuda ---
+
+    /** Obtém a sessão do usuário e os dados do jogador. */
+    async function getSession() {
+        if (myPlayerData) return true;
+        
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return false;
+            userId = user.id;
+
+            // Busca dados do jogador
+            const { data: playerData, error: playerError } = await supabase
+                .from('players')
+                .select('name, avatar_url, guild_id')
+                .eq('id', userId)
+                .single();
+
+            if (playerError || !playerData || !playerData.guild_id) {
+                tControls.innerHTML = '<p>Você precisa estar em uma guilda para usar a Taverna.</p>';
+                return false;
             }
-            return; // Não renderizar como uma mensagem de chat
+
+            myPlayerData = playerData;
+            guildId = playerData.guild_id;
+            return true;
+        } catch (e) {
+            console.error('Erro ao obter sessão ou dados do jogador:', e);
+            tControls.innerHTML = '<p>Erro ao inicializar a sessão. Por favor, recarregue.</p>';
+            return false;
+        }
+    }
+
+    /** Garante que a sala da taverna para a guilda exista. */
+    async function ensureRoom() {
+        if (currentRoom) return;
+        
+        try {
+            // Tenta obter a sala existente
+            let { data: roomData, error: roomError } = await supabase
+                .from('tavern_rooms')
+                .select('id, name')
+                .eq('guild_id', guildId)
+                .single();
+            
+            // Se não existir, cria uma (assumindo que 'A Taverna' é o padrão)
+            if (roomError && roomError.code === 'PGRST116') { // Não encontrou
+                const { data: newRoom, error: createError } = await supabase.rpc('create_tavern_room', {
+                    p_guild_id: guildId,
+                    p_name: 'A Taverna',
+                    p_open: false // Não é aberta a todos
+                });
+                if (createError) throw createError;
+                currentRoom = newRoom[0];
+            } else if (roomError) {
+                throw roomError;
+            } else {
+                currentRoom = roomData;
+            }
+        } catch (e) {
+            console.error('Erro ao garantir sala da Taverna:', e);
+            tControls.innerHTML = '<p>Erro ao acessar a sala da Taverna. Tente novamente.</p>';
+            throw e;
+        }
+    }
+
+    /** Cria e exibe uma notificação temporária. */
+    function showNotification(message, duration = 3000) {
+        if (!tNotifContainer) return;
+        const notif = document.createElement('div');
+        notif.className = 'tavern-notification';
+        notif.textContent = message;
+        tNotifContainer.appendChild(notif);
+
+        setTimeout(() => {
+            notif.style.opacity = '0';
+            setTimeout(() => tNotifContainer.removeChild(notif), 500);
+        }, duration);
+    }
+
+    /** Processa e exibe uma mensagem, incluindo as de sinalização. */
+    function processAndDisplayMessage(message) {
+        // Ignora mensagens sem conteúdo ou room_id
+        if (!message || !message.message) return;
+
+        // Verifica se é um sinal de jogador online
+        if (message.message.startsWith(ONLINE_PREFIX)) {
+            // AJUSTE 1: A notificação agora virá via polling/BC para TODOS, incluindo o próprio jogador
+            // (se ele tiver mais de uma aba aberta)
+            // Certifique-se de que a mensagem não é do sistema, mas de um jogador
+            if (message.player_id && message.player_name) {
+                showNotification(`${message.player_name} acabou de entrar na Taverna!`, 5000);
+            }
+            return; // Não exibe a mensagem de sinalização no chat
         }
 
-        // Guarda contra duplicação de mensagens
-        if (messagesCache.some(cachedMsg => cachedMsg.id === m.id)) {
+        // Se a mensagem já estiver no cache, ignora
+        if (messagesCache.some(m => m.id === message.id)) return;
+        
+        // Adiciona ao cache (e limita o tamanho do cache para evitar crescimento infinito)
+        messagesCache.push(message);
+        messagesCache.sort((a, b) => a.id - b.id);
+        if (messagesCache.length > 50) messagesCache.shift();
+
+        renderCachedMessages();
+    }
+
+    /** Renderiza o cache de mensagens no DOM. */
+    function renderCachedMessages() {
+        tChat.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+
+        messagesCache.forEach(message => {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'tavern-message';
+            msgEl.classList.add(message.player_id === userId ? 'self-message' : 'other-message');
+
+            const avatar = document.createElement('img');
+            avatar.src = message.player_avatar || 'https://default-avatar.png';
+            avatar.alt = message.player_name;
+            avatar.title = message.player_name;
+
+            const content = document.createElement('div');
+            content.className = 'bubble';
+            
+            const name = document.createElement('span');
+            name.className = 'message-name';
+            name.textContent = message.player_name;
+
+            const text = document.createElement('p');
+            text.className = 'message-text';
+            text.textContent = message.message;
+
+            content.appendChild(name);
+            content.appendChild(text);
+
+            msgEl.appendChild(avatar);
+            msgEl.appendChild(content);
+            fragment.appendChild(msgEl);
+        });
+
+        tChat.appendChild(fragment);
+        tChat.scrollTop = tChat.scrollHeight; // Scroll para a última mensagem
+    }
+
+    /** Busca as últimas mensagens e atualiza o chat. */
+    async function updateChat(forceReload = false) {
+        if (!currentRoom) return;
+
+        try {
+            let query = supabase
+                .from('tavern_messages')
+                .select('id, player_id, player_name, player_avatar, message, created_at')
+                .eq('room_id', currentRoom.id)
+                .order('id', { ascending: true });
+
+            if (lastPolledMessageId > 0 && !forceReload) {
+                query = query.gt('id', lastPolledMessageId);
+            } else if (lastPolledMessageId === 0 && !forceReload) {
+                query = query.limit(20);
+            }
+
+            const { data: newMessages, error } = await query;
+
+            if (error) throw error;
+            if (!newMessages || newMessages.length === 0) return;
+
+            newMessages.forEach(msg => processAndDisplayMessage(msg));
+
+            lastPolledMessageId = messagesCache.length > 0 ? messagesCache[messagesCache.length - 1].id : 0;
+            
+            pollingBackoff = 0;
+
+        } catch (e) {
+            console.error('Erro ao buscar mensagens:', e);
+            pollingBackoff = Math.min(60000, pollingBackoff + 2000);
+        }
+    }
+
+    /** Inicia o polling com backoff progressivo. */
+    function startPollingWithBackoff(immediately = false) {
+        if (pollingInterval) clearInterval(pollingInterval);
+        
+        async function poll() {
+            await updateChat();
+            
+            const interval = Math.max(1000, Math.min(60000, 2000 + pollingBackoff));
+            
+            pollingInterval = setTimeout(poll, interval);
+        }
+
+        if (immediately) {
+            poll();
+        } else {
+            pollingInterval = setTimeout(poll, 2000);
+        }
+    }
+
+    /** Persiste o cache de mensagens no armazenamento local. */
+    function persistCaches() {
+        if (guildId) {
+            localStorage.setItem(`tavern_cache_${guildId}`, JSON.stringify(messagesCache));
+            localStorage.setItem(`tavern_last_id_${guildId}`, lastPolledMessageId);
+        }
+    }
+    
+    /** Carrega o cache de mensagens do armazenamento local. */
+    function loadCaches() {
+        try {
+            const cachedMessages = localStorage.getItem(`tavern_cache_${guildId}`);
+            const cachedLastId = localStorage.getItem(`tavern_last_id_${guildId}`);
+            if (cachedMessages) {
+                messagesCache = JSON.parse(cachedMessages);
+                renderCachedMessages();
+                tChat.scrollTop = tChat.scrollHeight;
+            }
+            if (cachedLastId) {
+                lastPolledMessageId = parseInt(cachedLastId, 10);
+            }
+        } catch (e) {
+            console.warn('Erro ao carregar cache local:', e);
+            messagesCache = [];
+            lastPolledMessageId = 0;
+        }
+    }
+
+    // [NOVA FUNÇÃO] Para iniciar o cronômetro e desabilitar o botão
+    function startCountdown() {
+        if (!tSendBtn) return;
+        tSendBtn.disabled = true;
+        tSendBtn.style.filter = 'grayscale(0.7)';
+        tSendBtn.innerHTML = `<span><span id="cooldownText">${Math.ceil(CHAT_COOLDOWN_MS / 1000)}s</span></span>`;
+        const cooldownText = tSendBtn.querySelector('#cooldownText');
+
+        if (countdownInterval) clearInterval(countdownInterval);
+
+        function updateTimer() {
+            const timeElapsed = Date.now() - lastMessageTime;
+            const timeLeftSeconds = Math.ceil((CHAT_COOLDOWN_MS - timeElapsed) / 1000);
+
+            if (timeLeftSeconds <= 0) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                tSendBtn.disabled = false;
+                tSendBtn.style.filter = 'none';
+                tSendBtn.innerHTML = originalSendBtnHTML;
+            } else {
+                if (cooldownText) {
+                    cooldownText.textContent = `${timeLeftSeconds}s`;
+                }
+            }
+        }
+
+        countdownInterval = setInterval(updateTimer, 1000);
+        updateTimer();
+    }
+
+    // [NOVA FUNÇÃO] Manipulador de envio de mensagem com lógica de cooldown
+    async function handleSendMessage() {
+        if (!tMessageInput || !tSendBtn || !myPlayerData || !currentRoom) return;
+
+        const message = tMessageInput.value.trim();
+        if (!message) return;
+
+        const now = Date.now();
+        if (now - lastMessageTime < CHAT_COOLDOWN_MS) {
+            console.log('Cooldown ativo. Aguarde.');
+            showNotification('Aguarde 60 segundos entre as mensagens.', 3000);
             return;
         }
 
-        renderMessageDOM(m);
-        messagesCache.push(m);
-        tChat.scrollTop = tChat.scrollHeight;
-    }
+        // Inicia o cooldown IMEDIATAMENTE (e salva o tempo)
+        lastMessageTime = now;
+        startCountdown();
 
-
-    function renderCachedMessages() {
-        tChat.innerHTML = '';
-        if (messagesCache.length) {
-            messagesCache.forEach(m => {
-                // Não renderizar mensagens de status do cache
-                if (m.message && !m.message.startsWith(ONLINE_PREFIX)) {
-                    renderMessageDOM(m);
-                }
-            });
-        }
-        tChat.scrollTop = tChat.scrollHeight;
-    }
-
-    function persistCaches() {
-        try {
-            // Filtra mensagens de status antes de salvar no cache para não poluir
-            const cleanMessages = messagesCache.filter(m => m.message && !m.message.startsWith(ONLINE_PREFIX));
-            localStorage.setItem(PLAYERS_CACHE_KEY, JSON.stringify(Array.from(playersCache.entries())));
-            localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(cleanMessages));
-            localStorage.setItem(LAST_TS_KEY, lastMessageTimestamp);
-            localStorage.setItem(LAST_SYNC_KEY, String(lastSync));
-        } catch { }
-    }
-
-    // --- Sessão ---
-    async function getSession() {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error || !session) return false;
-
-        userId = session.user.id;
-        const { data: player, error: pErr } = await supabase
-            .from('players')
-            .select('guild_id,name,avatar_url')
-            .eq('id', userId)
-            .single();
-
-        if (pErr || !player) return false;
-
-        guildId = player.guild_id;
-        myPlayerData = {
-            name: player.name || 'Desconhecido',
-            avatar_url: player.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'
-        };
-        playersCache.set(userId, myPlayerData);
-
-        messagesCache = messagesCache.map(m =>
-            m.player_id === userId ? { ...m, player_name: myPlayerData.name, player_avatar: myPlayerData.avatar_url } : m
-        );
-        persistCaches();
-
-        return true;
-    }
-
-    async function ensureRoom() {
-        if (!guildId) return;
-        try {
-            const { data } = await supabase.from('tavern_rooms')
-                .select('*').eq('guild_id', guildId).limit(1);
-            if (data?.length) currentRoom = data[0];
-            else {
-                const { data: created } = await supabase.rpc('create_tavern_room', {
-                    p_guild_id: guildId, p_name: 'Taverna', p_open: false
-                });
-                currentRoom = Array.isArray(created) ? created[0] : created;
-            }
-        } catch (e) { console.warn('ensureRoom erro:', e); }
-    }
-
-  
-    async function startPollingWithBackoff(resetInterval = false) {
-        if (pollingTimer) clearTimeout(pollingTimer); 
-
-        if (resetInterval) {
-            pollingInterval = 10000;
-        }
-        
-        const checkAndPoll = async () => {
-            try {
-                const initialLastMessageTimestamp = lastMessageTimestamp;
-                await updateChat();
-                const hasNewMessages = initialLastMessageTimestamp !== lastMessageTimestamp;
-
-                if (hasNewMessages) {
-                    pollingInterval = 10000;
-                } else {
-                    pollingInterval = Math.min(pollingInterval + INTERVAL_INCREMENT, MAX_POLLING_INTERVAL);
-                }
-                
-                pollingTimer = setTimeout(checkAndPoll, pollingInterval);
-                lastSync = Date.now();
-                persistCaches();
-
-            } catch(e) {
-                console.warn('Erro durante o Polling com Backoff:', e);
-                pollingTimer = setTimeout(checkAndPoll, 25000);
-            }
-        };
-        
-        pollingTimer = setTimeout(checkAndPoll, pollingInterval);
-    }
-  
-    async function updateChat() {
-        if (!currentRoom?.id) return;
-        try {
-            const { data: msgs, error } = await supabase
-                .from('tavern_messages')
-                .select('id,player_id,player_name,player_avatar,message,created_at')
-                .eq('room_id', currentRoom.id)
-                .gt('created_at', lastMessageTimestamp)
-                .order('created_at', { ascending: true });
-
-            if (error || !msgs?.length) return;
-
-            // Processa as mensagens em sequência para garantir a ordem das notificações
-            for (const m of msgs) {
-                const cached = playersCache.get(m.player_id);
-                const normalized = {
-                    id: m.id,
-                    player_id: m.player_id,
-                    player_name:
-                        (m.player_id === userId ? myPlayerData.name :
-                            m.player_name || cached?.name || 'Jogador'),
-                    player_avatar:
-                        (m.player_id === userId ? myPlayerData.avatar_url :
-                            m.player_avatar || cached?.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'),
-                    message: m.message,
-                    created_at: m.created_at
-                };
-                processAndDisplayMessage(normalized);
-            }
-
-            lastMessageTimestamp = msgs[msgs.length - 1].created_at;
-            persistCaches();
-
-        } catch (e) { console.warn('updateChat falhou:', e); }
-    }
-
-    // --- Envio ---
-    tSendBtn.onclick = async () => {
-        const txt = tMessageInput.value.trim();
-        if (!txt) return;
         tMessageInput.value = '';
-        tSendBtn.disabled = true;
-
-        const msgData = {
-            id: `optim-${Date.now()}`,
-            player_id: userId,
-            player_name: myPlayerData.name,
-            player_avatar: myPlayerData.avatar_url,
-            message: txt,
-            created_at: new Date().toISOString()
-        };
-
-        renderMessageDOM(msgData);
-        messagesCache.push(msgData);
-        tChat.scrollTop = tChat.scrollHeight;
-
-        if (window.bc) {
-            bc.postMessage({ type: 'newMessage', guildId, data: msgData });
-        }
 
         try {
-            const { data: newMsg, error } = await supabase.rpc('post_tavern_message', {
+            // Usa o RPC para postar a mensagem
+            const { error } = await supabase.rpc('post_tavern_message', {
                 p_room_id: currentRoom.id,
                 p_player_id: userId,
                 p_player_name: myPlayerData.name,
-                p_player_avatar: myPlayerData.avatar_url,
-                p_message: txt
+                p_player_avatar: myPlayerData.avatar_url || 'https://default.png', 
+                p_message: message
             });
-            if (error) throw error;
             
-            const msg = Array.isArray(newMsg) ? newMsg[0] : newMsg;
+            if (error) throw error;
 
-            // Substituir a mensagem otimista pela real no cache
-            const idx = messagesCache.findIndex(m => m.id === msgData.id);
-            if (idx !== -1) {
-                messagesCache[idx] = msg;
-            }
-            persistCaches();
-        } catch (e) {
-            showNotification("Falha ao enviar mensagem", 3000);
-            console.warn(e);
-        } finally {
-            tSendBtn.disabled = false;
-           startPollingWithBackoff(true);
+            await updateChat();
+            
+        } catch(e) {
+            console.error('Erro ao enviar mensagem:', e);
         }
-    };
-
-    tMessageInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            tSendBtn.click();
-        }
-    });
-
-    // --- Inicialização ---
+    }
+    
+    /** Inicializa a Taverna. */
     async function initialize() {
-        if (tShowMembersBtn) tShowMembersBtn.style.display = 'none';
-        renderCachedMessages();
+        if (!tControls || !tActiveArea) return;
+        
+        loadCaches();
 
         if (!(await getSession())) {
             tControls.innerHTML = '<p>Você precisa estar logado e em uma guilda para usar a Taverna.</p>';
@@ -316,7 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await ensureRoom();
 
-        // Correção: Mostrar notificação para si mesmo imediatamente
+        // AJUSTE 1: RE-ADICIONADO - Mostrar notificação para o próprio jogador imediatamente.
         showNotification(`${myPlayerData.name} está online`, 5000);
 
         window.bc = new BroadcastChannel('guild_' + guildId);
@@ -333,21 +367,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         try { await supabase.rpc('cleanup_old_tavern_messages'); } catch { }
 
-        // Enviar evento "online" para outros jogadores
+        // Enviar evento "online" para outros jogadores (usando o insert original)
         try {
             await supabase.from('tavern_messages').insert({
                 room_id: currentRoom.id,
                 player_id: userId,
-                player_name: myPlayerData.name, // O nome é necessário para a notificação
+                player_name: myPlayerData.name,
                 message: `${ONLINE_PREFIX}${myPlayerData.name}`
             });
         } catch(e) {
             console.warn("Não foi possível notificar entrada na taverna:", e);
         }
+        
+        // Adicionar os manipuladores de eventos para o botão e Enter
+        tSendBtn.onclick = handleSendMessage;
+        tMessageInput.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                handleSendMessage();
+                e.preventDefault();
+            }
+        };
+
+        // Cooldown: O botão deve estar habilitado na inicialização
+        if (tSendBtn) {
+            tSendBtn.disabled = false;
+            tSendBtn.style.filter = 'none';
+            tSendBtn.innerHTML = originalSendBtnHTML;
+        }
 
         tTitle.textContent = currentRoom?.name || 'Taverna';
         tActiveArea.style.display = 'block';
-        tSendBtn.disabled = false;
     }
 
     initialize();

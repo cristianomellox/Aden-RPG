@@ -90,16 +90,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Função unificada para processar e adicionar mensagens (evita duplicação)
     function processAndDisplayMessage(m) {
-        // Correção 1: Lógica para notificações globais de "online"
+        // Lógica para notificações globais de "online" para OS OUTROS
         if (m.message && m.message.startsWith(ONLINE_PREFIX)) {
-            if (m.player_id !== userId) { // Não mostrar notificação para si mesmo
+            if (m.player_id !== userId) { // Mostrar notificação apenas sobre os outros
                 const playerName = m.message.substring(ONLINE_PREFIX.length);
-                showNotification(`${playerName} está online`, 5000);
+                showNotification(`${playerName} está online`, 3000);
             }
             return; // Não renderizar como uma mensagem de chat
         }
 
-        // Correção 2: Guarda contra duplicação
+        // Guarda contra duplicação de mensagens
         if (messagesCache.some(cachedMsg => cachedMsg.id === m.id)) {
             return;
         }
@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const msg = Array.isArray(newMsg) ? newMsg[0] : newMsg;
 
-            // Correção 2: Substituir a mensagem otimista pela real no cache
+            // Substituir a mensagem otimista pela real no cache
             const idx = messagesCache.findIndex(m => m.id === msgData.id);
             if (idx !== -1) {
                 messagesCache[idx] = msg;
@@ -316,6 +316,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await ensureRoom();
 
+        // Correção: Mostrar notificação para si mesmo imediatamente
+        showNotification(`${myPlayerData.name} está online`, 3000);
+
         window.bc = new BroadcastChannel('guild_' + guildId);
         bc.onmessage = (ev) => {
             if (!ev.data || ev.data.guildId !== guildId) return;
@@ -330,7 +333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         try { await supabase.rpc('cleanup_old_tavern_messages'); } catch { }
 
-        // Correção 1: Enviar evento "online" para outros jogadores
+        // Enviar evento "online" para outros jogadores
         try {
             await supabase.from('tavern_messages').insert({
                 room_id: currentRoom.id,
@@ -341,7 +344,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch(e) {
             console.warn("Não foi possível notificar entrada na taverna:", e);
         }
-
 
         tTitle.textContent = currentRoom?.name || 'Taverna';
         tActiveArea.style.display = 'block';

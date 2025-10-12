@@ -1,5 +1,5 @@
-// guild_tavern.js - Versão híbrida com BroadcastChannel + lazy pull
-// Zero egress local, Supabase consultado apenas quando necessário
+// guild_tavern.js - Versão híbrida com BroadcastChannel + Polling com Backoff Progressivo
+// Zero egress local, Supabase consultado de forma inteligente.
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Inicialização Supabase ---
@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let guildId = null;
     let myPlayerData = {};
     let currentRoom = null;
+    
+    // --- Polling Inteligente ---
+    let pollingInterval = 5000; // 5 segundos (mínimo)
+    const MAX_POLLING_INTERVAL = 300000; // 5 minutos
+    const INTERVAL_INCREMENT = 15000; // Aumenta em 15 segundos
+    let pollingTimer = null;
 
     const PLAYERS_CACHE_KEY = 'tavern_players_cache_v1';
     const MESSAGES_CACHE_KEY = 'tavern_messages_cache_v1';
@@ -51,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch { }
 
     let lastMessageTimestamp = localStorage.getItem(LAST_TS_KEY) || new Date(0).toISOString();
-    let lastSync = parseInt(localStorage.getItem(LAST_SYNC_KEY) || "0", 10);
+    let lastSync = parseInt(localStorage.getItem(LAST_SYNC_KEY) || "0", 10); // Mantido por compatibilidade
 
     // --- UX ---
     function showNotification(message, duration = 4000) {
@@ -140,7 +146,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) { console.warn('ensureRoom erro:', e); }
     }
 
-    // --- Atualização (lazy pull) ---
+  
+    async function startPollingWithBackoff(resetInterval = false) {
+        if (pollingTimer) clearTimeout(pollingTimer); 
+
+        if (resetInterval) {
+          
+            pollingInterval = 10000;
+        }
+        
+        const checkAndPoll = async () => {
+            try {
+                const initialLastMessageTimestamp = lastMessageTimestamp;
+                await updateChat();
+
+              
+                const hasNewMessages = initialLastMessageTimestamp !== lastMessageTimestamp;
+
+                if (hasNewMessages) {
+              
+                    pollingInterval = 10000;
+                } else {
+                
+                    pollingInterval = Math.min(pollingInterval + INTERVAL_INCREMENT, MAX_POLLING_INTERVAL);
+                }
+                
+              
+                pollingTimer = setTimeout(checkAndPoll, pollingInterval);
+                
+              
+                lastSync = Date.now();
+                persistCaches();
+
+            } catch(e) {
+                console.warn('Erro durante o Polling com Backoff:', e);
+              
+                pollingTimer = setTimeout(checkAndPoll, 25000);
+            }
+        };
+        
+    
+        pollingTimer = setTimeout(checkAndPoll, pollingInterval);
+    }
+  
     async function updateChat() {
         if (!currentRoom?.id) return;
         try {
@@ -236,11 +284,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const idx = messagesCache.findIndex(m => m.id === msgData.id);
             if (idx !== -1) messagesCache[idx] = msg;
             persistCaches();
+          
+
         } catch (e) {
             showNotification("Falha ao enviar mensagem", 3000);
             console.warn(e);
         } finally {
             tSendBtn.disabled = false;
+           startPollingWithBackoff(true);
         }
     };
 
@@ -275,17 +326,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
 
-        // --- Lazy pull inicial + a cada 5 minutos ---
+        // --- Lazy pull inicial + Polling Inteligente (Backoff) ---
         await updateChat();
-        lastSync = Date.now();
-        persistCaches();
-        setInterval(async () => {
-            if (Date.now() - lastSync >= 5 * 60 * 1000) {
-                await updateChat();
-                lastSync = Date.now();
-                persistCaches();
-            }
-        }, 60 * 1000);
+        startPollingWithBackoff(true);
 
         // --- RPC única de limpeza inicial ---
         try { await supabase.rpc('cleanup_old_tavern_messages'); } catch { }

@@ -22,9 +22,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
        <div> <span id="pageTitle">Guilda</span></div>
-        <a href="#" class="top-bar-link" id="refreshBtn" title="Recarregar">
-            <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
-        </a>
+        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
     </div>
 
     <div id="mainContainer">
@@ -91,14 +89,10 @@
                <div id="tavernContainer" class="tavern-container">
                   <h3 id="tavernTitle" style="margin-top: 110px; display:none;">Taverna da Guilda</h3>
   <h3 id="tavernTitle2" style="margin-top: 110px;">Taverna da Guilda</h3>
-  <button id="showMembersBtn" class="tavernSendBtn">
-    Membros na Taverna</button>
   <div id="tavernControls" style="margin-bottom:8px;"></div>
 
   <!-- Área ativa da Taverna (escondida até entrar) -->
   <div id="tavernActiveArea" style="display:none;">
-    <div id="tavernSeats" class="tavern-seats"></div>
-    <div id="tavernListeners"></div>
 
     <div id="tavernChat" class="tavern-chat"></div>
     <div id="tavernChatInput">
@@ -109,18 +103,7 @@
 </div>
 </div>
             
-            <div id="tavernPopoverTemplate" style="display: none; position: absolute; background: #333; border: 1px solid #555; border-radius: 8px; z-index: 100;" class="tavern-popover">
-    </div>
-    
-<div id="membersModal" class="modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 1000; overflow: auto;">
-    <div class="modal-content" style="background-color: #333; color: white; margin: 10% auto; padding: 20px; border: 1px solid #444; width: 80%; max-width: 450px; border-radius: 8px; position: relative;">
-        <span class="close-button" id="closeMembersModal" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
-        <h2 style="margin-top: 0;">Membros na Taverna</h2>
-        <ul id="membersList" style="list-style: none; padding: 0;">
-            <li>Carregando...</li>
-        </ul>
-    </div>
-</div>
+
 
     
 

@@ -1404,7 +1404,7 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
     position: absolute;
 }
 #tavernChat {
-  height: 68vh;
+  height: 62vh;
 }
 /* Correção para o layout do chat da Taverna */
 .tavern-message > div {

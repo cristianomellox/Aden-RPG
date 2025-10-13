@@ -1,4 +1,4 @@
-# Aden RPG + Rede Social
+# Aden RPG Online
 ## MMORPG de Fantasia Medieval para Mobile
 
 Este projeto é o desenvolvimento inicial (Alpha) de "Aden RPG", um Massively Multiplayer Online Role-Playing Game de fantasia medieval. O foco é a experiência mobile, oferecendo um sistema robusto de combate e uma profunda integração social.

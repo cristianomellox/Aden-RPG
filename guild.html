@@ -88,7 +88,10 @@
             <div id="taverna" class="tab-pane">
                <div id="tavernContainer" class="tavern-container">
                   <h3 id="tavernTitle" style="margin-top: 110px; display:none;">Taverna da Guilda</h3>
-  <h3 id="tavernTitle2" style="margin-top: 110px;">Taverna da Guilda</h3>
+                  <div class="tavern-header-inline" style="margin-top: 80px;display: flex;justify-content: center; align-items: center;">
+  <h3 id="tavernTitle2">Taverna da Guilda</h3>
+  <img id="tavtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; margin-top: -15px; right: 3px;">
+  </div>
   <div id="tavernControls" style="margin-bottom:8px;"></div>
 
   <!-- Área ativa da Taverna (escondida até entrar) -->
@@ -124,8 +127,8 @@
                   <span class="tdd_desc">De Segunda a Sexta.<br>Líder e Co-Líderes<br>podem iniciar a Raid.</span>
                   <div id="tddbuttons">
                    <img id="raidtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;">
-                    <img id="tddstory" src="https://aden-rpg.pages.dev/assets/tddstory.webp" style="width:45px; height:45px;">
-                      <img src="https://aden-rpg.pages.dev/assets/tddstart.webp" style="width:52px; height:52px; margin-top: -4px;">
+                    <img id="tddstory" src="https://aden-rpg.pages.dev/assets/tddstart.webp" style="width:47px; height:47px; margin-top: -2px;">
+                     
                    </div>
                 <img id="tddimg" src="https://aden-rpg.pages.dev/assets/tddbanner.webp" style="width: 90vw; height: 180px; background: none;">
       </div>      
@@ -428,6 +431,13 @@
   </div>
 </div>
 
+<div id="tutorialModaltav" class="modal-overlay2" style="display: none; height: 650px!important;">
+        <div class="modal-content2">
+           <center><h3 style="color: white;">Taverna da Guilda</h3></center>
+<p>A taverna é o local onde os membros da guilda se reúnem para conversar e trocar informações.</p>
+<p><strong>Dica:</strong> A Taverna não é necessariamente um chat ativo, pois tem um tempo mínimo para envio de mensagens e um limite de histórico antigo. Use-a para deixar recados importantes.</p>
+<center><button id="closetavTutorialBtn" class="action-btn">Fechar</button></center>
+</div></div>
 
 <div id="tutorialModalRaid" class="modal-overlay2" style="display: none;">
         <div class="modal-content2">
@@ -487,6 +497,34 @@ O tempo de preparação é de 10 minutos.</li></ul>
         <center><button id="closetddstoryBtn" class="action-btn">Fechar</button></center>       
     </div>
 </div>
+
+<script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const tavtutoImg = document.getElementById("tavtuto");
+            const tutorialModal = document.getElementById("tutorialModaltav");
+            const closetavTutorialBtn = document.getElementById("closetavTutorialBtn");
+
+            if (tavtutoImg) {
+                tavtutoImg.addEventListener("click", () => {
+                    tutorialModaltav.style.display = "flex";
+                });
+            }
+
+            if (closetavTutorialBtn) {
+                closetavTutorialBtn.addEventListener("click", () => {
+                    tutorialModaltav.style.display = "none";
+                });
+            }
+
+            if (tutorialModaltav) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tutorialModaltav) {
+                        tutorialModaltav.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
     
      <script>
         document.addEventListener("DOMContentLoaded", () => {

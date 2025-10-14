@@ -6,8 +6,9 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
-const RAID_POLL_MS = 10000;
-const REVIVE_CHECK_MS = 1000;
+const RAID_POLL_MS = 20000;
+const SECONDARY_POLL_MS = 80000;
+const REVIVE_CHECK_MS = 10000;
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
@@ -31,11 +32,12 @@ const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
 
 // Variáveis de estado
 let userId = null, userGuildId = null, userRank = "member", userName = null;
-let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1;
+let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1, playerMaxHealth = 1;
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
-let pollInterval = null, uiSecondInterval = null, raidTimerInterval = null, reviveTickerInterval = null, countdownInterval = null;
+let pollInterval = null, secondaryPollInterval = null, uiSecondInterval = null, raidTimerInterval = null, reviveTickerInterval = null, reviveUITickerInterval = null, countdownInterval = null;
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
+let playerRankInfo = { rank: null, damage: 0 };
 
 // --- Variáveis de estado para notificação de morte ---
 let deathNotificationQueue = [];
@@ -359,13 +361,53 @@ function ensurePlayerHpUi() {
   container.appendChild(pArea);
 }
 
+function ensurePlayerRankUi() {
+    let rankEl = $id("raidPlayerRankInfo");
+    if (rankEl) return;
+
+    const container = $id("raidDamageRankingContainer");
+    if (!container) return;
+    
+    rankEl = document.createElement("div");
+    rankEl.id = "raidPlayerRankInfo";
+    rankEl.style.cssText = "text-align: center; margin-top: 10px; margin-bottom: 10px; padding: 5px; background-color: rgba(0, 0, 0, 0.2); border-radius: 5px; font-size: 0.9em;";
+    
+    const title = document.createElement("strong");
+    title.textContent = "Sua Posição";
+    
+    const details = document.createElement("div");
+    details.id = "raidPlayerRankDetails";
+    details.textContent = "Ataque para atualizar...";
+
+    rankEl.appendChild(title);
+    rankEl.appendChild(details);
+
+    container.insertBefore(rankEl, container.firstChild);
+}
+
+function updatePlayerRankUi(rank, totalDamage) {
+    ensurePlayerRankUi();
+    const detailsEl = $id("raidPlayerRankDetails");
+    if (!detailsEl) return;
+
+    if (rank && totalDamage > 0) {
+        playerRankInfo = { rank, damage: totalDamage };
+        detailsEl.innerHTML = `
+            <span style="color: #ffc107;">#${rank}</span> com 
+            <span style="color: #ffdddd;">${totalDamage.toLocaleString()}</span> de dano
+        `;
+    } else {
+        detailsEl.textContent = "Você ainda não causou dano.";
+    }
+}
+
 function updatePlayerHpUi(cur, max) {
   ensurePlayerHpUi();
   const fill = $id("raidPlayerHpFill");
   const text = $id("raidPlayerHpText");
   const avatar = $id("raidPlayerAvatar");
   const overlay = $id("raidPlayerReviveOverlay");
-  const c = Math.max(0, Number(cur || 0));
+  const c = Math.max(0, Number(cur === null ? max : cur));
   const m = Math.max(1, Number(max || 1));
   const pct = Math.max(0, Math.min(100, (c / m) * 100));
   if (fill) fill.style.width = `${pct}%`;
@@ -475,8 +517,6 @@ function setRaidTitleFloorAndTimer(floor, endsAt) {
   }
 }
 
-// --- Funções para Notificação de Morte ---
-
 function createDeathNotificationUI() {
     if ($id('raidDeathNotification')) return;
 
@@ -562,9 +602,7 @@ async function checkOtherPlayerDeaths() {
             return;
         }
 
-        const allDeaths = raidData.recent_deaths;
-        // ALTERADO: Removido '&& death.player_id !== userId' para que a função processe a morte de todos, incluindo a do próprio jogador.
-        const newDeaths = allDeaths.filter(death => !processedDeathTimestamps.has(death.timestamp));
+        const newDeaths = raidData.recent_deaths.filter(death => !processedDeathTimestamps.has(death.timestamp));
 
         if (newDeaths.length === 0) {
             return;
@@ -703,22 +741,27 @@ async function continueLoadingRaid(raidData) {
     });
     const attackPara = $id('raidPlayerAttacks')?.parentNode;
     if (attackPara) attackPara.style.display = '';
+    
     setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
     updateHpBar(raidData.monster_health, maxMonsterHealth);
+    
     await loadMonsterForFloor(currentFloor);
-    await refreshRanking();
     await loadAttempts();
-    await loadPlayerCombatState();
+    await loadInitialPlayerState();
+    await refreshRanking();
+    await checkPendingRaidRewards();
 
     deathNotificationQueue = [];
     isDisplayingDeathNotification = false;
     processedDeathTimestamps.clear(); 
+    playerRankInfo = { rank: null, damage: 0 };
+    updatePlayerRankUi(null, 0);
 
     startPolling();
+    startSecondaryPolling();
     startUISecondTicker();
     startRaidTimer();
     startVisualBossAttackTicker(raidData.last_boss_attack_at);
-    startReviveTicker();
     startFloorMusic();
     openCombatModal();
 }
@@ -751,7 +794,7 @@ async function loadMonsterForFloor(floor) {
 async function refreshRanking() {
   if (!currentRaidId) return;
   try {
-    const { data } = await supabase.from("guild_raid_damage").select("player_id, damage, players(name)").eq("raid_id", currentRaidId).order("damage", { ascending: false });
+    const { data } = await supabase.from("guild_raid_damage").select("player_id, damage, players(name)").eq("raid_id", currentRaidId).order("damage", { ascending: false }).limit(10);
     const ul = $id("raidDamageRankingList");
     if (!ul) return;
     ul.innerHTML = "";
@@ -823,27 +866,24 @@ function isPlayerDeadLocal() {
   return new Date(_playerReviveUntil) > new Date();
 }
 
-async function loadPlayerCombatState() {
+async function loadInitialPlayerState() {
   if (!userId) return;
   try {
-    const { data: playerDetails, error: detailsError } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
-    const { data: playerState, error: stateError } = await supabase.from("players").select("raid_player_health, avatar_url, revive_until").eq("id", userId).single();
-    if (detailsError || stateError || !playerDetails || !playerState) {
-        console.error("Erro ao carregar estado do jogador:", detailsError || stateError);
+    const { data: playerDetails, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
+    if (error || !playerDetails) {
+        console.error("Erro ao carregar detalhes do jogador:", error);
         return;
     }
-    const maxHp = playerDetails.health || 1;
-    const curHp = (playerState.raid_player_health !== null && playerState.raid_player_health !== undefined) ? playerState.raid_player_health : maxHp;
-    _playerReviveUntil = playerState.revive_until;
+    playerMaxHealth = playerDetails.health || 1;
+    
+    updatePlayerHpUi(playerMaxHealth, playerMaxHealth);
+
     const av = $id("raidPlayerAvatar");
-    if (av && playerState.avatar_url) av.src = playerState.avatar_url;
-    updatePlayerHpUi(curHp, maxHp);
-    if (_playerReviveUntil && new Date(_playerReviveUntil) > new Date()) {
-      const secs = Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000);
-      setPlayerReviveOverlayText(secs);
-    }
+    const { data: pData } = await supabase.from("players").select("avatar_url").eq("id", userId).single();
+    if (av && pData?.avatar_url) av.src = pData.avatar_url;
+
   } catch (e) {
-    console.error("loadPlayerCombatState", e);
+    console.error("loadInitialPlayerState", e);
   }
 }
 
@@ -891,8 +931,14 @@ async function performAttack() {
             await loadAttempts();
             return;
         }
+        
         if (payload.attacks_left !== null) attacksLeft = Number(payload.attacks_left);
         lastAttackAt = payload.last_attack_at ? new Date(payload.last_attack_at) : (attacksLeft < MAX_ATTACKS ? new Date() : null);
+        
+        if (payload.player_rank && payload.new_total_damage) {
+            updatePlayerRankUi(payload.player_rank, payload.new_total_damage);
+        }
+
         updateAttackUI();
         displayFloatingDamageOver($id("raidMonsterArea"), payload.damage_dealt ?? 0, payload.is_crit === true);
         playHitSound(payload.is_crit === true);
@@ -903,7 +949,6 @@ async function performAttack() {
             setTimeout(() => monsterImg.classList.remove('shake-animation'), 1000);
         }
 
-        await refreshRanking();
         if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
         
         if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
@@ -1022,13 +1067,8 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
   }
 }
 
-// --- NOVO: Lógica para simulação de ataque e sincronização ---
-
 function getSimulatedBossDamage() {
-    // Mesma lógica do backend para o dano base: 2% da vida máxima do monstro.
     const baseDamage = Math.max(1, Math.floor(maxMonsterHealth * 0.02));
-    // Não simulamos a defesa do jogador, pois o dano é apenas visual.
-    // O HP real será corrigido pelo poll principal de qualquer maneira.
     return baseDamage;
 }
 
@@ -1052,8 +1092,6 @@ function simulateLocalBossAttack() {
 
 function syncBossAttackTimer(lastAttackAtFromServer) {
     if (!lastAttackAtFromServer) {
-        // Se o chefe nunca atacou, o primeiro ataque será 30s após o início do andar.
-        // Como não temos esse tempo, uma aproximação segura é não agendar nada até o primeiro poll.
         nextBossAttackAt = null; 
         return;
     }
@@ -1063,7 +1101,7 @@ function syncBossAttackTimer(lastAttackAtFromServer) {
     const intervalMs = BOSS_ATTACK_INTERVAL_SECONDS * 1000;
 
     const timeSinceLast = now - lastAttackTime;
-    if (timeSinceLast < 0) { // O último ataque está no futuro, relógio dessincronizado?
+    if (timeSinceLast < 0) {
         nextBossAttackAt = new Date(lastAttackTime + intervalMs);
         return;
     }
@@ -1084,10 +1122,9 @@ function startVisualBossAttackTicker(lastAttackAtFromServer) {
 
         if (new Date() >= nextBossAttackAt) {
             simulateLocalBossAttack();
-            // Agenda o próximo ataque a partir do horário que este deveria ter ocorrido.
             nextBossAttackAt = new Date(nextBossAttackAt.getTime() + (BOSS_ATTACK_INTERVAL_SECONDS * 1000));
         }
-    }, 500); // Verificação leve a cada 500ms
+    }, 500);
 }
 
 function stopVisualBossAttackTicker() {
@@ -1096,23 +1133,49 @@ function stopVisualBossAttackTicker() {
     nextBossAttackAt = null;
 }
 
-// --- Fim da nova lógica ---
-
 function startReviveTicker() {
   stopReviveTicker();
   reviveTickerInterval = setInterval(async () => {
-    if (!_playerReviveUntil) {
-      setPlayerReviveOverlayText(0);
-      return;
-    }
-    const remaining = Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000);
-    setPlayerReviveOverlayText(Math.max(0, remaining));
+    if (!_playerReviveUntil) return;
+    
+    const remaining = (new Date(_playerReviveUntil) - new Date()) / 1000;
+    
     if (remaining <= 0) {
-      await supabase.rpc("player_revive_if_needed", { p_player_id: userId });
-      await loadPlayerCombatState();
-      updateAttackUI();
+      const { data: reviveResult, error } = await supabase.rpc("player_revive_if_needed", { p_player_id: userId });
+
+      if (error) {
+        console.error("Erro ao tentar reviver jogador:", error);
+        await loadInitialPlayerState();
+        return;
+      }
+
+      if (reviveResult && reviveResult.action === 'revived') {
+        _playerReviveUntil = null;
+        updatePlayerHpUi(reviveResult.new_health, reviveResult.new_health);
+        updateAttackUI();
+        
+        stopReviveTicker();
+        stopReviveUITicker();
+      } else {
+        const { data: state } = await supabase.rpc('get_raid_essential_state', { p_raid_id: currentRaidId, p_player_id: userId });
+         if(state) _playerReviveUntil = state.revive_until;
+      }
     }
   }, REVIVE_CHECK_MS);
+}
+
+function startReviveUITicker() {
+    stopReviveUITicker();
+    reviveUITickerInterval = setInterval(() => {
+        if (!_playerReviveUntil) {
+            setPlayerReviveOverlayText(0);
+            stopReviveUITicker();
+            return;
+        }
+        const remaining = Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000);
+        setPlayerReviveOverlayText(Math.max(0, remaining));
+
+    }, 1000);
 }
 
 function stopReviveTicker() {
@@ -1120,27 +1183,10 @@ function stopReviveTicker() {
   reviveTickerInterval = null;
 }
 
-async function refreshRaidState() {
-  if (!currentRaidId || isProcessingAction) return;
-  try {
-    await supabase.rpc("tick_raid_boss_attack");
-    await supabase.rpc('end_expired_raid', { p_raid_id: currentRaidId });
-    const { data, error } = await supabase.from("guild_raids").select("*").eq("id", currentRaidId).single();
-    if (error || !data || !data.active) {
-      closeCombatModal();
-      showRaidAlert("A Raid terminou.");
-      return;
-    }
-    if (data.current_floor !== currentFloor) {
-      await loadRaid();
-    } else {
-      setRaidTitleFloorAndTimer(data.current_floor || 1, data.ends_at);
-      updateHpBar(data.monster_health, data.initial_monster_health || maxMonsterHealth);
-      syncBossAttackTimer(data.last_boss_attack_at);
-    }
-  } catch (e) {
-    console.error("refreshRaidState", e);
-  }
+function stopReviveUITicker() {
+    if (reviveUITickerInterval) clearInterval(reviveUITickerInterval);
+    reviveUITickerInterval = null;
+    setPlayerReviveOverlayText(0);
 }
 
 async function checkPendingRaidRewards() {
@@ -1155,8 +1201,7 @@ async function checkPendingRaidRewards() {
       if (shownRewardIds.has(reward.id)) continue;
       shownRewardIds.add(reward.id);
       await new Promise(resolve => {
-        showRewardModal(reward.xp, reward.crystals, async () => {
-          await loadRaid().catch(()=>{});
+        showRewardModal(reward.xp, reward.crystals, () => {
           resolve();
         }, reward.id, reward.items_dropped);
       });
@@ -1166,20 +1211,62 @@ async function checkPendingRaidRewards() {
 
 function startPolling() {
   stopPolling();
-  pollInterval = setInterval(() => {
-    refreshRaidState().catch(()=>{});
-    refreshRanking().catch(()=>{});
-    loadPlayerCombatState().catch(()=>{});
-    checkPendingRaidRewards().catch(()=>{});
-    if (currentFloor % 5 === 0) {
-        checkOtherPlayerDeaths().catch(()=>{});
+  pollInterval = setInterval(async () => {
+    if (!currentRaidId || !userId || isProcessingAction) return;
+
+    const { data: state, error } = await supabase.rpc('get_raid_essential_state', {
+      p_raid_id: currentRaidId,
+      p_player_id: userId
+    });
+
+    if (error || !state || !state.success) {
+      if (!state?.active) {
+          closeCombatModal();
+          showRaidAlert("A Raid terminou.");
+      }
+      return;
+    }
+
+    if (!state.active) {
+      closeCombatModal();
+      showRaidAlert("A Raid terminou.");
+      return;
+    }
+
+    updateHpBar(state.monster_health, state.initial_monster_health);
+    updatePlayerHpUi(state.player_health, playerMaxHealth);
+    syncBossAttackTimer(state.last_boss_attack_at);
+
+    _playerReviveUntil = state.revive_until;
+    if (isPlayerDeadLocal()) {
+      if (!reviveTickerInterval) startReviveTicker();
+      if (!reviveUITickerInterval) startReviveUITicker();
+    } else {
+      if (reviveTickerInterval) stopReviveTicker();
+      if (reviveUITickerInterval) stopReviveUITicker();
     }
   }, RAID_POLL_MS);
+}
+
+function startSecondaryPolling() {
+    stopSecondaryPolling();
+    secondaryPollInterval = setInterval(() => {
+        if (!currentRaidId || isProcessingAction) return;
+        refreshRanking().catch(e => console.warn("Falha ao atualizar ranking geral:", e));
+        if (currentFloor % 5 === 0) {
+            checkOtherPlayerDeaths().catch(e => console.warn("Falha ao checar mortes:", e));
+        }
+    }, SECONDARY_POLL_MS);
 }
 
 function stopPolling() {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = null;
+}
+
+function stopSecondaryPolling() {
+    if (secondaryPollInterval) clearInterval(secondaryPollInterval);
+    secondaryPollInterval = null;
 }
 
 function startUISecondTicker() {
@@ -1201,7 +1288,11 @@ function startRaidTimer() {
     const diff = Math.floor((new Date(raidEndsAt) - new Date()) / 1000);
     if (diff <= 0) {
       clearRaidTimer();
-      refreshRaidState(); 
+      const m = $id("raidCombatModal");
+      if(m && m.style.display !== 'none') {
+        closeCombatModal();
+        showRaidAlert("A Raid terminou.");
+      }
       return;
     }
     setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
@@ -1218,7 +1309,7 @@ function closeCombatModal(){
   if (banner) {
       banner.classList.remove('show');
       banner.style.animation = 'none';
-      banner.offsetHeight; // Trigger reflow
+      banner.offsetHeight;
       banner.style.animation = null; 
   }
   deathNotificationQueue = [];
@@ -1226,10 +1317,12 @@ function closeCombatModal(){
   processedDeathTimestamps.clear();
 
   stopPolling(); 
+  stopSecondaryPolling();
   stopUISecondTicker(); 
   clearRaidTimer(); 
   stopVisualBossAttackTicker();
   stopReviveTicker();
+  stopReviveUITicker();
   stopAllFloorMusic();
   clearCountdown();
   actionQueue = [];
@@ -1239,7 +1332,6 @@ function closeCombatModal(){
 function openRaidModal() { const m = $id("raidModal"); if (m) m.style.display = "flex"; }
 function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = "none"; }
 function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; }
-
 
 function bindEvents() {
   const tdd = $id("tdd");
@@ -1251,7 +1343,7 @@ function bindEvents() {
 
       const { data: activeRaid } = await supabase
         .from("guild_raids")
-        .select("id")
+        .select("id, current_floor")
         .eq("guild_id", userGuildId)
         .eq("active", true)
         .limit(1)
@@ -1328,7 +1420,6 @@ async function mainInit() {
 
 document.addEventListener("DOMContentLoaded", mainInit);
 
-// --- Compra de ataques Raid ---
 let raidBuyQty = 1;
 let raidBuyPlayerGold = 0;
 let raidBuyBaseBoughtCount = 0;
@@ -1418,10 +1509,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-// --- Verificação ao entrar na página: alerta e entrada forçada caso haja raid ativa ---
 async function checkActiveRaidOnEntry() {
   try {
-    // Aguarda o userGuildId ser definido (até 3s), pois initSession() pode demorar.
     let waited = 0;
     while (!userGuildId && waited < 3000) {
       await new Promise(r => setTimeout(r, 100));
@@ -1429,7 +1518,6 @@ async function checkActiveRaidOnEntry() {
     }
     if (!userGuildId) return;
 
-    // Tenta buscar raid ativa
     const { data: activeRaid, error } = await supabase
       .from("guild_raids")
       .select("id")
@@ -1440,10 +1528,8 @@ async function checkActiveRaidOnEntry() {
 
     if (error || !activeRaid) return;
 
-    // Pequeno atraso para não conflitar com qualquer fechamento de modal pendente
     await new Promise(r => setTimeout(r, 300));
 
-    // Apenas mostra o alerta
     try {
       showRaidAlert("Há uma Raid em andamento. Vá verificar!");
     } catch (e) {

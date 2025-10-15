@@ -94,9 +94,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // --- Estado ---
   let userId = null;
-  let monsterHpInterval = null;
+  // ALTERAÇÃO FINAL: Removidas variáveis de controle de polling que não são mais usadas.
+  // let monsterHpInterval = null;
   let historyCache = [];
-  let logsPollInterval = null;
+  // let logsPollInterval = null;
+  // let minesRefreshInterval = null;
+  // let rankingInterval = null;
+  // let sessionCheckInterval = null;
+  // FIM DA ALTERAÇÃO FINAL
   let buyMode = 'attack';
   let playerOwnedMineId = null;
   let currentMineId = null;
@@ -105,48 +110,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   let cooldownInterval = null;
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
-  const MINES_REFRESH_MS = 40000;
-  let minesRefreshInterval = null;
-  const RANKING_REFRESH_MS = 10000; // ALTERADO PARA 10s
-  let rankingInterval = null;
-  
   let hasAttackedOnce = false;
 
-  let sessionCheckInterval = null;
-
-  async function checkExpiredSessions() {
-    if (!userId) return;
-    try {
-      const { error } = await supabase.rpc("resolve_expired_mine_sessions", { p_player_id: userId });
-      if (error) console.warn("[mines] checkExpiredSessions erro:", error.message);
-    } catch (e) {
-      console.error("[mines] checkExpiredSessions exception:", e);
-    }
+  // ALTERAÇÃO FINAL: Função de resolução global para ser chamada em pontos chave.
+  async function resolveAllExpiredMinesGlobally() {
+    // Usamos .then() para não bloquear a interface do usuário. A função roda em segundo plano.
+    supabase.rpc('resolve_all_expired_mines').then(({ error }) => {
+      if (error) {
+        console.warn("[mines] Falha ao tentar resolver minas expiradas globalmente:", error.message);
+      }
+    });
   }
-
+  // FIM DA ALTERAÇÃO FINAL
   
   // --- Controladores de auto-refresh de minas ---
+  // ALTERAÇÃO FINAL: Funções de polling desativadas.
   function startMinesAutoRefresh() {
-    // evita múltiplos intervalos
-    if (minesRefreshInterval) return;
-    // só inicia se não estivermos em um combate (currentMineId === null)
-    if (currentMineId) return;
-    minesRefreshInterval = setInterval(() => {
-      // antes de chamar loadMines checamos se o usuário ainda está na tela das minas e a página visível
-      if (!document.hidden && !currentMineId) {
-        loadMines().catch(e => console.warn("[mines] auto loadMines falhou:", e));
-      }
-    }, MINES_REFRESH_MS);
-    // faz um primeiro carregamento imediato (opcional)
-    // loadMines().catch(()=>{});
+    // Esta função não faz mais nada. O refresh é manual ou orientado a eventos.
   }
 
   function stopMinesAutoRefresh() {
-    if (minesRefreshInterval) {
-      clearInterval(minesRefreshInterval);
-      minesRefreshInterval = null;
-    }
+    // Esta função não faz mais nada.
   }
+  // FIM DA ALTERAÇÃO FINAL
 
   // --- DOM ---
   const minesContainer = document.getElementById("minesContainer") || document.getElementById("minasContainer");
@@ -293,32 +279,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // --- Ranking ---
+  // ALTERAÇÃO FINAL: Função de busca de ranking simplificada. A atualização de HP agora é feita via resposta do ataque.
   async function fetchAndRenderDamageRanking() {
     if (!currentMineId || !damageRankingList) return;
     try {
-      // 1. Busca os dados do ranking de dano
       const { data: rankingData, error: rankingError } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
       if (rankingError) {
         console.warn("[mines] get_mine_damage_ranking falhou:", rankingError.message);
         return;
       }
-
-      // 2. Busca o HP atual do monstro
-      const { data: mineData, error: mineError } = await supabase
-        .from("mining_caverns")
-        .select("monster_health, initial_monster_health")
-        .eq("id", currentMineId)
-        .single();
-      if (mineError) {
-        console.warn("[mines] Falha ao buscar HP da mina:", mineError.message);
-      } else {
-        // 3. Atualiza a barra de vida com os dados recém-obtidos
-        const monsterHealth = mineData.monster_health;
-        const initialMonsterHealth = mineData.initial_monster_health;
-        updateHpBar(monsterHealth, initialMonsterHealth || maxMonsterHealth);
-      }
-
-      // 4. Renderiza o ranking de dano
+      renderRanking(rankingData);
+    } catch (e) {
+      console.error("[mines] fetchAndRenderDamageRanking erro:", e);
+    }
+  }
+  
+  // ALTERAÇÃO FINAL: Nova função auxiliar para desacoplar a renderização da busca de dados.
+  function renderRanking(rankingData) {
+      if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
       for (const row of (rankingData || [])) {
         const li = document.createElement("li");
@@ -330,10 +308,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           </div>`;
         damageRankingList.appendChild(li);
       }
-    } catch (e) {
-      console.error("[mines] fetchAndRenderDamageRanking erro:", e);
-    }
   }
+  // FIM DA ALTERAÇÃO FINAL
 
   async function refreshPlayerStats() {
     try {
@@ -679,22 +655,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadMines() {
     showLoading();
     try {
+      // ALTERAÇÃO FINAL: A resolução de minas expiradas foi removida daqui para ser centralizada nos gatilhos.
       let { data: mines, error } = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
         .order("name", { ascending: true });
       if (error) throw error;
-
-      const now = new Date();
-      const expiradas = (mines || []).filter(m => m.status === "disputando" && m.competition_end_time && new Date(m.competition_end_time) <= now);
-      if (expiradas.length) {
-        await Promise.all(expiradas.map(m => supabase.rpc("end_mine_combat_session", { _mine_id: m.id })));
-        const res2 = await supabase
-          .from("mining_caverns")
-          .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
-          .order("name", { ascending: true });
-        if (!res2.error) mines = res2.data || [];
-      }
 
       const ownerIds = Array.from(new Set((mines || []).map(m => m.owner_player_id).filter(Boolean)));
       const ownersMap = {};
@@ -774,11 +740,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // --- Entrar/Iniciar Combate PvE ---
   async function startCombat(mineId) {
     showLoading();
-    // interrompe o auto refresh ao entrar em combate PvE
-    stopMinesAutoRefresh();
-    // AQUI: Reseta o estado do ataque para a nova disputa
     hasAttackedOnce = false;
     try {
+      // ALTERAÇÃO FINAL: Gatilho de resolução global ao entrar em um combate.
+      await resolveAllExpiredMinesGlobally();
+      // FIM DA ALTERAÇÃO FINAL
+
       const sel = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
@@ -806,12 +773,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (combatModal) combatModal.style.display = "flex";
       await fetchAndRenderDamageRanking();
 
-      if (rankingInterval) clearInterval(rankingInterval);
-      rankingInterval = setInterval(fetchAndRenderDamageRanking, RANKING_REFRESH_MS);
-
+      // ALTERAÇÃO FINAL: Removido início de polling de ranking e sessão.
       ambientMusic.play();
-      if (sessionCheckInterval) clearInterval(sessionCheckInterval);
-      sessionCheckInterval = setInterval(checkExpiredSessions, 1000);
+      // FIM DA ALTERAÇÃO FINAL
     } catch (e) {
       console.error("[mines] startCombat erro:", e);
       showModalAlert("Erro ao entrar no combate.");
@@ -836,10 +800,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 1000);
   }
 
+  // ALTERAÇÃO FINAL: Função onCombatTimerEnd agora é um gatilho principal de resolução.
   async function onCombatTimerEnd() {
     try {
       if (!currentMineId) return;
+      showLoading();
       const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
+      hideLoading();
+      
       if (error) {
         console.error("[mines] end_mine_combat_session erro:", error);
         showModalAlert("Erro ao encerrar a sessão de combate.");
@@ -860,6 +828,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadMines();
     }
   }
+  // FIM DA ALTERAÇÃO FINAL
 
   // --- Ataque PvE ---
   async function attack() {
@@ -884,6 +853,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
+      // ALTERAÇÃO FINAL: A RPC de ataque agora retorna o ranking, otimizando a chamada.
       const { data, error } = await supabase.rpc("attack_mine_monster", { _player_id: userId, _mine_id: currentMineId });
       if (error) { showModalAlert("Erro ao atacar: " + error.message); return; }
       if (data.success === false) { showModalAlert(data.message); await updatePlayerAttacksUI(); return; }
@@ -891,7 +861,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       displayDamageNumber(data.damage_dealt, !!data.is_crit, false, monsterArea);
       if (!hasAttackedOnce) { hasAttackedOnce = true; }
       updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
-      fetchAndRenderDamageRanking();
+      
+      // Renderiza o ranking recebido diretamente da resposta do ataque.
+      if (data.ranking) {
+        renderRanking(data.ranking);
+      }
+      // FIM DA ALTERAÇÃO FINAL
 
       attacksLeft = data.attacks_left;
       if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
@@ -971,7 +946,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function startPvpCombat(mineId, ownerId, ownerName, ownerAvatar) {
     showLoading();
     // assegura que as minas não fiquem sendo recarregadas durante a simulação PvP
-    stopMinesAutoRefresh();
+    // stopMinesAutoRefresh(); // Função agora está vazia
     try {
         // Busca os stats de combate do desafiante
         const { data: challengerData, error: challengerError } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
@@ -1017,8 +992,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         pvpCombatModal.style.display = 'flex';
         ambientMusic.play();
-      if (sessionCheckInterval) clearInterval(sessionCheckInterval);
-      sessionCheckInterval = setInterval(checkExpiredSessions, 15000);
+      
+      // ALTERAÇÃO FINAL: Removido polling de sessão.
+      // if (sessionCheckInterval) clearInterval(sessionCheckInterval);
+      // sessionCheckInterval = setInterval(checkExpiredSessions, 15000);
+      // FIM DA ALTERAÇÃO FINAL
 
         pvpCountdown.style.display = 'block';
         for (let i = 4; i > 0; i--) {
@@ -1062,8 +1040,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     } finally {
         if(pvpCombatModal) pvpCombatModal.style.display = 'none';
         hideLoading();
-        // reinicia auto refresh após PvP
-        startMinesAutoRefresh();
         await loadMines();
     }
   }
@@ -1083,15 +1059,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (damageRankingList) damageRankingList.innerHTML = "";
     currentMineId = null;
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
-    if (cooldownInterval) clearInterval(cooldownInterval);
-    if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
+    if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
+    // ALTERAÇÃO FINAL: Removida limpeza de intervalos que não existem mais.
+    // if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
+    // if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
+    // FIM DA ALTERAÇÃO FINAL
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     ambientMusic.pause();
     ambientMusic.currentTime = 0;
-
-    if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
-    // reinicia o auto refresh quando o combate termina / UI é resetada
-    startMinesAutoRefresh();
   }
 
   // --- Listeners globais ---
@@ -1144,34 +1119,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // --- Boot ---
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { window.location.href = "login.html"; return; }
-    userId = user.id;
+  // ALTERAÇÃO FINAL: Função de boot agora inclui o gatilho de resolução global.
+  async function boot() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { window.location.href = "login.html"; return; }
+      userId = user.id;
 
-    // --- Nova Lógica de Reset ---
-    // Chama a função RPC para redefinir as tentativas de PvP antes de carregar o resto da página
-    await supabase.rpc('reset_player_pvp_attempts');
+      // Gatilho de resolução global ao carregar a página.
+      await resolveAllExpiredMinesGlobally();
+      
+      await supabase.rpc('reset_player_pvp_attempts');
 
-    await supabase.rpc('get_player_pvp_state', { p_player_id: userId });
-    
-    // Agora que o reset foi executado (se necessário), atualiza a interface e carrega as minas
-    await loadMines();
-    await refreshPlayerStats();
-    await updatePVPAttemptsUI();
-    await updatePlayerMineUI(); 
-    await checkForNewPvpLogs();
-    if (!document.hidden) startMinesAutoRefresh();
-  } catch (e) {
-    console.error("[mines] auth erro:", e);
-    window.location.href = "login.html";
+      await supabase.rpc('get_player_pvp_state', { p_player_id: userId });
+      
+      await loadMines();
+      await refreshPlayerStats();
+      await updatePVPAttemptsUI();
+      await updatePlayerMineUI(); 
+      await checkForNewPvpLogs();
+    } catch (e) {
+      console.error("[mines] auth erro:", e);
+      window.location.href = "login.html";
+    }
   }
 
+  boot();
+  // FIM DA ALTERAÇÃO FINAL
+
   window.addEventListener("beforeunload", () => {
-    stopMinesAutoRefresh();
+    // ALTERAÇÃO FINAL: Removida limpeza de intervalos de polling que não existem mais.
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     if (cooldownInterval) clearInterval(cooldownInterval);
-    if (rankingInterval) clearInterval(rankingInterval);
+    // FIM DA ALTERAÇÃO FINAL
   });
 
   function updateCountdown() {
@@ -1197,7 +1177,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("visibilitychange", async () => {
     // Se a aba ficar oculta
     if (document.visibilityState === 'hidden') {
-      stopMinesAutoRefresh();
       // Se estiver em um combate, toca um aviso de saída
       if (currentMineId) {
         avisoTelaSound.currentTime = 0;
@@ -1222,11 +1201,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         resetCombatUI(); // Isso fechará o modal de combate
     }
 
-    // Reinicia auto refresh apenas se não estiver em um combate
+    // ALTERAÇÃO FINAL: Atualiza a lista de minas ao voltar para a aba, se não estiver em combate.
     if (!currentMineId) {
-      startMinesAutoRefresh();
-      // Opcional: faz um carregamento imediato para atualizar a UI ao retornar
       loadMines().catch(e => console.warn("[mines] loadMines on visibilitychange falhou:", e));
     }
+    // FIM DA ALTERAÇÃO FINAL
   });
 });

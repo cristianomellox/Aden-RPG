@@ -208,6 +208,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         damageNum.addEventListener("animationend", () => damageNum.remove());
     }
 
+    // NOVA FUNÇÃO: Calcula o HP do monstro com base no estágio
+    function calculateMonsterHp(stage) {
+        const baseHp = 100;
+        if (stage <= 15) {
+            return baseHp + (stage - 1) * 97;
+        } else {
+            const hpAtStage20 = baseHp + (15 - 1) * 97; // HP no estágio 20
+            const stagesAbove20 = stage - 15;
+            return hpAtStage20 + stagesAbove20 * 1533;
+        }
+    }
+
     // 🎯 Event listeners
     musicPermissionBtn.addEventListener("click", () => {
         musicPermissionModal.style.display = "none";
@@ -223,9 +235,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     startAfkBtn.addEventListener("click", async () => {
         if (startAfkCooldownActive || !userId) return;
         
+        const currentStage = playerAfkData.current_afk_stage ?? 1;
+        const monsterBaseHealth = calculateMonsterHp(currentStage);
+
         const { data, error } = await supabase.rpc('perform_afk_combat', { 
             p_player_id: userId,
-            p_monster_base_health: 100 + ((playerAfkData.current_afk_stage ?? 1) - 1) * 143,
+            p_monster_base_health: monsterBaseHealth,
             p_attacks_limit: 10
         });
 
@@ -261,7 +276,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 monsterHpBar.style.display = 'flex';
                 attacksLeftSpan.style.display = 'block';
 
-                const monsterMaxHp = 100 + (playerAfkData.current_afk_stage - 1) * 143;
+                const monsterMaxHp = calculateMonsterHp(playerAfkData.current_afk_stage);
                 let currentMonsterHp = monsterMaxHp;
                 monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
 

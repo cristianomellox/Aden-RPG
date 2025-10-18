@@ -23,7 +23,11 @@ const BOSS_ATTACK_VIDEO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddbossatk06.webm",
     "https://aden-rpg.pages.dev/assets/tddbossatk07.webm",
     "https://aden-rpg.pages.dev/assets/tddbossatk08.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk09.webm"
+    "https://aden-rpg.pages.dev/assets/tddbossatk09.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk10.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk11.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk12.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk13.webm"
 ];
 const AMBIENT_AUDIO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3", "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3", "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3", "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3", "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"

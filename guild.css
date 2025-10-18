@@ -1075,7 +1075,7 @@ body {
     0 0 4px black;
   position: absolute!important;
   margin-left: -120px!important;
-  top: 40px!important;
+  top: 26px!important;
   background: none!important;
     border-radius: none!important;
     box-shadow: none!important;
@@ -1105,7 +1105,7 @@ font-size: 0.9em;
   position: absolute;
   text-align: left;
   margin-left: -100px;
-  top: -10px;
+  top: -17px;
   z-index: 2;
 }
 #raidCombatModal .modal-content {

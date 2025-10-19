@@ -14,8 +14,6 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Define o tempo de expiração do cache em milissegundos (ex: 24 horas)
-
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
 const playerInfoDiv = document.getElementById('playerInfoDiv');
@@ -32,7 +30,7 @@ const verifyOtpBtn = document.getElementById('verifyOtpBtn');
 const profileEditModal = document.getElementById('profileEditModal');
 const editPlayerNameInput = document.getElementById('editPlayerName');
 const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
-const saveProfileBtn = document.getElementById('saveProfileBtn');
+// A referência ao saveProfileBtn é removida daqui pois sua lógica foi movida para perfil_edit.js
 const profileEditMessage = document.getElementById('profileEditMessage');
 
 const welcomeContainer = document.getElementById('welcomeContainer');
@@ -201,7 +199,6 @@ function applyItemBonuses(player, equippedItems) {
 }
 
 // Função principal para buscar e exibir as informações do jogador
-
 async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
@@ -262,45 +259,15 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
 
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
 
+    // LÓGICA DE ABRIR O MODAL NO PRIMEIRO LOGIN MANTIDA AQUI
     if (playerWithEquips.name === 'Nome') {
         document.getElementById('editPlayerName').value = '';
         profileEditModal.style.display = 'flex';
     }
 }
 
-// Salvar perfil
-saveProfileBtn.addEventListener('click', async () => {
-    const newName = editPlayerNameInput.value.trim();
-    const newFaction = editPlayerFactionSelect.value;
-    const newAvatarUrl = document.getElementById('selectedAvatarUrl').value;
-    if (!newName) {
-        showFloatingMessage("O nome do jogador não pode ser vazio.");
-        profileEditMessage.textContent = "";
-        return;
-    }
-    const forbiddenChars = /[<>/\\$@#]/;
-    if (forbiddenChars.test(newName)) {
-        showFloatingMessage("O nome do jogador não pode conter caracteres inválidos.");
-        profileEditMessage.textContent = "";
-        return;
-    }
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        showFloatingMessage("Erro: Usuário não logado.");
-        return;
-    }
-    const { error } = await supabaseClient
-        .from('players')
-        .update({ name: newName, faction: newFaction, avatar_url: newAvatarUrl, rank: 'Aventureiro(a)' })
-        .eq('id', user.id);
-    if (error) {
-        showFloatingMessage(`Erro: ${error.message}`);
-    } else {
-        profileEditModal.style.display = 'none';
-        fetchAndDisplayPlayerInfo(true);
-        showFloatingMessage("Perfil salvo com sucesso!");
-    }
-});
+// --- O EVENT LISTENER DE SALVAR PERFIL FOI REMOVIDO DAQUI ---
+// A lógica foi movida para o arquivo 'perfil_edit.js' para usar a nova função RPC.
 
 // --- Recuperação de senha com token ---
 if (forgotPasswordLink) {
@@ -450,4 +417,3 @@ if (closeProfileModalBtn) {
         profileEditModal.style.display = 'none';
     };
 }
-

@@ -100,21 +100,26 @@
 </div>
 <div id="profileEditModal">
 <div>
-<h2>Bem-vindo(a), Aventureiro(a)!</h2>
-<label for="editPlayerName">Nome do Jogador:</label><br/>
-<input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text"/><br/>
-<label for="editPlayerFaction">Escolha sua Facção:</label><br/> <select id="editPlayerFaction">
-<option value="Aliança da Floresta">Aliança da Floresta</option>
-<option value="Guerreiros do Gelo">Guerreiros do Gelo</option>
-<option value="Sentinelas do Fogo">Sentinelas do Fogo</option>
-<option value="Horda Sombria">Horda Sombria</option>
-</select><br/>
-<label>Escolha seu Avatar:</label><br/>
-<div class="avatar-grid" id="avatarSelection"></div>
-<input id="selectedAvatarUrl" type="hidden"/>
-<button id="saveProfileBtn">Salvar Perfil</button>
-<button id="closeProfileModalBtn">Fechar</button>
-<p id="profileEditMessage"></p>
+    <h2>Bem-vindo(a), Aventureiro(a)!</h2>
+    <label for="editPlayerName">Nome do Jogador:</label><br/>
+    <input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text"/><br/>
+    <label for="editPlayerFaction">Escolha sua Facção:</label><br/>
+    <select id="editPlayerFaction">
+        <option value="Aliança da Floresta">Aliança da Floresta</option>
+        <option value="Guerreiros do Gelo">Guerreiros do Gelo</option>
+        <option value="Sentinelas do Fogo">Sentinelas do Fogo</option>
+        <option value="Horda Sombria">Horda Sombria</option>
+    </select><br/>
+
+    <label>Escolha seu Avatar:</label><br/>
+    <div class="avatar-grid" id="avatarSelection"></div>
+    <input id="selectedAvatarUrl" type="hidden"/>
+
+    <label for="editPlayerCustomAvatarUrl">Ou use uma URL personalizada:</label><br/>
+    <input id="editPlayerCustomAvatarUrl" placeholder="https://exemplo.com/imagem.png" type="text"/><br />
+    <p id="profileEditMessage"></p>
+    <button id="saveProfileBtn">Salvar Perfil</button>
+    <button id="closeProfileModalBtn">Fechar</button>
 </div>
 </div>
 <div id="footerMenu" style="display:none;">

@@ -866,7 +866,9 @@ margin-right: 15px;
 .diamond {
   width: 35px;
   height: 35px;
-  background: linear-gradient(to bottom, #444 0%, #222 30%, #444 100%);
+  background-image: url('https://aden-rpg.pages.dev/assets/menulateralbg.webp');
+  background-size: cover;
+  background-position: center;
   transform: rotate(45deg);
   border: 2px solid gold;
   display: flex;

@@ -776,6 +776,8 @@ margin-right: 15px;
 
 #welcomeContainer p {
   color: white;
+  font-size: 0.8em;
+  margin-left: -40px;
 }
 #afk-status {
   color: white;
@@ -826,4 +828,222 @@ margin-right: 15px;
   display: block;
   margin-top: 10px;
   font-size: 1.2em;
+}
+/* === MENU LATERAL DIREITO (LOSANGOS) === */
+#sideMenu {
+  position: fixed;
+  top: 55%;
+  right: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(to bottom, #444 0%, #222 30%, #444 100%);
+  padding: 20px 0;
+  border-radius: 10px 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.4);
+  z-index: 999;
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.menu-item span {
+  font-size: 11px;
+  color: #e0dccc;
+  margin-top: 5px;
+  text-align: center;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.diamond {
+  width: 35px;
+  height: 35px;
+  background: linear-gradient(to bottom, #444 0%, #222 30%, #444 100%);
+  transform: rotate(45deg);
+  border: 2px solid gold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(0,0,0,0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.diamond.small {
+  width: 25px;
+  height: 25px;
+}
+
+.diamond img {
+  width: 65%;
+  height: 65%;
+  transform: rotate(-45deg);
+  object-fit: contain;
+}
+
+.menu-item:hover .diamond {
+  transform: rotate(45deg) scale(1.1);
+  box-shadow: 0 0 10px gold;
+}
+
+/* Submenus */
+.submenu {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 5px;
+}
+
+/* === MODAL GENÉRICO === */
+.modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+}
+
+#sideMenu .submenu {
+  display: none;
+  position: absolute;
+  right: 70px; /* distância lateral entre o menu principal e o submenu */
+  margin-top: -7px;
+  transform: translateY(-50%);
+  flex-direction: row; /* agora ficam lado a lado */
+  align-items: center;
+  gap: 40px;
+  background: rgba(20, 20, 20, 0.95);
+  padding: 8px 9px;
+  border: 1px solid #555;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.4);
+  z-index: 1000;
+}
+#sideMenu .menu-item.expandable {
+  position: relative;
+}
+
+
+
+/* Estilos para o Modal Espiral */
+.spiral-tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #555;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  font-size: 1em;
+  background-color: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  background-image: none !important; /* Remove a imagem de fundo padrão dos botões */
+}
+
+.tab-btn.active {
+  color: gold;
+  border-bottom: 2px solid gold;
+}
+
+.spiral-content {
+  text-align: center;
+}
+
+.card-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.2em;
+  margin: 15px 0;
+}
+
+.plus-btn {
+  width: 32px!important;
+  height: 32px;
+  border-radius: 60%!important;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: 3px;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;
+  
+}
+
+.draw-btn {
+  width: 80%;
+  padding: 20px 40px;
+  font-size: 1.2em;
+}
+
+.close-spiral-modal {
+    margin-top: 15px;
+}
+
+/* Estilos para o Modal de Compra e Confirmação */
+.quantity-selector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin: 20px 0;
+}
+.quantity-selector button {
+    background-image: none !important;
+    background-color: #555 !important;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    font-size: 1.5em;
+    border-radius: 5px;
+}
+.quantity-selector span {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+/* Estilos para o Modal de Resultados */
+.results-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+.result-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(0,0,0,0.3);
+    padding: 10px;
+    border-radius: 8px;
+}
+.result-item img {
+    width: 64px;
+    height: 64px;
+}
+.result-item span {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-top: 5px;
 }

@@ -14,6 +14,9 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ADICIONADO: Cache de definições de itens para uso no Espiral e outras funcionalidades
+let itemDefinitions = new Map();
+
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
 const playerInfoDiv = document.getElementById('playerInfoDiv');
@@ -30,7 +33,6 @@ const verifyOtpBtn = document.getElementById('verifyOtpBtn');
 const profileEditModal = document.getElementById('profileEditModal');
 const editPlayerNameInput = document.getElementById('editPlayerName');
 const editPlayerFactionSelect = document.getElementById('editPlayerFaction');
-// A referência ao saveProfileBtn é removida daqui pois sua lógica foi movida para perfil_edit.js
 const profileEditMessage = document.getElementById('profileEditMessage');
 
 const welcomeContainer = document.getElementById('welcomeContainer');
@@ -54,6 +56,22 @@ const newPasswordInput = document.getElementById('newPasswordInput');
 const updatePasswordBtn = document.getElementById('updatePasswordBtn');
 const closeVerifyRecoveryModalBtn = document.getElementById('closeVerifyRecoveryModalBtn');
 const verifyRecoveryMessage = document.getElementById('verifyRecoveryMessage');
+
+
+// ADICIONADO: Função para carregar definições de itens no cache local
+async function loadItemDefinitions() {
+    if (itemDefinitions.size > 0) return; // Já carregado
+
+    const { data, error } = await supabaseClient.from('items').select('item_id, name');
+    if (error) {
+        console.error('Erro ao carregar definições de itens:', error);
+        return;
+    }
+    for (const item of data) {
+        itemDefinitions.set(item.item_id, item);
+    }
+    console.log('Definições de itens carregadas no cache.');
+}
 
 // Funções de Notificação Flutuante
 function showFloatingMessage(message, duration = 5000) {
@@ -86,7 +104,6 @@ async function signUp() {
     const password = passwordInput.value;
     authMessage.textContent = 'Enviando código de confirmação...';
 
-    // A função signInWithOtp é usada para a confirmação por código
     const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: {
@@ -98,7 +115,6 @@ async function signUp() {
         authMessage.textContent = `Erro ao registrar: ${error.message}`;
     } else {
         authMessage.textContent = 'Código de confirmação enviado para seu e-mail! Verifique a caixa de spam, caso não receba.';
-        // Esconde os botões de login/cadastro e mostra o campo de OTP
         signInBtn.style.display = 'none';
         signUpBtn.style.display = 'none';
         passwordInput.style.display = 'none';
@@ -164,7 +180,9 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
     document.getElementById('playerTopBar').style.display = 'flex';
     if (welcomeContainer && player && player.name) {
         welcomeContainer.innerHTML = `
-            <h2>Bem-vindo(a) de volta, ${player.name}!</h2>
+            <h3 style="color: white; text-align: center;">Saudações,<br><span style="background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; font-style: italic;">${player.name}</span>!</h3>
             <p>Prepare-se para novas aventuras em Aden!</p>
             <p>Clique nos botões do menu abaixo para explorar.</p>
         `;
@@ -243,7 +261,6 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
 
     if (itemsError) {
         console.error('Erro ao buscar itens equipados:', itemsError.message);
-        // continue without equipped items
     }
 
     const playerWithEquips = applyItemBonuses(player, equippedItems || []);
@@ -259,15 +276,11 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
 
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
 
-    // LÓGICA DE ABRIR O MODAL NO PRIMEIRO LOGIN MANTIDA AQUI
     if (playerWithEquips.name === 'Nome') {
         document.getElementById('editPlayerName').value = '';
         profileEditModal.style.display = 'flex';
     }
 }
-
-// --- O EVENT LISTENER DE SALVAR PERFIL FOI REMOVIDO DAQUI ---
-// A lógica foi movida para o arquivo 'perfil_edit.js' para usar a nova função RPC.
 
 // --- Recuperação de senha com token ---
 if (forgotPasswordLink) {
@@ -416,4 +429,261 @@ if (closeProfileModalBtn) {
     closeProfileModalBtn.onclick = () => {
         profileEditModal.style.display = 'none';
     };
+}
+
+// === MENU LATERAL (LOSANGOS) ===
+document.addEventListener("DOMContentLoaded", () => {
+  // MODIFICAÇÃO: Carrega as definições de itens ao iniciar a página.
+  loadItemDefinitions();
+    
+  const missionsBtn = document.getElementById("missionsBtn");
+  const missionsSub = document.getElementById("missionsSubmenu");
+  const moreBtn = document.getElementById("moreBtn");
+  const moreSub = document.getElementById("moreSubmenu");
+
+  function toggleSubmenu(btn, submenu) {
+    const isVisible = submenu.style.display === "flex";
+    document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    if (!isVisible) {
+      submenu.style.display = "flex";
+      const btnRect = btn.getBoundingClientRect();
+      submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
+    }
+  }
+
+  missionsBtn.addEventListener("click", () => toggleSubmenu(missionsBtn, missionsSub));
+  moreBtn.addEventListener("click", () => toggleSubmenu(moreBtn, moreSub));
+
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#sideMenu")) {
+      document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    }
+  });
+
+  const modal = document.getElementById("genericModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalMessage = document.getElementById("modalMessage");
+  const closeModal = document.getElementById("closeGenericModal");
+
+  const modalMessages = {
+    lojaModal: "Loja em breve!",
+    bolsaModal: "Bolsa em breve!",
+    pvModal: "PV em breve!",
+    diariasModal: "Missões Diárias em breve!",
+    conquistasModal: "Conquistas em breve!",
+    comercioModal: "Comércio em breve!",
+    rankingModal: "Ranking em breve!",
+    petsModal: "Pets em breve!"
+  };
+
+  document.querySelectorAll("#sideMenu .menu-item[data-modal]").forEach(item => {
+    item.addEventListener("click", () => {
+      const key = item.getAttribute("data-modal");
+
+      if (key === "espiralModal") {
+        openSpiralModal();
+        return;
+      }
+      
+      if (key === "bolsaModal") {
+        window.location.href = "/inventory.html";
+        return;
+      }
+
+      if (modalMessages[key]) {
+        modalTitle.textContent = item.querySelector("span").textContent;
+        modalMessage.textContent = modalMessages[key];
+        modal.style.display = "flex";
+      }
+    });
+  });
+
+  closeModal.addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+});
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE ESPIRAL (Gacha) ===
+// ===============================================
+
+const spiralModal = document.getElementById('spiralModal');
+const commonSpiralTab = document.querySelector('.tab-btn[data-tab="common"]');
+const advancedSpiralTab = document.querySelector('.tab-btn[data-tab="advanced"]');
+const commonSpiralContent = document.getElementById('common-spiral');
+const advancedSpiralContent = document.getElementById('advanced-spiral');
+const commonCardCountSpan = document.getElementById('commonCardCount');
+const advancedCardCountSpan = document.getElementById('advancedCardCount');
+const buyCommonCardBtn = document.getElementById('buyCommonCardBtn');
+const drawCommonBtn = document.getElementById('drawCommonBtn');
+const drawAdvancedBtn = document.getElementById('drawAdvancedBtn');
+
+const buyCardsModal = document.getElementById('buyCardsModal');
+const decreaseCardQtyBtn = document.getElementById('decreaseCardQtyBtn');
+const increaseCardQtyBtn = document.getElementById('increaseCardQtyBtn');
+const cardQtyToBuySpan = document.getElementById('cardQtyToBuy');
+const totalCrystalCostSpan = document.getElementById('totalCrystalCost');
+const confirmPurchaseBtn = document.getElementById('confirmPurchaseBtn');
+const buyCardsMessage = document.getElementById('buyCardsMessage');
+
+const drawConfirmModal = document.getElementById('drawConfirmModal');
+const drawQuantityInput = document.getElementById('drawQuantityInput');
+const confirmDrawBtn = document.getElementById('confirmDrawBtn');
+const drawConfirmMessage = document.getElementById('drawConfirmMessage');
+let currentDrawType = 'common';
+
+const drawResultsModal = document.getElementById('drawResultsModal');
+const drawResultsGrid = document.getElementById('drawResultsGrid');
+
+async function updateCardCounts() {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabaseClient
+        .from('inventory_items')
+        .select('item_id, quantity')
+        .eq('player_id', user.id)
+        .in('item_id', [41, 42]);
+
+    if (error) {
+        console.error("Erro ao buscar cartões:", error);
+        return;
+    }
+
+    const commonCards = data.find(item => item.item_id === 41);
+    const advancedCards = data.find(item => item.item_id === 42);
+
+    commonCardCountSpan.textContent = `x ${commonCards ? commonCards.quantity : 0}`;
+    advancedCardCountSpan.textContent = `x ${advancedCards ? advancedCards.quantity : 0}`;
+}
+
+function openSpiralModal() {
+    updateCardCounts();
+    spiralModal.style.display = 'flex';
+}
+
+commonSpiralTab.addEventListener('click', () => {
+    commonSpiralTab.classList.add('active');
+    advancedSpiralTab.classList.remove('active');
+    commonSpiralContent.style.display = 'block';
+    advancedSpiralContent.style.display = 'none';
+});
+
+advancedSpiralTab.addEventListener('click', () => {
+    advancedSpiralTab.classList.add('active');
+    commonSpiralTab.classList.remove('active');
+    advancedSpiralContent.style.display = 'block';
+    commonSpiralContent.style.display = 'none';
+});
+
+document.querySelector('.close-spiral-modal').addEventListener('click', () => spiralModal.style.display = 'none');
+document.getElementById('closeBuyCardsModalBtn').addEventListener('click', () => buyCardsModal.style.display = 'none');
+document.getElementById('closeDrawConfirmModalBtn').addEventListener('click', () => drawConfirmModal.style.display = 'none');
+document.getElementById('closeDrawResultsModalBtn').addEventListener('click', () => drawResultsModal.style.display = 'none');
+
+buyCommonCardBtn.addEventListener('click', () => {
+    cardQtyToBuySpan.textContent = '1';
+    totalCrystalCostSpan.textContent = '250';
+    buyCardsMessage.textContent = '';
+    buyCardsModal.style.display = 'flex';
+});
+
+increaseCardQtyBtn.addEventListener('click', () => {
+    let qty = parseInt(cardQtyToBuySpan.textContent) + 1;
+    cardQtyToBuySpan.textContent = qty;
+    totalCrystalCostSpan.textContent = qty * 250;
+});
+
+decreaseCardQtyBtn.addEventListener('click', () => {
+    let qty = parseInt(cardQtyToBuySpan.textContent);
+    if (qty > 1) {
+        qty--;
+        cardQtyToBuySpan.textContent = qty;
+        totalCrystalCostSpan.textContent = qty * 250;
+    }
+});
+
+confirmPurchaseBtn.addEventListener('click', async () => {
+    const quantity = parseInt(cardQtyToBuySpan.textContent);
+    confirmPurchaseBtn.disabled = true;
+    buyCardsMessage.textContent = 'Processando compra...';
+
+    const { data, error } = await supabaseClient.rpc('buy_spiral_cards', { purchase_quantity: quantity });
+
+    if (error) {
+        buyCardsMessage.textContent = `Erro: ${error.message}`;
+    } else {
+        buyCardsMessage.textContent = data;
+        await updateCardCounts();
+        await fetchAndDisplayPlayerInfo(true);
+        setTimeout(() => {
+            buyCardsModal.style.display = 'none';
+        }, 2000);
+    }
+    confirmPurchaseBtn.disabled = false;
+});
+
+function openDrawConfirmModal(type) {
+    currentDrawType = type;
+    drawQuantityInput.value = 1;
+    drawConfirmMessage.textContent = '';
+    drawConfirmModal.style.display = 'flex';
+}
+
+drawCommonBtn.addEventListener('click', () => openDrawConfirmModal('common'));
+drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced'));
+
+confirmDrawBtn.addEventListener('click', async () => {
+    const quantity = parseInt(drawQuantityInput.value);
+    if (isNaN(quantity) || quantity <= 0) {
+        drawConfirmMessage.textContent = 'Por favor, insira uma quantidade válida.';
+        return;
+    }
+
+    confirmDrawBtn.disabled = true;
+    drawConfirmMessage.textContent = 'Sorteando...';
+
+    const { data: wonItems, error } = await supabaseClient.rpc('perform_spiral_draw', {
+        draw_type: currentDrawType,
+        p_quantity: quantity
+    });
+
+    if (error) {
+        drawConfirmMessage.textContent = `Erro: ${error.message}`;
+    } else {
+        drawConfirmModal.style.display = 'none';
+        displayDrawResults(wonItems);
+        await updateCardCounts();
+    }
+    confirmDrawBtn.disabled = false;
+});
+
+// MODIFICADO: Função de resultados corrigida para usar o cache de itens e exibir a imagem correta.
+function displayDrawResults(items) {
+    drawResultsGrid.innerHTML = ''; // Limpa resultados anteriores
+    if (Object.keys(items).length === 0) {
+        drawResultsGrid.innerHTML = '<p>Nenhum item especial foi obtido desta vez.</p>';
+    } else {
+        for (const itemIdStr in items) {
+            const itemId = parseInt(itemIdStr, 10);
+            const quantity = items[itemId];
+            const itemDef = itemDefinitions.get(itemId);
+
+            if (!itemDef) {
+                console.warn(`Definição não encontrada para o item ID: ${itemId}`);
+                continue; 
+            }
+            
+            const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'result-item';
+            itemDiv.innerHTML = `
+                <img src="${imageUrl}" alt="${itemDef.name}">
+                <span>x${quantity}</span>
+            `;
+            drawResultsGrid.appendChild(itemDiv);
+        }
+    }
+    drawResultsModal.style.display = 'flex';
 }

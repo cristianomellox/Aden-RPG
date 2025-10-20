@@ -83,8 +83,8 @@
  <p style="background-color: rgba(51, 51, 51, 0.8); text-align: justify; border-radius: 5px; position: flex; width: 85vw;">Ao se registrar você concorda com os Termos de Uso e Política de Privacidade.</p>
 </div>
 </div>
-<div id="welcomeContainer" style="display:none;">
-<h2>Bem-vindo(a) de volta, Aventureiro(a)!</h2>
+<div id="welcomeContainer" style="display:none; padding: 55px; margin-top: -30px;">
+<center><h3>Bem-vindo(a) de volta, Aventureiro(a)!</h3></center>
 <p>Prepare-se para novas aventuras em Aden!</p>
 <p>Clique nos botões do menu abaixo para explorar.</p>
 </div>
@@ -143,6 +143,182 @@
 <button id="confirmCombatResultBtn">Confirmar</button>
 </div>
 </div>
+
+<!-- MENU LATERAL DIREITO (LOSANGOS) -->
+<div id="sideMenu">
+  <div class="menu-item" data-modal="espiralModal">
+    <div class="diamond">
+      <img src="https://aden-rpg.pages.dev/assets/icons/espiral.webp" alt="Espiral">
+    </div>
+    <span>Espiral</span>
+  </div>
+
+  <div class="menu-item" data-modal="lojaModal">
+    <div class="diamond">
+      <img src="https://aden-rpg.pages.dev/assets/icons/loja.webp" alt="Loja">
+    </div>
+    <span>Loja</span>
+  </div>
+
+  <div class="menu-item" data-modal="bolsaModal">
+    <div class="diamond">
+      <img src="https://aden-rpg.pages.dev/assets/icons/bolsa.webp" alt="Bolsa">
+    </div>
+    <span>Bolsa</span>
+  </div>
+
+  <div class="menu-item" data-modal="pvModal">
+    <div class="diamond">
+      <img src="https://aden-rpg.pages.dev/assets/icons/pv.webp" alt="PV">
+    </div>
+    <span>PV</span>
+  </div>
+
+  <!-- Grupo Missões -->
+  <div class="menu-item expandable" id="missionsBtn">
+    <div class="diamond">
+      <img src="https://aden-rpg.pages.dev/assets/icons/missoes.webp" alt="Missões">
+    </div>
+    <span>Missões</span>
+  </div>
+  <div class="submenu" id="missionsSubmenu" style="border-right: 2px solid: #777;">
+    <div class="menu-item" data-modal="diariasModal">
+      <div class="diamond small">
+        <img src="https://aden-rpg.pages.dev/assets/icons/diarias.webp" alt="Diárias">
+      </div>
+      <span>Diárias</span>
+    </div>
+    <div class="menu-item" data-modal="conquistasModal">
+      <div class="diamond small">
+        <img src="https://aden-rpg.pages.dev/assets/icons/conquistas.webp" alt="Conquistas">
+      </div>
+      <span>Conquistas</span>
+    </div>
+  </div>
+
+  <!-- Grupo Mais -->
+  <div class="menu-item expandable" id="moreBtn">
+    <div class="diamond">
+      <img src="https://aden-rpg.pages.dev/assets/icons/mais.webp" alt="Mais">
+    </div>
+    <span>Mais</span>
+  </div>
+  <div class="submenu" id="moreSubmenu">
+    <div class="menu-item" data-modal="comercioModal">
+      <div class="diamond small">
+        <img src="https://aden-rpg.pages.dev/assets/icons/comercio.webp" alt="Comércio">
+      </div>
+      <span>Comércio</span>
+    </div>
+    <div class="menu-item" data-modal="rankingModal">
+      <div class="diamond small">
+        <img src="https://aden-rpg.pages.dev/assets/icons/ranking.webp" alt="Ranking">
+      </div>
+      <span>Ranking</span>
+    </div>
+    <div class="menu-item" data-modal="petsModal">
+      <div class="diamond small">
+        <img src="https://aden-rpg.pages.dev/assets/icons/pets.webp" alt="Pets">
+      </div>
+      <span>Pets</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAIS PADRÃO -->
+<div id="genericModal" class="modal-container" style="display:none;">
+  <div class="modal-content">
+    <h2 id="modalTitle"></h2>
+    <p id="modalMessage"></p>
+    <button id="closeGenericModal">Fechar</button>
+  </div>
+</div>
+
+
+
+<div id="spiralModal" class="modal-container" style="display:none;">
+  <div class="modal-content">
+    <div class="spiral-tabs">
+      <button class="tab-btn active" data-tab="common">Espiral Comum</button>
+      <button class="tab-btn" data-tab="advanced">Espiral Avançado</button>
+    </div>
+
+    <div id="common-spiral" class="spiral-content">
+      <h2>Espiral Comum</h2>
+      <p>Use Cartão de Espiral Comum para sortear fragmentos de equipamentos R.</p>
+      <img src="https://aden-rpg.pages.dev/assets/espiral_comum.webp" alt="Espiral Comum" style="width:300px; height:300px;">
+      <div class="card-info">
+        <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" alt="Cartão Comum" style="width:40px; height:40px;">
+        <span id="commonCardCount">x 0</span>
+        <button id="buyCommonCardBtn" class="plus-btn" style="width: 32px;
+  height: 32px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: 3px;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px; margin-left: -5px;">+</button>
+      </div>
+      <button id="drawCommonBtn" class="draw-btn">Sortear</button>
+    </div>
+
+    <div id="advanced-spiral" class="spiral-content" style="display:none;">
+      <h2>Espiral Avançado</h2>
+      <p>Use Cartão de Espiral Avançado para sortear fragmentos de equipamentos SR.</p>
+      <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" alt="Espiral Avançado" style="width:300px; height:300px;">
+      <div class="card-info">
+        <img src="https://aden-rpg.pages.dev/assets/items/42.webp" alt="Cartão Avançado" style="width:40px; height:40px;">
+        <span id="advancedCardCount">x 0</span>
+      </div>
+      <button id="drawAdvancedBtn" class="draw-btn">Sortear</button>
+    </div>
+    
+    <button class="close-spiral-modal">Fechar</button>
+  </div>
+</div>
+
+<div id="buyCardsModal" class="modal-container" style="display:none;">
+    <div class="modal-content">
+        <h2>Comprar Cartões</h2>
+        <p>Cada Cartão de Espiral Comum custa 250 Cristais.</p>
+        <div class="quantity-selector">
+            <button id="decreaseCardQtyBtn">-</button>
+            <span id="cardQtyToBuy">1</span>
+            <button id="increaseCardQtyBtn">+</button>
+        </div>
+        <p>Custo Total: <img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:17px; height:17px; vertical-align:middle;"> <span id="totalCrystalCost">250</span></p>
+        <button id="confirmPurchaseBtn">Confirmar Compra</button>
+        <button id="closeBuyCardsModalBtn">Cancelar</button>
+        <p id="buyCardsMessage"></p>
+    </div>
+</div>
+
+<div id="drawConfirmModal" class="modal-container" style="display:none;">
+    <div class="modal-content">
+        <h2>Confirmar Sorteio</h2>
+        <p>Quantos sorteios você deseja fazer?</p>
+        <input type="number" id="drawQuantityInput" value="1" min="1" style="width: 80%; text-align: center; font-size: 1.2em;">
+        <button id="confirmDrawBtn">Sortear</button>
+        <button id="closeDrawConfirmModalBtn">Cancelar</button>
+        <p id="drawConfirmMessage"></p>
+    </div>
+</div>
+
+<div id="drawResultsModal" class="modal-container" style="display:none;">
+    <div class="modal-content">
+        <h2>Resultados do Sorteio</h2>
+        <div id="drawResultsGrid" class="results-grid">
+            </div>
+        <button id="closeDrawResultsModalBtn">Fechar</button>
+    </div>
+</div>
+
+
+
+
 <script src="script.js"></script>
 
 <script src="number_format.js"></script>

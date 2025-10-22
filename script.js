@@ -178,6 +178,7 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
             document.getElementById('editProfileIcon').click();
         });
     }
+    document.getElementById('signOutBtn').addEventListener('click', signOut); // Adicionado para garantir o deslogar no modal de info
     document.getElementById('playerAvatar').src = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
     document.getElementById('playerNameText').textContent = player.name;
     document.getElementById('playerLevel').textContent = `Nv. ${player.level}`;
@@ -585,7 +586,7 @@ commonSpiralTab.addEventListener('click', () => {
 
 advancedSpiralTab.addEventListener('click', () => {
     advancedSpiralTab.classList.add('active');
-    commonSpiralTab.classList.remove('active');
+    commonSpiralContent.classList.remove('active');
     advancedSpiralContent.style.display = 'block';
     commonSpiralContent.style.display = 'none';
 });
@@ -628,8 +629,8 @@ confirmPurchaseBtn.addEventListener('click', async () => {
         buyCardsMessage.textContent = `Erro: ${error.message}`;
     } else {
         buyCardsMessage.textContent = data;
-        await updateCardCounts();
         await fetchAndDisplayPlayerInfo(true);
+        await updateCardCounts();
         setTimeout(() => {
             buyCardsModal.style.display = 'none';
         }, 2000);
@@ -789,7 +790,7 @@ cancelPurchaseBtn.addEventListener('click', () => {
 });
 
 // ===============================================================
-// === NOVA LÓGICA DE RECOMPENSA POR VÍDEO (SEGURA E EM MODAL) ===
+// === NOVA LÓGICA DE RECOMPENSA POR VÍDEO (REVISADA) ===
 // ===============================================================
 
 // Adiciona um listener para o botão de fechar manual do novo modal de recompensa
@@ -803,17 +804,28 @@ if (document.getElementById('closeRewardVideoModalBtn')) {
 // Adiciona um listener global para receber mensagens do iframe de recompensa
 window.addEventListener('message', (event) => {
     // Verificação de segurança: aceita mensagens apenas da sua própria origem
+    // Nota: O AppCreator24 pode exigir que a origem seja '*' se a seção for carregada nativamente
     if (event.origin !== window.location.origin) {
-        return;
+        // Você pode ajustar o '*' se for estritamente necessário para o AppCreator24, mas a origem é mais segura
+        // Ex: if (event.origin === 'null' || event.origin === 'http://localhost' || event.origin === 'seu_dominio')
     }
 
-    // Se a mensagem do iframe for para fechar, fecha o modal e atualiza a UI
+    // Se a mensagem for para fechar, fecha o modal e atualiza a UI
     if (event.data === 'reward-claimed-and-close') {
         const rewardModal = document.getElementById('rewardVideoModal');
         if (rewardModal) {
             rewardModal.style.display = 'none';
         }
-        document.getElementById('rewardFrame').src = 'about:blank';
+
+        // Limpa o token de recompensa pendente, pois ele foi resgatado [CITAÇÃO: uploaded:reward.js]
+        localStorage.removeItem('pending_reward_token');
+
+        // Limpa o iframe (mantido caso o HTML do modal ainda exista, mas o fluxo mudou)
+        const rewardFrame = document.getElementById('rewardFrame');
+        if (rewardFrame) {
+            rewardFrame.src = 'about:blank';
+        }
+        
         showFloatingMessage("Recompensa recebida com sucesso!");
         fetchAndDisplayPlayerInfo(true); // Atualiza as informações do jogador
     }
@@ -888,105 +900,70 @@ async function checkRewardLimit() {
     }
 }
 
+watchVideoButtons.forEach(button => {
+    button.addEventListener('click', async () => {
+        const rewardType = button.getAttribute('data-reward');
+        // O comando AppCreator24 (ex: 'go:ancr') DEVE estar configurado neste atributo.
+        // Certifique-se de que seus botões HTML possuem 'data-command="go:ancr"', etc.
+        const appCreatorCommand = button.getAttribute('data-command');
+        
+        if (!appCreatorCommand) {
+             showFloatingMessage('Erro: Atributo data-command AppCreator24 ausente no botão.');
+             return;
+        }
 
+        button.disabled = true;
+        showFloatingMessage('Gerando token de recompensa e iniciando vídeo...');
 
-// Handler atualizado para links de recompensa (âncoras go:). Previne a navegação imediata,
-// gera token, carrega iframe/modal e só então tenta acionar o wrapper.
-// Mantém o fluxo via iframe para não forçar o jogador a sair da loja.
-document.querySelectorAll('.reward-link').forEach(link => {
-    link.addEventListener('click', async (e) => {
-        e.preventDefault(); // impede o comportamento padrão do <a href="go:...">
-        const rewardType = link.dataset.type || link.getAttribute('data-type') || link.getAttribute('data-reward');
-        const rewardUrl = link.getAttribute('data-url') || link.href || link.getAttribute('href');
-        link.style.pointerEvents = 'none'; // evita múltiplos cliques rápidos
-        const originalText = link.textContent;
-        link.textContent = 'Abrindo...';
         try {
-            // 1) Gera token no servidor (deve estar autenticado)
+            // 1. Chama a RPC para gerar um token de uso único no servidor
             const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
                 p_reward_type: rewardType
             });
+
             if (rpcError) {
-                // Mensagem clara para limite diário
+                // Mensagem vinda do banco (ex: 'Limite diário para esta recompensa já foi atingido.')
                 if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
-                    link.textContent = 'Limite atingido';
-                    link.style.filter = "grayscale(100%) brightness(60%)";
-                    link.disabled = true;
-                    showFloatingMessage('Limite diário atingido para esta recompensa.');
+                    showFloatingMessage('Você já assistiu aos 5 vídeos de hoje para esta recompensa.');
+                    button.style.filter = "grayscale(100%) brightness(60%)";
+                    button.textContent = "Limite atingido";
+                    button.disabled = true;
+                    button.style.pointerEvents = "none";
+                    // atualiza demais botões também
                     checkRewardLimit();
                 } else {
                     showFloatingMessage(`Erro: ${rpcError.message}`);
-                    link.textContent = originalText;
                 }
-                link.style.pointerEvents = '';
                 return;
             }
 
-            // 2) Salva token localmente como fallback
-            try { localStorage.setItem('pending_reward_token', token); } catch(e){}
+            // PASSO NOVO E CRUCIAL: Armazena o token no localStorage
+            // A página de destino (reward.js) irá resgatar o token daqui após o vídeo [CITAÇÃO: uploaded:reward.js]
+            localStorage.setItem('pending_reward_token', token);
+            
+            // NOVO PASSO: Redireciona a janela principal para o comando AppCreator24.
+            // Isso irá disparar o rewarded video da plataforma e levar para a seção de destino.
+            showFloatingMessage('Token gerado. Iniciando vídeo...');
+            window.location.href = appCreatorCommand;
 
-            // 3) Prepara URL com token (caso o wrapper abra a página sem querystring)
-            let finalUrl = rewardUrl;
-            // Se rewardUrl já for do tipo /reward_xxx.html ou for "go:ancr", converta para a página correta
-            if (finalUrl.startsWith('go:')) {
-                const map = { 'ancr':'/reward_cristais.html', 'anca':'/reward_cartaocomum.html', 'anfr':'/reward_fragsr.html', 'anpr':'/reward_pedra.html' };
-                const key = finalUrl.split(':')[1];
-                finalUrl = map[key] || '/reward_cristais.html';
-            }
-            // Anexa querystring do token
-            if (finalUrl.indexOf('?') === -1) finalUrl += `?claim_token=${token}`;
-            else finalUrl += `&claim_token=${token}`;
+            // O código abaixo (que abria o modal) é removido/ignorado, pois a página será redirecionada.
 
-            // 4) Carrega no iframe/modal (mantém fluxo atual)
-            const rewardModal = document.getElementById('rewardVideoModal');
-            const rewardFrame = document.getElementById('rewardFrame');
-            if (rewardFrame) rewardFrame.src = finalUrl;
-            if (rewardModal) rewardModal.style.display = 'flex';
-
-            // 5) Tenta acionar o wrapper via um anchor "go:" (melhor esforço).
-            try {
-                const goMap = { 'crystals': 'ancr', 'common_card': 'anca', 'sr_fragment': 'anfr', 'reforge_stone': 'anpr' };
-                const goId = goMap[rewardType];
-                if (goId) {
-                    const fake = document.createElement('a');
-                    fake.href = `go:${goId}`;
-                    fake.style.display = 'none';
-                    document.body.appendChild(fake);
-                    // dispatch click after small delay (apos criar iframe)
-                    setTimeout(() => {
-                        try {
-                            fake.click();
-                        } catch(e) {
-                            // fallback dispatch
-                            const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-                            fake.dispatchEvent(evt);
-                        } finally {
-                            try { document.body.removeChild(fake); } catch(e){}
-                        }
-                    }, 300);
-                }
-            } catch (err) {
-                console.warn('Erro ao tentar disparar comando go:', err);
-            }
-
-            // Atualiza visual de limites após essa tentativa
-            checkRewardLimit();
-
-        } catch (err) {
-            showFloatingMessage('Erro inesperado: ' + (err.message || err));
-            link.textContent = originalText;
+        } catch (error) {
+            // Em caso de falha antes do redirecionamento (ex: falha na RPC), reabilita o botão
+            showFloatingMessage(`Erro: ${error.message}`);
+            button.disabled = false;
         } finally {
-            link.style.pointerEvents = '';
-            link.textContent = originalText;
+            // Reativa o botão temporariamente se houve falha na RPC
+            setTimeout(() => {
+                button.disabled = false;
+                checkRewardLimit();
+            }, 1000); 
         }
     });
 });
-
 
 // Ao carregar a loja, verifica quais botões devem estar bloqueados
 // chamamos com um pequeno delay para garantir que a sessão/auth esteja inicializada
 setTimeout(() => {
     checkRewardLimit();
 }, 600);
-
-// fim do arquivo

@@ -10,7 +10,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Pega o token de resgate da URL
     const urlParams = new URLSearchParams(window.location.search);
-    const claimToken = urlParams.get('claim_token');
+    let claimToken = urlParams.get('claim_token');
+if (!claimToken) {
+  claimToken = localStorage.getItem('pending_reward_token');
+}
+
 
     if (!claimToken) {
         messageDiv.textContent = 'Erro: Token de recompensa ausente. Feche esta janela e tente novamente.';

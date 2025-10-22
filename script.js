@@ -888,6 +888,7 @@ async function checkRewardLimit() {
     }
 }
 
+
 watchVideoButtons.forEach(button => {
     button.addEventListener('click', async () => {
         const rewardType = button.getAttribute('data-reward');
@@ -896,20 +897,18 @@ watchVideoButtons.forEach(button => {
         showFloatingMessage('Preparando sua recompensa...');
 
         try {
-            // 1. Chama a RPC para gerar um token de uso único no servidor
+            // 1. Gera token no servidor
             const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
                 p_reward_type: rewardType
             });
 
             if (rpcError) {
-                // Mensagem vinda do banco (ex: 'Limite diário para esta recompensa já foi atingido.')
                 if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
                     showFloatingMessage('Você já assistiu aos 5 vídeos de hoje para esta recompensa.');
                     button.style.filter = "grayscale(100%) brightness(60%)";
                     button.textContent = "Limite atingido";
                     button.disabled = true;
                     button.style.pointerEvents = "none";
-                    // atualiza demais botões também
                     checkRewardLimit();
                 } else {
                     showFloatingMessage(`Erro: ${rpcError.message}`);
@@ -917,17 +916,53 @@ watchVideoButtons.forEach(button => {
                 return;
             }
 
-            // 2. Constrói a URL de recompensa com o token seguro
+            // 2. Guarda token localmente (fallback caso a wrapper não consiga passar querystring)
+            localStorage.setItem('pending_reward_token', token);
+
+            // 3. Prepara a URL que a página de recompensa espera (usada quando o iframe for carregado)
             const urlWithToken = `${rewardUrl}?claim_token=${token}`;
 
-            // 3. Abre o modal e carrega a URL no iframe
+            // 4. Carrega a URL no iframe do modal (mantém o fluxo atual do modal/iframe)
             const rewardModal = document.getElementById('rewardVideoModal');
             const rewardFrame = document.getElementById('rewardFrame');
-            
             rewardFrame.src = urlWithToken;
             rewardModal.style.display = 'flex';
-            
-            // A plataforma AppCreator24 deve interceptar o carregamento do iframe e exibir o vídeo
+
+            // 5. Tenta também disparar o comando interno do wrapper AppCreator24
+            //    criando um <a href="go:..."> e clicando nele programaticamente.
+            //    Alguns wrappers exigem um clique real do usuário — se for o caso,
+            //    este clique programático pode ou não funcionar. É um *melhor esforço*.
+            try {
+                const goMap = {
+                    'crystals': 'ancr',
+                    'common_card': 'anca',
+                    'sr_fragment': 'anfr',
+                    'reforge_stone': 'anpr'
+                };
+                const goId = goMap[rewardType];
+                if (goId) {
+                    const fakeAnchor = document.createElement('a');
+                    fakeAnchor.href = `go:${goId}`;
+                    fakeAnchor.style.display = 'none';
+                    document.body.appendChild(fakeAnchor);
+
+                    // Dispara o clique de forma segura
+                    const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+                    fakeAnchor.dispatchEvent(evt);
+
+                    // Remove o anchor logo em seguida
+                    setTimeout(() => {
+                        try { document.body.removeChild(fakeAnchor); } catch(e) {}
+                    }, 500);
+                }
+            } catch (e) {
+                // se falhar, não interrompe o fluxo do iframe/modal
+                console.warn('Não foi possível disparar go: anchor programaticamente:', e);
+            }
+
+            // Observação: o wrapper pode abrir um overlay de vídeo e depois navegar para a URL
+            // que colocamos no iframe (ou não). Nós mantemos o iframe aberto para que, caso
+            // o player de anúncio seja exibido no próprio iframe, o jogador não perca o modal.
 
         } catch (error) {
             showFloatingMessage(`Erro: ${error.message}`);
@@ -939,6 +974,7 @@ watchVideoButtons.forEach(button => {
         }
     });
 });
+
 
 // Ao carregar a loja, verifica quais botões devem estar bloqueados
 // chamamos com um pequeno delay para garantir que a sessão/auth esteja inicializada

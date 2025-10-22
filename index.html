@@ -316,6 +316,142 @@
     </div>
 </div>
 
+<div id="shopModal" class="modal-container" style="display:none;">
+    <div class="modal-content">
+        <div class="shop-tabs">
+            <button class="shop-tab-btn active" data-tab="shop-main">Loja</button>
+            <button class="shop-tab-btn" data-tab="shop-recharge">Recarga</button>
+            <button class="shop-tab-btn" data-tab="shop-video">Assistir Vídeo</button>
+        </div>
+
+        <div id="shop-main" class="shop-content">
+            <h2>Loja</h2>
+            <p>Aproveite as promoções e adquira seus itens.</p>
+
+            <div class="shop-item">
+                <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" alt="Cartão Comum" class="shop-item-img">
+                <div class="shop-item-details">
+                    <h3>Cartão de Espiral Comum <strong>x15</strong></h3>
+                    <p>Use no Espiral para sortear fragmentos de equipamentos.</p>
+                    <div class="shop-item-cost">
+                        <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>250</span>
+                    </div>
+                   <button class="shop-buy-btn" data-package="common_card_pack" data-name="Cartão de Espiral Comum x15" data-cost="250">Comprar</button>
+                </div>
+            </div>
+
+            <div class="shop-item">
+                <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" alt="Cartão Avançado" class="shop-item-img">
+                <div class="shop-item-details">
+                    <h3>Pacote Avançado</h3>
+                    <p>Contém: Cartão Avançado <strong>x20</strong> e Cartão Comum <strong>x10</strong>.</p>
+                    <div class="shop-item-cost">
+                        <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>560</span>
+                    </div>
+                    
+<button class="shop-buy-btn" data-package="advanced_card_pack" data-name="Pacote Avançado" data-cost="560">Comprar</button>
+                </div>
+            </div>
+
+            <div class="shop-item">
+                <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp" alt="Pedra de Refundição" class="shop-item-img" style="width: 130px; height: 100px; margin-left: 30px;">
+                <div class="shop-item-details">
+                    <h3>Pedras de Refundição x500</h3>
+                    <p>Utilizadas para reforjar os atributos de um equipamento.</p>
+                    <div class="shop-item-cost">
+                        <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                        <span>2.000</span>
+                    </div>
+                   
+<button class="shop-buy-btn" data-package="reforge_stone_pack" data-name="Pedras de Refundição x500" data-cost="2000">Comprar</button>
+                </div>
+            </div>
+            <p id="shopMessage" style="color: white; margin-top: 10px;"></p>
+        </div>
+
+        <div id="shop-recharge" class="shop-content" style="display:none;">
+            <h2>Recarga de Ouro</h2>
+            <p>A recarga está em fase de desenvolvimento.</p>
+            
+             <div class="shop-item recharge-item">
+                <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" class="shop-item-img">
+                <div class="shop-item-details">
+                    <h3>Ouro x140</h3>
+                    <span>R$ 9,90</span>
+                </div>
+            </div>
+             <div class="shop-item recharge-item">
+                <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" class="shop-item-img">
+                <div class="shop-item-details">
+                    <h3>Ouro x420 + 30 Bônus</h3>
+                    <span>R$ 27,90</span>
+                </div>
+            </div>
+             <div class="shop-item recharge-item">
+                <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro" class="shop-item-img">
+                <div class="shop-item-details">
+                    <h3>Ouro x1000 + 250 Bônus</h3>
+                    <span>R$ 74,90</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="shop-video" class="shop-content" style="display:none;">
+             <h2>Recompensas Diárias</h2>
+             <p>Assista a um vídeo para ganhar prêmios! Limite de 5 de cada por dia.</p>
+             <div class="video-rewards-container">
+                
+                <div class="video-reward-card">
+                    <img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais">
+                    <span>Cristais<br> x100</span>
+                    <button class="watch-video-btn" data-reward="crystals" data-url="/reward_cristais.html">Assistir</button>
+                </div>
+                
+                <div class="video-reward-card">
+                    <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" alt="Cartão Comum">
+                    <span>Cartão Comum x1</span>
+                    <button class="watch-video-btn" data-reward="common_card" data-url="/reward_cartaocomum.html">Assistir</button>
+                </div>
+
+                <div class="video-reward-card">
+                    <img src="https://aden-rpg.pages.dev/assets/itens/fragmento_sr.webp" alt="Fragmento SR">
+                    <span>Fragmento SR x1</span>
+                    <button class="watch-video-btn" data-reward="sr_fragment" data-url="/reward_fragsr.html">Assistir</button>
+                </div>
+
+                <div class="video-reward-card">
+                    <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp" alt="Pedra de Refundição">
+                    <span>Pedra de Refundição x1</span>
+                    <button class="watch-video-btn" data-reward="reforge_stone" data-url="/reward_pedra.html">Assistir</button>
+                </div>
+
+             </div>
+        </div>
+
+        <button id="closeShopModalBtn">Fechar</button>
+    </div>
+</div>
+
+
+<div id="purchaseConfirmModal" class="modal-container" style="display:none;">
+    <div class="modal-content">
+        <h2 id="confirmModalTitle">Confirmar Compra</h2>
+        <p id="confirmModalMessage"></p>
+        <div id="confirmModalButtons">
+            <button id="cancelPurchaseBtn">NÃO</button>
+            <button id="confirmPurchaseFinalBtn">SIM</button>
+        </div>
+    </div>
+</div>
+
+<div id="rewardVideoModal" class="modal-container" style="display:none; background-color: #000;">
+    <div class="modal-content" style="padding: 0; background: transparent; width: 100%; height: 100%;">
+        <iframe id="rewardFrame" allow="fullscreen" style="width: 100vw; height: 100vh; border: none;"></iframe>
+    </div>
+</div>
+
 
 
 

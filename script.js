@@ -889,88 +889,95 @@ async function checkRewardLimit() {
 }
 
 
-watchVideoButtons.forEach(button => {
-    button.addEventListener('click', async () => {
-        const rewardType = button.getAttribute('data-reward');
-        const rewardUrl = button.getAttribute('data-url');
-        button.disabled = true;
-        showFloatingMessage('Preparando sua recompensa...');
 
+// Handler atualizado para links de recompensa (âncoras go:). Previne a navegação imediata,
+// gera token, carrega iframe/modal e só então tenta acionar o wrapper.
+// Mantém o fluxo via iframe para não forçar o jogador a sair da loja.
+document.querySelectorAll('.reward-link').forEach(link => {
+    link.addEventListener('click', async (e) => {
+        e.preventDefault(); // impede o comportamento padrão do <a href="go:...">
+        const rewardType = link.dataset.type || link.getAttribute('data-type') || link.getAttribute('data-reward');
+        const rewardUrl = link.getAttribute('data-url') || link.href || link.getAttribute('href');
+        link.style.pointerEvents = 'none'; // evita múltiplos cliques rápidos
+        const originalText = link.textContent;
+        link.textContent = 'Abrindo...';
         try {
-            // 1. Gera token no servidor
+            // 1) Gera token no servidor (deve estar autenticado)
             const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
                 p_reward_type: rewardType
             });
-
             if (rpcError) {
+                // Mensagem clara para limite diário
                 if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
-                    showFloatingMessage('Você já assistiu aos 5 vídeos de hoje para esta recompensa.');
-                    button.style.filter = "grayscale(100%) brightness(60%)";
-                    button.textContent = "Limite atingido";
-                    button.disabled = true;
-                    button.style.pointerEvents = "none";
+                    link.textContent = 'Limite atingido';
+                    link.style.filter = "grayscale(100%) brightness(60%)";
+                    link.disabled = true;
+                    showFloatingMessage('Limite diário atingido para esta recompensa.');
                     checkRewardLimit();
                 } else {
                     showFloatingMessage(`Erro: ${rpcError.message}`);
+                    link.textContent = originalText;
                 }
+                link.style.pointerEvents = '';
                 return;
             }
 
-            // 2. Guarda token localmente (fallback caso a wrapper não consiga passar querystring)
-            localStorage.setItem('pending_reward_token', token);
+            // 2) Salva token localmente como fallback
+            try { localStorage.setItem('pending_reward_token', token); } catch(e){}
 
-            // 3. Prepara a URL que a página de recompensa espera (usada quando o iframe for carregado)
-            const urlWithToken = `${rewardUrl}?claim_token=${token}`;
+            // 3) Prepara URL com token (caso o wrapper abra a página sem querystring)
+            let finalUrl = rewardUrl;
+            // Se rewardUrl já for do tipo /reward_xxx.html ou for "go:ancr", converta para a página correta
+            if (finalUrl.startsWith('go:')) {
+                const map = { 'ancr':'/reward_cristais.html', 'anca':'/reward_cartaocomum.html', 'anfr':'/reward_fragsr.html', 'anpr':'/reward_pedra.html' };
+                const key = finalUrl.split(':')[1];
+                finalUrl = map[key] || '/reward_cristais.html';
+            }
+            // Anexa querystring do token
+            if (finalUrl.indexOf('?') === -1) finalUrl += `?claim_token=${token}`;
+            else finalUrl += `&claim_token=${token}`;
 
-            // 4. Carrega a URL no iframe do modal (mantém o fluxo atual do modal/iframe)
+            // 4) Carrega no iframe/modal (mantém fluxo atual)
             const rewardModal = document.getElementById('rewardVideoModal');
             const rewardFrame = document.getElementById('rewardFrame');
-            rewardFrame.src = urlWithToken;
-            rewardModal.style.display = 'flex';
+            if (rewardFrame) rewardFrame.src = finalUrl;
+            if (rewardModal) rewardModal.style.display = 'flex';
 
-            // 5. Tenta também disparar o comando interno do wrapper AppCreator24
-            //    criando um <a href="go:..."> e clicando nele programaticamente.
-            //    Alguns wrappers exigem um clique real do usuário — se for o caso,
-            //    este clique programático pode ou não funcionar. É um *melhor esforço*.
+            // 5) Tenta acionar o wrapper via um anchor "go:" (melhor esforço).
             try {
-                const goMap = {
-                    'crystals': 'ancr',
-                    'common_card': 'anca',
-                    'sr_fragment': 'anfr',
-                    'reforge_stone': 'anpr'
-                };
+                const goMap = { 'crystals': 'ancr', 'common_card': 'anca', 'sr_fragment': 'anfr', 'reforge_stone': 'anpr' };
                 const goId = goMap[rewardType];
                 if (goId) {
-                    const fakeAnchor = document.createElement('a');
-                    fakeAnchor.href = `go:${goId}`;
-                    fakeAnchor.style.display = 'none';
-                    document.body.appendChild(fakeAnchor);
-
-                    // Dispara o clique de forma segura
-                    const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-                    fakeAnchor.dispatchEvent(evt);
-
-                    // Remove o anchor logo em seguida
+                    const fake = document.createElement('a');
+                    fake.href = `go:${goId}`;
+                    fake.style.display = 'none';
+                    document.body.appendChild(fake);
+                    // dispatch click after small delay (apos criar iframe)
                     setTimeout(() => {
-                        try { document.body.removeChild(fakeAnchor); } catch(e) {}
-                    }, 500);
+                        try {
+                            fake.click();
+                        } catch(e) {
+                            // fallback dispatch
+                            const evt = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+                            fake.dispatchEvent(evt);
+                        } finally {
+                            try { document.body.removeChild(fake); } catch(e){}
+                        }
+                    }, 300);
                 }
-            } catch (e) {
-                // se falhar, não interrompe o fluxo do iframe/modal
-                console.warn('Não foi possível disparar go: anchor programaticamente:', e);
+            } catch (err) {
+                console.warn('Erro ao tentar disparar comando go:', err);
             }
 
-            // Observação: o wrapper pode abrir um overlay de vídeo e depois navegar para a URL
-            // que colocamos no iframe (ou não). Nós mantemos o iframe aberto para que, caso
-            // o player de anúncio seja exibido no próprio iframe, o jogador não perca o modal.
-
-        } catch (error) {
-            showFloatingMessage(`Erro: ${error.message}`);
-        } finally {
-            // reativa o botão temporariamente; checkRewardLimit() irá desativá-lo novamente se necessário
-            button.disabled = false;
-            // Atualiza visual de limites após cada tentativa
+            // Atualiza visual de limites após essa tentativa
             checkRewardLimit();
+
+        } catch (err) {
+            showFloatingMessage('Erro inesperado: ' + (err.message || err));
+            link.textContent = originalText;
+        } finally {
+            link.style.pointerEvents = '';
+            link.textContent = originalText;
         }
     });
 });

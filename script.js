@@ -14,7 +14,7 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ADICIONADO: Cache de definições de itens para uso no Espiral e outras funcionalidades
+// Cache de definições de itens para uso no Espiral e outras funcionalidades
 let itemDefinitions = new Map();
 
 // Elementos da UI
@@ -57,8 +57,19 @@ const updatePasswordBtn = document.getElementById('updatePasswordBtn');
 const closeVerifyRecoveryModalBtn = document.getElementById('closeVerifyRecoveryModalBtn');
 const verifyRecoveryMessage = document.getElementById('verifyRecoveryMessage');
 
+// --- Elementos da Loja ---
+const shopModal = document.getElementById('shopModal');
+const shopMessage = document.getElementById('shopMessage');
+const closeShopModalBtn = document.getElementById('closeShopModalBtn');
 
-// ADICIONADO: Função para carregar definições de itens no cache local
+// --- Elementos do Modal de Confirmação de Compra ---
+const purchaseConfirmModal = document.getElementById('purchaseConfirmModal');
+const confirmModalMessage = document.getElementById('confirmModalMessage');
+const confirmPurchaseFinalBtn = document.getElementById('confirmPurchaseFinalBtn');
+const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
+
+
+// Função para carregar definições de itens no cache local
 async function loadItemDefinitions() {
     if (itemDefinitions.size > 0) return; // Já carregado
 
@@ -433,7 +444,7 @@ if (closeProfileModalBtn) {
 
 // === MENU LATERAL (LOSANGOS) ===
 document.addEventListener("DOMContentLoaded", () => {
-  // MODIFICAÇÃO: Carrega as definições de itens ao iniciar a página.
+  // Carrega as definições de itens ao iniciar a página.
   loadItemDefinitions();
     
   const missionsBtn = document.getElementById("missionsBtn");
@@ -466,10 +477,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModal = document.getElementById("closeGenericModal");
 
   const modalMessages = {
-    lojaModal: "Loja em breve!",
-    bolsaModal: "Bolsa em breve!",
     pvModal: "PV em breve!",
-    diariasModal: "Missões Diárias em breve!",
+    tarefasModal: "Tarefas em breve!",
     conquistasModal: "Conquistas em breve!",
     comercioModal: "Comércio em breve!",
     rankingModal: "Ranking em breve!",
@@ -482,6 +491,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (key === "espiralModal") {
         openSpiralModal();
+        return;
+      }
+      
+      if (key === "lojaModal") {
+        openShopModal();
         return;
       }
       
@@ -658,9 +672,8 @@ confirmDrawBtn.addEventListener('click', async () => {
     confirmDrawBtn.disabled = false;
 });
 
-// MODIFICADO: Função de resultados corrigida para usar o cache de itens e exibir a imagem correta.
 function displayDrawResults(items) {
-    drawResultsGrid.innerHTML = ''; // Limpa resultados anteriores
+    drawResultsGrid.innerHTML = '';
     if (Object.keys(items).length === 0) {
         drawResultsGrid.innerHTML = '<p>Nenhum item especial foi obtido desta vez.</p>';
     } else {
@@ -687,3 +700,250 @@ function displayDrawResults(items) {
     }
     drawResultsModal.style.display = 'flex';
 }
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE LOJA (Shop)      ===
+// ===============================================
+
+function openShopModal() {
+    shopMessage.textContent = '';
+    shopModal.style.display = 'flex';
+}
+
+if (closeShopModalBtn) {
+    closeShopModalBtn.addEventListener('click', () => {
+        shopModal.style.display = 'none';
+    });
+}
+
+// Lógica para alternar entre as abas da loja
+const shopTabs = document.querySelectorAll('.shop-tab-btn');
+const shopContents = document.querySelectorAll('.shop-content');
+
+shopTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        shopTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        const targetContentId = tab.getAttribute('data-tab');
+        shopContents.forEach(content => {
+            if (content.id === targetContentId) {
+                content.style.display = 'block';
+            } else {
+                content.style.display = 'none';
+            }
+        });
+    });
+});
+
+// Lógica para os botões de compra com modal de confirmação
+const buyButtons = document.querySelectorAll('.shop-buy-btn');
+let purchaseHandler = null; // Variável para armazenar a função de compra
+
+buyButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const packageId = button.getAttribute('data-package');
+        const itemName = button.getAttribute('data-name');
+        const itemCost = button.getAttribute('data-cost');
+
+        // Prepara a mensagem do modal
+        confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
+        
+        // Define o que o botão "Confirmar" fará
+        purchaseHandler = async () => {
+            purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
+            button.disabled = true;
+            shopMessage.textContent = 'Processando sua compra...';
+
+            try {
+                const { data, error } = await supabaseClient.rpc('buy_shop_item', {
+                    package_id: packageId
+                });
+                if (error) throw error;
+
+                shopMessage.textContent = data;
+                await fetchAndDisplayPlayerInfo(true);
+            } catch (error) {
+                shopMessage.textContent = `Erro: ${error.message}`;
+            } finally {
+                button.disabled = false;
+            }
+        };
+
+        // Mostra o modal de confirmação
+        purchaseConfirmModal.style.display = 'flex';
+    });
+});
+
+// Listener para o botão de confirmação final
+confirmPurchaseFinalBtn.addEventListener('click', () => {
+    if (purchaseHandler) {
+        purchaseHandler();
+    }
+});
+
+// Listener para o botão de cancelar
+cancelPurchaseBtn.addEventListener('click', () => {
+    purchaseConfirmModal.style.display = 'none';
+    purchaseHandler = null; // Limpa o handler
+});
+
+// ===============================================================
+// === NOVA LÓGICA DE RECOMPENSA POR VÍDEO (SEGURA E EM MODAL) ===
+// ===============================================================
+
+// Adiciona um listener para o botão de fechar manual do novo modal de recompensa
+if (document.getElementById('closeRewardVideoModalBtn')) {
+    document.getElementById('closeRewardVideoModalBtn').addEventListener('click', () => {
+        document.getElementById('rewardVideoModal').style.display = 'none';
+        document.getElementById('rewardFrame').src = 'about:blank'; // Limpa o iframe para interromper a execução
+    });
+}
+
+// Adiciona um listener global para receber mensagens do iframe de recompensa
+window.addEventListener('message', (event) => {
+    // Verificação de segurança: aceita mensagens apenas da sua própria origem
+    if (event.origin !== window.location.origin) {
+        return;
+    }
+
+    // Se a mensagem do iframe for para fechar, fecha o modal e atualiza a UI
+    if (event.data === 'reward-claimed-and-close') {
+        const rewardModal = document.getElementById('rewardVideoModal');
+        if (rewardModal) {
+            rewardModal.style.display = 'none';
+        }
+        document.getElementById('rewardFrame').src = 'about:blank';
+        showFloatingMessage("Recompensa recebida com sucesso!");
+        fetchAndDisplayPlayerInfo(true); // Atualiza as informações do jogador
+    }
+});
+
+// Nova lógica para os botões de "Assistir Vídeo"
+const watchVideoButtons = document.querySelectorAll('.watch-video-btn');
+
+async function checkRewardLimit() {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return;
+
+        const { data: playerData, error } = await supabaseClient
+            .from('players')
+            .select('daily_rewards_log')
+            .eq('id', user.id)
+            .single();
+
+        if (error || !playerData) return;
+
+        const log = playerData.daily_rewards_log || {};
+        const counts = (log && log.counts) ? log.counts : {};
+        const logDateStr = log && log.date ? String(log.date) : null;
+
+        // Converte a data do log para string YYYY-MM-DD (espera que o backend use UTC date)
+        const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+
+        // Se não houver data ou for de outro dia, não bloqueia (reset diário ainda não aplicado no frontend)
+        if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
+            // limpa estilos caso existam
+            watchVideoButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.filter = "";
+                btn.style.pointerEvents = "";
+                // restaura texto caso tenha sido alterado; cada botão tem label "Assistir" no HTML original
+                if (btn.getAttribute('data-original-text')) {
+                    btn.textContent = btn.getAttribute('data-original-text');
+                } else {
+                    // guarda o texto original para uso futuro
+                    btn.setAttribute('data-original-text', btn.textContent);
+                }
+            });
+            return;
+        }
+
+        // Aplica bloqueios de acordo com counts
+        watchVideoButtons.forEach(btn => {
+            const type = btn.getAttribute('data-reward');
+            const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
+            if (isNaN(count) || count < 5) {
+                // ainda disponível
+                btn.disabled = false;
+                btn.style.filter = "";
+                btn.style.pointerEvents = "";
+                if (!btn.getAttribute('data-original-text')) {
+                    btn.setAttribute('data-original-text', btn.textContent);
+                } else {
+                    btn.textContent = btn.getAttribute('data-original-text');
+                }
+            } else {
+                // limite atingido
+                btn.disabled = true;
+                btn.style.filter = "grayscale(100%) brightness(60%)";
+                btn.style.pointerEvents = "none";
+                btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
+                btn.textContent = "Limite atingido";
+            }
+        });
+    } catch (e) {
+        console.error("Erro ao verificar limites de vídeo:", e);
+    }
+}
+
+watchVideoButtons.forEach(button => {
+    button.addEventListener('click', async () => {
+        const rewardType = button.getAttribute('data-reward');
+        const rewardUrl = button.getAttribute('data-url');
+        button.disabled = true;
+        showFloatingMessage('Preparando sua recompensa...');
+
+        try {
+            // 1. Chama a RPC para gerar um token de uso único no servidor
+            const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
+                p_reward_type: rewardType
+            });
+
+            if (rpcError) {
+                // Mensagem vinda do banco (ex: 'Limite diário para esta recompensa já foi atingido.')
+                if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
+                    showFloatingMessage('Você já assistiu aos 5 vídeos de hoje para esta recompensa.');
+                    button.style.filter = "grayscale(100%) brightness(60%)";
+                    button.textContent = "Limite atingido";
+                    button.disabled = true;
+                    button.style.pointerEvents = "none";
+                    // atualiza demais botões também
+                    checkRewardLimit();
+                } else {
+                    showFloatingMessage(`Erro: ${rpcError.message}`);
+                }
+                return;
+            }
+
+            // 2. Constrói a URL de recompensa com o token seguro
+            const urlWithToken = `${rewardUrl}?claim_token=${token}`;
+
+            // 3. Abre o modal e carrega a URL no iframe
+            const rewardModal = document.getElementById('rewardVideoModal');
+            const rewardFrame = document.getElementById('rewardFrame');
+            
+            rewardFrame.src = urlWithToken;
+            rewardModal.style.display = 'flex';
+            
+            // A plataforma AppCreator24 deve interceptar o carregamento do iframe e exibir o vídeo
+
+        } catch (error) {
+            showFloatingMessage(`Erro: ${error.message}`);
+        } finally {
+            // reativa o botão temporariamente; checkRewardLimit() irá desativá-lo novamente se necessário
+            button.disabled = false;
+            // Atualiza visual de limites após cada tentativa
+            checkRewardLimit();
+        }
+    });
+});
+
+// Ao carregar a loja, verifica quais botões devem estar bloqueados
+// chamamos com um pequeno delay para garantir que a sessão/auth esteja inicializada
+setTimeout(() => {
+    checkRewardLimit();
+}, 600);
+
+// fim do arquivo

@@ -1125,3 +1125,190 @@ margin-right: 15px;
   75%  { transform: translate(10px, -15px) rotate(270deg) scale(1.05); }
   100% { transform: translate(0, 0) rotate(360deg) scale(1); }
 }
+
+
+
+
+
+
+/* === ESTILOS PARA O MODAL DA LOJA === */
+#shopModal .modal-content {
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.1)
+    ),
+    url('https://aden-rpg.pages.dev/assets/lojabg.webp');
+  background-size: cover;
+  background-position: center;
+  border: none;
+    border-radius: 10px;
+    color: #e0dccc;
+    width: 98%;
+    max-height: 90vh;
+    height: 99vh;
+    overflow-y: auto;
+    text-align: center;
+    padding: 2px; /* Um pouco mais de espaço vertical */
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+    box-sizing: border-box; 
+}
+
+.shop-tabs {
+  display: flex;
+  flex-wrap: wrap;
+    justify-content: space-around;
+    border-bottom: 2px solid #555;
+    width: 100%; 
+    margin: 0 auto 5px auto;
+}
+    
+
+.shop-tab-btn {
+    padding: 10px 5px;
+    font-size: 0.9em;
+    background-color: transparent;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    background-image: none !important;
+    width: 70px;
+    display: flex;
+    justify-content: center;
+    text-align: center;
+}
+
+.shop-tab-btn.active {
+    color: gold;
+    border-bottom: 2px solid gold;
+}
+
+.shop-content {
+    text-align: center;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+
+.shop-item {
+    display: flex;
+    align-items: center;
+    width: 90%;
+    margin: 15px auto;
+    padding: 10px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #A68C42, #333, #A68C42);
+    border: 1px solid rgba(255,215,0,0.3);
+    color: white;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+
+.shop-item-img {
+    width: 120px;
+    height: 160px;
+    object-fit: contain;
+    margin-right: 15px;
+}
+
+.shop-item-details {
+    text-align: left;
+    flex-grow: 1;
+}
+
+.shop-item-details h3 {
+    margin: 0 0 5px 0;
+    font-size: 1.1em;
+    color: #fff;
+}
+
+.shop-item-details p {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.shop-item-cost {
+    display: flex;
+    align-items: center;
+    font-size: 1.2em;
+    font-weight: bold;
+    color: gold;
+    margin-bottom: 10px;
+}
+
+.shop-item-cost img {
+    width: 24px;
+    height: 24px;
+    margin-right: 5px;
+}
+
+.shop-buy-btn {
+    padding: 15px 30px !important;
+    width: 100%;
+    font-size: 1em;
+}
+
+.recharge-item .shop-item-details {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.recharge-item .shop-item-details span {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+/* Aba de Vídeos */
+.video-rewards-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.video-reward-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(0,0,0,0.6);
+    border-radius: 8px;
+    padding: 10px;
+    width: 150px;
+}
+
+.video-reward-card img {
+    width: 80px;
+    height: 100px;
+    object-fit: contain;
+}
+
+.video-reward-card span {
+    margin: 10px 0;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.video-reward-card button {
+    width: 100%;
+    padding: 15px 10px !important;
+    font-size: 0.9em;
+}
+#confirmModalButtons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+    gap: 25px;
+}

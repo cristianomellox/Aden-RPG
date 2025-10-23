@@ -14,6 +14,42 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// =======================================================================
+// NOVA FUNÇÃO PARA LIDAR COM AÇÕES NA URL (REABRIR A LOJA)
+// =======================================================================
+function handleUrlActions() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+
+    if (action === 'openShopVideo') {
+        // 1. Abre o modal da loja
+        const shopModal = document.getElementById('shopModal');
+        if (shopModal) {
+            shopModal.style.display = 'flex';
+        }
+
+        // 2. Simula o clique na aba "Assistir Vídeo"
+        const videoTabButton = document.querySelector('.shop-tab-btn[data-tab="shop-video"]');
+        const mainTabButton = document.querySelector('.shop-tab-btn[data-tab="shop-main"]');
+        const videoContent = document.getElementById('shop-video');
+        const mainContent = document.getElementById('shop-main');
+
+        if (videoTabButton && mainTabButton && videoContent && mainContent) {
+            // Remove a classe 'active' de todas as abas e esconde todos os conteúdos
+            document.querySelectorAll('.shop-tab-btn').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.shop-content').forEach(c => c.style.display = 'none');
+            
+            // Ativa a aba e o conteúdo de vídeo
+            videoTabButton.classList.add('active');
+            videoContent.style.display = 'block';
+        }
+
+        // 3. Limpa a URL para que a ação não se repita se o jogador recarregar a página
+        history.replaceState(null, '', window.location.pathname);
+    }
+}
+
+
 // Cache de definições de itens para uso no Espiral e outras funcionalidades
 let itemDefinitions = new Map();
 
@@ -178,7 +214,6 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
             document.getElementById('editProfileIcon').click();
         });
     }
-    document.getElementById('signOutBtn').addEventListener('click', signOut); // Adicionado para garantir o deslogar no modal de info
     document.getElementById('playerAvatar').src = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
     document.getElementById('playerNameText').textContent = player.name;
     document.getElementById('playerLevel').textContent = `Nv. ${player.level}`;
@@ -445,6 +480,9 @@ if (closeProfileModalBtn) {
 
 // === MENU LATERAL (LOSANGOS) ===
 document.addEventListener("DOMContentLoaded", () => {
+  // Chama a função para lidar com ações da URL, como reabrir a loja
+  handleUrlActions();
+
   // Carrega as definições de itens ao iniciar a página.
   loadItemDefinitions();
     
@@ -586,7 +624,7 @@ commonSpiralTab.addEventListener('click', () => {
 
 advancedSpiralTab.addEventListener('click', () => {
     advancedSpiralTab.classList.add('active');
-    commonSpiralContent.classList.remove('active');
+    commonSpiralTab.classList.remove('active');
     advancedSpiralContent.style.display = 'block';
     commonSpiralContent.style.display = 'none';
 });
@@ -629,8 +667,8 @@ confirmPurchaseBtn.addEventListener('click', async () => {
         buyCardsMessage.textContent = `Erro: ${error.message}`;
     } else {
         buyCardsMessage.textContent = data;
-        await fetchAndDisplayPlayerInfo(true);
         await updateCardCounts();
+        await fetchAndDisplayPlayerInfo(true);
         setTimeout(() => {
             buyCardsModal.style.display = 'none';
         }, 2000);
@@ -789,50 +827,9 @@ cancelPurchaseBtn.addEventListener('click', () => {
     purchaseHandler = null; // Limpa o handler
 });
 
-// ===============================================================
-// === NOVA LÓGICA DE RECOMPENSA POR VÍDEO (REVISADA) ===
-// ===============================================================
-
-// Adiciona um listener para o botão de fechar manual do novo modal de recompensa
-if (document.getElementById('closeRewardVideoModalBtn')) {
-    document.getElementById('closeRewardVideoModalBtn').addEventListener('click', () => {
-        document.getElementById('rewardVideoModal').style.display = 'none';
-        document.getElementById('rewardFrame').src = 'about:blank'; // Limpa o iframe para interromper a execução
-    });
-}
-
-// Adiciona um listener global para receber mensagens do iframe de recompensa
-window.addEventListener('message', (event) => {
-    // Verificação de segurança: aceita mensagens apenas da sua própria origem
-    // Nota: O AppCreator24 pode exigir que a origem seja '*' se a seção for carregada nativamente
-    if (event.origin !== window.location.origin) {
-        // Você pode ajustar o '*' se for estritamente necessário para o AppCreator24, mas a origem é mais segura
-        // Ex: if (event.origin === 'null' || event.origin === 'http://localhost' || event.origin === 'seu_dominio')
-    }
-
-    // Se a mensagem for para fechar, fecha o modal e atualiza a UI
-    if (event.data === 'reward-claimed-and-close') {
-        const rewardModal = document.getElementById('rewardVideoModal');
-        if (rewardModal) {
-            rewardModal.style.display = 'none';
-        }
-
-        // Limpa o token de recompensa pendente, pois ele foi resgatado [CITAÇÃO: uploaded:reward.js]
-        localStorage.removeItem('pending_reward_token');
-
-        // Limpa o iframe (mantido caso o HTML do modal ainda exista, mas o fluxo mudou)
-        const rewardFrame = document.getElementById('rewardFrame');
-        if (rewardFrame) {
-            rewardFrame.src = 'about:blank';
-        }
-        
-        showFloatingMessage("Recompensa recebida com sucesso!");
-        fetchAndDisplayPlayerInfo(true); // Atualiza as informações do jogador
-    }
-});
-
-// Nova lógica para os botões de "Assistir Vídeo"
-const watchVideoButtons = document.querySelectorAll('.watch-video-btn');
+// =======================================================================
+// === LÓGICA DE RECOMPENSA POR VÍDEO (INTEGRADA AO APPCREATOR24) ===
+// =======================================================================
 
 async function checkRewardLimit() {
     try {
@@ -851,33 +848,26 @@ async function checkRewardLimit() {
         const counts = (log && log.counts) ? log.counts : {};
         const logDateStr = log && log.date ? String(log.date) : null;
 
-        // Converte a data do log para string YYYY-MM-DD (espera que o backend use UTC date)
         const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
 
-        // Se não houver data ou for de outro dia, não bloqueia (reset diário ainda não aplicado no frontend)
         if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
-            // limpa estilos caso existam
             watchVideoButtons.forEach(btn => {
                 btn.disabled = false;
                 btn.style.filter = "";
                 btn.style.pointerEvents = "";
-                // restaura texto caso tenha sido alterado; cada botão tem label "Assistir" no HTML original
                 if (btn.getAttribute('data-original-text')) {
                     btn.textContent = btn.getAttribute('data-original-text');
                 } else {
-                    // guarda o texto original para uso futuro
                     btn.setAttribute('data-original-text', btn.textContent);
                 }
             });
             return;
         }
 
-        // Aplica bloqueios de acordo com counts
         watchVideoButtons.forEach(btn => {
             const type = btn.getAttribute('data-reward');
             const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
             if (isNaN(count) || count < 5) {
-                // ainda disponível
                 btn.disabled = false;
                 btn.style.filter = "";
                 btn.style.pointerEvents = "";
@@ -887,7 +877,6 @@ async function checkRewardLimit() {
                     btn.textContent = btn.getAttribute('data-original-text');
                 }
             } else {
-                // limite atingido
                 btn.disabled = true;
                 btn.style.filter = "grayscale(100%) brightness(60%)";
                 btn.style.pointerEvents = "none";
@@ -900,70 +889,52 @@ async function checkRewardLimit() {
     }
 }
 
+const watchVideoButtons = document.querySelectorAll('.watch-video-btn');
+
 watchVideoButtons.forEach(button => {
     button.addEventListener('click', async () => {
         const rewardType = button.getAttribute('data-reward');
-        // O comando AppCreator24 (ex: 'go:ancr') DEVE estar configurado neste atributo.
-        // Certifique-se de que seus botões HTML possuem 'data-command="go:ancr"', etc.
-        const appCreatorCommand = button.getAttribute('data-command');
-        
-        if (!appCreatorCommand) {
-             showFloatingMessage('Erro: Atributo data-command AppCreator24 ausente no botão.');
-             return;
-        }
-
         button.disabled = true;
-        showFloatingMessage('Gerando token de recompensa e iniciando vídeo...');
+        showFloatingMessage('Preparando sua recompensa...');
 
         try {
-            // 1. Chama a RPC para gerar um token de uso único no servidor
             const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
                 p_reward_type: rewardType
             });
 
             if (rpcError) {
-                // Mensagem vinda do banco (ex: 'Limite diário para esta recompensa já foi atingido.')
                 if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
-                    showFloatingMessage('Você já assistiu aos 5 vídeos de hoje para esta recompensa.');
-                    button.style.filter = "grayscale(100%) brightness(60%)";
-                    button.textContent = "Limite atingido";
-                    button.disabled = true;
-                    button.style.pointerEvents = "none";
-                    // atualiza demais botões também
+                    showFloatingMessage('Você já atingiu o limite diário para esta recompensa.');
                     checkRewardLimit();
                 } else {
                     showFloatingMessage(`Erro: ${rpcError.message}`);
                 }
+                button.disabled = false;
                 return;
             }
 
-            // PASSO NOVO E CRUCIAL: Armazena o token no localStorage
-            // A página de destino (reward.js) irá resgatar o token daqui após o vídeo [CITAÇÃO: uploaded:reward.js]
             localStorage.setItem('pending_reward_token', token);
-            
-            // NOVO PASSO: Redireciona a janela principal para o comando AppCreator24.
-            // Isso irá disparar o rewarded video da plataforma e levar para a seção de destino.
-            showFloatingMessage('Token gerado. Iniciando vídeo...');
-            window.location.href = appCreatorCommand;
 
-            // O código abaixo (que abria o modal) é removido/ignorado, pois a página será redirecionada.
+            const triggerId = `trigger-${rewardType}-ad`;
+            const triggerLink = document.getElementById(triggerId);
+
+            if (triggerLink) {
+                triggerLink.click();
+            } else {
+                throw new Error(`Gatilho para recompensa '${rewardType}' não encontrado.`);
+            }
 
         } catch (error) {
-            // Em caso de falha antes do redirecionamento (ex: falha na RPC), reabilita o botão
             showFloatingMessage(`Erro: ${error.message}`);
-            button.disabled = false;
+            localStorage.removeItem('pending_reward_token');
         } finally {
-            // Reativa o botão temporariamente se houve falha na RPC
-            setTimeout(() => {
-                button.disabled = false;
-                checkRewardLimit();
-            }, 1000); 
+            setTimeout(() => { button.disabled = false; }, 3000);
         }
     });
 });
 
-// Ao carregar a loja, verifica quais botões devem estar bloqueados
-// chamamos com um pequeno delay para garantir que a sessão/auth esteja inicializada
 setTimeout(() => {
     checkRewardLimit();
 }, 600);
+
+// fim do arquivo

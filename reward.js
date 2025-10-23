@@ -1,46 +1,50 @@
-// reward.js - SUBSTITUA TODO O CONTEÚDO DO ARQUIVO
+// reward.js - VERSÃO FINAL COM REDIRECIONAMENTO AUTOMÁTICO
 
 document.addEventListener('DOMContentLoaded', async () => {
     const messageDiv = document.getElementById('reward-message');
+    // O botão de retorno manual não será mais o principal, mas o deixamos no HTML como fallback
+    const returnBtn = document.getElementById('return-btn'); 
+    returnBtn.style.display = 'none'; // Esconde por padrão
 
-    // Inicializa o Supabase Client
     const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Pega o token de resgate da URL
-    const urlParams = new URLSearchParams(window.location.search);
-    let claimToken = urlParams.get('claim_token');
-if (!claimToken) {
-  claimToken = localStorage.getItem('pending_reward_token');
-}
+    let claimToken = localStorage.getItem('pending_reward_token');
 
+    if (localStorage.getItem('pending_reward_token')) {
+        localStorage.removeItem('pending_reward_token');
+    }
 
     if (!claimToken) {
-        messageDiv.textContent = 'Erro: Token de recompensa ausente. Feche esta janela e tente novamente.';
+        messageDiv.textContent = 'Erro: Token de recompensa ausente. Você será redirecionado em breve.';
+        setTimeout(() => {
+            window.location.href = '/index.html';
+        }, 3000);
         return;
     }
 
     try {
         messageDiv.textContent = 'Processando sua recompensa...';
         
-        // Chama a RPC para conceder a recompensa usando o token
         const { data: rpcData, error: rpcError } = await supabaseClient.rpc('grant_daily_reward', {
             p_claim_token: claimToken
         });
 
         if (rpcError) throw rpcError;
 
-        messageDiv.innerHTML = `<h2>Recompensa Recebida!</h2><p>${rpcData}</p><p>Esta janela fechará em breve.</p>`;
-
-        // Notifica a página principal (index.html) para fechar o modal e atualizar a UI
+        messageDiv.innerHTML = `<h2>Recompensa Recebida!</h2><p>${rpcData}</p><p>Retornando à loja...</p>`;
+        
+        // SUCESSO: Redireciona de volta para a loja aberta na aba correta
         setTimeout(() => {
-            window.parent.postMessage('reward-claimed-and-close', window.location.origin);
-        }, 3000); // Espera 3 segundos para o jogador ler a mensagem
+            window.location.href = '/index.html?action=openShopVideo';
+        }, 2500); // Espera 2.5 segundos para o jogador ler
 
     } catch (error) {
-        messageDiv.textContent = `Ocorreu um erro: ${error.message}`;
+        messageDiv.textContent = `Ocorreu um erro: ${error.message}. Você será redirecionado.`;
+        // ERRO: Redireciona de volta mesmo assim, para não prender o jogador
+        setTimeout(() => {
+            window.location.href = '/index.html?action=openShopVideo';
+        }, 3000);
     }
 });
-
-// Remove a função startRewardedVideo, pois ela não é mais necessária neste arquivo.

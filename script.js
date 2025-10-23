@@ -516,7 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModal = document.getElementById("closeGenericModal");
 
   const modalMessages = {
-    pvModal: "PV em breve!",
+    //pvModal: "PV em breve!",
     tarefasModal: "Tarefas em breve!",
     conquistasModal: "Conquistas em breve!",
     comercioModal: "Comércio em breve!",
@@ -540,6 +540,10 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (key === "bolsaModal") {
         window.location.href = "/inventory.html";
+        return;
+      }
+      if (key === "pvModal") {
+        document.getElementById('pvModal').style.display = "flex";
         return;
       }
 

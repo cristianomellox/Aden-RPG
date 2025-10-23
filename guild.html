@@ -399,7 +399,7 @@
       </div>
     </div>
     <div style="display: flex; justify-content: center; align-items: center;">
-     <img id="sendmp" src="https://aden-rpg.pages.dev/assets/mp.webp" alt="Manutenção" style="width: 60px; height: 60px; margin-top: 15px;"> 
+     <img id="sendmp" src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 50px; height: 50px; margin-top: 15px;"> 
     </div>
   </div>
 </div>
@@ -584,6 +584,41 @@ O tempo de preparação é de 10 minutos.</li></ul>
             }
         });
     </script>
+    
+    <div id="pvModal" class="modal-container" style="display:none;">
+  <div class="modal-content pv-modal-content">
+    <div class="pv-tabs" style="display: none;">
+      <h2 class="pv-tab-btn active" data-tab="pv-messages">Mensagens</h2>
+      <h2 class="pv-tab-btn" data-tab="pv-system">Sistema</h2>
+    </div>
+
+    <div id="pv-messages" class="pv-content">
+      <div id="pv-conversation-list">
+        </div>
+
+      <div id="pv-chat-view" style="display: none;">
+        <div class="chat-header">
+          <h2 id="pv-back-to-list-btn" style="display: none;"> <svg xmlns="http://www.w3.org/2000/svg" width="64" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg></h2>
+          <h3 id="pv-chat-with-name"></h3>
+          <h2 id="pv-delete-convo-btn" style="display: none;"><img src="https://aden-rpg.pages.dev/assets/iconlixo.webp" style="width:40px; height:40px; margin-top: 9px"></h2>
+        </div>
+        <div id="pv-chat-messages">
+          </div>
+        <div class="chat-input-area">
+          <input type="text" id="pv-chat-input" placeholder="Digite sua mensagem...">
+          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:40px; height:40px; margin-top: 2px;" id="pv-send-message-btn">
+        </div>
+      </div>
+    </div>
+
+    <div id="pv-system" class="pv-content" style="display:none;">
+      <div id="pv-system-messages-list">
+        </div>
+    </div>
+
+    <button id="closePvModalBtn">Fechar</button>
+  </div>
+</div>
 
 
 
@@ -653,7 +688,9 @@ document.addEventListener("DOMContentLoaded", () => {
    <script src="number_format.js"></script>
     <script src="guild.js"></script>
     <script src="playerModal.js"></script>
-   
+    <script src="pv.js"></script>
+<script src="guild_pv.js"></script>
+</body>
 <script defer src="guild_tavern.js"></script>
 
 

@@ -1486,3 +1486,52 @@ margin-right: 15px;
   background-color: #222;
   font-style: italic;
 }
+#pvtutomodal .modal-content2 {
+  text-align: left !important;
+  color: white;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 8px;
+}
+.modal-overlay2 {
+    position: fixed;
+  
+    width: 100%;
+    height: 100%;
+   background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+  
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+/* Estilos para a Bolinha de Notificação na Aba Sistema */
+.pv-tab-btn.has-unread-system {
+    position: relative; /* Necessário para posicionar o :after */
+    padding-right: 25px; /* Adiciona espaço para a bolinha */
+}
+
+/* Bolinha vermelha (dot) na aba Sistema */
+.pv-tab-btn.has-unread-system::after {
+    content: '';
+    position: absolute;
+    top: 5px; /* Ajuste a posição vertical conforme necessário */
+    right: 5px; /* Ajuste a posição horizontal conforme necessário */
+    width: 8px;
+    height: 8px;
+    background-color: red;
+    border-radius: 50%;
+    border: 1px solid white; /* Opcional: para maior destaque */
+}
+
+/* Garante que o modal de sistema fica acima dos outros elementos */
+#systemMessageModal {
+    z-index: 10000;
+}

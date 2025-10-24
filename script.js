@@ -15,37 +15,62 @@ const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =======================================================================
-// NOVA FUNÇÃO PARA LIDAR COM AÇÕES NA URL (REABRIR A LOJA)
+// FUNÇÃO PARA LIDAR COM AÇÕES NA URL (REABRIR LOJA OU ABRIR PV)
 // =======================================================================
-function handleUrlActions() {
+async function handleUrlActions() {
     const urlParams = new URLSearchParams(window.location.search);
     const action = urlParams.get('action');
 
     if (action === 'openShopVideo') {
-        // 1. Abre o modal da loja
         const shopModal = document.getElementById('shopModal');
         if (shopModal) {
             shopModal.style.display = 'flex';
         }
-
-        // 2. Simula o clique na aba "Assistir Vídeo"
         const videoTabButton = document.querySelector('.shop-tab-btn[data-tab="shop-video"]');
-        const mainTabButton = document.querySelector('.shop-tab-btn[data-tab="shop-main"]');
-        const videoContent = document.getElementById('shop-video');
-        const mainContent = document.getElementById('shop-main');
-
-        if (videoTabButton && mainTabButton && videoContent && mainContent) {
-            // Remove a classe 'active' de todas as abas e esconde todos os conteúdos
-            document.querySelectorAll('.shop-tab-btn').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.shop-content').forEach(c => c.style.display = 'none');
-            
-            // Ativa a aba e o conteúdo de vídeo
-            videoTabButton.classList.add('active');
-            videoContent.style.display = 'block';
+        if (videoTabButton) {
+            videoTabButton.click();
         }
-
-        // 3. Limpa a URL para que a ação não se repita se o jogador recarregar a página
         history.replaceState(null, '', window.location.pathname);
+
+    } else if (action === 'open_pv') {
+        const targetId = urlParams.get('target_id');
+        const targetName = urlParams.get('target_name');
+
+        if (targetId && targetName) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                showFloatingMessage("Você precisa estar logado para iniciar uma conversa.");
+                return;
+            }
+
+            showFloatingMessage(`Abrindo conversa com ${targetName}...`);
+
+            try {
+                const { data, error } = await supabaseClient.rpc('get_or_create_private_conversation', {
+                    target_player_id: targetId
+                });
+
+                if (error) throw error;
+
+                const conversationId = data.conversation_id;
+                const pvModal = document.getElementById('pvModal');
+                
+                if (pvModal) {
+                    pvModal.style.display = 'flex';
+                    if (window.openChatView) {
+                        await window.openChatView(conversationId, targetName);
+                    } else {
+                        console.error('A função window.openChatView não está pronta.');
+                        showFloatingMessage('Erro ao carregar o chat. Tente novamente.');
+                    }
+                }
+            } catch (err) {
+                console.error("Erro ao tentar abrir PV a partir da URL:", err);
+                showFloatingMessage(`Erro ao abrir conversa: ${err.message}`);
+            }
+
+            history.replaceState(null, '', window.location.pathname);
+        }
     }
 }
 
@@ -134,6 +159,7 @@ function showFloatingMessage(message, duration = 5000) {
         }, 500);
     }, duration);
 }
+window.showFloatingMessage = showFloatingMessage; // Expor globalmente
 
 // Funções de Autenticação
 async function signIn() {
@@ -434,8 +460,14 @@ homeBtn.addEventListener('click', () => {
 
 // Sessão e inicialização
 supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (session) fetchAndDisplayPlayerInfo();
-    else updateUIVisibility(false);
+    if (session) {
+        fetchAndDisplayPlayerInfo().then(() => {
+            // Após o login e carregamento dos dados do jogador, processar as ações da URL.
+            handleUrlActions();
+        });
+    } else {
+        updateUIVisibility(false);
+    }
 });
 
 // --- Modal de avatar ---
@@ -480,9 +512,7 @@ if (closeProfileModalBtn) {
 
 // === MENU LATERAL (LOSANGOS) ===
 document.addEventListener("DOMContentLoaded", () => {
-  // Chama a função para lidar com ações da URL, como reabrir a loja
-  handleUrlActions();
-
+  
   // Carrega as definições de itens ao iniciar a página.
   loadItemDefinitions();
     
@@ -516,7 +546,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModal = document.getElementById("closeGenericModal");
 
   const modalMessages = {
-    //pvModal: "PV em breve!",
     tarefasModal: "Tarefas em breve!",
     conquistasModal: "Conquistas em breve!",
     comercioModal: "Comércio em breve!",

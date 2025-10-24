@@ -1457,7 +1457,7 @@ margin-right: 15px;
 }
 
 .chat-message.received {
-  background-color: #333;
+  background-color: #555;
   color: #eee;
   align-self: flex-start;
   border-bottom-left-radius: 3px;
@@ -1473,7 +1473,7 @@ margin-right: 15px;
 
 .chat-input-area {
   display: flex;
-  border-top: 1px solid #555;
+  border-top: 1px solid #777;
   padding-top: 10px;
 }
 

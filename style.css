@@ -256,7 +256,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: #e0dccc;
     padding: 10px 20px;
     border-radius: 5px;
-    z-index: 1002;
+    z-index: 99999;
     font-size: 1.1em;
     /* --- ALTERAÇÕES INCLUÍDAS ABAIXO --- */
     white-space: normal; /* Permite a quebra de linha */
@@ -1534,4 +1534,98 @@ margin-right: 15px;
 /* Garante que o modal de sistema fica acima dos outros elementos */
 #systemMessageModal {
     z-index: 10000;
+}
+
+/* === ESTILOS MODAL DE PROGRESSÃO === */
+#progressionModal .modal-content {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.progression-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.progression-category {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #444;
+}
+
+.progression-category h3 {
+    margin: 0 0 10px 0;
+    color: gold;
+    border-bottom: 1px solid #555;
+    padding-bottom: 5px;
+}
+
+.mission-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mission-reward {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    flex-shrink: 0;
+}
+
+.mission-reward img {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+}
+
+.mission-reward span {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #ccc;
+    margin-top: 4px;
+}
+
+.mission-details {
+    flex-grow: 1;
+    text-align: left;
+}
+
+.mission-details p {
+    margin: 0;
+    font-size: 0.95em;
+    color: #fff;
+    line-height: 1.3;
+}
+
+.mission-actions {
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.mission-actions .claim-btn {
+    width: 100%;
+    padding: 15px 0 !important; /* Força o padding do botão */
+    font-size: 0.85em;
+    background: linear-gradient(to bottom, orange 0%, red 50%, orange 100%);
+}
+
+.mission-actions .claim-btn:disabled {
+    filter: grayscale(100%) brightness(60%);
+    pointer-events: none;
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); /* Garante que a imagem de fundo seja mantida */
+    opacity: 0.7;
+}
+
+.mission-complete-message {
+    font-size: 1em;
+    color: #4CAF50;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px 0;
 }

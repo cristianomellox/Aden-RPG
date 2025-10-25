@@ -15,6 +15,48 @@ const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =======================================================================
+// DADOS DO JOGADOR E DEFINIÇÕES DE MISSÃO
+// =======================================================================
+let currentPlayerId = null; // Armazena o ID do usuário logado
+let currentPlayerData = null; // Armazena todos os dados do jogador (com bônus)
+
+// Definições das Missões de Progressão (Client-side para UI)
+const mission_definitions = {
+    level: [
+        { req: 2, item_id: 2, qty: 10, desc: "Alcance nível 2.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp" },
+        { req: 3, item_id: 2, qty: 10, desc: "Alcance nível 3.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp" },
+        { req: 4, item_id: 2, qty: 10, desc: "Alcance nível 4.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp" },
+        { req: 5, item_id: 26, qty: 5, desc: "Alcance nível 5.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 10, item_id: 26, qty: 5, desc: "Alcance nível 10.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 15, item_id: 26, qty: 5, desc: "Alcance nível 15.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 20, item_id: 26, qty: 5, desc: "Alcance nível 20.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 25, item_id: 26, qty: 5, desc: "Alcance nível 25.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" },
+        { req: 30, item_id: 26, qty: 5, desc: "Alcance nível 30.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" }
+    ],
+    afk: [
+        { req: 5, crystals: 100, qty: 100, desc: "Alcance o estágio 5 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 10, crystals: 500, qty: 500, desc: "Alcance o estágio 10 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 15, crystals: 1500, qty: 1500, desc: "Alcance o estágio 15 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 20, crystals: 2500, qty: 2500, desc: "Alcance o estágio 20 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 25, crystals: 3000, qty: 3000, desc: "Alcance o estágio 25 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 30, crystals: 3000, qty: 3000, desc: "Alcance o estágio 30 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 35, crystals: 3000, qty: 3000, desc: "Alcance o estágio 35 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 40, crystals: 3000, qty: 3000, desc: "Alcance o estágio 40 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 50, item_id: 42, qty: 3, desc: "Alcance o estágio 50 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/cartaoavancado.webp" },
+        { req: 60, crystals: 3000, qty: 3000, desc: "Alcance o estágio 60 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 70, crystals: 3000, qty: 3000, desc: "Alcance o estágio 70 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 80, crystals: 3000, qty: 3000, desc: "Alcance o estágio 80 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 90, crystals: 3000, qty: 3000, desc: "Alcance o estágio 90 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req: 100, crystals: 5000, qty: 5000, desc: "Alcance o estágio 100 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" }
+    ],
+    misc: [
+        { req_type: "inventory", crystals: 200, qty: 200, desc: "Construa ou adquira um novo equipamento na bolsa.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req_type: "mine_attack", crystals: 500, qty: 500, desc: "Dispute uma mina de cristal.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        { req_type: "buy_raid_attack", gold: 10, qty: 10, desc: "Compre um ataque na Raid de guilda.", img: "https://aden-rpg.pages.dev/assets/goldcoin.webp" }
+    ]
+};
+
+// =======================================================================
 // FUNÇÃO PARA LIDAR COM AÇÕES NA URL (REABRIR LOJA OU ABRIR PV)
 // =======================================================================
 async function handleUrlActions() {
@@ -294,16 +336,21 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         updateUIVisibility(false);
+        currentPlayerData = null; // Limpa dados do jogador ao deslogar
         return;
     }
+    
+    currentPlayerId = user.id; // Armazena o ID do usuário
 
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
-        .select('*')
+        .select('*') // Busca todas as colunas
         .eq('id', user.id)
         .single();
+        
     if (playerError || !player) {
         updateUIVisibility(false);
+        currentPlayerData = null; // Limpa dados em caso de erro
         return;
     }
 
@@ -347,7 +394,13 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
         (playerWithEquips.evasion * 1)
     );
 
+    // Armazena os dados completos do jogador (com bônus) globalmente
+    currentPlayerData = playerWithEquips;
+
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
+    
+    // Verifica notificações de progressão
+    checkProgressionNotifications(playerWithEquips);
 
     if (playerWithEquips.name === 'Nome') {
         document.getElementById('editPlayerName').value = '';
@@ -547,7 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const modalMessages = {
     tarefasModal: "Tarefas em breve!",
-    conquistasModal: "Conquistas em breve!",
+    // "progressaoModal" removido daqui
     comercioModal: "Comércio em breve!",
     rankingModal: "Ranking em breve!",
     petsModal: "Pets em breve!"
@@ -559,6 +612,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (key === "espiralModal") {
         openSpiralModal();
+        return;
+      }
+      
+      // NOVA LÓGICA PARA PROGRESSÃO
+      if (key === "progressaoModal") {
+        openProgressionModal();
         return;
       }
       
@@ -587,7 +646,307 @@ document.addEventListener("DOMContentLoaded", () => {
   closeModal.addEventListener("click", () => {
     modal.style.display = "none";
   });
+  
+  // Listener para fechar o novo modal de progressão
+  const closeProgressionBtn = document.getElementById('closeProgressionModalBtn');
+  if (closeProgressionBtn) {
+      closeProgressionBtn.addEventListener('click', closeProgressionModal);
+  }
 });
+
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE PROGRESSÃO (NOVO) ===
+// ===============================================
+
+/**
+ * Verifica se há missões de progressão resgatáveis (APENAS Level e AFK).
+ * Isso é rápido e pode ser chamado após o login.
+ */
+function checkProgressionNotifications(player) {
+    if (!player) return;
+
+    const missionsDot = document.getElementById('missionsNotificationDot');
+    const progressionDot = document.getElementById('progressionNotificationDot');
+    if (!missionsDot || !progressionDot) return;
+
+    let hasClaimable = false;
+    const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
+
+    // 1. Checar Nível
+    const levelIndex = state.level || 0;
+    if (levelIndex < mission_definitions.level.length) {
+        const currentMission = mission_definitions.level[levelIndex];
+        if (player.level >= currentMission.req) {
+            hasClaimable = true;
+        }
+    }
+
+    // 2. Checar AFK (só checa se ainda não achou resgatável)
+    if (!hasClaimable) {
+        const afkIndex = state.afk || 0;
+        if (afkIndex < mission_definitions.afk.length) {
+            const currentMission = mission_definitions.afk[afkIndex];
+            if (player.current_afk_stage >= currentMission.req) {
+                hasClaimable = true;
+            }
+        }
+    }
+    
+    // 3. Checar Misc (só checa se ainda não achou resgatável)
+    // Vamos checar apenas os que não exigem busca no inventário (Misc 2 e 3)
+     if (!hasClaimable) {
+        const miscIndex = state.misc || 0;
+        if (miscIndex === 1) { // Missão "Dispute uma mina"
+             if (player.last_attack_time) {
+                hasClaimable = true;
+             }
+        } else if (miscIndex === 2) { // Missão "Compre um ataque na Raid"
+            if (player.raid_attacks_bought_count > 0) {
+                hasClaimable = true;
+            }
+        }
+    }
+
+
+    missionsDot.style.display = hasClaimable ? 'block' : 'none';
+    progressionDot.style.display = hasClaimable ? 'block' : 'none';
+}
+
+/**
+ * Abre o modal de progressão e chama a renderização
+ */
+function openProgressionModal() {
+    const modal = document.getElementById('progressionModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderProgressionModal();
+    }
+}
+
+/**
+ * Fecha o modal de progressão
+ */
+function closeProgressionModal() {
+    const modal = document.getElementById('progressionModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Renderiza o conteúdo do modal de progressão
+ */
+async function renderProgressionModal() {
+    const container = document.getElementById('progressionListContainer');
+    if (!container) return;
+
+    if (!currentPlayerData) {
+        container.innerHTML = '<p>Erro ao carregar dados do jogador. Tente novamente.</p>';
+        return;
+    }
+    
+    container.innerHTML = ''; // Limpa o conteúdo
+    const player = currentPlayerData;
+    const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
+
+    // --- Categoria 1: Nível ---
+    const levelIndex = state.level || 0;
+    const levelCatDiv = document.createElement('div');
+    levelCatDiv.className = 'progression-category';
+    levelCatDiv.innerHTML = '<h3>Progresso de Nível</h3>';
+    
+    if (levelIndex >= mission_definitions.level.length) {
+        levelCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
+    } else {
+        const mission = mission_definitions.level[levelIndex];
+        const canClaim = player.level >= mission.req;
+        levelCatDiv.innerHTML += `
+            <div class="mission-item">
+                <div class="mission-reward">
+                    <img src="${mission.img}" alt="Recompensa">
+                    <span>x${mission.qty}</span>
+                </div>
+                <div class="mission-details">
+                    <p>${mission.desc}</p>
+                </div>
+                <div class="mission-actions">
+                    <button class="claim-btn" data-category="level" ${canClaim ? '' : 'disabled'}>
+                        Resgatar
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    container.appendChild(levelCatDiv);
+
+    // --- Categoria 2: AFK ---
+    const afkIndex = state.afk || 0;
+    const afkCatDiv = document.createElement('div');
+    afkCatDiv.className = 'progression-category';
+    afkCatDiv.innerHTML = '<h3>Progresso de Aventura (AFK)</h3>';
+
+    if (afkIndex >= mission_definitions.afk.length) {
+        afkCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
+    } else {
+        const mission = mission_definitions.afk[afkIndex];
+        const canClaim = player.current_afk_stage >= mission.req;
+        afkCatDiv.innerHTML += `
+            <div class="mission-item">
+                <div class="mission-reward">
+                    <img src="${mission.img}" alt="Recompensa">
+                    <span>x${mission.qty}</span>
+                </div>
+                <div class="mission-details">
+                    <p>${mission.desc}</p>
+                </div>
+                <div class="mission-actions">
+                    <button class="claim-btn" data-category="afk" ${canClaim ? '' : 'disabled'}>
+                        Resgatar
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    container.appendChild(afkCatDiv);
+
+    // --- Categoria 3: Diversos ---
+    const miscIndex = state.misc || 0;
+    const miscCatDiv = document.createElement('div');
+    miscCatDiv.className = 'progression-category';
+    miscCatDiv.innerHTML = '<h3>Missões Diversas</h3>';
+
+    if (miscIndex >= mission_definitions.misc.length) {
+        miscCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
+    } else {
+        const mission = mission_definitions.misc[miscIndex];
+        // A verificação de "canClaim" para "misc" é assíncrona ou depende de dados variados
+        const canClaim = await checkMiscRequirement(miscIndex, player);
+        miscCatDiv.innerHTML += `
+            <div class="mission-item">
+                <div class="mission-reward">
+                    <img src="${mission.img}" alt="Recompensa">
+                    <span>x${mission.qty}</span>
+                </div>
+                <div class="mission-details">
+                    <p>${mission.desc}</p>
+                </div>
+                <div class="mission-actions">
+                    <button class="claim-btn" data-category="misc" ${canClaim ? '' : 'disabled'}>
+                        Resgatar
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    container.appendChild(miscCatDiv);
+    
+    // Adiciona listeners aos botões de resgate
+    container.querySelectorAll('.claim-btn').forEach(btn => {
+        btn.addEventListener('click', handleProgressionClaim);
+    });
+}
+
+/**
+ * Verifica o requisito para a missão "misc" atual.
+ */
+async function checkMiscRequirement(missionIndex, player) {
+    if (missionIndex === 0) {
+        // "Construa ou adquira um novo equipamento na bolsa."
+        try {
+            // Tenta usar RPC (se você a criou)
+             const { data, error: rpcError } = await supabaseClient
+                .rpc('count_player_equipment', { p_player_id: player.id });
+
+            if (rpcError) {
+                 // Fallback para a query com JOIN (mais lenta)
+                 console.warn("RPC count_player_equipment não encontrada, usando query com join.");
+                 const { count: inventoryCount, error: inventoryError } = await supabaseClient
+                    .from('inventory_items')
+                    .select('items!inner(item_type)', { count: 'exact', head: true }) //
+                    .eq('player_id', player.id)
+                    .in('items.item_type', ['arma', 'armadura', 'anel', 'colar', 'elmo', 'asa']); //
+                
+                if(inventoryError) throw inventoryError;
+                return (inventoryCount || 0) > 0;
+            }
+            
+            return (data || 0) > 0;
+
+        } catch (err) {
+            console.error("Erro ao checar inventário para missão misc 0:", err);
+            // Fallback 2 (caso a primeira query falhe por algum motivo)
+             try {
+                const { count: finalCount, error: finalError } = await supabaseClient
+                    .from('inventory_items')
+                    .select('items!inner(item_type)', { count: 'exact', head: true }) //
+                    .eq('player_id', player.id)
+                    .in('items.item_type', ['arma', 'armadura', 'anel', 'colar', 'elmo', 'asa']); //
+                if (finalError) return false;
+                return (finalCount || 0) > 0;
+             } catch(e) { return false; }
+        }
+    } else if (missionIndex === 1) {
+        // "Dispute uma mina de cristal."
+        return !!player.last_attack_time; // Retorna true se last_attack_time não for null/undefined
+    } else if (missionIndex === 2) {
+        // "Compre um ataque na Raid de guilda."
+        return (player.raid_attacks_bought_count || 0) > 0; //
+    }
+    return false;
+}
+
+/**
+ * Lida com o clique no botão "Resgatar"
+ */
+async function handleProgressionClaim(event) {
+    const button = event.target;
+    const category = button.dataset.category;
+    if (!category) return;
+
+    button.disabled = true;
+    button.textContent = "Aguarde...";
+
+    try {
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Removido o underscore "_" extra
+        const { data, error } = await supabaseClient.rpc('claim_progression_reward', {
+            p_category: category
+        });
+
+        if (error) throw new Error(error.message);
+
+        showFloatingMessage(data.message || 'Recompensa resgatada com sucesso!');
+
+        // Atualizar dados locais do jogador
+        if (currentPlayerData) {
+            if (!currentPlayerData.progression_state) {
+                 currentPlayerData.progression_state = { level: 0, afk: 0, misc: 0 };
+            }
+            currentPlayerData.progression_state[category] = data.new_index;
+            if (data.crystals_added > 0) {
+                currentPlayerData.crystals = (currentPlayerData.crystals || 0) + data.crystals_added;
+            }
+            if (data.gold_added > 0) {
+                currentPlayerData.gold = (currentPlayerData.gold || 0) + data.gold_added;
+            }
+            // Re-renderiza a barra superior e checa notificações
+            renderPlayerUI(currentPlayerData, true);
+            checkProgressionNotifications(currentPlayerData);
+        }
+        
+        // Re-renderiza o modal de progressão
+        await renderProgressionModal();
+
+    } catch (error) {
+        console.error(`Erro ao resgatar recompensa [${category}]:`, error);
+        showFloatingMessage(`Erro: ${error.message.replace('Error: ', '')}`);
+        // Re-habilita o botão em caso de erro
+        button.disabled = false;
+        button.textContent = "Resgatar";
+    }
+}
+
 
 // ===============================================
 // === LÓGICA DO SISTEMA DE ESPIRAL (Gacha) ===
@@ -629,15 +988,15 @@ async function updateCardCounts() {
         .from('inventory_items')
         .select('item_id, quantity')
         .eq('player_id', user.id)
-        .in('item_id', [41, 42]);
+        .in('item_id', [41, 42]); //
 
     if (error) {
         console.error("Erro ao buscar cartões:", error);
         return;
     }
 
-    const commonCards = data.find(item => item.item_id === 41);
-    const advancedCards = data.find(item => item.item_id === 42);
+    const commonCards = data.find(item => item.item_id === 41); //
+    const advancedCards = data.find(item => item.item_id === 42); //
 
     commonCardCountSpan.textContent = `x ${commonCards ? commonCards.quantity : 0}`;
     advancedCardCountSpan.textContent = `x ${advancedCards ? advancedCards.quantity : 0}`;
@@ -877,7 +1236,7 @@ async function checkRewardLimit() {
 
         if (error || !playerData) return;
 
-        const log = playerData.daily_rewards_log || {};
+        const log = playerData.daily_rewards_log || {}; //
         const counts = (log && log.counts) ? log.counts : {};
         const logDateStr = log && log.date ? String(log.date) : null;
 
@@ -946,7 +1305,7 @@ watchVideoButtons.forEach(button => {
                 return;
             }
 
-            localStorage.setItem('pending_reward_token', token);
+            localStorage.setItem('pending_reward_token', token); //
 
             const triggerId = `trigger-${rewardType}-ad`;
             const triggerLink = document.getElementById(triggerId);
@@ -959,7 +1318,7 @@ watchVideoButtons.forEach(button => {
 
         } catch (error) {
             showFloatingMessage(`Erro: ${error.message}`);
-            localStorage.removeItem('pending_reward_token');
+            localStorage.removeItem('pending_reward_token'); //
         } finally {
             setTimeout(() => { button.disabled = false; }, 3000);
         }

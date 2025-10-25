@@ -179,6 +179,7 @@
   <div class="menu-item expandable" id="missionsBtn">
     <div class="diamond">
       <img src="https://aden-rpg.pages.dev/assets/iconmissao.webp" alt="Missões">
+    <span class="notification-dot" id="missionsNotificationDot" style="display: none;"></span>
     </div>
     <span>Missões</span>
   </div>
@@ -189,11 +190,12 @@
       </div>
       <span>Tarefas</span>
     </div>
-    <div class="menu-item" data-modal="conquistasModal">
+    <div class="menu-item" data-modal="progressaoModal">
       <div class="diamond small">
-        <img src="https://aden-rpg.pages.dev/assets/iconconquista.webp" alt="Conquistas">
+        <img src="https://aden-rpg.pages.dev/assets/iconconquista.webp" alt="progressao">
+      <span class="notification-dot" id="progressionNotificationDot" style="display: none;"></span>
       </div>
-      <span>Conquistas</span>
+      <span>Progressão</span>
     </div>
   </div>
 
@@ -529,6 +531,16 @@
         <center><button id="closepvtutoBtn" class="action-btn">Fechar</button></center>       
     </div>
 </div> 
+
+<div id="progressionModal" class="modal-container" style="display:none;">
+  <div class="modal-content">
+    <h2>Missões de Progressão</h2>
+    <p>Complete missões para ganhar recompensas e avançar!</p>
+    <div id="progressionListContainer" class="progression-list">
+      </div>
+    <button id="closeProgressionModalBtn">Fechar</button>
+  </div>
+</div>
  
  <script>
         document.addEventListener("DOMContentLoaded", () => {

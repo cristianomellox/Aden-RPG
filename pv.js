@@ -547,7 +547,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Mensagem de confirmação que varia dinamicamente
                 const message = convo && convo.is_server_deleted 
                     ? "Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local."
-                    : "Tem certeza que deseja apagar esta conversa? Esta ação a removerá permanentemente do seu histórico (cache local).";
+                    : "Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você. A conversa ainda existirá para a outra pessoa, caso ela não a tenha apagado.";
 
                 showConfirmModal(message, () => { 
                     localConversations.delete(currentOpenConversationId);

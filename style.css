@@ -56,7 +56,8 @@ input[type="email"], input[type="password"], input[type="text"] {
     box-sizing: border-box;
 }
 button {
-    background: linear-gradient(145deg, #7a5c1c, #c9a94a); color: #fff; text-shadow: 1px 1px 2px #000;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a); color: #fff; 
+    text-shadow: 1px 1px 2px #000;
     color: #e0dccc;
     padding: 30px 40px;
     border: none;
@@ -506,6 +507,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
   color: #e0dccc;
   font-family: 'Cinzel', serif;
   border-bottom: 2px solid #444;
+  top: 0;
 }
 #playerAvatar {
   width: 60px;
@@ -651,12 +653,6 @@ margin-right: 15px;
   gap: 10px;
 }
 
-#editProfileIcon {
-  width: 15px;
-  height: 15px;
-  position: relative;
-  top: -2px;
-}
 #cpIcon {
   width: 16px;
   height: 24px;
@@ -772,13 +768,6 @@ margin-right: 15px;
     box-shadow: 0 0 10px gold;
 }
 
-
-
-#welcomeContainer p {
-  color: white;
-  font-size: 0.8em;
-  margin-left: -40px;
-}
 #afk-status {
   color: white;
 }
@@ -831,9 +820,10 @@ margin-right: 15px;
 }
 /* === MENU LATERAL DIREITO (LOSANGOS) === */
 #sideMenu {
+  min-width: 60px;
   position: fixed;
   top: 55%;
-  right: 2px;
+  right: 0px;
   transform: translateY(-50%);
   background: linear-gradient(to bottom, #444 0%, #222 30%, #444 100%);
   padding: 20px 0;
@@ -901,6 +891,7 @@ margin-right: 15px;
   flex-direction: column;
   align-items: center;
   margin-top: 5px;
+  margin-right: -10px;
 }
 
 /* === MODAL GENÉRICO === */
@@ -1628,4 +1619,95 @@ margin-right: 15px;
     font-weight: bold;
     text-align: center;
     padding: 20px 0;
+}
+
+#copiarid {
+  min-width: 90px;
+  min-height: 14px;
+  max-height: 15px;
+  font-size: 0.7em!important;
+  background: linear-gradient(to bottom, #000, #344); color: #fff; 
+    text-shadow: 1px 1px 2px #000;
+    display: flex;
+    margin-left: -3px;
+    align-items: center;
+    justify-content: center;
+    margin-top: -12px;
+    border: 1px solid #777;
+    border-radius: 6px;
+}
+
+/* ==============================
+   MAPA DE ADEN INTERATIVO
+   ============================== */
+#mapContainer {
+    width: 100vw;
+    height: calc(100vh - 120px); /* Ajuste conforme o topo e o rodapé */
+    overflow: hidden;
+    position: relative;
+    background-color: #000;
+    touch-action: none; /* evita zoom duplo no mobile */
+}
+
+#mapImage {
+    background-image: url('https://aden-rpg.pages.dev/assets/mapa_aden.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: top left;
+    width: 1500px;
+    height: 1600px;
+    position: absolute;
+    cursor: grab;
+    transform-origin: top left;
+    transition: transform 0.05s linear;
+    transform: scale(1);
+}
+
+/* Corrige para telas 9:16 */
+@media (max-aspect-ratio: 9/16) {
+  #mapContainer {
+    height: 90vh;
+  }
+}
+
+
+/* Compactar espaçamento vertical da topbar */
+#playerTopBar {
+  padding: 3px 6px !important; /* reduz padding interno */
+  align-items: center !important;
+}
+
+#playerAvatar {
+  width: 60px !important;
+  height: 60px !important;
+}
+
+#playerLevel {
+  font-size: 13px !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  margin-left: -18px!important;
+}
+
+#playerTopInfo {
+  gap: 2px !important; /* diminui espaço entre as linhas dentro da info */
+}
+
+#playerNameRow,
+#playerEmblemsRow,
+#playerStatsRow,
+#xpBarContainer {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
+  line-height: 1.2 !important;
+}
+
+#xpBarContainer {
+  height: 18px !important;
+  margin-top: 2px !important;
+}
+
+#xpText {
+  font-size: 12px !important;
 }

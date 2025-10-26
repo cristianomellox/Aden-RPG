@@ -295,14 +295,12 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
     document.getElementById('playerTopBar').style.display = 'flex';
     if (welcomeContainer && player && player.name) {
         welcomeContainer.innerHTML = `
-            <h3 style="color: white; text-align: center;">Saudações,<br><span style="background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent; font-style: italic;">${player.name}</span>!</h3>
-            <p>Prepare-se para novas aventuras em Aden!</p>
-            <p>Clique nos botões do menu abaixo para explorar.</p>
+            <div id="mapContainer">
+                <div id="mapImage"></div>
+            </div>
         `;
     }
-    if (!preserveActiveContainer) {
+if (!preserveActiveContainer) {
         updateUIVisibility(true, 'welcomeContainer');
     }
 }
@@ -407,6 +405,43 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
         profileEditModal.style.display = 'flex';
     }
 }
+// === Botão de copiar ID do jogador ===
+document.addEventListener('DOMContentLoaded', () => {
+  const copiarIdDiv = document.getElementById('copiarid');
+  if (!copiarIdDiv) return;
+
+  copiarIdDiv.addEventListener('click', async () => {
+    if (!currentPlayerId) {
+      showFloatingMessage('ID do jogador ainda não carregado.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentPlayerId);
+
+      const originalText = copiarIdDiv.textContent.trim();
+      copiarIdDiv.classList.add('copied');
+      copiarIdDiv.textContent = 'Copiado!';
+
+      // Reinsere o ícone SVG junto do texto
+      copiarIdDiv.insertAdjacentHTML('afterbegin', `
+       
+      `);
+
+      setTimeout(() => {
+        copiarIdDiv.classList.remove('copied');
+        copiarIdDiv.textContent = originalText;
+        copiarIdDiv.insertAdjacentHTML('afterbegin', `
+         
+        `);
+      }, 1500);
+    } catch (err) {
+      console.error('Falha ao copiar ID:', err);
+      showFloatingMessage('Não foi possível copiar o ID.');
+    }
+  });
+});
+
 
 // --- Recuperação de senha com token ---
 if (forgotPasswordLink) {
@@ -1330,3 +1365,169 @@ setTimeout(() => {
 }, 600);
 
 // fim do arquivo
+/* === MAP INTERACTION INSERTED BY CHATGPT === */
+
+
+/* === MAP INTERACTION INSERTED BY CHATGPT === */
+// Cria a interação do mapa (arrastar com mouse/touch) com inércia. Não altera nenhuma outra lógica.
+function enableMapInteraction() {
+    const map = document.getElementById('mapImage');
+    if (!map) return;
+
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let currentX = 0, currentY = 0;
+    let minX, maxX, minY, maxY;
+
+    // NOVAS VARIÁVEIS PARA INÉRCIA
+    let velocityX = 0;
+    let velocityY = 0;
+    let lastDragTime = 0;
+    let lastDragX = 0;
+    let lastDragY = 0;
+    let animationFrameId = null;
+    const FRICTION = 0.98; // Fator de desaceleração (ajuste se quiser mais ou menos inércia)
+
+    // calcula limites para evitar que o mapa seja arrastado completamente pra fora da viewport
+    function recalcLimits() {
+        const container = document.getElementById('mapContainer');
+        if (!container) return;
+        const containerRect = container.getBoundingClientRect();
+        const mapWidth = map.offsetWidth || 3000;
+        const mapHeight = map.offsetHeight || 3000;
+
+        minX = Math.min(0, containerRect.width - mapWidth);
+        maxX = 0;
+        minY = Math.min(0, containerRect.height - mapHeight);
+        maxY = 0;
+    }
+
+    recalcLimits();
+    window.addEventListener('resize', recalcLimits);
+
+    map.style.touchAction = 'none';
+    map.style.userSelect = 'none';
+
+    function setTransform(x, y) {
+        // aplica limites
+        if (typeof minX !== 'undefined') {
+            x = Math.max(minX, Math.min(maxX, x));
+            y = Math.max(minY, Math.min(maxY, y));
+        }
+        currentX = x; currentY = y;
+        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(1)`; // mantém o zoom reduzido
+    }
+    
+    function inertiaAnimation() {
+        // Aplica atrito (desaceleração)
+        velocityX *= FRICTION;
+        velocityY *= FRICTION;
+
+        // Calcula a nova posição
+        const nextX = currentX + velocityX;
+        const nextY = currentY + velocityY;
+
+        setTransform(nextX, nextY);
+
+        // Verifica se a velocidade é insignificante para parar a animação
+        if (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
+            animationFrameId = requestAnimationFrame(inertiaAnimation);
+        } else {
+            // Garante que a inércia para de vez
+            velocityX = 0;
+            velocityY = 0;
+            animationFrameId = null;
+        }
+    }
+
+    function getPoint(e) {
+        if (e.touches && e.touches.length) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else {
+            return { x: e.clientX, y: e.clientY };
+        }
+    }
+
+    function startDrag(e) {
+        // Cancela qualquer animação de inércia anterior
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+
+        const p = getPoint(e);
+        isDragging = true;
+        startX = p.x - currentX;
+        startY = p.y - currentY;
+        map.style.cursor = 'grabbing';
+        
+        // Prepara para calcular a velocidade
+        lastDragX = p.x;
+        lastDragY = p.y;
+        lastDragTime = performance.now();
+    }
+
+    function onDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const p = getPoint(e);
+        const nextX = p.x - startX;
+        const nextY = p.y - startY;
+        setTransform(nextX, nextY);
+        
+        // Calcula a velocidade (momentum)
+        const currentTime = performance.now();
+        const deltaTime = currentTime - lastDragTime;
+
+        if (deltaTime > 0) {
+            // Velocidade em pixels por milissegundo
+            velocityX = (p.x - lastDragX) / deltaTime;
+            velocityY = (p.y - lastDragY) / deltaTime;
+        }
+
+        lastDragX = p.x;
+        lastDragY = p.y;
+        lastDragTime = currentTime;
+    }
+
+    function endDrag() {
+        isDragging = false;
+        map.style.cursor = 'grab';
+        
+        // Inicia a inércia se a velocidade for significativa
+        // O fator 10 é um ajuste para converter a velocidade (px/ms) em um deslocamento (px)
+        if (Math.abs(velocityX * 10) > 2 || Math.abs(velocityY * 10) > 2) {
+            // Multiplicamos a velocidade para que o deslize inicial seja mais perceptível
+            velocityX *= 10; 
+            velocityY *= 10;
+            inertiaAnimation();
+        } else {
+            velocityX = 0;
+            velocityY = 0;
+        }
+    }
+
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag, { passive: false });
+    window.addEventListener('mouseup', endDrag, { passive: true });
+
+    map.addEventListener('touchstart', startDrag, { passive: true });
+    window.addEventListener('touchmove', onDrag, { passive: false });
+    window.addEventListener('touchend', endDrag, { passive: true });
+
+    map.style.cursor = 'grab';
+
+    setTimeout(recalcLimits, 100);
+}
+
+(function() {
+    const originalRenderPlayerUI = window.renderPlayerUI;
+    if (typeof originalRenderPlayerUI === 'function') {
+        window.renderPlayerUI = function(player, preserveActiveContainer) {
+            originalRenderPlayerUI(player, preserveActiveContainer);
+            setTimeout(enableMapInteraction, 150);
+        };
+    } else {
+        window.enableMapInteraction = enableMapInteraction;
+    }
+})();

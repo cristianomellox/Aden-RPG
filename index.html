@@ -20,7 +20,8 @@
 <div id="playerTopInfo">
 <div id="playerNameRow">
 <span id="playerNameText">Nome</span>
-<img alt="Editar" id="editProfileIcon" src="https://aden-rpg.pages.dev/edit_peefil.webp"/>
+<img alt="Editar" id="editProfileIcon" src="https://aden-rpg.pages.dev/edit_peefil.webp" style="display: none;"/>
+<duv id="copiarid">copiar id</duv>
 </div>
 <div id="playerEmblemsRow">
 <div id="playerCombatPower">
@@ -83,10 +84,7 @@
  <p style="background-color: rgba(51, 51, 51, 0.8); text-align: justify; border-radius: 5px; position: flex; width: 85vw;">Ao se registrar você concorda com os Termos de Uso e Política de Privacidade.</p>
 </div>
 </div>
-<div id="welcomeContainer" style="display:none; padding: 55px; margin-top: -30px;">
-<center><h3>Bem-vindo(a) de volta, Aventureiro(a)!</h3></center>
-<p>Prepare-se para novas aventuras em Aden!</p>
-<p>Clique nos botões do menu abaixo para explorar.</p>
+<div id="welcomeContainer" style="display:none; margin-top: 3px;">
 </div>
 <div id="playerInfoDiv" style="display:none;">
 <h2>Informações do Jogador</h2>
@@ -523,11 +521,11 @@
 <div id="pvtutomodal" class="modal-overlay2" style="display: none; z-index: 9999;">
     <div class="modal-content2">
       <center><h2>Mensagens</h2></center>
-     <p>As mensagens privadas (PV) não são necessariamente um chat/bate-papo, é mais uma espécie de mural de recados.</p>
+     <p>As mensagens privadas (PV) não são necessariamente um chat <strong>/</strong> bate-papo, é mais uma espécie de mural de recados.</p>
 <p>Recomendo que você use para deixar recados importantes e/ou trocar informações e contato, pois há limitações como:</p>
 <ul>
 <li><strong>Turno de mensagens</strong>: quando você envia uma mensagem para um jogador, você só poderá enviar outra mensagem após ele responder e vice-versa ou após três dias, quando há o arquivamento automático das mensagens.</li>
-<li><strong>Arquivamento</strong>: a cada 3 dias o histórico de mensagens é arquivado caso não haja mais interação de conversa.</li></ul>   
+<li><strong>Arquivamento</strong>: a cada três dias o histórico de mensagens é arquivado caso não haja mais interação de conversa.</li></ul>   
         <center><button id="closepvtutoBtn" class="action-btn">Fechar</button></center>       
     </div>
 </div> 

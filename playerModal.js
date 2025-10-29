@@ -24,6 +24,55 @@ document.addEventListener("DOMContentLoaded", () => {
         // Mas continuamos declarando variáveis DOM para evitar erros em tempo de execução
     }
 
+    // --- INÍCIO: FUNÇÕES DE CACHE ---
+    /**
+     * Armazena dados no localStorage com um tempo de expiração.
+     * @param {string} key - A chave para o cache.
+     * @param {any} data - Os dados a serem armazenados.
+     * @param {number} ttl - Time-to-live em milissegundos.
+     */
+    function setCache(key, data, ttl) {
+        const now = new Date();
+        const item = {
+            data: data,
+            expiry: now.getTime() + ttl,
+        };
+        try {
+            localStorage.setItem(key, JSON.stringify(item));
+        } catch (e) {
+            console.warn("[playerModal.js] Erro ao salvar no cache (localStorage cheio?):", e);
+        }
+    }
+
+    /**
+     * Recupera dados do localStorage se não estiverem expirados.
+     * @param {string} key - A chave do cache.
+     * @returns {any|null} - Os dados ou nulo se não existir ou estiver expirado.
+     */
+    function getCache(key) {
+        const itemStr = localStorage.getItem(key);
+        if (!itemStr) {
+            return null;
+        }
+        try {
+            const item = JSON.parse(itemStr);
+            const now = new Date();
+            if (now.getTime() > item.expiry) {
+                localStorage.removeItem(key);
+                return null;
+            }
+            return item.data;
+        } catch (e) {
+            console.error("[playerModal.js] Erro ao ler cache:", e);
+            localStorage.removeItem(key); // Remove cache corrompido
+            return null;
+        }
+    }
+    // --- FIM: FUNÇÕES DE CACHE ---
+
+    // Tempo de vida do cache (24 horas) - usado como fallback
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 86400000
+
     // Referências DOM
     const playerModal = document.getElementById('playerModal');
     const closeBtn = document.getElementById('closePlayerModal');
@@ -260,6 +309,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ----------------------------------------
     // fetchPlayerData: busca dados do jogador e atualiza modal
+    // (Modificado para incluir cache persistente baseado em CP)
     // ----------------------------------------
     async function fetchPlayerData(playerId) {
         try {
@@ -279,9 +329,67 @@ document.addEventListener("DOMContentLoaded", () => {
 
             clearModalContent(); // Limpa e esconde o botão de MP antes da busca
 
+            const cacheKey = `player_modal_data_${playerId}`;
+            const cachedData = getCache(cacheKey);
+
+            // --- Validação de Cache (Egress-light) ---
+            // 1. Verifica se o cache existe (getCache já verifica o TTL)
+            if (cachedData) {
+                let validationFailed = false;
+                let newCp = 0;
+                let newProfileUpdate = null;
+                let newGuildId = null;
+
+                try {
+                    // 2. Faz as duas checagens leves em paralelo
+                    const [cpResult, profileResult] = await Promise.all([
+                        supabase.rpc('get_player_power', { p_player_id: playerId }),
+                        supabase.from('players').select('last_profile_update, guild_id').eq('id', playerId).single()
+                    ]);
+
+                    if (cpResult.error || profileResult.error) {
+                        throw new Error(cpResult.error?.message || profileResult.error?.message);
+                    }
+                    
+                    newCp = cpResult.data;
+                    newProfileUpdate = profileResult.data.last_profile_update;
+                    newGuildId = profileResult.data.guild_id;
+
+                } catch (e) {
+                    console.warn("[playerModal.js] Falha na verificação de staleness do cache. Forçando refresh.", e);
+                    validationFailed = true;
+                }
+
+                // 3. Compara os dados leves
+                if (!validationFailed &&
+                    Number(newCp) === Number(cachedData.combatPower) &&
+                    newProfileUpdate === cachedData.player.last_profile_update &&
+                    newGuildId === cachedData.player.guild_id
+                ) {
+                    console.log(`[playerModal.js] Usando dados do cache (validados) para ${playerId}`);
+                    
+                    // Lógica do botão de MP (do cache)
+                    if (sendMpButton) {
+                        sendMpButton.setAttribute('data-player-id', cachedData.player.id);
+                        sendMpButton.setAttribute('data-player-name', cachedData.player.name);
+                        sendMpButton.style.display = (currentUserId && cachedData.player.id === currentUserId) ? 'none' : 'flex';
+                    }
+                    
+                    await populateModal(cachedData.player, cachedData.items || [], cachedData.guildData);
+                    return; // Cache hit, termina a função
+                } else {
+                     console.log(`[playerModal.js] Cache stale para ${playerId}. Buscando dados frescos.`);
+                }
+            }
+            // --- Fim da Validação de Cache ---
+
+
+            // --- Cache Miss, Expirado ou Stale: Busca Completa ---
+            console.log(`[playerModal.js] Buscando dados frescos (sem cache ou stale) para ${playerId}`);
+
             const { data: player, error: playerError } = await supabase
                 .from('players')
-                .select(`id, name, level, avatar_url, attack, min_attack, defense, health, crit_chance, crit_damage, evasion, guild_id`)
+                .select(`id, name, level, avatar_url, attack, min_attack, defense, health, crit_chance, crit_damage, evasion, guild_id, last_profile_update`) // last_profile_update é necessário para o cache
                 .eq('id', playerId)
                 .single();
 
@@ -327,21 +435,28 @@ document.addEventListener("DOMContentLoaded", () => {
             // --- Lógica do Botão de Mensagem Privada (PV) ---
             // -----------------------------------------------------
             if (sendMpButton) {
-                // 1. Define os atributos de dados (necessários para guild_pv.js)
                 sendMpButton.setAttribute('data-player-id', player.id);
                 sendMpButton.setAttribute('data-player-name', player.name);
-
-                // 2. Controla a visibilidade: Esconde se for o próprio jogador
-                if (currentUserId && player.id === currentUserId) {
-                    sendMpButton.style.display = 'none';
-                } else {
-                    // Mostra se for outro jogador
-                    sendMpButton.style.display = 'flex';
-                }
+                sendMpButton.style.display = (currentUserId && player.id === currentUserId) ? 'none' : 'flex';
             }
             // -----------------------------------------------------
 
+            // Popula o modal com os dados frescos
             await populateModal(player, items || [], guildData);
+
+            // --- Salva os novos dados no cache ---
+            try {
+                // Precisamos do CP para salvar no cache. Re-calculamos ele.
+                const totalStats = calcularAtributosTotais(player, items || []);
+                const cp = await fetchCombatPower(player.id, totalStats);
+                
+                // Salva o conjunto completo de dados + o CP calculado
+                setCache(cacheKey, { player, items: items || [], guildData, combatPower: cp }, CACHE_TTL_MS);
+                console.log(`[playerModal.js] Novos dados e CP (${cp}) salvos no cache para ${playerId}`);
+            } catch (e) {
+                console.error("[playerModal.js] Erro ao salvar dados no cache:", e);
+            }
+
         } catch (e) {
             console.error('Erro inesperado ao carregar dados do jogador', e);
         }
@@ -362,7 +477,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!playerId) return;
 
             if (playerModal) playerModal.style.display = 'flex';
-            clearModalContent();
             fetchPlayerData(playerId);
         });
     }
@@ -377,7 +491,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!playerId) return;
 
             if (playerModal) playerModal.style.display = 'flex';
-            clearModalContent();
             fetchPlayerData(playerId);
         });
     }
@@ -391,7 +504,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const playerId = link.dataset.playerId;
             if (!playerId) return;
             if (playerModal) playerModal.style.display = 'flex';
-            clearModalContent();
             fetchPlayerData(playerId);
         });
     }

@@ -90,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const playerCritDamageEl = document.getElementById('playerCritDamage');
     const playerEvasionEl = document.getElementById('playerEvasion');
 
-    // NOVO: Referência ao botão de Enviar MP
+    // Referência ao botão de Enviar MP
     const sendMpButton = document.getElementById('sendmp');
 
     // Slots de equipamentos
@@ -204,23 +204,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return totalStats;
     }
 
-    // Busca Combat Power via RPC (prefere RPC, faz fallback local)
-    async function fetchCombatPower(playerId, stats) {
-        try {
-            if (supabase && typeof supabase.rpc === 'function') {
-                const { data, error } = await supabase.rpc('get_player_power', { p_player_id: playerId });
-                if (error) {
-                    // Log e continua para fallback
-                    console.error("Erro RPC get_player_power:", error);
-                } else if (data !== null && data !== undefined) {
-                    return Math.floor(Number(data));
-                }
-            }
-        } catch (e) {
-            console.error("Erro inesperado RPC get_player_power:", e);
-        }
-
-        // fallback: cálculo local (mesma fórmula da versão antiga)
+    /**
+     * Calcula o Poder de Combate (CP) localmente com base nas estatísticas totais.
+     * Esta função substitui a RPC não existente.
+     * @param {object} stats - O objeto de estatísticas totais (base + itens).
+     * @returns {number} O valor do CP calculado.
+     */
+    function calculateCombatPowerLocal(stats) {
         try {
             const cpLocal = Math.floor(
                 (safeNum(stats.attack) * 12.5) +
@@ -237,6 +227,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return 0;
         }
     }
+
 
     async function populateModal(player, equippedItems = [], guildData = null) {
         try {
@@ -268,15 +259,15 @@ document.addEventListener("DOMContentLoaded", () => {
             if (playerCritDamageEl) playerCritDamageEl.textContent = `${Math.floor(stats.crit_damage)}%`;
             if (playerEvasionEl) playerEvasionEl.textContent = `${Math.floor(stats.evasion)}%`;
 
-            // CP (RPC ou fallback)
-            const cp = await fetchCombatPower(player.id, stats);
+            // CP (Apenas cálculo local)
+            const cp = calculateCombatPowerLocal(stats);
             if (combatPowerEl) combatPowerEl.textContent = `${formatNumberCompact(Number(cp) || 0)}`;
 
             // Remove shimmer
             const allShimmer = document.querySelectorAll('.shimmer');
             allShimmer.forEach(el => el.classList.remove('shimmer'));
 
-            // Limpa slots e monta equipamentos
+            // Limpa slots e monta equipamentos (Esta lógica está correta e funcional)
             Object.values(equipmentSlots).forEach(slot => {
                 if (slot) slot.innerHTML = '';
             });
@@ -309,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ----------------------------------------
     // fetchPlayerData: busca dados do jogador e atualiza modal
-    // (Modificado para incluir cache persistente baseado em CP)
+    // (USANDO APENAS VALIDAÇÃO LEVE DE PERFIL/GUILDA + IMPRESSÃO DIGITAL DE LEVEL)
     // ----------------------------------------
     async function fetchPlayerData(playerId) {
         try {
@@ -332,41 +323,65 @@ document.addEventListener("DOMContentLoaded", () => {
             const cacheKey = `player_modal_data_${playerId}`;
             const cachedData = getCache(cacheKey);
 
-            // --- Validação de Cache (Egress-light) ---
-            // 1. Verifica se o cache existe (getCache já verifica o TTL)
+            // --- Validação de Cache (Egress-light - Profile/Guild + Impressão Digital) ---
             if (cachedData) {
                 let validationFailed = false;
-                let newCp = 0;
                 let newProfileUpdate = null;
                 let newGuildId = null;
+                // Usa total_item_level e equipped_count para detectar mudanças no equipamento
+                let newEquipmentFingerprint = { total_item_level: 0, equipped_count: 0 }; 
 
                 try {
-                    // 2. Faz as duas checagens leves em paralelo
-                    const [cpResult, profileResult] = await Promise.all([
-                        supabase.rpc('get_player_power', { p_player_id: playerId }),
-                        supabase.from('players').select('last_profile_update, guild_id').eq('id', playerId).single()
-                    ]);
+                    // 2. Faz as duas checagens leves em paralelo (Profile/Guild e Itens Leves)
+                    const profilePromise = supabase
+                        .from('players')
+                        .select('last_profile_update, guild_id')
+                        .eq('id', playerId)
+                        .single();
 
-                    if (cpResult.error || profileResult.error) {
-                        throw new Error(cpResult.error?.message || profileResult.error?.message);
-                    }
-                    
-                    newCp = cpResult.data;
+                    // Query de Impressão Digital: Apenas level e id, sem JOINs pesados.
+                    const itemsPromise = supabase
+                        .from('inventory_items')
+                        .select('level, id')
+                        .eq('player_id', playerId)
+                        .not('equipped_slot', 'is', null);
+
+
+                    const [profileResult, itemsResult] = await Promise.all([profilePromise, itemsPromise]);
+
+                    if (profileResult.error) throw profileResult.error;
+
                     newProfileUpdate = profileResult.data.last_profile_update;
                     newGuildId = profileResult.data.guild_id;
 
+                    // Processa o resultado leve dos itens para criar a Impressão Digital
+                    if (!itemsResult.error && itemsResult.data && itemsResult.data.length > 0) {
+                        newEquipmentFingerprint.equipped_count = itemsResult.data.length;
+                        newEquipmentFingerprint.total_item_level = itemsResult.data.reduce(
+                            (sum, item) => sum + (Number(item.level) || 0), 0
+                        );
+                    } else if (itemsResult.error) {
+                         // Trata erro na busca leve dos itens como falha de validação
+                         throw itemsResult.error;
+                    }
+
                 } catch (e) {
-                    console.warn("[playerModal.js] Falha na verificação de staleness do cache. Forçando refresh.", e);
+                    console.warn("[playerModal.js] Falha na verificação de staleness do cache (busca leve). Forçando refresh.", e);
                     validationFailed = true;
                 }
 
-                // 3. Compara os dados leves
-                if (!validationFailed &&
-                    Number(newCp) === Number(cachedData.combatPower) &&
-                    newProfileUpdate === cachedData.player.last_profile_update &&
-                    newGuildId === cachedData.player.guild_id
-                ) {
-                    console.log(`[playerModal.js] Usando dados do cache (validados) para ${playerId}`);
+                // 3. Compara as checagens
+                const profileMatches = (newProfileUpdate === cachedData.player.last_profile_update);
+                const guildMatches = (newGuildId === cachedData.player.guild_id);
+                
+                const cachedFingerprint = cachedData.equipmentFingerprint || { total_item_level: 0, equipped_count: 0 }; 
+
+                const levelMatches = newEquipmentFingerprint.total_item_level === cachedFingerprint.total_item_level;
+                const countMatches = newEquipmentFingerprint.equipped_count === cachedFingerprint.equipped_count;
+
+                // Usa o cache apenas se TUDO bater (Egress-Light)
+                if (!validationFailed && profileMatches && guildMatches && levelMatches && countMatches) {
+                    console.log(`[playerModal.js] Usando dados do cache (validados por Profile/Guild/Equipamento) para ${playerId}`);
                     
                     // Lógica do botão de MP (do cache)
                     if (sendMpButton) {
@@ -375,21 +390,23 @@ document.addEventListener("DOMContentLoaded", () => {
                         sendMpButton.style.display = (currentUserId && cachedData.player.id === currentUserId) ? 'none' : 'flex';
                     }
                     
+                    // cachedData.items tem os dados completos e necessários para o populateModal
                     await populateModal(cachedData.player, cachedData.items || [], cachedData.guildData);
                     return; // Cache hit, termina a função
                 } else {
                      console.log(`[playerModal.js] Cache stale para ${playerId}. Buscando dados frescos.`);
+                     console.log(`[playerModal.js] Falhas: Profile: ${!profileMatches}, Guild: ${!guildMatches}, Count: ${!countMatches}, Level: ${!levelMatches}`);
                 }
             }
             // --- Fim da Validação de Cache ---
 
 
-            // --- Cache Miss, Expirado ou Stale: Busca Completa ---
+            // --- Cache Miss, Expirado ou Stale: Busca Completa (Pesada) ---
             console.log(`[playerModal.js] Buscando dados frescos (sem cache ou stale) para ${playerId}`);
 
             const { data: player, error: playerError } = await supabase
                 .from('players')
-                .select(`id, name, level, avatar_url, attack, min_attack, defense, health, crit_chance, crit_damage, evasion, guild_id, last_profile_update`) // last_profile_update é necessário para o cache
+                .select(`id, name, level, avatar_url, attack, min_attack, defense, health, crit_chance, crit_damage, evasion, guild_id, last_profile_update`)
                 .eq('id', playerId)
                 .single();
 
@@ -398,6 +415,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            // BUSCA PESADA COMPLETA (inclui atributos do item e JOINs)
             const { data: items, error: itemsError } = await supabase
                 .from('inventory_items')
                 .select(`
@@ -444,15 +462,22 @@ document.addEventListener("DOMContentLoaded", () => {
             // Popula o modal com os dados frescos
             await populateModal(player, items || [], guildData);
 
-            // --- Salva os novos dados no cache ---
+            // --- Salva os novos dados e a IMPRESSÃO DIGITAL no cache ---
             try {
-                // Precisamos do CP para salvar no cache. Re-calculamos ele.
-                const totalStats = calcularAtributosTotais(player, items || []);
-                const cp = await fetchCombatPower(player.id, totalStats);
+                // Cálculo de CP local para salvar no cache.
+                const allItems = items || [];
+                const totalStats = calcularAtributosTotais(player, allItems);
+                const cp = calculateCombatPowerLocal(totalStats);
                 
-                // Salva o conjunto completo de dados + o CP calculado
-                setCache(cacheKey, { player, items: items || [], guildData, combatPower: cp }, CACHE_TTL_MS);
-                console.log(`[playerModal.js] Novos dados e CP (${cp}) salvos no cache para ${playerId}`);
+                // Cria a nova Impressão Digital para salvar
+                const newFingerprint = {
+                    total_item_level: allItems.reduce((sum, item) => sum + (Number(item.level) || 0), 0),
+                    equipped_count: allItems.length
+                };
+                
+                // Salva o conjunto completo de dados + o CP + a Impressão Digital
+                setCache(cacheKey, { player, items: allItems, guildData, combatPower: cp, equipmentFingerprint: newFingerprint }, CACHE_TTL_MS);
+                console.log(`[playerModal.js] Novos dados, CP (${cp}) e Fingerprint salvos no cache para ${playerId}`);
             } catch (e) {
                 console.error("[playerModal.js] Erro ao salvar dados no cache:", e);
             }

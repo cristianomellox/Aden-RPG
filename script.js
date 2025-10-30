@@ -10,9 +10,166 @@ if ('serviceWorker' in navigator) {
   } catch(e) {}
 }
 
+// 🎵 Música de Fundo (Adicionada aqui)// 🎵 Música de Fundo (Melhorada para arrastar mapa)
+let musicStarted = false;
+let backgroundMusic;
+
+document.addEventListener("DOMContentLoaded", () => {
+  backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/index.mp3");
+  backgroundMusic.volume = 0.02;
+  backgroundMusic.loop = true;
+
+  function startBackgroundMusic() {
+    if (musicStarted) return;
+    backgroundMusic.play().then(() => {
+      musicStarted = true;
+      console.log("🎵 Música de fundo iniciada!");
+    }).catch(err => console.warn("⚠️ Falha ao iniciar música:", err));
+  }
+
+  // Função utilitária para registrar listeners com opções comuns
+  function addCapturedListener(target, evt, handler, opts = {}) {
+    try {
+      target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts));
+    } catch (e) {
+      // alguns targets (ex: null) podem falhar, silenciosamente ignoramos
+    }
+  }
+
+  // 1) Eventos primários que normalmente desbloqueiam áudio
+  const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+  for (const ev of primaryEvents) {
+    addCapturedListener(window, ev, function onPrimary(e) {
+      startBackgroundMusic();
+      // remover listener é opcional; play() verifica musicStarted
+    });
+    addCapturedListener(document.body, ev, function onPrimary2(e) {
+      startBackgroundMusic();
+    });
+  }
+
+  // 2) Tentar capturar ARRASTO — só inicia se houver um toque/pointer real associado
+  let moveArmed = false; // armará o gatilho quando detectarmos um pointerdown/touchstart
+  function armMove() { moveArmed = true; /* breve timeout para evitar ficar armado indefinidamente */ setTimeout(()=> moveArmed = false, 1200); }
+
+  addCapturedListener(window, "pointerdown", armMove);
+  addCapturedListener(window, "touchstart", armMove);
+  addCapturedListener(document.body, "pointerdown", armMove);
+  addCapturedListener(document.body, "touchstart", armMove);
+
+  function handleMoveForMusic(e) {
+    if (musicStarted || !moveArmed) return;
+    // Verifica se o movimento tem dedos ou pressão (sinal de arraste real)
+    const isTouchMove = (e.touches && e.touches.length > 0);
+    const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
+    if (isTouchMove || hasPressure || e.pointerType) {
+      startBackgroundMusic();
+      moveArmed = false;
+    }
+  }
+  addCapturedListener(window, "touchmove", handleMoveForMusic);
+  addCapturedListener(window, "pointermove", handleMoveForMusic);
+  addCapturedListener(document.body, "touchmove", handleMoveForMusic);
+  addCapturedListener(document.body, "pointermove", handleMoveForMusic);
+
+  // 3) Especial: anexa listeners diretamente aos elementos de mapa mais comuns
+  // Busca por ids/classes que costumam ser usadas por mapas (ajuste se seu mapa usa outro seletor)
+  const mapSelectors = [
+    "#mapContainer",
+    "#map",
+    ".map",
+    ".leaflet-container",
+    ".mapboxgl-canvas",
+    ".mapboxgl-map"
+  ];
+  for (const sel of mapSelectors) {
+    document.querySelectorAll(sel).forEach(el => {
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchmove", handleMoveForMusic);
+      addCapturedListener(el, "pointermove", handleMoveForMusic);
+    });
+  }
+
+  // 4) Fallbacks adicionais: se usuário soltar (pointerup / touchend) após arrastar, tente tocar
+  function tryOnUp(e) { if (!musicStarted) startBackgroundMusic(); }
+  addCapturedListener(window, "pointerup", tryOnUp);
+  addCapturedListener(window, "touchend", tryOnUp);
+  addCapturedListener(document.body, "pointerup", tryOnUp);
+  addCapturedListener(document.body, "touchend", tryOnUp);
+
+  // 5) Fallback temporizado (após pequena interação) — evita tentar tocar muitas vezes
+  setTimeout(() => {
+    if (!musicStarted) {
+      // última tentativa silenciosa
+      try { startBackgroundMusic(); } catch(e) {}
+    }
+  }, 6000);
+
+  // Expor para debug / chamadas manuais
+  window.startBackgroundMusic = startBackgroundMusic;
+  window.__musicDebug = { isStarted: () => musicStarted };
+});
+// FIM DA MÚSICA DE FUNDO
+
+// FIM DA MÚSICA DE FUNDO
+
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// =======================================================================
+// CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
+// =======================================================================
+const CACHE_TTL_MINUTES = 60; // Cache de 1 hora como padrão
+
+/**
+ * Salva dados no LocalStorage com um timestamp e TTL.
+ * @param {string} key A chave para o cache.
+ * @param {any} data Os dados a serem salvos (serão convertidos para JSON).
+ * @param {number} [ttlMinutes=CACHE_TTL_MINUTES] Tempo de vida em minutos.
+ */
+function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
+    const cacheItem = {
+        expires: Date.now() + (ttlMinutes * 60 * 1000), // Salva o timestamp de expiração
+        data: data
+    };
+    try {
+        localStorage.setItem(key, JSON.stringify(cacheItem));
+    } catch (e) {
+        console.warn("Falha ao salvar no localStorage (provavelmente cheio):", e);
+    }
+}
+
+/**
+ * Busca dados do LocalStorage e verifica se expiraram.
+ * @param {string} key A chave do cache.
+ * @param {number} [defaultTtlMinutes=CACHE_TTL_MINUTES] TTL padrão (não usado se o item já tem 'expires').
+ * @returns {any|null} Os dados (se encontrados e não expirados) ou null.
+ */
+function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
+    try {
+        const cachedItem = localStorage.getItem(key);
+        if (!cachedItem) return null;
+
+        const { expires, data } = JSON.parse(cachedItem);
+        
+        // Se não tiver 'expires' (formato antigo) ou se 'expires' não for um número, usa o TTL padrão
+        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1); // Força expiração se for formato antigo
+
+        if (Date.now() > expirationTime) {
+            localStorage.removeItem(key);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        console.error("Falha ao ler cache:", e);
+        localStorage.removeItem(key); // Remove item corrompido
+        return null;
+    }
+}
+// =======================================================================
+
 
 // =======================================================================
 // DADOS DO JOGADOR E DEFINIÇÕES DE MISSÃO
@@ -142,7 +299,7 @@ const welcomeContainer = document.getElementById('welcomeContainer');
 
 const floatingMessageDiv = document.getElementById('floatingMessage');
 const footerMenu = document.getElementById('footerMenu');
-const homeBtn = document.getElementById('homeBtn');
+// const homeBtn = document.getElementById('homeBtn'); // REMOVIDO
 
 // --- Elementos para recuperação de senha ---
 const forgotPasswordLink = document.getElementById('forgotPasswordLink');
@@ -172,19 +329,45 @@ const confirmPurchaseFinalBtn = document.getElementById('confirmPurchaseFinalBtn
 const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
 
 
-// Função para carregar definições de itens no cache local
+// Função para carregar definições de itens no cache local (MODIFICADA COM CACHE PERSISTENTE)
 async function loadItemDefinitions() {
-    if (itemDefinitions.size > 0) return; // Já carregado
+    const CACHE_KEY = 'item_definitions_cache';
+    const CACHE_TTL_24H = 1440; // 24 horas * 60 minutos
 
+    // 1. Tenta carregar do cache em memória (RAM) - lógica original
+    if (itemDefinitions.size > 0) return;
+
+    // 2. Tenta carregar do cache persistente (LocalStorage)
+    const cachedData = getCache(CACHE_KEY, CACHE_TTL_24H);
+    if (cachedData) {
+        // Recria o Map a partir dos dados [key, value] salvos no cache
+        try {
+             itemDefinitions = new Map(cachedData);
+             console.log('Definições de itens carregadas do LocalStorage.');
+             return;
+        } catch(e) {
+            console.warn("Falha ao parsear cache de itens, buscando novamente.", e);
+            localStorage.removeItem(CACHE_KEY); // Limpa cache corrompido
+        }
+    }
+
+    // 3. Se não houver cache, busca no Supabase
+    console.log('Buscando definições de itens do Supabase...');
     const { data, error } = await supabaseClient.from('items').select('item_id, name');
     if (error) {
         console.error('Erro ao carregar definições de itens:', error);
         return;
     }
+    
+    const dataForCache = []; // Array [key, value] para salvar no localStorage
     for (const item of data) {
         itemDefinitions.set(item.item_id, item);
+        dataForCache.push([item.item_id, item]); // Salva como [key, value]
     }
-    console.log('Definições de itens carregadas no cache.');
+    
+    // 4. Salva no cache persistente para a próxima vez com TTL de 24h
+    setCache(CACHE_KEY, dataForCache, CACHE_TTL_24H);
+    console.log('Definições de itens carregadas do Supabase e salvas no cache.');
 }
 
 // Funções de Notificação Flutuante
@@ -329,12 +512,33 @@ function applyItemBonuses(player, equippedItems) {
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador
-async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
+// Função principal para buscar e exibir as informações do jogador (MODIFICADA COM CACHE)
+async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
+    
+    const PLAYER_CACHE_KEY = 'player_data_cache';
+    const PLAYER_CACHE_TTL = 15; // 5 minutos. 24 horas (1440) quebraria a UI.
+
+    // 1. Tenta usar o cache se forceRefresh NÃO for true
+    if (!forceRefresh) {
+        const cachedPlayer = getCache(PLAYER_CACHE_KEY, PLAYER_CACHE_TTL);
+        if (cachedPlayer) {
+            // console.log("Carregando dados do jogador do cache (5 min).");
+            currentPlayerData = cachedPlayer;
+            currentPlayerId = cachedPlayer.id; // Garante que o ID esteja setado
+            renderPlayerUI(cachedPlayer, preserveActiveContainer);
+            checkProgressionNotifications(cachedPlayer);
+            return; // Sai da função, usou o cache
+        }
+    }
+    
+    // console.log("Buscando dados do jogador do Supabase (Cache expirado ou forçado).");
+
+    // 2. Se não houver cache ou se forceRefresh=true, busca no Supabase
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         updateUIVisibility(false);
         currentPlayerData = null; // Limpa dados do jogador ao deslogar
+        localStorage.removeItem(PLAYER_CACHE_KEY); // Limpa o cache ao deslogar
         return;
     }
     
@@ -349,6 +553,7 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
     if (playerError || !player) {
         updateUIVisibility(false);
         currentPlayerData = null; // Limpa dados em caso de erro
+        localStorage.removeItem(PLAYER_CACHE_KEY); // Limpa o cache em caso de erro
         return;
     }
 
@@ -394,6 +599,9 @@ async function fetchAndDisplayPlayerInfo(preserveActiveContainer = false) {
 
     // Armazena os dados completos do jogador (com bônus) globalmente
     currentPlayerData = playerWithEquips;
+    
+    // 3. Salva os dados frescos no cache
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, PLAYER_CACHE_TTL);
 
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     
@@ -432,9 +640,12 @@ document.addEventListener('DOMContentLoaded', () => {
         copiarIdDiv.classList.remove('copied');
         copiarIdDiv.textContent = originalText;
         copiarIdDiv.insertAdjacentHTML('afterbegin', `
-         
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 4px; vertical-align: middle;">
+        <path d="M4 1.5H14V11.5H4V1.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M12 4.5V14.5H2V4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
         `);
-      }, 1500);
+      }, 3000);
     } catch (err) {
       console.error('Falha ao copiar ID:', err);
       showFloatingMessage('Não foi possível copiar o ID.');
@@ -525,7 +736,7 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
         footerMenu.style.display = 'flex';
         welcomeContainer.style.display = 'block';
     } else {
-        authContainer.style.display = 'block';
+        authContainer.style.display = 'none';
         welcomeContainer.style.display = 'none';
         footerMenu.style.display = 'none';
         signInBtn.style.display = 'block';
@@ -540,15 +751,17 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
 signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
-homeBtn.addEventListener('click', () => {
-    updateUIVisibility(true, 'welcomeContainer');
-    fetchAndDisplayPlayerInfo(true, true);
-    showFloatingMessage("Você está na página inicial!");
-});
+// homeBtn.addEventListener('click', () => { // REMOVIDO
+//     updateUIVisibility(true, 'welcomeContainer');
+//     fetchAndDisplayPlayerInfo(true, true);
+//     showFloatingMessage("Você está na página inicial!");
+// });
 
 // Sessão e inicialização
 supabaseClient.auth.onAuthStateChange((event, session) => {
     if (session) {
+        // Chama a função (que pode usar o cache ou não)
+        // O forceRefresh=false e preserveActiveContainer=false são os padrões
         fetchAndDisplayPlayerInfo().then(() => {
             // Após o login e carregamento dos dados do jogador, processar as ações da URL.
             handleUrlActions();
@@ -601,7 +814,7 @@ if (closeProfileModalBtn) {
 // === MENU LATERAL (LOSANGOS) ===
 document.addEventListener("DOMContentLoaded", () => {
   
-  // Carrega as definições de itens ao iniciar a página.
+  // Carrega as definições de itens ao iniciar a página (agora usa cache).
   loadItemDefinitions();
     
   const missionsBtn = document.getElementById("missionsBtn");
@@ -687,6 +900,91 @@ document.addEventListener("DOMContentLoaded", () => {
   if (closeProgressionBtn) {
       closeProgressionBtn.addEventListener('click', closeProgressionModal);
   }
+
+  // ===============================================
+  // === INÍCIO - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+  const recursosBtn = document.getElementById('recursosBtn');
+  const pvpBtnFooter = document.getElementById('pvpBtnFooter');
+  const maisBtnFooter = document.getElementById('maisBtnFooter');
+
+  const recursosSubmenu = document.getElementById('recursosSubmenu');
+  const pvpSubmenu = document.getElementById('pvpSubmenu');
+  const maisSubmenu = document.getElementById('maisSubmenu');
+
+  const allSubmenus = [recursosSubmenu, pvpSubmenu, maisSubmenu];
+
+  function closeAllFooterSubmenus() {
+      allSubmenus.forEach(submenu => {
+          if (submenu) submenu.style.display = 'none';
+      });
+  }
+
+  function toggleFooterSubmenu(submenu, button) {
+      if (!submenu || !button) return;
+      
+      const isVisible = submenu.style.display === 'flex';
+      closeAllFooterSubmenus();
+
+      if (!isVisible) {
+          submenu.style.display = 'flex';
+          
+          // Posiciona o submenu acima do botão
+          const btnRect = button.getBoundingClientRect();
+          const footerRect = document.getElementById('footerMenu').getBoundingClientRect();
+          submenu.style.bottom = (window.innerHeight - footerRect.top) + 5 + 'px'; // 5px de espaço
+
+          // Centraliza o submenu horizontalmente com o botão
+          const submenuRect = submenu.getBoundingClientRect();
+          let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+
+          // Ajusta se sair da tela
+          if (newLeft < 5) { newLeft = 5; }
+          if ((newLeft + submenuRect.width) > (window.innerWidth - 5)) { 
+              newLeft = (window.innerWidth - submenuRect.width - 5);
+          }
+          
+          submenu.style.left = newLeft + 'px';
+      }
+  }
+
+  if (recursosBtn) {
+      recursosBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Impede que o 'document' click feche imediatamente
+          toggleFooterSubmenu(recursosSubmenu, recursosBtn);
+      });
+  }
+  if (pvpBtnFooter) {
+      pvpBtnFooter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFooterSubmenu(pvpSubmenu, pvpBtnFooter);
+      });
+  }
+  if (maisBtnFooter) {
+      maisBtnFooter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFooterSubmenu(maisSubmenu, maisBtnFooter);
+      });
+  }
+
+  // Fecha submenus ao clicar em qualquer outro lugar
+  // Adiciona ao listener 'click' principal do 'document' que já existe para o sideMenu
+  const originalDocClickListener = document.onclick;
+  document.addEventListener('click', (e) => {
+      // Chama o listener original se existir
+      if (typeof originalDocClickListener === 'function') {
+          originalDocClickListener(e);
+      }
+
+      // Lógica para fechar os submenus do footer
+      if (!e.target.closest('.footer-submenu') && !e.target.closest('.footer-btn')) {
+          closeAllFooterSubmenus();
+      }
+  });
+  // ===============================================
+  // === FIM - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+
 });
 
 
@@ -932,7 +1230,7 @@ async function checkMiscRequirement(missionIndex, player) {
 }
 
 /**
- * Lida com o clique no botão "Resgatar"
+ * Lida com o clique no botão "Resgatar" (MODIFICADO PARA ATUALIZAR O CACHE)
  */
 async function handleProgressionClaim(event) {
     const button = event.target;
@@ -953,22 +1251,13 @@ async function handleProgressionClaim(event) {
 
         showFloatingMessage(data.message || 'Recompensa resgatada com sucesso!');
 
-        // Atualizar dados locais do jogador
-        if (currentPlayerData) {
-            if (!currentPlayerData.progression_state) {
-                 currentPlayerData.progression_state = { level: 0, afk: 0, misc: 0 };
-            }
-            currentPlayerData.progression_state[category] = data.new_index;
-            if (data.crystals_added > 0) {
-                currentPlayerData.crystals = (currentPlayerData.crystals || 0) + data.crystals_added;
-            }
-            if (data.gold_added > 0) {
-                currentPlayerData.gold = (currentPlayerData.gold || 0) + data.gold_added;
-            }
-            // Re-renderiza a barra superior e checa notificações
-            renderPlayerUI(currentPlayerData, true);
-            checkProgressionNotifications(currentPlayerData);
-        }
+        // MODIFICADO: Em vez de atualizar manualmente, força um refresh
+        // que atualizará a UI, o cache e a variável global 'currentPlayerData'.
+        // O segundo 'true' (preserveActiveContainer) é vital para não fechar o modal.
+        await fetchAndDisplayPlayerInfo(true, true); 
+
+        // A checagem de notificação agora usará o 'currentPlayerData' atualizado pela função acima
+        checkProgressionNotifications(currentPlayerData);
         
         // Re-renderiza o modal de progressão
         await renderProgressionModal();
@@ -1083,6 +1372,7 @@ decreaseCardQtyBtn.addEventListener('click', () => {
     }
 });
 
+// MODIFICADO PARA ATUALIZAR O CACHE
 confirmPurchaseBtn.addEventListener('click', async () => {
     const quantity = parseInt(cardQtyToBuySpan.textContent);
     confirmPurchaseBtn.disabled = true;
@@ -1095,7 +1385,8 @@ confirmPurchaseBtn.addEventListener('click', async () => {
     } else {
         buyCardsMessage.textContent = data;
         await updateCardCounts();
-        await fetchAndDisplayPlayerInfo(true);
+        // Força o refresh (true) e preserva o container (true)
+        await fetchAndDisplayPlayerInfo(true, true); 
         setTimeout(() => {
             buyCardsModal.style.display = 'none';
         }, 2000);
@@ -1134,6 +1425,11 @@ confirmDrawBtn.addEventListener('click', async () => {
         drawConfirmModal.style.display = 'none';
         displayDrawResults(wonItems);
         await updateCardCounts();
+        // Não é necessário forçar refresh aqui, pois 'perform_spiral_draw'
+        // só gasta cartões, não ouro/cristais (o updateCardCounts já cuida disso)
+        // Mas se o sorteio der ouro/cristais, um refresh seria bom.
+        // Vamos adicionar por segurança.
+        await fetchAndDisplayPlayerInfo(true, true);
     }
     confirmDrawBtn.disabled = false;
 });
@@ -1204,7 +1500,7 @@ shopTabs.forEach(tab => {
 
 // Lógica para os botões de compra com modal de confirmação
 const buyButtons = document.querySelectorAll('.shop-buy-btn');
-let purchaseHandler = null; // Variável para armazenar a função de compra
+let purchaseHandler = null; // Variável para armanezar a função de compra
 
 buyButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -1215,7 +1511,7 @@ buyButtons.forEach(button => {
         // Prepara a mensagem do modal
         confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
         
-        // Define o que o botão "Confirmar" fará
+        // Define o que o botão "Confirmar" fará (MODIFICADO PARA ATUALIZAR O CACHE)
         purchaseHandler = async () => {
             purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
             button.disabled = true;
@@ -1228,7 +1524,8 @@ buyButtons.forEach(button => {
                 if (error) throw error;
 
                 shopMessage.textContent = data;
-                await fetchAndDisplayPlayerInfo(true);
+                // Força o refresh (true) e preserva o container (true)
+                await fetchAndDisplayPlayerInfo(true, true);
             } catch (error) {
                 shopMessage.textContent = `Erro: ${error.message}`;
             } finally {

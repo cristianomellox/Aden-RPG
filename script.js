@@ -736,14 +736,15 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
         footerMenu.style.display = 'flex';
         welcomeContainer.style.display = 'block';
     } else {
-        authContainer.style.display = 'block'; // <<< CORRIGIDO PARA EXIBIR O CONTAINER DE AUTENTICAÇÃO
-        welcomeContainer.style.display = 'none';
-        footerMenu.style.display = 'none';
-        signInBtn.style.display = 'block';
-        signUpBtn.style.display = 'block';
-        passwordInput.style.display = 'block';
-        otpInputContainer.style.display = 'none';
-        authMessage.textContent = '';
+        // Exibe corretamente o container de autenticação quando o usuário NÃO está logado
+        if (authContainer) authContainer.style.display = 'block';
+        if (welcomeContainer) welcomeContainer.style.display = 'none';
+        if (footerMenu) footerMenu.style.display = 'none';
+        if (signInBtn) signInBtn.style.display = 'block';
+        if (signUpBtn) signUpBtn.style.display = 'block';
+        if (passwordInput) passwordInput.style.display = 'block';
+        if (otpInputContainer) otpInputContainer.style.display = 'none';
+        if (authMessage) authMessage.textContent = '';
     }
 };
 
@@ -757,174 +758,1060 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 //     showFloatingMessage("Você está na página inicial!");
 // });
 
-// =======================================================================
-// LÓGICA DE INICIALIZAÇÃO DA AUTENTICAÇÃO (CORREÇÃO DE SESSÃO INICIAL)
-// **SUBSTITUIU o bloco antigo de onAuthStateChange**
-// =======================================================================
+// Sessão e inicialização
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    try {
+        if (session) {
+            // Session ativa: carrega os dados do jogador de forma resiliente
+            await fetchAndDisplayPlayerInfo().then(() => {
+                // Após carregar o jogador, processa ações da URL (se houver)
+                try { handleUrlActions(); } catch(e){ console.warn('handleUrlActions erro', e); }
+            }).catch(err => {
+                console.error('Erro em fetchAndDisplayPlayerInfo dentro do onAuthStateChange:', err);
+            });
+        } else {
+            // Sem sessão: mostra a tela de login
+            updateUIVisibility(false);
+        }
+    } catch (err) {
+        console.error('onAuthStateChange handler error', err);
+        updateUIVisibility(false);
+    }
+});
+
+// Checagem inicial ao carregar a página para garantir que a UI mostre o login quando apropriado
+(async function _initialAuthCheck(){
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) {
+            // sem usuário -> mostra login
+            updateUIVisibility(false);
+        } else {
+            // já logado -> carrega dados e ações de URL
+            await fetchAndDisplayPlayerInfo().then(() => {
+                try { handleUrlActions(); } catch(e){ console.warn('handleUrlActions erro', e); }
+            });
+        }
+    } catch (e) {
+        console.error('Erro no _initialAuthCheck:', e);
+        updateUIVisibility(false);
+    }
+})();
+        });
+    } else {
+        updateUIVisibility(false);
+    }
+});
+
+
+
+// --- Modal de avatar ---
+document.addEventListener('DOMContentLoaded', () => {
+    const avatar = document.getElementById('playerAvatar');
+    const modal = document.getElementById('playerInfoModal');
+    const modalContent = document.getElementById('modalPlayerInfoContent');
+    const closeBtn = document.getElementById('closePlayerInfoBtn');
+    if (avatar && modal && closeBtn && modalContent && playerInfoDiv) {
+        avatar.addEventListener('click', () => {
+            modalContent.innerHTML = playerInfoDiv.innerHTML;
+            modal.style.display = 'flex';
+            const modalEditProfileBtn = modal.querySelector('#editProfileBtn');
+            if (modalEditProfileBtn) {
+                modalEditProfileBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    document.getElementById('editProfileIcon').click();
+                };
+            }
+            const modalSignOutBtn = modal.querySelector('#signOutBtn');
+            if (modalSignOutBtn) {
+                modalSignOutBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    signOut();
+                };
+            }
+        });
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+});
+document.getElementById('editProfileIcon').onclick = () => {
+    profileEditModal.style.display = 'flex';
+};
+const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
+if (closeProfileModalBtn) {
+    closeProfileModalBtn.onclick = () => {
+        profileEditModal.style.display = 'none';
+    };
+}
+
+// === MENU LATERAL (LOSANGOS) ===
+document.addEventListener("DOMContentLoaded", () => {
+  
+  // Carrega as definições de itens ao iniciar a página (agora usa cache).
+  loadItemDefinitions();
+    
+  const missionsBtn = document.getElementById("missionsBtn");
+  const missionsSub = document.getElementById("missionsSubmenu");
+  const moreBtn = document.getElementById("moreBtn");
+  const moreSub = document.getElementById("moreSubmenu");
+
+  function toggleSubmenu(btn, submenu) {
+    const isVisible = submenu.style.display === "flex";
+    document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    if (!isVisible) {
+      submenu.style.display = "flex";
+      const btnRect = btn.getBoundingClientRect();
+      submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
+    }
+  }
+
+  missionsBtn.addEventListener("click", () => toggleSubmenu(missionsBtn, missionsSub));
+  moreBtn.addEventListener("click", () => toggleSubmenu(moreBtn, moreSub));
+
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#sideMenu")) {
+      document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    }
+  });
+
+  const modal = document.getElementById("genericModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalMessage = document.getElementById("modalMessage");
+  const closeModal = document.getElementById("closeGenericModal");
+
+  const modalMessages = {
+    tarefasModal: "Tarefas em breve!",
+    // "progressaoModal" removido daqui
+    comercioModal: "Comércio em breve!",
+    rankingModal: "Ranking em breve!",
+    petsModal: "Pets em breve!"
+  };
+
+  document.querySelectorAll("#sideMenu .menu-item[data-modal]").forEach(item => {
+    item.addEventListener("click", () => {
+      const key = item.getAttribute("data-modal");
+
+      if (key === "espiralModal") {
+        openSpiralModal();
+        return;
+      }
+      
+      // NOVA LÓGICA PARA PROGRESSÃO
+      if (key === "progressaoModal") {
+        openProgressionModal();
+        return;
+      }
+      
+      if (key === "lojaModal") {
+        openShopModal();
+        return;
+      }
+      
+      if (key === "bolsaModal") {
+        window.location.href = "/inventory.html";
+        return;
+      }
+      if (key === "pvModal") {
+        document.getElementById('pvModal').style.display = "flex";
+        return;
+      }
+
+      if (modalMessages[key]) {
+        modalTitle.textContent = item.querySelector("span").textContent;
+        modalMessage.textContent = modalMessages[key];
+        modal.style.display = "flex";
+      }
+    });
+  });
+
+  closeModal.addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+  
+  // Listener para fechar o novo modal de progressão
+  const closeProgressionBtn = document.getElementById('closeProgressionModalBtn');
+  if (closeProgressionBtn) {
+      closeProgressionBtn.addEventListener('click', closeProgressionModal);
+  }
+
+  // ===============================================
+  // === INÍCIO - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+  const recursosBtn = document.getElementById('recursosBtn');
+  const pvpBtnFooter = document.getElementById('pvpBtnFooter');
+  const maisBtnFooter = document.getElementById('maisBtnFooter');
+
+  const recursosSubmenu = document.getElementById('recursosSubmenu');
+  const pvpSubmenu = document.getElementById('pvpSubmenu');
+  const maisSubmenu = document.getElementById('maisSubmenu');
+
+  const allSubmenus = [recursosSubmenu, pvpSubmenu, maisSubmenu];
+
+  function closeAllFooterSubmenus() {
+      allSubmenus.forEach(submenu => {
+          if (submenu) submenu.style.display = 'none';
+      });
+  }
+
+  function toggleFooterSubmenu(submenu, button) {
+      if (!submenu || !button) return;
+      
+      const isVisible = submenu.style.display === 'flex';
+      closeAllFooterSubmenus();
+
+      if (!isVisible) {
+          submenu.style.display = 'flex';
+          
+          // Posiciona o submenu acima do botão
+          const btnRect = button.getBoundingClientRect();
+          const footerRect = document.getElementById('footerMenu').getBoundingClientRect();
+          submenu.style.bottom = (window.innerHeight - footerRect.top) + 5 + 'px'; // 5px de espaço
+
+          // Centraliza o submenu horizontalmente com o botão
+          const submenuRect = submenu.getBoundingClientRect();
+          let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+
+          // Ajusta se sair da tela
+          if (newLeft < 5) { newLeft = 5; }
+          if ((newLeft + submenuRect.width) > (window.innerWidth - 5)) { 
+              newLeft = (window.innerWidth - submenuRect.width - 5);
+          }
+          
+          submenu.style.left = newLeft + 'px';
+      }
+  }
+
+  if (recursosBtn) {
+      recursosBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Impede que o 'document' click feche imediatamente
+          toggleFooterSubmenu(recursosSubmenu, recursosBtn);
+      });
+  }
+  if (pvpBtnFooter) {
+      pvpBtnFooter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFooterSubmenu(pvpSubmenu, pvpBtnFooter);
+      });
+  }
+  if (maisBtnFooter) {
+      maisBtnFooter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFooterSubmenu(maisSubmenu, maisBtnFooter);
+      });
+  }
+
+  // Fecha submenus ao clicar em qualquer outro lugar
+  // Adiciona ao listener 'click' principal do 'document' que já existe para o sideMenu
+  const originalDocClickListener = document.onclick;
+  document.addEventListener('click', (e) => {
+      // Chama o listener original se existir
+      if (typeof originalDocClickListener === 'function') {
+          originalDocClickListener(e);
+      }
+
+      // Lógica para fechar os submenus do footer
+      if (!e.target.closest('.footer-submenu') && !e.target.closest('.footer-btn')) {
+          closeAllFooterSubmenus();
+      }
+  });
+  // ===============================================
+  // === FIM - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+
+});
+
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE PROGRESSÃO (NOVO) ===
+// ===============================================
 
 /**
- * Realiza a verificação de sessão imediata e configura o listener.
+ * Verifica se há missões de progressão resgatáveis (APENAS Level e AFK).
+ * Isso é rápido e pode ser chamado após o login.
  */
-const initializeAuth = async () => {
-    // 1. Tenta obter o estado da sessão imediatamente.
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
+function checkProgressionNotifications(player) {
+    if (!player) return;
 
-    if (error) {
-        console.error("Erro ao obter a sessão inicial:", error);
-        // Em caso de erro, presume-se deslogado para permitir a tentativa de login
-        window.updateUIVisibility(false); 
-    } else if (session) {
-        // 2. Se houver sessão, carrega a informação do jogador
-        console.log("Sessão inicial encontrada. Carregando UI de logado.");
-        fetchAndDisplayPlayerInfo();
-    } else {
-        // 3. Se não houver sessão (deslogado), exibe a tela de login
-        console.log("Nenhuma sessão inicial encontrada. Exibindo tela de login.");
-        window.updateUIVisibility(false);
+    const missionsDot = document.getElementById('missionsNotificationDot');
+    const progressionDot = document.getElementById('progressionNotificationDot');
+    if (!missionsDot || !progressionDot) return;
+
+    let hasClaimable = false;
+    const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
+
+    // 1. Checar Nível
+    const levelIndex = state.level || 0;
+    if (levelIndex < mission_definitions.level.length) {
+        const currentMission = mission_definitions.level[levelIndex];
+        if (player.level >= currentMission.req) {
+            hasClaimable = true;
+        }
+    }
+
+    // 2. Checar AFK (só checa se ainda não achou resgatável)
+    if (!hasClaimable) {
+        const afkIndex = state.afk || 0;
+        if (afkIndex < mission_definitions.afk.length) {
+            const currentMission = mission_definitions.afk[afkIndex];
+            if (player.current_afk_stage >= currentMission.req) {
+                hasClaimable = true;
+            }
+        }
     }
     
-    // 4. Configura o listener para futuras mudanças de estado (login/logout/token refresh)
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        // Ignora INITIAL_SESSION se já tivermos carregado a UI, mas processa SIGNED_IN
-        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
-            // true para forçar o refresh e garantir que a UI fique pronta
-            fetchAndDisplayPlayerInfo(true); 
-        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-            window.updateUIVisibility(false);
-            // Limpa o cache do jogador ao deslogar
-            localStorage.removeItem('player_data_cache');
+    // 3. Checar Misc (só checa se ainda não achou resgatável)
+    // Vamos checar apenas os que não exigem busca no inventário (Misc 2 e 3)
+     if (!hasClaimable) {
+        const miscIndex = state.misc || 0;
+        if (miscIndex === 1) { // Missão "Dispute uma mina"
+             if (player.last_attack_time) {
+                hasClaimable = true;
+             }
+        } else if (miscIndex === 2) { // Missão "Compre um ataque na Raid"
+            if (player.raid_attacks_bought_count > 0) {
+                hasClaimable = true;
+            }
         }
-    });
+    }
 
-    // 5. Lida com ações na URL (deve ser chamada após o login potencial ser processado)
-    handleUrlActions();
-};
 
-// Chama a função de inicialização
-initializeAuth(); 
+    missionsDot.style.display = hasClaimable ? 'block' : 'none';
+    progressionDot.style.display = hasClaimable ? 'block' : 'none';
+}
 
-// =======================================================================
-// FIM DA LÓGICA DE INICIALIZAÇÃO
-// =======================================================================
+/**
+ * Abre o modal de progressão e chama a renderização
+ */
+function openProgressionModal() {
+    const modal = document.getElementById('progressionModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderProgressionModal();
+    }
+}
 
-// LÓGICA DO CHAT (PV)
-// ... (código do chat.js)
+/**
+ * Fecha o modal de progressão
+ */
+function closeProgressionModal() {
+    const modal = document.getElementById('progressionModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
 
-// LÓGICA DO MAPA
-let isDragging = false;
-let startX = 0;
-let startY = 0;
-let currentX = 0;
-let currentY = 0;
-let minX, maxX, minY, maxY;
-
-let lastDragTime = 0;
-let velocityX = 0;
-let velocityY = 0;
-let lastDragX = 0;
-let lastDragY = 0;
-let animationFrameId = null;
-const FRICTION = 0.98; // Fator de desaceleração (ajuste se quiser mais ou menos inércia)
-
-// calcula limites para evitar que o mapa seja arrastado completamente pra fora da viewport
-function recalcLimits() {
-    const container = document.getElementById('mapContainer');
+/**
+ * Renderiza o conteúdo do modal de progressão
+ */
+async function renderProgressionModal() {
+    const container = document.getElementById('progressionListContainer');
     if (!container) return;
-    const containerRect = container.getBoundingClientRect();
-    const map = document.getElementById('mapImage');
-    const mapWidth = map.offsetWidth || 3000;
-    const mapHeight = map.offsetHeight || 3000;
-    minX = Math.min(0, containerRect.width - mapWidth);
-    maxX = 0;
-    minY = Math.min(0, containerRect.height - mapHeight);
-    maxY = 0;
+
+    if (!currentPlayerData) {
+        container.innerHTML = '<p>Erro ao carregar dados do jogador. Tente novamente.</p>';
+        return;
+    }
+    
+    container.innerHTML = ''; // Limpa o conteúdo
+    const player = currentPlayerData;
+    const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
+
+    // --- Categoria 1: Nível ---
+    const levelIndex = state.level || 0;
+    const levelCatDiv = document.createElement('div');
+    levelCatDiv.className = 'progression-category';
+    levelCatDiv.innerHTML = '<h3>Progresso de Nível</h3>';
+    
+    if (levelIndex >= mission_definitions.level.length) {
+        levelCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
+    } else {
+        const mission = mission_definitions.level[levelIndex];
+        const canClaim = player.level >= mission.req;
+        levelCatDiv.innerHTML += `
+            <div class="mission-item">
+                <div class="mission-reward">
+                    <img src="${mission.img}" alt="Recompensa">
+                    <span>x${mission.qty}</span>
+                </div>
+                <div class="mission-details">
+                    <p>${mission.desc}</p>
+                </div>
+                <div class="mission-actions">
+                    <button class="claim-btn" data-category="level" ${canClaim ? '' : 'disabled'}>
+                        Resgatar
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    container.appendChild(levelCatDiv);
+
+    // --- Categoria 2: AFK ---
+    const afkIndex = state.afk || 0;
+    const afkCatDiv = document.createElement('div');
+    afkCatDiv.className = 'progression-category';
+    afkCatDiv.innerHTML = '<h3>Progresso de Aventura (AFK)</h3>';
+
+    if (afkIndex >= mission_definitions.afk.length) {
+        afkCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
+    } else {
+        const mission = mission_definitions.afk[afkIndex];
+        const canClaim = player.current_afk_stage >= mission.req;
+        afkCatDiv.innerHTML += `
+            <div class="mission-item">
+                <div class="mission-reward">
+                    <img src="${mission.img}" alt="Recompensa">
+                    <span>x${mission.qty}</span>
+                </div>
+                <div class="mission-details">
+                    <p>${mission.desc}</p>
+                </div>
+                <div class="mission-actions">
+                    <button class="claim-btn" data-category="afk" ${canClaim ? '' : 'disabled'}>
+                        Resgatar
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    container.appendChild(afkCatDiv);
+
+    // --- Categoria 3: Diversos ---
+    const miscIndex = state.misc || 0;
+    const miscCatDiv = document.createElement('div');
+    miscCatDiv.className = 'progression-category';
+    miscCatDiv.innerHTML = '<h3>Missões Diversas</h3>';
+
+    if (miscIndex >= mission_definitions.misc.length) {
+        miscCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
+    } else {
+        const mission = mission_definitions.misc[miscIndex];
+        // A verificação de "canClaim" para "misc" é assíncrona ou depende de dados variados
+        const canClaim = await checkMiscRequirement(miscIndex, player);
+        miscCatDiv.innerHTML += `
+            <div class="mission-item">
+                <div class="mission-reward">
+                    <img src="${mission.img}" alt="Recompensa">
+                    <span>x${mission.qty}</span>
+                </div>
+                <div class="mission-details">
+                    <p>${mission.desc}</p>
+                </div>
+                <div class="mission-actions">
+                    <button class="claim-btn" data-category="misc" ${canClaim ? '' : 'disabled'}>
+                        Resgatar
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    container.appendChild(miscCatDiv);
+    
+    // Adiciona listeners aos botões de resgate
+    container.querySelectorAll('.claim-btn').forEach(btn => {
+        btn.addEventListener('click', handleProgressionClaim);
+    });
 }
 
-function setTransform(x, y) {
-    // aplica limites
-    if (typeof minX !== 'undefined') {
-        x = Math.max(minX, Math.min(maxX, x));
-        y = Math.max(minY, Math.min(maxY, y));
+/**
+ * Verifica o requisito para a missão "misc" atual.
+ */
+async function checkMiscRequirement(missionIndex, player) {
+    if (missionIndex === 0) {
+        // "Construa ou adquira um novo equipamento na bolsa."
+        try {
+            // Tenta usar RPC (se você a criou)
+             const { data, error: rpcError } = await supabaseClient
+                .rpc('count_player_equipment', { p_player_id: player.id });
+
+            if (rpcError) {
+                 // Fallback para a query com JOIN (mais lenta)
+                 console.warn("RPC count_player_equipment não encontrada, usando query com join.");
+                 const { count: inventoryCount, error: inventoryError } = await supabaseClient
+                    .from('inventory_items')
+                    .select('items!inner(item_type)', { count: 'exact', head: true }) //
+                    .eq('player_id', player.id)
+                    .in('items.item_type', ['arma', 'armadura', 'anel', 'colar', 'elmo', 'asa']); //
+                
+                if(inventoryError) throw inventoryError;
+                return (inventoryCount || 0) > 0;
+            }
+            
+            return (data || 0) > 0;
+
+        } catch (err) {
+            console.error("Erro ao checar inventário para missão misc 0:", err);
+            // Fallback 2 (caso a primeira query falhe por algum motivo)
+             try {
+                const { count: finalCount, error: finalError } = await supabaseClient
+                    .from('inventory_items')
+                    .select('items!inner(item_type)', { count: 'exact', head: true }) //
+                    .eq('player_id', player.id)
+                    .in('items.item_type', ['arma', 'armadura', 'anel', 'colar', 'elmo', 'asa']); //
+                if (finalError) return false;
+                return (finalCount || 0) > 0;
+             } catch(e) { return false; }
+        }
+    } else if (missionIndex === 1) {
+        // "Dispute uma mina de cristal."
+        return !!player.last_attack_time; // Retorna true se last_attack_time não for null/undefined
+    } else if (missionIndex === 2) {
+        // "Compre um ataque na Raid de guilda."
+        return (player.raid_attacks_bought_count || 0) > 0; //
     }
-    currentX = x;
-    currentY = y;
-    const map = document.getElementById('mapImage');
-    if (map) {
-        map.style.transform = `translate(${x}px, ${y}px)`;
+    return false;
+}
+
+/**
+ * Lida com o clique no botão "Resgatar" (MODIFICADO PARA ATUALIZAR O CACHE)
+ */
+async function handleProgressionClaim(event) {
+    const button = event.target;
+    const category = button.dataset.category;
+    if (!category) return;
+
+    button.disabled = true;
+    button.textContent = "Aguarde...";
+
+    try {
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Removido o underscore "_" extra
+        const { data, error } = await supabaseClient.rpc('claim_progression_reward', {
+            p_category: category
+        });
+
+        if (error) throw new Error(error.message);
+
+        showFloatingMessage(data.message || 'Recompensa resgatada com sucesso!');
+
+        // MODIFICADO: Em vez de atualizar manualmente, força um refresh
+        // que atualizará a UI, o cache e a variável global 'currentPlayerData'.
+        // O segundo 'true' (preserveActiveContainer) é vital para não fechar o modal.
+        await fetchAndDisplayPlayerInfo(true, true); 
+
+        // A checagem de notificação agora usará o 'currentPlayerData' atualizado pela função acima
+        checkProgressionNotifications(currentPlayerData);
+        
+        // Re-renderiza o modal de progressão
+        await renderProgressionModal();
+
+    } catch (error) {
+        console.error(`Erro ao resgatar recompensa [${category}]:`, error);
+        showFloatingMessage(`Erro: ${error.message.replace('Error: ', '')}`);
+        // Re-habilita o botão em caso de erro
+        button.disabled = false;
+        button.textContent = "Resgatar";
     }
 }
 
-function inertiaAnimation() {
-    velocityX *= FRICTION;
-    velocityY *= FRICTION;
 
-    if (Math.abs(velocityX) < 0.1 && Math.abs(velocityY) < 0.1) {
-        cancelAnimationFrame(animationFrameId);
+// ===============================================
+// === LÓGICA DO SISTEMA DE ESPIRAL (Gacha) ===
+// ===============================================
+
+const spiralModal = document.getElementById('spiralModal');
+const commonSpiralTab = document.querySelector('.tab-btn[data-tab="common"]');
+const advancedSpiralTab = document.querySelector('.tab-btn[data-tab="advanced"]');
+const commonSpiralContent = document.getElementById('common-spiral');
+const advancedSpiralContent = document.getElementById('advanced-spiral');
+const commonCardCountSpan = document.getElementById('commonCardCount');
+const advancedCardCountSpan = document.getElementById('advancedCardCount');
+const buyCommonCardBtn = document.getElementById('buyCommonCardBtn');
+const drawCommonBtn = document.getElementById('drawCommonBtn');
+const drawAdvancedBtn = document.getElementById('drawAdvancedBtn');
+
+const buyCardsModal = document.getElementById('buyCardsModal');
+const decreaseCardQtyBtn = document.getElementById('decreaseCardQtyBtn');
+const increaseCardQtyBtn = document.getElementById('increaseCardQtyBtn');
+const cardQtyToBuySpan = document.getElementById('cardQtyToBuy');
+const totalCrystalCostSpan = document.getElementById('totalCrystalCost');
+const confirmPurchaseBtn = document.getElementById('confirmPurchaseBtn');
+const buyCardsMessage = document.getElementById('buyCardsMessage');
+
+const drawConfirmModal = document.getElementById('drawConfirmModal');
+const drawQuantityInput = document.getElementById('drawQuantityInput');
+const confirmDrawBtn = document.getElementById('confirmDrawBtn');
+const drawConfirmMessage = document.getElementById('drawConfirmMessage');
+let currentDrawType = 'common';
+
+const drawResultsModal = document.getElementById('drawResultsModal');
+const drawResultsGrid = document.getElementById('drawResultsGrid');
+
+async function updateCardCounts() {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabaseClient
+        .from('inventory_items')
+        .select('item_id, quantity')
+        .eq('player_id', user.id)
+        .in('item_id', [41, 42]); //
+
+    if (error) {
+        console.error("Erro ao buscar cartões:", error);
         return;
     }
 
-    setTransform(currentX + velocityX, currentY + velocityY);
+    const commonCards = data.find(item => item.item_id === 41); //
+    const advancedCards = data.find(item => item.item_id === 42); //
 
-    animationFrameId = requestAnimationFrame(inertiaAnimation);
+    commonCardCountSpan.textContent = `x ${commonCards ? commonCards.quantity : 0}`;
+    advancedCardCountSpan.textContent = `x ${advancedCards ? advancedCards.quantity : 0}`;
 }
 
+function openSpiralModal() {
+    updateCardCounts();
+    spiralModal.style.display = 'flex';
+}
+
+commonSpiralTab.addEventListener('click', () => {
+    commonSpiralTab.classList.add('active');
+    advancedSpiralTab.classList.remove('active');
+    commonSpiralContent.style.display = 'block';
+    advancedSpiralContent.style.display = 'none';
+});
+
+advancedSpiralTab.addEventListener('click', () => {
+    advancedSpiralTab.classList.add('active');
+    commonSpiralTab.classList.remove('active');
+    advancedSpiralContent.style.display = 'block';
+    commonSpiralContent.style.display = 'none';
+});
+
+document.querySelector('.close-spiral-modal').addEventListener('click', () => spiralModal.style.display = 'none');
+document.getElementById('closeBuyCardsModalBtn').addEventListener('click', () => buyCardsModal.style.display = 'none');
+document.getElementById('closeDrawConfirmModalBtn').addEventListener('click', () => drawConfirmModal.style.display = 'none');
+document.getElementById('closeDrawResultsModalBtn').addEventListener('click', () => drawResultsModal.style.display = 'none');
+
+buyCommonCardBtn.addEventListener('click', () => {
+    cardQtyToBuySpan.textContent = '1';
+    totalCrystalCostSpan.textContent = '250';
+    buyCardsMessage.textContent = '';
+    buyCardsModal.style.display = 'flex';
+});
+
+increaseCardQtyBtn.addEventListener('click', () => {
+    let qty = parseInt(cardQtyToBuySpan.textContent) + 1;
+    cardQtyToBuySpan.textContent = qty;
+    totalCrystalCostSpan.textContent = qty * 250;
+});
+
+decreaseCardQtyBtn.addEventListener('click', () => {
+    let qty = parseInt(cardQtyToBuySpan.textContent);
+    if (qty > 1) {
+        qty--;
+        cardQtyToBuySpan.textContent = qty;
+        totalCrystalCostSpan.textContent = qty * 250;
+    }
+});
+
+// MODIFICADO PARA ATUALIZAR O CACHE
+confirmPurchaseBtn.addEventListener('click', async () => {
+    const quantity = parseInt(cardQtyToBuySpan.textContent);
+    confirmPurchaseBtn.disabled = true;
+    buyCardsMessage.textContent = 'Processando compra...';
+
+    const { data, error } = await supabaseClient.rpc('buy_spiral_cards', { purchase_quantity: quantity });
+
+    if (error) {
+        buyCardsMessage.textContent = `Erro: ${error.message}`;
+    } else {
+        buyCardsMessage.textContent = data;
+        await updateCardCounts();
+        // Força o refresh (true) e preserva o container (true)
+        await fetchAndDisplayPlayerInfo(true, true); 
+        setTimeout(() => {
+            buyCardsModal.style.display = 'none';
+        }, 2000);
+    }
+    confirmPurchaseBtn.disabled = false;
+});
+
+function openDrawConfirmModal(type) {
+    currentDrawType = type;
+    drawQuantityInput.value = 1;
+    drawConfirmMessage.textContent = '';
+    drawConfirmModal.style.display = 'flex';
+}
+
+drawCommonBtn.addEventListener('click', () => openDrawConfirmModal('common'));
+drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced'));
+
+confirmDrawBtn.addEventListener('click', async () => {
+    const quantity = parseInt(drawQuantityInput.value);
+    if (isNaN(quantity) || quantity <= 0) {
+        drawConfirmMessage.textContent = 'Por favor, insira uma quantidade válida.';
+        return;
+    }
+
+    confirmDrawBtn.disabled = true;
+    drawConfirmMessage.textContent = 'Sorteando...';
+
+    const { data: wonItems, error } = await supabaseClient.rpc('perform_spiral_draw', {
+        draw_type: currentDrawType,
+        p_quantity: quantity
+    });
+
+    if (error) {
+        drawConfirmMessage.textContent = `Erro: ${error.message}`;
+    } else {
+        drawConfirmModal.style.display = 'none';
+        displayDrawResults(wonItems);
+        await updateCardCounts();
+        // Não é necessário forçar refresh aqui, pois 'perform_spiral_draw'
+        // só gasta cartões, não ouro/cristais (o updateCardCounts já cuida disso)
+        // Mas se o sorteio der ouro/cristais, um refresh seria bom.
+        // Vamos adicionar por segurança.
+        await fetchAndDisplayPlayerInfo(true, true);
+    }
+    confirmDrawBtn.disabled = false;
+});
+
+function displayDrawResults(items) {
+    drawResultsGrid.innerHTML = '';
+    if (Object.keys(items).length === 0) {
+        drawResultsGrid.innerHTML = '<p>Nenhum item especial foi obtido desta vez.</p>';
+    } else {
+        for (const itemIdStr in items) {
+            const itemId = parseInt(itemIdStr, 10);
+            const quantity = items[itemId];
+            const itemDef = itemDefinitions.get(itemId);
+
+            if (!itemDef) {
+                console.warn(`Definição não encontrada para o item ID: ${itemId}`);
+                continue; 
+            }
+            
+            const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'result-item';
+            itemDiv.innerHTML = `
+                <img src="${imageUrl}" alt="${itemDef.name}">
+                <span>x${quantity}</span>
+            `;
+            drawResultsGrid.appendChild(itemDiv);
+        }
+    }
+    drawResultsModal.style.display = 'flex';
+}
+
+// ===============================================
+// === LÓGICA DO SISTEMA DE LOJA (Shop)      ===
+// ===============================================
+
+function openShopModal() {
+    shopMessage.textContent = '';
+    shopModal.style.display = 'flex';
+}
+
+if (closeShopModalBtn) {
+    closeShopModalBtn.addEventListener('click', () => {
+        shopModal.style.display = 'none';
+    });
+}
+
+// Lógica para alternar entre as abas da loja
+const shopTabs = document.querySelectorAll('.shop-tab-btn');
+const shopContents = document.querySelectorAll('.shop-content');
+
+shopTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        shopTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        const targetContentId = tab.getAttribute('data-tab');
+        shopContents.forEach(content => {
+            if (content.id === targetContentId) {
+                content.style.display = 'block';
+            } else {
+                content.style.display = 'none';
+            }
+        });
+    });
+});
+
+// Lógica para os botões de compra com modal de confirmação
+const buyButtons = document.querySelectorAll('.shop-buy-btn');
+let purchaseHandler = null; // Variável para armanezar a função de compra
+
+buyButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const packageId = button.getAttribute('data-package');
+        const itemName = button.getAttribute('data-name');
+        const itemCost = button.getAttribute('data-cost');
+
+        // Prepara a mensagem do modal
+        confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
+        
+        // Define o que o botão "Confirmar" fará (MODIFICADO PARA ATUALIZAR O CACHE)
+        purchaseHandler = async () => {
+            purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
+            button.disabled = true;
+            shopMessage.textContent = 'Processando sua compra...';
+
+            try {
+                const { data, error } = await supabaseClient.rpc('buy_shop_item', {
+                    package_id: packageId
+                });
+                if (error) throw error;
+
+                shopMessage.textContent = data;
+                // Força o refresh (true) e preserva o container (true)
+                await fetchAndDisplayPlayerInfo(true, true);
+            } catch (error) {
+                shopMessage.textContent = `Erro: ${error.message}`;
+            } finally {
+                button.disabled = false;
+            }
+        };
+
+        // Mostra o modal de confirmação
+        purchaseConfirmModal.style.display = 'flex';
+    });
+});
+
+// Listener para o botão de confirmação final
+confirmPurchaseFinalBtn.addEventListener('click', () => {
+    if (purchaseHandler) {
+        purchaseHandler();
+    }
+});
+
+// Listener para o botão de cancelar
+cancelPurchaseBtn.addEventListener('click', () => {
+    purchaseConfirmModal.style.display = 'none';
+    purchaseHandler = null; // Limpa o handler
+});
+
+// =======================================================================
+// === LÓGICA DE RECOMPENSA POR VÍDEO (INTEGRADA AO APPCREATOR24) ===
+// =======================================================================
+
+async function checkRewardLimit() {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return;
+
+        const { data: playerData, error } = await supabaseClient
+            .from('players')
+            .select('daily_rewards_log')
+            .eq('id', user.id)
+            .single();
+
+        if (error || !playerData) return;
+
+        const log = playerData.daily_rewards_log || {}; //
+        const counts = (log && log.counts) ? log.counts : {};
+        const logDateStr = log && log.date ? String(log.date) : null;
+
+        const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+
+        if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
+            watchVideoButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.filter = "";
+                btn.style.pointerEvents = "";
+                if (btn.getAttribute('data-original-text')) {
+                    btn.textContent = btn.getAttribute('data-original-text');
+                } else {
+                    btn.setAttribute('data-original-text', btn.textContent);
+                }
+            });
+            return;
+        }
+
+        watchVideoButtons.forEach(btn => {
+            const type = btn.getAttribute('data-reward');
+            const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
+            if (isNaN(count) || count < 5) {
+                btn.disabled = false;
+                btn.style.filter = "";
+                btn.style.pointerEvents = "";
+                if (!btn.getAttribute('data-original-text')) {
+                    btn.setAttribute('data-original-text', btn.textContent);
+                } else {
+                    btn.textContent = btn.getAttribute('data-original-text');
+                }
+            } else {
+                btn.disabled = true;
+                btn.style.filter = "grayscale(100%) brightness(60%)";
+                btn.style.pointerEvents = "none";
+                btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
+                btn.textContent = "Limite atingido";
+            }
+        });
+    } catch (e) {
+        console.error("Erro ao verificar limites de vídeo:", e);
+    }
+}
+
+const watchVideoButtons = document.querySelectorAll('.watch-video-btn');
+
+watchVideoButtons.forEach(button => {
+    button.addEventListener('click', async () => {
+        const rewardType = button.getAttribute('data-reward');
+        button.disabled = true;
+        showFloatingMessage('Preparando sua recompensa...');
+
+        try {
+            const { data: token, error: rpcError } = await supabaseClient.rpc('generate_reward_token', {
+                p_reward_type: rewardType
+            });
+
+            if (rpcError) {
+                if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
+                    showFloatingMessage('Você já atingiu o limite diário para esta recompensa.');
+                    checkRewardLimit();
+                } else {
+                    showFloatingMessage(`Erro: ${rpcError.message}`);
+                }
+                button.disabled = false;
+                return;
+            }
+
+            localStorage.setItem('pending_reward_token', token); //
+
+            const triggerId = `trigger-${rewardType}-ad`;
+            const triggerLink = document.getElementById(triggerId);
+
+            if (triggerLink) {
+                triggerLink.click();
+            } else {
+                throw new Error(`Gatilho para recompensa '${rewardType}' não encontrado.`);
+            }
+
+        } catch (error) {
+            showFloatingMessage(`Erro: ${error.message}`);
+            localStorage.removeItem('pending_reward_token'); //
+        } finally {
+            setTimeout(() => { button.disabled = false; }, 3000);
+        }
+    });
+});
+
+setTimeout(() => {
+    checkRewardLimit();
+}, 600);
+
+// fim do arquivo
+/* === MAP INTERACTION INSERTED BY CHATGPT === */
+
+
+/* === MAP INTERACTION INSERTED BY CHATGPT === */
+// Cria a interação do mapa (arrastar com mouse/touch) com inércia. Não altera nenhuma outra lógica.
 function enableMapInteraction() {
     const map = document.getElementById('mapImage');
     if (!map) return;
-    
-    // Configura o tamanho do mapa se ainda não foi feito
-    map.style.width = '3000px';
-    map.style.height = '3000px';
-    map.style.backgroundImage = 'url("https://aden-rpg.pages.dev/assets/map.webp")';
-    map.style.backgroundSize = 'cover';
-    
+
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let currentX = 0, currentY = 0;
+    let minX, maxX, minY, maxY;
+
+    // NOVAS VARIÁVEIS PARA INÉRCIA
+    let velocityX = 0;
+    let velocityY = 0;
+    let lastDragTime = 0;
+    let lastDragX = 0;
+    let lastDragY = 0;
+    let animationFrameId = null;
+    const FRICTION = 0.98; // Fator de desaceleração (ajuste se quiser mais ou menos inércia)
+
+    // calcula limites para evitar que o mapa seja arrastado completamente pra fora da viewport
+    function recalcLimits() {
+        const container = document.getElementById('mapContainer');
+        if (!container) return;
+        const containerRect = container.getBoundingClientRect();
+        const mapWidth = map.offsetWidth || 3000;
+        const mapHeight = map.offsetHeight || 3000;
+
+        minX = Math.min(0, containerRect.width - mapWidth);
+        maxX = 0;
+        minY = Math.min(0, containerRect.height - mapHeight);
+        maxY = 0;
+    }
+
     recalcLimits();
     window.addEventListener('resize', recalcLimits);
-    
+
     map.style.touchAction = 'none';
     map.style.userSelect = 'none';
 
-    function getPointerPosition(e) {
-        return {
-            x: e.clientX || (e.touches ? e.touches[0].clientX : 0),
-            y: e.clientY || (e.touches ? e.touches[0].clientY : 0)
-        };
+    function setTransform(x, y) {
+        // aplica limites
+        if (typeof minX !== 'undefined') {
+            x = Math.max(minX, Math.min(maxX, x));
+            y = Math.max(minY, Math.min(maxY, y));
+        }
+        currentX = x; currentY = y;
+        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(1)`; // mantém o zoom reduzido
+    }
+    
+    function inertiaAnimation() {
+        // Aplica atrito (desaceleração)
+        velocityX *= FRICTION;
+        velocityY *= FRICTION;
+
+        // Calcula a nova posição
+        const nextX = currentX + velocityX;
+        const nextY = currentY + velocityY;
+
+        setTransform(nextX, nextY);
+
+        // Verifica se a velocidade é insignificante para parar a animação
+        if (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
+            animationFrameId = requestAnimationFrame(inertiaAnimation);
+        } else {
+            // Garante que a inércia para de vez
+            velocityX = 0;
+            velocityY = 0;
+            animationFrameId = null;
+        }
+    }
+
+    function getPoint(e) {
+        if (e.touches && e.touches.length) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else {
+            return { x: e.clientX, y: e.clientY };
+        }
     }
 
     function startDrag(e) {
-        if (e.target.closest('button, a, input, select')) return; // Ignora se o clique for em um elemento interativo
-        e.preventDefault();
-        
+        // Cancela qualquer animação de inércia anterior
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
         }
-        
+
+        const p = getPoint(e);
         isDragging = true;
+        startX = p.x - currentX;
+        startY = p.y - currentY;
         map.style.cursor = 'grabbing';
         
-        const p = getPointerPosition(e);
-        startX = p.x;
-        startY = p.y;
-        lastDragX = currentX;
-        lastDragY = currentY;
+        // Prepara para calcular a velocidade
+        lastDragX = p.x;
+        lastDragY = p.y;
         lastDragTime = performance.now();
-        velocityX = 0;
-        velocityY = 0;
     }
 
     function onDrag(e) {
         if (!isDragging) return;
-
-        const p = getPointerPosition(e);
-        const dx = p.x - startX;
-        const dy = p.y - startY;
+        e.preventDefault();
+        const p = getPoint(e);
+        const nextX = p.x - startX;
+        const nextY = p.y - startY;
+        setTransform(nextX, nextY);
         
-        setTransform(lastDragX + dx, lastDragY + dy);
-        
+        // Calcula a velocidade (momentum)
         const currentTime = performance.now();
         const deltaTime = currentTime - lastDragTime;
 
         if (deltaTime > 0) {
+            // Velocidade em pixels por milissegundo
             velocityX = (p.x - lastDragX) / deltaTime;
             velocityY = (p.y - lastDragY) / deltaTime;
         }
@@ -975,135 +1862,3 @@ function enableMapInteraction() {
         window.enableMapInteraction = enableMapInteraction;
     }
 })();
-
-// LÓGICA DO MENU LATERAL, MODAIS DE PROGRESSÃO E ESPIRAL
-// ... (O restante da lógica que foi omitida, mas que deve ser mantida)
-// ... (Continuação do código, incluindo as funções de progressão, espiral, loja, etc)
-// ... (A lógica do footer e a função checkProgressionNotifications)
-// ... (A lógica do modal de perfil)
-
-/**
- * Funções de formato e utilidade (assumindo que estão em outro lugar, mas aqui no escopo)
- */
-function formatNumberCompact(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    }
-    if (num >= 1000) {
-        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-    }
-    return num;
-}
-
-function checkProgressionNotifications(player) { /* ... */ } // Placeholder
-function openProgressionModal() { /* ... */ } // Placeholder
-function renderProgressionModal() { /* ... */ } // Placeholder
-function checkMiscRequirement() { /* ... */ } // Placeholder
-function handleProgressionClaim() { /* ... */ } // Placeholder
-function openSpiralModal() { /* ... */ } // Placeholder
-function updateCardCounts() { /* ... */ } // Placeholder
-function openShopModal() { /* ... */ } // Placeholder
-function checkVideoWatchLimits() { /* ... */ } // Placeholder
-
-// Lógica de manipulação de elementos da UI que estava no final
-document.addEventListener("DOMContentLoaded", () => {
-    // Carrega as definições de itens ao iniciar a página (agora usa cache).
-    loadItemDefinitions();
-    // ... (restante da lógica de DOMContentLoaded)
-});
-
-// Ações do menu lateral (Losangos)
-const missionsBtn = document.getElementById("missionsBtn");
-const missionsSub = document.getElementById("missionsSubmenu");
-const moreBtn = document.getElementById("moreBtn");
-const moreSub = document.getElementById("moreSubmenu");
-
-function toggleSubmenu(btn, submenu) {
-    const isVisible = submenu.style.display === "flex";
-    document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
-    if (!isVisible) {
-        submenu.style.display = "flex";
-        const btnRect = btn.getBoundingClientRect();
-        submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
-    }
-}
-
-if (missionsBtn) missionsBtn.addEventListener("click", () => toggleSubmenu(missionsBtn, missionsSub));
-if (moreBtn) moreBtn.addEventListener("click", () => toggleSubmenu(moreBtn, moreSub));
-document.addEventListener("click", e => {
-    if (!e.target.closest("#sideMenu")) {
-        document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
-    }
-});
-
-// Lógica para abrir modais (ajustar conforme seu código)
-document.querySelectorAll("#sideMenu .menu-item[data-modal]").forEach(item => {
-    item.addEventListener("click", () => {
-        const key = item.getAttribute("data-modal");
-        if (key === "espiralModal") {
-            // openSpiralModal(); // Assumindo que essa função existe
-            showFloatingMessage("Espiral em breve!");
-            return;
-        }
-        if (key === "progressaoModal") {
-            // openProgressionModal(); // Assumindo que essa função existe
-            showFloatingMessage("Progressão em breve!");
-            return;
-        }
-        if (key === "lojaModal") {
-            // openShopModal(); // Assumindo que essa função existe
-            showFloatingMessage("Loja em breve!");
-            return;
-        }
-    });
-});
-
-// Lógica de perfil no final do script
-document.addEventListener('DOMContentLoaded', () => {
-    const profileIcon = document.getElementById('profileIcon');
-    const playerModal = document.getElementById('playerModal');
-    const modalContent = document.getElementById('playerModalContent');
-    const closeBtn = document.getElementById('closePlayerModalBtn');
-
-    if (profileIcon && playerModal) {
-        profileIcon.addEventListener('click', () => {
-            modalContent.innerHTML = playerInfoDiv.innerHTML;
-            playerModal.style.display = 'flex';
-            const modalEditProfileBtn = playerModal.querySelector('#editProfileBtn');
-            if (modalEditProfileBtn) {
-                modalEditProfileBtn.onclick = () => {
-                    playerModal.style.display = 'none';
-                    document.getElementById('editProfileIcon').click();
-                };
-            }
-            const modalSignOutBtn = playerModal.querySelector('#signOutBtn');
-            if (modalSignOutBtn) {
-                modalSignOutBtn.onclick = () => {
-                    playerModal.style.display = 'none';
-                    signOut();
-                };
-            }
-        });
-        closeBtn.addEventListener('click', () => {
-            playerModal.style.display = 'none';
-        });
-    }
-});
-document.getElementById('editProfileIcon').onclick = () => {
-    profileEditModal.style.display = 'flex';
-};
-const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
-if (closeProfileModalBtn) {
-    closeProfileModalBtn.onclick = () => {
-        profileEditModal.style.display = 'none';
-    };
-}
-
-// --- Service Worker ---
-if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-        navigator.serviceWorker.register("sw_afk.js")
-            .then(reg => console.log("Service Worker registrado:", reg.scope))
-            .catch(err => console.error("Erro ao registrar Service Worker:", err));
-    });
-}

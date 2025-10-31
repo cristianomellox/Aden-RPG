@@ -731,20 +731,40 @@ if (updatePasswordBtn) {
 
 // --- UI ---
 window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
-    if (isLoggedIn) {
-        authContainer.style.display = 'none';
-        footerMenu.style.display = 'flex';
-        welcomeContainer.style.display = 'block';
-    } else {
-        // Exibe corretamente o container de autenticação quando o usuário NÃO está logado
-        if (authContainer) authContainer.style.display = 'block';
-        if (welcomeContainer) welcomeContainer.style.display = 'none';
-        if (footerMenu) footerMenu.style.display = 'none';
-        if (signInBtn) signInBtn.style.display = 'block';
-        if (signUpBtn) signUpBtn.style.display = 'block';
-        if (passwordInput) passwordInput.style.display = 'block';
-        if (otpInputContainer) otpInputContainer.style.display = 'none';
-        if (authMessage) authMessage.textContent = '';
+    // Proteção: se elementos não existirem, tenta manipular com tolerância
+    try {
+        if (!authContainer || !welcomeContainer || !footerMenu) {
+            if (isLoggedIn) {
+                if (footerMenu) footerMenu.style.display = 'flex';
+                if (authContainer) authContainer.style.display = 'none';
+            } else {
+                if (authContainer) authContainer.style.display = 'block';
+                if (welcomeContainer) welcomeContainer.style.display = 'none';
+                if (footerMenu) footerMenu.style.display = 'none';
+            }
+            if (authMessage) authMessage.textContent = '';
+            return;
+        }
+
+        if (isLoggedIn) {
+            authContainer.style.display = 'none';
+            footerMenu.style.display = 'flex';
+            welcomeContainer.style.display = 'block';
+        } else {
+            // CORREÇÃO: ao deslogar, devemos garantir que o container de autenticação seja mostrado
+            authContainer.style.display = 'block';
+            welcomeContainer.style.display = 'none';
+            footerMenu.style.display = 'none';
+            if (signInBtn) signInBtn.style.display = 'block';
+            if (signUpBtn) signUpBtn.style.display = 'block';
+            if (passwordInput) passwordInput.style.display = 'block';
+            if (otpInputContainer) otpInputContainer.style.display = 'none';
+            if (authMessage) authMessage.textContent = '';
+        }
+    } catch (e) {
+        console.error("updateUIVisibility error:", e);
+        // fallback mínimo
+        if (!isLoggedIn && authContainer) authContainer.style.display = 'block';
     }
 };
 
@@ -759,45 +779,41 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 // });
 
 // Sessão e inicialização
+// Robust auth state handling (async + initial check)
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
     try {
         if (session) {
-            // Session ativa: carrega os dados do jogador de forma resiliente
-            await fetchAndDisplayPlayerInfo().then(() => {
-                // Após carregar o jogador, processa ações da URL (se houver)
-                try { handleUrlActions(); } catch(e){ console.warn('handleUrlActions erro', e); }
-            }).catch(err => {
-                console.error('Erro em fetchAndDisplayPlayerInfo dentro do onAuthStateChange:', err);
-            });
+            await fetchAndDisplayPlayerInfo();
+            // handle url actions after player data loaded
+            if (typeof handleUrlActions === 'function') {
+                try { handleUrlActions(); } catch(e){ console.error('handleUrlActions error:', e); }
+            }
         } else {
-            // Sem sessão: mostra a tela de login
             updateUIVisibility(false);
         }
-    } catch (err) {
-        console.error('onAuthStateChange handler error', err);
+    } catch (e) {
+        console.error('onAuthStateChange handler error:', e);
         updateUIVisibility(false);
     }
 });
 
-// Checagem inicial ao carregar a página para garantir que a UI mostre o login quando apropriado
+// Initial check in case onAuthStateChange doesn't fire in wrapper environments
 (async function _initialAuthCheck(){
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) {
-            // sem usuário -> mostra login
-            updateUIVisibility(false);
+        if (user) {
+            await fetchAndDisplayPlayerInfo();
+            if (typeof handleUrlActions === 'function') {
+                try { handleUrlActions(); } catch(e){ console.error('handleUrlActions error:', e); }
+            }
         } else {
-            // já logado -> carrega dados e ações de URL
-            await fetchAndDisplayPlayerInfo().then(() => {
-                try { handleUrlActions(); } catch(e){ console.warn('handleUrlActions erro', e); }
-            });
+            updateUIVisibility(false);
         }
     } catch (e) {
-        console.error('Erro no _initialAuthCheck:', e);
+        console.error('_initialAuthCheck error:', e);
         updateUIVisibility(false);
     }
-})();
-        });
+})();});
     } else {
         updateUIVisibility(false);
     }

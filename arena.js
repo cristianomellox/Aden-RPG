@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", async () => {
     // --- Configuração do Supabase ---
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -588,20 +587,34 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
 
-            const cleanupResult = await supabase.rpc('cleanup_old_arena_logs');
-            if (cleanupResult?.error) console.warn("Erro ao limpar logs antigos:", cleanupResult.error);
+            // tenta limpar logs antigos (se a RPC existir)
+            try {
+                const cleanupResult = await supabase.rpc('cleanup_old_arena_logs');
+                if (cleanupResult?.error) console.warn("Erro ao limpar logs antigos:", cleanupResult.error);
+            } catch (cleanupErr) {
+                // não é crítico — apenas logamos
+                console.warn("cleanup_old_arena_logs falhou (ou não existe):", cleanupErr?.message || cleanupErr);
+            }
 
-            const { data } = await supabase.rpc('get_arena_attack_logs');
+            // busca os logs
+            const { data, error } = await supabase.rpc('get_arena_attack_logs');
+            if (error) throw error;
+
             const r = normalizeRpcResult(data);
+            const fetchedLogs = (r && r.success && Array.isArray(r.logs)) ? r.logs : [];
 
+            // mantemos o comportamento de cache local existente, mas com checagens defensivas
             let h = getCache('arena_attack_history') || [];
-            if (r?.success && Array.isArray(r.logs)) {
+            if (Array.isArray(fetchedLogs) && fetchedLogs.length > 0) {
                 const ids = new Set(h.map(i => i.id));
-                const newOnes = r.logs.filter(l => !ids.has(l.id));
+                const newOnes = fetchedLogs.filter(l => !ids.has(l.id));
                 h = [...newOnes, ...h];
                 const limit = Date.now() - (3 * 24 * 60 * 60 * 1000);
                 h = h.filter(l => new Date(l.created_at).getTime() >= limit);
                 setCache('arena_attack_history', h, 4320);
+            } else {
+                // se não veio nada novo e cache também vazio, mantemos h como está (possivelmente vazio)
+                h = h || [];
             }
 
             if (!h.length) {

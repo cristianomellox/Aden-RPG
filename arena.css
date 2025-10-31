@@ -1,0 +1,504 @@
+/* arena.css */
+
+/* --- Estilos Globais e TopBar (Baseado em mitrar.html e mines.css) --- */
+body, html {
+    background-color: #121212;
+    color: #e0dccc;
+    font-family: 'Cinzel', serif;
+}
+
+#playerTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #1a1a1a;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.top-bar-link {
+    color: white;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+.top-bar-link svg { width: 30px; height: 30px; }
+#pageTitle {
+    color: #e0dccc;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+}
+
+/* --- Container Principal da Arena --- */
+#arenaContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.3)
+    ),
+    url('https://aden-rpg.pages.dev/assets/arena.webp');
+  background-size: cover;
+  background-position: center;
+  border: none;
+    border-radius: 10px;
+    color: #e0dccc;
+    position: relative;
+    margin-top: 50px; 
+    min-height: calc(100vh - 50px);
+    width: 100%;
+    overflow-y: auto;
+    text-align: center;
+    padding: 2px; 
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+    box-sizing: border-box; 
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+#arenaContainer h2 {
+    color: gold;
+    font-size: 1.8em;
+}
+#arenaContainer p {
+    font-size: 1.1em;
+    color: #ccc;
+    margin-bottom: 25px;
+}
+#attemptsInfo {
+    margin-top: 15px;
+    font-size: 1.1em;
+    color: #FFC107;
+    border: 1px solid gold;
+    border-radius: 10px;
+    background: #333;
+    padding: 0 9px;
+}
+
+/* Botão de Desafio (baseado em style.css) */
+.action-btn {
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    box-sizing: border-box;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color: #e0dccc;
+    font-weight: bold;
+    padding: 15px 40px; 
+    font-size: 1.1em;
+    text-shadow: 1px 1px 2px #000;
+    transition: filter 0.3s;
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+.action-btn:disabled {
+    filter: grayscale(1);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* --- Estilos de Overlay e Modais (Baseado em mines.css) --- */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+.spinner { /* (Adicione seu CSS de spinner aqui) */
+    width: 50px;
+    height: 50px;
+    border: 5px solid #555;
+    border-top-color: #e0dccc;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: none;
+    background: linear-gradient(to bottom, #000, #222);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background-color: none;
+    background: linear-gradient(to bottom, #333, #444);
+    padding: 20px;
+    border-radius: 10px;
+    width: 95vw;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0,0,0,0.7);
+    border: 3px solid #c9a94a;
+    position: relative;
+}
+
+/* --- Modal de Combate PvP (Correção para tela cheia) --- */
+/* 1. Aplica o fundo à tela inteira (#pvpCombatModal é o .modal-overlay) */
+#pvpCombatModal {
+    background-color: transparent; 
+    background: none; 
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.3)
+    ),
+    url('https://aden-rpg.pages.dev/assets/arena.webp');
+    background-size: cover;
+    background-position: center;
+}
+
+/* 2. Aplica o estilo de quadrado semi-transparente apenas ao conteúdo do duelo */
+#pvpCombatModal .modal-content {
+    /* Remove o fundo de imagem anterior */
+    background-image: none; 
+    /* Define o fundo semi-transparente para o quadrado do duelo */
+    background-color: rgba(0, 0, 0, 0.6); 
+    background: rgba(0, 0, 0, 0.6);
+    
+    /* Aumenta o tamanho do quadrado para o duelo */
+    max-width: 600px;
+    min-height: 350px;
+    
+    /* Mantém a borda do duelo */
+    border: 3px solid #c9a94a;
+    box-shadow: 0 0 20px rgba(0,0,0,0.9);
+}
+
+#pvpArena {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-start; /* Alinha pelo topo */
+    width: 100%;
+    margin-top: 20px;
+    min-height: 250px;
+}
+.player-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 45%;
+}
+.player-name-pvp {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.avatar-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+.player-avatar-pvp {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 3px solid #ffd700;
+}
+.vs-separator {
+    font-size: 2em;
+    font-weight: bold;
+    color: red;
+    padding-top: 50px;
+}
+.player-hp-bar {
+    position: relative;
+    width: 100%;
+    max-width: 140px;
+    height: 20px;
+    background-color: #333;
+    border: 1px solid #777;
+    border-radius: 8px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+.player-hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6bff6b, #86ffb8);
+    transition: width 0.3s ease;
+}
+.hp-text-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 98%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    color: #fff;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+    font-size: 0.8em;
+    white-space: nowrap;
+}
+
+/* --- Animação de Dano (Baseado em mines.css) --- */
+.damage-number, .crit-damage-number, .evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    font-weight: bold;
+    white-space: nowrap;
+    text-shadow: 2px 2px 4px #000;
+    pointer-events: none;
+}
+.damage-number {
+    font-family: Georgia, serif;
+    font-size: 23px;
+    color: #fff;
+    animation: floating-damage 1.5s ease-out forwards;
+}
+.crit-damage-number {
+    font-family: Georgia, serif;
+    font-size: 27px;
+    color: red;
+    text-shadow: -1px -1px 0 yellow, 1px -1px 0 yellow, -1px 1px 0 yellow, 1px 1px 0 yellow;
+    animation: floating-damage-crit 1.5s ease-out forwards;
+}
+@keyframes floating-damage {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -150%) scale(1.5); }
+}
+@keyframes floating-damage-crit {
+    0% { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+    50% { transform: translate(-50%, -75%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -150%) scale(1.0); }
+}
+
+/* --- Modal de Ranking --- */
+.ranking-modal-content {
+    width: 95vw;
+}
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+}
+#seasonInfo {
+    display: block;
+    font-size: 1.1em;
+    color: #FFC107;
+    margin-bottom: 15px;
+}
+#rankingListContainer {
+  width: 98vw;
+    overflow-y: auto;
+    background: none;
+
+}
+#rankingList {
+    list-style: none;
+    padding: 2px;
+    margin: 0;
+    width: 88vw;
+}
+#rankingList li {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #444;
+}
+#rankingList li:last-child {
+    border-bottom: none;
+}
+.rank-position {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #FFC107;
+    width: 40px;
+}
+.rank-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 2px solid #888;
+    margin-right: 10px;
+}
+.rank-player-info {
+    flex-grow: 1;
+    text-align: left;
+}
+.rank-player-name {
+    display: block;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #e0dccc;
+    white-space: nowrap; 
+    overflow-x: hidden;
+    text-overflow: ellipsis; 
+    max-width: 150px;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+.rank-guild-name {
+    display: block;
+    font-size: 0.8em;
+    color: lightblue;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+.rank-points {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: gold;
+    text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+}
+
+.ranking-tabs {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 10px;
+}
+.ranking-tab {
+  background: none;
+  border: 1px solid #c9a94a;
+  color: #e0dccc;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ranking-tab.active {
+  background-color: #c9a94a;
+  color: #000;
+}
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+#rankingHistoryList {
+  list-style: none;
+  padding: 0;
+  color: #ddd;
+}
+#rankingHistoryList li {
+  padding: 6px;
+  border-bottom: 1px solid #444;
+  font-size: 0.95em;
+}
+.ranking-tab.active {
+  background-color: #c9a94a;
+  color: #000;
+  box-shadow: 0 0 8px #c9a94a;
+}
+/* --- Estilos para o Top 3 da Arena --- */
+
+/* 1º Lugar (Ouro) */
+#rankingList li:nth-child(1) {
+    /* Fundo sutil e borda de destaque para o item da lista */
+    background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09);
+    border-left: 5px solid gold;
+}
+#rankingList li:nth-child(1) .rank-position,
+#rankingList li:nth-child(1) .rank-points {
+    /* Cor e sombra de texto para Ouro */
+    color: #FFD700; /* Ouro */
+    font-size: 0.9em; /* Destaque */
+    text-shadow: 0 0 8px #FFD700, 0 0 15px #000;
+}
+#rankingList li:nth-child(1) .rank-avatar {
+    /* Borda do avatar */
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+}
+
+/* 2º Lugar (Prata) */
+#rankingList li:nth-child(2) {
+    /* Fundo sutil e borda de destaque para o item da lista */
+    background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c);
+    border-left: 5px solid silver;
+}
+#rankingList li:nth-child(2) .rank-position,
+#rankingList li:nth-child(2) .rank-points {
+    /* Cor e sombra de texto para Prata */
+    color: silver; /* Prata */
+    font-size: 0.9em;
+    text-shadow: 0 0 8px silver;
+}
+#rankingList li:nth-child(2) .rank-avatar {
+    /* Borda do avatar */
+    border: 3px solid silver;
+    box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
+}
+
+/* 3º Lugar (Bronze) */
+#rankingList li:nth-child(3) {
+    /* Fundo sutil e borda de destaque para o item da lista */
+    background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5));;
+    border-left: 5px solid #CD7F32; /* Bronze (hex) */
+}
+#rankingList li:nth-child(3) .rank-position,
+#rankingList li:nth-child(3) .rank-points {
+    /* Cor e sombra de texto para Bronze */
+    color: #CD7F32; /* Bronze */
+    font-size: 0.9em;
+    text-shadow: 0 0 8px #CD7F32;
+}
+#rankingList li:nth-child(3) .rank-avatar {
+    /* Borda do avatar */
+    border: 3px solid #CD7F32;
+    box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
+}

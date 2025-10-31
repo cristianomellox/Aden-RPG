@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Arena PvP - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="arena.css" /> 
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <div><span id="pageTitle">Arena</span></div>
+        <img id="openRankingBtn" src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width:40px; height:40px; cursor: pointer;">
+    </div>
+
+    <div id="arenaContainer">
+        <h2>Desafie um Oponente</h2>
+        <p>Teste sua força contra outros jogadores e suba no ranking.</p>
+        
+        <button id="challengeBtn" class="action-btn">Desafiar</button>
+        
+        <div id="attemptsInfo">
+            Desafios restantes: <span id="arenaAttemptsLeft">...</span>
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="pvpCombatModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 id="pvpCountdown" style="display: none;">A batalha começará em 5...</h2>
+            <div id="pvpArena">
+                <div id="challengerSide" class="player-side">
+                    <span id="challengerName" class="player-name-pvp">Desafiante</span>
+                    <div class="avatar-container">
+                        <img id="challengerAvatar" src="https://aden-rpg.pages.dev/avatar01.webp" class="player-avatar-pvp">
+                    </div>
+                    <div class="player-hp-bar">
+                        <div id="challengerHpFill" class="player-hp-fill"></div>
+                        <span id="challengerHpText" class="hp-text-overlay">100 / 100</span>
+                    </div>
+                </div>
+                <span class="vs-separator">VS</span>
+                <div id="defenderSide" class="player-side">
+                    <span id="defenderName" class="player-name-pvp">Defensor</span>
+                    <div class="avatar-container">
+                        <img id="defenderAvatar" src="https://aden-rpg.pages.dev/avatar01.webp" class="player-avatar-pvp">
+                    </div>
+                    <div class="player-hp-bar">
+                        <div id="defenderHpFill" class="player-hp-fill"></div>
+                        <span id="defenderHpText" class="hp-text-overlay">100 / 100</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="confirmTitle">Resultado</h3>
+            <p id="confirmMessage" style="color: white; font-size: 1.1em;"></p>
+            <button id="confirmActionBtn" class="action-btn">Ok</button>
+        </div>
+    </div>
+
+    <div id="rankingModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content ranking-modal-content">
+            <span class="close-btn" id="closeRankingBtn">&times;</span>
+            <h2>Top 100 da Arena</h2>
+            <div class="ranking-tabs" style="margin-bottom:10px; display:flex; gap:8px; justify-content:center;">
+               <button class="ranking-tab active" data-tab="current" style="background:none;border:1px solid #c9a94a;color:#e0dccc;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;">Atual</button>
+<button class="ranking-tab" data-tab="past" style="background:none;border:1px solid #c9a94a;color:#e0dccc;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;">Passada</button>
+<button class="ranking-tab" data-tab="history" style="background:none;border:1px solid #c9a94a;color:#e0dccc;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:bold;">Histórico</button>
+</div>
+
+<!-- agrupado para controle de exibição -->
+<div id="seasonInfoContainer" style="text-align:center; margin-top:5px;">
+  <span id="seasonInfo">Temporada: (Mês) / (Ano)</span>
+  <span id="seasonNote" style="font-size:0.8em;color:white;">(atualiza todos os dias às 21h00)</span>
+</div>
+
+
+            <div id="rankingTabContent" style="margin-top:12px;">
+                <div id="rankingCurrent" class="tab-panel active">
+                    <div id="rankingListContainer">
+                        <ol id="rankingList"></ol>
+                    </div>
+                </div>
+                <div id="rankingPast" class="tab-panel" style="display:none;">
+                    <div id="rankingListContainerPast">
+                        <ol id="rankingListPast"></ol>
+                    </div>
+                </div>
+                <div id="rankingHistory" class="tab-panel" style="display:none;">
+                    <div id="rankingHistoryContainer">
+                        <ul id="rankingHistoryList"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="arena.js"></script>
+</body>
+</html>

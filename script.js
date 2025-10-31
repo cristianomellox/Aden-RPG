@@ -729,44 +729,25 @@ if (updatePasswordBtn) {
     });
 }
 
-// --- UI ---
+// --- UI ---// --- UI ---
 window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
-    // Proteção: se elementos não existirem, tenta manipular com tolerância
-    try {
-        if (!authContainer || !welcomeContainer || !footerMenu) {
-            if (isLoggedIn) {
-                if (footerMenu) footerMenu.style.display = 'flex';
-                if (authContainer) authContainer.style.display = 'none';
-            } else {
-                if (authContainer) authContainer.style.display = 'block';
-                if (welcomeContainer) welcomeContainer.style.display = 'none';
-                if (footerMenu) footerMenu.style.display = 'none';
-            }
-            if (authMessage) authMessage.textContent = '';
-            return;
-        }
-
-        if (isLoggedIn) {
-            authContainer.style.display = 'none';
-            footerMenu.style.display = 'flex';
-            welcomeContainer.style.display = 'block';
-        } else {
-            // CORREÇÃO: ao deslogar, devemos garantir que o container de autenticação seja mostrado
-            authContainer.style.display = 'block';
-            welcomeContainer.style.display = 'none';
-            footerMenu.style.display = 'none';
-            if (signInBtn) signInBtn.style.display = 'block';
-            if (signUpBtn) signUpBtn.style.display = 'block';
-            if (passwordInput) passwordInput.style.display = 'block';
-            if (otpInputContainer) otpInputContainer.style.display = 'none';
-            if (authMessage) authMessage.textContent = '';
-        }
-    } catch (e) {
-        console.error("updateUIVisibility error:", e);
-        // fallback mínimo
-        if (!isLoggedIn && authContainer) authContainer.style.display = 'block';
-    }
+  if (isLoggedIn) {
+    authContainer.style.display = 'none';
+    footerMenu.style.display = 'flex';
+    welcomeContainer.style.display = 'block';
+  } else {
+    authContainer.style.display = 'block'; // ✅ Corrigido
+    welcomeContainer.style.display = 'none';
+    footerMenu.style.display = 'none';
+    signInBtn.style.display = 'block';
+    signUpBtn.style.display = 'block';
+    passwordInput.style.display = 'block';
+    otpInputContainer.style.display = 'none';
+    authMessage.textContent = '';
+  }
 };
+
+
 
 // Eventos
 signInBtn.addEventListener('click', signIn);
@@ -779,41 +760,14 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 // });
 
 // Sessão e inicialização
-// Robust auth state handling (async + initial check)
-supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    try {
-        if (session) {
-            await fetchAndDisplayPlayerInfo();
-            // handle url actions after player data loaded
-            if (typeof handleUrlActions === 'function') {
-                try { handleUrlActions(); } catch(e){ console.error('handleUrlActions error:', e); }
-            }
-        } else {
-            updateUIVisibility(false);
-        }
-    } catch (e) {
-        console.error('onAuthStateChange handler error:', e);
-        updateUIVisibility(false);
-    }
-});
-
-// Initial check in case onAuthStateChange doesn't fire in wrapper environments
-(async function _initialAuthCheck(){
-    try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (user) {
-            await fetchAndDisplayPlayerInfo();
-            if (typeof handleUrlActions === 'function') {
-                try { handleUrlActions(); } catch(e){ console.error('handleUrlActions error:', e); }
-            }
-        } else {
-            updateUIVisibility(false);
-        }
-    } catch (e) {
-        console.error('_initialAuthCheck error:', e);
-        updateUIVisibility(false);
-    }
-})();});
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (session) {
+        // Chama a função (que pode usar o cache ou não)
+        // O forceRefresh=false e preserveActiveContainer=false são os padrões
+        fetchAndDisplayPlayerInfo().then(() => {
+            // Após o login e carregamento dos dados do jogador, processar as ações da URL.
+            handleUrlActions();
+        });
     } else {
         updateUIVisibility(false);
     }

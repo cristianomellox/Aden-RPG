@@ -435,8 +435,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         rankingData = result.ranking;
                         
                         if (rankingData.length > 0) {
-                            // Salva no cache com a TTL correta (até a próxima 00:00 UTC)
-                            setCache(cacheKey, rankingData, getMinutesUntilUTCMidnight());
+                            // Salva no cache com TTL de 15 minutos (conforme solicitado)
+                            setCache(cacheKey, rankingData, 15);
                         } else {
                             console.log("RPC retornou ranking vazio, não será salvo no cache.");
                         }
@@ -672,57 +672,35 @@ document.addEventListener("DOMContentLoaded", async () => {
             const now = new Date();
             const utcDay = now.getUTCDate(); // usamos UTC para alinhar com o server
             
-            // Só executa a lógica no primeiro dia do mês
-            if (utcDay !== 1) return; 
-
-            // ** A CORREÇÃO CRÍTICA **
-            // Se for dia 1, o cache do dia anterior (dia 30/31) está 100% INVÁLIDO.
-            // Limpamos ele IMEDIATAMENTE, antes de qualquer chamada de RPC.
-            // Isso previne a "condição de corrida" onde o usuário clica no ranking
-            // antes do reset terminar.
+            // Se for dia 1, limpamos caches que podem entrar em condição de corrida.
             try {
-                // Verifica se o cache de ranking existe ANTES de limpar
-                if (localStorage.getItem('arena_top_100_cache')) {
-                    localStorage.removeItem('arena_top_100_cache');
-                    console.log("Cache de Ranking Atual (arena_top_100_cache) limpo (Dia 1).");
-                }
-                if (localStorage.getItem('arena_last_season_cache')) {
-                    localStorage.removeItem('arena_last_season_cache');
-                    console.log("Cache de Temporada Passada (arena_last_season_cache) limpo (Dia 1).");
+                if (utcDay === 1) {
+                    // Verifica se o cache de ranking existe ANTES de limpar
+                    if (localStorage.getItem('arena_top_100_cache')) {
+                        localStorage.removeItem('arena_top_100_cache');
+                        console.log("Cache de Ranking Atual (arena_top_100_cache) limpo (Dia 1).");
+                    }
+                    if (localStorage.getItem('arena_last_season_cache')) {
+                        localStorage.removeItem('arena_last_season_cache');
+                        console.log("Cache de Temporada Passada (arena_last_season_cache) limpo (Dia 1).");
+                    }
                 }
             } catch (e) {
                 console.warn("Falha ao limpar caches no Dia 1:", e);
             }
 
-            // Agora, continuamos com a lógica original para evitar chamadas múltiplas da RPC.
-            // Verificamos se ESTE browser já tentou rodar o reset neste mês.
-            const year = now.getUTCFullYear();
-            const month = now.getUTCMonth() + 1; // 1-12
-            const ymd = `${year}-${String(month).padStart(2,'0')}`;
-            const localKey = 'arena_reset_checked_' + ymd;
-
-            if (localStorage.getItem(localKey)) {
-                // Este browser já tentou o reset, não faz de novo.
-                return;
-            }
-
-            // Marca que este browser vai tentar agora
-            try { localStorage.setItem(localKey, Date.now().toString()); } catch (e) {}
-
-            // Chamada à RPC que faz snapshot + reseta pontos (server-side é idempotente)
-            console.log("Dia 1 UTC. Tentando executar RPC 'reset_arena_season'...");
+            // ** Chamada SEM restrição de data: roda em todo carregamento da página **
+            console.log("Tentando executar RPC 'reset_arena_season' (chamada por carregamento de página)...");
             const { data, error } = await supabase.rpc('reset_arena_season');
             
             if (error) {
                 console.warn("Erro ao executar 'reset_arena_season':", error.message || error);
-                // se falhar, removemos a marca local para permitir nova tentativa
-                try { localStorage.removeItem(localKey); } catch (e) {}
                 return;
             }
 
             const r = normalizeRpcResult(data);
             if (r?.success) {
-                console.log("✅ Temporada resetada via RPC:", r.message || r);
+                console.log("✅ Temporada verificada/resetada via RPC:", r.message || r);
             } else {
                 console.log("ℹ️ 'reset_arena_season' retornou:", r?.message || r);
             }

@@ -532,14 +532,82 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingListPast) rankingListPast.innerHTML = "";
 
+            // Tentativa 1: cache
             let d = getCache('arena_last_season_cache');
-            if (!d) {
-                console.log("Cache de ranking (passado) vazio. Buscando do servidor...");
-                const { data } = await supabase.rpc('get_arena_top_100_past');
-                const r = normalizeRpcResult(data);
-                if (r?.success) {
-                    d = r.ranking;
-                    setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
+            if (d && Array.isArray(d)) {
+                console.log("Usando cache local da temporada passada.");
+            } else {
+                console.log("Cache de ranking (passado) vazio. Tentando RPC 'get_arena_top_100_past'...");
+                // Tenta RPC
+                try {
+                    const { data: rpcData, error: rpcError } = await supabase.rpc('get_arena_top_100_past');
+                    if (rpcError) {
+                        console.warn("RPC get_arena_top_100_past erro:", rpcError.message || rpcError);
+                    } else {
+                        const r = normalizeRpcResult(rpcData);
+                        if (r?.success && Array.isArray(r.ranking) && r.ranking.length) {
+                            d = r.ranking;
+                            setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
+                            console.log("Temporada passada obtida via RPC e salva em cache.");
+                        } else if (r?.ranking && typeof r.ranking === 'string') {
+                            // Às vezes o jsonb chega como string
+                            try { d = JSON.parse(r.ranking); if (Array.isArray(d)) { setCache('arena_last_season_cache', d, getMinutesUntilNextMonth()); } } catch(e){}
+                        } else {
+                            console.log("RPC get_arena_top_100_past não retornou ranking válido. Fallback para leitura direta da tabela.");
+                        }
+                    }
+                } catch (rpcCatchErr) {
+                    console.warn("Erro ao chamar RPC get_arena_top_100_past:", rpcCatchErr);
+                }
+
+                // Fallback: ler direto a tabela arena_season_snapshots (mais confiável)
+                if (!d || !Array.isArray(d) || d.length === 0) {
+                    try {
+                        const { data: snaps, error: snapErr } = await supabase
+  .from('arena_season_snapshots')
+  .select('ranking, season_year, season_month, created_at')
+  .order('created_at', { ascending: false })
+  .limit(1);
+
+if (snapErr) {
+  console.warn("Erro ao buscar arena_season_snapshots diretamente:", snapErr.message || snapErr);
+} else if (Array.isArray(snaps) && snaps.length > 0) {
+  const snap = snaps[0];
+  if (snap && snap.ranking) {
+    let rankingVal = snap.ranking;
+    if (typeof rankingVal === 'string') {
+      try { rankingVal = JSON.parse(rankingVal); } catch (e) {
+        console.warn("Erro ao parsear JSON do ranking:", e);
+        rankingVal = [];
+      }
+    }
+    if (Array.isArray(rankingVal)) {
+      d = rankingVal;
+      setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
+      console.log("Temporada passada carregada com sucesso a partir de arena_season_snapshots.");
+    }
+  }
+}
+
+
+                        if (snapErr) {
+                            console.warn("Erro ao buscar arena_season_snapshots diretamente:", snapErr.message || snapErr);
+                        } else if (snap && snap.ranking) {
+                            // ranking pode vir como JSON; normalize
+                            let rankingVal = snap.ranking;
+                            if (typeof rankingVal === 'string') {
+                                try { rankingVal = JSON.parse(rankingVal); } catch (e) { console.warn("Erro parse ranking json:", e); rankingVal = []; }
+                            }
+                            if (Array.isArray(rankingVal)) {
+                                d = rankingVal;
+                                // cache até início do próximo mês
+                                setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
+                                console.log("Temporada passada obtida via leitura direta da tabela e salva em cache.");
+                            }
+                        }
+                    } catch (tableErr) {
+                        console.error("Erro no fallback read de arena_season_snapshots:", tableErr);
+                    }
                 }
             }
 
@@ -589,27 +657,67 @@ document.addEventListener("DOMContentLoaded", async () => {
                  if (cleanupResult?.error) console.warn("Erro ao limpar logs antigos:", cleanupResult.error);
             });
 
-            // Chama a RPC (agora corrigida no SQL)
-            const { data, error } = await supabase.rpc('get_arena_attack_logs');
-            if (error) throw error; // Joga o erro para o catch
+            // Tenta carregar do cache com TTL de 60 minutos (1 hora)
+            const cacheKey = 'arena_attack_history';
+            let h = getCache(cacheKey);
 
-            const r = normalizeRpcResult(data);
-            let h = []; 
+            if (!h || !Array.isArray(h)) {
+                // Chama a RPC principal
+                try {
+                    const { data, error } = await supabase.rpc('get_arena_attack_logs');
+                    if (error) {
+                        console.warn("RPC get_arena_attack_logs erro:", error.message || error);
+                    } else {
+                        const r = normalizeRpcResult(data);
+                        if (r?.success && Array.isArray(r.logs) && r.logs.length) {
+                            h = r.logs;
+                            setCache(cacheKey, h, 60); // TTL 60 minutos conforme solicitado
+                            console.log("Historico obtido via RPC e salvo em cache (60min).");
+                        } else if (r?.logs && typeof r.logs === 'string') {
+                            try { const parsed = JSON.parse(r.logs); if (Array.isArray(parsed)) { h = parsed; setCache(cacheKey, h, 60); } } catch(e){}
+                        } else {
+                            console.log("RPC não retornou logs válidos. Fallback para leitura direta da tabela.");
+                        }
+                    }
+                } catch (rpcErr) {
+                    console.warn("Erro ao chamar RPC get_arena_attack_logs:", rpcErr);
+                }
 
-            if (r?.success && Array.isArray(r.logs)) {
-                // SUCESSO: A RPC retornou a lista de logs correta.
-                h = r.logs;
-                
-                // Salva a lista fresca no cache
-                setCache('arena_attack_history', h, 4320); // 3 dias
-                
+                // Fallback: consulta direta na tabela arena_attack_logs filtrando defender_id
+                if ((!h || !Array.isArray(h) || h.length === 0) && userId) {
+                    try {
+                        const { data: logsDirect, error: logsErr } = await supabase
+                            .from('arena_attack_logs')
+                            .select('id, attacker_id, defender_id, attacker_name, points_taken, created_at')
+                            .eq('defender_id', userId)
+                            .order('created_at', { ascending: false })
+                            .limit(200);
+
+                        if (logsErr) {
+                            console.warn("Erro ao buscar arena_attack_logs diretamente:", logsErr.message || logsErr);
+                        } else if (Array.isArray(logsDirect)) {
+                            h = logsDirect.map(l => ({
+                                id: l.id,
+                                attacker_id: l.attacker_id,
+                                defender_id: l.defender_id,
+                                attacker_name: l.attacker_name,
+                                points_taken: l.points_taken,
+                                created_at: l.created_at
+                            }));
+                            if (h.length) {
+                                setCache(cacheKey, h, 60); // cache 60 minutos
+                                console.log("Historico obtido via leitura direta e salvo em cache (60min).");
+                            }
+                        }
+                    } catch (tableErr) {
+                        console.error("Erro no fallback read de arena_attack_logs:", tableErr);
+                    }
+                }
             } else {
-                // FALHA (silenciosa ou r.success=false): Tenta carregar do cache.
-                h = getCache('arena_attack_history') || [];
-                console.warn("RPC get_arena_attack_logs falhou ou retornou dados inválidos. Usando cache.");
+                console.log("Usando cache local do histórico de ataques.");
             }
 
-            if (!h.length) {
+            if (!h || !h.length) {
                 if (rankingHistoryList) rankingHistoryList.innerHTML = `
                     <li style="padding:12px;text-align:center;color:#aaa;font-style:italic;">
                         Sem registros.
@@ -666,7 +774,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- Reset mensal da temporada (front-end safe call) ---
 
-    // [INÍCIO DA CORREÇÃO DA RACE CONDITION]
     async function checkAndResetArenaSeason() {
         try {
             const now = new Date();
@@ -709,29 +816,49 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error("checkAndResetArenaSeason erro fatal:", e);
         }
     }
-    // [FIM DA CORREÇÃO DA RACE CONDITION]
 
-
-    // --- Boot ---
+    // --- Boot (corrigido para aguardar autenticação) ---
     async function boot() {
         showLoading();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return (window.location.href = "index.html");
-            userId = user.id;
+            let { data: { user } } = await supabase.auth.getUser();
 
-            // [IMPORTANTE] A função de reset/limpeza de cache agora roda primeiro
-            // e é aguardada (await). Isso é essencial.
+            // Aguarda autenticação se ainda não tiver o usuário carregado
+            if (!user) {
+              console.log("⏳ Aguardando autenticação do Supabase...");
+              await new Promise((resolve) => {
+                const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+                  if (session?.user) {
+                    user = session.user;
+                    try { listener.subscription.unsubscribe(); } catch(e){/*ignore*/}
+                    resolve();
+                  }
+                });
+                // timeout fallback: em 5s resolvemos para evitar bloqueio indefinido
+                setTimeout(() => resolve(), 5000);
+              });
+            }
+
+            if (!user) {
+              console.warn("Usuário não autenticado, redirecionando...");
+              window.location.href = "index.html";
+              return;
+            }
+
+            userId = user.id;
+            console.log("Usuário autenticado:", user.email || user.id);
+
+            // 🔥 Agora sim — chamamos o reset garantido
             await checkAndResetArenaSeason();
 
-            // Reseta as tentativas diárias
-            await supabase.rpc('reset_player_arena_attempts');
-            
-            // Atualiza a UI das tentativas
+            // Reset diário das tentativas
+            await supabase.rpc("reset_player_arena_attempts");
+
+            // Atualiza tentativas na interface
             await updateAttemptsUI();
 
         } catch (e) {
-            console.error("Boot error:", e);
+            console.error("Erro no boot:", e);
             document.body.innerHTML = "<p>Erro ao carregar Arena.</p>";
         } finally {
             hideLoading();

@@ -321,7 +321,7 @@ body, html {
 }
 #seasonInfo {
     display: block;
-    font-size: 1.1em;
+    font-size: 1em;
     color: #FFC107;
     margin-bottom: 15px;
 }
@@ -384,6 +384,7 @@ body, html {
     display: block;
     font-size: 0.8em;
     color: lightblue;
+    font-weight: bold;
     text-shadow:
         1px 1px 2px black,
         -1px -1px 2px black,
@@ -501,4 +502,129 @@ body, html {
     /* Borda do avatar */
     border: 3px solid #CD7F32;
     box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
+}
+
+
+/* ================================
+   AJUSTE ABA "PASSADA" - ARENA
+   ================================ */
+
+/* Estrutura geral da lista passada */
+#rankingListPast {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 88vw;
+}
+
+#rankingListPast li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid #444;
+  background: rgba(20, 20, 20, 0.4);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+#rankingListPast li:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.01);
+}
+
+/* Alinhamento dos elementos internos */
+#rankingListPast .rank-position {
+  width: 40px;
+  font-weight: bold;
+  color: #FFC107;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+#rankingListPast .rank-avatar {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: 2px solid #888;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+#rankingListPast .rank-player-info {
+  flex-grow: 1;
+  text-align: left;
+}
+
+#rankingListPast .rank-player-name {
+  font-weight: bold;
+  color: #e0dccc;
+  display: block;
+}
+
+#rankingListPast .rank-guild-name {
+  font-size: 0.8em;
+  color: #aaa;
+}
+
+#rankingListPast .rank-points {
+  font-weight: bold;
+  color: #fff;
+  font-size: 0.85em;
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 80px;
+}
+
+/* EFEITO TOP 3 (igual ao da aba "Atual") */
+#rankingListPast li:nth-child(1) {
+  background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09);
+  border-left: 5px solid gold;
+}
+
+#rankingListPast li:nth-child(1) .rank-position,
+#rankingListPast li:nth-child(1) .rank-points {
+  color: #FFD700;
+  text-shadow: 0 0 6px #FFD700, 0 0 10px #000;
+}
+
+#rankingListPast li:nth-child(1) .rank-avatar {
+  border: 3px solid #FFD700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+}
+
+#rankingListPast li:nth-child(2) {
+  background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c);
+  border-left: 5px solid silver;
+}
+
+#rankingListPast li:nth-child(2) .rank-position,
+#rankingListPast li:nth-child(2) .rank-points {
+  color: silver;
+  text-shadow: 0 0 6px silver;
+}
+
+#rankingListPast li:nth-child(2) .rank-avatar {
+  border: 3px solid silver;
+  box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
+}
+
+#rankingListPast li:nth-child(3) {
+  background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5));
+  border-left: 5px solid #CD7F32;
+}
+
+#rankingListPast li:nth-child(3) .rank-position,
+#rankingListPast li:nth-child(3) .rank-points {
+  color: #CD7F32;
+  text-shadow: 0 0 6px #CD7F32;
+}
+
+#rankingListPast li:nth-child(3) .rank-avatar {
+  border: 3px solid #CD7F32;
+  box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
+}
+
+/* Fim da lista */
+#rankingListPast li:last-child {
+  border-bottom: none;
 }

@@ -24,6 +24,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const rankingListPast = document.getElementById("rankingListPast");
     const rankingHistoryList = document.getElementById("rankingHistoryList");
     const seasonInfoContainer = document.getElementById("seasonInfoContainer");
+    
+    // NOVO: Span da temporada passada
+    const seasonPastInfoSpan = document.getElementById("seasonPastInfo");
 
     const pvpCountdown = document.getElementById("pvpCountdown");
     const challengerSide = document.getElementById("challengerSide");
@@ -447,7 +450,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
             
+            // CORREÇÃO 1: Garante que as informações da temporada atual sejam exibidas.
+            if (seasonInfoContainer) seasonInfoContainer.style.display = 'block'; 
+
             renderRanking(rankingData || []); 
+            
+            // CORREÇÃO 3: REMOVIDO o código que forçava a visibilidade do painel "Passada" (rankingPast), resolvendo a sobreposição de listas.
+            
             if (rankingModal) rankingModal.style.display = 'flex';
         
         } catch (e) {
@@ -529,11 +538,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function fetchPastSeasonRanking() {
         showLoading();
         try {
+            // CORREÇÃO 1: Oculta info da temporada atual (Corrigido para voltar na aba Atual)
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingListPast) rankingListPast.innerHTML = "";
+            // Inicializa o span com um texto de carregamento/padrão
+            if (seasonPastInfoSpan) seasonPastInfoSpan.textContent = "Carregando Temporada Anterior...";
+
 
             // Tentativa 1: cache
             let d = getCache('arena_last_season_cache');
+            let snap = null; // Variável para armazenar o snapshot para o título da temporada
+
             if (d && Array.isArray(d)) {
                 console.log("Usando cache local da temporada passada.");
             } else {
@@ -544,19 +559,33 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (rpcError) {
                         console.warn("RPC get_arena_top_100_past erro:", rpcError.message || rpcError);
                     } else {
-                        const r = normalizeRpcResult(rpcData);
-                        if (r?.success && Array.isArray(r.ranking) && r.ranking.length) {
-                            d = r.ranking;
-                            setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
-                            console.log("Temporada passada obtida via RPC e salva em cache.");
-                        } else if (r?.ranking && typeof r.ranking === 'string') {
-                            // Às vezes o jsonb chega como string
-                            try { d = JSON.parse(r.ranking); if (Array.isArray(d)) { setCache('arena_last_season_cache', d, getMinutesUntilNextMonth()); } } catch(e){}
-                        } else {
-                            console.log("RPC get_arena_top_100_past não retornou ranking válido. Fallback para leitura direta da tabela.");
+                        // Normalizar possíveis formatos de retorno do RPC
+                        let r = rpcData;
+                        if (Array.isArray(r) && r.length === 1 && typeof r[0] === 'object' && r[0] !== null) {
+                            r = r[0].result || r[0];
                         }
-                    }
-                } catch (rpcCatchErr) {
+                        let candidate = null;
+                        if (!r) {
+                            candidate = null;
+                        } else if (Array.isArray(r)) {
+                            candidate = r;
+                        } else if (typeof r === 'string') {
+                            try { candidate = JSON.parse(r); } catch(e) { candidate = null; }
+                        } else if (typeof r === 'object') {
+                            if (Array.isArray(r.ranking)) candidate = r.ranking;
+                            else if (typeof r.ranking === 'string') {
+                                try { candidate = JSON.parse(r.ranking); } catch(e) { candidate = null; }
+                            } else if (Array.isArray(r.result)) candidate = r.result;
+                            else if (r.result && typeof r.result === 'object' && Array.isArray(r.result.ranking)) candidate = r.result.ranking;
+                        }
+                        if (Array.isArray(candidate) && candidate.length) {
+                            d = candidate;
+                            setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
+                            console.log("Temporada passada carregada com sucesso via RPC.");
+                        } else {
+                            console.log("RPC não retornou ranking válido; seguiremos com fallback.");
+                        }
+                    }} catch (rpcCatchErr) {
                     console.warn("Erro ao chamar RPC get_arena_top_100_past:", rpcCatchErr);
                 }
 
@@ -572,7 +601,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 if (snapErr) {
   console.warn("Erro ao buscar arena_season_snapshots diretamente:", snapErr.message || snapErr);
 } else if (Array.isArray(snaps) && snaps.length > 0) {
-  const snap = snaps[0];
+  snap = snaps[0]; // Armazena o snapshot para obter o título da temporada
   if (snap && snap.ranking) {
     let rankingVal = snap.ranking;
     if (typeof rankingVal === 'string') {
@@ -588,28 +617,27 @@ if (snapErr) {
     }
   }
 }
-
-
-                        if (snapErr) {
-                            console.warn("Erro ao buscar arena_season_snapshots diretamente:", snapErr.message || snapErr);
-                        } else if (snap && snap.ranking) {
-                            // ranking pode vir como JSON; normalize
-                            let rankingVal = snap.ranking;
-                            if (typeof rankingVal === 'string') {
-                                try { rankingVal = JSON.parse(rankingVal); } catch (e) { console.warn("Erro parse ranking json:", e); rankingVal = []; }
-                            }
-                            if (Array.isArray(rankingVal)) {
-                                d = rankingVal;
-                                // cache até início do próximo mês
-                                setCache('arena_last_season_cache', d, getMinutesUntilNextMonth());
-                                console.log("Temporada passada obtida via leitura direta da tabela e salva em cache.");
-                            }
-                        }
                     } catch (tableErr) {
                         console.error("Erro no fallback read de arena_season_snapshots:", tableErr);
                     }
                 }
             }
+
+            // CORREÇÃO: Gera o título da temporada passada e ATUALIZA O SPAN.
+            let seasonInfoText = "Temporada Anterior";
+            if (snap && snap.season_month && snap.season_year) {
+                const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                const monthIndex = snap.season_month - 1; // 0-indexed
+                if(monthIndex >= 0 && monthIndex < 12) {
+                    seasonInfoText = `Temporada: ${monthNames[monthIndex]} / ${snap.season_year}`;
+                } else {
+                     seasonInfoText = `Temporada: ${snap.season_month} / ${snap.season_year}`;
+                }
+            }
+            if (seasonPastInfoSpan) {
+                seasonPastInfoSpan.textContent = seasonInfoText;
+            }
+
 
             if (!d || !d.length) {
                 if (rankingListPast) {
@@ -621,18 +649,21 @@ if (snapErr) {
             } else {
                 if (rankingListPast) {
                     rankingListPast.innerHTML = "";
+                    
+                    // LINHA REMOVIDA: A inserção do <li> com o título da temporada passada foi movida para o span (#seasonPastInfo).
+
                     const defAv = 'https://aden-rpg.pages.dev/avatar01.webp';
                     d.forEach((p, i) => {
                         const av = p.avatar_url || p.avatar || defAv;
                         rankingListPast.innerHTML += `
-<li style="display:flex;align:items:center;padding:8px;border-bottom:1px solid #444;">
+<li id="rankingListPast" style="width: 82vw;">
 <span style="width:40px;font-weight:bold;color:#FFC107;">${i+1}.</span>
-<img src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%;border:2px solid #888;margin-right:10px;">
+<img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%">
 <div style="flex-grow:1;text-align:left;">
-<div style="font-weight:bold;color:#e0dccc">${esc(p.name)}</div>
-<div style="font-size:0.8em;color:#aaa">${esc(p.guild_name||'Sem Guilda')}</div>
+<div class="rank-player-name">${esc(p.name)}</div>
+<div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div>
 </div>
-<div style="font-weight:bold;color:#fff; font-size: 0.8em;">${Number(p.ranking_points||0).toLocaleString()} pts</div>
+<div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div>
 </li>`;
                     });
                 }
@@ -649,6 +680,7 @@ if (snapErr) {
     async function fetchAttackHistory() {
         showLoading();
         try {
+            // CORREÇÃO 1: Oculta info da temporada atual (Corrigido para voltar na aba Atual)
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
 
@@ -753,20 +785,30 @@ if (snapErr) {
                 tabs.forEach(t => { t.classList.remove("active"); t.style.background = "none"; t.style.color = "#e0dccc"; });
                 tab.classList.add("active");
                 tab.style.background = "#c9a94a"; tab.style.color = "#000";
-                document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+                
+                // Garante que a exibição da aba ativa seja controlada pelo JS
+                document.querySelectorAll(".tab-panel").forEach(p => {
+                    p.classList.remove("active");
+                    p.style.display = 'none'; // Adicionado para forçar ocultação de todas
+                });
+                
                 const tn = tab.dataset.tab;
+                let activePanel = null;
+
                 if (tn === 'current') {
-                    const el = document.getElementById('rankingCurrent');
-                    if (el) el.classList.add('active');
+                    activePanel = document.getElementById('rankingCurrent');
                     await fetchAndRenderRanking();
                 } else if (tn === 'past') {
-                    const el = document.getElementById('rankingPast');
-                    if (el) el.classList.add('active');
+                    activePanel = document.getElementById('rankingPast');
                     await fetchPastSeasonRanking();
                 } else {
-                    const el = document.getElementById('rankingHistory');
-                    if (el) el.classList.add('active');
+                    activePanel = document.getElementById('rankingHistory');
                     await fetchAttackHistory(); // Chama a função corrigida
+                }
+
+                if (activePanel) {
+                    activePanel.classList.add('active');
+                    activePanel.style.display = 'block'; // Garante que a aba selecionada seja exibida
                 }
             });
         });
@@ -869,14 +911,26 @@ if (snapErr) {
     if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);
     if (openRankingBtn) {
         openRankingBtn.addEventListener("click", async () => {
+            // Garante que a aba "Atual" esteja selecionada visualmente
+            const tabs = document.querySelectorAll(".ranking-tab");
             const curTab = document.querySelector(".ranking-tab[data-tab='current']");
-            if (curTab) {
-                document.querySelectorAll(".ranking-tab").forEach(t => { t.classList.remove("active"); t.style.background = "none"; t.style.color = "#e0dccc"; });
+            
+            if (tabs && curTab) {
+                tabs.forEach(t => { t.classList.remove("active"); t.style.background = "none"; t.style.color = "#e0dccc"; });
                 curTab.classList.add("active"); curTab.style.background = "#c9a94a"; curTab.style.color = "#000";
-                document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-                const rc = document.getElementById("rankingCurrent");
-                if (rc) rc.classList.add("active");
             }
+            
+            // Garante que APENAS o painel 'current' esteja visível/ativo
+            document.querySelectorAll(".tab-panel").forEach(p => {
+                p.classList.remove("active");
+                p.style.display = 'none';
+            });
+            const rc = document.getElementById("rankingCurrent");
+            if (rc) {
+                 rc.classList.add("active");
+                 rc.style.display = 'block';
+            }
+            
             await fetchAndRenderRanking(); 
         });
     }

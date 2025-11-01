@@ -21,7 +21,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const rankingList = document.getElementById("rankingList");
     const seasonInfoSpan = document.getElementById("seasonInfo");
 
-    // elementos adicionais usados nas versões com abas/histórico (pode não existir no teu HTML; por isso checamos)
     const rankingListPast = document.getElementById("rankingListPast");
     const rankingHistoryList = document.getElementById("rankingHistoryList");
     const seasonInfoContainer = document.getElementById("seasonInfoContainer");
@@ -42,7 +41,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffers = {};
 
-    // [MÚSICA]
     let backgroundMusic = null;
     let musicStarted = false;
 
@@ -86,7 +84,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
 
-    // [MÚSICA] Lógica de início de música robusta (baseada em zion.html)
     function startBackgroundMusic() {
         if (musicStarted) return;
         
@@ -100,7 +97,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             musicStarted = true;
         }).catch(err => {
             console.warn("⚠️ Falha ao iniciar música:", err);
-            musicStarted = false; // Permite tentar novamente
+            musicStarted = false; 
         });
     }
 
@@ -142,8 +139,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     addCapturedListener(window, "touchmove", handleMoveForMusic);
     addCapturedListener(window, "pointermove", handleMoveForMusic);
-    // [FIM MÚSICA]
-
 
     // --- Utilitários ---
     function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
@@ -190,6 +185,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         const diffMs = nextMonth.getTime() - Date.now();
         return Math.max(1, Math.floor(diffMs / 60000));
     }
+
+    /**
+     * Calcula o número de minutos restantes até a próxima meia-noite (00:00) UTC.
+     * Isso garante que o cache expire no horário exato do reset diário.
+     */
+    function getMinutesUntilUTCMidnight() {
+        const now = new Date();
+        // Cria uma data para 00:00 UTC de amanhã
+        const tomorrowUTC = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate() + 1, // O dia seguinte
+            0, 0, 0, 0 // Às 00:00:00.000
+        ));
+        
+        const diffMs = tomorrowUTC.getTime() - now.getTime();
+        
+        return Math.max(1, Math.ceil(diffMs / 60000));
+    }
+
 
     // --- Cache adicional: jogadores e guildas ---
     async function getCachedPlayerInfo(playerId) {
@@ -268,7 +283,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         let opponent = null; 
         let challengerInfo = null; 
         try {
-            // 1) buscar oponente
             const { data: findData, error: findError } = await supabase.rpc('find_arena_opponent');
             if (findError) throw findError;
             const findResult = normalizeRpcResult(findData);
@@ -276,10 +290,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             opponent = findResult.opponent; 
             cacheOpponent(opponent);
 
-            // [AVATAR] Buscar os dados do desafiante (nós mesmos)
             challengerInfo = await getCachedPlayerInfo(userId); 
 
-            // 2) iniciar combate
             const { data: combatData, error: combatError } = await supabase.rpc('start_arena_combat', { p_opponent_id: opponent.id });
             if (combatError) throw combatError;
             const combatResult = normalizeRpcResult(combatData);
@@ -287,7 +299,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             hideLoading(); 
 
-            // [AVATAR] Combinar os dados de info (nome/avatar) com os dados de stats (HP/etc)
             const challengerData = { 
                 ...(combatResult.challenger_stats || {}), 
                 id: userId,
@@ -301,10 +312,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 avatar_url: opponent?.avatar_url || null 
             };
 
-            // 3) animação/visualização do combate
             await simulatePvpAnimation(challengerData, defenderData, combatResult.combat_log);
 
-            // 4) resultado [NOVA MENSAGEM]
             let msg = "";
             const points = combatResult.points_transferred || 0;
             const opponentName = esc(opponent?.name || 'Oponente');
@@ -317,7 +326,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 msg = `<strong style="color:#f44336;">Você perdeu!</strong><br>${opponentName} derrotou você e tomou ${points.toLocaleString()} pontos.`;
             }
             showModalAlert(msg, "Resultado da Batalha");
-            // [FIM NOVA MENSAGEM]
 
         } catch (e) {
             console.error("Erro no desafio:", e);
@@ -339,7 +347,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             challengerName.textContent = challenger.name || esc(challenger.name || 'Desconhecido');
             defenderName.textContent = defender.name || esc(defender.name || 'Desconhecido');
 
-            // [AVATAR] garante avatar válido
             if (challengerAvatar) challengerAvatar.src = challenger.avatar_url || challenger.avatar || defaultAvatar;
             if (defenderAvatar) defenderAvatar.src = defender.avatar_url || defender.avatar || defaultAvatar;
 
@@ -408,49 +415,39 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- Ranking ---
     
-    // [CORREÇÃO DEFINITIVA - RANKING VAZIO]
     async function fetchAndRenderRanking() {
         showLoading();
         try {
             const cacheKey = 'arena_top_100_cache';
-            let rankingData = getCache(cacheKey); // 1. Tenta pegar do cache
+            let rankingData = getCache(cacheKey); 
 
-            if (!rankingData) { // 2. Se o cache estiver vazio ou expirado, busca no servidor
-                console.log("Cache de ranking vazio. Buscando do servidor...");
+            if (!rankingData) { 
+                console.log("Cache de ranking (atual) vazio. Buscando do servidor...");
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_arena_top_100');
 
                 if (rpcError) {
-                    // Erro na chamada RPC (ex: RLS, permissão)
                     console.warn('Erro RPC get_arena_top_100, usando fallback.', rpcError.message);
                     rankingData = await fallbackFetchTopPlayers();
-                    // Não salvar o fallback no cache
                 } else {
-                    // Chamada RPC bem-sucedida
                     const result = normalizeRpcResult(rpcData);
 
                     if (result?.success && Array.isArray(result.ranking)) {
                         rankingData = result.ranking;
                         
-                        // [A CORREÇÃO]
-                        // Apenas salva no cache se a lista NÃO estiver vazia.
-                        // Se a RPC falhar silenciosamente e retornar [], não vamos poluir o cache.
                         if (rankingData.length > 0) {
-                            setCache(cacheKey, rankingData, CACHE_TTL_24H);
+                            // Salva no cache com a TTL correta (até a próxima 00:00 UTC)
+                            setCache(cacheKey, rankingData, getMinutesUntilUTCMidnight());
                         } else {
-                            // Se a lista veio vazia, não salva no cache.
-                            // Isso força uma nova busca na próxima vez que o modal for aberto.
                             console.log("RPC retornou ranking vazio, não será salvo no cache.");
                         }
                     } else {
-                        // A função RPC retornou success: false ou dados mal formatados
                         console.warn('RPC get_arena_top_100 não retornou sucesso, usando fallback.');
                         rankingData = await fallbackFetchTopPlayers();
-                        // Não salvar o fallback no cache
                     }
                 }
             }
             
-            renderRanking(rankingData || []); // Renderiza o que tiver (do cache ou do fetch)
+            renderRanking(rankingData || []); 
             if (rankingModal) rankingModal.style.display = 'flex';
         
         } catch (e) {
@@ -460,7 +457,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             hideLoading();
         }
     }
-    // [FIM CORREÇÃO DEFINITIVA - RANKING VAZIO]
 
 
     async function fallbackFetchTopPlayers() {
@@ -488,7 +484,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }));
         } catch (fallbackError) {
             console.error("Fallback de ranking falhou:", fallbackError.message);
-            return []; // Retorna vazio se o fallback também falhar
+            return []; 
         }
     }
 
@@ -538,6 +534,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             let d = getCache('arena_last_season_cache');
             if (!d) {
+                console.log("Cache de ranking (passado) vazio. Buscando do servidor...");
                 const { data } = await supabase.rpc('get_arena_top_100_past');
                 const r = normalizeRpcResult(data);
                 if (r?.success) {
@@ -587,34 +584,29 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
 
-            // tenta limpar logs antigos (se a RPC existir)
-            try {
-                const cleanupResult = await supabase.rpc('cleanup_old_arena_logs');
-                if (cleanupResult?.error) console.warn("Erro ao limpar logs antigos:", cleanupResult.error);
-            } catch (cleanupErr) {
-                // não é crítico — apenas logamos
-                console.warn("cleanup_old_arena_logs falhou (ou não existe):", cleanupErr?.message || cleanupErr);
-            }
+            // A RPC de cleanup não deve travar o processo.
+            supabase.rpc('cleanup_old_arena_logs').then(cleanupResult => {
+                 if (cleanupResult?.error) console.warn("Erro ao limpar logs antigos:", cleanupResult.error);
+            });
 
-            // busca os logs
+            // Chama a RPC (agora corrigida no SQL)
             const { data, error } = await supabase.rpc('get_arena_attack_logs');
-            if (error) throw error;
+            if (error) throw error; // Joga o erro para o catch
 
             const r = normalizeRpcResult(data);
-            const fetchedLogs = (r && r.success && Array.isArray(r.logs)) ? r.logs : [];
+            let h = []; 
 
-            // mantemos o comportamento de cache local existente, mas com checagens defensivas
-            let h = getCache('arena_attack_history') || [];
-            if (Array.isArray(fetchedLogs) && fetchedLogs.length > 0) {
-                const ids = new Set(h.map(i => i.id));
-                const newOnes = fetchedLogs.filter(l => !ids.has(l.id));
-                h = [...newOnes, ...h];
-                const limit = Date.now() - (3 * 24 * 60 * 60 * 1000);
-                h = h.filter(l => new Date(l.created_at).getTime() >= limit);
-                setCache('arena_attack_history', h, 4320);
+            if (r?.success && Array.isArray(r.logs)) {
+                // SUCESSO: A RPC retornou a lista de logs correta.
+                h = r.logs;
+                
+                // Salva a lista fresca no cache
+                setCache('arena_attack_history', h, 4320); // 3 dias
+                
             } else {
-                // se não veio nada novo e cache também vazio, mantemos h como está (possivelmente vazio)
-                h = h || [];
+                // FALHA (silenciosa ou r.success=false): Tenta carregar do cache.
+                h = getCache('arena_attack_history') || [];
+                console.warn("RPC get_arena_attack_logs falhou ou retornou dados inválidos. Usando cache.");
             }
 
             if (!h.length) {
@@ -625,6 +617,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                 if (rankingHistoryList) {
                     rankingHistoryList.innerHTML = "";
+                    // Ordena por via das dúvidas (se os dados vierem do cache)
                     h.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).forEach(l => {
                         const date = new Date(l.created_at).toLocaleString('pt-BR');
                         rankingHistoryList.innerHTML += `<li style='padding:8px;border-bottom:1px solid #444;color:#ddd;'>
@@ -636,7 +629,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (rankingModal) rankingModal.style.display = 'flex';
         } catch (e) {
-            console.error(e);
+            console.error("Erro ao carregar histórico:", e);
             showModalAlert("Erro ao carregar histórico.");
         } finally {
             hideLoading();
@@ -657,7 +650,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (tn === 'current') {
                     const el = document.getElementById('rankingCurrent');
                     if (el) el.classList.add('active');
-                    await fetchAndRenderRanking(); // Chama a função corrigida
+                    await fetchAndRenderRanking();
                 } else if (tn === 'past') {
                     const el = document.getElementById('rankingPast');
                     if (el) el.classList.add('active');
@@ -665,43 +658,64 @@ document.addEventListener("DOMContentLoaded", async () => {
                 } else {
                     const el = document.getElementById('rankingHistory');
                     if (el) el.classList.add('active');
-                    await fetchAttackHistory();
+                    await fetchAttackHistory(); // Chama a função corrigida
                 }
             });
         });
     }
 
     // --- Reset mensal da temporada (front-end safe call) ---
-    // Objetivo: chamar a RPC reset_arena_season() apenas na virada do mês, minimizando chamadas.
-    // Estratégia:
-    // 1) Só tenta executar quando for dia 1 (UTC) — evita chamadas diárias.
-    // 2) Mantém um registro local (localStorage) dizendo que já checamos/rodamos no mês atual.
-    // 3) A RPC server-side deve ser idempotente e verificar se o snapshot já existe (evita duplicação se múltiplos clientes chamarem).
 
+    // [INÍCIO DA CORREÇÃO DA RACE CONDITION]
     async function checkAndResetArenaSeason() {
         try {
             const now = new Date();
             const utcDay = now.getUTCDate(); // usamos UTC para alinhar com o server
-            if (utcDay !== 1) return; // só no primeiro dia do mês
+            
+            // Só executa a lógica no primeiro dia do mês
+            if (utcDay !== 1) return; 
 
+            // ** A CORREÇÃO CRÍTICA **
+            // Se for dia 1, o cache do dia anterior (dia 30/31) está 100% INVÁLIDO.
+            // Limpamos ele IMEDIATAMENTE, antes de qualquer chamada de RPC.
+            // Isso previne a "condição de corrida" onde o usuário clica no ranking
+            // antes do reset terminar.
+            try {
+                // Verifica se o cache de ranking existe ANTES de limpar
+                if (localStorage.getItem('arena_top_100_cache')) {
+                    localStorage.removeItem('arena_top_100_cache');
+                    console.log("Cache de Ranking Atual (arena_top_100_cache) limpo (Dia 1).");
+                }
+                if (localStorage.getItem('arena_last_season_cache')) {
+                    localStorage.removeItem('arena_last_season_cache');
+                    console.log("Cache de Temporada Passada (arena_last_season_cache) limpo (Dia 1).");
+                }
+            } catch (e) {
+                console.warn("Falha ao limpar caches no Dia 1:", e);
+            }
+
+            // Agora, continuamos com a lógica original para evitar chamadas múltiplas da RPC.
+            // Verificamos se ESTE browser já tentou rodar o reset neste mês.
             const year = now.getUTCFullYear();
             const month = now.getUTCMonth() + 1; // 1-12
             const ymd = `${year}-${String(month).padStart(2,'0')}`;
-
             const localKey = 'arena_reset_checked_' + ymd;
+
             if (localStorage.getItem(localKey)) {
-                // já checamos/rodamos este mês neste browser
+                // Este browser já tentou o reset, não faz de novo.
                 return;
             }
 
-            // Marca como checado imediatamente para evitar chamadas concorrentes do mesmo cliente
+            // Marca que este browser vai tentar agora
             try { localStorage.setItem(localKey, Date.now().toString()); } catch (e) {}
 
-            // Chamada à RPC que faz snapshot + reseta pontos para 100 (server-side idempotente)
+            // Chamada à RPC que faz snapshot + reseta pontos (server-side é idempotente)
+            console.log("Dia 1 UTC. Tentando executar RPC 'reset_arena_season'...");
             const { data, error } = await supabase.rpc('reset_arena_season');
+            
             if (error) {
-                console.warn("Erro ao resetar temporada:", error.message || error);
-                // se falhar, removemos a marca local para permitir nova tentativa nas próximas visitas
+                console.warn("Erro ao executar 'reset_arena_season':", error.message || error);
+                // se falhar, removemos a marca local para permitir nova tentativa
                 try { localStorage.removeItem(localKey); } catch (e) {}
                 return;
             }
@@ -710,13 +724,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (r?.success) {
                 console.log("✅ Temporada resetada via RPC:", r.message || r);
             } else {
-                console.log("ℹ️ reset_arena_season retornou:", r?.message || r);
+                console.log("ℹ️ 'reset_arena_season' retornou:", r?.message || r);
             }
 
         } catch (e) {
-            console.error("checkAndResetArenaSeason erro:", e);
+            console.error("checkAndResetArenaSeason erro fatal:", e);
         }
     }
+    // [FIM DA CORREÇÃO DA RACE CONDITION]
+
 
     // --- Boot ---
     async function boot() {
@@ -726,11 +742,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!user) return (window.location.href = "index.html");
             userId = user.id;
 
-            // Checa e, se necessário, executa o reset da temporada (apenas no dia 1 UTC e com marcação local)
+            // [IMPORTANTE] A função de reset/limpeza de cache agora roda primeiro
+            // e é aguardada (await). Isso é essencial.
             await checkAndResetArenaSeason();
 
+            // Reseta as tentativas diárias
             await supabase.rpc('reset_player_arena_attempts');
+            
+            // Atualiza a UI das tentativas
             await updateAttemptsUI();
+
         } catch (e) {
             console.error("Boot error:", e);
             document.body.innerHTML = "<p>Erro ao carregar Arena.</p>";
@@ -751,7 +772,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const rc = document.getElementById("rankingCurrent");
                 if (rc) rc.classList.add("active");
             }
-            await fetchAndRenderRanking(); // Chama a função corrigida
+            await fetchAndRenderRanking(); 
         });
     }
     if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { if (rankingModal) rankingModal.style.display = 'none'; });

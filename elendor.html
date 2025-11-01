@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Elendor - Aden RPG</title> <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="zion.css" /> 
+
+</head>
+<style>
+  
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+/* Estilos gerais (Baseado em style.css) */
+body, p, span, div, button {
+    font-family: 'Cinzel', serif;
+}
+h1, h2 {
+    font-family: 'Cinzel', serif;
+    color: #e0dccc;
+    text-shadow: 2px 2px 4px #000;
+    letter-spacing: 1.5px;
+}
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0; /* Removido padding-bottom */
+    background-color: #121212;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* TopBar (Baseado em style.css e guild.html) */
+#playerTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #333;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.top-bar-link {
+    color: white;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+.top-bar-link svg {
+    width: 30px;
+    height: 30px;
+}
+#pageTitle {
+    color: #4CAF50; /* Cor Original para Área Pacífica */
+    font-size: 1.2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+}
+
+
+/* 3. Estilos para o Mapa em Tela Cheia */
+#mapContainer {
+    position: fixed; /* Fixa no viewport */
+    top: 0;
+    left: 0;
+    width: 100vw; 
+    height: 100vh; 
+    overflow: hidden;
+    margin: 0;
+    z-index: 1; /* Abaixo da TopBar e do Conteúdo */
+    box-shadow: none;
+    background-color: #121212; 
+}
+
+#map {
+    background-image: url('https://aden-rpg.pages.dev/assets/elendor.webp'); /* Imagem de fundo do mapa mantida, mude se a imagem de Tandra for diferente */
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: top left;
+    width: 1500px; 
+    height: 1700px; 
+    position: absolute;
+    cursor: grab;
+    transform-origin: top left;
+    transition: transform 0.05s linear;
+    transform: scale(1.1); /* Escala inicial para visualização em dispositivos móveis */
+}
+
+/* Container do Conteúdo Flutuante */
+#contentOverlay {
+    position: absolute; /* Posiciona sobre o mapa */
+    top: 50px; /* Abaixo da TopBar */
+    left: 0;
+    width: 100%;
+    min-height: 95vh; /* Ocupa o restante da tela */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Empurra o footer para baixo */
+    align-items: center;
+    z-index: 10; /* Acima do mapa */
+    /* Permite que o mapa receba eventos de clique, exceto nos filhos */
+    pointer-events: none; 
+}
+
+#zionContent {
+    width: 95%;
+    max-width: 600px;
+    margin-top: 2px; 
+    padding: 10px;
+    box-sizing: border-box;
+    text-align: center;
+    background-color: rgba(18, 18, 18, 0.5); /* Fundo semi-transparente para legibilidade */
+    border-radius: 8px;
+    pointer-events: auto; 
+    max-height: 95px;
+}
+
+#zionContent h2 {
+    margin-top: -13px;
+    margin-bottom: 5px;
+    color: gold; 
+    text-shadow: 2px 2px 6px black; /* Melhor contraste sobre o mapa */
+}
+
+/* 2. Guilda Regente (Estilo e Posição) */
+#guildreg-container {
+    color: #e0dccc; 
+    font-weight: bold; 
+    margin-top: -10px;
+    margin-bottom: 10px;
+    pointer-events: auto;
+}
+#guildreg {
+    color: orange; 
+    font-size: 1em;
+    text-shadow: 1px 1px 3px black;
+}
+
+/* Rodapé específico da página e botão */
+#zionFooter {
+    margin-top: auto; /* Empurra para o final do #contentOverlay */
+    padding: 10px;
+    pointer-events: auto;
+}
+
+/* Botão História (Baseado em style.css) */
+.action-btn {
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    box-sizing: border-box;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color: #e0dccc;
+    font-weight: bold;
+    padding: 15px 40px; 
+    font-size: 14px;
+    text-shadow: 1px 1px 2px #000;
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+
+/* Estilos do Modal (Mantidos) */
+.modal-container {
+    display: none; 
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border: 3px solid #c9a94a;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    max-height: 90vh; 
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: #e0dccc;
+    text-decoration: none;
+}
+
+#historyText {
+    overflow-y: auto;
+    max-height: 70vh;
+    padding-right: 10px; 
+    text-align: left;
+    color: #ccc;
+}
+</style>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+       <div> <span id="pageTitle">Área Pacífica</span></div>
+        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
+    </div>
+
+    <div id="mapContainer">
+        <div id="map">
+            </div>
+    </div>
+
+    <div id="contentOverlay">
+        
+        <div id="zionContent">
+            <h2>Elendor</h2> <p id="guildreg-container">
+                Guilda Regente:<br>
+                <span id="guildreg">Nenhuma.</span>
+            </p>
+        </div>
+
+        <div id="zionFooter">
+            <button id="openHistoryModalBtn" class="action-btn">História</button>
+        </div>
+
+    </div>
+    
+    <div id="historyModal" class="modal-container" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>História de Elendor</h2> <div id="historyText">
+                <p>Elendor é a cidade santuário dos Elfos da Floresta, uma metrópole etérea entrelaçada com as copas das Árvores-Mãe na misteriosa Selva de Éter. Não foi construída, mas sim "cultivada" ao longo de milênios, onde a arquitetura élfica se funde com a magia natural, fazendo das próprias árvores os seus pilares e moradias.</p>
+                <p>A fundação de Elendor está ligada à chegada da Deusa Sylvanara, que, segundo a lenda, tocou o coração da floresta, despertando a consciência das Árvores-Mãe e concedendo aos elfos o domínio sobre a 'Teia Viva', uma rede de energia mágica que sustenta toda a cidade. O objetivo dos seus fundadores era manter o equilíbrio perfeito entre civilização e natureza, servindo como guardiões da vida selvagem do continente de Aden.</p>
+                <p>A economia é baseada na troca de conhecimentos arcanos, poções de cura superiores e a colheita sustentável de frutos e essências mágicas raras da Selva de Éter. Os elfos de Elendor não usam moedas de metal; em vez disso, valorizam e trocam serviços, artefatos imbuidos de magia vital e o conhecimento de suas bibliotecas centenárias, mantendo contato mínimo com o exterior para proteger sua pureza.</p>
+                <p>Elendor é governada pelo Círculo dos Guardiões da Semente, um grupo de Sacerdotisas e Magos anciões, liderados pela Alta Silvanista. Eles meditam nas copas das Árvores-Mãe, tomando decisões através da leitura dos padrões do vento e do crescimento da floresta, garantindo que a vida e a magia de Elendor nunca sejam sacrificadas por ambições mundanas. A defesa é feita pelos Sentinelas da Folha, guerreiros invisíveis que usam a camuflagem e a magia da floresta para afastar qualquer ameaça.</p>
+                </div>
+        </div>
+    </div>
+
+<script>
+  let musicStarted = false;
+let backgroundMusic;
+
+document.addEventListener("DOMContentLoaded", () => {
+  backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/elendor.mp3"); // Música mantida
+  backgroundMusic.volume = 0.09;
+  backgroundMusic.loop = true;
+
+  function startBackgroundMusic() {
+    if (musicStarted) return;
+    backgroundMusic.play().then(() => {
+      musicStarted = true;
+      console.log("🎵 Música de fundo iniciada!");
+    }).catch(err => console.warn("⚠️ Falha ao iniciar música:", err));
+  }
+
+  // Função utilitária para registrar listeners com opções comuns
+  function addCapturedListener(target, evt, handler, opts = {}) {
+    try {
+      target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts));
+    } catch (e) {
+      // alguns targets (ex: null) podem falhar, silenciosamente ignoramos
+    }
+  }
+
+  // 1) Eventos primários que normalmente desbloqueiam áudio
+  const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+  for (const ev of primaryEvents) {
+    addCapturedListener(window, ev, function onPrimary(e) {
+      startBackgroundMusic();
+      // remover listener é opcional; play() verifica musicStarted
+    });
+    addCapturedListener(document.body, ev, function onPrimary2(e) {
+      startBackgroundMusic();
+    });
+  }
+
+  // 2) Tentar capturar ARRASTO — só inicia se houver um toque/pointer real associado
+  let moveArmed = false; // armará o gatilho quando detectarmos um pointerdown/touchstart
+  function armMove() { moveArmed = true; /* breve timeout para evitar ficar armado indefinidamente */ setTimeout(()=> moveArmed = false, 1200); }
+
+  addCapturedListener(window, "pointerdown", armMove);
+  addCapturedListener(window, "touchstart", armMove);
+  addCapturedListener(document.body, "pointerdown", armMove);
+  addCapturedListener(document.body, "touchstart", armMove);
+
+  function handleMoveForMusic(e) {
+    if (musicStarted || !moveArmed) return;
+    // Verifica se o movimento tem dedos ou pressão (sinal de arraste real)
+    const isTouchMove = (e.touches && e.touches.length > 0);
+    const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
+    if (isTouchMove || hasPressure || e.pointerType) {
+      startBackgroundMusic();
+      moveArmed = false;
+    }
+  }
+  addCapturedListener(window, "touchmove", handleMoveForMusic);
+  addCapturedListener(window, "pointermove", handleMoveForMusic);
+  addCapturedListener(document.body, "touchmove", handleMoveForMusic);
+  addCapturedListener(document.body, "pointermove", handleMoveForMusic);
+
+  // 3) Especial: anexa listeners diretamente aos elementos de mapa mais comuns
+  // Busca por ids/classes que costumam ser usadas por mapas (ajuste se seu mapa usa outro seletor)
+  const mapSelectors = [
+    "#mapContainer",
+    "#map",
+    ".map",
+    ".leaflet-container",
+    ".mapboxgl-canvas",
+    ".mapboxgl-map"
+  ];
+  for (const sel of mapSelectors) {
+    document.querySelectorAll(sel).forEach(el => {
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchmove", handleMoveForMusic);
+      addCapturedListener(el, "pointermove", handleMoveForMusic);
+    });
+  }
+
+  // 4) Fallbacks adicionais: se usuário soltar (pointerup / touchend) após arrastar, tente tocar
+  function tryOnUp(e) { if (!musicStarted) startBackgroundMusic(); }
+  addCapturedListener(window, "pointerup", tryOnUp);
+  addCapturedListener(window, "touchend", tryOnUp);
+  addCapturedListener(document.body, "pointerup", tryOnUp);
+  addCapturedListener(document.body, "touchend", tryOnUp);
+
+  // 5) Fallback temporizado (após pequena interação) — evita tentar tocar muitas vezes
+  setTimeout(() => {
+    if (!musicStarted) {
+      // última tentativa silenciosa
+      try { startBackgroundMusic(); } catch(e) {}
+    }
+  }, 6000);
+
+  // Expor para debug / chamadas manuais
+  window.startBackgroundMusic = startBackgroundMusic;
+  window.__musicDebug = { isStarted: () => musicStarted };
+});
+// FIM DA MÚSICA DE FUNDO
+  
+function enableMapInteraction() {
+    const mapContainer = document.getElementById('mapContainer');
+    const map = document.getElementById('map');
+    if (!map || !mapContainer) return;
+
+    let isDragging = false;
+    let startX, startY;
+    let currentX = 0;
+    let currentY = 0;
+    let velocityX = 0;
+    let velocityY = 0;
+    let lastMoveTime = 0;
+
+    // Calcula os limites de movimento do mapa
+    function recalcLimits() {
+        const containerRect = mapContainer.getBoundingClientRect();
+        
+        // Fator de escala atual
+        const style = window.getComputedStyle(map);
+        const transformMatrix = style.getPropertyValue('transform');
+        let scaleX = 1;
+
+        if (transformMatrix && transformMatrix !== 'none') {
+            const matrix = transformMatrix.match(/matrix.*\((.+)\)/);
+            if(matrix && matrix[1]) {
+                scaleX = parseFloat(matrix[1].split(', ')[0]);
+            }
+        } else {
+             const initialTransform = map.style.transform;
+             const scaleMatch = initialTransform.match(/scale\(([^)]+)\)/);
+             if (scaleMatch) {
+                 scaleX = parseFloat(scaleMatch[1]);
+             }
+        }
+        
+        const mapNaturalWidth = 1500; // Largura da imagem original em px (style.css)
+        const mapNaturalHeight = 1500; // Altura da imagem original em px (style.css)
+        
+        // Tamanho atual do mapa escalado
+        const scaledMapWidth = mapNaturalWidth * scaleX;
+        const scaledMapHeight = mapNaturalHeight * scaleX;
+
+        // Limites de deslocamento (X/Y)
+        const maxMoveX = 0;
+        const minMoveX = containerRect.width - scaledMapWidth;
+        const maxMoveY = 0;
+        const minMoveY = containerRect.height - scaledMapHeight;
+        
+        return {
+            minX: Math.min(maxMoveX, minMoveX),
+            maxX: Math.max(maxMoveX, minMoveX),
+            minY: Math.min(maxMoveY, minMoveY),
+            maxY: Math.max(maxMoveY, minMoveY)
+        };
+    }
+
+    // Aplica a transformação do mapa, respeitando os limites
+    function setMapPosition(x, y) {
+        const limits = recalcLimits();
+        currentX = Math.max(limits.minX, Math.min(x, limits.maxX));
+        currentY = Math.max(limits.minY, Math.min(y, limits.maxY));
+        
+        const style = window.getComputedStyle(map);
+        const transformMatrix = style.getPropertyValue('transform');
+        let scale = 'scale(1.1)';
+
+        if (transformMatrix && transformMatrix !== 'none') {
+            const match = transformMatrix.match(/scale\(([^)]+)\)/);
+            if (match) {
+                scale = `scale(${match[1]})`;
+            }
+        } else if (map.style.transform) {
+             const match = map.style.transform.match(/scale\(([^)]+)\)/);
+             if (match) {
+                scale = `scale(${match[1]})`;
+            }
+        }
+        
+        map.style.transform = `translate(${currentX}px, ${currentY}px) ${scale}`;
+    }
+
+    // Animação de inércia (movimento pós-arrasto)
+    let animationFrameId = null;
+    function inertiaAnimation() {
+        cancelAnimationFrame(animationFrameId);
+
+        if (isDragging) {
+            velocityX = 0;
+            velocityY = 0;
+            return;
+        }
+
+        // Reduz a velocidade (fricção)
+        velocityX *= 0.95; 
+        velocityY *= 0.95;
+
+        // Aplica o movimento
+        setMapPosition(currentX + velocityX, currentY + velocityY);
+
+        // Se a velocidade for muito baixa, para a inércia
+        if (Math.abs(velocityX) > 0.5 || Math.abs(velocityY) > 0.5) {
+            animationFrameId = requestAnimationFrame(inertiaAnimation);
+        } else {
+            velocityX = 0;
+            velocityY = 0;
+        }
+    }
+
+    // Início do arrasto
+    function startDrag(e) {
+        if (e.touches && e.touches.length > 1) return;
+
+        isDragging = true;
+        map.style.cursor = 'grabbing';
+        
+        // Coordenadas de início (considera toque ou mouse)
+        startX = e.clientX || e.touches[0].clientX;
+        startY = e.clientY || e.touches[0].clientY;
+        
+        velocityX = 0;
+        velocityY = 0;
+        lastMoveTime = performance.now();
+        cancelAnimationFrame(animationFrameId); 
+    }
+
+    // Durante o arrasto
+    function onDrag(e) {
+        if (!isDragging) return;
+        
+        e.preventDefault(); 
+        
+        const newX = e.clientX || e.touches[0].clientX;
+        const newY = e.clientY || e.touches[0].clientY;
+        const dx = newX - startX;
+        const dy = newY - startY;
+
+        // Calcula a velocidade para a inércia
+        const currentTime = performance.now();
+        const deltaTime = currentTime - lastMoveTime;
+
+        if (deltaTime > 0) {
+            velocityX = dx / deltaTime;
+            velocityY = dy / deltaTime;
+        }
+        
+        setMapPosition(currentX + dx, currentY + dy);
+
+        // Atualiza as posições de início para o próximo movimento
+        startX = newX;
+        startY = newY;
+        lastMoveTime = currentTime;
+    }
+
+    // Fim do arrasto
+    function endDrag() {
+        isDragging = false;
+        map.style.cursor = 'grab';
+        
+        if (Math.abs(velocityX) > 0.2 || Math.abs(velocityY) > 0.2) {
+            // Multiplicamos a velocidade para dar um "empurrão" de inércia
+            velocityX *= 10; 
+            velocityY *= 10;
+            inertiaAnimation();
+        } else {
+            velocityX = 0;
+            velocityY = 0;
+        }
+    }
+
+    // Adiciona os event listeners
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag, { passive: false });
+    window.addEventListener('mouseup', endDrag, { passive: true });
+
+    map.addEventListener('touchstart', startDrag, { passive: true });
+    window.addEventListener('touchmove', onDrag, { passive: false });
+    window.addEventListener('touchend', endDrag, { passive: true });
+
+    map.style.cursor = 'grab';
+
+    // Garante que os limites sejam calculados no carregamento
+    setTimeout(() => {
+        recalcLimits();
+        // Opcional: Centralizar o mapa inicialmente
+        // setMapPosition(limits.minX / 2, limits.minY / 2);
+    }, 100);
+}
+
+// =======================================================================
+// Lógica do Modal de História
+// =======================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const openBtn = document.getElementById('openHistoryModalBtn');
+    const modal = document.getElementById('historyModal');
+    const closeBtn = modal.querySelector('.close-btn');
+
+    if (openBtn && modal && closeBtn) {
+        openBtn.addEventListener('click', () => {
+            modal.style.display = 'flex'; // Usar flex para centralizar
+            document.body.style.overflow = 'hidden'; // Evita scroll do body por baixo do modal
+        });
+
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+            document.body.style.overflow = ''; // Restaura scroll do body
+        });
+
+        // Fechar se clicar fora do modal
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
+    }
+
+    // Habilita o mapa arrastável após o carregamento da página
+    enableMapInteraction();
+});
+</script>
+
+</body>
+</html>

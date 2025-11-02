@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (musicStarted) return;
         
         if (!backgroundMusic) {
-            backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/IntoTheWilds.mp3");
+            backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/arena.mp3");
             backgroundMusic.volume = 0.1;
             backgroundMusic.loop = true;
         }

@@ -175,6 +175,7 @@ body, html {
     url('https://aden-rpg.pages.dev/assets/arena.webp');
     background-size: cover;
     background-position: center;
+    border: none;
 }
 
 /* 2. Aplica o estilo de quadrado semi-transparente apenas ao conteúdo do duelo */
@@ -182,16 +183,7 @@ body, html {
     /* Remove o fundo de imagem anterior */
     background-image: none; 
     /* Define o fundo semi-transparente para o quadrado do duelo */
-    background-color: rgba(0, 0, 0, 0.6); 
-    background: rgba(0, 0, 0, 0.6);
-    
-    /* Aumenta o tamanho do quadrado para o duelo */
-    max-width: 600px;
-    min-height: 350px;
-    
-    /* Mantém a borda do duelo */
-    border: 3px solid #c9a94a;
-    box-shadow: 0 0 20px rgba(0,0,0,0.9);
+    border: none;
 }
 
 #pvpArena {
@@ -199,8 +191,8 @@ body, html {
     justify-content: space-around;
     align-items: flex-start; /* Alinha pelo topo */
     width: 100%;
-    margin-top: 20px;
-    min-height: 250px;
+    margin-top: 30px;
+    
 }
 .player-side {
     display: flex;
@@ -233,8 +225,9 @@ body, html {
 .vs-separator {
     font-size: 2em;
     font-weight: bold;
-    color: red;
+    color: gold;
     padding-top: 50px;
+    margin-left: 5px;
 }
 .player-hp-bar {
     position: relative;

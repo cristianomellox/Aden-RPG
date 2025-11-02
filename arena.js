@@ -502,7 +502,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const now = new Date();
             const month = now.toLocaleString('pt-BR', { month: 'long' });
             const year = now.getFullYear();
-            seasonInfoSpan.textContent = `Temporada: ${month[0].toUpperCase() + month.slice(1)} / ${year}`;
+            seasonInfoSpan.innerHTML = `<strong>Temporada<br> ${month[0].toUpperCase() + month.slice(1)} / ${year}</strong>`;
         }
 
         if (!rankingList) return;
@@ -820,8 +820,12 @@ if (snapErr) {
         try {
             const now = new Date();
             const utcDay = now.getUTCDate(); // usamos UTC para alinhar com o server
-            
-            // Se for dia 1, limpamos caches que podem entrar em condição de corrida.
+            const currentMonth = now.getUTCMonth() + 1; // 1..12
+            const currentYear = now.getUTCFullYear();
+
+            // Se for dia 1 UTC: limpamos caches que podem entrar em condição de corrida.
+            // Mantemos a limpeza do cache somente no dia 1, mas a chamada ao RPC só será feita se não
+            // tivermos registro no localStorage de já ter executado o reset este mês.
             try {
                 if (utcDay === 1) {
                     // Verifica se o cache de ranking existe ANTES de limpar
@@ -838,20 +842,48 @@ if (snapErr) {
                 console.warn("Falha ao limpar caches no Dia 1:", e);
             }
 
-            // ** Chamada SEM restrição de data: roda em todo carregamento da página **
-            console.log("Tentando executar RPC 'reset_arena_season' (chamada por carregamento de página)...");
-            const { data, error } = await supabase.rpc('reset_arena_season');
-            
-            if (error) {
-                console.warn("Erro ao executar 'reset_arena_season':", error.message || error);
-                return;
-            }
+            // --- Proteção cliente: só chamamos a RPC se for dia 1 UTC e se ainda não executamos este mês ---
+            try {
+                const lastResetRaw = localStorage.getItem('arena_last_season_reset');
+                let lastReset = null;
+                if (lastResetRaw) {
+                    try { lastReset = JSON.parse(lastResetRaw); } catch(e){ lastReset = null; }
+                }
 
-            const r = normalizeRpcResult(data);
-            if (r?.success) {
-                console.log("✅ Temporada verificada/resetada via RPC:", r.message || r);
-            } else {
-                console.log("ℹ️ 'reset_arena_season' retornou:", r?.message || r);
+                const alreadyDone = lastReset && lastReset.year === currentYear && lastReset.month === currentMonth;
+
+                if (utcDay !== 1) {
+                    console.log("⏸️ Reset da temporada não necessário (não é dia 1 UTC).");
+                    return;
+                }
+
+                if (alreadyDone) {
+                    console.log("⏸️ Reset da temporada já foi executado neste mês por este cliente (localStorage).");
+                    return;
+                }
+
+                console.log("⚙️ Executando RPC 'reset_arena_season' (chamado no Dia 1 UTC e ainda não executado neste mês)...");
+                const { data, error } = await supabase.rpc('reset_arena_season');
+                
+                if (error) {
+                    console.warn("Erro ao executar 'reset_arena_season':", error.message || error);
+                    return;
+                }
+
+                const r = normalizeRpcResult(data);
+                if (r?.success) {
+                    console.log("✅ Temporada verificada/resetada via RPC:", r.message || r);
+                    // Marca localmente para evitar múltiplas execuções durante o mesmo mês
+                    try {
+                        localStorage.setItem('arena_last_season_reset', JSON.stringify({ year: currentYear, month: currentMonth }));
+                    } catch(e) {
+                        console.warn("Falha ao gravar arena_last_season_reset no localStorage:", e);
+                    }
+                } else {
+                    console.log("ℹ️ 'reset_arena_season' retornou:", r?.message || r);
+                }
+            } catch (rpcErr) {
+                console.warn("Erro durante tentativa segura de reset:", rpcErr);
             }
 
         } catch (e) {
@@ -890,7 +922,7 @@ if (snapErr) {
             userId = user.id;
             console.log("Usuário autenticado:", user.email || user.id);
 
-            // 🔥 Agora sim — chamamos o reset garantido
+            // 🔥 Agora sim — chamamos o reset garantido (com proteção cliente)
             await checkAndResetArenaSeason();
 
             // Reset diário das tentativas

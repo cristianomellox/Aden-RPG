@@ -765,10 +765,24 @@ if (snapErr) {
                         const attackerName = esc(l.attacker_name);
                         const points = Number(l.points_taken || 0).toLocaleString();
 
-                        // Se attacker_won for truthy -> atacante venceu (defensor perdeu pontos).
-                        // Se falsy -> atacante perdeu (defensor ganhou pontos).
-                        const msg = l.attacker_won
-                            ? `${attackerName} atacou você e tomou ${points} pontos.`
+                        // --- NORMALIZAÇÃO ROBUSTA DE attacker_won ---
+                        // O banco pode devolver booleano, 't'/'f', 'true'/'false', 1/0, '1'/'0' etc.
+                        // Aqui garantimos um boolean real antes de montar a mensagem.
+                        const attackerWon = (
+                            l.attacker_won === true ||
+                            l.attacker_won === 't' ||
+                            l.attacker_won === 'T' ||
+                            l.attacker_won === 'true' ||
+                            l.attacker_won === 'True' ||
+                            l.attacker_won === 1 ||
+                            l.attacker_won === '1'
+                        );
+
+                        // Mensagens claras e sem ambiguidade:
+                        // Se attackerWon === true => atacante venceu, o defensor (você) perdeu pontos.
+                        // Se attackerWon === false => atacante perdeu, você ganhou pontos do atacante.
+                        const msg = attackerWon
+                            ? `${attackerName} atacou você e venceu. Você perdeu ${points} pontos.`
                             : `${attackerName} atacou você e perdeu. Você tomou ${points} pontos dele(a).`;
 
                         rankingHistoryList.innerHTML += `<li style='padding:8px;border-bottom:1px solid #444;color:#ddd;'>

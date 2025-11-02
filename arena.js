@@ -1,3 +1,4 @@
+// arena.js — versão final com correção de avatares + caching total
 document.addEventListener("DOMContentLoaded", async () => {
     // --- Configuração do Supabase ---
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -720,7 +721,7 @@ if (snapErr) {
                     try {
                         const { data: logsDirect, error: logsErr } = await supabase
                             .from('arena_attack_logs')
-                            .select('id, attacker_id, defender_id, attacker_name, points_taken, created_at')
+                            .select('id, attacker_id, defender_id, attacker_name, points_taken, created_at, attacker_won')
                             .eq('defender_id', userId)
                             .order('created_at', { ascending: false })
                             .limit(200);
@@ -734,7 +735,8 @@ if (snapErr) {
                                 defender_id: l.defender_id,
                                 attacker_name: l.attacker_name,
                                 points_taken: l.points_taken,
-                                created_at: l.created_at
+                                created_at: l.created_at,
+                                attacker_won: (typeof l.attacker_won === 'boolean') ? l.attacker_won : false
                             }));
                             if (h.length) {
                                 setCache(cacheKey, h, 60); // cache 60 minutos
@@ -760,8 +762,17 @@ if (snapErr) {
                     // Ordena por via das dúvidas (se os dados vierem do cache)
                     h.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).forEach(l => {
                         const date = new Date(l.created_at).toLocaleString('pt-BR');
+                        const attackerName = esc(l.attacker_name);
+                        const points = Number(l.points_taken || 0).toLocaleString();
+
+                        // Se attacker_won for truthy -> atacante venceu (defensor perdeu pontos).
+                        // Se falsy -> atacante perdeu (defensor ganhou pontos).
+                        const msg = l.attacker_won
+                            ? `${attackerName} atacou você e tomou ${points} pontos.`
+                            : `${attackerName} atacou você e perdeu. Você tomou ${points} pontos dele(a).`;
+
                         rankingHistoryList.innerHTML += `<li style='padding:8px;border-bottom:1px solid #444;color:#ddd;'>
-<strong>${date}</strong><br>${esc(l.attacker_name)} atacou você e tomou ${Number(l.points_taken||0).toLocaleString()} pontos.
+<strong>${date}</strong><br>${msg}
 </li>`;
                     });
                 }

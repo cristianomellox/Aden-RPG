@@ -16,7 +16,7 @@ let backgroundMusic;
 
 document.addEventListener("DOMContentLoaded", () => {
   backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/index.mp3");
-  backgroundMusic.volume = 0.02;
+  backgroundMusic.volume = 0.1;
   backgroundMusic.loop = true;
 
   function startBackgroundMusic() {

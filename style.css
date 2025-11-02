@@ -238,8 +238,8 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 
 /* Classes específicas para os elementos do novo botão */
 .footer-btn-img {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 40px;
     object-fit: contain;
     margin-bottom: 4px;
 }
@@ -1763,7 +1763,8 @@ margin-right: 15px;
 }
 
 #xpText {
-  font-size: 12px !important;
+  font-size: 0.9em !important;
+  margin-top: -3px;
 }
 
 
@@ -1785,4 +1786,112 @@ margin-right: 15px;
   color: gold;
   font-weight: bold;
   position: absolute;
+}
+
+/* ... (todo o conteúdo original de style.css) ... */
+
+/* ============================================= */
+/* === ESTILOS PARA O RANKING DE JOGADORES === */
+/* ============================================= */
+#playerRankingModal .modal-content {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.ranking-list-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left !important;
+}
+
+.ranking-list-players .ranking-item {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 3px !important;
+  width: 100% !important;
+  padding: 6px 0;
+  border-bottom: 1px solid #444;
+}
+
+.ranking-list-players .ranking-item-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+}
+
+.ranking-list-players .ranking-position {
+    width: 28px;
+    text-align: right;
+    font-size: 0.9em; 
+    font-weight: bold;
+    color: #ccc;
+}
+
+.ranking-list-players .ranking-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid #666;
+    margin-left: 8px;
+    object-fit: cover;
+}
+
+.ranking-list-players .ranking-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ranking-list-players .player-link {
+    color: white;
+    font-weight: bold;
+    font-size: 1em;
+    cursor: pointer;
+    text-decoration: none;
+}
+.ranking-list-players .player-link:hover {
+    color: gold;
+}
+
+.ranking-list-players .ranking-sub-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 4px;
+}
+
+.ranking-list-players .member-level {
+    font-size: 0.8em;
+    color: lightblue;
+}
+
+.ranking-list-players .ranking-power {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ranking-list-players .cp-icon {
+    width: 16px;
+    height: 22px;
+    vertical-align: -3px;
+}
+
+.ranking-list-players .power-value {
+    color: orange;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+#playerRankingMessage {
+    color: #ccc;
+    font-size: 0.9em;
 }

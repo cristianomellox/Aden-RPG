@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Torre da Desolação - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="guild.css" /> 
+    <style>
+      /* Garante que o conteúdo do modal de vídeo TDD ocupe toda a altura da viewport */
+#tddStoryModal.modal-overlay2 .modal-content2 {
+    /* Força altura total da viewport (tela) */
+    width: 100vw !important;
+    height: 100vh !important; 
+    
+    /* Usa Flexbox para o conteúdo do modal (videoContainer + botão Fechar) */
+    display: flex;
+    flex-direction: column;
+    
+    /* Remove margens/preenchimentos que podem interferir no cálculo de 100vh */
+    padding: 0 !important; 
+    border-radius: 0 !important;
+    border: none !important;
+}
+
+/* O container do vídeo ocupa todo o espaço restante do modal */
+#tddStoryModal #videoContainer {
+    flex-grow: 1; /* Permite que ocupe o máximo de espaço possível */
+    width: 100%;
+    /* Altura será determinada pelo flex-grow, não precisa de 'height: 100%' ou 'height: 100vh' */
+}
+
+/* Garante que o iframe use 100% da altura do seu pai (#videoContainer) */
+#tddStoryModal #videoContainer iframe {
+    height: 100%;
+    width: 100%;
+}
+/* Garante que o container do vídeo ocupe todo o espaço vertical restante */
+#videoContainer {
+    /* * Usa flex-grow: 1 para fazer este elemento 
+     * crescer e preencher o espaço restante no body (que é um flex-container vertical)
+     */
+    flex-grow: 1; 
+    
+    /* Configura este container como um flex-container para posicionar o iframe */
+    display: flex;
+    
+    /* Garante que ele ocupe 100% da largura horizontal */
+    width: 100%; 
+    
+    /* Opcional: Garante que o vídeo se centralize se sobrar espaço */
+    justify-content: center;
+    align-items: center; 
+}
+
+/* Garante que o iframe (o vídeo) use 100% da altura e largura do seu pai (#videoContainer) */
+#videoContainer iframe {
+    /* O iframe já tem width="100%" height="100%" no HTML, 
+       mas reforçamos aqui para a regra do CSS */
+    width: 100%;
+    height: 100%;
+}
+/* Correção para a página do vídeo TDD para que ele ocupe toda a altura */
+
+/* 1. Zera o padding-bottom de 100px que está no body em style.css */
+/* Isso permite que o #videoContainer preencha toda a tela */
+body {
+    padding-bottom: 0px !important;
+}
+
+/* 2. Garante que o container do vídeo ocupe todo o espaço vertical restante */
+#videoContainer {
+    /* Permite que ocupe o espaço restante no body */
+    flex-grow: 1; 
+    
+    /* Necessário para que o iframe dentro dele use 100% de sua altura */
+    display: flex;
+    width: 100%; 
+    
+    /* Garante que a altura mínima seja de 0 para evitar estouro em alguns navegadores */
+    min-height: 0; 
+}
+
+/* 3. Garante que o iframe preencha 100% da altura do seu contêiner (#videoContainer) */
+#videoContainer iframe {
+    width: 100%;
+    height: 100vh;
+}
+    </style>
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" style="color: white;" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <div><span style="font-weight: bold;" id="pageTitle">Torre da Desolação</span></div>
+        <img id="openRankingBtn" src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Ranking" style="width:30px; height:30px; cursor: pointer;">
+    </div>
+<div id="videoContainer">
+            <iframe 
+                id="tddStoryVideo"
+                width="100%" 
+                height="100%" 
+                src="https://www.youtube.com/embed/c7NZ7wrpTSM?autoplay=0&controls=1&modestbranding=1&rel=0" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" 
+                allowfullscreen>
+            </iframe>
+        </div>
+        
+              
+    </div>
+    
+</body>
+</html>

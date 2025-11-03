@@ -272,6 +272,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     font-size: 0.9em;
     font-weight: bold;
     text-align: center;
+    background: linear-gradient(to bottom, red 20%, orange 100%);
 }
 
 .footer-submenu-btn:hover {

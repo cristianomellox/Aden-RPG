@@ -1,3 +1,7 @@
+// =======================================================================
+// INÍCIO: LÓGICA DE MÚSICA (MOVIDA PARA O TOPO PARA CORRIGIR RACE CONDITION)
+// =======================================================================
+
 if ('serviceWorker' in navigator) {
   try {
     navigator.serviceWorker.getRegistrations().then(registrations => {
@@ -10,22 +14,96 @@ if ('serviceWorker' in navigator) {
   } catch(e) {}
 }
 
-// 🎵 Música de Fundo (Adicionada aqui)// 🎵 Música de Fundo (Melhorada para arrastar mapa)
+// 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
 let backgroundMusic;
 
-document.addEventListener("DOMContentLoaded", () => {
-  backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/index.mp3");
-  backgroundMusic.volume = 0.1;
-  backgroundMusic.loop = true;
-
-  function startBackgroundMusic() {
-    if (musicStarted) return;
-    backgroundMusic.play().then(() => {
-      musicStarted = true;
-      console.log("🎵 Música de fundo iniciada!");
-    }).catch(err => console.warn("⚠️ Falha ao iniciar música:", err));
+/**
+ * Função global para iniciar a música de fundo.
+ * Se chamada com forceMute=true (pelo intro), ela inicia o áudio no mudo.
+ * Em chamadas futuras (clique/arraste), ela apenas desmuta.
+ * * @param {boolean} [forceMute=false] - Se deve forçar o áudio a iniciar no mudo.
+ */
+function startBackgroundMusic(forceMute = false) 
+{
+  // Se intro estiver rodando, apenas sinalizamos interesse em tocar a música
+  // Exceto se for uma chamada de forceMute (do clique inicial)
+  if (window.__introPlaying && !forceMute) {
+    console.log("Intro rodando — adiando desmute. Será iniciado ao finalizar/pular o intro.");
+    window.__introWantedToStartMusic = true;
+    return;
   }
+
+  // Cria o objeto de áudio "preguiçosamente" (lazy-load) na primeira chamada
+  if (typeof backgroundMusic === 'undefined' || backgroundMusic === null) {
+    try {
+      backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/index.mp3");
+      backgroundMusic.volume = 0.1;
+      backgroundMusic.loop = true;
+    } catch(e){
+      console.warn("Falha ao criar backgroundMusic:", e);
+      return;
+    }
+  }
+
+  // Se já está tocando, e estamos chamando para desmutar (não forceMute)
+  if (musicStarted && !forceMute && backgroundMusic.muted) {
+     backgroundMusic.muted = false;
+     console.log("🎵 Música de fundo desmutada pelo gesto do usuário!");
+     return;
+  }
+
+  // Se já foi iniciada e não estamos em modo forceMute, ignora.
+  if (musicStarted && !forceMute) return;
+
+
+  // Define o estado de mudo com base no parâmetro
+  backgroundMusic.muted = forceMute; 
+
+  // Tenta tocar, com fallback de muted se bloqueado
+  const playPromise = backgroundMusic.play();
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      musicStarted = true; // Define o estado
+      if (forceMute) {
+        console.log("🎵 Música de fundo iniciada (MUTED) para desbloquear áudio.");
+      } else {
+        console.log("🎵 Música de fundo iniciada!");
+      }
+    }).catch(err => {
+      console.warn("⚠️ Falha ao iniciar música (tentando fallback forçado):", err);
+      try {
+        backgroundMusic.muted = true;
+        backgroundMusic.play().then(() => {
+          musicStarted = true; // Define o estado
+          console.log("🎵 Música de fundo iniciada (muted). Esperando gesto do usuário para ativar som.");
+          // Se o fallback forçado funcionar, adiciona um listener para desmutar na próxima interação
+          function onFirstGesture() {
+            try {
+              if (backgroundMusic && backgroundMusic.muted) backgroundMusic.muted = false;
+            } catch(e){}
+            window.removeEventListener('pointerdown', onFirstGesture);
+          }
+          window.addEventListener('pointerdown', onFirstGesture, { once: true, capture: true });
+        }).catch(e => {
+          console.warn("Não foi possível iniciar música mesmo em muted:", e);
+        });
+      } catch(e2){
+        console.warn("Fallback muted falhou:", e2);
+      }
+    });
+  }
+}
+
+// Expor globalmente IMEDIATAMENTE para que o Intro (IIFE) possa encontrá-la
+window.startBackgroundMusic = startBackgroundMusic;
+window.__musicDebug = { isStarted: () => musicStarted };
+
+
+// Os listeners de interação SÓ podem ser adicionados após o DOM carregar
+document.addEventListener("DOMContentLoaded", () => {
+  
+  // NENHUM 'new Audio()' aqui. Isso foi o erro.
 
   // Função utilitária para registrar listeners com opções comuns
   function addCapturedListener(target, evt, handler, opts = {}) {
@@ -37,20 +115,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 1) Eventos primários que normalmente desbloqueiam áudio
+  // (Estes listeners agora chamam a função global, que DESMUTA o áudio se ele estiver muted)
   const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
   for (const ev of primaryEvents) {
     addCapturedListener(window, ev, function onPrimary(e) {
-      startBackgroundMusic();
-      // remover listener é opcional; play() verifica musicStarted
+      startBackgroundMusic(); // Chama sem forceMute: Desmuta ou Inicia normal
     });
     addCapturedListener(document.body, ev, function onPrimary2(e) {
-      startBackgroundMusic();
+      startBackgroundMusic(); // Chama sem forceMute: Desmuta ou Inicia normal
     });
   }
 
-  // 2) Tentar capturar ARRASTO — só inicia se houver um toque/pointer real associado
-  let moveArmed = false; // armará o gatilho quando detectarmos um pointerdown/touchstart
-  function armMove() { moveArmed = true; /* breve timeout para evitar ficar armado indefinidamente */ setTimeout(()=> moveArmed = false, 1200); }
+  // 2) Tentar capturar ARRASTO (para desmutar)
+  let moveArmed = false; 
+  function armMove() { moveArmed = true; setTimeout(()=> moveArmed = false, 1200); }
 
   addCapturedListener(window, "pointerdown", armMove);
   addCapturedListener(window, "touchstart", armMove);
@@ -58,12 +136,13 @@ document.addEventListener("DOMContentLoaded", () => {
   addCapturedListener(document.body, "touchstart", armMove);
 
   function handleMoveForMusic(e) {
-    if (musicStarted || !moveArmed) return;
-    // Verifica se o movimento tem dedos ou pressão (sinal de arraste real)
+    if (musicStarted && !backgroundMusic.muted) return; // Se tocando e não muted, ignora
+    if (!moveArmed) return;
+
     const isTouchMove = (e.touches && e.touches.length > 0);
     const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
     if (isTouchMove || hasPressure || e.pointerType) {
-      startBackgroundMusic();
+      startBackgroundMusic(); // Chama sem forceMute: Desmuta ou Inicia normal
       moveArmed = false;
     }
   }
@@ -72,8 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
   addCapturedListener(document.body, "touchmove", handleMoveForMusic);
   addCapturedListener(document.body, "pointermove", handleMoveForMusic);
 
-  // 3) Especial: anexa listeners diretamente aos elementos de mapa mais comuns
-  // Busca por ids/classes que costumam ser usadas por mapas (ajuste se seu mapa usa outro seletor)
+  // 3) Listeners de Mapa (para desmutar)
   const mapSelectors = [
     "#mapContainer",
     "#map",
@@ -84,35 +162,168 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
   for (const sel of mapSelectors) {
     document.querySelectorAll(sel).forEach(el => {
-      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
-      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); }); // Chama sem forceMute: Desmuta ou Inicia normal
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); }); // Chama sem forceMute: Desmuta ou Inicia normal
       addCapturedListener(el, "touchmove", handleMoveForMusic);
       addCapturedListener(el, "pointermove", handleMoveForMusic);
     });
   }
 
-  // 4) Fallbacks adicionais: se usuário soltar (pointerup / touchend) após arrastar, tente tocar
-  function tryOnUp(e) { if (!musicStarted) startBackgroundMusic(); }
+  // 4) Fallbacks de "soltar" (Up)
+  function tryOnUp(e) { if (!musicStarted || backgroundMusic.muted) startBackgroundMusic(); }
   addCapturedListener(window, "pointerup", tryOnUp);
   addCapturedListener(window, "touchend", tryOnUp);
   addCapturedListener(document.body, "pointerup", tryOnUp);
   addCapturedListener(document.body, "touchend", tryOnUp);
 
-  // 5) Fallback temporizado (após pequena interação) — evita tentar tocar muitas vezes
+  // 5) Fallback temporizado (apenas tentará iniciar se nada ocorreu)
   setTimeout(() => {
     if (!musicStarted) {
-      // última tentativa silenciosa
       try { startBackgroundMusic(); } catch(e) {}
     }
   }, 6000);
-
-  // Expor para debug / chamadas manuais
-  window.startBackgroundMusic = startBackgroundMusic;
-  window.__musicDebug = { isStarted: () => musicStarted };
 });
 // FIM DA MÚSICA DE FUNDO
 
-// FIM DA MÚSICA DE FUNDO
+// =======================================================================
+// INÍCIO: SCRIPT DO INTRO (AGORA EXECUTA *DEPOIS* DA MÚSICA ESTAR DEFINIDA)
+// =======================================================================
+
+(function(){
+  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v18';
+  const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
+  const FORCE_SHOW_PARAM = 'show_intro';
+
+  window.__introPlaying = false;
+  window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
+
+  function _forceShowIntroFromUrl() {
+    try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; }
+    catch(e){ return false; }
+  }
+
+  if (window.__introSeen && !_forceShowIntroFromUrl()) return;
+
+  // Create modal element using site's modal classes
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'welcomeModal';
+  // minimal inline styles to ensure visibility if site styles are not yet loaded
+  modal.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:2147483646;background:rgba(0,0,0,0.75);';
+  const modalContent = document.createElement('div');
+  modalContent.className = 'modal-content';
+  modalContent.id = 'welcomeModalContent';
+  modalContent.style.cssText = 'max-width:520px;padding:20px;border-radius:10px;background:#0b0b0b;color:#fff;text-align:center;';
+  modalContent.innerHTML = '<p style="font-size:16px;line-height:1.4;margin-bottom:16px;">Bem-vindo(a)! Não se esqueça de ler nossos <strong>Termos de Uso</strong> e divirta-se!</p>';
+  const okBtn = document.createElement('button');
+  okBtn.id = 'welcomeOkBtn';
+  okBtn.textContent = 'OK';
+  okBtn.style.cssText = 'padding:10px 18px;font-size:16px;border-radius:8px;border:none;background:#c9a94a;color:#111;cursor:pointer;';
+  modalContent.appendChild(okBtn);
+  modal.appendChild(modalContent);
+  document.documentElement.appendChild(modal);
+
+  // Create overlay video container but keep hidden until OK clicked
+  const overlay = document.createElement('div');
+  overlay.id = 'gameIntroOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;visibility:hidden;';
+  const container = document.createElement('div');
+  container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;';
+  const video = document.createElement('video');
+  video.id = 'gameIntroVideo';
+  video.src = INTRO_VIDEO_SRC;
+  video.setAttribute('playsinline','');
+  video.setAttribute('webkit-playsinline','');
+  video.setAttribute('preload','auto');
+  video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;';
+  container.appendChild(video);
+  overlay.appendChild(container);
+  document.documentElement.appendChild(overlay);
+
+  // Prevent page interactions under modal/video while intro is active
+  const prevOverflow = document.documentElement.style.overflow;
+
+  function startVideoFromUserGesture() {
+    try {
+      // mark as seen so modal/video won't show again
+      localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
+      window.__introSeen = true;
+
+      // hide modal and show overlay
+      modal.remove();
+      document.documentElement.style.overflow = 'hidden';
+      overlay.style.visibility = 'visible';
+      window.__introPlaying = true;
+
+      // play video with audio (user gesture from OK should allow playback with sound)
+      video.muted = false;
+      const p = video.play();
+      if (p !== undefined) {
+        p.then(()=> {
+          // success
+        }).catch(err => {
+          // If playback still blocked, try muted playback then wait for user gesture to unmute
+          console.warn('Intro play blocked despite user gesture, trying muted playback', err);
+          video.muted = true;
+          video.play().catch(()=>{});
+          // create a small hint button to unmute (but avoid UI clutter)
+          const unmuteHint = document.createElement('button');
+          unmuteHint.textContent = 'Ativar som';
+          unmuteHint.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483650;padding:8px 12px;border-radius:8px;border:none;background:rgba(255,255,255,0.12);color:#fff;';
+          unmuteHint.addEventListener('click', () => { video.muted = false; try{ unmuteHint.remove(); }catch(e){} });
+          document.documentElement.appendChild(unmuteHint);
+        });
+      }
+
+      // When video ends -> cleanup and start music
+      video.addEventListener('ended', () => {
+        try {
+          window.__introPlaying = false;
+          overlay.remove();
+          document.documentElement.style.overflow = prevOverflow || '';
+          // start background music (agora chama para desmutar se estava muted)
+          if (typeof window.startBackgroundMusic === 'function') {
+            try { 
+              window.startBackgroundMusic(); 
+            } catch(e){ console.warn(e); }
+          }
+        } catch(e){ console.warn(e); }
+      }, { once: true });
+
+    } catch(e){ console.warn('Erro ao iniciar vídeo do intro', e); }
+  }
+
+  okBtn.addEventListener('click', function(ev){
+    ev.stopPropagation();
+    
+    // 1. Inicia a música de fundo IMEDIATAMENTE, mas FORÇANDO O MUDO
+    // Isso garante que o áudio está desbloqueado pelo clique, mas silencioso
+    if (typeof window.startBackgroundMusic === 'function') {
+        window.startBackgroundMusic(true);
+    }
+    
+    // 2. Continua com a lógica normal de reprodução do vídeo
+    startVideoFromUserGesture();
+  });
+
+  // Also allow pressing Enter key when modal focused
+  okBtn.addEventListener('keyup', function(ev){ if(ev.key === 'Enter') okBtn.click(); });
+
+  // Safety: if page becomes hidden, pause video
+  document.addEventListener('visibilitychange', () => {
+    try {
+      if (document.visibilityState !== 'visible') {
+        if (!video.paused) video.pause();
+      }
+    } catch(e){}
+  });
+})();
+;
+// FIM DO SCRIPT DO INTRO
+
+// =======================================================================
+// INÍCIO: RESTANTE DO SCRIPT (SUPABASE, CACHE, JOGADOR, ETC.)
+// =======================================================================
 
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';

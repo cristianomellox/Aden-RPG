@@ -240,7 +240,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
     }
 
     const lastUpdated = await getLastUpdated();
-    const isExpired = !lastUpdated || (Date.now() - lastUpdated > 60 * 1000);
+    const isExpired = !lastUpdated || (Date.now() - lastUpdated > 15 * 60 * 1000);
     const canUseCache = !forceRefresh && !isExpired;
 
     console.log('[CACHE] forceRefresh=', forceRefresh, ' isExpired=', isExpired, ' lastUpdated=', lastUpdated);

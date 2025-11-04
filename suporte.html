@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Página de Suporte - Formulário</title>
+    <style>
+        /* Estilos base para garantir que o layout ocupe 100% da tela */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            display: flex; /* Define o body como um contêiner flexível */
+            flex-direction: column; /* Organiza os elementos verticalmente */
+            overflow: hidden; /* Evita barras de rolagem desnecessárias no body */
+        }
+        
+        /* Estilos da Top Bar (Cabeçalho) */
+        #playerTopBar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 15px;
+            background: linear-gradient(to bottom, #444, #222);
+            color: white;
+            min-height: 44px; /* Altura mínima para mobile */
+            flex-shrink: 0; /* Impede que a barra encolha */
+        }
+        
+        #pageTitle {
+            font-weight: bold;
+            font-size: 1.1em;
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        /* Estilos para links e ícones da Top Bar */
+        .top-bar-link {
+            display: flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+        }
+
+        /* Estilo do Ícone de Retorno (SVG) */
+        .lucide-chevron-left {
+            width: 28px;
+            height: 28px;
+            margin-right: 5px;
+        }
+        
+        /* Container do formulário */
+        #formContainer {
+            flex-grow: 1; /* Faz o container do formulário ocupar todo o espaço restante */
+            width: 100%;
+            /* Adiciona o overflow: hidden para garantir que o iframe cortado não cause a barra de rolagem da página */
+            overflow: hidden; 
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+        }
+
+        /* O Iframe será ligeiramente maior que o container, mas o container o cortará (crop) */
+        #googleFormIframe {
+            width: 100%;
+            /* Ajuste principal: Definição de altura para cortar a div de rodapé do Google.
+               100% preenche o contêiner. Adicionando cerca de 60px (ou um valor maior, se necessário)
+               forçamos a parte final do iframe a ser jogada para fora do contêiner #formContainer, 
+               sendo então ocultada pelo 'overflow: hidden' do #formContainer.
+            */
+          height: 100vh;
+            border: none;
+            display: block;
+            
+            /* Ajusta a margem para mover o iframe para cima e garantir que a barra de rolagem fique visível */
+            
+        }
+    </style>
+</head>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" style="color: white;" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <div id="pageTitle">Formulário de Suporte</div>
+        <div style="width: 44px; height: 34px;"></div>
+    </div>
+
+    <div id="formContainer">
+        <iframe 
+            id="googleFormIframe"
+            src="https://docs.google.com/forms/d/e/1FAIpQLSeLpDCYKxGC693uWxDF3apo5JXvuyYqwIDlSeb4Uh-5JCfCNg/viewform?embedded=true" 
+            frameborder="0" 
+            marginheight="0" 
+            marginwidth="0"
+            title="Formulário de Suporte">
+            Carregando...
+        </iframe>
+    </div>
+</body>
+</html>

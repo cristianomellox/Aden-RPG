@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Sobre o Jogo - Aden RPG</title>
+    <style>
+        /* Estilos base para garantir que o layout ocupe 100% da tela */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            
+            /* Background Cover: https://aden-rpg.pages.dev/assets/guildhall.webp */
+            background: url('https://aden-rpg.pages.dev/assets/credits.webp') no-repeat center center fixed; 
+            -webkit-background-size: cover;
+            -moz-background-size: cover;
+            -o-background-size: cover;
+            background-size: cover;
+        }
+        
+        /* Estilos da Top Bar (Cabeçalho) - Mantido */
+        #playerTopBar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 15px;
+            background: linear-gradient(to bottom, #444, #222);
+            color: white;
+            min-height: 44px; 
+            flex-shrink: 0; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        #pageTitle {
+            font-weight: bold;
+            font-size: 1.1em;
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        /* Estilos para links e ícones da Top Bar - Mantido */
+        .top-bar-link {
+            display: flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+        }
+
+        /* Estilo do Ícone de Retorno (SVG) - Mantido */
+        .lucide-chevron-left {
+            width: 24px;
+            height: 24px;
+            margin-right: 5px;
+        }
+        
+        /* Seletor de Idioma */
+        #language-selector {
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            background-color: rgba(0, 0, 0, 0.85); 
+            box-shadow: 0 4px 5px rgba(0,0,0,0.5);
+            flex-shrink: 0;
+            gap: 20px;
+        }
+
+        .lang-button {
+            width: 80px;
+            height: 50px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: border-color 0.2s, opacity 0.2s;
+            border-radius: 5px;
+            object-fit: cover; 
+        }
+
+        .lang-button.active {
+            border-color: #c9a94a; 
+            opacity: 1;
+        }
+        
+        .lang-button:not(.active) {
+            opacity: 0.7;
+        }
+        
+        /* Container de Conteúdo */
+        #aboutContent {
+            flex-grow: 1; 
+            padding: 20px;
+            color: #e0dccc; 
+            text-shadow: 1px 1px 2px #000;
+            background-color: rgba(0, 0, 0, 0.75); 
+            max-width: 800px;
+            margin: 20px auto; 
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+        
+        #aboutContent h2 {
+            color: #c9a94a; 
+            border-bottom: 2px solid #c9a94a;
+            padding-bottom: 5px;
+            margin-top: 20px;
+            font-size: 1.4em;
+        }
+        
+        #aboutContent h2:first-child {
+            margin-top: 0;
+        }
+
+        #aboutContent p, #aboutContent ul {
+            font-size: 1.05em;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        /* Lista de Músicas */
+        .music-list {
+            list-style: none;
+            padding-left: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .music-list li {
+            background-color: rgba(201, 169, 74, 0.1);
+            border: 1px solid rgba(201, 169, 74, 0.4);
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.9em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        /* Crédito Udio */
+        .udio-credit {
+            margin-top: 30px;
+            font-style: italic;
+            color: gold;
+            font-size: 0.9em;
+            text-align: center;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        /* Créditos de Desenvolvimento */
+        #devCredits {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        #devCredits strong {
+            color: #e0dccc;
+        }
+
+        /* NOVO: Estilos para o Modal de Início de Música */
+        #music-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 10000; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #music-modal-content {
+            background-color: rgba(34, 34, 34, 0.95); 
+            color: #e0dccc;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(201, 169, 74, 0.5); 
+            max-width: 80%;
+            border: 1px solid #c9a94a;
+        }
+
+        #music-modal-content p {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #c9a94a;
+        }
+
+        #music-modal-ok-btn {
+            background-color: #c9a94a;
+            color: #222;
+            border: none;
+            padding: 10px 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #music-modal-ok-btn:hover {
+            background-color: #e0dccc;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="music-modal-overlay">
+        <div id="music-modal-content">
+            <p>Conheça os créditos do jogo</p>
+            <button id="music-modal-ok-btn">Ok</button>
+        </div>
+    </div>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" style="color: white;" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        <div id="pageTitle">Sobre o Jogo</div>
+        <div style="width: 44px; height: 34px;"></div>
+    </div>
+    
+    <div id="language-selector">
+        <img 
+            id="lang-pt" 
+            src="https://aden-rpg.pages.dev/assets/flag_pt.webp" 
+            alt="Bandeira Português" 
+            class="lang-button active" 
+            data-lang="pt"
+            width="80" 
+            height="50"
+        />
+        <img 
+            id="lang-en" 
+            src="https://aden-rpg.pages.dev/assets/flag_en.webp" 
+            alt="Bandeira English" 
+            class="lang-button" 
+            data-lang="en"
+            width="80" 
+            height="50"
+        />
+    </div>
+
+    <div id="aboutContent">
+        
+        <h2 data-i18n="title1" data-lang-en="Aden RPG: An Epic Journey in Your Pocket">Aden RPG: Uma Jornada Épica no Seu Bolso</h2>
+        <p data-i18n="p1" data-lang-en="Aden RPG is a mobile MMORPG focused on progression, exploration, and strategic combat. Created to provide an immersive and deep gaming experience, it combines classic RPG systems with the convenience and optimization for mobile devices.">
+            Aden RPG é um MMORPG mobile com foco em progressão, exploração e combate estratégico. Criado para proporcionar uma experiência de jogo envolvente e profunda, ele combina sistemas clássicos de RPG com a conveniência e otimização para dispositivos móveis.
+        </p>
+        
+        <p data-i18n="p1-tech" data-lang-en="Same technology used in World of Warcraft for protection in a transactional and authoritative data engine, as well as a backend paradigm utilized in games like Perfect World, where server-side procedures control the flow of logic.">
+            Mesma tecnologia usada em World of Warcraft de proteção em um motor de dados transacional e autoritário, assim como paradigma de backend utilizado em jogos como Perfect World, onde os procedimentos no servidor controlam o fluxo da lógica.
+        </p>
+
+        <h2 data-i18n="title2" data-lang-en="Development Credits">Créditos de Desenvolvimento</h2>
+        <div id="devCredits">
+            <p>
+                <strong data-i18n="p2-1" data-lang-en="Lead Developer:">Desenvolvimento Principal:</strong> Cristiano Mellox.
+            </p>
+            <p data-i18n="p2-2" data-lang-en="The entirety of Aden RPG was developed solely by Cristiano Mellox, who handled the programming, frontend and backend logic, story, design, and art of the game.">
+                Todo o Aden RPG foi desenvolvido integralmente por Cristiano Mellox, que cuidou da programação, lógica de frontend e backend, história, design e arte do jogo.
+            </p>
+        </div>
+        
+        <h2 data-i18n="title3" data-lang-en="Original Soundtrack">Trilha Sonora Original</h2>
+        <p data-i18n="p3-1" data-lang-en="The audio tracks that compose the environment and atmosphere of Aden are:">As faixas de áudio que compõem o ambiente e a atmosfera de Aden são:</p>
+        
+        <ul class="music-list" id="musicList">
+            <li data-en="Aden">Aden</li>
+            <li data-en="Zion">Zion</li>
+            <li data-en="Elendor">Elendor</li>
+            <li data-en="Capital">Capital</li>
+            <li data-en="Mitrar">Mitrar</li>
+            <li data-en="Tandra">Tandra</li>
+            <li data-en="Astrax">Astrax</li>
+            <li data-en="Duratar">Duratar</li>
+            <li data-en="Arena">Arena</li>
+            <li data-en="Mines">Minas</li>
+            <li data-en="AFK">AFK</li>
+            <li data-en="AFK Combat">Combate AFK</li>
+            <li data-en="Desolation Tower">Torre da Desolação</li>
+            <li data-en="Eternal Echoes">Eternal Echoes</li>
+        </ul>
+        
+        <div class="udio-credit" data-i18n="udio-credit" data-lang-en="The music used in this game was made with Udio.">
+            As músicas utilizadas neste jogo foram feitas com o Udio.<br>
+            <strong>Made with Udio</strong>
+        </div>
+
+    </div>
+
+    <script>
+        // Função para alternar o idioma do conteúdo
+        function setLanguage(lang) {
+            const isEnglish = lang === 'en';
+            
+            // 1. Atualizar o Título da Página (dentro da playerTopBar) e <title>
+            const pageTitle = document.getElementById('pageTitle');
+            if (isEnglish) {
+                pageTitle.textContent = 'About the Game';
+                document.title = 'About the Game - Aden RPG';
+            } else {
+                pageTitle.textContent = 'Sobre o Jogo';
+                document.title = 'Sobre o Jogo - Aden RPG';
+            }
+            
+            // 2. Atualizar todos os elementos traduzíveis (data-i18n)
+            const translatableElements = document.querySelectorAll('[data-i18n]');
+            translatableElements.forEach(el => {
+                let textToUse;
+                
+                if (isEnglish) {
+                    textToUse = el.getAttribute('data-lang-en');
+                } else {
+                    textToUse = el.getAttribute('data-lang-pt-original');
+                }
+                
+                if (el.classList.contains('udio-credit')) {
+                    // Caso especial para o bloco Udio que tem a tag <strong> fixa
+                    el.innerHTML = textToUse + '<br><strong>Made with Udio</strong>';
+                } else {
+                    el.textContent = textToUse;
+                }
+            });
+
+            // 3. Atualizar a lista de músicas
+            const musicListItems = document.querySelectorAll('#musicList li');
+            musicListItems.forEach(li => {
+                if (isEnglish && li.hasAttribute('data-en')) {
+                    li.textContent = li.getAttribute('data-en');
+                } else {
+                    // Volta para o texto original (Português)
+                    li.textContent = li.getAttribute('data-pt-original');
+                }
+            });
+            
+            // 4. Atualizar botões de bandeira
+            document.querySelectorAll('.lang-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            document.getElementById(`lang-${lang}`).classList.add('active');
+            
+            // 5. Atualizar a tag HTML lang
+            document.documentElement.lang = isEnglish ? 'en' : 'pt-br';
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Pré-processamento: Armazena o texto original em Português
+            const translatableElements = document.querySelectorAll('[data-i18n]');
+            translatableElements.forEach(el => {
+                if (el.classList.contains('udio-credit')) {
+                    const originalText = el.textContent.split('Made with Udio')[0].trim();
+                    el.setAttribute('data-lang-pt-original', originalText);
+                } else {
+                    el.setAttribute('data-lang-pt-original', el.textContent.trim());
+                }
+            });
+
+            // Pré-processamento: Armazena o texto original em Português para a lista de músicas
+            const musicListItems = document.querySelectorAll('#musicList li');
+            musicListItems.forEach(li => {
+                li.setAttribute('data-pt-original', li.textContent.trim());
+            });
+
+            // Event Listeners para os botões de idioma
+            document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt'));
+            document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
+
+            // Define o idioma padrão (Português) no carregamento
+            setLanguage('pt'); 
+
+            // ====================================================================
+            // NOVO: Lógica de Música e Modal (Início da Música)
+            // ====================================================================
+            const modalOverlay = document.getElementById('music-modal-overlay');
+            const okButton = document.getElementById('music-modal-ok-btn');
+            const musicUrl = "https://aden-rpg.pages.dev/assets/credits.mp3";
+            let backgroundMusic = new Audio(musicUrl);
+            backgroundMusic.loop = true;
+            backgroundMusic.volume = 0.5; // Volume de fundo
+
+            // Tenta iniciar a música (necessita de interação do usuário)
+            function startMusic() {
+                const playPromise = backgroundMusic.play();
+
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('Música de créditos iniciada.');
+                    }).catch(error => {
+                        // Captura falha de autoplay silenciosamente (esperado)
+                        console.warn('Falha ao iniciar a música, mas o áudio está carregado.');
+                    });
+                }
+            }
+
+            function handleOkClick() {
+                // 1. Iniciar a música, aproveitando o clique do usuário
+                startMusic();
+                
+                // 2. Esconder o modal
+                modalOverlay.style.display = 'none';
+                
+                // 3. Remover o listener
+                okButton.removeEventListener('click', handleOkClick);
+            }
+
+            // Adiciona o evento de clique ao botão OK do modal
+            okButton.addEventListener('click', handleOkClick);
+        });
+    </script>
+</body>
+</html>

@@ -1,14 +1,6 @@
 (function() {
     const hotspots = [
         {
-            id: 'terras_amald',
-            top: 290, 
-            left: 490,
-            width: 200,
-            height: 50,
-            url: '/terras_amald.html'
-        },
-        {
             id: 'zion',
             top: 370,
             left: 80,

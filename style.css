@@ -62,7 +62,7 @@ button {
     padding: 30px 40px;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.9em;
     margin: 5px 0px;
     font-weight: bold;
 }
@@ -176,7 +176,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: #e0dccc;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 0.9em;
     
 }
 #profileEditModal button:hover {
@@ -216,7 +216,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     margin: 0;
     border-radius: 0;
     cursor: pointer;
-    font-size: 11px; /* Tamanho da fonte menor */
+    font-size: 0.7em; /* Tamanho da fonte menor */
     font-weight: bold;
     flex: 1; /* Faz todos os botões ocuparem espaço igual */
     
@@ -577,7 +577,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
   flex-grow: 1;
 }
 #playerNameLevel {
-  font-size: 13px;
+  font-size: 0.9em;
   font-weight: bold;
   display: flex;
   
@@ -670,7 +670,7 @@ body {
 }
 
 #playerLevel {
-  font-size: 15px;
+  font-size: 1em;
   color: gold;
   align-items: left;
   text-align: left;
@@ -689,7 +689,7 @@ margin-right: 15px;
 #playerNameRow {
   display: flex;
   align-items: center;
-  font-size: 18px;
+  font-size: 1.1em;
   font-weight: bold;
   gap: 8px;
 }
@@ -697,7 +697,7 @@ margin-right: 15px;
 #playerEmblemsRow {
   display: flex;
   gap: 5px;
-  font-size: 19px;
+  font-size: 1em;
 }
 
 #playerStatsRow {
@@ -735,11 +735,11 @@ margin-right: 15px;
   transition: width 0.5s ease-in-out;
 }
 .emblema {
-  font-size: 12px;
+  font-size: 0.7em;
 }
 #xpText {
   position: absolute;
-  top: -3px;
+  top: -2px;
   left: 0;
   width: 100%;
   height: 100%;
@@ -901,7 +901,7 @@ margin-right: 15px;
 }
 
 .menu-item span {
-  font-size: 11px;
+  font-size: 0.8em;
   color: #e0dccc;
   margin-top: 5px;
   text-align: center;
@@ -1706,7 +1706,7 @@ margin-right: 15px;
 }
 
 #mapImage {
-    background-image: url('https://aden-rpg.pages.dev/assets/mapa_aden.png');
+    background-image: url('https://aden-rpg.pages.dev/assets/mapa_aden.webp');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: top left;
@@ -1739,7 +1739,7 @@ margin-right: 15px;
 }
 
 #playerLevel {
-  font-size: 13px !important;
+  font-size: 0.9em !important;
   margin: 0 !important;
   line-height: 1 !important;
   margin-left: -18px!important;
@@ -1774,7 +1774,7 @@ margin-right: 15px;
     position: absolute; 
     z-index: 10;
     box-sizing: border-box;
-    border: 6px solid gold;
+    border: 0px solid gold;
     transition: background-color 0.2s ease;
 }
 

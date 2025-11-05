@@ -50,6 +50,16 @@
 </div>
 </div>
 <div id="authContainer">
+  <div id="authSideButtons">
+  <a href="suporte.html" class="auth-side-btn">
+    <img src="https://aden-rpg.pages.dev/assets/suporte.webp" alt="Suporte" style="width: 40px; height: 40px;">
+    <span>Suporte</span>
+  </a>
+  <a href="sobre.html" class="auth-side-btn">
+    <img src="https://aden-rpg.pages.dev/assets/sobre.webp" alt="Sobre" style="width: 40px; height: 40px;">
+    <span>Sobre</span>
+  </a>
+</div>
 <div id="caixaLogin">
 <h2>Login / Cadastro</h2>
 <input id="emailInput" placeholder="Seu e-mail" type="email"/>
@@ -89,6 +99,14 @@
 </div></div>
 <p id="authMessage"></p>
  <p style="background-color: rgba(51, 51, 51, 0.8); text-align: justify; border-radius: 5px; position: flex; width: 85vw;">Ao se registrar você concorda com os Termos de Uso e Política de Privacidade.</p>
+ 
+<p id="authCopyrightFooter"
+    style="background-color: rgba(51, 51, 51, 0.8); text-align: center; border-radius: 5px; position: flex; width: 85vw; font-size: 0.9em; padding: 5px 0; margin-top: 10px; color: #ccc;"
+    data-lang-pt="&copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados."
+    data-lang-en="&copy; 2025 - 2026 Aden RPG Online. All rights reserved.">
+    &copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados.
+</p>
+ 
 </div>
 </div>
 <div id="welcomeContainer" style="display:none; margin-top: 3px;">
@@ -162,7 +180,6 @@
 </div>
 
 
-<!-- MENU LATERAL DIREITO (LOSANGOS) -->
 <div id="sideMenu">
   <div class="menu-item" data-modal="espiralModal">
     <div class="diamond">
@@ -193,7 +210,6 @@
     <span>PV</span>
   </div>
 
-  <!-- Grupo Missões -->
   <div class="menu-item expandable" id="missionsBtn">
     <div class="diamond">
       <img src="https://aden-rpg.pages.dev/assets/iconmissao.webp" alt="Missões">
@@ -217,7 +233,6 @@
     </div>
   </div>
 
-  <!-- Grupo Mais -->
   <div class="menu-item expandable" id="moreBtn">
     <div class="diamond">
       <img src="https://aden-rpg.pages.dev/assets/iconmais.webp" alt="Mais">
@@ -225,17 +240,23 @@
     <span>Mais</span>
   </div>
   <div class="submenu" id="moreSubmenu">
-    <div class="menu-item" data-modal="comercioModal">
+    <div class="menu-item">
+      <div class="diamond small">
+      <a style="text-decoration: none; display: flex; align-items: center; justify-content: center;" href="resgate.html">  <img src="https://aden-rpg.pages.dev/assets/resgate.webp" alt="Comércio"></a>
+      </div>
+     <a style="text-decoration: none;" href="resgate.html"> <span>Resgate</span></a>
+    </div>
+    <div class="menu-item" data-modal="comercioModal" style="display: none;">
       <div class="diamond small">
         <img src="https://aden-rpg.pages.dev/assets/iconcomercio.webp" alt="Comércio">
       </div>
       <span>Comércio</span>
     </div>
-    <div class="menu-item" data-modal="rankingModal">
+    <div class="menu-item">
       <div class="diamond small">
-        <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking">
+       <a style="text-decoration: none; display: flex; align-items: center; justify-content: center;" href="ranking_cp.html"> <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking"></a>
       </div>
-      <span>Ranking</span>
+     <a style="text-decoration: none;" href="ranking_cp.html"> <span>Ranking</span></a>
     </div>
     <div class="menu-item" data-modal="petsModal" style="display: none;">
       <div class="diamond small">
@@ -246,7 +267,6 @@
   </div>
 </div>
 
-<!-- MODAIS PADRÃO -->
 <div id="genericModal" class="modal-container" style="display:none;">
   <div class="modal-content">
     <h2 id="modalTitle"></h2>

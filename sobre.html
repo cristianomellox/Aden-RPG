@@ -213,6 +213,19 @@
         #music-modal-ok-btn:hover {
             background-color: #e0dccc;
         }
+        
+        /* NOVO: Estilos do Rodapé de Copyright */
+        #copyright-footer {
+            text-align: center;
+            padding: 10px;
+            color: #e0dccc;
+            font-size: 0.85em;
+            background-color: rgba(0, 0, 0, 0.85); 
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.5);
+            flex-shrink: 0;
+            margin-top: auto; /* Garante que fique no final */
+        }
+
     </style>
 </head>
 <body>
@@ -300,6 +313,12 @@
         </div>
 
     </div>
+    
+    <footer id="copyright-footer">
+        <p id="copyright-text" data-lang-pt="&copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados." data-lang-en="&copy; 2025 - 2026 Aden RPG Online. All rights reserved.">
+            &copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados.
+        </p>
+    </footer>
 
     <script>
         // Função para alternar o idioma do conteúdo
@@ -346,13 +365,21 @@
                 }
             });
             
-            // 4. Atualizar botões de bandeira
+            // NOVO: 4. Atualizar o Rodapé de Copyright
+            const copyrightText = document.getElementById('copyright-text');
+            if (isEnglish) {
+                copyrightText.innerHTML = copyrightText.getAttribute('data-lang-en');
+            } else {
+                copyrightText.innerHTML = copyrightText.getAttribute('data-lang-pt');
+            }
+            
+            // 5. Atualizar botões de bandeira
             document.querySelectorAll('.lang-button').forEach(button => {
                 button.classList.remove('active');
             });
             document.getElementById(`lang-${lang}`).classList.add('active');
             
-            // 5. Atualizar a tag HTML lang
+            // 6. Atualizar a tag HTML lang
             document.documentElement.lang = isEnglish ? 'en' : 'pt-br';
         }
 

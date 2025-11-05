@@ -216,7 +216,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     margin: 0;
     border-radius: 0;
     cursor: pointer;
-    font-size: 0.7em; /* Tamanho da fonte menor */
+    font-size: 0.8em; /* Tamanho da fonte menor */
     font-weight: bold;
     flex: 1; /* Faz todos os botões ocuparem espaço igual */
     
@@ -256,6 +256,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     position: fixed;
     display: flex;
     flex-direction: column;
+    gap: 5px;
     background-color: rgba(30, 30, 30, 0.95);
     border: 1px solid #555;
     border-radius: 8px;
@@ -1897,3 +1898,42 @@ margin-right: 15px;
     color: #ccc;
     font-size: 0.9em;
 }
+/* Estilos para os novos botões laterais */
+#authSideButtons {
+  position: fixed; /* Fixo na tela */
+  top: 26%;        /* Centralizado verticalmente */
+  right: 2px;     /* Na borda direita, ajuste este valor se necessário */
+  transform: translateY(-50%); /* Ajuste fino da centralização */
+  display: flex; 
+  flex-direction: column;
+  align-items: center;
+  gap: 15px; /* Espaço entre os botões */
+  z-index: 1001; /* Garante que fique acima do conteúdo principal */
+  background-color: rgba(0,0,0,0.5);
+}
+
+.auth-side-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: #f0f0f0; /* Cor do texto */
+  font-weight: bold;
+  font-size: 0.68em; /* Tamanho do span */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8); /* Sombra para legibilidade */
+  width: 70px; /* Largura para o span */
+  text-align: center;
+  /* IMPORTANTE: A visibilidade deste container deve ser controlada 
+     pelo mesmo script que controla o authContainer */
+}
+
+.auth-side-btn img {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 5px; /* Espaço entre imagem e span */
+}
+
+.auth-side-btn:hover {
+  opacity: 0.8; /* Efeito simples ao passar o mouse */
+}
+/* Fim dos estilos para os botões laterais */

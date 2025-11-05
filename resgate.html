@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="noindex, nofollow">
+  <title>Resgate de Código - Aden RPG</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #playerTopBar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 15px;
+      background: linear-gradient(to bottom, #444, #222);
+      color: white;
+      min-height: 44px;
+      flex-shrink: 0;
+    }
+
+    #pageTitle {
+      font-weight: 800;
+      font-size: 1.5em;
+      text-align: center;
+      flex-grow: 1;
+    }
+
+    .top-bar-link {
+      display: flex;
+      align-items: center;
+      color: white;
+      text-decoration: none;
+    }
+body, html {
+  text-shadow: 1px 1px 2px #000;
+}
+    .lucide-chevron-left {
+      width: 28px;
+      height: 28px;
+      margin-right: 5px;
+    }
+
+    /* Conteúdo principal */
+    #resgateContainer {
+      flex-grow: 1;
+      background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/redeem.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    background-color: none;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #codigoInput {
+      width: 80%;
+      max-width: 300px;
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 1em;
+      outline: none;
+    }
+
+    #btnConfirmar {
+      margin-top: 15px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background-color: #c9a94a;
+      color: #111;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1em;
+    }
+
+    #btnConfirmar:hover {
+      background-color: #e2c96e;
+    }
+
+    #resgateMensagem {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #ffcc66;
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+  const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const codigoInput = document.getElementById('codigoInput');
+  const btnConfirmar = document.getElementById('btnConfirmar');
+  const mensagem = document.getElementById('resgateMensagem');
+
+  if (!btnConfirmar) {
+    console.error("Elemento #btnConfirmar não encontrado no DOM!");
+    return;
+  }
+
+  btnConfirmar.addEventListener('click', async () => {
+    const codigo = codigoInput.value.trim();
+    if (!codigo) {
+      mensagem.textContent = 'Digite um código válido.';
+      return;
+    }
+
+    try {
+      mensagem.textContent = 'Verificando...';
+      const { data, error } = await supabaseClient.rpc('redeem_reward_code', { code_id: codigo });
+
+      if (error) {
+        mensagem.textContent = 'Erro: ' + error.message;
+        console.error(error);
+        return;
+      }
+
+      mensagem.textContent = data || 'Código processado.';
+    } catch (err) {
+      console.error(err);
+      mensagem.textContent = 'Erro ao tentar resgatar o código.';
+    }
+  });
+});
+
+  </script>
+</head>
+<body>
+  <div id="playerTopBar">
+    <a href="index.html" class="top-bar-link" title="Voltar">
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left">
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    </a>
+    <div id="pageTitle">Resgate</div>
+    <div style="width: 44px; height: 34px;"></div>
+  </div>
+
+  <div id="resgateContainer">
+    
+    <p style="font-size: 1.2em;">Digite um código promocional para resgatar prêmios.</p>
+    <input id="codigoInput" type="text" placeholder="Digite o código">
+    <button id="btnConfirmar">Confirmar</button>
+    <p id="resgateMensagem"></p>
+  </div>
+</body>
+</html>

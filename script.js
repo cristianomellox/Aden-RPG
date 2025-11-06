@@ -37,7 +37,7 @@ function startBackgroundMusic(forceMute = false)
   // Cria o objeto de áudio "preguiçosamente" (lazy-load) na primeira chamada
   if (typeof backgroundMusic === 'undefined' || backgroundMusic === null) {
     try {
-      backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/index.mp3");
+      backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/aden.mp3");
       backgroundMusic.volume = 0.1;
       backgroundMusic.loop = true;
     } catch(e){

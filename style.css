@@ -1909,27 +1909,28 @@ margin-right: 15px;
   align-items: center;
   gap: 15px; /* Espaço entre os botões */
   z-index: 1001; /* Garante que fique acima do conteúdo principal */
-  background-color: rgba(0,0,0,0.5);
+  
+}#authSideButtons span {
+ background-color: rgba(0,0,0,0.5); 
 }
-
 .auth-side-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-decoration: none;
   color: #f0f0f0; /* Cor do texto */
-  font-weight: bold;
+  
   font-size: 0.68em; /* Tamanho do span */
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8); /* Sombra para legibilidade */
-  width: 70px; /* Largura para o span */
+  width: 60px; /* Largura para o span */
   text-align: center;
   /* IMPORTANTE: A visibilidade deste container deve ser controlada 
      pelo mesmo script que controla o authContainer */
 }
 
 .auth-side-btn img {
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 25px;
   margin-bottom: 5px; /* Espaço entre imagem e span */
 }
 

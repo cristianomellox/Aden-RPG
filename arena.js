@@ -1,4 +1,4 @@
-// arena.js — versão final com correção de avatares + caching total
+// arena.js — versão final com correção de avatares + caching total + SFX de streak
 document.addEventListener("DOMContentLoaded", async () => {
     // --- Configuração do Supabase ---
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -52,11 +52,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
         critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
         evade: "https://aden-rpg.pages.dev/assets/evade.mp3",
+        // SFX de streak (3,4,5)
+        streak3: "https://aden-rpg.pages.dev/assets/killingspree.mp3",
+        streak4: "https://aden-rpg.pages.dev/assets/implacavel.mp3",
+        streak5: "https://aden-rpg.pages.dev/assets/dominando.mp3",
+        // música de fundo (já usada)
+        background: "https://aden-rpg.pages.dev/assets/arena.mp3"
     };
 
     async function preload(name) {
         try {
-            const res = await fetch(audioFiles[name]);
+            const url = audioFiles[name];
+            if (!url) return;
+            const res = await fetch(url);
             const ab = await res.arrayBuffer();
             audioBuffers[name] = await new Promise((resolve, reject) => {
                 audioContext.decodeAudioData(ab, resolve, reject);
@@ -66,7 +74,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             audioBuffers[name] = null;
         }
     }
+    // Preload dos principais efeitos (inclui streaks)
     preload('normal'); preload('critical'); preload('evade');
+    preload('streak3'); preload('streak4'); preload('streak5');
 
     function playSound(name, opts = {}) {
         const vol = typeof opts.volume === 'number' ? opts.volume : 1;
@@ -84,15 +94,66 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.warn("[audio] play error:", err);
             }
         }
-        try { new Audio(audioFiles[name]).play(); } catch (e) {}
+        // fallback para HTMLAudio
+        try {
+            const a = new Audio(audioFiles[name] || audioFiles.normal);
+            a.volume = Math.min(1, Math.max(0, vol));
+            // don't keep reference — fire and forget
+            a.play().catch(e => {});
+        } catch (e) {}
     }
 
+    // Função para "destravar" SFX: toca silenciosamente cada buffer (ou html audio) e para imediatamente.
+    let sfxUnlocked = false;
+    async function unlockSfx() {
+        if (sfxUnlocked) return;
+        sfxUnlocked = true;
+
+        // Resume audio context se necessário
+        if (audioContext.state === 'suspended') {
+            try { await audioContext.resume(); } catch(e){ console.warn("AudioContext resume falhou", e); }
+        }
+
+        // Toca cada buffer brevemente com ganho 0 para destravar
+        const names = ['normal','critical','evade','streak3','streak4','streak5'];
+        for (const name of names) {
+            const buf = audioBuffers[name];
+            if (buf && audioContext.state !== 'closed') {
+                try {
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buf;
+                    const gain = audioContext.createGain();
+                    gain.gain.value = 0.0; // silencioso
+                    source.connect(gain).connect(audioContext.destination);
+                    source.start(0);
+                    // stop safe after short interval
+                    setTimeout(() => {
+                        try { source.stop(); } catch(e){}
+                    }, 60);
+                } catch (e) {
+                    // fallback below
+                }
+            } else {
+                // fallback HTMLAudio play/pause with volume 0
+                try {
+                    const a = new Audio(audioFiles[name] || audioFiles.normal);
+                    a.volume = 0;
+                    const p = a.play();
+                    if (p && p.then) {
+                        p.then(() => { try { a.pause(); a.currentTime = 0; } catch(e){} });
+                    } else {
+                        try { a.pause(); a.currentTime = 0; } catch(e){}
+                    }
+                } catch (e) {}
+            }
+        }
+    }
 
     function startBackgroundMusic() {
         if (musicStarted) return;
         
         if (!backgroundMusic) {
-            backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/arena.mp3");
+            backgroundMusic = new Audio(audioFiles.background);
             backgroundMusic.volume = 0.1;
             backgroundMusic.loop = true;
         }
@@ -122,6 +183,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         addCapturedListener(window, ev, () => {
             resumeAudioContext();
             startBackgroundMusic();
+            // desbloqueia SFX na primeira interação (silencioso)
+            try { unlockSfx(); } catch(e){ console.warn("unlockSfx erro", e); }
         }, { once: true });
     }
 
@@ -139,6 +202,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (isTouchMove || hasPressure || e.pointerType) {
             startBackgroundMusic();
             moveArmed = false;
+            try { unlockSfx(); } catch(e){}
         }
     }
     addCapturedListener(window, "touchmove", handleMoveForMusic);
@@ -279,6 +343,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // --- Streak (vitórias consecutivas) — cache frontend (localStorage) ---
+    const STREAK_KEY = 'arena_win_streak';
+    const STREAK_DATE_KEY = 'arena_win_streak_date'; // YYYY-MM-DD (UTC)
+    function getTodayUTCDateString() {
+        const now = new Date();
+        return now.getUTCFullYear() + '-' + String(now.getUTCMonth()+1).padStart(2,'0') + '-' + String(now.getUTCDate()).padStart(2,'0');
+    }
+    function loadStreak() {
+        try {
+            const raw = localStorage.getItem(STREAK_KEY);
+            const dateRaw = localStorage.getItem(STREAK_DATE_KEY);
+            const today = getTodayUTCDateString();
+            if (!dateRaw || dateRaw !== today) {
+                // novo dia — reset
+                localStorage.setItem(STREAK_KEY, "0");
+                localStorage.setItem(STREAK_DATE_KEY, today);
+                return 0;
+            }
+            const n = parseInt(raw, 10);
+            return Number.isFinite(n) ? Math.max(0, n) : 0;
+        } catch (e) { return 0; }
+    }
+    function saveStreak(n) {
+        try {
+            const today = getTodayUTCDateString();
+            localStorage.setItem(STREAK_KEY, String(Math.max(0, Math.floor(n))));
+            localStorage.setItem(STREAK_DATE_KEY, today);
+        } catch (e) {}
+    }
+    let currentStreak = loadStreak();
+
+    // Função para checar se dia mudou (por exemplo, sessão longa)
+    function ensureStreakDate() {
+        try {
+            const dateRaw = localStorage.getItem(STREAK_DATE_KEY);
+            const today = getTodayUTCDateString();
+            if (!dateRaw || dateRaw !== today) {
+                currentStreak = 0;
+                saveStreak(0);
+            }
+        } catch(e){}
+    }
+
+    // Chama para garantir que, ao carregar, se for novo dia zera
+    ensureStreakDate();
+
     // --- PvP: fluxo de desafio e animação ---
     async function handleChallengeClick() {
         if (!challengeBtn) return;
@@ -286,6 +396,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         challengeBtn.disabled = true;
         let opponent = null; 
         let challengerInfo = null; 
+        let combatResult = null;
         try {
             const { data: findData, error: findError } = await supabase.rpc('find_arena_opponent');
             if (findError) throw findError;
@@ -298,11 +409,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const { data: combatData, error: combatError } = await supabase.rpc('start_arena_combat', { p_opponent_id: opponent.id });
             if (combatError) throw combatError;
-            const combatResult = normalizeRpcResult(combatData);
+            combatResult = normalizeRpcResult(combatData);
             if (!combatResult?.success) return showModalAlert(combatResult?.message || "Falha ao iniciar combate.");
 
-            hideLoading(); 
-
+            // 🔥 CORREÇÃO: Esconde o loading overlay AQUI para que a animação do PvP seja visível.
+            hideLoading();
+            
             const challengerData = { 
                 ...(combatResult.challenger_stats || {}), 
                 id: userId,
@@ -322,6 +434,37 @@ document.addEventListener("DOMContentLoaded", async () => {
             const points = combatResult.points_transferred || 0;
             const opponentName = esc(opponent?.name || 'Oponente');
 
+            // --- Atualiza streak NO FRONTEND (cache local) conforme resultado ---
+            try {
+                ensureStreakDate(); // garante reset diário se necessário
+
+                if (combatResult.winner_id === userId) {
+                    // vitória do jogador
+                    currentStreak = loadStreak(); // recarrega (safety)
+                    currentStreak = currentStreak + 1;
+                    saveStreak(currentStreak);
+
+                    // dispara SFX conforme thresholds
+                    if (currentStreak >= 5) {
+                        // 5+ -> toca som5 (prioridade)
+                        try { playSound('streak5', { volume: 0.9 }); } catch(e){ console.warn("play streak5", e); }
+                    } else if (currentStreak === 4) {
+                        try { playSound('streak4', { volume: 0.9 }); } catch(e){ console.warn("play streak4", e); }
+                    } else if (currentStreak === 3) {
+                        try { playSound('streak3', { volume: 0.9 }); } catch(e){ console.warn("play streak3", e); }
+                    }
+                } else if (combatResult.winner_id === null) {
+                    // empate: neutro (não incrementa nem zera)
+                    // se quiser que empate zere => currentStreak = 0; saveStreak(0);
+                } else {
+                    // derrota do jogador -> zera streak
+                    currentStreak = 0;
+                    saveStreak(0);
+                }
+            } catch (stErr) {
+                console.warn("Erro ao atualizar streak local:", stErr);
+            }
+
             if (combatResult.winner_id === userId) {
                 msg = `<strong style="color:#4CAF50;">Você venceu!</strong><br>Você derrotou ${opponentName} e tomou ${points.toLocaleString()} pontos dele(a).`;
             } else if (combatResult.winner_id === null) {
@@ -336,6 +479,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             showModalAlert("Erro inesperado: " + (e?.message || e));
         } finally {
             await updateAttemptsUI();
+            // Garante que a tela de loading seja escondida em caso de erro ou retorno antecipado (antes da animação).
+            // Se o hideLoading() foi chamado antes da animação, esta chamada é redundante e inofensiva.
+            hideLoading();
         }
     }
 
@@ -955,6 +1101,9 @@ if (snapErr) {
 
             // Atualiza tentativas na interface
             await updateAttemptsUI();
+
+            // Garante que o streak seja verificado no boot (novo dia)
+            ensureStreakDate();
 
         } catch (e) {
             console.error("Erro no boot:", e);

@@ -148,7 +148,16 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (error) {
                 console.error('Erro ao atualizar perfil:', error);
                 if (profileEditMessage) {
-                    profileEditMessage.textContent = error.message;
+                    let errorMessage = 'Ocorreu um erro ao atualizar o perfil.'; // Mensagem de erro padrão
+                    
+                    // Verifica se o erro é de violação de restrição única (código '23505' do PostgreSQL)
+                    if (error.code === '23505' && error.message.includes('players_name_key')) {
+                         errorMessage = "Esse nome já está em uso.";
+                    } else if (error.message) {
+                        errorMessage = error.message;
+                    }
+                    
+                    profileEditMessage.textContent = errorMessage;
                     profileEditMessage.style.color = '#ff9999';
                 }
             } finally {

@@ -1,16 +1,14 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-K">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="robots" content="noindex, nofollow">
     <meta name="googlebot" content="noindex, nofollow">
     <title>Batalha de Guildas</title>
     
-    <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <!-- Estilos -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="guild.css">
      <link rel="stylesheet" href="guild_battle.css">
@@ -18,47 +16,39 @@
 </head>
 <body>
 
-    <!-- REQUISIÇÃO 3: Elementos de Áudio (da Raid) -->
     <audio id="audioNormalHit" src="https://aden-rpg.pages.dev/assets/normal_hit.mp3" preload="auto"></audio>
     <audio id="audioCritHit" src="https://aden-rpg.pages.dev/assets/critical_hit.mp3" preload="auto"></audio>
 
-    <!-- Top Bar Fixa -->
     <div id="playerTopBar">
         <a href="guild.html" class="top-bar-link" title="Voltar">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
         <div id="pageTitle">Batalha de Guildas</div>
-        <div style="width: 28px;"></div> <!-- Espaçador -->
-    </div>
+        <div style="width: 28px;"></div> </div>
 
-    <!-- Container Principal -->
     <div id="battleContainer">
 
-        <!-- Tela da Batalha (inicialmente oculta) -->
         <div id="battleActiveScreen" style="display: none; flex-direction: column; height: 100%;">
-            <!-- Cabeçalho (Timer, Pontos) -->
             <div id="battleHeader">
                 <div id="battleTimer">55:00</div>
-                <!-- REQUISIÇÃO 1: Botão de Ranking -->
                 <button id="showRankingBtn">
                     <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking">
                 </button>
             </div>
 
-            <!-- Mapa -->
             <div id="battleMap" style="background-image: url('https://aden-rpg.pages.dev/assets/capital.webp');">
-                <!-- Nexus -->
                 <div class="battle-objective" id="obj-nexus" data-index="0">
                     <span class="obj-name">Nexus</span>
+                    <span class="obj-owner-name" id="obj-owner-0"></span>
                     <div class="obj-hp-bar">
                         <div class="obj-hp-fill" id="obj-hp-fill-0"></div>
                         <span class="obj-hp-text" id="obj-hp-text-0">5k / 5k</span>
                     </div>
                     <span class="obj-garrison-count" id="obj-garrison-0"></span>
                 </div>
-                <!-- CPs -->
                 <div class="battle-objective" id="obj-cp-1" data-index="1">
                     <span class="obj-name">Ponto 1</span>
+                    <span class="obj-owner-name" id="obj-owner-1"></span>
                     <div class="obj-hp-bar">
                         <div class="obj-hp-fill" id="obj-hp-fill-1"></div>
                         <span class="obj-hp-text" id="obj-hp-text-1">4k / 4k</span>
@@ -67,6 +57,7 @@
                 </div>
                 <div class="battle-objective" id="obj-cp-2" data-index="2">
                     <span class="obj-name">Ponto 2</span>
+                    <span class="obj-owner-name" id="obj-owner-2"></span>
                     <div class="obj-hp-bar">
                         <div class="obj-hp-fill" id="obj-hp-fill-2"></div>
                         <span class="obj-hp-text" id="obj-hp-text-2">4k / 4k</span>
@@ -75,6 +66,7 @@
                 </div>
                 <div class="battle-objective" id="obj-cp-3" data-index="3">
                     <span class="obj-name">Ponto 3</span>
+                    <span class="obj-owner-name" id="obj-owner-3"></span>
                     <div class="obj-hp-bar">
                         <div class="obj-hp-fill" id="obj-hp-fill-3"></div>
                         <span class="obj-hp-text" id="obj-hp-text-3">4k / 4k</span>
@@ -83,6 +75,7 @@
                 </div>
                 <div class="battle-objective" id="obj-cp-4" data-index="4">
                     <span class="obj-name">Ponto 4</span>
+                    <span class="obj-owner-name" id="obj-owner-4"></span>
                     <div class="obj-hp-bar">
                         <div class="obj-hp-fill" id="obj-hp-fill-4"></div>
                         <span class="obj-hp-text" id="obj-hp-text-4">4k / 4k</span>
@@ -91,7 +84,6 @@
                 </div>
             </div>
 
-            <!-- Rodapé (Ações) -->
             <div id="battleFooter">
                 <div id="playerBattleInfo">
                     <div id="player-attacks">Ações: 3 / 3</div>
@@ -103,7 +95,6 @@
             </div>
         </div>
 
-        <!-- Telas de Estado -->
         <div id="loadingScreen">
             <h2>Carregando...</h2>
         </div>
@@ -113,8 +104,7 @@
             <p>Seu Líder ou Co-Líder pode registrar a guilda para a batalha da próxima hora.</p>
             <p id="registrationTimer"></p>
             <div class="city-grid" id="cityGrid">
-                <!-- Cidades preenchidas por JS -->
-            </div>
+                </div>
             <p id="citySelectionMessage" style="color: #ffc107;"></p>
         </div>
 
@@ -125,20 +115,29 @@
             <h1 id="waitTimer">00:00</h1>
         </div>
         
-        <div id="resultsScreen" style="display: none;">
-            <h2>Batalha Finalizada</h2>
-            <p>A batalha em <strong id="resultCityName"></strong> terminou!</p>
-            <h3>Ranking de Honra</h3>
-            <ol id="resultsRanking">
-                <!-- Resultados preenchidos por JS -->
-            </ol>
-            <p id="resultsRewardMessage"></p>
-            <button onclick="window.location.href='guild.html'" class="action-btn">Voltar</button>
+        <div id="resultsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="modal-close" id="resultsModalClose">&times;</span>
+                <h2>Batalha Finalizada</h2>
+                <p>A batalha em <strong id="resultCityName"></strong> terminou!</p>
+
+                <h3>Ranking de Honra</h3>
+                <ol id="resultsRankingHonor" class="ranking-list results-list">
+                    </ol>
+                
+                <h3>Top 5 Dano</h3>
+                <ol id="resultsRankingDamage" class="ranking-list results-list">
+                    </ol>
+
+                <h3>Recompensas</h3>
+                <p id="resultsRewardMessage"></p>
+                
+                <button onclick="window.location.href='guild.html'" class="action-btn">Voltar</button>
+            </div>
         </div>
 
     </div>
     
-    <!-- Modal de Ação do Objetivo -->
     <div id="objectiveModal" class="modal">
         <div class="modal-content">
             <span class="modal-close" id="objectiveModalClose">&times;</span>
@@ -151,7 +150,6 @@
         </div>
     </div>
     
-    <!-- Modal de Alerta Simples -->
     <div id="alertModal" class="modal">
         <div class="modal-content">
             <span class="modal-close" id="alertModalClose">&times;</span>
@@ -160,7 +158,6 @@
         </div>
     </div>
     
-    <!-- REQUISIÇÃO 1: Modal de Ranking -->
     <div id="battleRankingModal" class="modal">
         <div class="modal-content">
             <span class="modal-close" id="rankingModalClose">&times;</span>
@@ -171,13 +168,45 @@
             </div>
             <div id="rankingTabGuilds" class="tab-pane active">
                 <ul class="ranking-list" id="guildRankingList">
-                    <!-- Preenchido por JS -->
-                </ul>
+                    </ul>
             </div>
             <div id="rankingTabDamage" class="tab-pane">
                 <ul class="ranking-list" id="playerDamageList">
-                    <!-- Preenchido por JS -->
+                    </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div id="cityRegisterConfirmModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="cityRegisterModalClose">&times;</span>
+            <h3 id="cityRegisterModalTitle">Confirmar Registro</h3>
+            <p>Deseja registrar sua guilda na batalha por <strong id="cityRegisterModalCityName"></strong>?</p>
+            <div id="cityRegisterModalGuildListArea">
+                <p>Guildas já registradas (Máx 4):</p>
+                <ul id="cityRegisterModalGuildList" class="ranking-list">
+                    <li>Nenhuma guilda registrada.</li>
                 </ul>
+            </div>
+            <p id="cityRegisterModalMessage" style="color: #ffc107;"></p>
+            <div id="cityRegisterModalActions">
+                <button id="cityRegisterModalCancelBtn" class="action-btn" style="background-color: #555;">Cancelar</button>
+                <button id="cityRegisterModalConfirmBtn" class="action-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="garrisonLeaveConfirmModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="garrisonLeaveModalClose">&times;</span>
+            <h3>Ação Perigosa</h3>
+            <p id="garrisonLeaveModalMessage" style="color: #ffc107;">
+                Atenção: Ao sair da sua guarnição atual, o objetivo ficará com 0 ou menos de HP e será **derrotado**.
+            </p>
+            <p>Deseja continuar mesmo assim?</p>
+            <div id="garrisonLeaveModalActions">
+                <button id="garrisonLeaveModalCancelBtn" class="action-btn" style="background-color: #555;">Cancelar</button>
+                <button id="garrisonLeaveModalConfirmBtn" class="action-btn">Continuar</button>
             </div>
         </div>
     </div>

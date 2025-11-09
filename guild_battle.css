@@ -1,0 +1,534 @@
+:root {
+            --guild-color-neutral: #888;
+            --guild-color-mine: #007bff;
+            --guild-color-enemy-1: #dc3545;
+            --guild-color-enemy-2: #ffc107;
+            --guild-color-enemy-3: #17a2b8;
+        }
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: 'Cinzel', serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-color: #121212;
+            color: white;
+        }
+
+        /* Top Bar Fixa */
+        #playerTopBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 10px;
+            background: linear-gradient(to bottom, #444, #222);
+            color: white;
+            flex-shrink: 0;
+            z-index: 1000;
+            box-sizing: border-box;
+        }
+        
+        #pageTitle {
+            font-weight: bold;
+            font-size: 1.1em;
+            text-align: center;
+            flex-grow: 1;
+        }
+
+        .top-bar-link {
+            display: flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+        }
+        
+        /* Container principal da Batalha */
+        #battleContainer {
+            flex-grow: 1;
+            width: 100%;
+            margin-top: 54px; /* Altura da topbar */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        /* Tela de Carregamento e Estados */
+        #loadingScreen, #citySelectionScreen, #waitingScreen, #resultsScreen {
+            position: absolute;
+            top: 54px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 54px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            z-index: 500;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        #citySelectionScreen {
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
+        }
+
+        #citySelectionScreen h2 {
+            margin-top: 0;
+        }
+
+        .city-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 20px;
+        }
+
+        .city-btn {
+            padding: 25px 10px;
+            font-size: 1em;
+            font-weight: bold;
+            
+        }
+
+        .city-btn.disabled {
+            filter: grayscale(1);
+            border-color: #555;
+        }
+        
+        /* Cabeçalho da Batalha (Timer e Pontos) */
+        #battleHeader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background: #111;
+            flex-shrink: 0;
+            border-bottom: 2px solid gold;
+        }
+        
+        #battleTimer {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #ffc107;
+        }
+        
+        /* REQUISIÇÃO 1: Botão de Ranking */
+        #showRankingBtn {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            cursor: pointer;
+        }
+        
+        #showRankingBtn img {
+            width: 40px;
+            height: 40px;
+            vertical-align: middle;
+        }
+
+        /* Mapa da Batalha */
+        
+        #battleMap {
+    flex-grow: 1;
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+
+    display: grid;
+    grid-template-areas:
+        "cp1 nexus cp2"
+        "cp3 nexus cp4";
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: auto auto auto;
+
+    justify-content: center; /* Junta tudo no centro */
+    align-content: center;
+    justify-items: center;
+    align-items: center;
+
+    width: fit-content;       /* Limita a largura ao conteúdo */
+    margin: 0 auto;           /* Centraliza o grid na tela */
+    gap: 6px;                 /* Pequeno espaço entre blocos */
+    padding: 0;
+}
+       
+       
+       .battle-objective {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 3px solid var(--guild-color-neutral);
+    border-radius: 10px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+    width: 180px;
+}
+
+
+        
+        
+        .battle-objective:hover {
+            transform: scale(1.05);
+        }
+#obj-nexus {
+    grid-area: nexus;
+    transform: scale(1.1);
+    z-index: 2;
+}
+     
+        #obj-cp-1 { grid-area: cp1; }
+        #obj-cp-2 { 
+          grid-area: cp2; }
+        #obj-cp-3 { grid-area: cp3; }
+        #obj-cp-4 { grid-area: cp4; }
+
+        .obj-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 2px #000;
+        }
+        
+        #obj-nexus .obj-name {
+            font-size: 1.3em;
+            color: gold;
+        }
+
+        .obj-hp-bar {
+            width: 90%;
+            height: 18px;
+            background: #333;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #777;
+            position: relative;
+        }
+
+        .obj-hp-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(to right, #ff4433, red);
+            transition: width 0.3s ease;
+        }
+
+        .obj-hp-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.8em;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px #000;
+            white-space: nowrap;
+        }
+        
+        .obj-garrison-count {
+            font-size: 0.9em;
+            margin-top: 5px;
+            color: #00bcd4;
+            font-weight: bold;
+        }
+
+        /* Rodapé de Ações do Jogador */
+        #battleFooter {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 10px;
+            background: #111;
+            flex-shrink: 0;
+            border-top: 2px solid gold;
+        }
+        
+        #playerBattleInfo {
+            text-align: center;
+        }
+
+        #player-attacks {
+            font-size: 1em;
+            font-weight: bold;
+            color: gold;
+        }
+        
+        #player-cooldown {
+            font-size: 0.9em;
+            color: #fff;
+        }
+        
+        #garrison-status {
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        #garrison-status.garrisoned {
+            color: #00bcd4;
+        }
+        
+        #garrison-status.cooldown {
+            color: #ffc107;
+        }
+
+        /* Modais */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1500;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
+            padding: 20px;
+            border: 1px solid gold;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-close {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        #objectiveModalActions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .action-btn {
+            padding: 15px 30px;
+        }
+
+        #resultsRanking {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        #resultsRanking li {
+            font-size: 1.1em;
+            padding: 8px;
+            border-bottom: 1px solid #555;
+        }
+        
+        #resultsRanking li:first-child {
+            font-weight: bold;
+            color: gold;
+        }
+        
+        /* REQUISIÇÃO 1: Estilos do Modal de Ranking */
+        .ranking-tabs {
+            display: flex;
+            border-bottom: 2px solid #555;
+            margin-bottom: 15px;
+        }
+        .ranking-tabs .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: #333;
+            border: none;
+            color: #aaa;
+            font-size: 1em;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+        }
+        .ranking-tabs .tab-btn.active {
+            background: #111;
+            color: gold;
+            border-bottom: 2px solid gold;
+            margin-bottom: -2px;
+        }
+        .tab-pane {
+            display: none;
+            text-align: left;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+        .tab-pane.active {
+            display: block;
+        }
+        .ranking-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .ranking-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 5px;
+            border-bottom: 1px solid #444;
+        }
+        .ranking-list li:first-child {
+            color: gold;
+        }
+        
+        /* REQUISIÇÃO 3: Estilos de Dano e Shake (da Raid) */
+        .damage-number, .crit-damage-number {
+            position: absolute;
+            font-size: 1.8em;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px #000;
+            animation: floatUp 1s ease-out forwards;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .crit-damage-number {
+            color: gold;
+            font-size: 2.2em;
+            animation: floatUpCrit 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-60px); }
+        }
+        @keyframes floatUpCrit {
+            0% { opacity: 1; transform: translateY(0) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-70px) scale(1); }
+        }
+        
+        @keyframes shake-objective {
+            0%, 100% { transform: translateX(0); }
+            10%, 10%, 10% { transform: translateX(-5px); }
+            20%, 20%, 20% { transform: translateX(5px); }
+        }
+        .shake-animation {
+            animation: shake-objective 0.9s ease-in-out;
+        }
+        
+        /* Mapa da Batalha */
+
+        #battleMap {
+    flex-grow: 1;
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+
+    /* Removendo as propriedades de Grid e usando Flexbox para centralizar, se necessário */
+    display: flex; 
+    flex-direction: column;
+    justify-content: center; 
+    align-items: center; 
+    height: 100%;
+
+    width: 100%;       
+    margin: 0 auto;           
+    gap: 6px;                 
+    padding: 0;
+
+    /* PROPRIEDADES DE GRID REMOVIDAS */
+    /*
+    grid-template-areas: "cp1 nexus cp2" "cp3 nexus cp4";
+    grid-template-rows: 1fr 1fr;
+    grid-template-columns: auto auto auto;
+    justify-content: center; 
+    align-content: center;
+    justify-items: center;
+    align-items: center;
+    */
+}
+
+.battle-objective {
+    position: absolute; /* MUDANÇA: Define posição absoluta */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 3px solid var(--guild-color-neutral);
+    border-radius: 10px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+    width: 180px; /* Mantido conforme solicitado */
+}
+
+/* POSICIONAMENTO ABSOLUTO DOS OBJETIVOS */
+#obj-nexus {
+    /* Centraliza o Nexus no centro do #battleMap */
+    top: 50%;
+    left: 50%;
+    /* Centraliza o próprio elemento e aplica o scale */
+    transform: translate(-50%, -50%) scale(1.1); 
+    z-index: 2;
+    /* grid-area: nexus; (Removido) */
+}
+
+#obj-cp-1 { 
+    /* Ponto 1: Canto Superior Esquerdo */
+    top: 20%; 
+    left: 25%; 
+    transform: translate(-50%, -50%); 
+    /* grid-area: cp1; (Removido) */
+}
+#obj-cp-2 { 
+    /* Ponto 2: Canto Superior Direito */
+    top: 20%; 
+    right: 25%; 
+    transform: translate(50%, -50%); 
+    /* grid-area: cp2; (Removido) */
+}
+#obj-cp-3 { 
+    /* Ponto 3: Canto Inferior Esquerdo */
+    bottom: 20%; 
+    left: 25%; 
+    transform: translate(-50%, 50%); 
+    /* grid-area: cp3; (Removido) */
+}
+#obj-cp-4 { 
+    /* Ponto 4: Canto Inferior Direito */
+    bottom: 20%; 
+    right: 25%; 
+    transform: translate(50%, 50%); 
+    /* grid-area: cp4; (Removido) */
+}
+
+.obj-owner-name {
+            font-size: 0.8em;
+            font-weight: 500;
+            margin-top: -3px;
+            margin-bottom: 5px;
+            color: var(--guild-color-neutral); /* Cor padrão Neutra */
+        }

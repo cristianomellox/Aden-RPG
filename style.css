@@ -878,7 +878,7 @@ margin-right: 15px;
 #sideMenu {
   min-width: 70px;
   position: fixed;
-  top: 53%;
+  top: 50%;
   right: 0px;
   transform: translateY(-50%);
   background: linear-gradient(to bottom, #444 0%, #222 30%, #444 100%);

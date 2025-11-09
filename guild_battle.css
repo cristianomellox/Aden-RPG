@@ -1,8 +1,8 @@
 :root {
-            --guild-color-neutral: #888;
+            --guild-color-neutral: green;
             --guild-color-mine: #007bff;
-            --guild-color-enemy-1: #dc3545;
-            --guild-color-enemy-2: #ffc107;
+            --guild-color-enemy-1: #FFA500;
+            --guild-color-enemy-2: lightblue;
             --guild-color-enemy-3: #17a2b8;
         }
         
@@ -79,11 +79,11 @@
             box-sizing: border-box;
         }
         
-        #citySelectionScreen {
+        #citySelectionScreen, #waitingScreen { /* Combinado */
             background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
         }
 
-        #citySelectionScreen h2 {
+        #citySelectionScreen h2, #waitingScreen h2 {
             margin-top: 0;
         }
 
@@ -106,6 +106,34 @@
         .city-btn.disabled {
             filter: grayscale(1);
             border-color: #555;
+        }
+
+        /* REQUISIÇÃO 1: Lista de Guildas na Tela de Espera */
+        #waitGuildListArea {
+            width: 90%;
+            max-width: 400px;
+            margin-top: 20px;
+        }
+        
+        #waitGuildList {
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid #555;
+            border-radius: 5px;
+            text-align: center;
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 0 0;
+        }
+        
+        #waitGuildList li {
+            padding: 8px 10px;
+            font-weight: bold;
+            border-bottom: 1px solid #444;
+        }
+         #waitGuildList li:last-child {
+            border-bottom: none;
         }
         
         /* Cabeçalho da Batalha (Timer e Pontos) */
@@ -177,7 +205,7 @@
     cursor: pointer;
     border: 3px solid var(--guild-color-neutral);
     border-radius: 10px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.8);
     padding: 10px;
     box-sizing: border-box;
     transition: all 0.3s ease;

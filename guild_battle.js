@@ -48,7 +48,7 @@ const screens = {
 const battle = {
     header: $('battleHeader'),
     timer: $('battleTimer'),
-    rankingBtn: $('showRankingBtn'), // REQ 1
+    rankingBtn: $('showRankingBtn'),
     map: $('battleMap'),
     footer: $('battleFooter'),
     playerAttacks: $('player-attacks'),
@@ -255,7 +255,29 @@ function updateCityRegistrationButtons() {
  */
 function renderWaitingScreen(instance) {
     $('waitCityName').textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
-    // O timer de 1s (startGlobalUITimer) vai atualizar o 'waitTimer'
+    
+    // REQUISIÇÃO 1: Renderiza a lista de guildas
+    const waitListEl = $('waitGuildList');
+    waitListEl.innerHTML = '';
+    const registeredGuilds = instance.registered_guilds || [];
+    
+    if (registeredGuilds.length === 0) {
+        waitListEl.innerHTML = '<li>Aguardando guildas...</li>';
+    } else {
+        // Mapeia guild_id para cor (necessário aqui também)
+        const guildColorMap = new Map();
+        registeredGuilds.forEach((g, index) => {
+            guildColorMap.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
+        });
+
+        registeredGuilds.forEach(g => {
+            const li = document.createElement('li');
+            const color = guildColorMap.get(g.guild_id);
+            li.innerHTML = `<strong style="color: ${color};">${g.guild_name}</strong>`;
+            waitListEl.appendChild(li);
+        });
+    }
+
     showScreen('waiting');
 }
 
@@ -733,6 +755,12 @@ modals.objectiveAttackBtn.onclick = async () => {
  */
 modals.objectiveGarrisonBtn.onclick = async () => {
     if (!selectedObjective) return;
+    
+    // REQUISIÇÃO 2 (FIX): Checa o cooldown no frontend ANTES da lógica otimista
+    if (battle.garrisonStatus.textContent.includes('Guarnição CD:')) {
+        showAlert('Aguarde o cooldown de 30 segundos para guarnecer novamente.');
+        return;
+    }
 
     // REQ 3: Envolve a ação no wrapper de verificação
     checkGarrisonLeaveAndExecute(async () => {

@@ -62,7 +62,7 @@
         }
 
         /* Tela de Carregamento e Estados */
-        #loadingScreen, #citySelectionScreen, #waitingScreen, #resultsScreen {
+        #loadingScreen, #citySelectionScreen, #waitingScreen {
             position: absolute;
             top: 54px;
             left: 0;
@@ -325,7 +325,7 @@
             cursor: pointer;
         }
         
-        #objectiveModalActions {
+        #objectiveModalActions, #cityRegisterModalActions, #garrisonLeaveModalActions {
             display: flex;
             justify-content: center;
             gap: 15px;
@@ -336,23 +336,31 @@
             padding: 15px 30px;
         }
 
-        #resultsRanking {
+        /* REQUISIÇÃO 5: Listas de Resultado */
+        .results-list {
             list-style: none;
             padding: 0;
             text-align: left;
-            max-height: 300px;
+            max-height: 150px; /* Altura menor por seção */
             overflow-y: auto;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.2);
+            margin-bottom: 15px;
         }
         
-        #resultsRanking li {
-            font-size: 1.1em;
+        .results-list li {
+            font-size: 1em;
             padding: 8px;
             border-bottom: 1px solid #555;
         }
         
-        #resultsRanking li:first-child {
+        .results-list li:first-child {
             font-weight: bold;
             color: gold;
+        }
+         .results-list li:last-child {
+            border-bottom: none;
         }
         
         /* REQUISIÇÃO 1: Estilos do Modal de Ranking */
@@ -456,17 +464,6 @@
     margin: 0 auto;           
     gap: 6px;                 
     padding: 0;
-
-    /* PROPRIEDADES DE GRID REMOVIDAS */
-    /*
-    grid-template-areas: "cp1 nexus cp2" "cp3 nexus cp4";
-    grid-template-rows: 1fr 1fr;
-    grid-template-columns: auto auto auto;
-    justify-content: center; 
-    align-content: center;
-    justify-items: center;
-    align-items: center;
-    */
 }
 
 .battle-objective {
@@ -487,48 +484,51 @@
 
 /* POSICIONAMENTO ABSOLUTO DOS OBJETIVOS */
 #obj-nexus {
-    /* Centraliza o Nexus no centro do #battleMap */
     top: 50%;
     left: 50%;
-    /* Centraliza o próprio elemento e aplica o scale */
     transform: translate(-50%, -50%) scale(1.1); 
     z-index: 2;
-    /* grid-area: nexus; (Removido) */
 }
 
 #obj-cp-1 { 
-    /* Ponto 1: Canto Superior Esquerdo */
     top: 20%; 
     left: 25%; 
     transform: translate(-50%, -50%); 
-    /* grid-area: cp1; (Removido) */
 }
 #obj-cp-2 { 
-    /* Ponto 2: Canto Superior Direito */
     top: 20%; 
     right: 25%; 
     transform: translate(50%, -50%); 
-    /* grid-area: cp2; (Removido) */
 }
 #obj-cp-3 { 
-    /* Ponto 3: Canto Inferior Esquerdo */
     bottom: 20%; 
     left: 25%; 
     transform: translate(-50%, 50%); 
-    /* grid-area: cp3; (Removido) */
 }
 #obj-cp-4 { 
-    /* Ponto 4: Canto Inferior Direito */
     bottom: 20%; 
     right: 25%; 
     transform: translate(50%, 50%); 
-    /* grid-area: cp4; (Removido) */
 }
 
+/* REQUISIÇÃO 4: Estilo do Nome do Dono */
 .obj-owner-name {
-            font-size: 0.8em;
-            font-weight: 500;
-            margin-top: -3px;
-            margin-bottom: 5px;
-            color: var(--guild-color-neutral); /* Cor padrão Neutra */
-        }
+    font-size: 0.8em;
+    font-weight: 500;
+    margin-top: -3px;
+    margin-bottom: 5px;
+    color: var(--guild-color-neutral); /* Cor padrão Neutra */
+    text-shadow: 1px 1px 1px #000;
+}
+
+#cityRegisterModalGuildList {
+    max-height: 150px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid #555;
+    border-radius: 5px;
+    text-align: left;
+}
+#cityRegisterModalGuildList li {
+    padding: 6px 10px;
+}

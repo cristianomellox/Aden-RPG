@@ -14,6 +14,12 @@ let pollInterval = null;
 let uiTimerInterval = null;
 let selectedObjective = null;
 
+// REQ 1: Variáveis para o modal de registro
+let cityToRegister = null;
+
+// REQ 3: Variável para o callback de confirmação
+let pendingGarrisonLeaveAction = null;
+
 const CITIES = [
     { id: 1, name: 'Capital' }, { id: 2, name: 'Zion' },
     { id: 3, name: 'Elendor' }, { id: 4, name: 'Mitrar' },
@@ -36,7 +42,7 @@ const screens = {
     citySelection: $('citySelectionScreen'),
     waiting: $('waitingScreen'),
     battle: $('battleActiveScreen'),
-    results: $('resultsScreen')
+    results: $('resultsModal') // REQ 5: Alterado para o modal
 };
 
 const battle = {
@@ -69,7 +75,32 @@ const modals = {
     rankingTabGuilds: $('rankingTabGuilds'),
     rankingTabDamage: $('rankingTabDamage'),
     guildRankingList: $('guildRankingList'),
-    playerDamageList: $('playerDamageList')
+    playerDamageList: $('playerDamageList'),
+
+    // REQ 1: Registro
+    cityRegister: $('cityRegisterConfirmModal'),
+    cityRegisterClose: $('cityRegisterModalClose'),
+    cityRegisterTitle: $('cityRegisterModalTitle'),
+    cityRegisterCityName: $('cityRegisterModalCityName'),
+    cityRegisterGuildList: $('cityRegisterModalGuildList'),
+    cityRegisterMessage: $('cityRegisterModalMessage'),
+    cityRegisterCancelBtn: $('cityRegisterModalCancelBtn'),
+    cityRegisterConfirmBtn: $('cityRegisterModalConfirmBtn'),
+    
+    // REQ 3: Saída de Guarnição
+    garrisonLeave: $('garrisonLeaveConfirmModal'),
+    garrisonLeaveClose: $('garrisonLeaveModalClose'),
+    garrisonLeaveMessage: $('garrisonLeaveModalMessage'),
+    garrisonLeaveCancelBtn: $('garrisonLeaveModalCancelBtn'),
+    garrisonLeaveConfirmBtn: $('garrisonLeaveModalConfirmBtn'),
+    
+    // REQ 5: Resultados
+    results: $('resultsModal'),
+    resultsClose: $('resultsModalClose'),
+    resultCityName: $('resultCityName'),
+    resultsRankingHonor: $('resultsRankingHonor'),
+    resultsRankingDamage: $('resultsRankingDamage'),
+    resultsRewardMessage: $('resultsRewardMessage')
 };
 
 // REQ 3: Áudio
@@ -85,7 +116,12 @@ if(audio.crit) audio.crit.volume = 0.1;
 function showScreen(screenName) {
     Object.values(screens).forEach(s => s.style.display = 'none');
     if (screens[screenName]) {
-        screens[screenName].style.display = 'flex';
+        // REQ 5: Telas de "estado" são flex, modal de resultado não é
+        if (screenName === 'results') {
+             screens[screenName].style.display = 'flex'; // Modais são flex
+        } else {
+             screens[screenName].style.display = 'flex';
+        }
     }
 }
 
@@ -96,6 +132,8 @@ function showAlert(message) {
 
 modals.alertOk.onclick = () => modals.alert.style.display = 'none';
 modals.alertClose.onclick = () => modals.alert.style.display = 'none';
+// REQ 5
+if(modals.resultsClose) modals.resultsClose.onclick = () => modals.results.style.display = 'none';
 
 function formatTime(totalSeconds) {
     const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
@@ -170,7 +208,8 @@ function renderCitySelectionScreen(playerRank) {
              btn.style.opacity = '0.6';
         }
 
-        btn.onclick = () => handleCityRegistration(city.id, city.name);
+        // REQ 1: Modificado para chamar o *pré-registro*
+        btn.onclick = () => handleCityRegistrationPre(city.id, city.name);
         cityGrid.appendChild(btn);
     });
 
@@ -225,7 +264,7 @@ function renderWaitingScreen(instance) {
  */
 function renderBattleScreen(state) {
     currentBattleState = state;
-    userPlayerStats = state.player_stats;
+    userPlayerStats = state.player_stats; // Armazena stats para Req 3
 
     // Define o background
     const city = CITIES.find(c => c.id === state.instance.city_id);
@@ -298,6 +337,8 @@ function renderAllObjectives(objectives) {
         });
         currentBattleState.guildColorMap = guildColorMap;
     }
+    
+    const registeredGuilds = currentBattleState.instance.registered_guilds || [];
 
     objectives.forEach(obj => {
         const el = $(`obj-cp-${obj.objective_index}`) || $('obj-nexus');
@@ -320,11 +361,22 @@ function renderAllObjectives(objectives) {
            if (garrisonEl) garrisonEl.textContent = '';
         }
 
-        // Define a cor da borda
-        if (obj.owner_guild_id && currentBattleState.guildColorMap) {
-            el.style.borderColor = currentBattleState.guildColorMap.get(obj.owner_guild_id) || 'var(--guild-color-neutral)';
-        } else {
-            el.style.borderColor = 'var(--guild-color-neutral)';
+        // REQUISIÇÃO 4: Define o nome e a cor do dono
+        const ownerEl = $(`obj-owner-${obj.objective_index}`);
+        if (ownerEl) {
+            if (obj.owner_guild_id && currentBattleState.guildColorMap) {
+                const guild = registeredGuilds.find(g => g.guild_id === obj.owner_guild_id);
+                const color = currentBattleState.guildColorMap.get(obj.owner_guild_id) || 'var(--guild-color-neutral)';
+                
+                ownerEl.textContent = guild ? guild.guild_name : 'Dominado';
+                ownerEl.style.color = color;
+                el.style.borderColor = color;
+                
+            } else {
+                ownerEl.textContent = 'Não Dominado';
+                ownerEl.style.color = 'var(--guild-color-neutral)';
+                el.style.borderColor = 'var(--guild-color-neutral)';
+            }
         }
     });
 }
@@ -391,44 +443,67 @@ function renderPlayerFooter(playerState, playerGarrison) {
 }
 
 /**
- * Renderiza a tela de resultados
+ * Renderiza a tela de resultados (REQ 5)
  */
-function renderResultsScreen(instance) {
+function renderResultsScreen(instance, playerDamageRanking) {
     // Tenta distribuir recompensas (seguro, pois a função tem trava)
     supabase.rpc('distribute_battle_rewards', { p_battle_instance_id: instance.id })
         .then(({data, error}) => {
-            if (error) console.warn("Erro ao tentar distribuir recompensas:", error.message);
-            else console.log("Distribuição de recompensas verificada:", data.message);
+            if (error) {
+                console.warn("Erro ao tentar distribuir recompensas:", error.message);
+                // Mostra erro na UI de resultados
+                modals.resultsRewardMessage.textContent = `Falha ao processar recompensas: ${error.message}`;
+                modals.resultsRewardMessage.style.color = '#dc3545';
+            } else {
+                console.log("Distribuição de recompensas verificada:", data.message);
+                // Mostra a mensagem do backend (ex: "Recompensas distribuídas" ou "Já distribuídas")
+                // A lógica de quem ganhou está abaixo
+            }
         });
 
-    $('resultCityName').textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
+    modals.resultCityName.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
 
-    const rankingEl = $('resultsRanking');
-    const rewardMsgEl = $('resultsRewardMessage');
-    rankingEl.innerHTML = '';
+    // --- Ranking de Honra ---
+    modals.resultsRankingHonor.innerHTML = '';
+    if (!instance.registered_guilds || instance.registered_guilds.length === 0) {
+        modals.resultsRankingHonor.innerHTML = '<li>Nenhum dado de ranking.</li>';
+    } else {
+        const sortedGuilds = [...instance.registered_guilds].sort((a, b) => b.honor_points - a.honor_points);
+        sortedGuilds.forEach((g, index) => {
+            const li = document.createElement('li');
+            li.textContent = `#${index + 1} ${g.guild_name} - ${g.honor_points} Pontos`;
+            modals.resultsRankingHonor.appendChild(li);
+        });
 
-    if (!instance.registered_guilds) {
-        rankingEl.innerHTML = '<li>Nenhum dado de ranking.</li>';
-        showScreen('results');
-        return;
+        // --- Mensagem de Recompensa ---
+        const myGuildResult = sortedGuilds.find(g => g.guild_id === userGuildId);
+        if (myGuildResult && myGuildResult.honor_points === sortedGuilds[0].honor_points && sortedGuilds[0].honor_points > 0) {
+            modals.resultsRewardMessage.textContent = "Sua guilda venceu! As recompensas (Cristais, Pedras, Baús) foram enviadas aos participantes com dano. Bônus para Top 1 e 2 de dano!";
+            modals.resultsRewardMessage.style.color = 'gold';
+        } else {
+            modals.resultsRewardMessage.textContent = "Sua guilda não venceu desta vez. Mais sorte na próxima!";
+            modals.resultsRewardMessage.style.color = '#aaa';
+        }
     }
 
-    const sortedGuilds = [...instance.registered_guilds].sort((a, b) => b.honor_points - a.honor_points);
-
-    sortedGuilds.forEach((g, index) => {
-        const li = document.createElement('li');
-        li.textContent = `#${index + 1} ${g.guild_name} - ${g.honor_points} Pontos`;
-        rankingEl.appendChild(li);
-    });
-
-    const myGuildResult = sortedGuilds.find(g => g.guild_id === userGuildId);
-
-    if (myGuildResult && myGuildResult.honor_points === sortedGuilds[0].honor_points && sortedGuilds[0].honor_points > 0) {
-        rewardMsgEl.textContent = "Sua guilda venceu! As recompensas foram enviadas.";
-        rewardMsgEl.style.color = 'gold';
+    // --- Ranking de Dano (Top 5) ---
+    modals.resultsRankingDamage.innerHTML = '';
+    if (!playerDamageRanking || playerDamageRanking.length === 0) {
+        modals.resultsRankingDamage.innerHTML = '<li>Nenhum jogador causou dano.</li>';
     } else {
-        rewardMsgEl.textContent = "Sua guilda não venceu desta vez. Mais sorte na próxima!";
-        rewardMsgEl.style.color = '#aaa';
+        // Mapeia guild_id para nome para o ranking de dano
+        const guildNameMap = new Map();
+        (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
+        
+        playerDamageRanking.forEach((p, index) => {
+            const li = document.createElement('li');
+            const guildName = guildNameMap.get(p.guild_id) ? `(${guildNameMap.get(p.guild_id)})` : '';
+            li.innerHTML = `
+                <span>#${index + 1} ${p.name} ${guildName}</span>
+                <span>${kFormatter(p.total_damage_dealt)}</span>
+            `;
+            modals.resultsRankingDamage.appendChild(li);
+        });
     }
 
     showScreen('results');
@@ -437,21 +512,80 @@ function renderResultsScreen(instance) {
 // --- Lógica de Interação ---
 
 /**
- * Chamada quando o líder clica para registrar
+ * REQ 1: Chamada quando o líder clica para registrar (Passo 1: Abrir Modal)
  */
-async function handleCityRegistration(cityId, cityName) {
-    const msgEl = $('citySelectionMessage');
+async function handleCityRegistrationPre(cityId, cityName) {
+    cityToRegister = { id: cityId, name: cityName }; // Armazena dados
+    
+    modals.cityRegisterCityName.textContent = cityName;
+    modals.cityRegisterMessage.textContent = "Carregando guildas registradas...";
+    modals.cityRegisterGuildList.innerHTML = '';
+    modals.cityRegisterConfirmBtn.disabled = true;
+
+    modals.cityRegister.style.display = 'flex';
+
+    // Busca a lista de guildas
+    const { data, error } = await supabase.rpc('get_city_registrations', { p_city_id: cityId });
+
+    if (error || !data.success) {
+        modals.cityRegisterMessage.textContent = `Erro: ${error ? error.message : data.message}`;
+        modals.cityRegisterMessage.style.color = '#dc3545';
+        return;
+    }
+
+    const guilds = data.registered_guilds || [];
+    if (guilds.length === 0) {
+        modals.cityRegisterGuildList.innerHTML = '<li>Nenhuma guilda registrada.</li>';
+    } else {
+        guilds.forEach(g => {
+            const li = document.createElement('li');
+            li.textContent = g.guild_name || 'Guilda Desconhecida';
+            modals.cityRegisterGuildList.appendChild(li);
+        });
+    }
+
+    if (guilds.length >= 4) {
+        modals.cityRegisterMessage.textContent = "Esta cidade já atingiu o limite de 4 guildas.";
+        modals.cityRegisterMessage.style.color = '#ffc107';
+        modals.cityRegisterConfirmBtn.disabled = true;
+    } else {
+        modals.cityRegisterMessage.textContent = "";
+        modals.cityRegisterConfirmBtn.disabled = false;
+    }
+}
+
+// REQ 1: Listeners do modal de registro
+modals.cityRegisterClose.onclick = () => modals.cityRegister.style.display = 'none';
+modals.cityRegisterCancelBtn.onclick = () => modals.cityRegister.style.display = 'none';
+modals.cityRegisterConfirmBtn.onclick = () => {
+    if (cityToRegister) {
+        handleCityRegistrationConfirm(cityToRegister.id, cityToRegister.name);
+    }
+};
+
+/**
+ * REQ 1: Chamada quando o líder clica em "Confirmar" no modal
+ */
+async function handleCityRegistrationConfirm(cityId, cityName) {
+    const msgEl = modals.cityRegisterMessage;
     msgEl.textContent = `Registrando em ${cityName}...`;
+    modals.cityRegisterConfirmBtn.disabled = true;
+    modals.cityRegisterCancelBtn.disabled = true;
 
     const { data, error } = await supabase.rpc('register_for_guild_battle', { p_city_id: cityId });
 
     if (error || !data.success) {
         msgEl.textContent = `Erro: ${error ? error.message : data.message}`;
         msgEl.style.color = '#dc3545';
+        modals.cityRegisterConfirmBtn.disabled = false; // Permite tentar de novo
+        modals.cityRegisterCancelBtn.disabled = false;
     } else {
         msgEl.textContent = data.message;
         msgEl.style.color = '#28a745';
-        setTimeout(pollBattleState, 2000); // Recarrega o estado
+        setTimeout(() => {
+            modals.cityRegister.style.display = 'none'; // Fecha o modal
+            pollBattleState(); // Recarrega o estado
+        }, 2000);
     }
 }
 
@@ -471,9 +605,12 @@ function handleObjectiveClick(objective) {
 
     modals.objectiveGarrisonBtn.style.display = isOwned ? 'inline-block' : 'none';
 
-    const isGarrisoned = currentBattleState.player_garrison && currentBattleState.player_garrison.objective_id !== objective.id;
-    modals.objectiveGarrisonWarning.style.display = isGarrisoned ? 'block' : 'none';
-    modals.objectiveGarrisonWarning.textContent = "Atenção: Atacar removerá você da sua guarnição atual.";
+    // REQ 3: Modificado para aviso de *qualquer* ação
+    const isGarrisonedElsewhere = currentBattleState.player_garrison && 
+                                  (!isOwned || currentBattleState.player_garrison.objective_id !== objective.id);
+                                  
+    modals.objectiveGarrisonWarning.style.display = isGarrisonedElsewhere ? 'block' : 'none';
+    modals.objectiveGarrisonWarning.textContent = "Atenção: Esta ação removerá você da sua guarnição atual.";
 
     modals.objective.style.display = 'flex';
 }
@@ -481,110 +618,185 @@ function handleObjectiveClick(objective) {
 modals.objectiveClose.onclick = () => modals.objective.style.display = 'none';
 
 /**
+ * REQ 3: Wrapper de Ação para checar saída de guarnição
+ * @param {function} actionCallback - A função a ser executada (atacar ou guarnecer)
+ */
+function checkGarrisonLeaveAndExecute(actionCallback) {
+    // 1. Verifica se o jogador está guarnecendo
+    if (!currentBattleState || !currentBattleState.player_garrison || !userPlayerStats) {
+        actionCallback(); // Não está guarnecendo, executa direto
+        return;
+    }
+    
+    // 2. Encontra o objetivo onde ele está
+    const oldObjectiveId = currentBattleState.player_garrison.objective_id;
+    const oldObjective = currentBattleState.objectives.find(o => o.id === oldObjectiveId);
+    const playerHealth = userPlayerStats.health ? parseInt(userPlayerStats.health, 10) : 0;
+    
+    if (!oldObjective || playerHealth === 0) {
+        actionCallback(); // Não achou o objetivo antigo ou player não tem HP, executa direto
+        return;
+    }
+    
+    // 3. Calcula HP
+    const currentTotalHp = (oldObjective.current_hp || 0) + (oldObjective.garrison_hp || 0);
+    const newTotalHp = currentTotalHp - playerHealth;
+    
+    // 4. Verifica se o HP ficará negativo
+    if (newTotalHp > 0) {
+        actionCallback(); // HP ficará positivo, executa direto
+        return;
+    }
+    
+    // 5. HP ficará <= 0, mostra modal de confirmação
+    pendingGarrisonLeaveAction = actionCallback; // Armazena a ação pendente
+    modals.garrisonLeave.style.display = 'flex';
+}
+
+// REQ 3: Listeners do modal de saída de guarnição
+modals.garrisonLeaveClose.onclick = () => {
+    pendingGarrisonLeaveAction = null;
+    modals.garrisonLeave.style.display = 'none';
+};
+modals.garrisonLeaveCancelBtn.onclick = () => {
+    pendingGarrisonLeaveAction = null;
+    modals.garrisonLeave.style.display = 'none';
+};
+modals.garrisonLeaveConfirmBtn.onclick = () => {
+    modals.garrisonLeave.style.display = 'none';
+    if (pendingGarrisonLeaveAction) {
+        pendingGarrisonLeaveAction(); // Executa a ação pendente
+    }
+    pendingGarrisonLeaveAction = null;
+};
+
+/**
  * Jogador clica em "Atacar" no modal
  */
 modals.objectiveAttackBtn.onclick = async () => {
     if (!selectedObjective) return;
+    
+    // REQ 3: Envolve a ação no wrapper de verificação
+    checkGarrisonLeaveAndExecute(async () => {
+        modals.objective.style.display = 'none';
+        
+        const { data, error } = await supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id });
 
-    modals.objective.style.display = 'none';
-    // Não mostra tela de loading para ataque, para ser mais rápido
-
-    const { data, error } = await supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id });
-
-    if (error || !data.success) {
-        showAlert(error ? error.message : data.message);
-        pollBattleState(); // Força poll para re-sincronizar
-        return;
-    }
-
-    // REQUISIÇÃO 3: Efeitos Visuais
-    const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
-    if (objectiveEl) {
-        playHitSound(data.is_crit);
-        displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
-        objectiveEl.classList.add('shake-animation');
-        setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
-    }
-
-    // Atualização otimista (parcial)
-    const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
-    if (obj) {
-        if (data.objective_destroyed) {
-            // Se destruiu, precisamos do estado completo
-            pollBattleState();
-        } else {
-            // Atualiza HP localmente
-            obj.current_hp = data.objective_new_hp;
-            obj.garrison_hp = 0; // HP da guarnição é "virtual"
-            renderAllObjectives(currentBattleState.objectives);
-
-            // Atualiza estado do jogador localmente
-            if(currentBattleState.player_state) {
-                 currentBattleState.player_state.attacks_left -= 1;
-                 currentBattleState.player_state.last_attack_at = new Date().toISOString();
-                 if(data.garrison_left) {
-                     currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
-                     currentBattleState.player_garrison = null;
-                 }
-                 renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-            } else {
-                pollBattleState(); // Fallback
-            }
+        if (error || !data.success) {
+            showAlert(error ? error.message : data.message);
+            pollBattleState(); // Força poll para re-sincronizar
+            return;
         }
-    } else {
-        pollBattleState(); // Fallback
-    }
+
+        // REQUISIÇÃO 3: Efeitos Visuais
+        const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
+        if (objectiveEl) {
+            playHitSound(data.is_crit);
+            displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
+            objectiveEl.classList.add('shake-animation');
+            setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
+        }
+
+        // Atualização otimista (parcial)
+        const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
+        if (obj) {
+            if (data.objective_destroyed) {
+                // Se destruiu, precisamos do estado completo
+                pollBattleState();
+            } else {
+                // REQUISIÇÃO 2: Atualiza HP localmente
+                obj.current_hp = data.objective_new_hp;
+                obj.garrison_hp = data.objective_new_garrison_hp; // <<< FIX
+                renderAllObjectives(currentBattleState.objectives);
+
+                // Atualiza estado do jogador localmente
+                if(currentBattleState.player_state) {
+                     currentBattleState.player_state.attacks_left -= 1;
+                     currentBattleState.player_state.last_attack_at = new Date().toISOString();
+                     if(data.garrison_left) {
+                         currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                         currentBattleState.player_garrison = null;
+                     }
+                     renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+                } else {
+                    pollBattleState(); // Fallback
+                }
+            }
+        } else {
+            pollBattleState(); // Fallback
+        }
+    });
 };
 
 /**
  * Jogador clica em "Guarnecer" no modal
- *
- * Agora usa atualização otimista: atualiza a UI imediatamente e executa o RPC em background.
  */
 modals.objectiveGarrisonBtn.onclick = async () => {
     if (!selectedObjective) return;
 
-    modals.objective.style.display = 'none';
+    // REQ 3: Envolve a ação no wrapper de verificação
+    checkGarrisonLeaveAndExecute(async () => {
+        modals.objective.style.display = 'none';
 
-    // --- Atualização otimista imediata ---
-    if (currentBattleState) {
-        // Remove guarnição anterior (se houver)
-        try {
-            if (!currentBattleState.player_state) currentBattleState.player_state = {};
-            // Marca player_garrison localmente
-            currentBattleState.player_garrison = {
-                objective_id: selectedObjective.id,
-                started_at: new Date().toISOString()
-            };
-            // Reset de possível cooldown de saída
-            currentBattleState.player_state.last_garrison_leave_at = null;
-            // Atualiza rodapé imediatamente
-            renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-        } catch (e) {
-            console.warn("Erro durante atualização otimista de guarnição:", e);
-        }
-    }
-
-    // --- Executa RPC em segundo plano ---
-    supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
-        .then(({ data, error }) => {
-            if (error || !data.success) {
-                // Se backend falhou, mostra alerta e força re-sync
-                showAlert(error ? error.message : data.message);
-                setTimeout(pollBattleState, 500);
-            } else if (data.message) {
-                // RPC retornou OK — log para inspeção, não sobrescreve a UI otimista
-                console.log("Guarnição confirmada pelo servidor:", data.message);
+        // --- Atualização otimista imediata ---
+        if (currentBattleState) {
+            try {
+                if (!currentBattleState.player_state) currentBattleState.player_state = {};
+                
+                // REQ 3: Se estava em outra guarnição, remove o HP antigo otimistamente
+                if (currentBattleState.player_garrison && userPlayerStats) {
+                    const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
+                    if (oldObj) {
+                        oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - parseInt(userPlayerStats.health, 10));
+                    }
+                }
+                
+                // Marca player_garrison localmente
+                currentBattleState.player_garrison = {
+                    objective_id: selectedObjective.id,
+                    started_at: new Date().toISOString()
+                };
+                
+                // Adiciona HP novo otimistamente
+                if (userPlayerStats) {
+                    const newObj = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                    if (newObj) {
+                         newObj.garrison_hp = (newObj.garrison_hp || 0) + parseInt(userPlayerStats.health, 10);
+                    }
+                }
+                
+                // Reset de possível cooldown de saída
+                currentBattleState.player_state.last_garrison_leave_at = null;
+                // Atualiza rodapé e objetivos imediatamente
+                renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+                renderAllObjectives(currentBattleState.objectives);
+                
+            } catch (e) {
+                console.warn("Erro durante atualização otimista de guarnição:", e);
             }
-        })
-        .catch(err => {
-            console.error("Erro RPC guarnição:", err);
-            showAlert("Erro ao guarnecer. Tentando sincronizar...");
-        })
-        .finally(() => {
-            // Sincroniza o estado real do servidor após curto intervalo
-            setTimeout(pollBattleState, 1500);
-        });
+        }
+
+        // --- Executa RPC em segundo plano ---
+        supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
+            .then(({ data, error }) => {
+                if (error || !data.success) {
+                    // Se backend falhou, mostra alerta e força re-sync
+                    showAlert(error ? error.message : data.message);
+                    setTimeout(pollBattleState, 500);
+                } else if (data.message) {
+                    // RPC retornou OK — log para inspeção, não sobrescreve a UI otimista
+                    console.log("Guarnição confirmada pelo servidor:", data.message);
+                }
+            })
+            .catch(err => {
+                console.error("Erro RPC guarnição:", err);
+                showAlert("Erro ao guarnecer. Tentando sincronizar...");
+            })
+            .finally(() => {
+                // Sincroniza o estado real do servidor após curto intervalo
+                setTimeout(pollBattleState, 1500);
+            });
+    });
 };
 
 // --- Lógica de Polling e Estado ---
@@ -607,6 +819,7 @@ async function pollBattleState() {
     // Atualiza dados globais
     if (data.player_stats) {
         userGuildId = data.player_stats.guild_id;
+        userPlayerStats = data.player_stats; // REQ 3: Garante que temos stats
     }
     userRank = data.player_rank;
 
@@ -654,7 +867,8 @@ async function pollBattleState() {
             break;
         case 'finished':
             stopPolling();
-            renderResultsScreen(data.instance);
+            // REQ 5: Passa o ranking de dano para a tela de resultados
+            renderResultsScreen(data.instance, data.player_damage_ranking);
             break;
         case 'no_guild':
             stopPolling();
@@ -801,8 +1015,11 @@ async function init() {
             
             // Alternância de Conteúdo (Panes)
             // *** CORREÇÃO CHAVE: Ajusta o case para corresponder aos IDs dos painéis ***
-            const targetIdSuffix = tabId.charAt(0).toUpperCase() + tabId.slice(1);
-            const targetPaneId = `rankingTab${targetIdSuffix}`;
+            // const targetIdSuffix = tabId.charAt(0).toUpperCase() + tabId.slice(1);
+            // const targetPaneId = `rankingTab${targetIdSuffix}`;
+            
+            // Simplificado para usar os IDs reais
+            const targetPaneId = tabId === 'guilds' ? 'rankingTabGuilds' : 'rankingTabDamage';
 
             document.querySelectorAll('#battleRankingModal .tab-pane').forEach(pane => {
                 const isActive = pane.id === targetPaneId;

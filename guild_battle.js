@@ -34,6 +34,14 @@ const GUILD_COLORS = [
     'var(--guild-color-enemy-3)'
 ];
 
+// NOVO: Definição dos Itens
+const REWARD_ITEMS = {
+    CRYSTALS: { name: 'Cristais', img: 'https://aden-rpg.pages.dev/assets/cristais.webp' },
+    REFORGE_STONE: { name: 'Pedra de Refundição', img: 'https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp' },
+    CARD_ADVANCED: { name: 'Cartão Avançado', img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp' },
+    CARD_COMMON: { name: 'Cartão Comum', img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp' }
+};
+
 // --- Elementos DOM ---
 const $ = (selector) => document.getElementById(selector);
 
@@ -101,6 +109,7 @@ const modals = {
     resultsRankingHonor: $('resultsRankingHonor'),
     resultsRankingDamage: $('resultsRankingDamage'),
     resultsRewardMessage: $('resultsRewardMessage')
+    // Os divs de recompensa são criados dinamicamente
 };
 
 // REQ 3: Áudio
@@ -186,7 +195,8 @@ function renderCitySelectionScreen(playerRank) {
     const minutes = now.getMinutes();
 
     const isLeader = playerRank === 'leader' || playerRank === 'co-leader';
-    let registrationOpen = minutes < 5;
+    // CORREÇÃO: Altera a lógica de registro para abrir a cada 15 minutos (duração de 5 minutos)
+    let registrationOpen = (minutes % 15) < 5;
 
     // O timer de 1s (startGlobalUITimer) vai atualizar o texto
 
@@ -229,7 +239,8 @@ function updateCityRegistrationButtons() {
     
     const now = new Date();
     const minutes = now.getMinutes();
-    let registrationOpen = minutes < 5;
+    // CORREÇÃO: Altera a lógica de registro para abrir a cada 15 minutos (duração de 5 minutos)
+    let registrationOpen = (minutes % 15) < 5;
 
     // Atualiza todos os botões no grid
     const cityButtons = document.querySelectorAll('#cityGrid .city-btn');
@@ -291,7 +302,7 @@ function renderBattleScreen(state) {
     // Define o background
     const city = CITIES.find(c => c.id === state.instance.city_id);
     if (city) {
-        battle.map.style.backgroundImage = `url(${city.map_image_url || 'https://aden-rpg.pages.dev/assets/capital.webp'})`;
+        battle.map.style.backgroundImage = `url(${city.map_image_url || 'https://aden-rpg.pages.dev/assets/guild_battle.webp'})`;
     }
 
     // O timer de 1s (startGlobalUITimer) vai atualizar o 'battleTimer'
@@ -464,8 +475,21 @@ function renderPlayerFooter(playerState, playerGarrison) {
     }
 }
 
+
 /**
- * Renderiza a tela de resultados (REQ 5)
+ * NOVO: Helper para criar HTML de item de recompensa
+ */
+function createRewardItemHTML(item, quantity) {
+    return `
+        <div class="reward-item">
+            <img src="${item.img}" alt="${item.name}">
+            <span>x${quantity}</span>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza a tela de resultados (REQ 5) - MODIFICADA
  */
 function renderResultsScreen(instance, playerDamageRanking) {
     // Tenta distribuir recompensas (seguro, pois a função tem trava)
@@ -473,47 +497,34 @@ function renderResultsScreen(instance, playerDamageRanking) {
         .then(({data, error}) => {
             if (error) {
                 console.warn("Erro ao tentar distribuir recompensas:", error.message);
-                // Mostra erro na UI de resultados
                 modals.resultsRewardMessage.textContent = `Falha ao processar recompensas: ${error.message}`;
                 modals.resultsRewardMessage.style.color = '#dc3545';
             } else {
                 console.log("Distribuição de recompensas verificada:", data.message);
-                // Mostra a mensagem do backend (ex: "Recompensas distribuídas" ou "Já distribuídas")
-                // A lógica de quem ganhou está abaixo
+                // A mensagem de sucesso/falha será definida abaixo
             }
         });
 
     modals.resultCityName.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
 
-    // --- Ranking de Honra ---
+    // --- Rankings de Honra e Dano (sem alteração) ---
     modals.resultsRankingHonor.innerHTML = '';
-    if (!instance.registered_guilds || instance.registered_guilds.length === 0) {
+    const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => b.honor_points - a.honor_points);
+    
+    if (sortedGuilds.length === 0) {
         modals.resultsRankingHonor.innerHTML = '<li>Nenhum dado de ranking.</li>';
     } else {
-        const sortedGuilds = [...instance.registered_guilds].sort((a, b) => b.honor_points - a.honor_points);
         sortedGuilds.forEach((g, index) => {
             const li = document.createElement('li');
             li.textContent = `#${index + 1} ${g.guild_name} - ${g.honor_points} Pontos`;
             modals.resultsRankingHonor.appendChild(li);
         });
-
-        // --- Mensagem de Recompensa ---
-        const myGuildResult = sortedGuilds.find(g => g.guild_id === userGuildId);
-        if (myGuildResult && myGuildResult.honor_points === sortedGuilds[0].honor_points && sortedGuilds[0].honor_points > 0) {
-            modals.resultsRewardMessage.textContent = "Sua guilda venceu! As recompensas (Cristais, Pedras, Baús) foram enviadas aos participantes com dano. Bônus para Top 1 e 2 de dano!";
-            modals.resultsRewardMessage.style.color = 'gold';
-        } else {
-            modals.resultsRewardMessage.textContent = "Sua guilda não venceu desta vez. Mais sorte na próxima!";
-            modals.resultsRewardMessage.style.color = '#aaa';
-        }
     }
 
-    // --- Ranking de Dano (Top 5) ---
     modals.resultsRankingDamage.innerHTML = '';
     if (!playerDamageRanking || playerDamageRanking.length === 0) {
         modals.resultsRankingDamage.innerHTML = '<li>Nenhum jogador causou dano.</li>';
     } else {
-        // Mapeia guild_id para nome para o ranking de dano
         const guildNameMap = new Map();
         (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
         
@@ -528,6 +539,110 @@ function renderResultsScreen(instance, playerDamageRanking) {
         });
     }
 
+    // --- NOVO: Lógica de Exibição de Recompensas ---
+
+    // 1. Cria os containers dinamicamente se não existirem
+    let guildRewardsEl = $('resultsGuildRewards');
+    if (!guildRewardsEl) {
+        guildRewardsEl = document.createElement('div');
+        guildRewardsEl.id = 'resultsGuildRewards';
+        guildRewardsEl.className = 'results-rewards-section';
+        modals.resultsRewardMessage.after(guildRewardsEl);
+    }
+    guildRewardsEl.innerHTML = ''; // Limpa
+
+    let playerRewardsEl = $('resultsPlayerRewards');
+    if (!playerRewardsEl) {
+        playerRewardsEl = document.createElement('div');
+        playerRewardsEl.id = 'resultsPlayerRewards';
+        playerRewardsEl.className = 'results-rewards-section';
+        guildRewardsEl.after(playerRewardsEl);
+    }
+    playerRewardsEl.innerHTML = ''; // Limpa
+
+    // 2. Descobre o rank da guilda do jogador
+    let myGuildRank = -1;
+    let myGuildResult = null;
+    if (sortedGuilds.length > 0) {
+        myGuildResult = sortedGuilds.find(g => g.guild_id === userGuildId);
+        if (myGuildResult) {
+            myGuildRank = sortedGuilds.indexOf(myGuildResult) + 1;
+        }
+    }
+    
+    // 3. Descobre o rank de dano do jogador
+    let myPlayerDamageRank = -1;
+    if (playerDamageRanking && playerDamageRanking.length > 0) {
+        const myDamageData = playerDamageRanking.find(p => p.player_id === userId);
+        if (myDamageData) {
+            myPlayerDamageRank = playerDamageRanking.indexOf(myDamageData) + 1;
+        }
+    }
+
+    // 4. Constrói HTML das Recompensas da Guilda
+    let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
+    let hasGuildRewards = false;
+
+    if (myGuildRank === 1 && myGuildResult.honor_points > 0) {
+        modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
+        modals.resultsRewardMessage.style.color = 'gold';
+        
+        guildRewardsHTML += '<div class="results-reward-list">';
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 3000);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 4);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 50);
+        guildRewardsHTML += '</div>';
+        hasGuildRewards = true;
+        
+    } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
+        modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
+        modals.resultsRewardMessage.style.color = '#00bcd4'; // Ciano para 2º lugar
+
+        guildRewardsHTML += '<div class="results-reward-list">';
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 2);
+        guildRewardsHTML += '</div>';
+        hasGuildRewards = true;
+
+    } else {
+        modals.resultsRewardMessage.textContent = "Sua guilda não venceu desta vez. Mais sorte na próxima!";
+        modals.resultsRewardMessage.style.color = '#aaa';
+        guildRewardsHTML += '<p>Nenhuma recompensa de guilda nesta batalha.</p>';
+    }
+    
+    guildRewardsEl.innerHTML = guildRewardsHTML;
+    if (!hasGuildRewards) guildRewardsEl.style.display = 'none'; // Oculta se não houver
+
+    // 5. Constrói HTML das Recompensas Individuais (Bônus)
+    let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
+    let hasPlayerRewards = false;
+
+    if (myGuildRank === 1 && myPlayerDamageRank === 1) {
+        playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano (Multiplicador 3x):</p>';
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "3000 (Base) + 6000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "4 (Base) + 8 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "50 (Base) + 100 (Bônus)");
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+
+    } else if (myGuildRank === 1 && myPlayerDamageRank === 2) {
+        playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano (Multiplicador 2x):</p>';
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "3000 (Base) + 3000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "4 (Base) + 4 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "50 (Base) + 50 (Bônus)");
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+    }
+    
+    if (hasPlayerRewards) {
+        playerRewardsEl.innerHTML = playerRewardsHTML;
+    } else {
+        playerRewardsEl.style.display = 'none'; // Oculta se não for Top 1 ou 2
+    }
+    
+    // 6. Exibe a tela
     showScreen('results');
 }
 
@@ -756,7 +871,20 @@ modals.objectiveAttackBtn.onclick = async () => {
 modals.objectiveGarrisonBtn.onclick = async () => {
     if (!selectedObjective) return;
     
-    // REQUISIÇÃO 2 (FIX): Checa o cooldown no frontend ANTES da lógica otimista
+    // *** CORREÇÃO (REQ 2 da task anterior) ***
+    // Verificação robusta de cooldown no frontend, lendo o estado
+    if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
+        const lastLeave = new Date(currentBattleState.player_state.last_garrison_leave_at);
+        const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
+        
+        if (timeSinceLeave < 30) {
+            const timeLeft = 30 - timeSinceLeave;
+            showAlert(`Aguarde o cooldown de 30 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
+            return; // Impede a ação
+        }
+    }
+    
+    // Verificação antiga (mantida como fallback, caso a UI demore a atualizar)
     if (battle.garrisonStatus.textContent.includes('Guarnição CD:')) {
         showAlert('Aguarde o cooldown de 30 segundos para guarnecer novamente.');
         return;
@@ -777,6 +905,8 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                     if (oldObj) {
                         oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - parseInt(userPlayerStats.health, 10));
                     }
+                    // *** CORREÇÃO: Define o tempo de saída AQUI para a UI ***
+                    currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                 }
                 
                 // Marca player_garrison localmente
@@ -793,8 +923,6 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                     }
                 }
                 
-                // Reset de possível cooldown de saída
-                currentBattleState.player_state.last_garrison_leave_at = null;
                 // Atualiza rodapé e objetivos imediatamente
                 renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
                 renderAllObjectives(currentBattleState.objectives);
@@ -847,9 +975,12 @@ async function pollBattleState() {
     // Atualiza dados globais
     if (data.player_stats) {
         userGuildId = data.player_stats.guild_id;
-        userPlayerStats = data.player_stats; // REQ 3: Garante que temos stats
+        userPlayerStats = data.player_stats;
     }
+    // NOVO: Define o userId global assim que a sessão é validada (no init)
+    // e o userGuildId assim que os stats são carregados
     userRank = data.player_rank;
+
 
     // Roteia para a tela correta
     switch(data.status) {
@@ -894,9 +1025,11 @@ async function pollBattleState() {
             startPolling(); // Continua poll para checar início
             break;
         case 'finished':
-            stopPolling();
-            // REQ 5: Passa o ranking de dano para a tela de resultados
+            // *** CORREÇÃO (de acordo com a solicitação anterior) ***
+            // Mostra a tela de resultados E CONTINUA O POLLING.
+            // O polling só vai parar quando o SQL retornar 'no_battle' (novo ciclo de registro).
             renderResultsScreen(data.instance, data.player_damage_ranking);
+            startPolling();
             break;
         case 'no_guild':
             stopPolling();
@@ -904,7 +1037,7 @@ async function pollBattleState() {
             $('loadingScreen').innerHTML = '<h2>Você não está em uma guilda.</h2><p>Junte-se a uma guilda para participar.</p>';
             break;
         case 'no_battle':
-            stopPolling();
+            stopPolling(); // Agora sim, para o polling
             renderCitySelectionScreen(data.player_rank);
             break;
         default:
@@ -939,13 +1072,44 @@ function startGlobalUITimer() {
         // 1. Timer da Tela de Seleção de Cidade
         if (screens.citySelection.style.display === 'flex') {
             const registrationTimer = $('registrationTimer');
-            if (minutes < 5) {
+            
+            // CORREÇÃO: Lógica para calcular o tempo restante baseado em ciclos de 15 minutos
+            const cycleMin = 15; // Ciclo de 15 minutos
+            const durationMin = 5; // Duração de 5 minutos
+            
+            const minutesInCycle = minutes % cycleMin;
+            const nextCycleStart = minutes - minutesInCycle + cycleMin; // Próximo ciclo (ex: 15, 30, 45, 60)
+            const nextCycleTimestamp = new Date(now);
+            nextCycleTimestamp.setMinutes(nextCycleStart);
+            nextCycleTimestamp.setSeconds(0);
+            nextCycleTimestamp.setMilliseconds(0);
+
+            // Ajusta o próximo ciclo se o cálculo jogou para a próxima hora
+            if (nextCycleStart >= 60) {
+                 nextCycleTimestamp.setHours(nextCycleTimestamp.getHours() + 1);
+                 nextCycleTimestamp.setMinutes(nextCycleStart - 60);
+            }
+            
+            // Verifica se o registro está aberto (minutos 0-4, 15-19, 30-34, 45-49)
+            if (minutesInCycle < durationMin) {
                 // Período de registro aberto
-                const timeLeft = (4 * 60 + 59) - (minutes * 60 + seconds);
+                const registrationEnd = new Date(now);
+                registrationEnd.setMinutes(minutes - minutesInCycle + durationMin);
+                registrationEnd.setSeconds(0);
+                registrationEnd.setMilliseconds(0);
+                
+                // Ajusta o final se o cálculo jogou para a próxima hora
+                if (minutes - minutesInCycle + durationMin >= 60) {
+                     registrationEnd.setHours(registrationEnd.getHours() + 1);
+                     registrationEnd.setMinutes(minutes - minutesInCycle + durationMin - 60);
+                }
+
+                const timeLeft = Math.max(0, Math.floor((registrationEnd - now) / 1000));
                 registrationTimer.textContent = `Registro fecha em: ${formatTime(timeLeft)}`;
+
             } else {
                 // Período de registro fechado
-                const timeToOpen = (59 * 60 + 59) - (minutes * 60 + seconds);
+                const timeToOpen = Math.max(0, Math.floor((nextCycleTimestamp - now) / 1000));
                 registrationTimer.textContent = `Registro abre em: ${formatTime(timeToOpen)}`;
             }
             
@@ -994,7 +1158,7 @@ async function init() {
         window.location.href = 'index.html';
         return;
     }
-    userId = session.user.id;
+    userId = session.user.id; // Define o userId global
 
     // Adiciona listeners aos objetivos do mapa
     document.querySelectorAll('.battle-objective').forEach(el => {

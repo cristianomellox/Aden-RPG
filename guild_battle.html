@@ -30,13 +30,15 @@
 
         <div id="battleActiveScreen" style="display: none; flex-direction: column; height: 100%;">
             <div id="battleHeader">
+              
+  <img id="showShopBtn" src="https://aden-rpg.pages.dev/assets/iconloja.webp" alt="Loja" style="width: 30px; height: 30px; margin-left: 4px; margin-top: -2px;">
                 <div id="battleTimer">55:00</div>
                 <button id="showRankingBtn">
-                    <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking">
+                    <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width: 30px; height: 30px; margin-right: 4px; margin-top: -3px;">
                 </button>
             </div>
 
-            <div id="battleMap" style="background-image: url('https://aden-rpg.pages.dev/assets/capital.webp');">
+            <div id="battleMap" style="background-image: url('https://aden-rpg.pages.dev/assets/guild_battle.webp');">
                 <div class="battle-objective" id="obj-nexus" data-index="0">
                     <span class="obj-name">Nexus</span>
                     <span class="obj-owner-name" id="obj-owner-0"></span>
@@ -100,8 +102,8 @@
         </div>
 
         <div id="citySelectionScreen" style="display: none;">
-            <h2>Batalha de Guildas</h2>
-            <p>Seu Líder ou Co-Líder pode registrar a guilda para a batalha da próxima hora.</p>
+            <h2 style="color:lightblue;">Registro</h2>
+            <p>Seu Líder ou Co-Líder pode registrar a guilda para a próxima batalha.</p>
             <p id="registrationTimer"></p>
             <div class="city-grid" id="cityGrid">
                 </div>
@@ -123,7 +125,7 @@
         
         <div id="resultsModal" class="modal" style="display: none;">
             <div class="modal-content">
-                <span class="modal-close" id="resultsModalClose">&times;</span>
+               
                 <h2>Batalha Finalizada</h2>
                 <p>A batalha em <strong id="resultCityName"></strong> terminou!</p>
 
@@ -138,7 +140,7 @@
                 <h3>Recompensas</h3>
                 <p id="resultsRewardMessage"></p>
                 
-                <button onclick="window.location.href='guild.html'" class="action-btn">Voltar</button>
+               
             </div>
         </div>
 

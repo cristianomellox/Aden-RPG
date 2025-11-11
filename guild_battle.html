@@ -31,7 +31,7 @@
         <div id="battleActiveScreen" style="display: none; flex-direction: column; height: 100%;">
             <div id="battleHeader">
               
-  <img id="showShopBtn" src="https://aden-rpg.pages.dev/assets/iconloja.webp" alt="Loja" style="width: 30px; height: 30px; margin-left: 4px; margin-top: -2px;">
+  <img id="showShopBtn" src="https://aden-rpg.pages.dev/assets/iconloja.webp" alt="Loja" style="width: 30px; height: 30px; margin-left: 4px; margin-top: -2px; cursor: pointer;">
                 <div id="battleTimer">55:00</div>
                 <button id="showRankingBtn">
                     <img src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width: 30px; height: 30px; margin-right: 4px; margin-top: -3px;">
@@ -220,6 +220,45 @@
             <div id="garrisonLeaveModalActions">
                 <button id="garrisonLeaveModalCancelBtn" class="action-btn" style="background-color: #555;">Cancelar</button>
                 <button id="garrisonLeaveModalConfirmBtn" class="action-btn">Continuar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="battleShopModal" class="modal-container" style="display:none;">
+        <div class="modal-content">
+            <span class="modal-close" id="battleShopModalClose" style="top: 10px; right: 15px; font-size: 2em; color: white;">&times;</span>
+            
+            <div id="shop-main" class="shop-content">
+                <h2>Loja da Batalha</h2>
+                <p>Compre ações extras para esta batalha. (Limite de 1 por tipo)</p>
+
+                <div class="shop-item">
+                    <img src="https://aden-rpg.pages.dev/assets/pvp.webp" alt="Ações" class="shop-item-img" style="width: 80px; height: 80px; object-fit: contain;">
+                    <div class="shop-item-details">
+                        <h3>Pacote de Ações <strong>x3</strong></h3>
+                        <p>Adiciona +3 ações de batalha.</p>
+                        <div class="shop-item-cost">
+                            <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                            <span>30</span>
+                        </div>
+                       <button class="shop-buy-btn" id="buyPack1Btn" data-package="pack_1" data-cost="30" data-actions="3">Comprar</button>
+                    </div>
+                </div>
+
+                <div class="shop-item">
+                    <img src="https://aden-rpg.pages.dev/assets/pvp.webp" alt="Ações" class="shop-item-img" style="width: 80px; height: 80px; object-fit: contain;">
+                    <div class="shop-item-details">
+                        <h3>Pacote de Ações <strong>x5</strong></h3>
+                        <p>Adiciona +5 ações de batalha.</p>
+                        <div class="shop-item-cost">
+                            <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
+                            <span>75</span>
+                        </div>
+                        <button class="shop-buy-btn" id="buyPack2Btn" data-package="pack_2" data-cost="75" data-actions="5">Comprar</button>
+                    </div>
+                </div>
+                
+                <p id="battleShopMessage" style="color: white; margin-top: 10px;"></p>
             </div>
         </div>
     </div>

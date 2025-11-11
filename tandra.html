@@ -133,7 +133,7 @@ body {
     background-color: rgba(18, 18, 18, 0.5); /* Fundo semi-transparente para legibilidade */
     border-radius: 8px;
     pointer-events: auto; 
-    max-height: 95px;
+  
 }
 
 #zionContent h2 {
@@ -255,10 +255,16 @@ body {
     <div id="contentOverlay">
         
         <div id="zionContent">
-            <h2>Tandra</h2> <p id="guildreg-container">
-                Guilda Regente:<br>
-                <span id="guildreg">Nenhuma.</span>
-            </p>
+            <h2>Tandra</h2>
+            
+           <p id="guildreg-container">
+    Guilda Regente:<br>
+    <span id="guildreg_tandra">
+        <img id="guild_flag_tandra" src="" alt="Bandeira da Guilda" 
+            style="width: 40px; height: 42px; margin-right: 5px; border-radius: 3px; vertical-align: middle; object-fit: cover; display: none;">
+        <span id="guild_name_tandra">Nenhuma.</span>
+        </span>
+</p>
         </div>
 
         <div id="zionFooter">
@@ -601,6 +607,76 @@ document.addEventListener('DOMContentLoaded', () => {
     enableMapInteraction();
 });
 </script>
+<script>
+// ... (Scripts de música e modal de história permanecem intactos) ...
 
+// =======================================================================
+// Lógica para Exibir Dono da Cidade
+// MODIFICADO: Agora usa dois elementos (IMG e SPAN) separados para Bandeira e Nome.
+// Tamanho da bandeira: 40px (largura) x 42px (altura)
+// =======================================================================
+
+// Configuração do Supabase
+const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function fetchAndDisplayCityOwner(cityName) {
+    const cityNameLower = cityName.toLowerCase();
+    
+    // Alvos baseados na nova estrutura de IDs: guild_name_[cidade] e guild_flag_[cidade]
+    const nameSpan = document.getElementById(`guild_name_${cityNameLower}`);
+    const flagImg = document.getElementById(`guild_flag_${cityNameLower}`);
+    const defaultText = 'Nenhuma.';
+
+    if (!nameSpan || !flagImg) {
+        console.error(`Elementos de guilda para ${cityName} não encontrados (guild_name_${cityNameLower} ou guild_flag_${cityNameLower}).`);
+        return;
+    }
+
+    flagImg.style.display = 'none'; // Inicialmente oculta
+    nameSpan.textContent = defaultText;
+
+    try {
+        const { data: ownersData, error } = await supabase.rpc('get_city_owners');
+
+        if (error) {
+            console.error('Erro Supabase ao buscar donos das cidades:', error);
+            return;
+        }
+
+        const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityNameLower);
+
+        if (cityOwnerData && cityOwnerData.owner_guild_id) {
+            const guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
+            const guildFlagUrl = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'; 
+
+            // 1. Atualiza o SRC da imagem e a torna visível
+            flagImg.setAttribute('src', guildFlagUrl);
+            flagImg.style.display = 'inline-block'; 
+            flagImg.setAttribute('alt', `Bandeira da Guilda ${guildName}`);
+
+            // 2. Atualiza o TEXTO do nome
+            nameSpan.textContent = guildName;
+        } 
+
+    } catch (err) {
+        console.error('Erro inesperado na função fetchAndDisplayCityOwner:', err);
+    }
+}
+
+// Inicia a busca
+document.addEventListener('DOMContentLoaded', () => {
+    const pageTitle = document.title;
+    const cityNames = ['tandra', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
+    const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
+
+    if (cityName) {
+        fetchAndDisplayCityOwner(cityName);
+    } else {
+        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+    }
+});
+</script>
 </body>
 </html>

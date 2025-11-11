@@ -57,7 +57,7 @@
             margin-top: 54px; /* Altura da topbar */
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow: auto;
             background: #1a1a1a;
         }
 
@@ -77,11 +77,20 @@
             z-index: 500;
             padding: 20px;
             box-sizing: border-box;
+            text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
+        background-image: linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0)), url('https://aden-rpg.pages.dev/assets/registro_batalha.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
         }
         
-        #citySelectionScreen, #waitingScreen { /* Combinado */
-            background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);
-        }
+      
 
         #citySelectionScreen h2, #waitingScreen h2 {
             margin-top: 0;
@@ -125,12 +134,14 @@
             list-style: none;
             padding: 0;
             margin: 10px 0 0 0;
+            margin-left: 25px;
         }
         
         #waitGuildList li {
-            padding: 8px 10px;
+            padding: 8px 2px;
             font-weight: bold;
             border-bottom: 1px solid #444;
+          
         }
          #waitGuildList li:last-child {
             border-bottom: none;
@@ -316,7 +327,7 @@
         }
 
         #player-attacks {
-            font-size: 1em;
+            font-size: 0.9em;
             font-weight: bold;
             color: gold;
         }
@@ -327,7 +338,7 @@
         }
         
         #garrison-status {
-            font-size: 0.9em;
+            font-size: 0.8em;
             font-weight: bold;
         }
         
@@ -622,4 +633,15 @@
 }
 #cityRegisterModalGuildList li {
     padding: 6px 10px;
+}
+
+/* ... (todo o conteúdo original de style.css) ... */
+
+/* Adicionado para a loja da Batalha */
+#battleShopModal .shop-buy-btn:disabled {
+    filter: grayscale(1);
+    opacity: 0.7;
+    cursor: not-allowed;
+    /* Garante que a imagem de fundo seja mantida se o estilo base :disabled a remover */
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp');
 }

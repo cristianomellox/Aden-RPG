@@ -195,6 +195,32 @@ function displayFloatingDamage(targetEl, val, isCrit) {
 // --- Funções Principais de UI ---
 
 /**
+ * NOVO: Atualiza a interface do usuário com os recursos do jogador (e.g., cristais)
+ * @param {object} playerStats - O objeto de estatísticas do jogador
+ */
+const updatePlayerResourcesUI = (playerStats) => {
+    if (!playerStats) return;
+    
+    // ATUALIZA VARIÁVEL GLOBAL (Importante para o restante do JS)
+    userPlayerStats = playerStats; 
+
+    // ATUALIZA CRISTAIS (ou outro recurso principal da UI, se houver um elemento dedicado)
+    if (playerStats.crystals !== undefined) {
+        // Encontre o elemento que exibe os cristais (Adapte o ID 'playerCrystals' se necessário)
+        // Por exemplo, se você tem um elemento na UI geral com o ID 'playerCrystalsAmount':
+        const crystalsElement = document.getElementById('playerCrystalsAmount'); 
+        if(crystalsElement) {
+            // Formate o número para exibição, se necessário
+            crystalsElement.textContent = Number(playerStats.crystals).toLocaleString('pt-BR'); 
+        }
+    }
+    
+    // TODO: Adicione aqui a lógica para atualizar outros recursos
+    // como Ouro, Prata, Itens de Inventário, etc., se eles estiverem inclusos no retorno do get_player_battle_stats
+};
+
+
+/**
  * Renderiza a tela de seleção de cidade
  */
 function renderCitySelectionScreen(playerRank) {
@@ -322,6 +348,9 @@ function renderBattleScreen(state) {
     renderPlayerFooter(state.player_state, state.player_garrison);
     // REQ 1: Popula o modal de ranking em segundo plano
     renderRankingModal(state.instance.registered_guilds, state.player_damage_ranking);
+    
+    // Atualiza recursos (cristais, etc.) - Embora geralmente redundante no 'active', é seguro
+    updatePlayerResourcesUI(state.player_stats);
 
     showScreen('battle');
 }
@@ -520,6 +549,8 @@ function createRewardItemHTML(item, quantity) {
  */
 function renderResultsScreen(instance, playerDamageRanking) {
     // Tenta distribuir recompensas (seguro, pois a função tem trava)
+    // ESTA CHAMADA JÁ NÃO É MAIS NECESSÁRIA, POIS O SERVER SIDE FAZ ISSO.
+    // MANTIDA COMO FALLBACK, MAS O PAGAMENTO VEM NA RESPOSTA DO get_guild_battle_state.
     supabase.rpc('distribute_battle_rewards', { p_battle_instance_id: instance.id })
         .then(({data, error}) => {
             if (error) {
@@ -1090,6 +1121,12 @@ async function pollBattleState() {
         userPlayerStats = data.player_stats;
     }
     userRank = data.player_rank;
+    
+    // CORREÇÃO ESSENCIAL: Atualiza os recursos do jogador APÓS o poll,
+    // garantindo que as recompensas pagas no server sejam refletidas na UI
+    if (data.player_stats) {
+        updatePlayerResourcesUI(data.player_stats);
+    }
 
 
     // Roteia para a tela correta
@@ -1128,6 +1165,8 @@ async function pollBattleState() {
             startPolling(); // Continua poll para checar início
             break;
         case 'finished':
+            // O get_guild_battle_state.sql agora garante que as recompensas foram pagas
+            // e o player_stats foi atualizado e enviado no payload.
             renderResultsScreen(data.instance, data.player_damage_ranking);
             startPolling(); // Continua poll até o 'no_battle'
             break;

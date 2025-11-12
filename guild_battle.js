@@ -10,7 +10,7 @@ let userRank = null;
 let userPlayerStats = null;
 
 let currentBattleState = null; // Armazena o estado vindo do RPC
-let pollInterval = null;
+let heartbeatInterval = null; // NOVO: Substitui o pollInterval
 let uiTimerInterval = null;
 let selectedObjective = null;
 
@@ -416,16 +416,23 @@ function renderAllObjectives(objectives) {
         const el = $(`obj-cp-${obj.objective_index}`) || $('obj-nexus');
         if (!el) return;
 
-        const totalHp = (obj.base_hp || 0) + (obj.garrison_hp || 0);
+        // NOVO: Na lógica do heartbeat, o obj pode ter 'id' mas não 'base_hp'
+        // Devemos usar o dado do 'currentBattleState' que é mais completo
+        const fullObj = currentBattleState.objectives.find(o => o.id === obj.id);
+        if (!fullObj) return; // Não deveria acontecer se o merge foi feito
+        
+        // Usa o 'obj' (vindo do heartbeat ou full load) para HP atual
+        // e 'fullObj' (do load inicial) para o HP base
+        const totalHp = (fullObj.base_hp || 0) + (obj.garrison_hp || 0);
         const currentTotalHp = (obj.current_hp || 0) + (obj.garrison_hp || 0);
         const percent = totalHp > 0 ? (currentTotalHp / totalHp) * 100 : 0;
 
-        const fillEl = $(`obj-hp-fill-${obj.objective_index}`);
-        const textEl = $(`obj-hp-text-${obj.objective_index}`);
+        const fillEl = $(`obj-hp-fill-${fullObj.objective_index}`);
+        const textEl = $(`obj-hp-text-${fullObj.objective_index}`);
         if (fillEl) fillEl.style.width = `${percent}%`;
         if (textEl) textEl.textContent = `${kFormatter(currentTotalHp)} / ${kFormatter(totalHp)}`;
 
-        const garrisonEl = $(`obj-garrison-${obj.objective_index}`);
+        const garrisonEl = $(`obj-garrison-${fullObj.objective_index}`);
 
         if (obj.garrison_hp > 0) {
            if (garrisonEl) garrisonEl.textContent = `+${kFormatter(obj.garrison_hp)} HP Guarnição`;
@@ -434,7 +441,7 @@ function renderAllObjectives(objectives) {
         }
 
         // REQUISIÇÃO 4: Define o nome e a cor do dono
-        const ownerEl = $(`obj-owner-${obj.objective_index}`);
+        const ownerEl = $(`obj-owner-${fullObj.objective_index}`);
         if (ownerEl) {
             if (obj.owner_guild_id && currentBattleState.guildColorMap) {
                 const guild = registeredGuilds.find(g => g.guild_id === obj.owner_guild_id);
@@ -509,7 +516,9 @@ function renderPlayerFooter(playerState, playerGarrison) {
         if (objective) {
             objName = objective.objective_type === 'nexus' ? 'Nexus' : `Ponto ${objective.objective_index}`;
         } else {
-            setTimeout(pollBattleState, 1500);
+            // NOVO: Se o objetivo não for encontrado (ex: estado de heartbeat incompleto),
+            // chama o poll completo para re-sincronizar.
+            setTimeout(pollBattleState, 1500); 
         }
 
         battle.garrisonStatus.textContent = `Guarnecendo: ${objName}`;
@@ -793,7 +802,7 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
         msgEl.style.color = '#28a745';
         setTimeout(() => {
             modals.cityRegister.style.display = 'none'; // Fecha o modal
-            pollBattleState(); // Recarrega o estado
+            pollBattleState(); // Recarrega o estado (chamada única)
         }, 2000);
     }
 }
@@ -802,11 +811,16 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
  * Chamada quando o jogador clica em um objetivo
  */
 function handleObjectiveClick(objective) {
-    selectedObjective = objective;
+    // NOVO: O 'objective' pode ser do heartbeat (leve)
+    // Precisamos do objeto completo do 'currentBattleState'
+    const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
+    if (!fullObjective) return; // Não achou o objeto completo
+    
+    selectedObjective = fullObjective; // Armazena o objeto COMPLETO
 
-    modals.objectiveTitle.textContent = objective.objective_type === 'nexus' ? 'Nexus Central' : `Ponto de Controle ${objective.objective_index}`;
+    modals.objectiveTitle.textContent = fullObjective.objective_type === 'nexus' ? 'Nexus Central' : `Ponto de Controle ${fullObjective.objective_index}`;
 
-    const isOwned = objective.owner_guild_id === userGuildId;
+    const isOwned = fullObjective.owner_guild_id === userGuildId;
     // CORREÇÃO 3: Desabilita ataque se for o dono
     modals.objectiveAttackBtn.disabled = isOwned;
     modals.objectiveAttackBtn.style.filter = isOwned ? 'grayscale(1)' : '';
@@ -816,7 +830,7 @@ function handleObjectiveClick(objective) {
 
     // REQ 3: Modificado para aviso de *qualquer* ação
     const isGarrisonedElsewhere = currentBattleState.player_garrison && 
-                                  (!isOwned || currentBattleState.player_garrison.objective_id !== objective.id);
+                                  (!isOwned || currentBattleState.player_garrison.objective_id !== fullObjective.id);
                                   
     modals.objectiveGarrisonWarning.style.display = isGarrisonedElsewhere ? 'block' : 'none';
     modals.objectiveGarrisonWarning.textContent = "Atenção: Esta ação removerá você da sua guarnição atual.";
@@ -893,7 +907,7 @@ modals.objectiveAttackBtn.onclick = async () => {
 
         if (error || !data.success) {
             showAlert(error ? error.message : data.message);
-            pollBattleState(); // Força poll para re-sincronizar
+            pollBattleState(); // Força poll completo para re-sincronizar
             return;
         }
 
@@ -911,7 +925,8 @@ modals.objectiveAttackBtn.onclick = async () => {
         if (obj) {
             if (data.objective_destroyed) {
                 // Se destruiu, precisamos do estado completo
-                pollBattleState();
+                // O heartbeat poll vai pegar a mudança, mas podemos forçar
+                pollHeartbeatState();
             } else {
                 // REQUISIÇÃO 2: Atualiza HP localmente
                 obj.current_hp = data.objective_new_hp;
@@ -928,11 +943,11 @@ modals.objectiveAttackBtn.onclick = async () => {
                      }
                      renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
                 } else {
-                    pollBattleState(); // Fallback
+                    pollBattleState(); // Fallback para poll completo
                 }
             }
         } else {
-            pollBattleState(); // Fallback
+            pollBattleState(); // Fallback para poll completo
         }
     });
 };
@@ -1010,7 +1025,7 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                 if (error || !data.success) {
                     // Se backend falhou, mostra alerta e força re-sync
                     showAlert(error ? error.message : data.message);
-                    setTimeout(pollBattleState, 500);
+                    setTimeout(pollBattleState, 500); // Poll completo
                 } else if (data.message) {
                     // RPC retornou OK — log para inspeção, não sobrescreve a UI otimista
                     console.log("Guarnição confirmada pelo servidor:", data.message);
@@ -1021,8 +1036,8 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                 showAlert("Erro ao guarnecer. Tentando sincronizar...");
             })
             .finally(() => {
-                // Sincroniza o estado real do servidor após curto intervalo
-                setTimeout(pollBattleState, 1500);
+                // Sincroniza o estado (leve) do servidor após curto intervalo
+                setTimeout(pollHeartbeatState, 1500);
             });
     });
 };
@@ -1084,7 +1099,7 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     // *** CORREÇÃO: Remove a atualização otimista ***
     // Em vez disso, força uma nova busca ao servidor para
     // obter o valor 100% correto e evitar race conditions.
-    pollBattleState();
+    pollBattleState(); // Poll completo para re-sincronizar o player_state
 
     // Fecha o modal após o sucesso
     setTimeout(() => {
@@ -1097,18 +1112,20 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
 
 /**
  * Função principal de polling, busca o estado no servidor
+ * ESTA FUNÇÃO É CHAMADA APENAS EM TRANSIÇÕES DE ESTADO
  */
 async function pollBattleState() {
     // Se o poll já estiver agendado, não execute de novo
     // (Isso é um 'debounce' simples para evitar chamadas múltiplas)
-    stopPolling();
+    // *** MODIFICADO: Não limpa mais o heartbeat, pois são diferentes ***
     
     const { data, error } = await supabase.rpc('get_guild_battle_state');
 
     if (error) {
         console.error("Erro ao buscar estado da batalha:", error);
         showAlert("Erro de conexão. Tentando novamente...");
-        startPolling(); // Re-agenda o poll em caso de erro
+        // Tenta novamente em 5s
+        setTimeout(pollBattleState, 5000);
         return;
     }
 
@@ -1135,72 +1152,152 @@ async function pollBattleState() {
             // Valida que o payload esteja completo o suficiente para renderizar
             if (!data || !data.instance || !data.objectives) {
                 console.warn("Estado da batalha incompleto, aguardando próxima atualização...");
-                startPolling(); // Tenta de novo
+                setTimeout(pollBattleState, 1000); // Tenta de novo
                 return;
             }
+
+            // Para o heartbeat poll (caso esteja rodando) antes de carregar
+            stopHeartbeatPolling(); 
 
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
                 setTimeout(() => {
                     try {
-                        renderBattleScreen(data);
+                        renderBattleScreen(data); // Carga INICIAL com dados completos
                     } catch (e) {
                         console.error("Erro ao renderizar tela de batalha:", e);
-                        startPolling(); // Tenta de novo se falhar
+                        setTimeout(pollBattleState, 1000); // Tenta de novo se falhar
                         return;
                     }
-                    startPolling(); // Inicia o poll regular
+                    startHeartbeatPolling(); // Inicia o poll LEVE
                 }, 500);
             } else {
-                // Já está na batalha: apenas atualiza
-                renderAllObjectives(data.objectives);
-                renderPlayerFooter(data.player_state, data.player_garrison);
-                renderRankingModal(data.instance.registered_guilds, data.player_damage_ranking);
-                showScreen('battle');
-                startPolling(); // Re-agenda o próximo poll
+                // Já está na batalha: isso é uma re-sincronização completa
+                renderBattleScreen(data);
+                startHeartbeatPolling(); // Reinicia o poll LEVE
             }
             break;
+            
         case 'registering':
+            stopHeartbeatPolling(); // Garante que o poll leve pare
             renderWaitingScreen(data.instance);
-            startPolling(); // Continua poll para checar início
+            // NÃO inicia poll, conforme solicitado. O timer de 1s da UI
+            // (startGlobalUITimer) vai chamar o pollBattleState() quando o tempo zerar.
             break;
+            
         case 'finished':
-            // O get_guild_battle_state.sql agora garante que as recompensas foram pagas
-            // e o player_stats foi atualizado e enviado no payload.
+            stopHeartbeatPolling(); // Para o poll leve
             renderResultsScreen(data.instance, data.player_damage_ranking);
-            startPolling(); // Continua poll até o 'no_battle'
+            
+            // *** CORREÇÃO APLICADA AQUI ***
+            // Agenda uma verificação (poll lento) para o próximo ciclo de registro.
+            // Isso garante que a tela de resultados saia
+            // quando a tela 'no_battle' (registro) ficar disponível.
+            setTimeout(pollBattleState, 15000); // Verifica a cada 15 segundos
             break;
+            
         case 'no_guild':
-            stopPolling(); // Para o poll
+            stopHeartbeatPolling(); // Para tudo
             showScreen('loading');
             $('loadingScreen').innerHTML = '<h2>Você não está em uma guilda.</h2><p>Junte-se a uma guilda para participar.</p>';
             break;
+            
         case 'no_battle':
-            stopPolling(); // Para o poll
+            stopHeartbeatPolling(); // Para tudo
             renderCitySelectionScreen(data.player_rank);
-            // NÃO inicia o poll, pois o timer de 1s da UI
+            // NÃO inicia poll, pois o timer de 1s da UI
             // é suficiente para a tela de registro.
             break;
+            
         default:
-            stopPolling(); // Para o poll
+            stopHeartbeatPolling(); // Para tudo
             showScreen('loading');
             $('loadingScreen').innerHTML = `<h2>Erro</h2><p>${data.message || 'Estado desconhecido.'}</p>`;
     }
 }
 
-function startPolling() {
-    stopPolling(); // Limpa qualquer poll anterior
-    // Poll a cada 10 segundos
-    pollInterval = setInterval(pollBattleState, 10000);
-}
+/**
+ * NOVO: Processa o payload leve do heartbeat
+ */
+function processHeartbeat(data) {
+    if (!data) return; // Falha no RPC
 
-function stopPolling() {
-    if (pollInterval) clearInterval(pollInterval);
-    pollInterval = null;
+    switch(data.status) {
+        case 'active':
+            // A batalha está ativa, mescla os dados leves
+            if (!currentBattleState || !currentBattleState.objectives || !currentBattleState.instance) {
+                // O estado completo ainda não carregou, aguarde.
+                // Isso pode acontecer se o heartbeat voltar antes do pollBattleState inicial.
+                return; 
+            }
+
+            // 1. Mescla Objetivos
+            data.objectives.forEach(heartbeatObj => {
+                const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
+                if (fullObj) {
+                    // Atualiza apenas os dados dinâmicos
+                    fullObj.current_hp = heartbeatObj.current_hp;
+                    fullObj.garrison_hp = heartbeatObj.garrison_hp;
+                    fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
+                }
+            });
+
+            // 2. Mescla Pontos de Honra
+            data.guild_honor.forEach(heartbeatGuild => {
+                const fullGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === heartbeatGuild.guild_id);
+                if (fullGuild) {
+                    fullGuild.honor_points = heartbeatGuild.honor_points;
+                }
+            });
+            
+            // 3. Re-renderiza os componentes afetados
+            renderAllObjectives(currentBattleState.objectives);
+            // O ranking é atualizado em segundo plano, não é crítico
+            renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
+            break;
+
+        case 'finished':
+        case 'no_battle':
+        case 'no_guild':
+            // A batalha acabou ou deu erro!
+            // Para o heartbeat
+            stopHeartbeatPolling();
+            // Chama o poll COMPLETO para transicionar a tela
+            pollBattleState(); 
+            break;
+    }
 }
 
 /**
- * Timer global de UI
+ * NOVO: Função de polling LEVE
+ */
+async function pollHeartbeatState() {
+    const { data, error } = await supabase.rpc('get_battle_heartbeat');
+    
+    if (error) {
+        console.error("Erro no heartbeat da batalha:", error.message);
+        // Não mostra alerta, apenas tenta de novo.
+        // O poll completo será chamado se a batalha terminar.
+        return;
+    }
+    
+    processHeartbeat(data);
+}
+
+
+function startHeartbeatPolling() {
+    stopHeartbeatPolling(); // Limpa qualquer poll anterior
+    // Poll a cada 10 segundos
+    heartbeatInterval = setInterval(pollHeartbeatState, 10000);
+}
+
+function stopHeartbeatPolling() {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+}
+
+/**
+ * Timer global de UI (Lógica de transição de estado movida para cá)
  */
 function startGlobalUITimer() {
     if (uiTimerInterval) clearInterval(uiTimerInterval);
@@ -1247,7 +1344,9 @@ function startGlobalUITimer() {
             $('waitTimer').textContent = formatTime(timeLeft);
 
             if (timeLeft <= 0) {
-                pollBattleState(); // Força o poll quando o timer acabar
+                // TEMPO DE ESPERA ACABOU!
+                // Chama o poll completo UMA VEZ para ir para a tela 'active'
+                pollBattleState(); 
             }
         }
 
@@ -1264,7 +1363,11 @@ function startGlobalUITimer() {
             }
 
             if (timeLeft <= 0) {
-                pollBattleState(); // Força o poll
+                // BATALHA ACABOU!
+                // Para o heartbeat
+                stopHeartbeatPolling();
+                // Chama o poll completo UMA VEZ para ir para a tela 'finished'
+                pollBattleState(); 
             }
         }
 
@@ -1292,6 +1395,8 @@ async function init() {
             const index = parseInt(el.dataset.index, 10);
             // Proteção: currentBattleState.objectives pode estar ausente momentaneamente
             if (!currentBattleState.objectives) return;
+            
+            // NOVO: Acha pelo index, pois o 'objective' no array pode ser leve
             const objective = currentBattleState.objectives.find(o => o.objective_index === index);
             if (objective) {
                 handleObjectiveClick(objective);
@@ -1349,7 +1454,7 @@ async function init() {
     modals.shopBtnPack2.onclick = () => handleBuyBattleActions(2, 75, 5, modals.shopBtnPack2);
 
 
-    // Inicia o primeiro poll
+    // Inicia o primeiro poll (completo)
     pollBattleState();
 
     // Inicia o timer global da UI

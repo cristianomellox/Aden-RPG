@@ -225,6 +225,37 @@
             flex-shrink: 0;
             margin-top: auto; /* Garante que fique no final */
         }
+        
+        /* NOVO: Estilos para os botões de Termos e Política */
+        .policy-links-container {
+            display: flex; /* Habilita flexbox para layout em linha */
+            justify-content: center; /* Centraliza os botões horizontalmente */
+            gap: 15px; /* Espaço entre os botões */
+            margin-top: 30px; /* Espaço acima */
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .policy-button {
+            /* Estilo inspirado nos itens da music-list */
+            background-color: rgba(201, 169, 74, 0.1);
+            border: 1px solid rgba(201, 169, 74, 0.4);
+            padding: 10px 15px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.95em;
+            color: #e0dccc; /* Cor do texto para contraste */
+            text-decoration: none; /* Remove sublinhado padrão de links */
+            transition: background-color 0.2s, border-color 0.2s;
+            flex-grow: 1; /* Permite que os botões cresçam para ocupar o espaço */
+            max-width: 250px; /* Limite de largura para botões em telas grandes */
+        }
+
+        .policy-button:hover {
+            background-color: rgba(201, 169, 74, 0.25);
+            border-color: #c9a94a;
+        }
 
     </style>
 </head>
@@ -312,7 +343,25 @@
             <strong>Made with Udio</strong>
         </div>
 
-    </div>
+        <div class="policy-links-container">
+            <a 
+                href="termos_de_uso.html" 
+                class="policy-button" 
+                data-i18n="terms_of_use" 
+                data-lang-en="Terms of Use"
+            >
+                Termos de Uso
+            </a>
+            <a 
+                href="politica_de_privacidade.html" 
+                class="policy-button" 
+                data-i18n="privacy_policy" 
+                data-lang-en="Privacy Policy"
+            >
+                Política de Privacidade
+            </a>
+        </div>
+        </div>
     
     <footer id="copyright-footer">
         <p id="copyright-text" data-lang-pt="&copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados." data-lang-en="&copy; 2025 - 2026 Aden RPG Online. All rights reserved.">
@@ -350,7 +399,12 @@
                     // Caso especial para o bloco Udio que tem a tag <strong> fixa
                     el.innerHTML = textToUse + '<br><strong>Made with Udio</strong>';
                 } else {
-                    el.textContent = textToUse;
+                    // Se for um link de política/termo, o texto é o próprio elemento
+                    if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+                        el.textContent = textToUse;
+                    } else {
+                        el.textContent = textToUse;
+                    }
                 }
             });
 

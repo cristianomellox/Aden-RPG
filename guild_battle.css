@@ -1,5 +1,5 @@
 :root {
-            --guild-color-neutral: green;
+            --guild-color-neutral: #fff;
             --guild-color-mine: #007bff;
             --guild-color-enemy-1: #FFA500;
             --guild-color-enemy-2: lightblue;
@@ -156,15 +156,18 @@
             background: #111;
             flex-shrink: 0;
             border-bottom: 2px solid gold;
-            max-height: 35px;
+            max-height: 50px;
         }
         
         #battleTimer {
             grid-column: 2; /* ADICIONADO */
             justify-self: center; /* ADICIONADO */
-            font-size: 1.4em;
+            font-size: 2.2em;
             font-weight: bold;
-            color: #ffc107;
+            
+            background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
         }
         
         /* REQUISIÇÃO 3 (NOVO): Botão Loja (Adicionar <a> com este ID no HTML) */

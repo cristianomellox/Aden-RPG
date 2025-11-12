@@ -162,7 +162,7 @@
         #battleTimer {
             grid-column: 2; /* ADICIONADO */
             justify-self: center; /* ADICIONADO */
-            font-size: 2.2em;
+            font-size: 2em;
             font-weight: bold;
             
             background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);

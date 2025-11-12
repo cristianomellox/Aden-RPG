@@ -920,31 +920,38 @@ modals.objectiveAttackBtn.onclick = async () => {
             setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
         }
 
-        // Atualização otimista (parcial)
+        // *** INÍCIO DA CORREÇÃO (ATAQUE) - Consumo de Ação Otimista ***
+        // A ação deve ser consumida IMEDIATAMENTE após o sucesso do RPC,
+        // independentemente de o objetivo ter sido destruído ou não.
+        if(currentBattleState.player_state) {
+             currentBattleState.player_state.attacks_left -= 1;
+             currentBattleState.player_state.last_attack_at = new Date().toISOString();
+             
+             // Se o ataque também removeu o jogador da guarnição
+             if(data.garrison_left) { 
+                 currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                 currentBattleState.player_garrison = null;
+             }
+             // Renderiza o rodapé IMEDIATAMENTE com a ação consumida
+             renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+        } else {
+            pollBattleState(); // Fallback para poll completo se o estado do player estiver incompleto
+        }
+        // *** FIM DA CORREÇÃO ***
+        
+        // Atualização otimista (parcial) do objetivo
         const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
         if (obj) {
             if (data.objective_destroyed) {
-                // Se destruiu, precisamos do estado completo
-                // O heartbeat poll vai pegar a mudança, mas podemos forçar
+                // Se destruiu, o heartbeat poll vai pegar a mudança, mas podemos forçar
                 pollHeartbeatState();
             } else {
                 // REQUISIÇÃO 2: Atualiza HP localmente
                 obj.current_hp = data.objective_new_hp;
                 obj.garrison_hp = data.objective_new_garrison_hp; // <<< FIX
                 renderAllObjectives(currentBattleState.objectives);
-
-                // Atualiza estado do jogador localmente
-                if(currentBattleState.player_state) {
-                     currentBattleState.player_state.attacks_left -= 1;
-                     currentBattleState.player_state.last_attack_at = new Date().toISOString();
-                     if(data.garrison_left) {
-                         currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
-                         currentBattleState.player_garrison = null;
-                     }
-                     renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-                } else {
-                    pollBattleState(); // Fallback para poll completo
-                }
+                
+                // O rodapé (ações) JÁ FOI ATUALIZADO acima.
             }
         } else {
             pollBattleState(); // Fallback para poll completo
@@ -995,6 +1002,15 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                     // *** CORREÇÃO: Define o tempo de saída AQUI para a UI ***
                     currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                 }
+                
+                // *** INÍCIO DA CORREÇÃO (GUARNIÇÃO) - Consumo de Ação Otimista ***
+                // Consome a ação otimistamente AQUI
+                currentBattleState.player_state.attacks_left -= 1;
+                // Inicia o timer de recarga se estava no máximo (ou null)
+                if (currentBattleState.player_state.last_attack_at === null || currentBattleState.player_state.attacks_left === 2) {
+                    currentBattleState.player_state.last_attack_at = new Date().toISOString();
+                }
+                // *** FIM DA CORREÇÃO ***
                 
                 // Marca player_garrison localmente
                 currentBattleState.player_garrison = {
@@ -1193,7 +1209,7 @@ async function pollBattleState() {
             // Agenda uma verificação (poll lento) para o próximo ciclo de registro.
             // Isso garante que a tela de resultados saia
             // quando a tela 'no_battle' (registro) ficar disponível.
-            setTimeout(pollBattleState, 15000); // Verifica a cada 15 segundos
+            setTimeout(pollBattleState, 7000); // Verifica a cada 15 segundos
             break;
             
         case 'no_guild':

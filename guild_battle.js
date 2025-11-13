@@ -9,28 +9,21 @@ let userGuildId = null;
 let userRank = null;
 let userPlayerStats = null;
 
-let currentBattleState = null; // Armazena o estado vindo do RPC
+let currentBattleState = null; 
 let heartbeatInterval = null;
 let uiTimerInterval = null;
 let selectedObjective = null;
 
-// REQ 1/2: Flag para previnir ações duplicadas
 let isProcessingBattleAction = false;
-
-// REQ 3: Polling de Dano
 let damagePollInterval = null;
 let playerDamageCache = new Map();
-
-// REQ 1: Variáveis para o modal de registro
 let cityToRegister = null;
-
-// REQ 3: Variável para o callback de confirmação
 let pendingGarrisonLeaveAction = null;
 
-// REQ 6: Notificações de Captura
+// REQ 1: Notificações de Captura
 let captureNotificationQueue = [];
 let isDisplayingCaptureNotification = false;
-let previousObjectiveState = new Map();
+let processedCaptureTimestamps = new Set(); // REQ 1: Para filtrar eventos
 
 const CITIES = [
     { id: 1, name: 'Capital' }, { id: 2, name: 'Zion' },
@@ -118,11 +111,10 @@ const modals = {
     shopBtnPack2: $('buyPack2Btn')
 };
 
-// REQ 3 & 6: Áudio
+// REQ 2: Áudio
 const audio = {
     normal: $('audioNormalHit'),
     crit: $('audioCritHit'),
-    // REQ 6: Sons de Captura
     enemy_p1: new Audio('https://aden-rpg.pages.dev/ini_ponto1.mp3'),
     enemy_p2: new Audio('https://aden-rpg.pages.dev/ini_ponto2.mp3'),
     enemy_p3: new Audio('https://aden-rpg.pages.dev/ini_ponto3.mp3'),
@@ -137,13 +129,20 @@ const audio = {
 if(audio.normal) audio.normal.volume = 0.5;
 if(audio.crit) audio.crit.volume = 0.1;
 
-// REQ 6: Desbloqueio de Mídia
+// REQ 2: Desbloqueio de Mídia (Correção)
+const audioContext = new (window.AudioContext || window.webkitAudioContext)(); // REQ 2
 let isMediaUnlocked = false;
 function unlockBattleAudio() {
     if (isMediaUnlocked) return;
+
+    // REQ 2: Resumir o AudioContext
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.warn("AudioContext resume falhou", e));
+    }
+
     try {
         Object.values(audio).forEach(aud => {
-            if (aud && aud.play) {
+            if (aud && aud.play && aud.paused) { // REQ 2: Apenas se estiver pausado
                 aud.volume = 0; // Muta temporariamente
                 aud.play().then(() => {
                     aud.pause();
@@ -151,10 +150,13 @@ function unlockBattleAudio() {
                     if (aud === audio.crit) aud.volume = 0.1;
                     else if (aud === audio.normal) aud.volume = 0.5;
                     else aud.volume = 0.7; // Volume padrão para sons de captura
-                }).catch(()=>{});
+                }).catch((e)=>{
+                    // Ignora erros de interrupção
+                });
             }
         });
         isMediaUnlocked = true;
+        console.log("Mídia de batalha desbloqueada.");
     } catch(e) { console.warn("Falha ao desbloquear áudio", e); }
 }
 
@@ -164,11 +166,7 @@ function unlockBattleAudio() {
 function showScreen(screenName) {
     Object.values(screens).forEach(s => s.style.display = 'none');
     if (screens[screenName]) {
-        if (screenName === 'results') {
-             screens[screenName].style.display = 'flex';
-        } else {
-             screens[screenName].style.display = 'flex';
-        }
+        screens[screenName].style.display = 'flex';
     }
 }
 
@@ -197,6 +195,7 @@ function kFormatter(num) {
 }
 
 function playHitSound(isCrit) {
+    if(!isMediaUnlocked) return; // REQ 2
     try {
         const s = isCrit ? audio.crit : audio.normal;
         s.currentTime = 0;
@@ -217,14 +216,13 @@ function displayFloatingDamage(targetEl, val, isCrit) {
     el.addEventListener("animationend", () => el.remove());
 }
 
-// --- Funções de Notificação (REQ 6) ---
+// --- Funções de Notificação (REQ 1) ---
 
 function createCaptureNotificationUI() {
     if ($('battleCaptureNotification')) return;
 
     const banner = document.createElement('div');
-    banner.id = 'battleCaptureNotification'; // ID ÚNICO
-
+    banner.id = 'battleCaptureNotification'; 
     const style = document.createElement('style');
     style.textContent = `
         #battleCaptureNotification {
@@ -248,7 +246,6 @@ function createCaptureNotificationUI() {
             opacity: 1;
             animation: slideAcrossContinuous 15s linear forwards;
         }
-        /* Keyframes já devem existir do guild_raid.js, mas garantimos aqui */
         @keyframes slideAcrossContinuous {
             0% { transform: translateX(100%); }
             100% { transform: translateX(calc(-100% - 1%)); }
@@ -258,11 +255,12 @@ function createCaptureNotificationUI() {
     document.body.appendChild(banner);
 }
 
+// REQ 1: Modificada para aceitar o nome do jogador
 function displayCaptureNotification(data) {
     const banner = $('battleCaptureNotification');
     if (!banner) return;
 
-    banner.innerHTML = `<span style="color: yellow;">${data.guildName}</span> acaba de capturar o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
+    banner.innerHTML = `<span style="color: yellow;">${data.playerName}</span> da <span style="color: #00bcd4;">${data.guildName}</span> capturou <span style="color: lightgreen;">${data.objectiveName}</span>!`;
     banner.classList.add('show');
 
     const onAnimationEnd = () => {
@@ -284,7 +282,7 @@ function processCaptureNotificationQueue() {
 }
 
 function playCaptureSound(type, index, isAlly) {
-    if (!isMediaUnlocked) return;
+    if (!isMediaUnlocked) return; // REQ 2
     
     let soundToPlay = null;
     if (type === 'nexus') {
@@ -396,18 +394,11 @@ function renderBattleScreen(state) {
         battle.map.style.backgroundImage = `url(${city.map_image_url || 'https://aden-rpg.pages.dev/assets/guild_battle.webp'})`;
     }
 
-    // REQ 3: Popula o cache de nomes
     playerDamageCache.clear();
     (state.player_damage_ranking || []).forEach(p => {
         if (p.player_id && p.name) {
             playerDamageCache.set(p.player_id, p.name);
         }
-    });
-
-    // REQ 6: Inicializa o estado dos objetivos
-    previousObjectiveState.clear();
-    (state.objectives || []).forEach(obj => {
-        previousObjectiveState.set(obj.id, obj.owner_guild_id);
     });
 
     renderAllObjectives(state.objectives);
@@ -417,9 +408,6 @@ function renderBattleScreen(state) {
     showScreen('battle');
 }
 
-/**
- * REQ 3: Modificado para usar o cache de nomes
- */
 function renderRankingModal(registeredGuilds, playerDamageRanking) {
     if (!registeredGuilds) registeredGuilds = [];
     if (!playerDamageRanking) playerDamageRanking = [];
@@ -429,7 +417,6 @@ function renderRankingModal(registeredGuilds, playerDamageRanking) {
         guildColorMap.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
     });
 
-    // Aba 1: Pontos de Honra (Guildas)
     const sortedGuilds = [...registeredGuilds].sort((a, b) => (b.honor_points || 0) - (a.honor_points || 0));
     modals.guildRankingList.innerHTML = '';
     sortedGuilds.forEach((g, index) => {
@@ -442,16 +429,12 @@ function renderRankingModal(registeredGuilds, playerDamageRanking) {
         modals.guildRankingList.appendChild(li);
     });
 
-    // Aba 2: Dano Causado (Jogadores)
     modals.playerDamageList.innerHTML = '';
     playerDamageRanking.forEach((p, index) => {
-        // Tenta obter o nome do cache
         const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
-        // Atualiza o cache se o nome veio no payload (ex: full poll)
         if (p.name && !playerDamageCache.has(p.player_id)) {
             playerDamageCache.set(p.player_id, p.name);
         }
-
         const color = guildColorMap.get(p.guild_id) || 'var(--guild-color-neutral)';
         const li = document.createElement('li');
         li.innerHTML = `
@@ -542,7 +525,6 @@ function renderPlayerFooter(playerState, playerGarrison) {
         }
     }
     
-    // REQ 1: Garante que o número nunca seja negativo na UI
     battle.playerAttacks.textContent = `Ações: ${Math.max(0, currentAttacks)} / ${naturalCap}`;
     battle.playerCooldown.textContent = cooldownText;
 
@@ -584,20 +566,17 @@ function createRewardItemHTML(item, quantity) {
 }
 
 function renderResultsScreen(instance, playerDamageRanking) {
-    // REQ 5: Adiciona data
     const titleEl = $('resultCityName');
     titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
     
-    // Verifica se o elemento de data já existe
     let dateEl = $('resultBattleDate');
     if (!dateEl) {
         dateEl = document.createElement('p');
         dateEl.id = 'resultBattleDate';
         dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: -10px; margin-bottom: 15px; text-align: center;';
-        titleEl.after(dateEl); // Insere logo após o título
+        titleEl.after(dateEl);
     }
     
-    // Formata e define a data de término
     const endDate = new Date(instance.end_time);
     dateEl.textContent = endDate.toLocaleString('pt-BR', { 
         day: '2-digit', 
@@ -606,7 +585,6 @@ function renderResultsScreen(instance, playerDamageRanking) {
         hour: '2-digit', 
         minute: '2-digit' 
     });
-    // --- Fim REQ 5 ---
 
     modals.resultsRankingHonor.innerHTML = '';
     const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => b.honor_points - a.honor_points);
@@ -631,7 +609,6 @@ function renderResultsScreen(instance, playerDamageRanking) {
         playerDamageRanking.forEach((p, index) => {
             const li = document.createElement('li');
             const guildName = guildNameMap.get(p.guild_id) ? `(${guildNameMap.get(p.guild_id)})` : '';
-            // REQ 3: Usa o cache
             const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
             li.innerHTML = `
                 <span>#${index + 1} ${playerName} ${guildName}</span>
@@ -818,7 +795,6 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
 }
 
 function handleObjectiveClick(objective) {
-    // REQ 1/2: Impede abertura do modal se uma ação estiver em progresso
     if (isProcessingBattleAction) return;
 
     const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
@@ -891,18 +867,17 @@ modals.objectiveAttackBtn.onclick = async () => {
     if (!selectedObjective) return;
     
     checkGarrisonLeaveAndExecute(async () => {
-        // REQ 1/2: Trava de Ação
         if (isProcessingBattleAction) return;
         isProcessingBattleAction = true;
         
-        modals.objectiveAttackBtn.disabled = true; // Desabilita botão
+        modals.objectiveAttackBtn.disabled = true;
         modals.objective.style.display = 'none';
         
         supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id })
             .then(({ data, error }) => {
                 if (error || !data.success) {
                     showAlert(error ? error.message : data.message);
-                    pollBattleState(); // Força poll completo
+                    pollBattleState();
                     return;
                 }
 
@@ -914,9 +889,8 @@ modals.objectiveAttackBtn.onclick = async () => {
                     setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
                 }
 
-                // REQ 1: Consumo de Ação Otimista
                 if(currentBattleState.player_state) {
-                    currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1); // Garante > 0
+                    currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1);
                     currentBattleState.player_state.last_attack_at = new Date().toISOString();
                     
                     if(data.garrison_left) { 
@@ -931,7 +905,7 @@ modals.objectiveAttackBtn.onclick = async () => {
                 const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
                 if (obj) {
                     if (data.objective_destroyed) {
-                        pollHeartbeatState(); // Puxa o estado leve
+                        pollHeartbeatState();
                     } else {
                         obj.current_hp = data.objective_new_hp;
                         obj.garrison_hp = data.objective_new_garrison_hp;
@@ -943,11 +917,11 @@ modals.objectiveAttackBtn.onclick = async () => {
 
             })
             .finally(() => {
-                // REQ 1/2: Libera a trava
                 isProcessingBattleAction = false;
-                // Re-habilita o botão APENAS se o objetivo não for da guilda
                 if (selectedObjective && currentBattleState) {
+                    // Re-lê o estado *local* mais recente
                     const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                    // Habilita o botão apenas se o objetivo (após o ataque) AINDA não for da guilda
                     if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
                          modals.objectiveAttackBtn.disabled = false;
                     }
@@ -959,7 +933,6 @@ modals.objectiveAttackBtn.onclick = async () => {
 modals.objectiveGarrisonBtn.onclick = async () => {
     if (!selectedObjective) return;
     
-    // REQ 2: Verificação robusta de cooldown
     if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
         const lastLeave = new Date(currentBattleState.player_state.last_garrison_leave_at);
         const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
@@ -972,11 +945,9 @@ modals.objectiveGarrisonBtn.onclick = async () => {
     }
     
     checkGarrisonLeaveAndExecute(async () => {
-        // REQ 1/2: Trava de Ação
         if (isProcessingBattleAction) return;
         isProcessingBattleAction = true;
         modals.objectiveGarrisonBtn.disabled = true;
-
         modals.objective.style.display = 'none';
 
         if (currentBattleState) {
@@ -991,8 +962,7 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                     currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                 }
                 
-                // REQ 1: Consumo de Ação Otimista
-                currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1); // Garante > 0
+                currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1);
                 if (currentBattleState.player_state.last_attack_at === null || currentBattleState.player_state.attacks_left === 2) {
                     currentBattleState.player_state.last_attack_at = new Date().toISOString();
                 }
@@ -1031,13 +1001,13 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                 showAlert("Erro ao guarnecer. Sincronizando...");
             })
             .finally(() => {
-                // REQ 1/2: Libera a trava
                 isProcessingBattleAction = false;
                 modals.objectiveGarrisonBtn.disabled = false;
                 setTimeout(pollHeartbeatState, 1500);
             });
     });
 };
+
 
 function openBattleShop() {
     if (!currentBattleState || !currentBattleState.player_state) {
@@ -1082,7 +1052,7 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     modals.battleShopMessage.textContent = data.message;
     modals.battleShopMessage.style.color = '#28a745';
     btnEl.textContent = "Comprado";
-    pollBattleState(); // Força poll completo
+    pollBattleState();
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
     }, 1500);
@@ -1091,8 +1061,8 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
 // --- Lógica de Polling e Estado ---
 
 async function pollBattleState() {
-    stopHeartbeatPolling(); // REQ 3: Para polls leves
-    stopDamagePolling(); // REQ 3: Para polls de dano
+    stopHeartbeatPolling();
+    stopDamagePolling();
     
     const { data, error } = await supabase.rpc('get_guild_battle_state');
 
@@ -1113,13 +1083,13 @@ async function pollBattleState() {
         updatePlayerResourcesUI(data.player_stats);
     }
 
-    // REQ 6: Limpa fila de notificação
+    // REQ 1: Limpa fila de notificação e cache de timestamps
     captureNotificationQueue = [];
     isDisplayingCaptureNotification = false;
+    processedCaptureTimestamps.clear(); // Limpa ao carregar o estado
     const banner = $('battleCaptureNotification');
     if (banner) banner.classList.remove('show');
 
-    // Roteia para a tela correta
     switch(data.status) {
         case 'active':
             if (!data || !data.instance || !data.objectives) {
@@ -1139,12 +1109,12 @@ async function pollBattleState() {
                         return;
                     }
                     startHeartbeatPolling();
-                    startDamagePolling(); // REQ 3: Inicia poll de dano
+                    startDamagePolling();
                 }, 500);
             } else {
                 renderBattleScreen(data);
                 startHeartbeatPolling();
-                startDamagePolling(); // REQ 3: Reinicia poll de dano
+                startDamagePolling();
             }
             break;
             
@@ -1153,7 +1123,6 @@ async function pollBattleState() {
             break;
             
         case 'finished':
-            // REQ 3: Limpa cache de nomes
             playerDamageCache.clear();
             renderResultsScreen(data.instance, data.player_damage_ranking);
             setTimeout(pollBattleState, 7000);
@@ -1165,7 +1134,6 @@ async function pollBattleState() {
             break;
             
         case 'no_battle':
-            // REQ 3: Limpa cache de nomes
             playerDamageCache.clear();
             renderCitySelectionScreen(data.player_rank);
             break;
@@ -1176,9 +1144,53 @@ async function pollBattleState() {
     }
 }
 
-/**
- * REQ 6: Lógica de captura movida para cá
- */
+// REQ 1: Nova função assíncrona para lidar com capturas
+async function handleNewCaptures(newCaptures) {
+    if (!newCaptures || newCaptures.length === 0) return;
+
+    // 1. Encontra IDs de jogadores que não estão no cache
+    const playerIdsToFetch = [...new Set(
+        newCaptures
+            .map(c => c.player_id)
+            .filter(id => id && !playerDamageCache.has(id))
+    )];
+
+    // 2. Busca nomes se necessário
+    if (playerIdsToFetch.length > 0) {
+        try {
+            const { data: players, error } = await supabase
+                .from('players')
+                .select('id, name')
+                .in('id', playerIdsToFetch);
+            
+            if (!error && players) {
+                players.forEach(p => playerDamageCache.set(p.id, p.name));
+            }
+        } catch (e) {
+            console.warn("Falha ao buscar nomes de jogadores para captura", e);
+        }
+    }
+
+    // 3. Processa a fila de captura e som
+    newCaptures.forEach(c => {
+        const playerName = playerDamageCache.get(c.player_id) || '???';
+        const guild = (currentBattleState.instance.registered_guilds || []).find(g => g.guild_id === c.guild_id);
+        const guildName = guild ? guild.guild_name : '???';
+        const objectiveName = c.objective_name || '???';
+
+        // Adiciona na fila do banner
+        captureNotificationQueue.push({ playerName, guildName, objectiveName });
+        
+        // Toca o som (Req 1 & 6)
+        const isAlly = c.guild_id === userGuildId;
+        playCaptureSound(c.objective_type, c.objective_index, isAlly);
+    });
+
+    // 4. Inicia o processamento do banner
+    processCaptureNotificationQueue();
+}
+
+
 function processHeartbeat(data) {
     if (!data) return; 
 
@@ -1188,35 +1200,29 @@ function processHeartbeat(data) {
                 return; 
             }
 
-            // 1. Mescla Objetivos e checa Capturas (REQ 6)
+            // 1. Processa novos eventos de captura (REQ 1 & 6)
+            if (data.recent_captures) {
+                const newCaptures = data.recent_captures.filter(c => !processedCaptureTimestamps.has(c.timestamp));
+                if (newCaptures.length > 0) {
+                    // Marca como processado imediatamente
+                    newCaptures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
+                    // Lida com a busca de nomes, sons e banner de forma assíncrona
+                    handleNewCaptures(newCaptures);
+                }
+            }
+
+            // 2. Mescla Objetivos (HP/Owner)
             data.objectives.forEach(heartbeatObj => {
                 const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
                 if (fullObj) {
-                    const oldOwner = previousObjectiveState.get(heartbeatObj.id);
-                    const newOwner = heartbeatObj.owner_guild_id;
-
-                    if (oldOwner !== newOwner && newOwner !== null) {
-                        // CAPTURA DETECTADA
-                        playCaptureSound(fullObj.objective_type, fullObj.objective_index, newOwner === userGuildId);
-                        
-                        const newGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === newOwner);
-                        const guildName = newGuild ? newGuild.guild_name : 'Uma guilda';
-                        const objectiveName = (fullObj.objective_type === 'nexus') ? 'Nexus' : `Ponto ${fullObj.objective_index}`;
-                        
-                        captureNotificationQueue.push({ guildName, objectiveName });
-                        processCaptureNotificationQueue();
-                    }
-                    // Atualiza o estado anterior
-                    previousObjectiveState.set(heartbeatObj.id, newOwner);
-
-                    // Atualiza dados dinâmicos
+                    // Apenas atualiza o estado visual (som/banner são tratados acima)
                     fullObj.current_hp = heartbeatObj.current_hp;
                     fullObj.garrison_hp = heartbeatObj.garrison_hp;
                     fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
                 }
             });
 
-            // 2. Mescla Pontos de Honra
+            // 3. Mescla Pontos de Honra
             if (data.guild_honor) {
                 data.guild_honor.forEach(heartbeatGuild => {
                     const fullGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === heartbeatGuild.guild_id);
@@ -1226,8 +1232,9 @@ function processHeartbeat(data) {
                 });
             }
             
-            // 3. Re-renderiza componentes
+            // 4. Re-renderiza
             renderAllObjectives(currentBattleState.objectives);
+            // Atualiza o ranking de guildas (honra)
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
             break;
 
@@ -1235,13 +1242,16 @@ function processHeartbeat(data) {
         case 'no_battle':
         case 'no_guild':
             stopHeartbeatPolling();
-            stopDamagePolling(); // REQ 3
+            stopDamagePolling();
             pollBattleState(); 
             break;
     }
 }
 
 async function pollHeartbeatState() {
+    // REQ 1/2: Trava de ação impede o heartbeat? Não, o heartbeat é leve.
+    // if (isProcessingBattleAction) return; 
+
     const { data, error } = await supabase.rpc('get_battle_heartbeat');
     if (error) {
         console.error("Erro no heartbeat:", error.message);
@@ -1250,7 +1260,6 @@ async function pollHeartbeatState() {
     processHeartbeat(data);
 }
 
-// REQ 3: Nova função de polling de dano
 async function pollDamageRanking() {
     if (!currentBattleState || !currentBattleState.instance) return;
 
@@ -1263,17 +1272,14 @@ async function pollDamageRanking() {
         return;
     }
 
-    // Mapeia o novo ranking leve usando o cache de nomes
     const newRanking = data.map(p => ({
         player_id: p.player_id,
         total_damage_dealt: p.total_damage_dealt,
         guild_id: p.guild_id,
-        name: playerDamageCache.get(p.player_id) || '???' // Puxa do cache
+        name: playerDamageCache.get(p.player_id) // Puxa do cache
     }));
 
     currentBattleState.player_damage_ranking = newRanking;
-    
-    // Atualiza apenas o modal de ranking
     renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
 }
 
@@ -1288,10 +1294,8 @@ function stopHeartbeatPolling() {
     heartbeatInterval = null;
 }
 
-// REQ 3: Funções de controle do poll de dano
 function startDamagePolling() {
     stopDamagePolling();
-    // Poll a cada 2 minutos (120000 ms)
     damagePollInterval = setInterval(pollDamageRanking, 120000);
 }
 
@@ -1308,7 +1312,6 @@ function startGlobalUITimer() {
         const minutes = now.getMinutes();
         const seconds = now.getSeconds();
 
-        // 1. Timer da Tela de Seleção de Cidade
         if (screens.citySelection.style.display === 'flex') {
             const registrationTimer = $('registrationTimer');
             const cycleMin = 15;
@@ -1329,7 +1332,6 @@ function startGlobalUITimer() {
             updateCityRegistrationButtons();
         }
 
-        // 2. Timer da Tela de Espera
         if (screens.waiting.style.display === 'flex' && currentBattleState && currentBattleState.status === 'registering') {
             const regEnd = new Date(currentBattleState.instance.registration_end_time);
             const timeLeft = Math.max(0, Math.floor((regEnd - now) / 1000));
@@ -1339,7 +1341,6 @@ function startGlobalUITimer() {
             }
         }
 
-        // 3. Timer da Tela de Batalha
         if (screens.battle.style.display === 'flex' && currentBattleState && currentBattleState.status === 'active') {
             const battleEnd = new Date(currentBattleState.instance.end_time);
             const timeLeft = Math.max(0, Math.floor((battleEnd - now) / 1000));
@@ -1350,12 +1351,13 @@ function startGlobalUITimer() {
             }
             if (timeLeft <= 0) {
                 stopHeartbeatPolling();
-                stopDamagePolling(); // REQ 3
+                stopDamagePolling();
                 pollBattleState(); 
             }
         }
     }, 1000);
 }
+
 
 async function init() {
     showScreen('loading');
@@ -1367,9 +1369,12 @@ async function init() {
     }
     userId = session.user.id; 
 
-    // REQ 6: Cria UI do banner e adiciona listener de áudio
+    // REQ 1 & 2: Cria UI do banner e adiciona listener de áudio
     createCaptureNotificationUI();
     document.addEventListener('click', unlockBattleAudio, { once: true });
+    // REQ 2: Adiciona um listener extra no 'body' para garantir
+    document.body.addEventListener('click', unlockBattleAudio, { once: true });
+
 
     document.querySelectorAll('.battle-objective').forEach(el => {
         el.addEventListener('click', () => {

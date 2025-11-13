@@ -263,7 +263,7 @@ function createCaptureNotificationUI() {
 function displayCaptureNotification(data) {
     const banner = $('battleCaptureNotification');
     if (!banner) return;
-    banner.innerHTML = `<span style="color: yellow;">${data.playerName}</span> da guilda <span style="color: #00bcd4;">${data.guildName}</span> capturou o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
+    banner.innerHTML = `<span style="color: yellow;">${data.playerName}</span> da guilda <span style="color: #00bcd4;">${data.guildName}</span> destruiu o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
     banner.classList.add('show');
     const onAnimationEnd = () => {
         banner.classList.remove('show');

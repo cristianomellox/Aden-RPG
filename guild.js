@@ -628,7 +628,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                           </div>
                           <span class="member-level" 
                                 style="font-weight: bold; color: lightblue; padding-left:10px; border-left:2px solid #777; font-size: 0.8em;">
-                                Nv. ${g.level || 1}
+                              
                           </span>
                       </div>
                   </div>

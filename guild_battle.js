@@ -14,17 +14,18 @@ let heartbeatInterval = null;
 let uiTimerInterval = null;
 let selectedObjective = null;
 
+// REQ 2/3: Flag para previnir ações duplicadas
 let isProcessingBattleAction = false;
+
 let damagePollInterval = null;
 let playerDamageCache = new Map();
 let cityToRegister = null;
 let pendingGarrisonLeaveAction = null;
 
-// REQ 1/2: Notificações de Captura
 let captureNotificationQueue = [];
 let isDisplayingCaptureNotification = false;
 let processedCaptureTimestamps = new Set();
-let lastCaptureTimestamp = '1970-01-01T00:00:00+00:00'; // Otimização de Egress
+let lastCaptureTimestamp = '1970-01-01T00:00:00+00:00'; 
 
 const CITIES = [
     { id: 1, name: 'Capital' }, { id: 2, name: 'Zion' },
@@ -112,7 +113,7 @@ const modals = {
     shopBtnPack2: $('buyPack2Btn')
 };
 
-// REQ 1: Áudio
+// Áudio
 const audio = {
     normal: $('audioNormalHit'),
     crit: $('audioCritHit'),
@@ -130,35 +131,33 @@ const audio = {
 if(audio.normal) audio.normal.volume = 0.5;
 if(audio.crit) audio.crit.volume = 0.1;
 
-// REQ 1: Desbloqueio de Mídia (Correção)
+// REQ 1 (Bug Áudio): Desbloqueio de Mídia (Correção)
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let isMediaUnlocked = false;
 
 function unlockBattleAudio() {
     if (isMediaUnlocked) return;
-    isMediaUnlocked = true; // Trava imediatamente para evitar múltiplas execuções
+    isMediaUnlocked = true; 
 
     // 1. Resume o AudioContext
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.warn("AudioContext resume falhou", e));
     }
 
-    // 2. Toca e pausa um som de forma silenciosa para desbloquear tags <audio>
+    // 2. Toca e pausa um som de forma silenciosa
     try {
-        const sound = audio.normal || audio.enemy_p1; // Pega qualquer som
+        const sound = audio.normal || audio.enemy_p1;
         if (sound && sound.paused) {
             sound.volume = 0;
             sound.play()
                 .then(() => {
                     sound.pause();
-                    // Restaura volumes
                     if (sound === audio.crit) sound.volume = 0.1;
                     else if (sound === audio.normal) sound.volume = 0.5;
                     else sound.volume = 0.7;
                     console.log("Mídia de batalha desbloqueada.");
                 })
                 .catch((e) => {
-                    // Ignora erros comuns de interrupção
                     console.warn("Desbloqueio de áudio falhou, mas foi registrado.", e.name);
                 });
         }
@@ -499,35 +498,55 @@ function renderAllObjectives(objectives) {
     });
 }
 
+// REQ 2/3: Adicionada função auxiliar para checagem de ataques
+function computeShownAttacksAndRemaining() {
+    const playerState = (currentBattleState && currentBattleState.player_state) ? currentBattleState.player_state : null;
+    const now = new Date();
+    
+    if (!playerState) {
+        return { shownAttacks: 0, secondsToNext: 0 };
+    }
+
+    const naturalCap = 3;
+    const attacksLeft = playerState.attacks_left || 0;
+    const lastAttackAt = playerState.last_attack_at;
+
+    if (attacksLeft >= naturalCap) {
+        return { shownAttacks: attacksLeft, secondsToNext: 0 };
+    }
+    
+    if (!lastAttackAt) {
+        return { shownAttacks: attacksLeft, secondsToNext: 0 };
+    }
+
+    const elapsed = Math.floor((now - new Date(lastAttackAt)) / 1000);
+    const recovered = Math.floor(elapsed / 60);
+    
+    let shown = Math.min(naturalCap, attacksLeft + recovered);
+    let secondsToNext = 0;
+    
+    if (shown < naturalCap) {
+        const sinceLast = elapsed % 60;
+        secondsToNext = 60 - sinceLast;
+    }
+    
+    return { shownAttacks: shown, secondsToNext };
+}
+
 function renderPlayerFooter(playerState, playerGarrison) {
     if (!playerState) return; 
 
-    const now = new Date();
-    const naturalCap = 3;
-    let currentAttacks = playerState.attacks_left;
-    let cooldownText = "";
-
-    if (currentAttacks < naturalCap) {
-        if (playerState.last_attack_at) {
-            const lastAttack = new Date(playerState.last_attack_at);
-            const elapsed = Math.floor((now - lastAttack) / 1000);
-            const recovered = Math.floor(elapsed / 60);
-            const recoveredAttacks = Math.min(naturalCap, playerState.attacks_left + recovered);
-
-            if (recoveredAttacks > currentAttacks) {
-                currentAttacks = recoveredAttacks;
-            }
-            if (currentAttacks < naturalCap) {
-                const timeToNext = 60 - (elapsed % 60);
-                cooldownText = `+1 em ${formatTime(timeToNext)}`;
-            }
-        } else {
-            cooldownText = `+1 em 01:00`;
-        }
+    // Atualiza o estado local para o helper
+    if (currentBattleState) {
+        currentBattleState.player_state = playerState;
+        currentBattleState.player_garrison = playerGarrison;
     }
-    
-    battle.playerAttacks.textContent = `Ações: ${Math.max(0, currentAttacks)} / ${naturalCap}`;
-    battle.playerCooldown.textContent = cooldownText;
+
+    const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
+    const naturalCap = 3;
+
+    battle.playerAttacks.textContent = `Ações: ${Math.max(0, shownAttacks)} / ${naturalCap}`;
+    battle.playerCooldown.textContent = secondsToNext > 0 ? `+1 em ${formatTime(secondsToNext)}` : "";
 
     if (playerGarrison) {
         const objectives = (currentBattleState && currentBattleState.objectives) ? currentBattleState.objectives : null;
@@ -542,7 +561,7 @@ function renderPlayerFooter(playerState, playerGarrison) {
         battle.garrisonStatus.className = 'garrisoned';
     } else if (playerState.last_garrison_leave_at) {
         const lastLeave = new Date(playerState.last_garrison_leave_at);
-        const timeSinceLeave = Math.floor((now - lastLeave) / 1000);
+        const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
         if (timeSinceLeave < 30) {
             const timeLeft = 30 - timeSinceLeave;
             battle.garrisonStatus.textContent = `Guarnição CD: ${timeLeft}s`;
@@ -728,7 +747,7 @@ function renderResultsScreen(instance, playerDamageRanking) {
 // --- Lógica de Interação ---
 
 async function handleCityRegistrationPre(cityId, cityName) {
-    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
+    unlockBattleAudio(); // Desbloqueia áudio
     cityToRegister = { id: cityId, name: cityName };
     modals.cityRegisterCityName.textContent = cityName;
     modals.cityRegisterMessage.textContent = "Carregando guildas registradas...";
@@ -797,7 +816,7 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
 }
 
 function handleObjectiveClick(objective) {
-    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
+    unlockBattleAudio(); // Desbloqueia áudio
     if (isProcessingBattleAction) return;
 
     const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
@@ -867,8 +886,16 @@ modals.garrisonLeaveConfirmBtn.onclick = () => {
 };
 
 modals.objectiveAttackBtn.onclick = async () => {
-    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
+    unlockBattleAudio(); // Desbloqueia áudio
     if (!selectedObjective) return;
+
+    // *** CORREÇÃO (REQ 2/3) ***
+    // Verifica ataques *antes* de executar
+    const { shownAttacks } = computeShownAttacksAndRemaining();
+    if (shownAttacks <= 0) {
+        showAlert('Sem ações restantes.');
+        return; 
+    }
     
     checkGarrisonLeaveAndExecute(async () => {
         if (isProcessingBattleAction) return;
@@ -881,7 +908,7 @@ modals.objectiveAttackBtn.onclick = async () => {
             .then(({ data, error }) => {
                 if (error || !data.success) {
                     showAlert(error ? error.message : data.message);
-                    pollBattleState();
+                    pollBattleState(); // Força re-sincronização
                     return;
                 }
 
@@ -921,19 +948,23 @@ modals.objectiveAttackBtn.onclick = async () => {
 
             })
             .finally(() => {
-                isProcessingBattleAction = false;
-                if (selectedObjective && currentBattleState) {
-                    const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
-                    if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
-                         modals.objectiveAttackBtn.disabled = false;
+                // *** CORREÇÃO (REQ 3) ***
+                // Adiciona cooldown para previnir spam
+                setTimeout(() => {
+                    isProcessingBattleAction = false;
+                    if (selectedObjective && currentBattleState) {
+                        const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                        if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
+                            modals.objectiveAttackBtn.disabled = false;
+                        }
                     }
-                }
+                }, 800); // Cooldown de 800ms
             });
     });
 };
 
 modals.objectiveGarrisonBtn.onclick = async () => {
-    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
+    unlockBattleAudio(); // Desbloqueia áudio
     if (!selectedObjective) return;
     
     if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
@@ -945,6 +976,14 @@ modals.objectiveGarrisonBtn.onclick = async () => {
             showAlert(`Aguarde 30 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
             return;
         }
+    }
+
+    // *** CORREÇÃO (REQ 2/3) ***
+    // Verifica ataques *antes* de executar
+    const { shownAttacks } = computeShownAttacksAndRemaining();
+    if (shownAttacks <= 0) {
+        showAlert('Sem ações restantes.');
+        return; // Impede a ação e o bug de remoção otimista
     }
     
     checkGarrisonLeaveAndExecute(async () => {
@@ -1004,15 +1043,20 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                 showAlert("Erro ao guarnecer. Sincronizando...");
             })
             .finally(() => {
-                isProcessingBattleAction = false;
-                modals.objectiveGarrisonBtn.disabled = false;
-                setTimeout(pollHeartbeatState, 1500);
+                // *** CORREÇÃO (REQ 3) ***
+                // Adiciona cooldown para previnir spam
+                setTimeout(() => {
+                    isProcessingBattleAction = false;
+                    modals.objectiveGarrisonBtn.disabled = false;
+                }, 800); // Cooldown de 800ms
+                setTimeout(pollHeartbeatState, 1500); // Sincroniza
             });
     });
 };
 
 
 function openBattleShop() {
+    unlockBattleAudio(); // Desbloqueia áudio
     if (!currentBattleState || !currentBattleState.player_state) {
         showAlert("Não foi possível carregar o estado do jogador.");
         return;
@@ -1086,7 +1130,6 @@ async function pollBattleState() {
         updatePlayerResourcesUI(data.player_stats);
     }
 
-    // REQ 1/2: Limpa fila de notificação
     captureNotificationQueue = [];
     isDisplayingCaptureNotification = false;
     const banner = $('battleCaptureNotification');
@@ -1100,8 +1143,9 @@ async function pollBattleState() {
                 return;
             }
 
-            // REQ 2: Lógica de captura no Full Load
-            processedCaptureTimestamps.clear(); // Limpa timestamps
+            // *** CORREÇÃO (REQ 1) ***
+            // A lógica de captura no Full Load agora APENAS preenche o histórico
+            processedCaptureTimestamps.clear();
             const captures = (data.instance && data.instance.recent_captures) ? data.instance.recent_captures : [];
             if (captures.length > 0) {
                 // 1. Preenche o set com TODO o histórico
@@ -1110,13 +1154,14 @@ async function pollBattleState() {
                 lastCaptureTimestamp = captures[captures.length - 1].timestamp; 
                 // 3. (REQ 2) Mostra APENAS a última captura
                 const lastCapture = captures[captures.length - 1];
-                setTimeout(() => handleNewCaptures([lastCapture]), 1000); 
+                // *** CORREÇÃO (REQ 1): Não mostra mais a última captura no full load,
+                // apenas no heartbeat. Isso evita replays de som/banner em erros.
+                // setTimeout(() => handleNewCaptures([lastCapture]), 1000); // <-- REMOVIDO
             } else {
-                // Reseta o timestamp se não houver capturas
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
+            // *** FIM DA CORREÇÃO ***
 
-            // Lógica de renderização
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
                 setTimeout(() => {
@@ -1157,18 +1202,15 @@ async function pollBattleState() {
     }
 }
 
-// REQ 1: Lida com a exibição e som das capturas
 async function handleNewCaptures(newCaptures) {
     if (!newCaptures || newCaptures.length === 0) return;
 
-    // 1. Encontra IDs de jogadores que não estão no cache
     const playerIdsToFetch = [...new Set(
         newCaptures
             .map(c => c.player_id)
             .filter(id => id && !playerDamageCache.has(id))
     )];
 
-    // 2. Busca nomes se necessário
     if (playerIdsToFetch.length > 0) {
         try {
             const { data: players, error } = await supabase
@@ -1184,26 +1226,21 @@ async function handleNewCaptures(newCaptures) {
         }
     }
 
-    // 3. Processa a fila de captura e som
     newCaptures.forEach(c => {
         const playerName = playerDamageCache.get(c.player_id) || '???';
         const guild = (currentBattleState.instance.registered_guilds || []).find(g => g.guild_id === c.guild_id);
         const guildName = guild ? guild.guild_name : '???';
         const objectiveName = c.objective_name || '???';
 
-        // Adiciona na fila do banner
         captureNotificationQueue.push({ playerName, guildName, objectiveName });
         
-        // Toca o som
         const isAlly = c.guild_id === userGuildId;
         playCaptureSound(c.objective_type, c.objective_index, isAlly);
     });
 
-    // 4. Inicia o processamento do banner
     processCaptureNotificationQueue();
 }
 
-// REQ 1/2: Modificado para usar o timestamp
 async function pollHeartbeatState() {
     const { data, error } = await supabase.rpc('get_battle_heartbeat', { 
         p_last_capture_timestamp: lastCaptureTimestamp 
@@ -1226,20 +1263,15 @@ function processHeartbeat(data) {
                 return; 
             }
 
-            // 1. Processa novos eventos de captura
             if (data.recent_captures && data.recent_captures.length > 0) {
-                const newCaptures = data.recent_captures; // Já filtrado pelo SQL
+                const newCaptures = data.recent_captures; 
                 
-                // Adiciona ao set de processados (embora o SQL já filtre)
                 newCaptures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
-                // Atualiza o timestamp para o próximo poll
                 lastCaptureTimestamp = newCaptures[newCaptures.length - 1].timestamp;
 
-                // Lida com a exibição/som
                 handleNewCaptures(newCaptures);
             }
 
-            // 2. Mescla Objetivos (HP/Owner)
             data.objectives.forEach(heartbeatObj => {
                 const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
                 if (fullObj) {
@@ -1249,7 +1281,6 @@ function processHeartbeat(data) {
                 }
             });
 
-            // 3. Mescla Pontos de Honra
             if (data.guild_honor) {
                 data.guild_honor.forEach(heartbeatGuild => {
                     const fullGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === heartbeatGuild.guild_id);
@@ -1259,7 +1290,6 @@ function processHeartbeat(data) {
                 });
             }
             
-            // 4. Re-renderiza
             renderAllObjectives(currentBattleState.objectives);
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
             break;
@@ -1384,9 +1414,7 @@ async function init() {
     userId = session.user.id; 
 
     createCaptureNotificationUI();
-    // REQ 1: Listeners de desbloqueio de áudio
-    // Tenta desbloquear em qualquer clique, mas focado nos botões
-    document.addEventListener('click', unlockBattleAudio, { once: true });
+    // REQ 1 (Bug Áudio): Listener genérico
     document.body.addEventListener('click', unlockBattleAudio, { once: true });
 
 

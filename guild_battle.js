@@ -20,10 +20,11 @@ let playerDamageCache = new Map();
 let cityToRegister = null;
 let pendingGarrisonLeaveAction = null;
 
-// REQ 1: Notificações de Captura
+// REQ 1/2: Notificações de Captura
 let captureNotificationQueue = [];
 let isDisplayingCaptureNotification = false;
-let processedCaptureTimestamps = new Set(); // REQ 1: Para filtrar eventos
+let processedCaptureTimestamps = new Set();
+let lastCaptureTimestamp = '1970-01-01T00:00:00+00:00'; // Otimização de Egress
 
 const CITIES = [
     { id: 1, name: 'Capital' }, { id: 2, name: 'Zion' },
@@ -111,7 +112,7 @@ const modals = {
     shopBtnPack2: $('buyPack2Btn')
 };
 
-// REQ 2: Áudio
+// REQ 1: Áudio
 const audio = {
     normal: $('audioNormalHit'),
     crit: $('audioCritHit'),
@@ -129,35 +130,41 @@ const audio = {
 if(audio.normal) audio.normal.volume = 0.5;
 if(audio.crit) audio.crit.volume = 0.1;
 
-// REQ 2: Desbloqueio de Mídia (Correção)
-const audioContext = new (window.AudioContext || window.webkitAudioContext)(); // REQ 2
+// REQ 1: Desbloqueio de Mídia (Correção)
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let isMediaUnlocked = false;
+
 function unlockBattleAudio() {
     if (isMediaUnlocked) return;
+    isMediaUnlocked = true; // Trava imediatamente para evitar múltiplas execuções
 
-    // REQ 2: Resumir o AudioContext
+    // 1. Resume o AudioContext
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.warn("AudioContext resume falhou", e));
     }
 
+    // 2. Toca e pausa um som de forma silenciosa para desbloquear tags <audio>
     try {
-        Object.values(audio).forEach(aud => {
-            if (aud && aud.play && aud.paused) { // REQ 2: Apenas se estiver pausado
-                aud.volume = 0; // Muta temporariamente
-                aud.play().then(() => {
-                    aud.pause();
-                    // Restaura volumes padrão
-                    if (aud === audio.crit) aud.volume = 0.1;
-                    else if (aud === audio.normal) aud.volume = 0.5;
-                    else aud.volume = 0.7; // Volume padrão para sons de captura
-                }).catch((e)=>{
-                    // Ignora erros de interrupção
+        const sound = audio.normal || audio.enemy_p1; // Pega qualquer som
+        if (sound && sound.paused) {
+            sound.volume = 0;
+            sound.play()
+                .then(() => {
+                    sound.pause();
+                    // Restaura volumes
+                    if (sound === audio.crit) sound.volume = 0.1;
+                    else if (sound === audio.normal) sound.volume = 0.5;
+                    else sound.volume = 0.7;
+                    console.log("Mídia de batalha desbloqueada.");
+                })
+                .catch((e) => {
+                    // Ignora erros comuns de interrupção
+                    console.warn("Desbloqueio de áudio falhou, mas foi registrado.", e.name);
                 });
-            }
-        });
-        isMediaUnlocked = true;
-        console.log("Mídia de batalha desbloqueada.");
-    } catch(e) { console.warn("Falha ao desbloquear áudio", e); }
+        }
+    } catch (e) {
+        console.warn("Falha ao desbloquear áudio", e);
+    }
 }
 
 
@@ -195,7 +202,7 @@ function kFormatter(num) {
 }
 
 function playHitSound(isCrit) {
-    if(!isMediaUnlocked) return; // REQ 2
+    if(!isMediaUnlocked) return;
     try {
         const s = isCrit ? audio.crit : audio.normal;
         s.currentTime = 0;
@@ -216,11 +223,10 @@ function displayFloatingDamage(targetEl, val, isCrit) {
     el.addEventListener("animationend", () => el.remove());
 }
 
-// --- Funções de Notificação (REQ 1) ---
+// --- Funções de Notificação ---
 
 function createCaptureNotificationUI() {
     if ($('battleCaptureNotification')) return;
-
     const banner = document.createElement('div');
     banner.id = 'battleCaptureNotification'; 
     const style = document.createElement('style');
@@ -255,14 +261,11 @@ function createCaptureNotificationUI() {
     document.body.appendChild(banner);
 }
 
-// REQ 1: Modificada para aceitar o nome do jogador
 function displayCaptureNotification(data) {
     const banner = $('battleCaptureNotification');
     if (!banner) return;
-
-    banner.innerHTML = `<span style="color: yellow;">${data.playerName}</span> da <span style="color: #00bcd4;">${data.guildName}</span> capturou <span style="color: lightgreen;">${data.objectiveName}</span>!`;
+    banner.innerHTML = `<span style="color: yellow;">${data.playerName}</span> da guilda <span style="color: #00bcd4;">${data.guildName}</span> capturou o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
     banner.classList.add('show');
-
     const onAnimationEnd = () => {
         banner.classList.remove('show');
         banner.removeEventListener('animationend', onAnimationEnd);
@@ -282,8 +285,7 @@ function processCaptureNotificationQueue() {
 }
 
 function playCaptureSound(type, index, isAlly) {
-    if (!isMediaUnlocked) return; // REQ 2
-    
+    if (!isMediaUnlocked) return;
     let soundToPlay = null;
     if (type === 'nexus') {
         soundToPlay = isAlly ? audio.ally_nexus : audio.enemy_nexus;
@@ -291,7 +293,6 @@ function playCaptureSound(type, index, isAlly) {
         const key = `${isAlly ? 'ally' : 'enemy'}_p${index}`;
         soundToPlay = audio[key];
     }
-    
     if (soundToPlay) {
         soundToPlay.currentTime = 0;
         soundToPlay.play().catch(e => console.warn("Falha ao tocar som de captura:", e));
@@ -727,6 +728,7 @@ function renderResultsScreen(instance, playerDamageRanking) {
 // --- Lógica de Interação ---
 
 async function handleCityRegistrationPre(cityId, cityName) {
+    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
     cityToRegister = { id: cityId, name: cityName };
     modals.cityRegisterCityName.textContent = cityName;
     modals.cityRegisterMessage.textContent = "Carregando guildas registradas...";
@@ -795,6 +797,7 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
 }
 
 function handleObjectiveClick(objective) {
+    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
     if (isProcessingBattleAction) return;
 
     const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
@@ -864,6 +867,7 @@ modals.garrisonLeaveConfirmBtn.onclick = () => {
 };
 
 modals.objectiveAttackBtn.onclick = async () => {
+    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
     if (!selectedObjective) return;
     
     checkGarrisonLeaveAndExecute(async () => {
@@ -919,9 +923,7 @@ modals.objectiveAttackBtn.onclick = async () => {
             .finally(() => {
                 isProcessingBattleAction = false;
                 if (selectedObjective && currentBattleState) {
-                    // Re-lê o estado *local* mais recente
                     const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
-                    // Habilita o botão apenas se o objetivo (após o ataque) AINDA não for da guilda
                     if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
                          modals.objectiveAttackBtn.disabled = false;
                     }
@@ -931,6 +933,7 @@ modals.objectiveAttackBtn.onclick = async () => {
 };
 
 modals.objectiveGarrisonBtn.onclick = async () => {
+    unlockBattleAudio(); // REQ 1: Desbloqueia áudio
     if (!selectedObjective) return;
     
     if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
@@ -1083,10 +1086,9 @@ async function pollBattleState() {
         updatePlayerResourcesUI(data.player_stats);
     }
 
-    // REQ 1: Limpa fila de notificação e cache de timestamps
+    // REQ 1/2: Limpa fila de notificação
     captureNotificationQueue = [];
     isDisplayingCaptureNotification = false;
-    processedCaptureTimestamps.clear(); // Limpa ao carregar o estado
     const banner = $('battleCaptureNotification');
     if (banner) banner.classList.remove('show');
 
@@ -1098,16 +1100,27 @@ async function pollBattleState() {
                 return;
             }
 
+            // REQ 2: Lógica de captura no Full Load
+            processedCaptureTimestamps.clear(); // Limpa timestamps
+            const captures = (data.instance && data.instance.recent_captures) ? data.instance.recent_captures : [];
+            if (captures.length > 0) {
+                // 1. Preenche o set com TODO o histórico
+                captures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
+                // 2. Define o timestamp para o próximo heartbeat
+                lastCaptureTimestamp = captures[captures.length - 1].timestamp; 
+                // 3. (REQ 2) Mostra APENAS a última captura
+                const lastCapture = captures[captures.length - 1];
+                setTimeout(() => handleNewCaptures([lastCapture]), 1000); 
+            } else {
+                // Reseta o timestamp se não houver capturas
+                lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
+            }
+
+            // Lógica de renderização
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
                 setTimeout(() => {
-                    try {
-                        renderBattleScreen(data);
-                    } catch (e) {
-                        console.error("Erro ao renderizar tela de batalha:", e);
-                        setTimeout(pollBattleState, 1000);
-                        return;
-                    }
+                    renderBattleScreen(data);
                     startHeartbeatPolling();
                     startDamagePolling();
                 }, 500);
@@ -1144,7 +1157,7 @@ async function pollBattleState() {
     }
 }
 
-// REQ 1: Nova função assíncrona para lidar com capturas
+// REQ 1: Lida com a exibição e som das capturas
 async function handleNewCaptures(newCaptures) {
     if (!newCaptures || newCaptures.length === 0) return;
 
@@ -1181,7 +1194,7 @@ async function handleNewCaptures(newCaptures) {
         // Adiciona na fila do banner
         captureNotificationQueue.push({ playerName, guildName, objectiveName });
         
-        // Toca o som (Req 1 & 6)
+        // Toca o som
         const isAlly = c.guild_id === userGuildId;
         playCaptureSound(c.objective_type, c.objective_index, isAlly);
     });
@@ -1190,6 +1203,19 @@ async function handleNewCaptures(newCaptures) {
     processCaptureNotificationQueue();
 }
 
+// REQ 1/2: Modificado para usar o timestamp
+async function pollHeartbeatState() {
+    const { data, error } = await supabase.rpc('get_battle_heartbeat', { 
+        p_last_capture_timestamp: lastCaptureTimestamp 
+    });
+    
+    if (error) {
+        console.error("Erro no heartbeat:", error.message);
+        return;
+    }
+    
+    processHeartbeat(data);
+}
 
 function processHeartbeat(data) {
     if (!data) return; 
@@ -1200,22 +1226,23 @@ function processHeartbeat(data) {
                 return; 
             }
 
-            // 1. Processa novos eventos de captura (REQ 1 & 6)
-            if (data.recent_captures) {
-                const newCaptures = data.recent_captures.filter(c => !processedCaptureTimestamps.has(c.timestamp));
-                if (newCaptures.length > 0) {
-                    // Marca como processado imediatamente
-                    newCaptures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
-                    // Lida com a busca de nomes, sons e banner de forma assíncrona
-                    handleNewCaptures(newCaptures);
-                }
+            // 1. Processa novos eventos de captura
+            if (data.recent_captures && data.recent_captures.length > 0) {
+                const newCaptures = data.recent_captures; // Já filtrado pelo SQL
+                
+                // Adiciona ao set de processados (embora o SQL já filtre)
+                newCaptures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
+                // Atualiza o timestamp para o próximo poll
+                lastCaptureTimestamp = newCaptures[newCaptures.length - 1].timestamp;
+
+                // Lida com a exibição/som
+                handleNewCaptures(newCaptures);
             }
 
             // 2. Mescla Objetivos (HP/Owner)
             data.objectives.forEach(heartbeatObj => {
                 const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
                 if (fullObj) {
-                    // Apenas atualiza o estado visual (som/banner são tratados acima)
                     fullObj.current_hp = heartbeatObj.current_hp;
                     fullObj.garrison_hp = heartbeatObj.garrison_hp;
                     fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
@@ -1234,7 +1261,6 @@ function processHeartbeat(data) {
             
             // 4. Re-renderiza
             renderAllObjectives(currentBattleState.objectives);
-            // Atualiza o ranking de guildas (honra)
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
             break;
 
@@ -1246,18 +1272,6 @@ function processHeartbeat(data) {
             pollBattleState(); 
             break;
     }
-}
-
-async function pollHeartbeatState() {
-    // REQ 1/2: Trava de ação impede o heartbeat? Não, o heartbeat é leve.
-    // if (isProcessingBattleAction) return; 
-
-    const { data, error } = await supabase.rpc('get_battle_heartbeat');
-    if (error) {
-        console.error("Erro no heartbeat:", error.message);
-        return;
-    }
-    processHeartbeat(data);
 }
 
 async function pollDamageRanking() {
@@ -1369,15 +1383,16 @@ async function init() {
     }
     userId = session.user.id; 
 
-    // REQ 1 & 2: Cria UI do banner e adiciona listener de áudio
     createCaptureNotificationUI();
+    // REQ 1: Listeners de desbloqueio de áudio
+    // Tenta desbloquear em qualquer clique, mas focado nos botões
     document.addEventListener('click', unlockBattleAudio, { once: true });
-    // REQ 2: Adiciona um listener extra no 'body' para garantir
     document.body.addEventListener('click', unlockBattleAudio, { once: true });
 
 
     document.querySelectorAll('.battle-objective').forEach(el => {
         el.addEventListener('click', () => {
+            unlockBattleAudio(); // Garante o desbloqueio
             if (!currentBattleState || currentBattleState.status !== 'active' || !currentBattleState.objectives) return;
             const index = parseInt(el.dataset.index, 10);
             const objective = currentBattleState.objectives.find(o => o.objective_index === index);
@@ -1388,6 +1403,7 @@ async function init() {
     });
 
     battle.rankingBtn.onclick = () => {
+        unlockBattleAudio(); // Garante o desbloqueio
         modals.ranking.style.display = 'flex';
         document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
         const defaultTabBtn = modals.ranking.querySelector('.tab-btn[data-tab="guilds"]');
@@ -1417,7 +1433,10 @@ async function init() {
         });
     });
 
-    $('showShopBtn').onclick = () => openBattleShop();
+    $('showShopBtn').onclick = () => {
+        unlockBattleAudio(); // Garante o desbloqueio
+        openBattleShop();
+    };
     modals.shopBtnPack1.onclick = () => handleBuyBattleActions(1, 30, 3, modals.shopBtnPack1);
     modals.shopBtnPack2.onclick = () => handleBuyBattleActions(2, 75, 5, modals.shopBtnPack2);
 

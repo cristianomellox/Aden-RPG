@@ -593,7 +593,7 @@ function renderResultsScreen(instance, playerDamageRanking) {
     if (!dateEl) {
         dateEl = document.createElement('p');
         dateEl.id = 'resultBattleDate';
-        dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: -10px; margin-bottom: 15px; text-align: center;';
+        dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: 0px; margin-bottom: 0px; text-align: center;';
         titleEl.after(dateEl);
     }
     

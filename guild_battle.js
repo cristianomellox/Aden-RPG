@@ -10,15 +10,27 @@ let userRank = null;
 let userPlayerStats = null;
 
 let currentBattleState = null; // Armazena o estado vindo do RPC
-let heartbeatInterval = null; // NOVO: Substitui o pollInterval
+let heartbeatInterval = null;
 let uiTimerInterval = null;
 let selectedObjective = null;
+
+// REQ 1/2: Flag para previnir ações duplicadas
+let isProcessingBattleAction = false;
+
+// REQ 3: Polling de Dano
+let damagePollInterval = null;
+let playerDamageCache = new Map();
 
 // REQ 1: Variáveis para o modal de registro
 let cityToRegister = null;
 
 // REQ 3: Variável para o callback de confirmação
 let pendingGarrisonLeaveAction = null;
+
+// REQ 6: Notificações de Captura
+let captureNotificationQueue = [];
+let isDisplayingCaptureNotification = false;
+let previousObjectiveState = new Map();
 
 const CITIES = [
     { id: 1, name: 'Capital' }, { id: 2, name: 'Zion' },
@@ -34,7 +46,6 @@ const GUILD_COLORS = [
     'var(--guild-color-enemy-3)'
 ];
 
-// NOVO: Definição dos Itens
 const REWARD_ITEMS = {
     CRYSTALS: { name: 'Cristais', img: 'https://aden-rpg.pages.dev/assets/cristais.webp' },
     REFORGE_STONE: { name: 'Pedra de Refundição', img: 'https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp' },
@@ -50,7 +61,7 @@ const screens = {
     citySelection: $('citySelectionScreen'),
     waiting: $('waitingScreen'),
     battle: $('battleActiveScreen'),
-    results: $('resultsModal') // REQ 5: Alterado para o modal
+    results: $('resultsModal')
 };
 
 const battle = {
@@ -71,21 +82,16 @@ const modals = {
     objectiveGarrisonBtn: $('objectiveGarrisonBtn'),
     objectiveGarrisonWarning: $('objectiveModalGarrisonWarning'),
     objectiveClose: $('objectiveModalClose'),
-
     alert: $('alertModal'),
     alertMessage: $('alertModalMessage'),
     alertOk: $('alertModalOk'),
     alertClose: $('alertModalClose'),
-
-    // REQ 1
     ranking: $('battleRankingModal'),
     rankingClose: $('rankingModalClose'),
     rankingTabGuilds: $('rankingTabGuilds'),
     rankingTabDamage: $('rankingTabDamage'),
     guildRankingList: $('guildRankingList'),
     playerDamageList: $('playerDamageList'),
-
-    // REQ 1: Registro
     cityRegister: $('cityRegisterConfirmModal'),
     cityRegisterClose: $('cityRegisterModalClose'),
     cityRegisterTitle: $('cityRegisterModalTitle'),
@@ -94,24 +100,17 @@ const modals = {
     cityRegisterMessage: $('cityRegisterModalMessage'),
     cityRegisterCancelBtn: $('cityRegisterModalCancelBtn'),
     cityRegisterConfirmBtn: $('cityRegisterModalConfirmBtn'),
-    
-    // REQ 3: Saída de Guarnição
     garrisonLeave: $('garrisonLeaveConfirmModal'),
     garrisonLeaveClose: $('garrisonLeaveModalClose'),
     garrisonLeaveMessage: $('garrisonLeaveModalMessage'),
     garrisonLeaveCancelBtn: $('garrisonLeaveModalCancelBtn'),
     garrisonLeaveConfirmBtn: $('garrisonLeaveModalConfirmBtn'),
-    
-    // REQ 5: Resultados
     results: $('resultsModal'),
     resultsClose: $('resultsModalClose'),
     resultCityName: $('resultCityName'),
     resultsRankingHonor: $('resultsRankingHonor'),
     resultsRankingDamage: $('resultsRankingDamage'),
     resultsRewardMessage: $('resultsRewardMessage'),
-    // Os divs de recompensa são criados dinamicamente
-    
-    // NOVO: Loja da Batalha
     battleShop: $('battleShopModal'),
     battleShopClose: $('battleShopModalClose'),
     battleShopMessage: $('battleShopMessage'),
@@ -119,22 +118,54 @@ const modals = {
     shopBtnPack2: $('buyPack2Btn')
 };
 
-// REQ 3: Áudio
+// REQ 3 & 6: Áudio
 const audio = {
     normal: $('audioNormalHit'),
-    crit: $('audioCritHit')
+    crit: $('audioCritHit'),
+    // REQ 6: Sons de Captura
+    enemy_p1: new Audio('https://aden-rpg.pages.dev/ini_ponto1.mp3'),
+    enemy_p2: new Audio('https://aden-rpg.pages.dev/ini_ponto2.mp3'),
+    enemy_p3: new Audio('https://aden-rpg.pages.dev/ini_ponto3.mp3'),
+    enemy_p4: new Audio('https://aden-rpg.pages.dev/ini_ponto4.mp3'),
+    enemy_nexus: new Audio('https://aden-rpg.pages.dev/ini_nexus.mp3'),
+    ally_p1: new Audio('https://aden-rpg.pages.dev/ally_ponto1.mp3'),
+    ally_p2: new Audio('https://aden-rpg.pages.dev/ally_ponto2.mp3'),
+    ally_p3: new Audio('https://aden-rpg.pages.dev/ally_ponto3.mp3'),
+    ally_p4: new Audio('https://aden-rpg.pages.dev/ally_ponto4.mp3'),
+    ally_nexus: new Audio('https://aden-rpg.pages.dev/ally_nexus.mp3')
 };
 if(audio.normal) audio.normal.volume = 0.5;
 if(audio.crit) audio.crit.volume = 0.1;
+
+// REQ 6: Desbloqueio de Mídia
+let isMediaUnlocked = false;
+function unlockBattleAudio() {
+    if (isMediaUnlocked) return;
+    try {
+        Object.values(audio).forEach(aud => {
+            if (aud && aud.play) {
+                aud.volume = 0; // Muta temporariamente
+                aud.play().then(() => {
+                    aud.pause();
+                    // Restaura volumes padrão
+                    if (aud === audio.crit) aud.volume = 0.1;
+                    else if (aud === audio.normal) aud.volume = 0.5;
+                    else aud.volume = 0.7; // Volume padrão para sons de captura
+                }).catch(()=>{});
+            }
+        });
+        isMediaUnlocked = true;
+    } catch(e) { console.warn("Falha ao desbloquear áudio", e); }
+}
+
 
 // --- Funções Auxiliares ---
 
 function showScreen(screenName) {
     Object.values(screens).forEach(s => s.style.display = 'none');
     if (screens[screenName]) {
-        // REQ 5: Telas de "estado" são flex, modal de resultado não é
         if (screenName === 'results') {
-             screens[screenName].style.display = 'flex'; // Modais são flex
+             screens[screenName].style.display = 'flex';
         } else {
              screens[screenName].style.display = 'flex';
         }
@@ -148,9 +179,7 @@ function showAlert(message) {
 
 modals.alertOk.onclick = () => modals.alert.style.display = 'none';
 modals.alertClose.onclick = () => modals.alert.style.display = 'none';
-// REQ 5
 if(modals.resultsClose) modals.resultsClose.onclick = () => modals.results.style.display = 'none';
-// NOVO: Loja
 if(modals.battleShopClose) modals.battleShopClose.onclick = () => modals.battleShop.style.display = 'none';
 
 
@@ -167,7 +196,6 @@ function kFormatter(num) {
     return Math.sign(num)*((Math.abs(num)/1000).toFixed(1)) + 'k';
 }
 
-// REQ 3: Funções de Efeitos Visuais
 function playHitSound(isCrit) {
     try {
         const s = isCrit ? audio.crit : audio.normal;
@@ -181,109 +209,148 @@ function displayFloatingDamage(targetEl, val, isCrit) {
     const el = document.createElement("div");
     el.textContent = isCrit ? `${Number(val).toLocaleString()}!` : String(val);
     el.className = isCrit ? "crit-damage-number" : "damage-number";
-
-    // Posicionamento aleatório leve
-    const xOffset = Math.random() * 60 - 30; // -30px a +30px
-    const yOffset = Math.random() * 40 - 20; // -20px a +20px
+    const xOffset = Math.random() * 60 - 30;
+    const yOffset = Math.random() * 40 - 20;
     el.style.left = `calc(50% + ${xOffset}px)`;
     el.style.top = `calc(40% + ${yOffset}px)`;
-
     targetEl.appendChild(el);
     el.addEventListener("animationend", () => el.remove());
 }
 
+// --- Funções de Notificação (REQ 6) ---
+
+function createCaptureNotificationUI() {
+    if ($('battleCaptureNotification')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'battleCaptureNotification'; // ID ÚNICO
+
+    const style = document.createElement('style');
+    style.textContent = `
+        #battleCaptureNotification {
+            position: fixed;
+            top: 10px;
+            transform: translateX(100%);
+            right: 0;
+            background-color: rgb(0, 0, 255);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px 0 0 5px;
+            z-index: 25000;
+            font-weight: bold;
+            white-space: nowrap;
+            text-shadow: 1px 1px 2px #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #battleCaptureNotification.show {
+            opacity: 1;
+            animation: slideAcrossContinuous 15s linear forwards;
+        }
+        /* Keyframes já devem existir do guild_raid.js, mas garantimos aqui */
+        @keyframes slideAcrossContinuous {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(calc(-100% - 1%)); }
+        }
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(banner);
+}
+
+function displayCaptureNotification(data) {
+    const banner = $('battleCaptureNotification');
+    if (!banner) return;
+
+    banner.innerHTML = `<span style="color: yellow;">${data.guildName}</span> acaba de capturar o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
+    banner.classList.add('show');
+
+    const onAnimationEnd = () => {
+        banner.classList.remove('show');
+        banner.removeEventListener('animationend', onAnimationEnd);
+        isDisplayingCaptureNotification = false;
+        setTimeout(() => processCaptureNotificationQueue(), 200);
+    };
+    banner.addEventListener('animationend', onAnimationEnd, { once: true });
+}
+
+function processCaptureNotificationQueue() {
+    if (isDisplayingCaptureNotification || captureNotificationQueue.length === 0) {
+        return;
+    }
+    isDisplayingCaptureNotification = true;
+    const data = captureNotificationQueue.shift();
+    displayCaptureNotification(data);
+}
+
+function playCaptureSound(type, index, isAlly) {
+    if (!isMediaUnlocked) return;
+    
+    let soundToPlay = null;
+    if (type === 'nexus') {
+        soundToPlay = isAlly ? audio.ally_nexus : audio.enemy_nexus;
+    } else {
+        const key = `${isAlly ? 'ally' : 'enemy'}_p${index}`;
+        soundToPlay = audio[key];
+    }
+    
+    if (soundToPlay) {
+        soundToPlay.currentTime = 0;
+        soundToPlay.play().catch(e => console.warn("Falha ao tocar som de captura:", e));
+    }
+}
+
+
 // --- Funções Principais de UI ---
 
-/**
- * NOVO: Atualiza a interface do usuário com os recursos do jogador (e.g., cristais)
- * @param {object} playerStats - O objeto de estatísticas do jogador
- */
 const updatePlayerResourcesUI = (playerStats) => {
     if (!playerStats) return;
-    
-    // ATUALIZA VARIÁVEL GLOBAL (Importante para o restante do JS)
     userPlayerStats = playerStats; 
-
-    // ATUALIZA CRISTAIS (ou outro recurso principal da UI, se houver um elemento dedicado)
     if (playerStats.crystals !== undefined) {
-        // Encontre o elemento que exibe os cristais (Adapte o ID 'playerCrystals' se necessário)
-        // Por exemplo, se você tem um elemento na UI geral com o ID 'playerCrystalsAmount':
         const crystalsElement = document.getElementById('playerCrystalsAmount'); 
         if(crystalsElement) {
-            // Formate o número para exibição, se necessário
             crystalsElement.textContent = Number(playerStats.crystals).toLocaleString('pt-BR'); 
         }
     }
-    
-    // TODO: Adicione aqui a lógica para atualizar outros recursos
-    // como Ouro, Prata, Itens de Inventário, etc., se eles estiverem inclusos no retorno do get_player_battle_stats
 };
 
-
-/**
- * Renderiza a tela de seleção de cidade
- */
 function renderCitySelectionScreen(playerRank) {
     const cityGrid = $('cityGrid');
     cityGrid.innerHTML = '';
-
     const now = new Date();
     const minutes = now.getMinutes();
-
     const isLeader = playerRank === 'leader' || playerRank === 'co-leader';
-    // CORREÇÃO: Altera a lógica de registro para abrir a cada 15 minutos (duração de 5 minutos)
     let registrationOpen = (minutes % 15) < 5;
-
-    // O timer de 1s (startGlobalUITimer) vai atualizar o texto
 
     CITIES.forEach(city => {
         const btn = document.createElement('button');
         btn.className = 'city-btn';
         btn.textContent = city.name;
-        
         const shouldBeEnabled = isLeader && registrationOpen;
-        
         if (!shouldBeEnabled) {
             btn.classList.add('disabled');
             btn.disabled = true;
         }
-        
-        // Estilo inicial de desabilitado
         if (!isLeader || !registrationOpen) {
              btn.style.filter = 'grayscale(1)';
              btn.style.opacity = '0.6';
         }
-
-        // REQ 1: Modificado para chamar o *pré-registro*
         btn.onclick = () => handleCityRegistrationPre(city.id, city.name);
         cityGrid.appendChild(btn);
     });
-
     showScreen('citySelection');
 }
 
-/**
- * REQ do Usuário: Habilita/Desabilita botões de registro
- * dependendo se o período de 5 minutos está aberto.
- */
 function updateCityRegistrationButtons() {
-    // A função é chamada apenas se a tela de seleção estiver ativa
     if (screens.citySelection.style.display !== 'flex') return;
-    
-    // userRank já deve estar definido em pollBattleState
     const isLeader = userRank === 'leader' || userRank === 'co-leader';
-    
     const now = new Date();
     const minutes = now.getMinutes();
-    // CORREÇÃO: Altera a lógica de registro para abrir a cada 15 minutos (duração de 5 minutos)
     let registrationOpen = (minutes % 15) < 5;
-
-    // Atualiza todos os botões no grid
     const cityButtons = document.querySelectorAll('#cityGrid .city-btn');
 
     cityButtons.forEach(btn => {
         const shouldBeEnabled = isLeader && registrationOpen;
-        
         btn.disabled = !shouldBeEnabled;
         if (shouldBeEnabled) {
             btn.classList.remove('disabled');
@@ -297,13 +364,8 @@ function updateCityRegistrationButtons() {
     });
 }
 
-/**
- * Renderiza a tela de espera
- */
 function renderWaitingScreen(instance) {
     $('waitCityName').textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
-    
-    // REQUISIÇÃO 1: Renderiza a lista de guildas
     const waitListEl = $('waitGuildList');
     waitListEl.innerHTML = '';
     const registeredGuilds = instance.registered_guilds || [];
@@ -311,12 +373,10 @@ function renderWaitingScreen(instance) {
     if (registeredGuilds.length === 0) {
         waitListEl.innerHTML = '<li>Aguardando guildas...</li>';
     } else {
-        // Mapeia guild_id para cor (necessário aqui também)
         const guildColorMap = new Map();
         registeredGuilds.forEach((g, index) => {
             guildColorMap.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
         });
-
         registeredGuilds.forEach(g => {
             const li = document.createElement('li');
             const color = guildColorMap.get(g.guild_id);
@@ -324,59 +384,60 @@ function renderWaitingScreen(instance) {
             waitListEl.appendChild(li);
         });
     }
-
     showScreen('waiting');
 }
 
-/**
- * Renderiza a tela de batalha ativa
- */
 function renderBattleScreen(state) {
     currentBattleState = state;
-    userPlayerStats = state.player_stats; // Armazena stats para Req 3
+    userPlayerStats = state.player_stats; 
 
-    // Define o background
     const city = CITIES.find(c => c.id === state.instance.city_id);
     if (city) {
         battle.map.style.backgroundImage = `url(${city.map_image_url || 'https://aden-rpg.pages.dev/assets/guild_battle.webp'})`;
     }
 
-    // O timer de 1s (startGlobalUITimer) vai atualizar o 'battleTimer'
+    // REQ 3: Popula o cache de nomes
+    playerDamageCache.clear();
+    (state.player_damage_ranking || []).forEach(p => {
+        if (p.player_id && p.name) {
+            playerDamageCache.set(p.player_id, p.name);
+        }
+    });
 
-    // Renderiza os componentes
+    // REQ 6: Inicializa o estado dos objetivos
+    previousObjectiveState.clear();
+    (state.objectives || []).forEach(obj => {
+        previousObjectiveState.set(obj.id, obj.owner_guild_id);
+    });
+
     renderAllObjectives(state.objectives);
     renderPlayerFooter(state.player_state, state.player_garrison);
-    // REQ 1: Popula o modal de ranking em segundo plano
     renderRankingModal(state.instance.registered_guilds, state.player_damage_ranking);
-    
-    // Atualiza recursos (cristais, etc.) - Embora geralmente redundante no 'active', é seguro
     updatePlayerResourcesUI(state.player_stats);
-
     showScreen('battle');
 }
 
 /**
- * REQ 1: Renderiza o conteúdo do modal de ranking
+ * REQ 3: Modificado para usar o cache de nomes
  */
 function renderRankingModal(registeredGuilds, playerDamageRanking) {
     if (!registeredGuilds) registeredGuilds = [];
     if (!playerDamageRanking) playerDamageRanking = [];
 
-    // Mapeia guild_id para cor (necessário aqui também)
     const guildColorMap = new Map();
     registeredGuilds.forEach((g, index) => {
         guildColorMap.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
     });
 
     // Aba 1: Pontos de Honra (Guildas)
-    const sortedGuilds = [...registeredGuilds].sort((a, b) => b.honor_points - a.honor_points);
+    const sortedGuilds = [...registeredGuilds].sort((a, b) => (b.honor_points || 0) - (a.honor_points || 0));
     modals.guildRankingList.innerHTML = '';
     sortedGuilds.forEach((g, index) => {
         const color = guildColorMap.get(g.guild_id);
         const li = document.createElement('li');
         li.innerHTML = `
             <span>${index + 1}. <strong style="color: ${color};">${g.guild_name}</strong></span>
-            <span>${g.honor_points} pts</span>
+            <span>${g.honor_points || 0} pts</span>
         `;
         modals.guildRankingList.appendChild(li);
     });
@@ -384,24 +445,26 @@ function renderRankingModal(registeredGuilds, playerDamageRanking) {
     // Aba 2: Dano Causado (Jogadores)
     modals.playerDamageList.innerHTML = '';
     playerDamageRanking.forEach((p, index) => {
+        // Tenta obter o nome do cache
+        const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
+        // Atualiza o cache se o nome veio no payload (ex: full poll)
+        if (p.name && !playerDamageCache.has(p.player_id)) {
+            playerDamageCache.set(p.player_id, p.name);
+        }
+
         const color = guildColorMap.get(p.guild_id) || 'var(--guild-color-neutral)';
         const li = document.createElement('li');
         li.innerHTML = `
-            <span>${index + 1}. <strong style="color: ${color};">${p.name}</strong></span>
+            <span>${index + 1}. <strong style="color: ${color};">${playerName}</strong></span>
             <span>${kFormatter(p.total_damage_dealt)}</span>
         `;
         modals.playerDamageList.appendChild(li);
     });
 }
 
-
-/**
- * Renderiza todos os objetivos no mapa
- */
 function renderAllObjectives(objectives) {
     if (!objectives || !currentBattleState || !currentBattleState.instance) return;
 
-    // Recria o mapa de cores se ele não existir (ex: vindo de um poll)
     if (!currentBattleState.guildColorMap) {
         const guildColorMap = new Map();
         (currentBattleState.instance.registered_guilds || []).forEach((g, index) => {
@@ -416,13 +479,9 @@ function renderAllObjectives(objectives) {
         const el = $(`obj-cp-${obj.objective_index}`) || $('obj-nexus');
         if (!el) return;
 
-        // NOVO: Na lógica do heartbeat, o obj pode ter 'id' mas não 'base_hp'
-        // Devemos usar o dado do 'currentBattleState' que é mais completo
         const fullObj = currentBattleState.objectives.find(o => o.id === obj.id);
-        if (!fullObj) return; // Não deveria acontecer se o merge foi feito
+        if (!fullObj) return; 
         
-        // Usa o 'obj' (vindo do heartbeat ou full load) para HP atual
-        // e 'fullObj' (do load inicial) para o HP base
         const totalHp = (fullObj.base_hp || 0) + (obj.garrison_hp || 0);
         const currentTotalHp = (obj.current_hp || 0) + (obj.garrison_hp || 0);
         const percent = totalHp > 0 ? (currentTotalHp / totalHp) * 100 : 0;
@@ -433,14 +492,10 @@ function renderAllObjectives(objectives) {
         if (textEl) textEl.textContent = `${kFormatter(currentTotalHp)} / ${kFormatter(totalHp)}`;
 
         const garrisonEl = $(`obj-garrison-${fullObj.objective_index}`);
-
-        if (obj.garrison_hp > 0) {
-           if (garrisonEl) garrisonEl.textContent = `+${kFormatter(obj.garrison_hp)} HP Guarnição`;
-        } else {
-           if (garrisonEl) garrisonEl.textContent = '';
+        if (garrisonEl) {
+           garrisonEl.textContent = (obj.garrison_hp > 0) ? `+${kFormatter(obj.garrison_hp)} HP Guarnição` : '';
         }
 
-        // REQUISIÇÃO 4: Define o nome e a cor do dono
         const ownerEl = $(`obj-owner-${fullObj.objective_index}`);
         if (ownerEl) {
             if (obj.owner_guild_id && currentBattleState.guildColorMap) {
@@ -460,67 +515,46 @@ function renderAllObjectives(objectives) {
     });
 }
 
-/**
- * Renderiza o rodapé de status do jogador
- * *** CORRIGIDO PARA O BUG DA LOJA ***
- */
 function renderPlayerFooter(playerState, playerGarrison) {
     if (!playerState) return; 
 
     const now = new Date();
-    const naturalCap = 3; // O limite de regeneração natural é sempre 3
-    
+    const naturalCap = 3;
     let currentAttacks = playerState.attacks_left;
     let cooldownText = "";
 
-    // 1. Lógica de Cooldown e Regeneração
-    // A regeneração SÓ acontece se o total de ações for MENOR que 3.
     if (currentAttacks < naturalCap) {
         if (playerState.last_attack_at) {
             const lastAttack = new Date(playerState.last_attack_at);
             const elapsed = Math.floor((now - lastAttack) / 1000);
             const recovered = Math.floor(elapsed / 60);
-
-            // Calcula o total que o jogador teria com a regeneração
             const recoveredAttacks = Math.min(naturalCap, playerState.attacks_left + recovered);
 
             if (recoveredAttacks > currentAttacks) {
-                // Se a regeneração fez ele ganhar ações, atualiza o display
-                // (Não atualizamos o playerState, pois o servidor é a fonte da verdade)
                 currentAttacks = recoveredAttacks;
             }
-
-            // Se, mesmo após a regeneração, ele ainda está abaixo do cap, mostra o timer
             if (currentAttacks < naturalCap) {
                 const timeToNext = 60 - (elapsed % 60);
                 cooldownText = `+1 em ${formatTime(timeToNext)}`;
             }
         } else {
-            // Tem menos de 3 ações, mas nenhum registro de ataque (estranho, mas seguro)
             cooldownText = `+1 em 01:00`;
         }
     }
-    // Se currentAttacks >= 3, o cooldownText permanece "" (vazio), o que está correto.
-
-    // 2. Renderiza o total de Ações
-    // O denominador (limite) é sempre 3 para fins de regeneração.
-    battle.playerAttacks.textContent = `Ações: ${currentAttacks} / ${naturalCap}`;
+    
+    // REQ 1: Garante que o número nunca seja negativo na UI
+    battle.playerAttacks.textContent = `Ações: ${Math.max(0, currentAttacks)} / ${naturalCap}`;
     battle.playerCooldown.textContent = cooldownText;
 
-    // 3. Status de Guarnição (lógica inalterada)
     if (playerGarrison) {
         const objectives = (currentBattleState && currentBattleState.objectives) ? currentBattleState.objectives : null;
         const objective = objectives ? objectives.find(o => o.id === playerGarrison.objective_id) : null;
-
         let objName = '...';
         if (objective) {
             objName = objective.objective_type === 'nexus' ? 'Nexus' : `Ponto ${objective.objective_index}`;
         } else {
-            // NOVO: Se o objetivo não for encontrado (ex: estado de heartbeat incompleto),
-            // chama o poll completo para re-sincronizar.
             setTimeout(pollBattleState, 1500); 
         }
-
         battle.garrisonStatus.textContent = `Guarnecendo: ${objName}`;
         battle.garrisonStatus.className = 'garrisoned';
     } else if (playerState.last_garrison_leave_at) {
@@ -540,10 +574,6 @@ function renderPlayerFooter(playerState, playerGarrison) {
     }
 }
 
-
-/**
- * NOVO: Helper para criar HTML de item de recompensa
- */
 function createRewardItemHTML(item, quantity) {
     return `
         <div class="reward-item">
@@ -553,28 +583,31 @@ function createRewardItemHTML(item, quantity) {
     `;
 }
 
-/**
- * Renderiza a tela de resultados (REQ 5) - MODIFICADA
- */
 function renderResultsScreen(instance, playerDamageRanking) {
-    // Tenta distribuir recompensas (seguro, pois a função tem trava)
-    // ESTA CHAMADA JÁ NÃO É MAIS NECESSÁRIA, POIS O SERVER SIDE FAZ ISSO.
-    // MANTIDA COMO FALLBACK, MAS O PAGAMENTO VEM NA RESPOSTA DO get_guild_battle_state.
-    supabase.rpc('distribute_battle_rewards', { p_battle_instance_id: instance.id })
-        .then(({data, error}) => {
-            if (error) {
-                console.warn("Erro ao tentar distribuir recompensas:", error.message);
-                modals.resultsRewardMessage.textContent = `Falha ao processar recompensas: ${error.message}`;
-                modals.resultsRewardMessage.style.color = '#dc3545';
-            } else {
-                console.log("Distribuição de recompensas verificada:", data.message);
-                // A mensagem de sucesso/falha será definida abaixo
-            }
-        });
+    // REQ 5: Adiciona data
+    const titleEl = $('resultCityName');
+    titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
+    
+    // Verifica se o elemento de data já existe
+    let dateEl = $('resultBattleDate');
+    if (!dateEl) {
+        dateEl = document.createElement('p');
+        dateEl.id = 'resultBattleDate';
+        dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: -10px; margin-bottom: 15px; text-align: center;';
+        titleEl.after(dateEl); // Insere logo após o título
+    }
+    
+    // Formata e define a data de término
+    const endDate = new Date(instance.end_time);
+    dateEl.textContent = endDate.toLocaleString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    // --- Fim REQ 5 ---
 
-    modals.resultCityName.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
-
-    // --- Rankings de Honra e Dano (sem alteração) ---
     modals.resultsRankingHonor.innerHTML = '';
     const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => b.honor_points - a.honor_points);
     
@@ -598,17 +631,16 @@ function renderResultsScreen(instance, playerDamageRanking) {
         playerDamageRanking.forEach((p, index) => {
             const li = document.createElement('li');
             const guildName = guildNameMap.get(p.guild_id) ? `(${guildNameMap.get(p.guild_id)})` : '';
+            // REQ 3: Usa o cache
+            const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
             li.innerHTML = `
-                <span>#${index + 1} ${p.name} ${guildName}</span>
+                <span>#${index + 1} ${playerName} ${guildName}</span>
                 <span>${kFormatter(p.total_damage_dealt)}</span>
             `;
             modals.resultsRankingDamage.appendChild(li);
         });
     }
 
-    // --- NOVO: Lógica de Exibição de Recompensas ---
-
-    // 1. Cria os containers dinamicamente se não existirem
     let guildRewardsEl = $('resultsGuildRewards');
     if (!guildRewardsEl) {
         guildRewardsEl = document.createElement('div');
@@ -616,8 +648,8 @@ function renderResultsScreen(instance, playerDamageRanking) {
         guildRewardsEl.className = 'results-rewards-section';
         modals.resultsRewardMessage.after(guildRewardsEl);
     }
-    guildRewardsEl.innerHTML = ''; // Limpa
-    guildRewardsEl.style.display = 'block'; // Garante que esteja visível
+    guildRewardsEl.innerHTML = '';
+    guildRewardsEl.style.display = 'block';
 
     let playerRewardsEl = $('resultsPlayerRewards');
     if (!playerRewardsEl) {
@@ -626,10 +658,9 @@ function renderResultsScreen(instance, playerDamageRanking) {
         playerRewardsEl.className = 'results-rewards-section';
         guildRewardsEl.after(playerRewardsEl);
     }
-    playerRewardsEl.innerHTML = ''; // Limpa
-    playerRewardsEl.style.display = 'block'; // Garante que esteja visível
+    playerRewardsEl.innerHTML = '';
+    playerRewardsEl.style.display = 'block';
 
-    // 2. Descobre o rank da guilda do jogador
     let myGuildRank = -1;
     let myGuildResult = null;
     if (sortedGuilds.length > 0) {
@@ -639,7 +670,6 @@ function renderResultsScreen(instance, playerDamageRanking) {
         }
     }
     
-    // 3. Descobre o rank de dano do jogador
     let myPlayerDamageRank = -1;
     if (playerDamageRanking && playerDamageRanking.length > 0) {
         const myDamageData = playerDamageRanking.find(p => p.player_id === userId);
@@ -648,43 +678,36 @@ function renderResultsScreen(instance, playerDamageRanking) {
         }
     }
 
-    // 4. Constrói HTML das Recompensas da Guilda
     let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
     let hasGuildRewards = false;
 
     if (myGuildRank === 1 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = 'gold';
-        
         guildRewardsHTML += '<div class="results-reward-list">';
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 3000);
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 4);
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 50);
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
-        
     } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
-        modals.resultsRewardMessage.style.color = '#00bcd4'; // Ciano para 2º lugar
-
+        modals.resultsRewardMessage.style.color = '#00bcd4';
         guildRewardsHTML += '<div class="results-reward-list">';
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 6); // MODIFICADO
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); // MODIFICADO
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 6);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20);
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
-
-    } else if (myGuildRank === 3 && myGuildResult.honor_points > 0) { // NOVO RANK 3
+    } else if (myGuildRank === 3 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
-        modals.resultsRewardMessage.style.color = '#cd7f32'; // Bronze para 3º lugar
-
+        modals.resultsRewardMessage.style.color = '#cd7f32';
         guildRewardsHTML += '<div class="results-reward-list">';
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 500);
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 4);
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 10);
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
-
     } else {
         modals.resultsRewardMessage.textContent = "Sem recompensas ou já recebidas!";
         modals.resultsRewardMessage.style.color = '#aaa';
@@ -692,9 +715,8 @@ function renderResultsScreen(instance, playerDamageRanking) {
     }
     
     guildRewardsEl.innerHTML = guildRewardsHTML;
-    if (!hasGuildRewards && myGuildRank > 0) guildRewardsEl.style.display = 'none'; // Oculta se não houver
+    if (!hasGuildRewards && myGuildRank > 0) guildRewardsEl.style.display = 'none';
 
-    // 5. Constrói HTML das Recompensas Individuais (Bônus)
     let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
     let hasPlayerRewards = false;
 
@@ -706,7 +728,6 @@ function renderResultsScreen(instance, playerDamageRanking) {
         playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "50 (Base) + 100 (Bônus)");
         playerRewardsHTML += '</div>';
         hasPlayerRewards = true;
-
     } else if (myGuildRank === 1 && myPlayerDamageRank === 2) {
         playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano (Multiplicador 2x):</p>';
         playerRewardsHTML += '<div class="results-reward-list">';
@@ -720,29 +741,22 @@ function renderResultsScreen(instance, playerDamageRanking) {
     if (hasPlayerRewards) {
         playerRewardsEl.innerHTML = playerRewardsHTML;
     } else {
-        playerRewardsEl.style.display = 'none'; // Oculta se não for Top 1 ou 2
+        playerRewardsEl.style.display = 'none';
     }
     
-    // 6. Exibe a tela
     showScreen('results');
 }
 
 // --- Lógica de Interação ---
 
-/**
- * REQ 1: Chamada quando o líder clica para registrar (Passo 1: Abrir Modal)
- */
 async function handleCityRegistrationPre(cityId, cityName) {
-    cityToRegister = { id: cityId, name: cityName }; // Armazena dados
-    
+    cityToRegister = { id: cityId, name: cityName };
     modals.cityRegisterCityName.textContent = cityName;
     modals.cityRegisterMessage.textContent = "Carregando guildas registradas...";
     modals.cityRegisterGuildList.innerHTML = '';
     modals.cityRegisterConfirmBtn.disabled = true;
-
     modals.cityRegister.style.display = 'flex';
 
-    // Busca a lista de guildas
     const { data, error } = await supabase.rpc('get_city_registrations', { p_city_id: cityId });
 
     if (error || !data.success) {
@@ -772,7 +786,6 @@ async function handleCityRegistrationPre(cityId, cityName) {
     }
 }
 
-// REQ 1: Listeners do modal de registro
 modals.cityRegisterClose.onclick = () => modals.cityRegister.style.display = 'none';
 modals.cityRegisterCancelBtn.onclick = () => modals.cityRegister.style.display = 'none';
 modals.cityRegisterConfirmBtn.onclick = () => {
@@ -781,9 +794,6 @@ modals.cityRegisterConfirmBtn.onclick = () => {
     }
 };
 
-/**
- * REQ 1: Chamada quando o líder clica em "Confirmar" no modal
- */
 async function handleCityRegistrationConfirm(cityId, cityName) {
     const msgEl = modals.cityRegisterMessage;
     msgEl.textContent = `Registrando em ${cityName}...`;
@@ -795,40 +805,34 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
     if (error || !data.success) {
         msgEl.textContent = `Erro: ${error ? error.message : data.message}`;
         msgEl.style.color = '#dc3545';
-        modals.cityRegisterConfirmBtn.disabled = false; // Permite tentar de novo
+        modals.cityRegisterConfirmBtn.disabled = false;
         modals.cityRegisterCancelBtn.disabled = false;
     } else {
         msgEl.textContent = data.message;
         msgEl.style.color = '#28a745';
         setTimeout(() => {
-            modals.cityRegister.style.display = 'none'; // Fecha o modal
-            pollBattleState(); // Recarrega o estado (chamada única)
+            modals.cityRegister.style.display = 'none';
+            pollBattleState();
         }, 2000);
     }
 }
 
-/**
- * Chamada quando o jogador clica em um objetivo
- */
 function handleObjectiveClick(objective) {
-    // NOVO: O 'objective' pode ser do heartbeat (leve)
-    // Precisamos do objeto completo do 'currentBattleState'
+    // REQ 1/2: Impede abertura do modal se uma ação estiver em progresso
+    if (isProcessingBattleAction) return;
+
     const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
-    if (!fullObjective) return; // Não achou o objeto completo
+    if (!fullObjective) return; 
     
-    selectedObjective = fullObjective; // Armazena o objeto COMPLETO
-
+    selectedObjective = fullObjective; 
     modals.objectiveTitle.textContent = fullObjective.objective_type === 'nexus' ? 'Nexus Central' : `Ponto de Controle ${fullObjective.objective_index}`;
-
     const isOwned = fullObjective.owner_guild_id === userGuildId;
-    // CORREÇÃO 3: Desabilita ataque se for o dono
+    
     modals.objectiveAttackBtn.disabled = isOwned;
     modals.objectiveAttackBtn.style.filter = isOwned ? 'grayscale(1)' : '';
     modals.objectiveAttackBtn.style.opacity = isOwned ? '0.6' : '1';
-
     modals.objectiveGarrisonBtn.style.display = isOwned ? 'inline-block' : 'none';
 
-    // REQ 3: Modificado para aviso de *qualquer* ação
     const isGarrisonedElsewhere = currentBattleState.player_garrison && 
                                   (!isOwned || currentBattleState.player_garrison.objective_id !== fullObjective.id);
                                   
@@ -840,43 +844,33 @@ function handleObjectiveClick(objective) {
 
 modals.objectiveClose.onclick = () => modals.objective.style.display = 'none';
 
-/**
- * REQ 3: Wrapper de Ação para checar saída de guarnição
- * @param {function} actionCallback - A função a ser executada (atacar ou guarnecer)
- */
 function checkGarrisonLeaveAndExecute(actionCallback) {
-    // 1. Verifica se o jogador está guarnecendo
     if (!currentBattleState || !currentBattleState.player_garrison || !userPlayerStats) {
-        actionCallback(); // Não está guarnecendo, executa direto
+        actionCallback();
         return;
     }
     
-    // 2. Encontra o objetivo onde ele está
     const oldObjectiveId = currentBattleState.player_garrison.objective_id;
     const oldObjective = currentBattleState.objectives.find(o => o.id === oldObjectiveId);
     const playerHealth = userPlayerStats.health ? parseInt(userPlayerStats.health, 10) : 0;
     
     if (!oldObjective || playerHealth === 0) {
-        actionCallback(); // Não achou o objetivo antigo ou player não tem HP, executa direto
+        actionCallback();
         return;
     }
     
-    // 3. Calcula HP
     const currentTotalHp = (oldObjective.current_hp || 0) + (oldObjective.garrison_hp || 0);
     const newTotalHp = currentTotalHp - playerHealth;
     
-    // 4. Verifica se o HP ficará negativo
     if (newTotalHp > 0) {
-        actionCallback(); // HP ficará positivo, executa direto
+        actionCallback();
         return;
     }
     
-    // 5. HP ficará <= 0, mostra modal de confirmação
-    pendingGarrisonLeaveAction = actionCallback; // Armazena a ação pendente
+    pendingGarrisonLeaveAction = actionCallback;
     modals.garrisonLeave.style.display = 'flex';
 }
 
-// REQ 3: Listeners do modal de saída de guarnição
 modals.garrisonLeaveClose.onclick = () => {
     pendingGarrisonLeaveAction = null;
     modals.garrisonLeave.style.display = 'none';
@@ -888,85 +882,84 @@ modals.garrisonLeaveCancelBtn.onclick = () => {
 modals.garrisonLeaveConfirmBtn.onclick = () => {
     modals.garrisonLeave.style.display = 'none';
     if (pendingGarrisonLeaveAction) {
-        pendingGarrisonLeaveAction(); // Executa a ação pendente
+        pendingGarrisonLeaveAction();
     }
     pendingGarrisonLeaveAction = null;
 };
 
-/**
- * Jogador clica em "Atacar" no modal
- */
 modals.objectiveAttackBtn.onclick = async () => {
     if (!selectedObjective) return;
     
-    // REQ 3: Envolve a ação no wrapper de verificação
     checkGarrisonLeaveAndExecute(async () => {
+        // REQ 1/2: Trava de Ação
+        if (isProcessingBattleAction) return;
+        isProcessingBattleAction = true;
+        
+        modals.objectiveAttackBtn.disabled = true; // Desabilita botão
         modals.objective.style.display = 'none';
         
-        const { data, error } = await supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id });
+        supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id })
+            .then(({ data, error }) => {
+                if (error || !data.success) {
+                    showAlert(error ? error.message : data.message);
+                    pollBattleState(); // Força poll completo
+                    return;
+                }
 
-        if (error || !data.success) {
-            showAlert(error ? error.message : data.message);
-            pollBattleState(); // Força poll completo para re-sincronizar
-            return;
-        }
+                const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
+                if (objectiveEl) {
+                    playHitSound(data.is_crit);
+                    displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
+                    objectiveEl.classList.add('shake-animation');
+                    setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
+                }
 
-        // REQUISIÇÃO 3: Efeitos Visuais
-        const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
-        if (objectiveEl) {
-            playHitSound(data.is_crit);
-            displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
-            objectiveEl.classList.add('shake-animation');
-            setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
-        }
-
-        // *** INÍCIO DA CORREÇÃO (ATAQUE) - Consumo de Ação Otimista ***
-        // A ação deve ser consumida IMEDIATAMENTE após o sucesso do RPC,
-        // independentemente de o objetivo ter sido destruído ou não.
-        if(currentBattleState.player_state) {
-             currentBattleState.player_state.attacks_left -= 1;
-             currentBattleState.player_state.last_attack_at = new Date().toISOString();
-             
-             // Se o ataque também removeu o jogador da guarnição
-             if(data.garrison_left) { 
-                 currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
-                 currentBattleState.player_garrison = null;
-             }
-             // Renderiza o rodapé IMEDIATAMENTE com a ação consumida
-             renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-        } else {
-            pollBattleState(); // Fallback para poll completo se o estado do player estiver incompleto
-        }
-        // *** FIM DA CORREÇÃO ***
-        
-        // Atualização otimista (parcial) do objetivo
-        const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
-        if (obj) {
-            if (data.objective_destroyed) {
-                // Se destruiu, o heartbeat poll vai pegar a mudança, mas podemos forçar
-                pollHeartbeatState();
-            } else {
-                // REQUISIÇÃO 2: Atualiza HP localmente
-                obj.current_hp = data.objective_new_hp;
-                obj.garrison_hp = data.objective_new_garrison_hp; // <<< FIX
-                renderAllObjectives(currentBattleState.objectives);
+                // REQ 1: Consumo de Ação Otimista
+                if(currentBattleState.player_state) {
+                    currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1); // Garante > 0
+                    currentBattleState.player_state.last_attack_at = new Date().toISOString();
+                    
+                    if(data.garrison_left) { 
+                        currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                        currentBattleState.player_garrison = null;
+                    }
+                    renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+                } else {
+                    pollBattleState(); 
+                }
                 
-                // O rodapé (ações) JÁ FOI ATUALIZADO acima.
-            }
-        } else {
-            pollBattleState(); // Fallback para poll completo
-        }
+                const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
+                if (obj) {
+                    if (data.objective_destroyed) {
+                        pollHeartbeatState(); // Puxa o estado leve
+                    } else {
+                        obj.current_hp = data.objective_new_hp;
+                        obj.garrison_hp = data.objective_new_garrison_hp;
+                        renderAllObjectives(currentBattleState.objectives);
+                    }
+                } else {
+                    pollBattleState();
+                }
+
+            })
+            .finally(() => {
+                // REQ 1/2: Libera a trava
+                isProcessingBattleAction = false;
+                // Re-habilita o botão APENAS se o objetivo não for da guilda
+                if (selectedObjective && currentBattleState) {
+                    const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                    if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
+                         modals.objectiveAttackBtn.disabled = false;
+                    }
+                }
+            });
     });
 };
 
-/**
- * Jogador clica em "Guarnecer" no modal
- */
 modals.objectiveGarrisonBtn.onclick = async () => {
     if (!selectedObjective) return;
     
-    // *** CORREÇÃO (REQ 2 da task anterior) ***
-    // Verificação robusta de cooldown no frontend, lendo o estado
+    // REQ 2: Verificação robusta de cooldown
     if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
         const lastLeave = new Date(currentBattleState.player_state.last_garrison_leave_at);
         const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
@@ -974,51 +967,41 @@ modals.objectiveGarrisonBtn.onclick = async () => {
         if (timeSinceLeave < 30) {
             const timeLeft = 30 - timeSinceLeave;
             showAlert(`Aguarde 30 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
-            return; // Impede a ação
+            return;
         }
     }
     
-    // Verificação antiga (mantida como fallback, caso a UI demore a atualizar)
-    if (battle.garrisonStatus.textContent.includes('Guarnição CD:')) {
-        showAlert('Aguarde o cooldown de 30 segundos para guarnecer novamente.');
-        return;
-    }
-
-    // REQ 3: Envolve a ação no wrapper de verificação
     checkGarrisonLeaveAndExecute(async () => {
+        // REQ 1/2: Trava de Ação
+        if (isProcessingBattleAction) return;
+        isProcessingBattleAction = true;
+        modals.objectiveGarrisonBtn.disabled = true;
+
         modals.objective.style.display = 'none';
 
-        // --- Atualização otimista imediata ---
         if (currentBattleState) {
             try {
                 if (!currentBattleState.player_state) currentBattleState.player_state = {};
                 
-                // REQ 3: Se estava em outra guarnição, remove o HP antigo otimistamente
                 if (currentBattleState.player_garrison && userPlayerStats) {
                     const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
                     if (oldObj) {
                         oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - parseInt(userPlayerStats.health, 10));
                     }
-                    // *** CORREÇÃO: Define o tempo de saída AQUI para a UI ***
                     currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                 }
                 
-                // *** INÍCIO DA CORREÇÃO (GUARNIÇÃO) - Consumo de Ação Otimista ***
-                // Consome a ação otimistamente AQUI
-                currentBattleState.player_state.attacks_left -= 1;
-                // Inicia o timer de recarga se estava no máximo (ou null)
+                // REQ 1: Consumo de Ação Otimista
+                currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1); // Garante > 0
                 if (currentBattleState.player_state.last_attack_at === null || currentBattleState.player_state.attacks_left === 2) {
                     currentBattleState.player_state.last_attack_at = new Date().toISOString();
                 }
-                // *** FIM DA CORREÇÃO ***
                 
-                // Marca player_garrison localmente
                 currentBattleState.player_garrison = {
                     objective_id: selectedObjective.id,
                     started_at: new Date().toISOString()
                 };
                 
-                // Adiciona HP novo otimistamente
                 if (userPlayerStats) {
                     const newObj = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
                     if (newObj) {
@@ -1026,50 +1009,44 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                     }
                 }
                 
-                // Atualiza rodapé e objetivos imediatamente
                 renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
                 renderAllObjectives(currentBattleState.objectives);
                 
             } catch (e) {
-                console.warn("Erro durante atualização otimista de guarnição:", e);
+                console.warn("Erro atualização otimista (garrison):", e);
             }
         }
 
-        // --- Executa RPC em segundo plano ---
         supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
             .then(({ data, error }) => {
                 if (error || !data.success) {
-                    // Se backend falhou, mostra alerta e força re-sync
                     showAlert(error ? error.message : data.message);
-                    setTimeout(pollBattleState, 500); // Poll completo
+                    setTimeout(pollBattleState, 500); 
                 } else if (data.message) {
-                    // RPC retornou OK — log para inspeção, não sobrescreve a UI otimista
-                    console.log("Guarnição confirmada pelo servidor:", data.message);
+                    console.log("Guarnição confirmada:", data.message);
                 }
             })
             .catch(err => {
                 console.error("Erro RPC guarnição:", err);
-                showAlert("Erro ao guarnecer. Tentando sincronizar...");
+                showAlert("Erro ao guarnecer. Sincronizando...");
             })
             .finally(() => {
-                // Sincroniza o estado (leve) do servidor após curto intervalo
+                // REQ 1/2: Libera a trava
+                isProcessingBattleAction = false;
+                modals.objectiveGarrisonBtn.disabled = false;
                 setTimeout(pollHeartbeatState, 1500);
             });
     });
 };
 
-
-// NOVO: Abre a loja da Batalha
 function openBattleShop() {
     if (!currentBattleState || !currentBattleState.player_state) {
         showAlert("Não foi possível carregar o estado do jogador.");
         return;
     }
-
     const playerState = currentBattleState.player_state;
     modals.battleShopMessage.textContent = "";
 
-    // Verifica o Pacote 1 (3 Ações)
     if (playerState.bought_action_pack_1) {
         modals.shopBtnPack1.disabled = true;
         modals.shopBtnPack1.textContent = "Comprado";
@@ -1077,8 +1054,6 @@ function openBattleShop() {
         modals.shopBtnPack1.disabled = false;
         modals.shopBtnPack1.textContent = "Comprar";
     }
-
-    // Verifica o Pacote 2 (5 Ações)
     if (playerState.bought_action_pack_2) {
         modals.shopBtnPack2.disabled = true;
         modals.shopBtnPack2.textContent = "Comprado";
@@ -1086,12 +1061,9 @@ function openBattleShop() {
         modals.shopBtnPack2.disabled = false;
         modals.shopBtnPack2.textContent = "Comprar";
     }
-    
     modals.battleShop.style.display = 'flex';
 }
 
-// NOVO: Lida com a compra de ações
-// *** CORRIGIDO PARA O BUG DA LOJA ***
 async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     btnEl.disabled = true;
     modals.battleShopMessage.textContent = "Processando...";
@@ -1101,7 +1073,6 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     if (error || !data.success) {
         modals.battleShopMessage.textContent = `Erro: ${error ? error.message : data.message}`;
         modals.battleShopMessage.style.color = '#dc3545';
-        // Não re-habilita se a mensagem for "já comprado"
         if (!data.message.includes("já comprou")) {
              btnEl.disabled = false;
         }
@@ -1111,147 +1082,134 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     modals.battleShopMessage.textContent = data.message;
     modals.battleShopMessage.style.color = '#28a745';
     btnEl.textContent = "Comprado";
-
-    // *** CORREÇÃO: Remove a atualização otimista ***
-    // Em vez disso, força uma nova busca ao servidor para
-    // obter o valor 100% correto e evitar race conditions.
-    pollBattleState(); // Poll completo para re-sincronizar o player_state
-
-    // Fecha o modal após o sucesso
+    pollBattleState(); // Força poll completo
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
     }, 1500);
 }
 
-
 // --- Lógica de Polling e Estado ---
 
-/**
- * Função principal de polling, busca o estado no servidor
- * ESTA FUNÇÃO É CHAMADA APENAS EM TRANSIÇÕES DE ESTADO
- */
 async function pollBattleState() {
-    // Se o poll já estiver agendado, não execute de novo
-    // (Isso é um 'debounce' simples para evitar chamadas múltiplas)
-    // *** MODIFICADO: Não limpa mais o heartbeat, pois são diferentes ***
+    stopHeartbeatPolling(); // REQ 3: Para polls leves
+    stopDamagePolling(); // REQ 3: Para polls de dano
     
     const { data, error } = await supabase.rpc('get_guild_battle_state');
 
     if (error) {
         console.error("Erro ao buscar estado da batalha:", error);
         showAlert("Erro de conexão. Tentando novamente...");
-        // Tenta novamente em 5s
         setTimeout(pollBattleState, 5000);
         return;
     }
 
-    // Armazena o estado global
     currentBattleState = data;
-
-    // Atualiza dados globais
     if (data.player_stats) {
         userGuildId = data.player_stats.guild_id;
         userPlayerStats = data.player_stats;
     }
     userRank = data.player_rank;
-    
-    // CORREÇÃO ESSENCIAL: Atualiza os recursos do jogador APÓS o poll,
-    // garantindo que as recompensas pagas no server sejam refletidas na UI
     if (data.player_stats) {
         updatePlayerResourcesUI(data.player_stats);
     }
 
+    // REQ 6: Limpa fila de notificação
+    captureNotificationQueue = [];
+    isDisplayingCaptureNotification = false;
+    const banner = $('battleCaptureNotification');
+    if (banner) banner.classList.remove('show');
 
     // Roteia para a tela correta
     switch(data.status) {
         case 'active':
-            // Valida que o payload esteja completo o suficiente para renderizar
             if (!data || !data.instance || !data.objectives) {
-                console.warn("Estado da batalha incompleto, aguardando próxima atualização...");
-                setTimeout(pollBattleState, 1000); // Tenta de novo
+                console.warn("Estado da batalha incompleto, aguardando...");
+                setTimeout(pollBattleState, 1000); 
                 return;
             }
-
-            // Para o heartbeat poll (caso esteja rodando) antes de carregar
-            stopHeartbeatPolling(); 
 
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
                 setTimeout(() => {
                     try {
-                        renderBattleScreen(data); // Carga INICIAL com dados completos
+                        renderBattleScreen(data);
                     } catch (e) {
                         console.error("Erro ao renderizar tela de batalha:", e);
-                        setTimeout(pollBattleState, 1000); // Tenta de novo se falhar
+                        setTimeout(pollBattleState, 1000);
                         return;
                     }
-                    startHeartbeatPolling(); // Inicia o poll LEVE
+                    startHeartbeatPolling();
+                    startDamagePolling(); // REQ 3: Inicia poll de dano
                 }, 500);
             } else {
-                // Já está na batalha: isso é uma re-sincronização completa
                 renderBattleScreen(data);
-                startHeartbeatPolling(); // Reinicia o poll LEVE
+                startHeartbeatPolling();
+                startDamagePolling(); // REQ 3: Reinicia poll de dano
             }
             break;
             
         case 'registering':
-            stopHeartbeatPolling(); // Garante que o poll leve pare
             renderWaitingScreen(data.instance);
-            // NÃO inicia poll, conforme solicitado. O timer de 1s da UI
-            // (startGlobalUITimer) vai chamar o pollBattleState() quando o tempo zerar.
             break;
             
         case 'finished':
-            stopHeartbeatPolling(); // Para o poll leve
+            // REQ 3: Limpa cache de nomes
+            playerDamageCache.clear();
             renderResultsScreen(data.instance, data.player_damage_ranking);
-            
-            // *** CORREÇÃO APLICADA AQUI ***
-            // Agenda uma verificação (poll lento) para o próximo ciclo de registro.
-            // Isso garante que a tela de resultados saia
-            // quando a tela 'no_battle' (registro) ficar disponível.
-            setTimeout(pollBattleState, 7000); // Verifica a cada 15 segundos
+            setTimeout(pollBattleState, 7000);
             break;
             
         case 'no_guild':
-            stopHeartbeatPolling(); // Para tudo
             showScreen('loading');
             $('loadingScreen').innerHTML = '<h2>Você não está em uma guilda.</h2><p>Junte-se a uma guilda para participar.</p>';
             break;
             
         case 'no_battle':
-            stopHeartbeatPolling(); // Para tudo
+            // REQ 3: Limpa cache de nomes
+            playerDamageCache.clear();
             renderCitySelectionScreen(data.player_rank);
-            // NÃO inicia poll, pois o timer de 1s da UI
-            // é suficiente para a tela de registro.
             break;
             
         default:
-            stopHeartbeatPolling(); // Para tudo
             showScreen('loading');
             $('loadingScreen').innerHTML = `<h2>Erro</h2><p>${data.message || 'Estado desconhecido.'}</p>`;
     }
 }
 
 /**
- * NOVO: Processa o payload leve do heartbeat
+ * REQ 6: Lógica de captura movida para cá
  */
 function processHeartbeat(data) {
-    if (!data) return; // Falha no RPC
+    if (!data) return; 
 
     switch(data.status) {
         case 'active':
-            // A batalha está ativa, mescla os dados leves
             if (!currentBattleState || !currentBattleState.objectives || !currentBattleState.instance) {
-                // O estado completo ainda não carregou, aguarde.
-                // Isso pode acontecer se o heartbeat voltar antes do pollBattleState inicial.
                 return; 
             }
 
-            // 1. Mescla Objetivos
+            // 1. Mescla Objetivos e checa Capturas (REQ 6)
             data.objectives.forEach(heartbeatObj => {
                 const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
                 if (fullObj) {
-                    // Atualiza apenas os dados dinâmicos
+                    const oldOwner = previousObjectiveState.get(heartbeatObj.id);
+                    const newOwner = heartbeatObj.owner_guild_id;
+
+                    if (oldOwner !== newOwner && newOwner !== null) {
+                        // CAPTURA DETECTADA
+                        playCaptureSound(fullObj.objective_type, fullObj.objective_index, newOwner === userGuildId);
+                        
+                        const newGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === newOwner);
+                        const guildName = newGuild ? newGuild.guild_name : 'Uma guilda';
+                        const objectiveName = (fullObj.objective_type === 'nexus') ? 'Nexus' : `Ponto ${fullObj.objective_index}`;
+                        
+                        captureNotificationQueue.push({ guildName, objectiveName });
+                        processCaptureNotificationQueue();
+                    }
+                    // Atualiza o estado anterior
+                    previousObjectiveState.set(heartbeatObj.id, newOwner);
+
+                    // Atualiza dados dinâmicos
                     fullObj.current_hp = heartbeatObj.current_hp;
                     fullObj.garrison_hp = heartbeatObj.garrison_hp;
                     fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
@@ -1259,51 +1217,69 @@ function processHeartbeat(data) {
             });
 
             // 2. Mescla Pontos de Honra
-            data.guild_honor.forEach(heartbeatGuild => {
-                const fullGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === heartbeatGuild.guild_id);
-                if (fullGuild) {
-                    fullGuild.honor_points = heartbeatGuild.honor_points;
-                }
-            });
+            if (data.guild_honor) {
+                data.guild_honor.forEach(heartbeatGuild => {
+                    const fullGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === heartbeatGuild.guild_id);
+                    if (fullGuild) {
+                        fullGuild.honor_points = heartbeatGuild.honor_points;
+                    }
+                });
+            }
             
-            // 3. Re-renderiza os componentes afetados
+            // 3. Re-renderiza componentes
             renderAllObjectives(currentBattleState.objectives);
-            // O ranking é atualizado em segundo plano, não é crítico
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
             break;
 
         case 'finished':
         case 'no_battle':
         case 'no_guild':
-            // A batalha acabou ou deu erro!
-            // Para o heartbeat
             stopHeartbeatPolling();
-            // Chama o poll COMPLETO para transicionar a tela
+            stopDamagePolling(); // REQ 3
             pollBattleState(); 
             break;
     }
 }
 
-/**
- * NOVO: Função de polling LEVE
- */
 async function pollHeartbeatState() {
     const { data, error } = await supabase.rpc('get_battle_heartbeat');
-    
     if (error) {
-        console.error("Erro no heartbeat da batalha:", error.message);
-        // Não mostra alerta, apenas tenta de novo.
-        // O poll completo será chamado se a batalha terminar.
+        console.error("Erro no heartbeat:", error.message);
         return;
     }
-    
     processHeartbeat(data);
+}
+
+// REQ 3: Nova função de polling de dano
+async function pollDamageRanking() {
+    if (!currentBattleState || !currentBattleState.instance) return;
+
+    const { data, error } = await supabase.rpc('get_battle_damage_ranking', { 
+        p_battle_instance_id: currentBattleState.instance.id 
+    });
+    
+    if (error || !data) {
+        console.warn("Erro no poll de dano:", error ? error.message : "Sem dados");
+        return;
+    }
+
+    // Mapeia o novo ranking leve usando o cache de nomes
+    const newRanking = data.map(p => ({
+        player_id: p.player_id,
+        total_damage_dealt: p.total_damage_dealt,
+        guild_id: p.guild_id,
+        name: playerDamageCache.get(p.player_id) || '???' // Puxa do cache
+    }));
+
+    currentBattleState.player_damage_ranking = newRanking;
+    
+    // Atualiza apenas o modal de ranking
+    renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
 }
 
 
 function startHeartbeatPolling() {
-    stopHeartbeatPolling(); // Limpa qualquer poll anterior
-    // Poll a cada 10 segundos
+    stopHeartbeatPolling(); 
     heartbeatInterval = setInterval(pollHeartbeatState, 10000);
 }
 
@@ -1312,9 +1288,18 @@ function stopHeartbeatPolling() {
     heartbeatInterval = null;
 }
 
-/**
- * Timer global de UI (Lógica de transição de estado movida para cá)
- */
+// REQ 3: Funções de controle do poll de dano
+function startDamagePolling() {
+    stopDamagePolling();
+    // Poll a cada 2 minutos (120000 ms)
+    damagePollInterval = setInterval(pollDamageRanking, 120000);
+}
+
+function stopDamagePolling() {
+    if (damagePollInterval) clearInterval(damagePollInterval);
+    damagePollInterval = null;
+}
+
 function startGlobalUITimer() {
     if (uiTimerInterval) clearInterval(uiTimerInterval);
 
@@ -1326,30 +1311,21 @@ function startGlobalUITimer() {
         // 1. Timer da Tela de Seleção de Cidade
         if (screens.citySelection.style.display === 'flex') {
             const registrationTimer = $('registrationTimer');
-            
             const cycleMin = 15;
             const durationMin = 5;
-            
             const minutesInCycle = minutes % cycleMin;
             
-            // Verifica se o registro está aberto (minutos 0-4, 15-19, 30-34, 45-49)
             if (minutesInCycle < durationMin) {
-                // Período de registro aberto
                 const secondsInCycle = minutesInCycle * 60 + seconds;
                 const durationSeconds = durationMin * 60;
                 const timeLeft = Math.max(0, durationSeconds - secondsInCycle);
-                
                 registrationTimer.textContent = `Registro fecha em: ${formatTime(timeLeft)}`;
-
             } else {
-                // Período de registro fechado
                 const cycleStartSeconds = (minutesInCycle * 60) + seconds;
                 const nextCycleStartSeconds = cycleMin * 60;
                 const timeToOpen = Math.max(0, nextCycleStartSeconds - cycleStartSeconds);
-                
                 registrationTimer.textContent = `Registro abre em: ${formatTime(timeToOpen)}`;
             }
-            
             updateCityRegistrationButtons();
         }
 
@@ -1358,42 +1334,29 @@ function startGlobalUITimer() {
             const regEnd = new Date(currentBattleState.instance.registration_end_time);
             const timeLeft = Math.max(0, Math.floor((regEnd - now) / 1000));
             $('waitTimer').textContent = formatTime(timeLeft);
-
             if (timeLeft <= 0) {
-                // TEMPO DE ESPERA ACABOU!
-                // Chama o poll completo UMA VEZ para ir para a tela 'active'
                 pollBattleState(); 
             }
         }
 
         // 3. Timer da Tela de Batalha
         if (screens.battle.style.display === 'flex' && currentBattleState && currentBattleState.status === 'active') {
-            // Atualiza timer da batalha
             const battleEnd = new Date(currentBattleState.instance.end_time);
             const timeLeft = Math.max(0, Math.floor((battleEnd - now) / 1000));
             battle.timer.textContent = formatTime(timeLeft);
 
-            // Atualiza o rodapé do jogador (cooldown)
             if (currentBattleState.player_state) {
                  renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
             }
-
             if (timeLeft <= 0) {
-                // BATALHA ACABOU!
-                // Para o heartbeat
                 stopHeartbeatPolling();
-                // Chama o poll completo UMA VEZ para ir para a tela 'finished'
+                stopDamagePolling(); // REQ 3
                 pollBattleState(); 
             }
         }
-
-    }, 1000); // Roda a cada 1 segundo
+    }, 1000);
 }
 
-
-/**
- * Função de inicialização
- */
 async function init() {
     showScreen('loading');
 
@@ -1402,17 +1365,16 @@ async function init() {
         window.location.href = 'index.html';
         return;
     }
-    userId = session.user.id; // Define o userId global
+    userId = session.user.id; 
 
-    // Adiciona listeners aos objetivos do mapa
+    // REQ 6: Cria UI do banner e adiciona listener de áudio
+    createCaptureNotificationUI();
+    document.addEventListener('click', unlockBattleAudio, { once: true });
+
     document.querySelectorAll('.battle-objective').forEach(el => {
         el.addEventListener('click', () => {
-            if (!currentBattleState || currentBattleState.status !== 'active') return;
+            if (!currentBattleState || currentBattleState.status !== 'active' || !currentBattleState.objectives) return;
             const index = parseInt(el.dataset.index, 10);
-            // Proteção: currentBattleState.objectives pode estar ausente momentaneamente
-            if (!currentBattleState.objectives) return;
-            
-            // NOVO: Acha pelo index, pois o 'objective' no array pode ser leve
             const objective = currentBattleState.objectives.find(o => o.objective_index === index);
             if (objective) {
                 handleObjectiveClick(objective);
@@ -1420,22 +1382,15 @@ async function init() {
         });
     });
 
-    // REQ 1: Listeners do Modal de Ranking
     battle.rankingBtn.onclick = () => {
         modals.ranking.style.display = 'flex';
-        
-        // ** MELHORIA: Garante o estado inicial ao abrir o modal **
-        // Ativa o botão e painel padrão ('guilds' / Pontos de Honra)
         document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
         const defaultTabBtn = modals.ranking.querySelector('.tab-btn[data-tab="guilds"]');
         if (defaultTabBtn) defaultTabBtn.classList.add('active');
-        
         document.querySelectorAll('#battleRankingModal .tab-pane').forEach(pane => {
             pane.classList.remove('active');
-            pane.style.display = 'none'; // Oculta todos por padrão
+            pane.style.display = 'none';
         });
-
-        // Exibe o painel de Guildas (Pontos de Honra)
         if (modals.rankingTabGuilds) {
             modals.rankingTabGuilds.classList.add('active');
             modals.rankingTabGuilds.style.display = 'block';
@@ -1445,35 +1400,23 @@ async function init() {
 
     document.querySelectorAll('.ranking-tabs .tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const tabId = btn.dataset.tab; // 'guilds' ou 'damage'
-            
-            // Alternância de Botões
+            const tabId = btn.dataset.tab;
             document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
-            // Alternância de Conteúdo (Panes)
             const targetPaneId = tabId === 'guilds' ? 'rankingTabGuilds' : 'rankingTabDamage';
-
             document.querySelectorAll('#battleRankingModal .tab-pane').forEach(pane => {
                 const isActive = pane.id === targetPaneId;
-                
-                // Garante visibilidade
                 pane.style.display = isActive ? 'block' : 'none';
                 pane.classList.toggle('active', isActive);
             });
         });
     });
 
-    // NOVO: Listeners da Loja
     $('showShopBtn').onclick = () => openBattleShop();
     modals.shopBtnPack1.onclick = () => handleBuyBattleActions(1, 30, 3, modals.shopBtnPack1);
     modals.shopBtnPack2.onclick = () => handleBuyBattleActions(2, 75, 5, modals.shopBtnPack2);
 
-
-    // Inicia o primeiro poll (completo)
     pollBattleState();
-
-    // Inicia o timer global da UI
     startGlobalUITimer();
 }
 

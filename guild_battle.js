@@ -116,16 +116,16 @@ const modals = {
 const audio = {
     normal: $('audioNormalHit'),
     crit: $('audioCritHit'),
-    enemy_p1: new Audio('https://aden-rpg.pages.dev/ini_ponto1.mp3'),
-    enemy_p2: new Audio('https://aden-rpg.pages.dev/ini_ponto2.mp3'),
-    enemy_p3: new Audio('https://aden-rpg.pages.dev/ini_ponto3.mp3'),
-    enemy_p4: new Audio('https://aden-rpg.pages.dev/ini_ponto4.mp3'),
-    enemy_nexus: new Audio('https://aden-rpg.pages.dev/ini_nexus.mp3'),
-    ally_p1: new Audio('https://aden-rpg.pages.dev/ally_ponto1.mp3'),
-    ally_p2: new Audio('https://aden-rpg.pages.dev/ally_ponto2.mp3'),
-    ally_p3: new Audio('https://aden-rpg.pages.dev/ally_ponto3.mp3'),
-    ally_p4: new Audio('https://aden-rpg.pages.dev/ally_ponto4.mp3'),
-    ally_nexus: new Audio('https://aden-rpg.pages.dev/ally_nexus.mp3')
+    enemy_p1: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto1.mp3'),
+    enemy_p2: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto2.mp3'),
+    enemy_p3: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto3.mp3'),
+    enemy_p4: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto4.mp3'),
+    enemy_nexus: new Audio('https://aden-rpg.pages.dev/assets/ini_nexus.mp3'),
+    ally_p1: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto1.mp3'),
+    ally_p2: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto2.mp3'),
+    ally_p3: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto3.mp3'),
+    ally_p4: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto4.mp3'),
+    ally_nexus: new Audio('https://aden-rpg.pages.dev/assets/ally_nexus.mp3')
 };
 if(audio.normal) audio.normal.volume = 0.5;
 if(audio.crit) audio.crit.volume = 0.1;

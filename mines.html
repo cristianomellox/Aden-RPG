@@ -288,6 +288,107 @@ document.addEventListener('keydown', event => {
 
 </script> 
 
+<div id="banModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); color: white; z-index: 10000; justify-content: center; align-items: center; text-align: center; flex-direction: column;">
+    <div style="background: #2b2b2b; padding: 30px; border-radius: 15px; box-shadow: 0 0 25px rgba(255, 69, 0, 0.8); max-width: 90%; width: 400px; border: 3px solid #ff4500;">
+        <img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;">
+        <h2 style="color: #ff4500; font-size: 1.8em; margin-bottom: 20px;">Você foi banido(a)!</h2>
+        
+        <p style="text-align: left; margin-bottom: 25px;">
+            <strong>Motivo:</strong><br>
+            <span id="banReasonContent" style="color: #ffd700; display: block; margin-top: 5px; padding: 10px; border: 1px dashed #444; white-space: pre-wrap;">[Carregando Motivo...]</span>
+        </p>
+
+        <button id="logoutBanBtn" style="background: linear-gradient(to top, #ff4500, #ff8c00); color: white; padding: 12px 25px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: background 0.2s;">
+            Fechar
+        </button>
+    </div>
+</div>
+
+<script>
+// --- INÍCIO DO SCRIPT DE VERIFICAÇÃO DE BANIMENTO ---
+document.addEventListener("DOMContentLoaded", async () => {
+    // Configurações do Supabase (A mesma utilizada em seus outros arquivos)
+    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+    
+    // Verifica se o SDK foi carregado (o que é esperado)
+    if (!window.supabase) {
+        console.error("Supabase SDK não está carregado. Não é possível verificar banimento.");
+        return;
+    }
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let userId = null;
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) userId = user.id;
+    } catch (e) {
+        // Ignora erros de autenticação (pode estar deslogado), o script principal da página cuidará disso.
+        return;
+    }
+
+    if (!userId) {
+        // Usuário não logado.
+        return; 
+    }
+
+    // --- VERIFICAÇÃO DE BANIMENTO NA TABELA 'players' ---
+    try {
+        const { data, error } = await supabase
+            .from('players') // USANDO A TABELA CORRETA 'players'
+            .select('is_banned, ban_reason')
+            .eq('id', userId)
+            .single();
+
+        if (error) {
+            console.error("Erro ao verificar status de banimento:", error);
+            // Se houver erro, o script não trava o jogo, apenas registra o erro.
+            return;
+        }
+
+        if (data && data.is_banned === true) {
+            console.warn(`Usuário ${userId} está banido. Exibindo modal.`);
+            
+            // 1. Encontrar elementos do Modal
+            const banModal = document.getElementById('banModalOverlay');
+            const banReasonContent = document.getElementById('banReasonContent');
+            const logoutBanBtn = document.getElementById('logoutBanBtn');
+            
+            if (banModal && banReasonContent && logoutBanBtn) {
+                // 2. Preencher o motivo
+                banReasonContent.innerText = data.ban_reason || "Motivo não especificado. Entre em contato com o suporte.";
+                
+                // 3. Exibir o Modal (usando flex para centralizar)
+                banModal.style.display = 'flex';
+                
+                // 4. Adicionar o evento de Logout ao botão "Fechar"
+                logoutBanBtn.onclick = async () => {
+                    await supabase.auth.signOut();
+                    // Redireciona para o index para garantir que a sessão foi limpa
+                    window.location.href = "index.html?logout=true"; 
+                };
+
+                // Bloquear a rolagem da página por trás do modal
+                document.body.style.overflow = 'hidden';
+
+                // ** IMPORTANTE: Interromper a execução de todos os outros scripts da página **
+                // Não há uma maneira limpa de fazer isso com scripts síncronos, 
+                // mas garantimos que as principais ações não ocorram ao retornarmos aqui.
+                // Outros scripts que leem o DOM devem ser estruturados para depender do login/status.
+            } else {
+                // Fallback de segurança se o HTML do modal não foi incluído
+                console.error("Modal de banimento não encontrado. Redirecionando como fallback.");
+                window.location.href = "index.html?logout=true"; 
+            }
+        }
+    } catch (e) {
+        console.error("Erro geral no check de banimento:", e);
+    }
+});
+// --- FIM DO SCRIPT DE VERIFICAÇÃO DE BANIMENTO ---
+</script>
+
 
 <div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
     <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">

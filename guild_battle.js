@@ -222,6 +222,66 @@ function displayFloatingDamage(targetEl, val, isCrit) {
     el.addEventListener("animationend", () => el.remove());
 }
 
+// =================================================================
+// NOVA FUNÇÃO DE CORREÇÃO
+// =================================================================
+/**
+ * Replica a lógica de recuperação e consumo de ações do servidor,
+ * para ser usada nas atualizações otimistas do cliente,
+ * corrigindo o bug de inconsistência de ações.
+ */
+function optimisticUpdatePlayerActions() {
+    if (!currentBattleState || !currentBattleState.player_state) return;
+
+    const playerState = currentBattleState.player_state;
+    const now = new Date();
+    const naturalCap = 3; // Limite de ações que recuperam
+    
+    // Pega o estado atual ANTES de modificar
+    let attacksLeft = playerState.attacks_left || 0;
+    let lastAttackAt = playerState.last_attack_at ? new Date(playerState.last_attack_at) : null;
+
+    // 1. Replica a lógica de RECUPERAÇÃO do servidor
+    // Só recupera se o 'last_attack_at' existir (indicando que o timer está correndo)
+    // E se as ações estiverem abaixo do limite natural
+    if (lastAttackAt && attacksLeft < naturalCap) {
+        const elapsed = Math.floor((now - lastAttackAt) / 1000); // Segundos desde o início do timer
+        const recovered = Math.floor(elapsed / 60);             // Ações recuperadas
+        
+        if (recovered > 0) {
+            // Adiciona as ações recuperadas, limitando ao teto
+            attacksLeft = Math.min(naturalCap, attacksLeft + recovered);
+            
+            if (attacksLeft >= naturalCap) {
+                // Totalmente recuperado, para o timer
+                lastAttackAt = null; 
+            } else {
+                // Parcialmente recuperado, avança o timer
+                // Ex: Tinha 0, timer em T=0. Passou 1.5 min. Recuperou 1.
+                // Novo timer base é T=60s.
+                lastAttackAt = new Date(lastAttackAt.getTime() + recovered * 60000);
+            }
+        }
+    }
+
+    // 2. Replica o CONSUMO da ação
+    attacksLeft = attacksLeft - 1;
+
+    // 3. Replica o INÍCIO do timer
+    // Se o timer estava parado (lastAttackAt == null), inicia ele agora.
+    if (lastAttackAt === null) {
+        lastAttackAt = now;
+    }
+
+    // 4. Aplica o novo estado calculado ao objeto local
+    currentBattleState.player_state.attacks_left = attacksLeft;
+    currentBattleState.player_state.last_attack_at = lastAttackAt ? lastAttackAt.toISOString() : null;
+}
+// =================================================================
+// FIM DA NOVA FUNÇÃO
+// =================================================================
+
+
 // --- Funções de Notificação ---
 
 function createCaptureNotificationUI() {
@@ -920,18 +980,23 @@ modals.objectiveAttackBtn.onclick = async () => {
                     setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
                 }
 
+                // ***** INÍCIO DA MODIFICAÇÃO *****
                 if(currentBattleState.player_state) {
-                    currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1);
-                    currentBattleState.player_state.last_attack_at = new Date().toISOString();
                     
+                    // Substitui a lógica de decremento antiga
+                    optimisticUpdatePlayerActions();
+                    
+                    // Mantém a lógica de guarnição que já existia
                     if(data.garrison_left) { 
                         currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                         currentBattleState.player_garrison = null;
                     }
                     renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+
                 } else {
                     pollBattleState(); 
                 }
+                // ***** FIM DA MODIFICAÇÃO *****
                 
                 const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
                 if (obj) {
@@ -992,10 +1057,12 @@ modals.objectiveGarrisonBtn.onclick = async () => {
         modals.objectiveGarrisonBtn.disabled = true;
         modals.objective.style.display = 'none';
 
+        // ***** INÍCIO DA MODIFICAÇÃO *****
         if (currentBattleState) {
             try {
                 if (!currentBattleState.player_state) currentBattleState.player_state = {};
                 
+                // Lógica de sair da guarnição anterior (está OK)
                 if (currentBattleState.player_garrison && userPlayerStats) {
                     const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
                     if (oldObj) {
@@ -1004,11 +1071,10 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                     currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                 }
                 
-                currentBattleState.player_state.attacks_left = Math.max(0, (currentBattleState.player_state.attacks_left || 0) - 1);
-                if (currentBattleState.player_state.last_attack_at === null || currentBattleState.player_state.attacks_left === 2) {
-                    currentBattleState.player_state.last_attack_at = new Date().toISOString();
-                }
+                // Substitui a lógica de decremento antiga
+                optimisticUpdatePlayerActions();
                 
+                // Lógica de entrar na nova guarnição (está OK)
                 currentBattleState.player_garrison = {
                     objective_id: selectedObjective.id,
                     started_at: new Date().toISOString()
@@ -1028,6 +1094,7 @@ modals.objectiveGarrisonBtn.onclick = async () => {
                 console.warn("Erro atualização otimista (garrison):", e);
             }
         }
+        // ***** FIM DA MODIFICAÇÃO *****
 
         supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
             .then(({ data, error }) => {

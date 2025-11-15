@@ -390,6 +390,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     ensureStreakDate();
 
     // --- PvP: fluxo de desafio e animação ---
+    
+    // >>> ESTE BLOCO FOI ATUALIZADO <<<
     async function handleChallengeClick() {
         if (!challengeBtn) return;
         showLoading();
@@ -446,7 +448,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                     // dispara SFX conforme thresholds
                     if (currentStreak >= 5) {
-                        // 5+ -> toca som5 (prioridade)
                         try { playSound('streak5', { volume: 0.9 }); } catch(e){ console.warn("play streak5", e); }
                     } else if (currentStreak === 4) {
                         try { playSound('streak4', { volume: 0.9 }); } catch(e){ console.warn("play streak4", e); }
@@ -454,8 +455,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         try { playSound('streak3', { volume: 0.9 }); } catch(e){ console.warn("play streak3", e); }
                     }
                 } else if (combatResult.winner_id === null) {
-                    // empate: neutro (não incrementa nem zera)
-                    // se quiser que empate zere => currentStreak = 0; saveStreak(0);
+                    // empate: neutro
                 } else {
                     // derrota do jogador -> zera streak
                     currentStreak = 0;
@@ -472,18 +472,69 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                 msg = `<strong style="color:#f44336;">Você perdeu!</strong><br>${opponentName} derrotou você e tomou ${points.toLocaleString()} pontos.`;
             }
-            showModalAlert(msg, "Resultado da Batalha");
+            
+            // [NOVO] INÍCIO: Construir HTML das Recompensas
+            let rewardsHTML = "";
+            const rewards = combatResult.rewards_granted;
+
+            if (rewards && (rewards.crystals > 0 || rewards.item_41 > 0 || rewards.item_42 > 0)) {
+                let rewardsItems = [];
+                // Estilos CSS para os ícones e texto
+                const imgStyle = "width: 35px; height: 38px; margin-right: 5px; image-rendering: pixelated; object-fit: contain;";
+                const itemStyle = "display: flex; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 5px;";
+                const textStyle = "font-size: 1.1em; color: #fff; font-weight: bold; text-shadow: 1px 1px 2px #000;";
+
+                // Adiciona Cristais se houver
+                if (rewards.crystals > 0) {
+                    rewardsItems.push(`
+                        <div style="${itemStyle}">
+                            <img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imgStyle}">
+                            <span style="${textStyle}">x ${rewards.crystals.toLocaleString()}</span>
+                        </div>
+                    `);
+                }
+                // Adiciona Item 41 (Comum) se houver
+                if (rewards.item_41 > 0) {
+                    rewardsItems.push(`
+                        <div style="${itemStyle}">
+                            <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imgStyle}">
+                            <span style="${textStyle}">x ${rewards.item_41}</span>
+                        </div>
+                    `);
+                }
+                // Adiciona Item 42 (Avançado) se houver
+                if (rewards.item_42 > 0) {
+                    rewardsItems.push(`
+                        <div style="${itemStyle}">
+                            <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imgStyle}">
+                            <span style="${textStyle}">x ${rewards.item_42}</span>
+                        </div>
+                    `);
+                }
+
+                if (rewardsItems.length > 0) {
+                    rewardsHTML = `
+                        <hr style="border-color: #555; margin: 15px 0; border-style: dashed;">
+                        <div style="display: flex; align-items: center; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                            ${rewardsItems.join('')}
+                        </div>
+                    `;
+                }
+            }
+            // [NOVO] FIM: Construir HTML das Recompensas
+
+            // Adiciona o HTML das recompensas à mensagem
+            showModalAlert(msg + rewardsHTML, "Resultado da Batalha");
 
         } catch (e) {
             console.error("Erro no desafio:", e);
             showModalAlert("Erro inesperado: " + (e?.message || e));
         } finally {
             await updateAttemptsUI();
-            // Garante que a tela de loading seja escondida em caso de erro ou retorno antecipado (antes da animação).
-            // Se o hideLoading() foi chamado antes da animação, esta chamada é redundante e inofensiva.
             hideLoading();
         }
     }
+    // >>> FIM DO BLOCO ATUALIZADO <<<
 
     async function simulatePvpAnimation(challenger, defender, log) {
         const hasPvpUI = pvpCombatModal && challengerName && defenderName && challengerHpFill && defenderHpFill && challengerHpText && defenderHpText;
@@ -912,8 +963,6 @@ if (snapErr) {
                         const points = Number(l.points_taken || 0).toLocaleString();
 
                         // --- NORMALIZAÇÃO ROBUSTA DE attacker_won ---
-                        // O banco pode devolver booleano, 't'/'f', 'true'/'false', 1/0, '1'/'0' etc.
-                        // Aqui garantimos um boolean real antes de montar a mensagem.
                         const attackerWon = (
                             l.attacker_won === true ||
                             l.attacker_won === 't' ||
@@ -925,8 +974,6 @@ if (snapErr) {
                         );
 
                         // Mensagens claras e sem ambiguidade:
-                        // Se attackerWon === true => atacante venceu, o defensor (você) perdeu pontos.
-                        // Se attackerWon === false => atacante perdeu, você ganhou pontos do atacante.
                         const msg = attackerWon
                             ? `${attackerName} atacou você e venceu. Você perdeu ${points} pontos.`
                             : `${attackerName} atacou você e perdeu. Você tomou ${points} pontos dele(a).`;
@@ -994,12 +1041,8 @@ if (snapErr) {
             const currentMonth = now.getUTCMonth() + 1; // 1..12
             const currentYear = now.getUTCFullYear();
 
-            // Se for dia 1 UTC: limpamos caches que podem entrar em condição de corrida.
-            // Mantemos a limpeza do cache somente no dia 1, mas a chamada ao RPC só será feita se não
-            // tivermos registro no localStorage de já ter executado o reset este mês.
             try {
                 if (utcDay === 1) {
-                    // Verifica se o cache de ranking existe ANTES de limpar
                     if (localStorage.getItem('arena_top_100_cache')) {
                         localStorage.removeItem('arena_top_100_cache');
                         console.log("Cache de Ranking Atual (arena_top_100_cache) limpo (Dia 1).");

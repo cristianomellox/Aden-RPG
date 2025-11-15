@@ -21,6 +21,7 @@ let damagePollInterval = null;
 let playerDamageCache = new Map();
 let cityToRegister = null;
 let pendingGarrisonLeaveAction = null;
+let resultsPollTimeout = null; // NOVO: Para controlar o poll da tela de resultados
 
 let captureNotificationQueue = [];
 let isDisplayingCaptureNotification = false;
@@ -51,86 +52,13 @@ const REWARD_ITEMS = {
 // --- Elementos DOM ---
 const $ = (selector) => document.getElementById(selector);
 
-const screens = {
-    loading: $('loadingScreen'),
-    citySelection: $('citySelectionScreen'),
-    waiting: $('waitingScreen'),
-    battle: $('battleActiveScreen'),
-    results: $('resultsModal')
-};
-
-const battle = {
-    header: $('battleHeader'),
-    timer: $('battleTimer'),
-    rankingBtn: $('showRankingBtn'),
-    map: $('battleMap'),
-    footer: $('battleFooter'),
-    playerAttacks: $('player-attacks'),
-    playerCooldown: $('player-cooldown'),
-    garrisonStatus: $('garrison-status')
-};
-
-const modals = {
-    objective: $('objectiveModal'),
-    objectiveTitle: $('objectiveModalTitle'),
-    objectiveAttackBtn: $('objectiveAttackBtn'),
-    objectiveGarrisonBtn: $('objectiveGarrisonBtn'),
-    objectiveGarrisonWarning: $('objectiveModalGarrisonWarning'),
-    objectiveClose: $('objectiveModalClose'),
-    alert: $('alertModal'),
-    alertMessage: $('alertModalMessage'),
-    alertOk: $('alertModalOk'),
-    alertClose: $('alertModalClose'),
-    ranking: $('battleRankingModal'),
-    rankingClose: $('rankingModalClose'),
-    rankingTabGuilds: $('rankingTabGuilds'),
-    rankingTabDamage: $('rankingTabDamage'),
-    guildRankingList: $('guildRankingList'),
-    playerDamageList: $('playerDamageList'),
-    cityRegister: $('cityRegisterConfirmModal'),
-    cityRegisterClose: $('cityRegisterModalClose'),
-    cityRegisterTitle: $('cityRegisterModalTitle'),
-    cityRegisterCityName: $('cityRegisterModalCityName'),
-    cityRegisterGuildList: $('cityRegisterModalGuildList'),
-    cityRegisterMessage: $('cityRegisterModalMessage'),
-    cityRegisterCancelBtn: $('cityRegisterModalCancelBtn'),
-    cityRegisterConfirmBtn: $('cityRegisterModalConfirmBtn'),
-    garrisonLeave: $('garrisonLeaveConfirmModal'),
-    garrisonLeaveClose: $('garrisonLeaveModalClose'),
-    garrisonLeaveMessage: $('garrisonLeaveModalMessage'),
-    garrisonLeaveCancelBtn: $('garrisonLeaveModalCancelBtn'),
-    garrisonLeaveConfirmBtn: $('garrisonLeaveModalConfirmBtn'),
-    results: $('resultsModal'),
-    resultsClose: $('resultsModalClose'),
-    resultCityName: $('resultCityName'),
-    resultsRankingHonor: $('resultsRankingHonor'),
-    resultsRankingDamage: $('resultsRankingDamage'),
-    resultsRewardMessage: $('resultsRewardMessage'),
-    battleShop: $('battleShopModal'),
-    battleShopClose: $('battleShopModalClose'),
-    battleShopMessage: $('battleShopMessage'),
-    shopBtnPack1: $('buyPack1Btn'),
-    shopBtnPack2: $('buyPack2Btn')
-};
+// MODIFICAÇÃO: Declarar como 'let' e vazios. Serão populados no init.
+let screens = {};
+let battle = {};
+let modals = {};
+let audio = {};
 
 // Áudio
-const audio = {
-    normal: $('audioNormalHit'),
-    crit: $('audioCritHit'),
-    enemy_p1: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto1.mp3'),
-    enemy_p2: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto2.mp3'),
-    enemy_p3: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto3.mp3'),
-    enemy_p4: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto4.mp3'),
-    enemy_nexus: new Audio('https://aden-rpg.pages.dev/assets/ini_nexus.mp3'),
-    ally_p1: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto1.mp3'),
-    ally_p2: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto2.mp3'),
-    ally_p3: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto3.mp3'),
-    ally_p4: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto4.mp3'),
-    ally_nexus: new Audio('https://aden-rpg.pages.dev/assets/ally_nexus.mp3')
-};
-if(audio.normal) audio.normal.volume = 0.5;
-if(audio.crit) audio.crit.volume = 0.1;
-
 // REQ 1 (Bug Áudio): Desbloqueio de Mídia (Correção)
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let isMediaUnlocked = false;
@@ -181,15 +109,31 @@ function showAlert(message) {
     modals.alert.style.display = 'flex';
 }
 
-modals.alertOk.onclick = () => modals.alert.style.display = 'none';
-modals.alertClose.onclick = () => modals.alert.style.display = 'none';
-if(modals.resultsClose) modals.resultsClose.onclick = () => modals.results.style.display = 'none';
-if(modals.battleShopClose) modals.battleShopClose.onclick = () => modals.battleShop.style.display = 'none';
-
+// NOVO: Função para fechar modal de resultados e voltar à tela de cidades
+function closeResultsAndShowCities() {
+    if (resultsPollTimeout) clearTimeout(resultsPollTimeout);
+    resultsPollTimeout = null;
+    modals.results.style.display = 'none';
+    renderCitySelectionScreen(userRank || 'member'); 
+}
 
 function formatTime(totalSeconds) {
+    // ATUALIZADO: para lidar com dias, horas, minutos e segundos
+    if (totalSeconds < 0) totalSeconds = 0;
+    
+    const days = Math.floor(totalSeconds / 86400);
+    totalSeconds %= 86400;
+    const hours = Math.floor(totalSeconds / 3600);
+    totalSeconds %= 3600;
     const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
     const seconds = String(Math.floor(totalSeconds % 60)).padStart(2, '0');
+    
+    if (days > 0) {
+        return `${days}d ${String(hours).padStart(2, '0')}h ${minutes}m`;
+    }
+    if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${minutes}:${seconds}`;
+    }
     return `${minutes}:${seconds}`;
 }
 
@@ -375,10 +319,13 @@ const updatePlayerResourcesUI = (playerStats) => {
 function renderCitySelectionScreen(playerRank) {
     const cityGrid = $('cityGrid');
     cityGrid.innerHTML = '';
+    
+    // LÓGICA ATUALIZADA: Checa o dia e hora em UTC
     const now = new Date();
-    const minutes = now.getMinutes();
+    const dayUTC = now.getUTCDay(); // 0 = Domingo
+    const hoursUTC = now.getUTCHours();
     const isLeader = playerRank === 'leader' || playerRank === 'co-leader';
-    let registrationOpen = (minutes % 15) < 5;
+    let registrationOpen = (dayUTC === 0 && hoursUTC < 23); // Domingo, antes das 23:00 UTC
 
     CITIES.forEach(city => {
         const btn = document.createElement('button');
@@ -402,9 +349,13 @@ function renderCitySelectionScreen(playerRank) {
 function updateCityRegistrationButtons() {
     if (screens.citySelection.style.display !== 'flex') return;
     const isLeader = userRank === 'leader' || userRank === 'co-leader';
+    
+    // LÓGICA ATUALIZADA: Checa o dia e hora em UTC
     const now = new Date();
-    const minutes = now.getMinutes();
-    let registrationOpen = (minutes % 15) < 5;
+    const dayUTC = now.getUTCDay(); // 0 = Domingo
+    const hoursUTC = now.getUTCHours();
+    let registrationOpen = (dayUTC === 0 && hoursUTC < 23); // Domingo, antes das 23:00 UTC
+
     const cityButtons = document.querySelectorAll('#cityGrid .city-btn');
 
     cityButtons.forEach(btn => {
@@ -844,14 +795,6 @@ async function handleCityRegistrationPre(cityId, cityName) {
     }
 }
 
-modals.cityRegisterClose.onclick = () => modals.cityRegister.style.display = 'none';
-modals.cityRegisterCancelBtn.onclick = () => modals.cityRegister.style.display = 'none';
-modals.cityRegisterConfirmBtn.onclick = () => {
-    if (cityToRegister) {
-        handleCityRegistrationConfirm(cityToRegister.id, cityToRegister.name);
-    }
-};
-
 async function handleCityRegistrationConfirm(cityId, cityName) {
     const msgEl = modals.cityRegisterMessage;
     msgEl.textContent = `Registrando em ${cityName}...`;
@@ -900,8 +843,6 @@ function handleObjectiveClick(objective) {
     modals.objective.style.display = 'flex';
 }
 
-modals.objectiveClose.onclick = () => modals.objective.style.display = 'none';
-
 function checkGarrisonLeaveAndExecute(actionCallback) {
     if (!currentBattleState || !currentBattleState.player_garrison || !userPlayerStats) {
         actionCallback();
@@ -927,225 +868,6 @@ function checkGarrisonLeaveAndExecute(actionCallback) {
     
     pendingGarrisonLeaveAction = actionCallback;
     modals.garrisonLeave.style.display = 'flex';
-}
-
-modals.garrisonLeaveClose.onclick = () => {
-    pendingGarrisonLeaveAction = null;
-    modals.garrisonLeave.style.display = 'none';
-};
-modals.garrisonLeaveCancelBtn.onclick = () => {
-    pendingGarrisonLeaveAction = null;
-    modals.garrisonLeave.style.display = 'none';
-};
-modals.garrisonLeaveConfirmBtn.onclick = () => {
-    modals.garrisonLeave.style.display = 'none';
-    if (pendingGarrisonLeaveAction) {
-        pendingGarrisonLeaveAction();
-    }
-    pendingGarrisonLeaveAction = null;
-};
-
-modals.objectiveAttackBtn.onclick = async () => {
-    unlockBattleAudio(); // Desbloqueia áudio
-    if (!selectedObjective) return;
-
-    // *** CORREÇÃO (REQ 2/3) ***
-    // Verifica ataques *antes* de executar
-    const { shownAttacks } = computeShownAttacksAndRemaining();
-    if (shownAttacks <= 0) {
-        showAlert('Sem ações restantes.');
-        return; 
-    }
-    
-    checkGarrisonLeaveAndExecute(async () => {
-        if (isProcessingBattleAction) return;
-        isProcessingBattleAction = true;
-        
-        modals.objectiveAttackBtn.disabled = true;
-        modals.objective.style.display = 'none';
-        
-        supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id })
-            .then(({ data, error }) => {
-                if (error || !data.success) {
-                    showAlert(error ? error.message : data.message);
-                    pollBattleState(); // Força re-sincronização
-                    return;
-                }
-
-                const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
-                if (objectiveEl) {
-                    playHitSound(data.is_crit);
-                    displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
-                    objectiveEl.classList.add('shake-animation');
-                    setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
-                }
-
-                // ***** INÍCIO DA MODIFICAÇÃO *****
-                if(currentBattleState.player_state) {
-                    
-                    // Substitui a lógica de decremento antiga
-                    optimisticUpdatePlayerActions();
-                    
-                    // Mantém a lógica de guarnição que já existia
-                    if(data.garrison_left) { 
-                        currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
-                        currentBattleState.player_garrison = null;
-                    }
-                    renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-
-                } else {
-                    pollBattleState(); 
-                }
-                // ***** FIM DA MODIFICAÇÃO *****
-                
-                const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
-                if (obj) {
-                    if (data.objective_destroyed) {
-                        pollHeartbeatState();
-                    } else {
-                        obj.current_hp = data.objective_new_hp;
-                        obj.garrison_hp = data.objective_new_garrison_hp;
-                        renderAllObjectives(currentBattleState.objectives);
-                    }
-                } else {
-                    pollBattleState();
-                }
-
-            })
-            .finally(() => {
-                // *** CORREÇÃO (REQ 3) ***
-                // Adiciona cooldown para previnir spam
-                setTimeout(() => {
-                    isProcessingBattleAction = false;
-                    if (selectedObjective && currentBattleState) {
-                        const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
-                        if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
-                            modals.objectiveAttackBtn.disabled = false;
-                        }
-                    }
-                }, 800); // Cooldown de 800ms
-            });
-    });
-};
-
-modals.objectiveGarrisonBtn.onclick = async () => {
-    unlockBattleAudio(); // Desbloqueia áudio
-    if (!selectedObjective) return;
-    
-    if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
-        const lastLeave = new Date(currentBattleState.player_state.last_garrison_leave_at);
-        const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
-        
-        if (timeSinceLeave < 30) {
-            const timeLeft = 30 - timeSinceLeave;
-            showAlert(`Aguarde 30 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
-            return;
-        }
-    }
-
-    // *** CORREÇÃO (REQ 2/3) ***
-    // Verifica ataques *antes* de executar
-    const { shownAttacks } = computeShownAttacksAndRemaining();
-    if (shownAttacks <= 0) {
-        showAlert('Sem ações restantes.');
-        return; // Impede a ação e o bug de remoção otimista
-    }
-    
-    checkGarrisonLeaveAndExecute(async () => {
-        if (isProcessingBattleAction) return;
-        isProcessingBattleAction = true;
-        modals.objectiveGarrisonBtn.disabled = true;
-        modals.objective.style.display = 'none';
-
-        // ***** INÍCIO DA MODIFICAÇÃO *****
-        if (currentBattleState) {
-            try {
-                if (!currentBattleState.player_state) currentBattleState.player_state = {};
-                
-                // Lógica de sair da guarnição anterior (está OK)
-                if (currentBattleState.player_garrison && userPlayerStats) {
-                    const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
-                    if (oldObj) {
-                        oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - parseInt(userPlayerStats.health, 10));
-                    }
-                    currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
-                }
-                
-                // Substitui a lógica de decremento antiga
-                optimisticUpdatePlayerActions();
-                
-                // Lógica de entrar na nova guarnição (está OK)
-                currentBattleState.player_garrison = {
-                    objective_id: selectedObjective.id,
-                    started_at: new Date().toISOString()
-                };
-                
-                if (userPlayerStats) {
-                    const newObj = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
-                    if (newObj) {
-                         newObj.garrison_hp = (newObj.garrison_hp || 0) + parseInt(userPlayerStats.health, 10);
-                    }
-                }
-                
-                renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-                renderAllObjectives(currentBattleState.objectives);
-                
-            } catch (e) {
-                console.warn("Erro atualização otimista (garrison):", e);
-            }
-        }
-        // ***** FIM DA MODIFICAÇÃO *****
-
-        supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
-            .then(({ data, error }) => {
-                if (error || !data.success) {
-                    showAlert(error ? error.message : data.message);
-                    setTimeout(pollBattleState, 500); 
-                } else if (data.message) {
-                    console.log("Guarnição confirmada:", data.message);
-                }
-            })
-            .catch(err => {
-                console.error("Erro RPC guarnição:", err);
-                showAlert("Erro ao guarnecer. Sincronizando...");
-            })
-            .finally(() => {
-                // *** CORREÇÃO (REQ 3) ***
-                // Adiciona cooldown para previnir spam
-                setTimeout(() => {
-                    isProcessingBattleAction = false;
-                    modals.objectiveGarrisonBtn.disabled = false;
-                }, 800); // Cooldown de 800ms
-                setTimeout(pollHeartbeatState, 1500); // Sincroniza
-            });
-    });
-};
-
-
-function openBattleShop() {
-    unlockBattleAudio(); // Desbloqueia áudio
-    if (!currentBattleState || !currentBattleState.player_state) {
-        showAlert("Não foi possível carregar o estado do jogador.");
-        return;
-    }
-    const playerState = currentBattleState.player_state;
-    modals.battleShopMessage.textContent = "";
-
-    if (playerState.bought_action_pack_1) {
-        modals.shopBtnPack1.disabled = true;
-        modals.shopBtnPack1.textContent = "Comprado";
-    } else {
-        modals.shopBtnPack1.disabled = false;
-        modals.shopBtnPack1.textContent = "Comprar";
-    }
-    if (playerState.bought_action_pack_2) {
-        modals.shopBtnPack2.disabled = true;
-        modals.shopBtnPack2.textContent = "Comprado";
-    } else {
-        modals.shopBtnPack2.disabled = false;
-        modals.shopBtnPack2.textContent = "Comprar";
-    }
-    modals.battleShop.style.display = 'flex';
 }
 
 async function handleBuyBattleActions(packId, cost, actions, btnEl) {
@@ -1177,6 +899,10 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
 async function pollBattleState() {
     stopHeartbeatPolling();
     stopDamagePolling();
+    
+    // Limpa o timeout de re-poll de resultados se o pollBattleState for chamado
+    if (resultsPollTimeout) clearTimeout(resultsPollTimeout);
+    resultsPollTimeout = null;
     
     const { data, error } = await supabase.rpc('get_guild_battle_state');
 
@@ -1219,11 +945,6 @@ async function pollBattleState() {
                 captures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
                 // 2. Define o timestamp para o próximo heartbeat
                 lastCaptureTimestamp = captures[captures.length - 1].timestamp; 
-                // 3. (REQ 2) Mostra APENAS a última captura
-                const lastCapture = captures[captures.length - 1];
-                // *** CORREÇÃO (REQ 1): Não mostra mais a última captura no full load,
-                // apenas no heartbeat. Isso evita replays de som/banner em erros.
-                // setTimeout(() => handleNewCaptures([lastCapture]), 1000); // <-- REMOVIDO
             } else {
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
@@ -1248,9 +969,11 @@ async function pollBattleState() {
             break;
             
         case 'finished':
+            if (resultsPollTimeout) clearTimeout(resultsPollTimeout); // Limpa o timeout anterior
             playerDamageCache.clear();
             renderResultsScreen(data.instance, data.player_damage_ranking);
-            setTimeout(pollBattleState, 7000);
+            // Define um novo timeout para o caso do usuário não fechar o modal
+            resultsPollTimeout = setTimeout(pollBattleState, 7000);
             break;
             
         case 'no_guild':
@@ -1420,40 +1143,52 @@ function startGlobalUITimer() {
 
     uiTimerInterval = setInterval(() => {
         const now = new Date();
-        const minutes = now.getMinutes();
-        const seconds = now.getSeconds();
-
+        
         if (screens.citySelection.style.display === 'flex') {
+            // LÓGICA ATUALIZADA: Timer de registro semanal
             const registrationTimer = $('registrationTimer');
-            const cycleMin = 15;
-            const durationMin = 5;
-            const minutesInCycle = minutes % cycleMin;
+            const dayUTC = now.getUTCDay(); // 0 = Domingo
+            const hoursUTC = now.getUTCHours();
             
-            if (minutesInCycle < durationMin) {
-                const secondsInCycle = minutesInCycle * 60 + seconds;
-                const durationSeconds = durationMin * 60;
-                const timeLeft = Math.max(0, durationSeconds - secondsInCycle);
+            if (dayUTC === 0 && hoursUTC < 23) {
+                // REGISTRO ABERTO: Contagem regressiva para 23:00 UTC de hoje
+                const registrationEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 0, 0));
+                const timeLeft = Math.max(0, Math.floor((registrationEnd - now) / 1000));
                 registrationTimer.textContent = `Registro fecha em: ${formatTime(timeLeft)}`;
             } else {
-                const cycleStartSeconds = (minutesInCycle * 60) + seconds;
-                const nextCycleStartSeconds = cycleMin * 60;
-                const timeToOpen = Math.max(0, nextCycleStartSeconds - cycleStartSeconds);
+                // REGISTRO FECHADO: Contagem regressiva para 00:00 UTC do próximo Domingo
+                const daysToSunday = (7 - dayUTC) % 7;
+                let nextSunday = new Date(now.getTime());
+                nextSunday.setUTCDate(now.getUTCDate() + daysToSunday);
+                nextSunday.setUTCHours(0, 0, 0, 0);
+
+                if (dayUTC === 0 && hoursUTC >= 23) { // Se for Domingo depois das 23h
+                    nextSunday.setUTCDate(now.getUTCDate() + 7);
+                }
+                
+                const timeToOpen = Math.max(0, Math.floor((nextSunday - now) / 1000));
                 registrationTimer.textContent = `Registro abre em: ${formatTime(timeToOpen)}`;
             }
             updateCityRegistrationButtons();
         }
 
         if (screens.waiting.style.display === 'flex' && currentBattleState && currentBattleState.status === 'registering') {
-            const regEnd = new Date(currentBattleState.instance.registration_end_time);
-            const timeLeft = Math.max(0, Math.floor((regEnd - now) / 1000));
+            // LÓGICA ATUALIZADA: Contagem para o *início* da batalha (23:30 UTC)
+            // O end_time é Segunda 00:00 UTC. A batalha dura 30 min.
+            const battleEnd = new Date(currentBattleState.instance.end_time);
+            const battleStart = new Date(battleEnd.getTime() - 30 * 60 * 1000); // 30 mins antes do fim
+            
+            const timeLeft = Math.max(0, Math.floor((battleStart - now) / 1000));
             $('waitTimer').textContent = formatTime(timeLeft);
+            
             if (timeLeft <= 0) {
                 pollBattleState(); 
             }
         }
 
         if (screens.battle.style.display === 'flex' && currentBattleState && currentBattleState.status === 'active') {
-            const battleEnd = new Date(currentBattleState.instance.end_time);
+            // LÓGICA ATUALIZADA: Contagem para o *fim* da batalha (30 minutos de duração)
+            const battleEnd = new Date(currentBattleState.instance.end_time); // Segunda 00:00 UTC
             const timeLeft = Math.max(0, Math.floor((battleEnd - now) / 1000));
             battle.timer.textContent = formatTime(timeLeft);
 
@@ -1469,9 +1204,101 @@ function startGlobalUITimer() {
     }, 1000);
 }
 
+// =================================================================
+// FUNÇÃO DE INICIALIZAÇÃO
+// =================================================================
+
+// NOVO: Função para popular os elementos DOM
+function setupDOMElements() {
+    screens = {
+        loading: $('loadingScreen'),
+        citySelection: $('citySelectionScreen'),
+        waiting: $('waitingScreen'),
+        battle: $('battleActiveScreen'),
+        results: $('resultsModal')
+    };
+
+    battle = {
+        header: $('battleHeader'),
+        timer: $('battleTimer'),
+        rankingBtn: $('showRankingBtn'),
+        map: $('battleMap'),
+        footer: $('battleFooter'),
+        playerAttacks: $('player-attacks'),
+        playerCooldown: $('player-cooldown'),
+        garrisonStatus: $('garrison-status')
+    };
+
+    modals = {
+        objective: $('objectiveModal'),
+        objectiveTitle: $('objectiveModalTitle'),
+        objectiveAttackBtn: $('objectiveAttackBtn'),
+        objectiveGarrisonBtn: $('objectiveGarrisonBtn'),
+        objectiveGarrisonWarning: $('objectiveModalGarrisonWarning'),
+        objectiveClose: $('objectiveModalClose'),
+        alert: $('alertModal'),
+        alertMessage: $('alertModalMessage'),
+        alertOk: $('alertModalOk'),
+        alertClose: $('alertModalClose'),
+        ranking: $('battleRankingModal'),
+        rankingClose: $('rankingModalClose'),
+        rankingTabGuilds: $('rankingTabGuilds'),
+        rankingTabDamage: $('rankingTabDamage'),
+        guildRankingList: $('guildRankingList'),
+        playerDamageList: $('playerDamageList'),
+        cityRegister: $('cityRegisterConfirmModal'),
+        cityRegisterClose: $('cityRegisterModalClose'),
+        cityRegisterTitle: $('cityRegisterModalTitle'),
+        cityRegisterCityName: $('cityRegisterModalCityName'),
+        cityRegisterGuildList: $('cityRegisterModalGuildList'),
+        cityRegisterMessage: $('cityRegisterModalMessage'),
+        cityRegisterCancelBtn: $('cityRegisterModalCancelBtn'),
+        cityRegisterConfirmBtn: $('cityRegisterModalConfirmBtn'),
+        garrisonLeave: $('garrisonLeaveConfirmModal'),
+        garrisonLeaveClose: $('garrisonLeaveModalClose'),
+        garrisonLeaveMessage: $('garrisonLeaveModalMessage'),
+        garrisonLeaveCancelBtn: $('garrisonLeaveModalCancelBtn'),
+        garrisonLeaveConfirmBtn: $('garrisonLeaveConfirmBtn'),
+        results: $('resultsModal'),
+        resultsClose: $('resultsModalClose'),
+        resultCityName: $('resultCityName'),
+        resultsRankingHonor: $('resultsRankingHonor'),
+        resultsRankingDamage: $('resultsRankingDamage'),
+        resultsRewardMessage: $('resultsRewardMessage'),
+        resultsModalCloseBtn: $('resultsModalCloseBtn'), 
+        battleShop: $('battleShopModal'),
+        battleShopClose: $('battleShopModalClose'),
+        battleShopMessage: $('battleShopMessage'),
+        shopBtnPack1: $('buyPack1Btn'),
+        shopBtnPack2: $('buyPack2Btn')
+    };
+
+    audio = {
+        normal: $('audioNormalHit'),
+        crit: $('audioCritHit'),
+        enemy_p1: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto1.mp3'),
+        enemy_p2: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto2.mp3'),
+        enemy_p3: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto3.mp3'),
+        enemy_p4: new Audio('https://aden-rpg.pages.dev/assets/ini_ponto4.mp3'),
+        enemy_nexus: new Audio('https://aden-rpg.pages.dev/assets/ini_nexus.mp3'),
+        ally_p1: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto1.mp3'),
+        ally_p2: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto2.mp3'),
+        ally_p3: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto3.mp3'),
+        ally_p4: new Audio('https://aden-rpg.pages.dev/assets/ally_ponto4.mp3'),
+        ally_nexus: new Audio('https://aden-rpg.pages.dev/assets/ally_nexus.mp3')
+    };
+    
+    // Ajusta o volume (como era feito antes)
+    if(audio.normal) audio.normal.volume = 0.5;
+    if(audio.crit) audio.crit.volume = 0.1;
+}
+
 
 async function init() {
-    showScreen('loading');
+    // CHAMA A NOVA FUNÇÃO AQUI
+    setupDOMElements(); 
+    
+    showScreen('loading'); // Agora 'screens.loading' existe
 
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session) {
@@ -1485,6 +1312,226 @@ async function init() {
     document.body.addEventListener('click', unlockBattleAudio, { once: true });
 
 
+    // =================================================================
+    // ATRIBUIÇÃO DE EVENTOS
+    // (Movido para dentro do init e com checagens para segurança)
+    // =================================================================
+
+    // Listeners dos Modais
+    if(modals.alertOk) modals.alertOk.onclick = () => modals.alert.style.display = 'none';
+    if(modals.alertClose) modals.alertClose.onclick = () => modals.alert.style.display = 'none';
+    if(modals.resultsClose) modals.resultsClose.onclick = closeResultsAndShowCities;
+    if(modals.resultsModalCloseBtn) modals.resultsModalCloseBtn.onclick = closeResultsAndShowCities;
+    if(modals.battleShopClose) modals.battleShopClose.onclick = () => modals.battleShop.style.display = 'none';
+    
+    if(modals.cityRegisterClose) modals.cityRegisterClose.onclick = () => modals.cityRegister.style.display = 'none';
+    if(modals.cityRegisterCancelBtn) modals.cityRegisterCancelBtn.onclick = () => modals.cityRegister.style.display = 'none';
+    if(modals.cityRegisterConfirmBtn) modals.cityRegisterConfirmBtn.onclick = () => {
+        if (cityToRegister) {
+            handleCityRegistrationConfirm(cityToRegister.id, cityToRegister.name);
+        }
+    };
+    
+    if(modals.objectiveClose) modals.objectiveClose.onclick = () => modals.objective.style.display = 'none';
+    
+    if(modals.garrisonLeaveClose) modals.garrisonLeaveClose.onclick = () => {
+        pendingGarrisonLeaveAction = null;
+        modals.garrisonLeave.style.display = 'none';
+    };
+    if(modals.garrisonLeaveCancelBtn) modals.garrisonLeaveCancelBtn.onclick = () => {
+        pendingGarrisonLeaveAction = null;
+        modals.garrisonLeave.style.display = 'none';
+    };
+    if(modals.garrisonLeaveConfirmBtn) modals.garrisonLeaveConfirmBtn.onclick = () => {
+        modals.garrisonLeave.style.display = 'none';
+        if (pendingGarrisonLeaveAction) {
+            pendingGarrisonLeaveAction();
+        }
+        pendingGarrisonLeaveAction = null;
+    };
+    
+    // Listeners dos Botões de Ação
+    if (modals.objectiveAttackBtn) {
+        modals.objectiveAttackBtn.onclick = async () => {
+            unlockBattleAudio(); // Desbloqueia áudio
+            if (!selectedObjective) return;
+
+            // *** CORREÇÃO (REQ 2/3) ***
+            // Verifica ataques *antes* de executar
+            const { shownAttacks } = computeShownAttacksAndRemaining();
+            if (shownAttacks <= 0) {
+                showAlert('Sem ações restantes.');
+                return; 
+            }
+            
+            checkGarrisonLeaveAndExecute(async () => {
+                if (isProcessingBattleAction) return;
+                isProcessingBattleAction = true;
+                
+                modals.objectiveAttackBtn.disabled = true;
+                modals.objective.style.display = 'none';
+                
+                supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id })
+                    .then(({ data, error }) => {
+                        if (error || !data.success) {
+                            showAlert(error ? error.message : data.message);
+                            pollBattleState(); // Força re-sincronização
+                            return;
+                        }
+
+                        const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
+                        if (objectiveEl) {
+                            playHitSound(data.is_crit);
+                            displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
+                            objectiveEl.classList.add('shake-animation');
+                            setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
+                        }
+
+                        // ***** INÍCIO DA MODIFICAÇÃO *****
+                        if(currentBattleState.player_state) {
+                            
+                            // Substitui a lógica de decremento antiga
+                            optimisticUpdatePlayerActions();
+                            
+                            // Mantém a lógica de guarnição que já existia
+                            if(data.garrison_left) { 
+                                currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                                currentBattleState.player_garrison = null;
+                            }
+                            renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+
+                        } else {
+                            pollBattleState(); 
+                        }
+                        // ***** FIM DA MODIFICAÇÃO *****
+                        
+                        const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
+                        if (obj) {
+                            if (data.objective_destroyed) {
+                                pollHeartbeatState();
+                            } else {
+                                obj.current_hp = data.objective_new_hp;
+                                obj.garrison_hp = data.objective_new_garrison_hp;
+                                renderAllObjectives(currentBattleState.objectives);
+                            }
+                        } else {
+                            pollBattleState();
+                        }
+
+                    })
+                    .finally(() => {
+                        // *** CORREÇÃO (REQ 3) ***
+                        // Adiciona cooldown para previnir spam
+                        setTimeout(() => {
+                            isProcessingBattleAction = false;
+                            if (selectedObjective && currentBattleState) {
+                                const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                                if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
+                                    modals.objectiveAttackBtn.disabled = false;
+                                }
+                            }
+                        }, 800); // Cooldown de 800ms
+                    });
+            });
+        };
+    }
+
+    if (modals.objectiveGarrisonBtn) {
+        modals.objectiveGarrisonBtn.onclick = async () => {
+            unlockBattleAudio(); // Desbloqueia áudio
+            if (!selectedObjective) return;
+            
+            if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
+                const lastLeave = new Date(currentBattleState.player_state.last_garrison_leave_at);
+                const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
+                
+                if (timeSinceLeave < 30) {
+                    const timeLeft = 30 - timeSinceLeave;
+                    showAlert(`Aguarde 30 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
+                    return;
+                }
+            }
+
+            // *** CORREÇÃO (REQ 2/3) ***
+            // Verifica ataques *antes* de executar
+            const { shownAttacks } = computeShownAttacksAndRemaining();
+            if (shownAttacks <= 0) {
+                showAlert('Sem ações restantes.');
+                return; // Impede a ação e o bug de remoção otimista
+            }
+            
+            checkGarrisonLeaveAndExecute(async () => {
+                if (isProcessingBattleAction) return;
+                isProcessingBattleAction = true;
+                modals.objectiveGarrisonBtn.disabled = true;
+                modals.objective.style.display = 'none';
+
+                // ***** INÍCIO DA MODIFICAÇÃO *****
+                if (currentBattleState) {
+                    try {
+                        if (!currentBattleState.player_state) currentBattleState.player_state = {};
+                        
+                        // Lógica de sair da guarnição anterior (está OK)
+                        if (currentBattleState.player_garrison && userPlayerStats) {
+                            const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
+                            if (oldObj) {
+                                oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - parseInt(userPlayerStats.health, 10));
+                            }
+                            currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                        }
+                        
+                        // Substitui a lógica de decremento antiga
+                        optimisticUpdatePlayerActions();
+                        
+                        // Lógica de entrar na nova guarnição (está OK)
+                        currentBattleState.player_garrison = {
+                            objective_id: selectedObjective.id,
+                            started_at: new Date().toISOString()
+                        };
+                        
+                        if (userPlayerStats) {
+                            const newObj = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                            if (newObj) {
+                                 newObj.garrison_hp = (newObj.garrison_hp || 0) + parseInt(userPlayerStats.health, 10);
+                            }
+                        }
+                        
+                        renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+                        renderAllObjectives(currentBattleState.objectives);
+                        
+                    } catch (e) {
+                        console.warn("Erro atualização otimista (garrison):", e);
+                    }
+                }
+                // ***** FIM DA MODIFICAÇÃO *****
+
+                supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
+                    .then(({ data, error }) => {
+                        if (error || !data.success) {
+                            showAlert(error ? error.message : data.message);
+                            setTimeout(pollBattleState, 500); 
+                        } else if (data.message) {
+                            console.log("Guarnição confirmada:", data.message);
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Erro RPC guarnição:", err);
+                        showAlert("Erro ao guarnecer. Sincronizando...");
+                    })
+                    .finally(() => {
+                        // *** CORREÇÃO (REQ 3) ***
+                        // Adiciona cooldown para previnir spam
+                        setTimeout(() => {
+                            isProcessingBattleAction = false;
+                            modals.objectiveGarrisonBtn.disabled = false;
+                        }, 800); // Cooldown de 800ms
+                        setTimeout(pollHeartbeatState, 1500); // Sincroniza
+                    });
+            });
+        };
+    }
+    
+    // Listeners dos Objetivos do Mapa
     document.querySelectorAll('.battle-objective').forEach(el => {
         el.addEventListener('click', () => {
             unlockBattleAudio(); // Garante o desbloqueio
@@ -1497,23 +1544,29 @@ async function init() {
         });
     });
 
-    battle.rankingBtn.onclick = () => {
-        unlockBattleAudio(); // Garante o desbloqueio
-        modals.ranking.style.display = 'flex';
-        document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-        const defaultTabBtn = modals.ranking.querySelector('.tab-btn[data-tab="guilds"]');
-        if (defaultTabBtn) defaultTabBtn.classList.add('active');
-        document.querySelectorAll('#battleRankingModal .tab-pane').forEach(pane => {
-            pane.classList.remove('active');
-            pane.style.display = 'none';
-        });
-        if (modals.rankingTabGuilds) {
-            modals.rankingTabGuilds.classList.add('active');
-            modals.rankingTabGuilds.style.display = 'block';
-        }
-    };
-    modals.rankingClose.onclick = () => modals.ranking.style.display = 'none';
+    // Listener do Ranking (Ponto do Erro Original)
+    if (battle.rankingBtn) {
+        battle.rankingBtn.onclick = () => {
+            unlockBattleAudio(); // Garante o desbloqueio
+            modals.ranking.style.display = 'flex';
+            document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const defaultTabBtn = modals.ranking.querySelector('.tab-btn[data-tab="guilds"]');
+            if (defaultTabBtn) defaultTabBtn.classList.add('active');
+            document.querySelectorAll('#battleRankingModal .tab-pane').forEach(pane => {
+                pane.classList.remove('active');
+                pane.style.display = 'none';
+            });
+            if (modals.rankingTabGuilds) {
+                modals.rankingTabGuilds.classList.add('active');
+                modals.rankingTabGuilds.style.display = 'block';
+            }
+        };
+    }
+    if (modals.rankingClose) {
+        modals.rankingClose.onclick = () => modals.ranking.style.display = 'none';
+    }
 
+    // Listener das Abas do Ranking
     document.querySelectorAll('.ranking-tabs .tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tabId = btn.dataset.tab;
@@ -1528,13 +1581,22 @@ async function init() {
         });
     });
 
-    $('showShopBtn').onclick = () => {
-        unlockBattleAudio(); // Garante o desbloqueio
-        openBattleShop();
-    };
-    modals.shopBtnPack1.onclick = () => handleBuyBattleActions(1, 30, 3, modals.shopBtnPack1);
-    modals.shopBtnPack2.onclick = () => handleBuyBattleActions(2, 75, 5, modals.shopBtnPack2);
+    // Listeners da Loja
+    const showShopBtnEl = $('showShopBtn'); // Pega o elemento da loja (ID do HTML)
+    if (showShopBtnEl) {
+        showShopBtnEl.onclick = () => {
+            unlockBattleAudio(); // Garante o desbloqueio
+            openBattleShop();
+        };
+    }
+    if (modals.shopBtnPack1) {
+        modals.shopBtnPack1.onclick = () => handleBuyBattleActions(1, 30, 3, modals.shopBtnPack1);
+    }
+    if (modals.shopBtnPack2) {
+        modals.shopBtnPack2.onclick = () => handleBuyBattleActions(2, 75, 5, modals.shopBtnPack2);
+    }
 
+    // Inicia os loops de polling
     pollBattleState();
     startGlobalUITimer();
 }

@@ -23,7 +23,7 @@
         <a href="guild.html" class="top-bar-link" title="Voltar">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
-        <div id="pageTitle">Batalha de Guildas</div>
+        <div id="pageTitle">Batalha por Territórios</div>
         <div style="width: 28px;"></div> </div>
 
     <div id="battleContainer">
@@ -105,9 +105,9 @@
         <div id="citySelectionScreen" style="display: none;">
             <div style="background-color: rgba(0, 0, 0, 0.6); border-radius: 10px;">
             <h2 style="color:lightblue;">Registro</h2>
-            <p>Seu Líder ou Co-Líder pode registrar a guilda para a próxima batalha.</p>
+            <p style="font-weight: bold;">Seu Líder ou Co-Líder pode registrar a guilda para a próxima batalha.</p>
             
-            <p id="registrationTimer"></p>
+            <p id="registrationTimer" style="font-weight: bold;"></p>
             </div>
             <div class="city-grid" id="cityGrid">
                 </div>
@@ -129,11 +129,14 @@
             </div>
         </div>
         
-        <div id="resultsModal" class="modal" style="display: none;">
+       <div id="resultsModal" class="modal" style="display: none;">
             <div class="modal-content">
                
+               <span class="modal-close" id="resultsModalClose">&times;</span>
+                
                 <h2>Batalha Finalizada</h2>
                 <p>A batalha em <strong id="resultCityName"></strong> terminou!</p>
+                <p id="resultBattleDate" style="font-size: 0.9em; color: #ccc; margin-top: -10px; margin-bottom: 10px; text-align: center;"></p>
 
                 <h3>Ranking de Honra</h3>
                 <ol id="resultsRankingHonor" class="ranking-list results-list">
@@ -146,11 +149,15 @@
                 <h3>Recompensas</h3>
                 <p id="resultsRewardMessage"></p>
                 
-               
+                <div id="resultsGuildRewards" class="results-rewards-section"></div>
+                <div id="resultsPlayerRewards" class="results-rewards-section"></div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="resultsModalCloseBtn" class="action-btn">Fechar</button>
+                </div>
             </div>
         </div>
-
-    </div>
+  
     
     <div id="objectiveModal" class="modal">
         <div class="modal-content">

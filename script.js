@@ -1062,7 +1062,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModal = document.getElementById("closeGenericModal");
 
   const modalMessages = {
-    tarefasModal: "Tarefas em breve!",
+    titulosModal: "Títulos em breve!",
     // "progressaoModal" removido daqui
     comercioModal: "Comércio em breve!",
     rankingModal: "Ranking em breve!",

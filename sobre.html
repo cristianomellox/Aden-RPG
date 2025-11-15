@@ -165,6 +165,26 @@
         #devCredits strong {
             color: #e0dccc;
         }
+        
+        /* NOVO: Estilo para a Música da Tela Inicial Separada */
+        #initialScreenMusic {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 2px solid #c9a94a;
+            border-radius: 8px;
+            background-color: rgba(201, 169, 74, 0.05);
+        }
+        
+        #initialScreenMusic p {
+            margin: 5px 0;
+            font-weight: bold;
+            color: #e0dccc;
+            font-size: 1em;
+        }
+        
+        #initialScreenMusic strong {
+            color: #c9a94a;
+        }
 
         /* NOVO: Estilos para o Modal de Início de Música */
         #music-modal-overlay {
@@ -256,6 +276,19 @@
             background-color: rgba(201, 169, 74, 0.25);
             border-color: #c9a94a;
         }
+        
+        /* NOVO: Estilo para a lista de agradecimentos especiais */
+        .special-thanks-list {
+            list-style: none;
+            padding-left: 0;
+            text-align: center;
+        }
+
+        .special-thanks-list li {
+            margin: 5px 0;
+            font-weight: bold;
+            color: #c9a94a;
+        }
 
     </style>
 </head>
@@ -321,27 +354,43 @@
         <h2 data-i18n="title3" data-lang-en="Original Soundtrack">Trilha Sonora Original</h2>
         <p data-i18n="p3-1" data-lang-en="The audio tracks that compose the environment and atmosphere of Aden are:">As faixas de áudio que compõem o ambiente e a atmosfera de Aden são:</p>
         
-        <ul class="music-list" id="musicList">
-            <li data-en="Aden">Aden</li>
-            <li data-en="Zion">Zion</li>
-            <li data-en="Elendor">Elendor</li>
-            <li data-en="Capital">Capital</li>
-            <li data-en="Mitrar">Mitrar</li>
-            <li data-en="Tandra">Tandra</li>
-            <li data-en="Astrax">Astrax</li>
-            <li data-en="Duratar">Duratar</li>
-            <li data-en="Arena">Arena</li>
-            <li data-en="Mines">Minas</li>
-            <li data-en="AFK">AFK</li>
-            <li data-en="AFK Combat">Combate AFK</li>
-            <li data-en="Desolation Tower">Torre da Desolação</li>
-            <li data-en="Eternal Echoes">Eternal Echoes</li>
-        </ul>
-        
-        <div class="udio-credit" data-i18n="udio-credit" data-lang-en="The music used in this game was made with Udio.">
-            As músicas utilizadas neste jogo foram feitas com o Udio.<br>
-            <strong>Made with Udio</strong>
+        <div id="initialScreenMusic">
+            <p data-i18n="p-initial-music-title" data-lang-en="Initial Screen Music:">Música da Tela Inicial:</p>
+            <p><strong>Little Universe</strong></p>
+            <p data-i18n="p-initial-music-composer" data-lang-en="Composed by:">Composta por:</p>
+            <p>Alexandr Zhelanov</p>
         </div>
+        
+        <div id="udioMusicSection">
+            <p data-i18n="p-udio-tracks" data-lang-en="Other Tracks:">Outras Faixas:</p>
+            <ul class="music-list" id="musicList">
+                <li data-en="Aden">Aden</li>
+                <li data-en="Zion">Zion</li>
+                <li data-en="Elendor">Elendor</li>
+                <li data-en="Capital">Capital</li>
+                <li data-en="Mitrar">Mitrar</li>
+                <li data-en="Tandra">Tandra</li>
+                <li data-en="Astrax">Astrax</li>
+                <li data-en="Duratar">Duratar</li>
+                <li data-en="Arena">Arena</li>
+                <li data-en="Mines">Minas</li>
+                <li data-en="AFK">AFK</li>
+                <li data-en="AFK Combat">Combate AFK</li>
+                <li data-en="Desolation Tower">Torre da Desolação</li>
+                <li data-en="Eternal Echoes">Eternal Echoes</li>
+            </ul>
+        
+            <div class="udio-credit" data-i18n="udio-credit" data-lang-en="The tracks above were made with Udio.">
+                As músicas acima foram feitas com o Udio.<br>
+                <strong>Made with Udio</strong>
+            </div>
+        </div>
+
+        <h2 data-i18n="title4" data-lang-en="Special Thanks">Agradecimentos Especiais</h2>
+        <ul class="special-thanks-list">
+            <li>Alexandr Zhelanov</li>
+            <li>Cristina Almeida</li>
+        </ul>
 
         <div class="policy-links-container">
             <a 
@@ -408,7 +457,7 @@
                 }
             });
 
-            // 3. Atualizar a lista de músicas
+            // 3. Atualizar a lista de músicas do Udio (a lista de Agradecimentos não muda)
             const musicListItems = document.querySelectorAll('#musicList li');
             musicListItems.forEach(li => {
                 if (isEnglish && li.hasAttribute('data-en')) {
@@ -419,7 +468,7 @@
                 }
             });
             
-            // NOVO: 4. Atualizar o Rodapé de Copyright
+            // 4. Atualizar o Rodapé de Copyright
             const copyrightText = document.getElementById('copyright-text');
             if (isEnglish) {
                 copyrightText.innerHTML = copyrightText.getAttribute('data-lang-en');
@@ -441,6 +490,7 @@
             // Pré-processamento: Armazena o texto original em Português
             const translatableElements = document.querySelectorAll('[data-i18n]');
             translatableElements.forEach(el => {
+                // Adiciona exceção para elementos que não são o .udio-credit
                 if (el.classList.contains('udio-credit')) {
                     const originalText = el.textContent.split('Made with Udio')[0].trim();
                     el.setAttribute('data-lang-pt-original', originalText);
@@ -449,7 +499,7 @@
                 }
             });
 
-            // Pré-processamento: Armazena o texto original em Português para a lista de músicas
+            // Pré-processamento: Armazena o texto original em Português para a lista de músicas do Udio
             const musicListItems = document.querySelectorAll('#musicList li');
             musicListItems.forEach(li => {
                 li.setAttribute('data-pt-original', li.textContent.trim());

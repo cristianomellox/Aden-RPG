@@ -38,7 +38,7 @@ function startBackgroundMusic(forceMute = false)
   if (typeof backgroundMusic === 'undefined' || backgroundMusic === null) {
     try {
       backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/aden.mp3");
-      backgroundMusic.volume = 0.1;
+      backgroundMusic.volume = 0.03;
       backgroundMusic.loop = true;
     } catch(e){
       console.warn("Falha ao criar backgroundMusic:", e);

@@ -1440,7 +1440,7 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
     background: none;
     border-radius: 8px;
     box-shadow: 
-        0 0 5px 5px gold,
+        0 0 5px 5px lightblue,
         inset 0 0 10px 2px rgba(255, 255, 255, 0.5);
 }
 #gvg_1 {

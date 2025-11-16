@@ -387,8 +387,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }
       
-      const me = (guildData.players || []).find(p => p.id === userId);
+      // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
+      const allPlayersInGuild = guildData.players || [];
+      const me = allPlayersInGuild.find(p => p.id === userId);
       userRank = me ? me.rank : 'member';
+      
+      // Filtra admins APENAS para exibição e cálculos
+      const visiblePlayers = allPlayersInGuild.filter(p => p.rank !== 'admin');
+      // --- FIM DA LÓGICA ---
 
       const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
       if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
@@ -412,7 +418,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (guildPowerValue === null) {
         try {
-          guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+          // Usa a lista de jogadores visíveis para o cálculo de fallback
+          guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
         } catch(e){ guildPowerValue = 0; }
       }
 
@@ -422,7 +429,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (guildMemberListElement){
         guildMemberListElement.innerHTML = '';
         const roles = ['leader','co-leader','member'];
-        const sorted = (guildData.players || []).slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
+        // Usa a lista de jogadores visíveis para renderizar
+        const sorted = visiblePlayers.slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
         sorted.forEach(m => {
           const li = document.createElement('li');
           li.innerHTML = `
@@ -443,9 +451,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       try{
         const lvlEl = document.getElementById('guildLevelValue');
         const memberCountHeader = document.getElementById('guildMemberCountHeader');
-        const membersFromPlayers = (guildData.players && guildData.players.length) ? guildData.players.length : 0;
+        // Usa a contagem de jogadores visíveis
+        const membersFromPlayers = visiblePlayers.length;
         if (lvlEl) lvlEl.textContent = guildData.level || '1';
         if (memberCountHeader) {
+            // Usa guildData.members_count (do DB) se disponível, senão usa a contagem visível
             const currentMembers = guildData.members_count ?? membersFromPlayers;
             const maxMembers = guildData.max_members || getMaxMembers(guildData.level || 1);
             memberCountHeader.textContent = `${currentMembers} / ${maxMembers}`;
@@ -454,7 +464,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (editGuildBtn){
         editGuildBtn.style.display = 'inline-block';
-        editGuildBtn.onclick = () => openEditGuildModal(guildData);
+        // Passa o guildData original (não modificado) para o modal
+        editGuildBtn.onclick = () => openEditGuildModal(currentGuildData);
       }
 
       if (editGuildBtn) checkGuildNotifications(guildData);
@@ -515,11 +526,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
+        const allPlayersInGuild = guildData.players || [];
+        const visiblePlayers = allPlayersInGuild.filter(p => p.rank !== 'admin');
+        // --- FIM DA LÓGICA ---
+
         const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
         guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
         guildViewDescription.textContent = guildData.description || '';
         guildViewLevelValue.textContent = guildData.level || 1;
-        guildViewMemberCountHeader.textContent = `${(guildData.players || []).length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
+        // Usa a contagem de jogadores visíveis
+        guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
         let guildPowerValue = null;
         try {
@@ -539,7 +556,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (guildPowerValue === null) {
           try {
-            guildPowerValue = (guildData.players || []).reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+            // Usa a lista de jogadores visíveis para o cálculo de fallback
+            guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
           } catch(e){ guildPowerValue = 0; }
         }
 
@@ -548,7 +566,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         guildViewMemberList.innerHTML = '';
         const roles = ['leader', 'co-leader', 'member'];
-        const sorted = (guildData.players || []).slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
+        // Usa a lista de jogadores visíveis para renderizar
+        const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
         sorted.forEach(m => {
             const li = document.createElement('li');
             li.innerHTML = `
@@ -653,8 +672,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function openEditGuildModal(guildData){
     if (!editGuildModal) return;
+
+    // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
+    // Usa a lista de jogadores completa (não filtrada) para checar permissões
+    const allPlayersInGuild = guildData.players || [];
     const isLeader = (guildData.leader_id === userId);
-    const isCoLeader = ((guildData.players || []).find(p => p.id === userId) || {}).rank === 'co-leader';
+    // Checa o rank na lista completa, permitindo que um admin-co-leader mantenha a permissão
+    const isCoLeader = (allPlayersInGuild.find(p => p.id === userId) || {}).rank === 'co-leader';
+    // --- FIM DA LÓGICA ---
 
     $$('#editTabMenu .edit-tab-btn, #editTabs .edit-tab-btn').forEach(btn => {
       const tab = btn.dataset.tab;
@@ -723,7 +748,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (manageMembersList) manageMembersList.innerHTML = '';
-    const members = (guildData.players || []).slice().sort((a,b)=> a.rank === b.rank ? a.name.localeCompare(b.name) : (a.rank === 'leader' ? -1 : (b.rank === 'leader' ? 1 : (a.rank === 'co-leader' ? -1 : 1))));
+    // Filtra admins APENAS para a lista de "Gerenciar Membros"
+    const members = allPlayersInGuild.filter(p => p.rank !== 'admin').slice().sort((a,b)=> a.rank === b.rank ? a.name.localeCompare(b.name) : (a.rank === 'leader' ? -1 : (b.rank === 'leader' ? 1 : (a.rank === 'co-leader' ? -1 : 1))));
     members.forEach(m => {
       if (!manageMembersList) return;
       const li = document.createElement('li');

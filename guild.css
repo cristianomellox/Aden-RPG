@@ -169,13 +169,13 @@
 
 /* Estilos para o Modal de Criação de Guilda */
 .modal {
-    display: none; /* Oculto por padrão */
+    display: flex; /* Oculto por padrão */
     position: fixed;
     z-index: 100;
-    left: 0;
+    left: 0!important;
     top: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 95vh;
     overflow: auto;
     background-color: rgba(0, 0, 0, 0.6);
     justify-content: center;
@@ -189,7 +189,7 @@
     border: 1px solid #555;
     border-radius: 10px;
     width: 80%;
-    max-width: 400px;
+    left: 0;
   
     position: relative;
 }
@@ -1223,10 +1223,10 @@ hr {
   text-align: left;      /* Garante que cada item também seja alinhado à esquerda */
 }
 /* === Correção do modal de tutorial da Raid === */
-#tutorialModalRaid, #tddModalStory {
+#tutorialModalRaid, #tddModalStory, #tutorialModalgvgt {
   overflow-y: auto!important;
   top: 0 !important;
-  width: 97% !important;
+  width: 100vw !important;
   height: 100vh !important;
   justify-content: center !important;
   align-items: flex-start !important;
@@ -1234,13 +1234,13 @@ hr {
   z-index: 13000 !important;
 }
 
-#tutorialModalRaid .modal-content2 p,
-#tutorialModalRaid .modal-content2 li {
+#tutorialModalRaid .modal-content2 p, #tutorialModalgvgt p,
+#tutorialModalRaid .modal-content2 li, #tutorialModalgvgt li {
   text-align: left !important;
   color: white;
 }
-#tutorialModalRaid .modal-content2 h3,
-#tutorialModalRaid .modal-content2 h4 {
+#tutorialModalRaid .modal-content2 h3, #tutorialModalgvgt h3,
+#tutorialModalRaid .modal-content2 h4, #tutorialModalgvgt h4 {
   color: white;
 }
 #tddModalStory .modal-content2 {
@@ -1432,3 +1432,75 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
         text-align: center;
         text-decoration: none; /* Estilizar como botão, mas é um link */
     }
+  #gvgtimg {
+  z-index: 1!important;
+  max-width: 360px;
+    background: none;
+    border-radius: 8px;
+    box-shadow: 
+        0 0 5px 5px gold,
+        inset 0 0 10px 2px rgba(255, 255, 255, 0.5);
+}
+#gvg_1 {
+  position: relative!important;
+  width:100%;
+  height: 100%;
+  display: flex;
+  align-items: center!important;
+  justify-content: center!important;
+}
+#gvgt {
+  position: relative!important;
+  display: flex;
+  align-items: center!important;
+  justify-content: center!important;
+  z-index: 2!important;
+}
+
+.gvgt_desc {
+  font-size: 0.8em;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+  position: absolute!important;
+  margin-left: -65px!important;
+  top: 50px!important;
+  
+    border-radius: none!important;
+    box-shadow: none!important;
+    z-index: 2;
+}
+#gvgtbuttons {
+position: absolute!important;
+  z-index: 4;
+  top: 130px!important;
+  background: none!important;
+    border-radius: none!important;
+    box-shadow: none!important;
+    left: 12px;
+    gap: 20px;
+    display: flex;
+}
+
+.gvgt_h3 {
+font-size: 0.9em;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 4px black;
+  position: absolute;
+  text-align: left;
+  margin-left: -29px;
+  top: -13px;
+  z-index: 2;
+}
+.modal-content2 {
+  padding: 8px!important;
+}

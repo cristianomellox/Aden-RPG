@@ -6,13 +6,15 @@
     margin-bottom: 20px;
     background-color: #2e2e2e;
     border-radius: 8px;
-    padding: 10px;
+    padding: 5px;
     overflow: hidden;
-  
+  left: 0;
+  margin: 0;
+  margin-left: -1rem;
 }
 
 .tab-btn {
-    flex-grow: 1;
+    flex-grow: 0.3;
     padding: 4px 5px;
     /* Remove todos os estilos padrão de botão */
     background: none;
@@ -20,7 +22,7 @@
     cursor: pointer;
     font: inherit;
     outline: inherit;
-
+max-width: 120px;
     /* Estilos para criar a aparência de abas */
     background-color: #444;
     color: white;
@@ -29,7 +31,7 @@
     position: relative;
     z-index: 1;
     text-align: center;
-    top: 10px;
+    top: 7px;
 }
 
 /* Bordas entre as abas para separar visualmente */
@@ -947,9 +949,9 @@ body {
   font-size: 0.6em;
 }
 #tabMenu {
-  width: 98vw;
+  width: 95vw;
   background: none;
-  margin-left: -1.9rem;
+  justify-content: center;
 }
 #editGuildModal {
   font-size: 0.8em;

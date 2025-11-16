@@ -31,7 +31,7 @@
             <span class="tab-btn" data-tab="taverna">Taverna</span>
             <span class="tab-btn" data-tab="ranking">Ranking</span>
             <span class="tab-btn" data-tab="raid">Raid</span>
-            <span class="tab-btn" data-tab="batalhas">Batalhas</span>
+            <span class="tab-btn" data-tab="batalhas">Batalha</span>
         </div>
 
         <div id="tabContent">
@@ -218,7 +218,17 @@
             </div>
 
             <div id="batalhas" class="tab-pane">
-                <p>Conteúdo de Batalhas será adicionado aqui.</p>
+                 <center><h3>Batalha de Guilda</h3></center>
+              <div id="gvg_1">
+               
+                <div id="gvgt">
+                  <h3 class="gvgt_h3">Batalha por Territórios</h3>
+                  <span class="gvgt_desc" style="background-color: rgba(0, 0, 0, 0.5);" onclick="window.location.href='guild_battle.html'"><strong>Registro:</strong> Sábado 21h00.<br><strong>Batalha:</strong> Domingo 20h30.</span>
+                  <div id="gvgtbuttons">
+                   <img id="gvgttuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:45px; height:45px;">
+                   </div>
+                <img id="gvgtimg" src="https://aden-rpg.pages.dev/assets/gvg_cidades.webp" style="width: 90vw; height: 180px; background: none;" onclick="window.location.href='guild_battle.html'">
+      </div>  </div>    
             </div>
         </div>
     </div>
@@ -501,6 +511,88 @@ O tempo de preparação é de 10 minutos.</li></ul>
     </div>
 </div>
 
+<div id="tutorialModalgvgt" class="modal-overlay2" style="display: none;">
+    <div class="modal-content2">
+        <center><h3>Guia Completo da Batalha por Territórios</h3></center>
+        <p>Seja bem-vindo, guerreiro! A Batalha por Territórios é um evento de guilda, onde o poder e a estratégia da sua aliança decidem o controle de cidades vitais.</p>
+        <hr>
+
+        <center><h4>1. Fase de Registro</h4></center>
+        <p>A Batalha por Territórios ocorre semanalmente. Sua guilda deve se registrar para desafiar uma cidade:</p>
+        <ul>
+            <li><strong>Prazo Final:</strong> O registro abre no <strong>Sábado às 21:00</strong> e fecha no <strong>Domingo às 20:00</strong>.</li>
+            <li><strong>Limite de Desafios:</strong> Apenas 4 guildas podem se registrar para disputar cada cidade.</li>
+            <li><strong>Ação Necessária:</strong> Um líder ou co-líder da guilda deve escolher a cidade para o registro.</li>
+        </ul>
+        
+        <center><h4>1.2 Combate</h4></center>
+        <p>A batalha começa no <strong>Domingo às 20:30</strong> e tem duração de <strong>30 minutos</strong>.</p>
+<hr>
+        <center><h4>2. O Campo de Batalha</h4></center>
+        <p>Cada cidade possui <strong>5 Objetivos</strong> que devem ser atacados e dominados para acumular <strong>Pontos de Honra</strong>:</p>
+        <ul>
+            <li><strong>O Nexus (1 Ponto):</strong> Objetivo central, com 600.000 HP.</li>
+            <li><strong>Pontos de Controle (4 Pontos):</strong> Objetivos secundários, cada um com 300.000 HP.</li>
+        </ul>
+        <p>A guilda com mais Pontos de Honra no final da batalha vence e conquista a cidade.</p>
+        <hr>
+
+        <center><h4>3. Ações de Batalha e Combate</h4></center>
+        <p>Sua participação é limitada por <strong>Ações de Batalha</strong>:</p>
+        <ul>
+            <li><strong>Limite Máximo:</strong> Você pode acumular um máximo de <strong>3 Ações</strong>.</li>
+            <li><strong>Recuperação:</strong> Você recupera <strong>1 Ação</strong> a cada <strong>60 segundos</strong> (1 minuto).</li>
+            <li><strong>Comprando Ações:</strong> Você pode comprar reforços com Ouro (Pacote 1: 3 Ações / Pacote 2: 5 Ações).</li>
+        </ul>
+        <p>Você pode usar suas ações de duas formas:</p>
+        <ul>
+            <li><strong>ATACAR (Custo: 1 Ação):</strong> Causa dano ao objetivo. O dano primeiro atinge a Guarnição dos inimigos e só depois o HP principal do Objetivo.</li>
+            <li><strong>GUARNECER (Custo: 1 Ação):</strong> Junta-se à Guarnição de um Objetivo dominado pela sua guilda, aumentando o HP de defesa do ponto.</li>
+        </ul>
+        <hr>
+
+        <center><h4>4. Captura e Pontuação</h4></center>
+        <p>Ao zerar o HP principal de um Objetivo, a guilda que causou o maior dano total o captura e ganha Honra:</p>
+        <ul>
+            <li><strong>Captura do Nexus:</strong> <strong>+300 Pontos de Honra</strong> distribuídos entre as guildas que atacaram de acordo com seu dano.</li>
+            <li><strong>Captura de Ponto de Controle:</strong> <strong>+100 Pontos de Honra</strong> distribuídos entre as guildas que atacaram de acordo com seu dano.</li>
+            <li><strong>Perda:</strong> A guilda que perde o objetivo é penalizada na mesma quantidade de Honra.</li>
+        </ul>
+        <hr>
+
+        <center><h4>5. Recompensas</h4></center>
+        <p>As recompensas são distribuídas para as guildas que terminarem nas 3 primeiras posições e apenas para os jogadores que participaram ativamente (causaram dano):</p>
+        <table style="width: 100%; border-collapse: collapse; text-align: left; color: white;">
+            <thead>
+                <tr>
+                    <th style="padding: 5px; border-bottom: 1px solid #444;">Classificação</th>
+                    <th style="padding: 5px; border-bottom: 1px solid #444;">Recompensas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding: 5px;"><strong>1º Lugar</strong></td>
+                    <td style="padding: 5px;">4 Cartões de Espiral Avançado, 50 Pedras de Refundição e 3000 Cristais.</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;"><strong>2º Lugar</strong></td>
+                    <td style="padding: 5px;">6 Cartões de Espiral Comum, 20 Pedras de Refundição e 1000 Cristais.</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;"><strong>3º Lugar</strong></td>
+                    <td style="padding: 5px;">4 Cartões de Espiral Comum, 10 Pedras de Refundição e 500 Cristais.</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>O jogador top 1 de dano terá suas recompensas triplicadas (se for da guilda vencedora).<br>
+        O jogador top 2 de dano terá suas recompensas duplicadas (se for da guilda vencedora).</p>
+
+        <p>Participe, planeje seus ataques e guarnições para levar sua guilda à vitória!</p>
+        <center><button id="closegvgtTutorialBtn" class="action-btn">Fechar</button></center>
+    </div>
+</div>
+
+
 <script>
         document.addEventListener("DOMContentLoaded", () => {
             const tavtutoImg = document.getElementById("tavtuto");
@@ -551,6 +643,33 @@ O tempo de preparação é de 10 minutos.</li></ul>
                 window.addEventListener("click", (event) => {
                     if (event.target === tutorialModalRaid) {
                         tutorialModalRaid.style.display = "none";
+                    }
+                });
+            }
+        });
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const gvgttutoImg = document.getElementById("gvgttuto");
+            const tutorialModalgvgt = document.getElementById("tutorialModalgvgt");
+            const closegvgtTutorialBtn = document.getElementById("closegvgtTutorialBtn");
+
+            if (gvgttutoImg) {
+                gvgttutoImg.addEventListener("click", () => {
+                    tutorialModalgvgt.style.display = "flex";
+                });
+            }
+
+            if (closegvgtTutorialBtn) {
+                closegvgtTutorialBtn.addEventListener("click", () => {
+                    tutorialModalgvgt.style.display = "none";
+                });
+            }
+
+            if (tutorialModalgvgt) {
+                window.addEventListener("click", (event) => {
+                    if (event.target === tutorialModalgvgt) {
+                        tutorialModalgvgt.style.display = "none";
                     }
                 });
             }

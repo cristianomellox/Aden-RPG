@@ -1506,3 +1506,9 @@ font-size: 0.9em;
 .modal-content2 {
   padding: 8px!important;
 }
+#guildPower {
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, white, orange, orange);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
+}

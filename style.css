@@ -1936,4 +1936,9 @@ margin-right: 15px;
 .auth-side-btn:hover {
   opacity: 0.8; /* Efeito simples ao passar o mouse */
 }
-/* Fim dos estilos para os botões laterais */
+#countdownTop, .preh1 {
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
+}

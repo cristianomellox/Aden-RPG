@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pré-Registro - Aden RPG</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div id="authContainer" style="display:flex;">
+
+    <div id="authSideButtons">
+        <a href="suporte.html" class="auth-side-btn">
+            <img src="https://aden-rpg.pages.dev/assets/suporte.webp" style="width:40px;height:40px">
+            <span>Suporte</span>
+        </a>
+        <a href="sobre.html" class="auth-side-btn">
+            <img src="https://aden-rpg.pages.dev/assets/sobre.webp" style="width:40px;height:40px">
+            <span>Sobre</span>
+        </a>
+    </div>
+
+    <div id="topCountdown"
+         style="text-align:center; margin-bottom:25px; background:rgba(0,0,0,0.35);
+                padding:12px; border-radius:8px; width:90vw; max-width:420px;">
+        <h3 class="preh1" style="margin:0;">Lançamento Oficial:</h3>
+        <h1 id="countdownTop" style="font-size:1.8em;margin:5px 0 0 0;">00 00:00:00</h1>
+    </div>
+
+    <div id="caixaLogin">
+        <h2>Pré-Registro</h2>
+
+        <input id="emailInput" type="email" placeholder="Seu e-mail" />
+
+        <div id="otpInputContainer" style="display:none;">
+            <input id="otpInput" type="text" placeholder="Código de confirmação" />
+            <button id="verifyOtpBtn">Confirmar Código</button>
+        </div>
+
+        <div id="btnReg">
+            <button id="signUpBtn">Registrar</button>
+        </div>
+
+        <p id="authMessage"></p>
+
+        <p style="background-color:rgba(51,51,51,0.8); text-align:center; border-radius:5px;
+                  width:85vw; font-size:0.9em; padding:5px 0; margin-top:10px; color:#ccc;">
+            &copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados.
+        </p>
+    </div>
+</div>
+
+<script>
+/* ============================================================
+   🎵 LÓGICA DA MÚSICA — MESMA DO script.js (REDUZIDA)
+   ============================================================ */
+
+let musicStarted = false;
+let backgroundMusic = null;
+
+function startBackgroundMusic(forceMute = false) {
+    if (!backgroundMusic) {
+        backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/aden.mp3");
+        backgroundMusic.volume = 0.3;
+        backgroundMusic.loop = true;
+    }
+
+    if (musicStarted && !forceMute && backgroundMusic.muted) {
+        backgroundMusic.muted = false;
+        return;
+    }
+
+    if (musicStarted && !forceMute) return;
+
+    backgroundMusic.muted = forceMute;
+
+    const playPromise = backgroundMusic.play();
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            musicStarted = true;
+        }).catch(() => {
+            backgroundMusic.muted = true;
+            backgroundMusic.play().then(() => {
+                musicStarted = true;
+                function onFirstGesture() {
+                    backgroundMusic.muted = false;
+                    window.removeEventListener("pointerdown", onFirstGesture);
+                }
+                window.addEventListener("pointerdown", onFirstGesture, { once:true });
+            });
+        });
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const events = ["click","pointerdown","touchstart","mousedown","keydown"];
+    for (const ev of events) {
+        window.addEventListener(ev, () => startBackgroundMusic());
+        document.body.addEventListener(ev, () => startBackgroundMusic());
+    }
+});
+
+/* ============================================================
+   ⏳ CONTADOR (24/01)
+   ============================================================ */
+
+const releaseDate = new Date("2025-11-24T20:00:00");
+
+function formatTime(n){ return n < 10 ? "0"+n : n; }
+
+function startCountdown(){
+    const topEl = document.getElementById("countdownTop");
+
+    setInterval(()=>{
+        const now = new Date();
+        const diff = releaseDate - now;
+
+        if (diff <= 0) {
+            topEl.innerText = "Já disponível!";
+            return;
+        }
+
+        const d = Math.floor(diff/(1000*60*60*24));
+        const h = Math.floor((diff%(1000*60*60*24))/(1000*60*60));
+        const m = Math.floor((diff%(1000*60*60))/(1000*60));
+        const s = Math.floor((diff%(1000*60))/1000);
+
+        // FORMATO ATUALIZADO: dias (d) + 'D', seguido por HH:MM:SS
+        topEl.innerText = `${d}D ${formatTime(h)}:${formatTime(m)}:${formatTime(s)}`;
+    },1000);
+}
+startCountdown();
+
+/* ============================================================
+   📧 PRÉ-REGISTRO (TOKEN)
+   ============================================================ */
+
+const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+document.getElementById("signUpBtn").addEventListener("click", async () =>{
+    const email = document.getElementById("emailInput").value.trim();
+    const msg = document.getElementById("authMessage");
+
+    if (!email) {
+        msg.innerText = "Digite seu e-mail";
+        return;
+    }
+
+    const { error } = await supabaseClient.auth.signInWithOtp({ email });
+    if (error) {
+        msg.innerText = error.message;
+        return;
+    }
+
+    msg.innerText = "Código enviado ao seu e-mail.";
+    document.getElementById("otpInputContainer").style.display = "block";
+});
+
+
+document.getElementById("verifyOtpBtn").addEventListener("click", async ()=>{
+    const email = document.getElementById("emailInput").value.trim();
+    const token = document.getElementById("otpInput").value.trim();
+    const msg = document.getElementById("authMessage");
+
+    const { error } = await supabaseClient.auth.verifyOtp({
+        email,
+        token,
+        type: "email"
+    });
+
+    if (error) {
+        msg.innerText = error.message;
+        return;
+    }
+
+    msg.innerText = "Pré-registro concluído!";
+    document.getElementById("otpInputContainer").style.display = "none";
+});
+</script>
+
+</body>
+</html>

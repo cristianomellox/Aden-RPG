@@ -1512,3 +1512,9 @@ font-size: 0.9em;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent; 
 }
+#raidCountdownTimer {
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
+}

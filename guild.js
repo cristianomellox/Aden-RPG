@@ -397,7 +397,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       // --- FIM DA LÓGICA ---
 
       const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-      if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
+      if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:155px;margin-right:8px;border-radius:6px; margin-top: 14px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
       if (guildDescriptionEl) guildDescriptionEl.textContent = guildData.description || '';
 
       let guildPowerValue = null;
@@ -532,7 +532,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // --- FIM DA LÓGICA ---
 
         const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-        guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:140px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
+        guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:150px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
         guildViewDescription.textContent = guildData.description || '';
         guildViewLevelValue.textContent = guildData.level || 1;
         // Usa a contagem de jogadores visíveis
@@ -978,7 +978,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           li.className = 'search-item-clickable';
           if (g.id) { li.dataset.guildId = g.id; }
           else { console.error('Guilda inválida nos resultados de busca:', g); return; }
-          li.innerHTML = `<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="${g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" style="width:100px;height:100px;border-radius:4px;"><div><br><strong>${g.name}</strong><div style="font-size:0.9em;color:white;">${g.description||''}</div><div style="font-size:0.85em; color: white;">Membros: ${g.members_count||0}/${g.max_members||0}</div></div></div>`;
+          li.innerHTML = `<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="${g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" style="width:100px;height:110px;border-radius:4px;"><div><br><strong>${g.name}</strong><div style="font-size:0.9em;color:white;">${g.description||''}</div><div style="font-size:0.85em; color: white;">Membros: ${g.members_count||0}/${g.max_members||0}</div></div></div>`;
           const btnImg = document.createElement('img');
           btnImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
           btnImg.alt = "Solicitar Entrada";

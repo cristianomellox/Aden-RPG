@@ -870,6 +870,29 @@ function checkGarrisonLeaveAndExecute(actionCallback) {
     modals.garrisonLeave.style.display = 'flex';
 }
 
+// =================================================================
+// CORREÇÃO DA LOJA: Função adicionada que estava faltando
+// =================================================================
+function openBattleShop() {
+    // Limpa mensagens anteriores
+    if (modals.battleShopMessage) {
+        modals.battleShopMessage.textContent = "";
+    }
+    
+    // Reabilita os botões caso tenham ficado travados em loading
+    if (modals.shopBtnPack1) {
+        modals.shopBtnPack1.disabled = false;
+        modals.shopBtnPack1.textContent = "Comprar";
+    }
+    if (modals.shopBtnPack2) {
+        modals.shopBtnPack2.disabled = false;
+        modals.shopBtnPack2.textContent = "Comprar";
+    }
+
+    // Exibe o modal
+    modals.battleShop.style.display = 'flex';
+}
+
 async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     btnEl.disabled = true;
     modals.battleShopMessage.textContent = "Processando...";

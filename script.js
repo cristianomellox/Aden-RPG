@@ -648,11 +648,16 @@ async function verifyOtp() {
 }
 
 async function signOut() {
+    // --- CORREÇÃO DE CACHE APLICADA ---
+    // Limpa explicitamente o cache do jogador antes de sair e recarregar
+    // Isso previne que o próximo usuário veja os dados do anterior
+    localStorage.removeItem('player_data_cache');
+    
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
         console.error('Erro ao sair:', error.message);
     }
-        window.location.reload();
+    window.location.reload();
 }
 
 // Função helper para renderizar a UI com os dados do jogador
@@ -820,7 +825,14 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     checkProgressionNotifications(playerWithEquips);
 
     if (playerWithEquips.name === 'Nome') {
-        document.getElementById('editPlayerName').value = '';
+        // --- CORREÇÃO DO AVATAR APLICADA ---
+        // Chama a função global do perfil_edit.js para carregar os avatares
+        if (typeof window.updateProfileEditModal === 'function') {
+            window.updateProfileEditModal(playerWithEquips);
+        }
+
+        const nameInput = document.getElementById('editPlayerName');
+        if (nameInput) nameInput.value = '';
         profileEditModal.style.display = 'flex';
     }
 }

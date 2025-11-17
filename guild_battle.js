@@ -29,10 +29,7 @@ let processedCaptureTimestamps = new Set();
 let lastCaptureTimestamp = '1970-01-01T00:00:00+00:00'; 
 
 const CITIES = [
-    { id: 1, name: 'Capital' }, { id: 2, name: 'Zion' },
-    { id: 3, name: 'Elendor' }, { id: 4, name: 'Mitrar' },
-    { id: 5, name: 'Tandra' }, { id: 6, name: 'Astrax' },
-    { id: 7, name: 'Duratar' }
+    { id: 1, name: 'Capital' }
 ];
 
 const GUILD_COLORS = [
@@ -1190,7 +1187,7 @@ function startGlobalUITimer() {
                 }
                 
                 const timeToOpen = Math.max(0, Math.floor((nextSunday - now) / 1000));
-                registrationTimer.textContent = `Registro abre em: ${formatTime(timeToOpen)}`;
+                registrationTimer.innerHTML = `Registro abre em: <br><span id="timerreg">${formatTime(timeToOpen)}</span>`;
             }
             updateCityRegistrationButtons();
         }

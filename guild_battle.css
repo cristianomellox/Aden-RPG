@@ -648,3 +648,13 @@
     /* Garante que a imagem de fundo seja mantida se o estilo base :disabled a remover */
     background-image: url('https://aden-rpg.pages.dev/assets/botao.webp');
 }
+.tab-btn {
+  max-width: 400px!important;
+}
+#timerreg, #waitTimer {
+  font-size: 2em;
+  text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

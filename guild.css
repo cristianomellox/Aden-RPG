@@ -191,7 +191,7 @@ max-width: 120px;
     border: 1px solid #555;
     border-radius: 10px;
     width: 80%;
-    left: 0;
+    
   
     position: relative;
 }
@@ -859,6 +859,11 @@ body {
 }
 #confirmModal {
   width: 100vw;
+  display: flex;
+  justify-content: center;
+  position: absolute!important;
+  left: 50%!important;
+  top: 50%;
 }
 #promptModal .modal-content {
     max-width: 400px;

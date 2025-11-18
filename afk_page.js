@@ -208,18 +208,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         damageNum.addEventListener("animationend", () => damageNum.remove());
     }
 
-    // NOVA FUNÇÃO: Calcula o HP do monstro com base no estágio
-    function calculateMonsterHp(stage) {
-        const baseHp = 100;
-        if (stage <= 15) {
-            return baseHp + (stage - 1) * 97;
-        } else {
-            const hpAtStage20 = baseHp + (15 - 1) * 97; // HP no estágio 20
-            const stagesAbove20 = stage - 15;
-            return hpAtStage20 + stagesAbove20 * 1533;
-        }
-    }
-
     // 🎯 Event listeners
     musicPermissionBtn.addEventListener("click", () => {
         musicPermissionModal.style.display = "none";
@@ -235,16 +223,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     startAfkBtn.addEventListener("click", async () => {
         if (startAfkCooldownActive || !userId) return;
         
-        const currentStage = playerAfkData.current_afk_stage ?? 1;
-        const monsterBaseHealth = calculateMonsterHp(currentStage);
-
-        const { data, error } = await supabase.rpc('perform_afk_combat', { 
-            p_player_id: userId,
-            p_monster_base_health: monsterBaseHealth,
-            p_attacks_limit: 10
+        // NÃO calculamos mais o HP aqui. O Backend decide.
+        const { data, error } = await supabase.rpc('start_afk_adventure', { 
+            p_player_id: userId
         });
 
-        // ✅ Trate corretamente mensagens de erro do SQL
         if (error || !data?.success) {
             const message = data?.message || data?.error || error?.message || "Ocorreu um erro ao iniciar a aventura.";
             console.error("Erro ao iniciar aventura AFK:", error || data);
@@ -276,9 +259,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 monsterHpBar.style.display = 'flex';
                 attacksLeftSpan.style.display = 'block';
 
-                const monsterMaxHp = calculateMonsterHp(playerAfkData.current_afk_stage);
-                let currentMonsterHp = monsterMaxHp;
+                // 🔑 O SEGREDO: Usamos o HP devolvido pelo Backend.
+                const monsterMaxHp = data.monster_hp_inicial; 
+                let currentMonsterHp = monsterMaxHp; 
+                
                 monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
+                monsterHpFill.style.width = '100%'; 
 
                 const attackLog = data.attacks || [];
                 attacksLeftSpan.textContent = attackLog.length;
@@ -299,7 +285,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                         currentMonsterHp = Math.max(0, currentMonsterHp - attack.damage);
                         monsterHpFill.style.width = `${(Math.max(0, currentMonsterHp) / monsterMaxHp) * 100}%`;
-                        monsterHpValueSpan.textContent = `${(currentMonsterHp)} / ${(monsterMaxHp)}`;
+                        monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
 
                         currentAttackIndex++;
                         attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
@@ -308,7 +294,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     } else {
                         const message = data.venceu
                             ? `Monstro derrotado! Ganhou ${formatNumberCompact(data.xp_ganho)} XP e ${formatNumberCompact(data.gold_ganho)} Ouro!`
-                            : `Você não derrotou o monstro. Ele ainda tem ${formatNumberCompact(data.monstro_hp_restante)} HP.`;
+                            : `Você não derrotou o monstro. Ele recuperou a vida para a próxima batalha.`;
+                        
                         resultText.textContent = message;
                         resultModal.style.display = "block";
                         if (data.leveled_up) showLevelUpBalloon(data.new_level);

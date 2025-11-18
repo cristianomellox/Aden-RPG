@@ -166,7 +166,7 @@
             color: #e0dccc;
         }
         
-        /* NOVO: Estilo para a Música da Tela Inicial Separada */
+        /* Estilo para a Música da Tela Inicial Separada */
         #initialScreenMusic {
             margin-bottom: 20px;
             padding: 15px;
@@ -186,7 +186,7 @@
             color: #c9a94a;
         }
 
-        /* NOVO: Estilos para o Modal de Início de Música */
+        /* Estilos para o Modal de Início de Música */
         #music-modal-overlay {
             position: fixed;
             top: 0;
@@ -234,7 +234,7 @@
             background-color: #e0dccc;
         }
         
-        /* NOVO: Estilos do Rodapé de Copyright */
+        /* Estilos do Rodapé de Copyright */
         #copyright-footer {
             text-align: center;
             padding: 10px;
@@ -246,14 +246,20 @@
             margin-top: auto; /* Garante que fique no final */
         }
         
-        /* NOVO: Estilos para os botões de Termos e Política */
+        /* Estilos para o link do Discord */
+        #discord-link-container {
+            margin-top: 30px; /* Espaço acima */
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            text-align: center; /* Centraliza o botão */
+        }
+
+        /* Estilos para os botões de Termos e Política */
         .policy-links-container {
             display: flex; /* Habilita flexbox para layout em linha */
             justify-content: center; /* Centraliza os botões horizontalmente */
             gap: 15px; /* Espaço entre os botões */
-            margin-top: 30px; /* Espaço acima */
-            padding-top: 15px;
-            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 15px; /* Espaço acima do container de política, abaixo do Discord */
         }
 
         .policy-button {
@@ -270,6 +276,15 @@
             transition: background-color 0.2s, border-color 0.2s;
             flex-grow: 1; /* Permite que os botões cresçam para ocupar o espaço */
             max-width: 250px; /* Limite de largura para botões em telas grandes */
+            display: block; /* Garante que o link funcione como um bloco para o padding */
+        }
+
+        .policy-button.discord-button {
+            max-width: 400px; /* Permite que o botão Discord seja um pouco mais largo, se necessário */
+            margin: 0 auto;
+            display: flex; /* Habilita flexbox para alinhar ícone e texto */
+            align-items: center; /* Alinha verticalmente */
+            justify-content: center; /* Centraliza o conteúdo (ícone + texto) */
         }
 
         .policy-button:hover {
@@ -277,7 +292,7 @@
             border-color: #c9a94a;
         }
         
-        /* NOVO: Estilo para a lista de agradecimentos especiais */
+        /* Estilo para a lista de agradecimentos especiais */
         .special-thanks-list {
             list-style: none;
             padding-left: 0;
@@ -289,6 +304,27 @@
             font-weight: bold;
             color: #c9a94a;
         }
+        
+        /* Ícone do Discord - ATUALIZADO PARA USAR IMG */
+        .discord-icon-img {
+            width: 30px; /* Tamanho do ícone */
+            height: 30px;
+            margin-right: 10px; /* Espaço entre o ícone e o texto */
+            object-fit: contain;
+        }
+
+        /* O antigo .discord-icon não será mais usado, mas pode ser removido. 
+        .discord-icon {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            margin-right: 10px; 
+            background-image: url('http://googleusercontent.com/image_generation_content/0'); 
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        */
 
     </style>
 </head>
@@ -391,6 +427,26 @@
             <li>Alexandr Zhelanov</li>
             <li>Cristina Almeida</li>
         </ul>
+        
+        <h2 data-i18n="title5" data-lang-en="Social Media">Redes Sociais</h2>
+<span style="text-align: center;">Participe de nosso grupo no Discord e interaja com outros aventureiros de Aden, promova ou busque guilda, além de recebar periodicamente códigos de resgate de recompensas:</span>
+        <div id="discord-link-container" style="margin-top: -10px;">
+            <a 
+                href="https://discord.gg/bR83bknt" 
+                class="policy-button discord-button" 
+                data-i18n="discord_server" 
+                data-lang-en="Aden RPG Online"
+            >
+                <img 
+                    style="width: 50px; height: 50px;" src="https://aden-rpg.pages.dev/assets/discord_icon.png" 
+                    alt="Ícone do Discord" 
+                    class="discord-icon-img"
+                />
+                Aden RPG Online
+            </a>
+        </div>
+        
+        <h2 data-i18n="title6" data-lang-en="Read Me">Leia me</h2>
 
         <div class="policy-links-container">
             <a 
@@ -441,15 +497,23 @@
                 if (isEnglish) {
                     textToUse = el.getAttribute('data-lang-en');
                 } else {
-                    textToUse = el.getAttribute('data-lang-pt-original');
+                    // Use o texto original em Português
+                    textToUse = el.getAttribute('data-lang-pt-original') || el.textContent.trim();
                 }
                 
                 if (el.classList.contains('udio-credit')) {
                     // Caso especial para o bloco Udio que tem a tag <strong> fixa
                     el.innerHTML = textToUse + '<br><strong>Made with Udio</strong>';
                 } else {
+                    // Se for o link do Discord, só atualiza o texto, mantendo o ícone.
+                    if (el.classList.contains('discord-button')) {
+                        const iconImg = el.querySelector('.discord-icon-img'); // Busca pela nova classe
+                        el.innerHTML = ''; // Limpa o conteúdo
+                        if(iconImg) el.appendChild(iconImg.cloneNode(true)); // Adiciona a imagem de volta (cloneNode(true) para incluir atributos)
+                        el.appendChild(document.createTextNode(textToUse)); // Adiciona o texto
+                    }
                     // Se for um link de política/termo, o texto é o próprio elemento
-                    if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+                    else if (el.tagName === 'A' || el.tagName === 'BUTTON') {
                         el.textContent = textToUse;
                     } else {
                         el.textContent = textToUse;
@@ -498,6 +562,32 @@
                     el.setAttribute('data-lang-pt-original', el.textContent.trim());
                 }
             });
+            
+            // Ajuste para o botão Discord, garantindo que o texto inicial seja apenas "Aden RPG Online"
+            const discordButton = document.querySelector('.discord-button');
+            if (discordButton) {
+                // Certifica-se de que o texto base (português) é apenas "Aden RPG Online"
+                discordButton.setAttribute('data-lang-pt-original', 'Aden RPG Online');
+                
+                // IMPORTANTE: Remove o elemento .discord-icon antigo se ainda estiver no DOM 
+                const oldIconSpan = discordButton.querySelector('.discord-icon');
+                if (oldIconSpan) {
+                    oldIconSpan.remove();
+                }
+                
+                // Garante que o texto está após a imagem, se houver:
+                const iconImg = discordButton.querySelector('.discord-icon-img');
+                const currentText = discordButton.textContent.trim();
+                
+                // Se o texto não for o desejado, corrigimos
+                if (currentText !== 'Aden RPG Online') {
+                    discordButton.textContent = ''; // Limpa tudo
+                    if (iconImg) {
+                        discordButton.appendChild(iconImg); // Adiciona a imagem
+                    }
+                    discordButton.appendChild(document.createTextNode('Aden RPG Online')); // Adiciona o texto
+                }
+            }
 
             // Pré-processamento: Armazena o texto original em Português para a lista de músicas do Udio
             const musicListItems = document.querySelectorAll('#musicList li');
@@ -513,7 +603,7 @@
             setLanguage('pt'); 
 
             // ====================================================================
-            // NOVO: Lógica de Música e Modal (Início da Música)
+            // Lógica de Música e Modal (Início da Música)
             // ====================================================================
             const modalOverlay = document.getElementById('music-modal-overlay');
             const okButton = document.getElementById('music-modal-ok-btn');

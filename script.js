@@ -202,7 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
     catch(e){ return false; }
   }
 
-  if (window.__introSeen && !_forceShowIntroFromUrl()) return;
+  
 
   // Create modal element using site's modal classes
   const modal = document.createElement('div');
@@ -824,7 +824,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     // Verifica notificações de progressão
     checkProgressionNotifications(playerWithEquips);
 
-    if (playerWithEquips.name === 'Nome') {
+    if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
+
         // --- CORREÇÃO DO AVATAR APLICADA ---
         // Chama a função global do perfil_edit.js para carregar os avatares
         if (typeof window.updateProfileEditModal === 'function') {

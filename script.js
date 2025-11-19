@@ -732,7 +732,7 @@ function applyItemBonuses(player, equippedItems) {
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     
     const PLAYER_CACHE_KEY = 'player_data_cache';
-    const PLAYER_CACHE_TTL = 5; // 5 minutos. 24 horas (1440) quebraria a UI.
+    const PLAYER_CACHE_TTL = 1; // 5 minutos. 24 horas (1440) quebraria a UI.
 
     // 1. Tenta usar o cache se forceRefresh NÃO for true
     if (!forceRefresh) {

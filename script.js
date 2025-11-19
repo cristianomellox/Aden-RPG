@@ -190,13 +190,15 @@ document.addEventListener("DOMContentLoaded", () => {
 // =======================================================================
 
 (function(){
-  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v18';
+  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v19';
   const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
   const FORCE_SHOW_PARAM = 'show_intro';
 
   window.__introPlaying = false;
   window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
-
+if (window.__introSeen && !_forceShowIntroFromUrl()) {
+    return; // <--- ESTA É A LINHA QUE IMPEDE A EXIBIÇÃO
+}
   function _forceShowIntroFromUrl() {
     try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; }
     catch(e){ return false; }

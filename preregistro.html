@@ -30,7 +30,23 @@
     </div>
 
     <div id="caixaLogin">
-       
+        <h2>Pré-Registro</h2>
+
+        <!-- EMAIL -->
+        <input id="emailInput" type="email" placeholder="Seu e-mail" />
+
+        <!-- SENHA (IGUAL AO index.html) -->
+        <input id="passwordInput" type="password" placeholder="Sua senha" />
+
+        <!-- OTP -->
+        <div id="otpInputContainer" style="display:none;">
+            <input id="otpInput" type="text" placeholder="Código de confirmação" />
+            <button id="verifyOtpBtn">Confirmar Código</button>
+        </div>
+
+        <div id="btnReg">
+            <button id="signUpBtn">Registrar</button>
+        </div>
 
         <p id="authMessage"></p>
 
@@ -43,9 +59,8 @@
 
 <script>
 /* ============================================================
-   🎵 LÓGICA DA MÚSICA — MESMA DO script.js (REDUZIDA)
+   🎵 LÓGICA DA MÚSICA (MESMA DO script.js)
    ============================================================ */
-
 let musicStarted = false;
 let backgroundMusic = null;
 
@@ -94,11 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ============================================================
    ⏳ CONTADOR (24/01)
    ============================================================ */
-
-const releaseDate = new Date("2025-11-24T20:00:00");
-
+const releaseDate = new Date("2025-11-22T10:00:00");
 function formatTime(n){ return n < 10 ? "0"+n : n; }
-
 function startCountdown(){
     const topEl = document.getElementById("countdownTop");
 
@@ -116,14 +128,13 @@ function startCountdown(){
         const m = Math.floor((diff%(1000*60*60))/(1000*60));
         const s = Math.floor((diff%(1000*60))/1000);
 
-        // FORMATO ATUALIZADO: dias (d) + 'D', seguido por HH:MM:SS
         topEl.innerText = `${d}D ${formatTime(h)}:${formatTime(m)}:${formatTime(s)}`;
     },1000);
 }
 startCountdown();
 
 /* ============================================================
-   📧 PRÉ-REGISTRO (TOKEN)
+   📧 PRÉ-REGISTRO COM SENHA (IGUAL AO index.html)
    ============================================================ */
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
@@ -132,23 +143,28 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 document.getElementById("signUpBtn").addEventListener("click", async () =>{
     const email = document.getElementById("emailInput").value.trim();
+    const password = document.getElementById("passwordInput").value.trim();
     const msg = document.getElementById("authMessage");
 
-    if (!email) {
-        msg.innerText = "Digite seu e-mail";
-        return;
-    }
+    if (!email) return msg.innerText = "Digite seu e-mail";
+    if (!password) return msg.innerText = "Digite uma senha";
 
-    const { error } = await supabaseClient.auth.signInWithOtp({ email });
+    msg.innerText = "Enviando código...";
+
+    const { error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: window.location.origin }
+    });
+
     if (error) {
         msg.innerText = error.message;
         return;
     }
 
-    msg.innerText = "Código enviado ao seu e-mail.";
+    msg.innerText = "Código enviado ao seu e-mail!";
     document.getElementById("otpInputContainer").style.display = "block";
 });
-
 
 document.getElementById("verifyOtpBtn").addEventListener("click", async ()=>{
     const email = document.getElementById("emailInput").value.trim();
@@ -158,7 +174,7 @@ document.getElementById("verifyOtpBtn").addEventListener("click", async ()=>{
     const { error } = await supabaseClient.auth.verifyOtp({
         email,
         token,
-        type: "email"
+        type: "signup"
     });
 
     if (error) {
@@ -166,8 +182,26 @@ document.getElementById("verifyOtpBtn").addEventListener("click", async ()=>{
         return;
     }
 
-    msg.innerText = "Pré-registro concluído!";
-    document.getElementById("otpInputContainer").style.display = "none";
+    /* ============================================================
+       🆕 NOVO COMPORTAMENTO APÓS CONFIRMAR O CÓDIGO
+       ============================================================ */
+    const caixa = document.getElementById("caixaLogin");
+
+    caixa.innerHTML = `
+        <h2 style="text-align:center;">Pré-Registro Concluído!</h2>
+        <p style="
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 10px;
+            color: #ddd;
+            font-size: 1.1em;
+        ">
+            Seu pré-registro foi realizado com sucesso.<br><br>
+            Assim que o lançamento acontecer, você poderá fazer o login com o e-mail e senha que você cadastrou.
+        </p>
+    `;
 });
 </script>
 

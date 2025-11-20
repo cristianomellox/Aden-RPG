@@ -1,4 +1,4 @@
-// arena.js — versão final com correção de avatares + caching total + SFX de streak
+// arena.js — versão final com correção de avatares + caching total + SFX de streak + Correção de Tentativas + Pausa ao Sair
 document.addEventListener("DOMContentLoaded", async () => {
     // --- Configuração do Supabase ---
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -391,28 +391,44 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- PvP: fluxo de desafio e animação ---
     
-    // >>> ESTE BLOCO FOI ATUALIZADO <<<
+    // >>> ESTE BLOCO FOI ATUALIZADO PARA CORRIGIR O BUG DAS TENTATIVAS <<<
     async function handleChallengeClick() {
-        if (!challengeBtn) return;
-        showLoading();
+        // 1. Trava de Segurança: Se o botão já estiver desabilitado ou não existir, pare imediatamente.
+        if (!challengeBtn || challengeBtn.disabled) return;
+        
+        // Desabilita visualmente e logicamente o botão
         challengeBtn.disabled = true;
+        
+        showLoading();
+        
         let opponent = null; 
         let challengerInfo = null; 
         let combatResult = null;
         try {
+            // Busca oponente
             const { data: findData, error: findError } = await supabase.rpc('find_arena_opponent');
             if (findError) throw findError;
+            
             const findResult = normalizeRpcResult(findData);
-            if (!findResult?.success) return showModalAlert(findResult?.message || "Nenhum oponente encontrado.");
+            if (!findResult?.success) {
+                // Se falhar, reabilita o botão para tentar de novo
+                challengeBtn.disabled = false;
+                return showModalAlert(findResult?.message || "Nenhum oponente encontrado.");
+            }
+            
             opponent = findResult.opponent; 
             cacheOpponent(opponent);
-
             challengerInfo = await getCachedPlayerInfo(userId); 
 
+            // Inicia combate
             const { data: combatData, error: combatError } = await supabase.rpc('start_arena_combat', { p_opponent_id: opponent.id });
             if (combatError) throw combatError;
+            
             combatResult = normalizeRpcResult(combatData);
-            if (!combatResult?.success) return showModalAlert(combatResult?.message || "Falha ao iniciar combate.");
+            if (!combatResult?.success) {
+                 // Se o combate falhar logicamente (ex: sem tentativas), mantém desabilitado se for o caso, ou avisa
+                 return showModalAlert(combatResult?.message || "Falha ao iniciar combate.");
+            }
 
             // 🔥 CORREÇÃO: Esconde o loading overlay AQUI para que a animação do PvP seja visível.
             hideLoading();
@@ -528,6 +544,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         } catch (e) {
             console.error("Erro no desafio:", e);
+            // Em caso de erro fatal, reabilita o botão para não travar o jogo
+            challengeBtn.disabled = false;
             showModalAlert("Erro inesperado: " + (e?.message || e));
         } finally {
             await updateAttemptsUI();
@@ -1185,6 +1203,23 @@ if (snapErr) {
     }
     if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { if (rankingModal) rankingModal.style.display = 'none'; });
     initRankingTabs();
+
+    // =======================================================================
+    // NOVA LÓGICA: CONTROLE DE VISIBILIDADE (PAUSAR/RETOMAR AO SAIR DA ABA)
+    // =======================================================================
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === 'hidden') {
+        // Usuário saiu da aba ou minimizou: Pausa a música se estiver tocando
+        if (backgroundMusic && !backgroundMusic.paused) {
+          backgroundMusic.pause();
+        }
+      } else if (document.visibilityState === 'visible') {
+        // Usuário voltou: Retoma APENAS se a música já tivesse sido iniciada e criada
+        if (musicStarted && backgroundMusic && backgroundMusic.paused) {
+          backgroundMusic.play().catch(e => console.warn("⚠️ Falha ao retomar música automaticamente:", e));
+        }
+      }
+    });
 
     boot();
 });

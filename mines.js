@@ -1177,6 +1177,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("visibilitychange", async () => {
     // Se a aba ficar oculta
     if (document.visibilityState === 'hidden') {
+        
+      // NOVO: Pausa música ao sair
+      if (ambientMusic && !ambientMusic.paused) {
+        ambientMusic.pause();
+        // Marcamos que estava tocando, embora neste script o resetCombatUI 
+        // normalmente impeça o resume imediato, mantemos a flag por consistência.
+        ambientMusic._wasPlaying = true; 
+      }
+
       // Se estiver em um combate, toca um aviso de saída
       if (currentMineId) {
         avisoTelaSound.currentTime = 0;
@@ -1198,7 +1207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Exibe o alerta e reseta a UI
         showModalAlert(`Você saiu da tela durante a disputa pela ${esc(mineName)}. Você pode retornar para a disputa. Esta medida é para evitar bugs.`);
-        resetCombatUI(); // Isso fechará o modal de combate
+        resetCombatUI(); // Isso fechará o modal de combate e manterá o áudio pausado.
     }
 
     // ALTERAÇÃO FINAL: Atualiza a lista de minas ao voltar para a aba, se não estiver em combate.

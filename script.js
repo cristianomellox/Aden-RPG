@@ -433,6 +433,12 @@ const mission_definitions = {
         { req: 30, item_id: 26, qty: 5, desc: "Alcance nível 30.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" }
     ],
     afk: [
+        // NOVAS MISSÕES ADICIONADAS
+        { req: 2, item_id: 13, qty: 1, desc: "Alcance o estágio 2 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/asa_guardia.webp" }, 
+        { req: 3, item_id: 10, qty: 10, desc: "Alcance o estágio 3 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_anel_runico.webp" },
+        { req: 4, crystals: 1500, qty: 1500, desc: "Alcance o estágio 4 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+        
+        // MISSÕES ANTIGAS
         { req: 5, crystals: 100, qty: 100, desc: "Alcance o estágio 5 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 10, crystals: 500, qty: 500, desc: "Alcance o estágio 10 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 15, crystals: 1500, qty: 1500, desc: "Alcance o estágio 15 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },

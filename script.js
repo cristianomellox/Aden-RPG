@@ -99,6 +99,29 @@ function startBackgroundMusic(forceMute = false)
 window.startBackgroundMusic = startBackgroundMusic;
 window.__musicDebug = { isStarted: () => musicStarted };
 
+// =======================================================================
+// NOVA LÓGICA: CONTROLE DE VISIBILIDADE (PAUSAR/RETOMAR AO SAIR DA ABA)
+// =======================================================================
+document.addEventListener("visibilitychange", () => {
+  // Se o objeto de áudio não existe, não faz nada
+  if (!backgroundMusic) return;
+
+  if (document.visibilityState === 'hidden') {
+    // Usuário saiu da aba ou minimizou: Pausa a música se estiver tocando
+    if (!backgroundMusic.paused) {
+      backgroundMusic.pause();
+      // console.log("🎵 Música pausada (aba em segundo plano).");
+    }
+  } else if (document.visibilityState === 'visible') {
+    // Usuário voltou: Retoma APENAS se a música já tivesse sido iniciada anteriormente
+    if (musicStarted && backgroundMusic.paused) {
+      backgroundMusic.play().catch(e => console.warn("⚠️ Falha ao retomar música automaticamente:", e));
+      // console.log("🎵 Música retomada (aba ativa).");
+    }
+  }
+});
+// =======================================================================
+
 
 // Os listeners de interação SÓ podem ser adicionados após o DOM carregar
 document.addEventListener("DOMContentLoaded", () => {

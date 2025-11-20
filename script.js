@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // =======================================================================
 
 (function(){
-  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v22';
+  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v24';
   const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
   const FORCE_SHOW_PARAM = 'show_intro';
 
@@ -242,8 +242,8 @@ if (window.__introSeen && !_forceShowIntroFromUrl()) {
   modalContent.innerHTML =
     '<p style="font-size:16px;line-height:1.4;margin-bottom:16px;">' +
     '<strong>Um presente!</strong><br>' +
-    'Copie o código abaixo e cole no menu lateral Mais > Resgate para receber uma espada R:<br>' +
-    '9bef0f2f-53a4-4de6-8322-044ee80a65e8<br>' +
+    'Copie o código abaixo e cole no menu lateral <strong>Mais > Resgate</strong> para receber uma espada R:<br>' +
+    '<span style="color: gold; font-weight: bold;">9bef0f2f-53a4-4de6-8322-044ee80a65e8</span><br>' +
     'Obtenha códigos de resgate diariamente em nosso grupo no Discord. Link no menu "Sobre".'
     '</p>';
   const okBtn = document.createElement('button');

@@ -241,11 +241,8 @@ if (window.__introSeen && !_forceShowIntroFromUrl()) {
   modalContent.style.cssText = 'max-width:520px;padding:20px;border-radius:10px;background:#0b0b0b;color:#fff;text-align:center;';
   modalContent.innerHTML =
     '<p style="font-size:16px;line-height:1.4;margin-bottom:16px;">' +
-    '<strong>Um presente!</strong><br>' +
-    'Copie o código abaixo e cole no menu lateral <strong>Mais > Resgate</strong> para receber uma espada R:<br>' +
-    '<span style="color: gold; font-weight: bold;">9bef0f2f-53a4-4de6-8322-044ee80a65e8</span><br>' +
-    'Obtenha códigos de resgate diariamente em nosso grupo no Discord. Link no menu "Sobre".'
-    '</p>';
+    '<strong>Salve!</strong><br>' +
+    'Se não sabe o que fazer, leia o Tutorial no menu <strong>Opções > Tutorial</strong> e receba uma espada R.</p>';
   const okBtn = document.createElement('button');
   okBtn.id = 'welcomeOkBtn';
   okBtn.textContent = 'OK';

@@ -341,7 +341,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const total = calcTotalCost(buyQty, buyBaseBoughtCount);
     if (buyAttackCostInfo) buyAttackCostInfo.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
     if (buyPlayerGoldInfo) buyPlayerGoldInfo.innerHTML = `Você tem: <br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(buyPlayerGold || 0).toLocaleString()}</strong>`;
-    if (buyConfirmBtn) buyConfirmBtn.disabled = (total > (buyPlayerGold || 0));
+    
   }
 
   async function openBuyModal() {
@@ -427,7 +427,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const total = calcPvpCost(buyPvpQty, buyPvpBaseBoughtCount);
     buyPvpCostInfo.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
     buyPvpPlayerGoldInfo.innerHTML = `Você tem: <br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(buyPvpPlayerGold || 0).toLocaleString()}</strong>`;
-    buyPvpConfirmBtn.disabled = (total > buyPvpPlayerGold);
+    
   }
 
   async function openBuyPvpModal() {

@@ -742,3 +742,106 @@ body, html {
     20% { opacity: 1; transform: translate(-50%, -30px) scale(1.2); }
     100% { opacity: 0; transform: translate(-50%, -80px) scale(1); }
 }
+
+/*
+ * Novos estilos para o Modal de Seleção de Poções na Arena
+ * (Baseado em estilos de inventory.css para consistência)
+ */
+
+/* Ajusta o contêiner do modal para um visual mais premium */
+#potionSelectModal .modal-content {
+    max-width: 90%;
+    width: 400px; /* Largura definida para o modal */
+    background: linear-gradient(to bottom, #333, #1a1a1a);
+    padding: 20px;
+    border: 3px solid #c9a94a; /* Borda de destaque */
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+/* Estilo para a grade de poções */
+#potionListGrid {
+    display: grid;
+    /* Colunas responsivas que se ajustam, permitindo 3 a 4 itens por linha */
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); 
+    gap: 10px;
+    padding: 10px;
+    max-height: 60vh;
+    overflow-y: auto;
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    margin-top: 15px;
+}
+
+/* Estilização de cada slot de poção (Mais estiloso) */
+.inventory-item {
+    background-color: #2e2e2e;
+    border: 2px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    display: flex;
+    flex-direction: column; /* Empilha imagem e nome */
+    align-items: center;
+    justify-content: center; /* Distribui imagem no topo e nome no rodapé */
+    height: 120px; /* Altura fixa para manter a grade uniforme */
+    text-align: center;
+    cursor: pointer;
+    position: relative; /* ESSENCIAL para a posição absoluta da quantidade */
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.inventory-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+    border-color: gold;
+}
+
+.inventory-item img {
+    max-width: 100%;
+    max-height: 50px; 
+    object-fit: contain;
+    margin-bottom: 5px;
+}
+
+/* 2. Quantidade no canto inferior direito (como no inventário) */
+.item-quantity {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 4px;
+    color: #ffcc00; /* Destaque em amarelo/ouro */
+    font-family: 'Cinzel', serif;
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px 4px;
+}
+
+/* 3. Nome da poção mais alinhado e bonito no modal */
+/* O nome é o último 'div' dentro de '.inventory-item' em arena.js */
+.inventory-item > div:last-child {
+    font-size: 0.9em !important; 
+    color: #e0dccc !important;
+    font-weight: 500;
+    text-shadow: 1px 1px 1px #000;
+    margin-top: auto; /* Garante alinhamento na parte inferior */
+    width: 100%;
+    padding: 0 2px;
+    box-sizing: border-box;
+    line-height: 1.1;
+}
+
+/* 3. Nome da poção mais alinhado, bonito e com ellipsis */
+.inventory-item > div:last-child {
+    font-size: 0.8em !important; 
+    color: #e0dccc !important;
+    font-weight: 500;
+    text-shadow: 1px 1px 1px #000;
+    margin-top: auto;
+    width: 100%;
+    padding: 0 2px;
+    box-sizing: border-box;
+    
+    overflow: hidden; 
+    text-overflow: ellipsis;
+}

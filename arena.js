@@ -283,7 +283,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (challengeBtn) {
                 challengeBtn.disabled = attempts <= 0;
                 challengeBtn.style.filter = attempts <= 0 ? "grayscale(1)" : "none";
-                challengeBtn.textContent = attempts <= 0 ? "Volte Amanhã" : "Desafiar";
+                challengeBtn.textContent = attempts <= 0 ? "Volte às 21h00" : "Desafiar";
             }
         } catch { if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = "Erro"; }
     }
@@ -336,7 +336,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         // Reseta visual
         document.querySelectorAll('.potion-slot').forEach(el => {
-            el.innerHTML = '<span style="font-size:2em; color:#555; pointer-events:none;">+</span>';
+            el.innerHTML = '<span style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; font-size:2em; color:#555; pointer-events:none;">+</span>';
             el.dataset.itemId = "";
             el.style.border = "1px dashed #555";
         });
@@ -374,7 +374,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const unequipBtn = document.createElement('div');
         unequipBtn.className = "inventory-item"; 
         unequipBtn.style.border = "1px solid red";
-        unequipBtn.innerHTML = "<span style='color:red; font-weight:bold;'>REMOVER</span><br><small>Desequipar</small>";
+        unequipBtn.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;"><small>Remover</small>';
         unequipBtn.onclick = async () => {
             showLoading();
             await supabase.rpc('unequip_arena_potion', { p_slot_type: slotType.toUpperCase(), p_slot_index: parseInt(slotIndex) });
@@ -723,12 +723,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             ct = document.createElement('div');
             ct.className = 'buff-container';
             ct.style.position = "absolute";
-            ct.style.top = "215px"; // Abaixo do HP
+            ct.style.top = "160px"; // Abaixo do HP
             ct.style.width = "100%";
             ct.style.display = "flex";
             ct.style.justifyContent = "center";
             ct.style.gap = "5px";
-            ct.style.zIndex = "15";
+            ct.style.zIndex = "1500";
             sideElement.appendChild(ct);
         }
         const icon = document.createElement("img");

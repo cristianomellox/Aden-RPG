@@ -30,6 +30,32 @@
         <div id="attemptsInfo">
             Desafios restantes: <span id="arenaAttemptsLeft">...</span>
         </div>
+        <div id="potionSlotsContainer">
+    <div class="potion-group">
+        <h3>Poções de Ataque</h3>
+        <div class="slots-row">
+            <div class="potion-slot" data-type="attack" data-index="0" id="slot-atk-0">+</div>
+            <div class="potion-slot" data-type="attack" data-index="1" id="slot-atk-1">+</div>
+        </div>
+        <small>Usadas quando você desafia.</small>
+    </div>
+    <div class="potion-group">
+        <h3>Poções de Defesa</h3>
+        <div class="slots-row">
+            <div class="potion-slot" data-type="defense" data-index="0" id="slot-def-0">+</div>
+            <div class="potion-slot" data-type="defense" data-index="1" id="slot-def-1">+</div>
+        </div>
+        <small>Usadas quando você é desafiado.</small>
+    </div>
+</div>
+
+<div id="potionSelectModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <span id="closePotionModal" class="close-btn">&times;</span>
+        <h2>Escolher Poção</h2>
+        <div id="potionListGrid" class="items-grid"></div>
+    </div>
+</div>
     </div>
 
     <div id="loading-overlay" class="loading-overlay" style="display: none;">
@@ -86,6 +112,7 @@
 <!-- agrupado para controle de exibição -->
 <div id="seasonInfoContainer" style="text-align:center; margin-top:5px;">
   <span id="seasonInfo">Temporada<br> (Mês) / (Ano)</span>
+  <span style="margin-top: -5px;">(Atualiza a cada 15 minutos)</span>
 </div>
 
 

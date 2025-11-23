@@ -705,7 +705,7 @@ body, html {
 /* Container das Poções Laterais com Cooldown */
 .battle-potions-container {
     position: absolute;
-    top: 40%!important;
+    top: 19%!important;
     
     display: flex;
     flex-direction: column;

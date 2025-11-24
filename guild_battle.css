@@ -653,8 +653,12 @@
 }
 #timerreg, #waitTimer {
   font-size: 2em;
+  font-weight: bold;
   text-shadow: none;
   background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+#battleShopMessage {
+  color: white!important;
 }

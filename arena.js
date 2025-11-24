@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const confirmModal = document.getElementById("confirmModal");
     const confirmMessage = document.getElementById("confirmMessage");
     const confirmActionBtn = document.getElementById("confirmActionBtn");
-    const confirmTitle = document.getElementById("confirmTitle"); // Adicionado para segurança
+    const confirmTitle = document.getElementById("confirmTitle");
 
     const rankingModal = document.getElementById("rankingModal");
     const openRankingBtn = document.getElementById("openRankingBtn");
@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const defenderHpFill = document.getElementById("defenderHpFill");
     const challengerHpText = document.getElementById("challengerHpText");
     const defenderHpText = document.getElementById("defenderHpText");
-    const pvpArena = document.getElementById("pvpArena"); // Container da arena
+    const pvpArena = document.getElementById("pvpArena");
 
     // --- Elementos de Poções (Novos) ---
     const potionSelectModal = document.getElementById("potionSelectModal");
@@ -63,6 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let backgroundMusic = null;
     let musicStarted = false;
 
+    // Lista de Arquivos de Áudio
     const audioFiles = {
         normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
         critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
@@ -70,7 +71,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         streak3: "https://aden-rpg.pages.dev/assets/killingspree.mp3",
         streak4: "https://aden-rpg.pages.dev/assets/implacavel.mp3",
         streak5: "https://aden-rpg.pages.dev/assets/dominando.mp3",
-        background: "https://aden-rpg.pages.dev/assets/arena.mp3"
+        background: "https://aden-rpg.pages.dev/assets/arena.mp3",
+        // Novos sons
+        heal: "https://aden-rpg.pages.dev/assets/pot_cura.mp3",
+        dex: "https://aden-rpg.pages.dev/assets/pot_dex.mp3",
+        fury: "https://aden-rpg.pages.dev/assets/pot_furia.mp3",
+        atk: "https://aden-rpg.pages.dev/assets/pot_atk.mp3"
     };
 
     async function preload(name) {
@@ -87,8 +93,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             audioBuffers[name] = null;
         }
     }
+    // Preload dos sons
     preload('normal'); preload('critical'); preload('evade');
     preload('streak3'); preload('streak4'); preload('streak5');
+    preload('heal'); preload('dex'); preload('fury'); preload('atk');
 
     function playSound(name, opts = {}) {
         const vol = typeof opts.volume === 'number' ? opts.volume : 1;
@@ -120,7 +128,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (audioContext.state === 'suspended') {
             try { await audioContext.resume(); } catch(e){ console.warn("AudioContext resume falhou", e); }
         }
-        const names = ['normal','critical','evade','streak3','streak4','streak5'];
+        const names = ['normal','critical','evade','streak3','streak4','streak5', 'heal', 'dex', 'fury', 'atk'];
         for (const name of names) {
             const buf = audioBuffers[name];
             if (buf && audioContext.state !== 'closed') {
@@ -588,7 +596,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             arr.forEach(p => {
                 const el = document.getElementById(`bp-${side}-${p.item_id}`);
                 if(el) {
-                    const max = (p.type==='HEAL'?5:(p.type==='FURY'?10:15));
+                    // Mantido 7 e 15 para visualizar o tempo cheio
+                    const max = (p.type === 'HEAL' ? 7 : 15); 
                     cds.push({ id: p.item_id, side, el: el.querySelector('.cooldown-overlay'), max, cur: 0 });
                 }
             });
@@ -597,7 +606,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         for (const turn of (log || [])) {
             // Atualiza cooldowns visuais
-            cds.forEach(c => { if(c.cur > 0) { c.cur--; c.el.style.height = `${(c.cur/c.max)*100}%`; } });
+            cds.forEach(c => { 
+                if(c.cur > 0) { 
+                    c.cur--; 
+                    // Atualiza a altura da barra preta (overlay)
+                    c.el.style.height = `${(c.cur/c.max)*100}%`; 
+                } 
+            });
 
             const actorId = turn.actor || turn.attacker_id;
             const isChallengerActor = actorId === challenger.id;
@@ -616,9 +631,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (turn.action === 'potion' || turn.action === 'buff_start') {
                 // Reset cooldown visual
                 const cdObj = cds.find(x => x.id == turn.item_id && x.side == sideStr);
-                if(cdObj) { cdObj.cur = cdObj.max; cdObj.el.style.height = "100%"; }
+                if(cdObj) { 
+                    cdObj.cur = cdObj.max; // Reseta para 7 (ou 15)
+                    cdObj.el.style.height = "100%"; // Barra cheia (preta)
+                }
 
                 if (turn.type === 'HEAL') {
+                    playSound('heal', { volume: 0.8 });
                     if (isChallengerActor) cHP = Math.min(cMax, cHP + turn.value); else dHP = Math.min(dMax, dHP + turn.value);
                     if (hasPvpUI) {
                         updatePvpHpBar(challengerHpFill, challengerHpText, cHP, cMax);
@@ -627,12 +646,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                         flashPotionIcon(turn.item_id, actorSide);
                     }
                 } else {
-                    // Buff Start
+                    if (turn.type === 'FURY') playSound('fury', { volume: 0.8 });
+                    else if (turn.type === 'DEX') playSound('dex', { volume: 0.8 });
+                    else playSound('atk', { volume: 0.8 });
+
                     if (hasPvpUI) {
                         const buffName = turn.type === 'FURY' ? "FÚRIA!" : (turn.type === 'DEX' ? "DESTREZA!" : "FORÇA!");
                         displayFloatingText(buffName, '#ffaa00', actorSide);
                         flashPotionIcon(turn.item_id, actorSide);
-                        addBuffIcon(actorSide, turn.item_id); // <-- Chamada para o buff
+                        addBuffIcon(actorSide, turn.item_id); 
                     }
                 }
             }
@@ -698,7 +720,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     function flashPotionIcon(itemId, sideElement) {
         const img = document.createElement("img");
         const itemName = POTION_MAP[itemId] || `item_${itemId}`; 
-        // Usa o nome base que é conhecido por funcionar
         img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`; 
         img.style.position = "absolute";
         img.style.top = "60%";
@@ -733,7 +754,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         const icon = document.createElement("img");
         const imgName = POTION_MAP[itemId] || "pocao_de_cura_r";
-        // CORREÇÃO CRÍTICA: Removendo o sufixo _0estrelas para usar a imagem de poção base.
         icon.src = `https://aden-rpg.pages.dev/assets/itens/${imgName}.webp`; 
         icon.style.width = "25px";
         icon.style.height = "25px";
@@ -748,7 +768,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if(!pots || !pots.length) return;
         const ct = document.createElement('div');
         ct.className = 'battle-potions-container';
-        // Estilos inline para garantir visibilidade imediata
         ct.style.position = "absolute";
         ct.style.top = "60px";
         ct.style.display = "flex";
@@ -772,7 +791,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             slot.style.overflow = "hidden";
 
             const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
-            // CORREÇÃO CONFIRMADA: O slot de poção de batalha usa a tag <img> com o caminho correto.
             slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:0;background:rgba(0,0,0,0.85);transition:height 1s linear;"></div>`;
             ct.appendChild(slot);
         });

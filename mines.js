@@ -569,6 +569,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       const timeToNextAttack = player.time_to_next_attack;
 
       if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
+      if (attacksLeft <= 0) {
+          if (attackBtn) {
+              // Adiciona a classe para aplicar grayscale e desabilitar visualmente
+              attackBtn.classList.add('disabled-attack-btn');
+          }
+          if (attackBtn) attackBtn.disabled = true; // Desabilita funcionalmente
+      } else {
+          if (attackBtn) {
+              // Remove a classe para reabilitar a aparência
+              attackBtn.classList.remove('disabled-attack-btn');
+          }
+          if (attackBtn) attackBtn.disabled = false; // Habilita funcionalmente
+      }
       if (cooldownInterval) clearInterval(cooldownInterval);
 
       if (attacksLeft < 5) {

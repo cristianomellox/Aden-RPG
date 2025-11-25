@@ -333,17 +333,12 @@ p {
             z-index: 2; 
         }
 #combatTimer {
-  font-size: 30px;
-  color: blue;
-  text-shadow:
-        -1px -1px 0 white,
-        1px -1px 0 white,
-        -1px 1px 0 white,
-        1px 1px 0 white,
-        -2px -2px 0 white,
-        2px -2px 0 white,
-        -2px 2px 0 white,
-        2px 2px 0 white;
+  font-weight: bold;
+  font-size: 1.7em;
+  text-shadow: none!important;
+ background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 
 }
 
 .mine-card.aberta    { 

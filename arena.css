@@ -678,7 +678,7 @@ body, html {
 /* Container de Buffs (abaixo do HP) */
 .buff-container {
     position: absolute;
-    top: 120px!important; /* Ajustado para não ficar em cima do HP */
+    top: 100px!important; /* Ajustado para não ficar em cima do HP */
     left: 50%;
     transform: translateX(-50%);
     width: 100%;
@@ -739,7 +739,7 @@ body, html {
 /* Animação do texto flutuante */
 @keyframes floatUpPotion {
     0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
-    20% { opacity: 1; transform: translate(-50%, -30px) scale(1.2); }
+    20% { opacity: 3; transform: translate(-50%, -30px) scale(1.2); }
     100% { opacity: 0; transform: translate(-50%, -80px) scale(1); }
 }
 

@@ -744,7 +744,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             ct = document.createElement('div');
             ct.className = 'buff-container';
             ct.style.position = "absolute";
-            ct.style.top = "160px"; // Abaixo do HP
+            ct.style.top = "130px"; // Abaixo do HP
             ct.style.width = "100%";
             ct.style.display = "flex";
             ct.style.justifyContent = "center";
@@ -755,13 +755,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const icon = document.createElement("img");
         const imgName = POTION_MAP[itemId] || "pocao_de_cura_r";
         icon.src = `https://aden-rpg.pages.dev/assets/itens/${imgName}.webp`; 
-        icon.style.width = "25px";
-        icon.style.height = "25px";
+        icon.style.width = "35px";
+        icon.style.height = "35px";
         icon.style.objectFit = "contain";
         icon.style.animation = "blinkPotion 1s infinite"; 
         icon.style.filter = "drop-shadow(0 0 2px gold)";
         ct.appendChild(icon);
-        setTimeout(() => icon.remove(), 5000);
+        setTimeout(() => icon.remove(), 7000);
     }
 
     function renderBattlePotions(tgt, pots, side) {

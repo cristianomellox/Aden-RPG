@@ -512,6 +512,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (timerContainer) timerContainer.style.opacity = "1";
         if (attackBtn) {
             attackBtn.style.filter = "none";
+            attackBtn.style.opacity = "1";
             attackBtn.style.pointerEvents = "auto";
             attackBtn.classList.remove("attack-anim");
         }
@@ -550,6 +551,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 attackBtn.classList.add("attack-anim");
                 attackBtn.style.pointerEvents = "none";
                 attackBtn.style.filter = "grayscale(1)";
+            attackBtn.style.opacity = "0.5"; 
             }
             document.getElementById("turnTimerContainer").style.opacity = "0.3";
             togglePlayerPotions(false);
@@ -646,7 +648,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const row = document.createElement('div');
         row.className = 'active-buffs-row';
-        row.style.cssText = 'position:absolute; top: 125px; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 10; pointer-events: none;';
+        row.style.cssText = 'position:absolute; top: 115px; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 10; pointer-events: none;';
 
         Object.keys(buffs).forEach(key => {
             const buff = buffs[key];
@@ -655,8 +657,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const img = document.createElement('img');
                 const itemName = POTION_MAP[buff.item_id] || `item_${buff.item_id}`;
                 img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
-                img.style.width = '25px';
-                img.style.height = '25px';
+                img.style.width = '35px';
+                img.style.height = '35px';
                 
                 // CORREÇÃO: Usa 'blinkPotion' para coincidir com o CSS
                 img.style.animation = 'blinkPotion 1s infinite alternate';

@@ -540,7 +540,7 @@ p {
         0 0 8px gold;
         justify-content: center;
         top: 4%;
-      left: 2%;
+      margin-left: -3px;
         vertical-align: -6px;
         position: relative;
 }
@@ -846,14 +846,10 @@ p {
     z-index: 1000;
 }
 
-/* Adicionar no final de mines.css */
 
-/* Estilos para "desabilitar" visualmente o botão de ataque */
 #attackBtn.disabled-attack-btn {
     filter: grayscale(100%);
-    opacity: 0.7; /* Suaviza um pouco a aparência desabilitada */
-    cursor: not-allowed; /* Altera o cursor para indicar que não é clicável */
-    /* Garante que o CSS desabilite a interação em alguns navegadores,
-       embora o JS ainda faça a desabilitação funcionalmente. */
+    opacity: 0.7; 
+    cursor: not-allowed; 
     pointer-events: none; 
 }

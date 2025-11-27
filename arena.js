@@ -1,4 +1,4 @@
-// arena.js — Versão Final Integrada (PvP + Poções + Ranking + Histórico + Áudio)
+// arena.js — Versão Final Corrigida (Tempo Real, Segurança de Saída, Botão Funcional)
 document.addEventListener("DOMContentLoaded", async () => {
     // --- Configuração do Supabase ---
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -6,6 +6,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let userId = null;
+
+    // --- Variáveis de Estado de Batalha ---
+    let currentBattleId = null;
+    let turnTimerInterval = null;
+    let turnTimeLeft = 10;
+    let isMyTurn = false;
+    let battleStateCache = null;
 
     // --- DOM Elements ---
     const loadingOverlay = document.getElementById("loading-overlay");
@@ -29,6 +36,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const seasonInfoContainer = document.getElementById("seasonInfoContainer");
     const seasonPastInfoSpan = document.getElementById("seasonPastInfo");
 
+    // PvP Modal Elements
     const pvpCountdown = document.getElementById("pvpCountdown");
     const challengerSide = document.getElementById("challengerSide");
     const defenderSide = document.getElementById("defenderSide");
@@ -40,15 +48,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const defenderHpFill = document.getElementById("defenderHpFill");
     const challengerHpText = document.getElementById("challengerHpText");
     const defenderHpText = document.getElementById("defenderHpText");
-    const pvpArena = document.getElementById("pvpArena");
-
-    // --- Elementos de Poções (Novos) ---
+    
+    // Poções Loadout
     const potionSelectModal = document.getElementById("potionSelectModal");
     const closePotionModalBtn = document.getElementById("closePotionModal");
     const potionListGrid = document.getElementById("potionListGrid");
     const potionSlots = document.querySelectorAll(".potion-slot");
 
-    // Mapeamento de Imagens das Poções
+    // Mapeamento
     const POTION_MAP = {
         43: "pocao_de_cura_r", 44: "pocao_de_cura_sr",
         45: "pocao_de_furia_r", 46: "pocao_de_furia_sr",
@@ -56,14 +63,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
     };
 
-    // --- Sons ---
+    // --- Áudio ---
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffers = {};
-
     let backgroundMusic = null;
     let musicStarted = false;
 
-    // Lista de Arquivos de Áudio
     const audioFiles = {
         normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
         critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
@@ -72,11 +77,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         streak4: "https://aden-rpg.pages.dev/assets/implacavel.mp3",
         streak5: "https://aden-rpg.pages.dev/assets/dominando.mp3",
         background: "https://aden-rpg.pages.dev/assets/arena.mp3",
-        // Novos sons
         heal: "https://aden-rpg.pages.dev/assets/pot_cura.mp3",
         dex: "https://aden-rpg.pages.dev/assets/pot_dex.mp3",
         fury: "https://aden-rpg.pages.dev/assets/pot_furia.mp3",
-        atk: "https://aden-rpg.pages.dev/assets/pot_atk.mp3"
+        atk: "https://aden-rpg.pages.dev/assets/pot_atk.mp3",
+        win: "https://aden-rpg.pages.dev/assets/win.mp3", 
+        loss: "https://aden-rpg.pages.dev/assets/loss.mp3"
     };
 
     async function preload(name) {
@@ -89,14 +95,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 audioContext.decodeAudioData(ab, resolve, reject);
             });
         } catch (e) {
-            console.warn(`[audio] preload ${name} falhou:`, e);
             audioBuffers[name] = null;
         }
     }
-    // Preload dos sons
-    preload('normal'); preload('critical'); preload('evade');
-    preload('streak3'); preload('streak4'); preload('streak5');
-    preload('heal'); preload('dex'); preload('fury'); preload('atk');
+    Object.keys(audioFiles).forEach(key => preload(key));
 
     function playSound(name, opts = {}) {
         const vol = typeof opts.volume === 'number' ? opts.volume : 1;
@@ -110,9 +112,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 source.connect(gain).connect(audioContext.destination);
                 source.start(0);
                 return;
-            } catch (err) {
-                console.warn("[audio] play error:", err);
-            }
+            } catch (err) {}
         }
         try {
             const a = new Audio(audioFiles[name] || audioFiles.normal);
@@ -126,30 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (sfxUnlocked) return;
         sfxUnlocked = true;
         if (audioContext.state === 'suspended') {
-            try { await audioContext.resume(); } catch(e){ console.warn("AudioContext resume falhou", e); }
-        }
-        const names = ['normal','critical','evade','streak3','streak4','streak5', 'heal', 'dex', 'fury', 'atk'];
-        for (const name of names) {
-            const buf = audioBuffers[name];
-            if (buf && audioContext.state !== 'closed') {
-                try {
-                    const source = audioContext.createBufferSource();
-                    source.buffer = buf;
-                    const gain = audioContext.createGain();
-                    gain.gain.value = 0.0;
-                    source.connect(gain).connect(audioContext.destination);
-                    source.start(0);
-                    setTimeout(() => { try { source.stop(); } catch(e){} }, 60);
-                } catch (e) {}
-            } else {
-                try {
-                    const a = new Audio(audioFiles[name] || audioFiles.normal);
-                    a.volume = 0;
-                    const p = a.play();
-                    if (p && p.then) { p.then(() => { try { a.pause(); a.currentTime = 0; } catch(e){} }); } 
-                    else { try { a.pause(); a.currentTime = 0; } catch(e){} }
-                } catch (e) {}
-            }
+            try { await audioContext.resume(); } catch(e){}
         }
     }
 
@@ -157,13 +134,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (musicStarted) return;
         if (!backgroundMusic) {
             backgroundMusic = new Audio(audioFiles.background);
-            backgroundMusic.volume = 0.1;
+            backgroundMusic.volume = 0.015;
             backgroundMusic.loop = true;
         }
-        backgroundMusic.play().then(() => { musicStarted = true; }).catch(err => {
-            console.warn("⚠️ Falha ao iniciar música:", err);
-            musicStarted = false; 
-        });
+        backgroundMusic.play().then(() => { musicStarted = true; }).catch(err => { musicStarted = false; });
     }
 
     function addCapturedListener(target, evt, handler, opts = {}) {
@@ -172,7 +146,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function resumeAudioContext() {
         if (audioContext.state === 'suspended') {
-            audioContext.resume().catch(e => console.warn("AudioContext resume falhou", e));
+            audioContext.resume().catch(e => {});
         }
     }
 
@@ -181,28 +155,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         addCapturedListener(window, ev, () => {
             resumeAudioContext();
             startBackgroundMusic();
-            try { unlockSfx(); } catch(e){ console.warn("unlockSfx erro", e); }
+            unlockSfx();
         }, { once: true });
     }
-
-    let moveArmed = false; 
-    function armMove() { moveArmed = true; setTimeout(()=> moveArmed = false, 1200); }
-    addCapturedListener(window, "pointerdown", armMove);
-    addCapturedListener(window, "touchstart", armMove);
-
-    function handleMoveForMusic(e) {
-        resumeAudioContext(); 
-        if (musicStarted || !moveArmed) return;
-        const isTouchMove = (e.touches && e.touches.length > 0);
-        const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
-        if (isTouchMove || hasPressure || e.pointerType) {
-            startBackgroundMusic();
-            moveArmed = false;
-            try { unlockSfx(); } catch(e){}
-        }
-    }
-    addCapturedListener(window, "touchmove", handleMoveForMusic);
-    addCapturedListener(window, "pointermove", handleMoveForMusic);
 
     // --- Utilitários ---
     function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
@@ -213,7 +168,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!confirmModal) { alert(message); return; }
         if (confirmTitle) confirmTitle.textContent = title;
         if (confirmMessage) confirmMessage.innerHTML = message;
-        if (confirmActionBtn) confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; };
+        
+        const newBtn = confirmActionBtn.cloneNode(true);
+        confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn);
+        
+        newBtn.onclick = () => { confirmModal.style.display = 'none'; };
         confirmModal.style.display = 'flex';
     }
 
@@ -232,13 +191,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch { return null; }
     }
 
-    function getMinutesUntilNextMonth() {
-        const now = new Date();
-        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
-        const diffMs = nextMonth.getTime() - Date.now();
-        return Math.max(1, Math.floor(diffMs / 60000));
-    }
-
     async function getCachedPlayerInfo(playerId) {
         if (!playerId) return null;
         const key = `player_${playerId}`;
@@ -249,17 +201,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             .eq('id', playerId).single();
         if (data) setCache(key, data, CACHE_TTL_24H);
         return data;
-    }
-
-    async function getCachedGuildName(guildId) {
-        if (!guildId) return 'Sem Guilda';
-        const key = `guild_${guildId}`;
-        let cached = getCache(key);
-        if (cached) return cached;
-        const { data } = await supabase.from('guilds').select('name').eq('id', guildId).single();
-        const name = data?.name || 'Sem Guilda';
-        setCache(key, name, CACHE_TTL_24H);
-        return name;
     }
 
     function cacheOpponent(opponent) {
@@ -288,15 +229,26 @@ document.addEventListener("DOMContentLoaded", async () => {
             const { data } = await supabase.from('players').select('arena_attempts_left').eq('id', userId).single();
             const attempts = data?.arena_attempts_left ?? 0;
             if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = attempts;
+            
             if (challengeBtn) {
-                challengeBtn.disabled = attempts <= 0;
-                challengeBtn.style.filter = attempts <= 0 ? "grayscale(1)" : "none";
-                challengeBtn.textContent = attempts <= 0 ? "Volte às 21h00" : "Desafiar";
+                if (attempts <= 0) {
+                    challengeBtn.disabled = true;
+                    challengeBtn.textContent = "Volte às 21h00";
+                    challengeBtn.style.filter = "grayscale(1)";
+                    challengeBtn.style.cursor = "not-allowed";
+                    challengeBtn.style.pointerEvents = "none"; 
+                } else {
+                    challengeBtn.disabled = false;
+                    challengeBtn.textContent = "Desafiar";
+                    challengeBtn.style.filter = "none";
+                    challengeBtn.style.cursor = "pointer";
+                    challengeBtn.style.pointerEvents = "auto";
+                }
             }
         } catch { if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = "Erro"; }
     }
 
-    // --- Streak ---
+    // --- Streak Logic ---
     const STREAK_KEY = 'arena_win_streak';
     const STREAK_DATE_KEY = 'arena_win_streak_date'; 
     function getTodayUTCDateString() {
@@ -334,15 +286,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     ensureStreakDate();
 
-    // =======================================================================
-    // --- [NOVO] LÓGICA DE POÇÕES / LOADOUT ---
-    // =======================================================================
-
+    // --- LOADOUT ---
     async function loadArenaLoadout() {
         if (!userId) return;
         const { data, error } = await supabase.rpc('get_my_arena_loadout');
         
-        // Reseta visual
         document.querySelectorAll('.potion-slot').forEach(el => {
             el.innerHTML = '<span style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; font-size:2em; color:#555; pointer-events:none;">+</span>';
             el.dataset.itemId = "";
@@ -408,7 +356,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             div.innerHTML = `
                 <img src="https://aden-rpg.pages.dev/assets/itens/${inv.items.name}.webp" style="width:50px; height:50px;">
                 <span class="item-quantity">${inv.quantity}</span>
-                <div style="font-size:0.7em; margin-top:5px; color:#fff;">${inv.items.display_name}</div>
+                <div style="font-size:0.7em; margin-top:5px; color:#fff; overflow:hidden; text-overflow:ellipsis;">${inv.items.display_name}</div>
             `;
             div.onclick = async () => {
                 showLoading();
@@ -436,149 +384,83 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
-    // --- COMBATE (Atualizado para suportar poções) ---
+    // --- LÓGICA DE COMBATE MANUAL ---
     // =======================================================================
 
+    // Injeção de CSS de Batalha (Mantida pois não é HTML de elemento)
+    const style = document.createElement('style');
+    style.innerHTML = `
+        #attackBtnContainer:active { transform: scale(0.95); }
+        .attack-anim { animation: attack-pulse 0.2s ease-in-out; }
+        @keyframes attack-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .battle-potion-slot { transition: transform 0.2s; border: 1px solid #777; background: #000; border-radius: 4px; overflow: hidden; width: 40px; height: 40px; position: relative; }
+        .potion-clickable:hover { transform: scale(1.1); border-color: gold; cursor: pointer; }
+        .potion-disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.5; }
+        @keyframes floatUpPotion { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); } 20% { opacity: 1; transform: translate(-50%, -20px) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -60px) scale(1); } }
+        @keyframes blinkPotion { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.9); } }
+    `;
+    document.head.appendChild(style);
+
+    // --- Configuração do Botão de Ataque (Movida para fora de injectBattleInterface) ---
+    const btnContainer = document.getElementById("attackBtnContainer");
+    if (btnContainer) {
+        // Clonar para garantir que o listener seja o único ativo
+        const newBtn = btnContainer.cloneNode(true);
+        btnContainer.parentNode.replaceChild(newBtn, btnContainer);
+
+        newBtn.addEventListener("click", async (e) => {
+            e.preventDefault(); 
+            e.stopPropagation();
+            
+            if (isMyTurn) {
+                await performAction('ATTACK');
+            }
+        });
+        
+        newBtn.style.cursor = "pointer";
+        newBtn.style.pointerEvents = "auto";
+    }
+
+    // A função original injectBattleInterface foi removida, 
+    // pois os elementos já estão no HTML e o CSS acima cuida dos estilos.
+    
     async function handleChallengeClick() {
         if (!challengeBtn || challengeBtn.disabled) return;
+        if (arenaAttemptsLeftSpan.textContent === '0') return;
+
         challengeBtn.disabled = true;
         showLoading();
         
-        let opponent = null; 
-        let challengerInfo = null; 
         try {
             const { data: findData, error: findError } = await supabase.rpc('find_arena_opponent');
-            if (findError) throw findError;
-            
             const findResult = normalizeRpcResult(findData);
-            if (!findResult?.success) {
+            
+            if (findError || !findResult?.success) {
                 challengeBtn.disabled = false;
                 return showModalAlert(findResult?.message || "Nenhum oponente encontrado.");
             }
             
-            opponent = findResult.opponent; 
+            const opponent = findResult.opponent; 
             cacheOpponent(opponent);
-            challengerInfo = await getCachedPlayerInfo(userId); 
 
-            // Inicia combate (V2 no Backend)
-            const { data: combatData, error: combatError } = await supabase.rpc('start_arena_combat', { p_opponent_id: opponent.id });
-            if (combatError) throw combatError;
+            const { data: initData, error: initError } = await supabase.rpc('init_arena_battle_manual', { p_opponent_id: opponent.id });
+            const initResult = normalizeRpcResult(initData);
             
-            const combatResult = normalizeRpcResult(combatData);
-            if (!combatResult?.success) {
-                 return showModalAlert(combatResult?.message || "Falha ao iniciar combate.");
+            if (initError || !initResult?.success) {
+                challengeBtn.disabled = false;
+                return showModalAlert(initResult?.message || "Falha ao iniciar batalha.");
             }
 
-            await loadArenaLoadout(); // Atualiza inventário local (poções gastas)
+            currentBattleId = initResult.battle_id;
+            battleStateCache = initResult.state;
+            
+            const myInfo = await getCachedPlayerInfo(userId);
+            
+            // REMOVIDA: injectBattleInterface();
+            setupBattleUI(battleStateCache, myInfo, opponent);
+            
             hideLoading();
-            
-            const challengerData = { 
-                ...(combatResult.challenger_stats || {}), 
-                id: userId, 
-                name: challengerInfo?.name || 'Desafiante', 
-                avatar_url: challengerInfo?.avatar_url 
-            };
-            const defenderData = { 
-                ...(combatResult.defender_stats || {}), 
-                id: opponent?.id, 
-                name: opponent?.name || 'Defensor', 
-                avatar_url: opponent?.avatar_url 
-            };
 
-            // CHAMA A NOVA ANIMAÇÃO COM OS ARRAYS DE POÇÕES
-            await simulatePvpAnimation(
-                challengerData, 
-                defenderData, 
-                combatResult.combat_log,
-                combatResult.challenger_potions,
-                combatResult.defender_potions
-            );
-
-            // Resultado
-            let msg = "";
-            const points = combatResult.points_transferred || 0;
-            const opponentName = esc(opponent?.name || 'Oponente');
-
-            try {
-                ensureStreakDate();
-                if (combatResult.winner_id === userId) {
-                    currentStreak++;
-                    saveStreak(currentStreak);
-                    if (currentStreak >= 5) playSound('streak5', { volume: 0.9 });
-                    else if (currentStreak === 4) playSound('streak4', { volume: 0.9 });
-                    else if (currentStreak === 3) playSound('streak3', { volume: 0.9 });
-                } else if (combatResult.winner_id && combatResult.winner_id !== userId) {
-                    currentStreak = 0;
-                    saveStreak(0);
-                }
-            } catch (stErr) {}
-
-            if (combatResult.winner_id === userId) {
-                msg = `<strong style="color:#4CAF50;">Você venceu!</strong><br>Você derrotou ${opponentName} e tomou ${points.toLocaleString()} pontos dele(a).`;
-            } else if (combatResult.winner_id === null) {
-                msg = `<strong style="color:#FFC107;">Empate!</strong><br>Ninguém perdeu pontos nesta batalha.`;
-            } else {
-                msg = `<strong style="color:#f44336;">Você perdeu!</strong><br>${opponentName} derrotou você e tomou ${points.toLocaleString()} pontos.`;
-            }
-            
-            // Exibir Recompensas (V2)
-            let rewardsHTML = "";
-            const rewards = combatResult.rewards_granted;
-            if (rewards && (rewards.crystals > 0 || rewards.item_41 > 0 || rewards.item_42 > 0)) {
-                let rewardsItems = [];
-                const imgStyle = "width: 35px; height: 38px; margin-right: 5px; image-rendering: pixelated; object-fit: contain;";
-                const itemStyle = "display: flex; align-items: center; background: rgba(0,0,0,0.3); padding: 5px 8px; border-radius: 5px;";
-                const textStyle = "font-size: 1.1em; color: #fff; font-weight: bold; text-shadow: 1px 1px 2px #000;";
-
-                if (rewards.crystals > 0) rewardsItems.push(`<div style="${itemStyle}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imgStyle}"><span style="${textStyle}">x ${rewards.crystals.toLocaleString()}</span></div>`);
-                if (rewards.item_41 > 0) rewardsItems.push(`<div style="${itemStyle}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imgStyle}"><span style="${textStyle}">x ${rewards.item_41}</span></div>`);
-                if (rewards.item_42 > 0) rewardsItems.push(`<div style="${itemStyle}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imgStyle}"><span style="${textStyle}">x ${rewards.item_42}</span></div>`);
-
-                if (rewardsItems.length > 0) {
-                    rewardsHTML = `<hr style="border-color: #555; margin: 15px 0; border-style: dashed;"><div style="display: flex; align-items: center; gap: 10px; justify-content: center; flex-wrap: wrap;">${rewardsItems.join('')}</div>`;
-                }
-            }
-
-            showModalAlert(msg + rewardsHTML, "Resultado da Batalha");
-
-        } catch (e) {
-            console.error("Erro no desafio:", e);
-            challengeBtn.disabled = false;
-            showModalAlert("Erro inesperado: " + (e?.message || e));
-        } finally {
-            await updateAttemptsUI();
-            hideLoading();
-        }
-    }
-
-    // --- Animação (Atualizada V2) ---
-    async function simulatePvpAnimation(challenger, defender, log, cPots, dPots) {
-        const hasPvpUI = pvpCombatModal && challengerName && defenderName;
-        const defaultAvatar = 'https://aden-rpg.pages.dev/avatar01.webp';
-
-        let cHP = +((challenger && (challenger.health || challenger.max_health)) || 0);
-        const cMax = cHP;
-        let dHP = +((defender && (defender.health || defender.max_health)) || 0);
-        const dMax = dHP;
-
-        // Limpeza de elementos antigos
-        document.querySelectorAll('.active-buff-icon').forEach(e => e.remove());
-        document.querySelectorAll('.battle-potions-container').forEach(e => e.remove());
-
-        if (hasPvpUI) {
-            challengerName.textContent = challenger.name || esc(challenger.name || 'Desafiante');
-            defenderName.textContent = defender.name || esc(defender.name || 'Defensor');
-            if (challengerAvatar) challengerAvatar.src = challenger.avatar_url || challenger.avatar || defaultAvatar;
-            if (defenderAvatar) defenderAvatar.src = defender.avatar_url || defender.avatar || defaultAvatar;
-            
-            updatePvpHpBar(challengerHpFill, challengerHpText, cHP, cMax);
-            updatePvpHpBar(defenderHpFill, defenderHpText, dHP, dMax);
-            
-            // Renderiza as poções laterais com cooldown
-            renderBattlePotions(challengerSide, cPots, 'left');
-            renderBattlePotions(defenderSide, dPots, 'right');
-
-            pvpCombatModal.style.display = 'flex';
             if (pvpCountdown) {
                 pvpCountdown.style.display = 'block';
                 for (let i = 3; i > 0; i--) {
@@ -587,85 +469,254 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
                 pvpCountdown.style.display = 'none';
             }
+
+            startPlayerTurn();
+
+        } catch (e) {
+            console.error("Erro no desafio:", e);
+            challengeBtn.disabled = false;
+            showModalAlert("Erro inesperado: " + (e?.message || e));
+            hideLoading();
+        } finally {
+            await updateAttemptsUI();
         }
+    }
 
-        // Prepara estado visual dos cooldowns
-        const cds = [];
-        const initCd = (arr, side) => {
-            if(!arr) return;
-            arr.forEach(p => {
-                const el = document.getElementById(`bp-${side}-${p.item_id}`);
-                if(el) {
-                    // Mantido 7 e 15 para visualizar o tempo cheio
-                    const max = (p.type === 'HEAL' ? 7 : 15); 
-                    cds.push({ id: p.item_id, side, el: el.querySelector('.cooldown-overlay'), max, cur: 0 });
-                }
-            });
-        };
-        initCd(cPots, 'left'); initCd(dPots, 'right');
+    function setupBattleUI(state, me, opp) {
+        pvpCombatModal.style.display = "flex";
+        
+        document.getElementById("turnTimerContainer").style.display = "block";
+        document.getElementById("combatControls").style.display = "flex";
+        
+        const defAvatar = 'https://aden-rpg.pages.dev/avatar01.webp';
+        challengerName.textContent = me?.name || "Você";
+        challengerAvatar.src = me?.avatar_url || defAvatar;
+        
+        defenderName.textContent = opp?.name || "Oponente";
+        defenderAvatar.src = opp?.avatar_url || defAvatar;
 
-        for (const turn of (log || [])) {
-            // Atualiza cooldowns visuais
-            cds.forEach(c => { 
-                if(c.cur > 0) { 
-                    c.cur--; 
-                    // Atualiza a altura da barra preta (overlay)
-                    c.el.style.height = `${(c.cur/c.max)*100}%`; 
-                } 
-            });
+        updateBattleStateUI(state);
+        
+        renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
+        renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
+    }
 
-            const actorId = turn.actor || turn.attacker_id;
-            const isChallengerActor = actorId === challenger.id;
-            const actorSide = isChallengerActor ? challengerSide : defenderSide;
-            const targetSide = isChallengerActor ? defenderSide : challengerSide;
-            const sideStr = isChallengerActor ? 'left' : 'right';
+    function startPlayerTurn() {
+        if (!currentBattleId) return;
+        isMyTurn = true;
+        turnTimeLeft = 10; 
+        
+        const timerContainer = document.getElementById("turnTimerContainer");
+        const attackBtn = document.getElementById("attackBtnContainer");
+        
+        if (timerContainer) timerContainer.style.opacity = "1";
+        if (attackBtn) {
+            attackBtn.style.filter = "none";
+            attackBtn.style.pointerEvents = "auto";
+            attackBtn.classList.remove("attack-anim");
+        }
+        updateTimerUI();
+        togglePlayerPotions(true);
 
-            if (turn.action === 'attack' || (!turn.action && turn.damage !== undefined)) {
-                const dmg = +turn.damage || 0;
-                if (isChallengerActor) dHP = Math.max(0, dHP - dmg); else cHP = Math.max(0, cHP - dmg);
-                if (hasPvpUI) {
-                    updatePvpHpBar(challengerHpFill, challengerHpText, cHP, cMax);
-                    updatePvpHpBar(defenderHpFill, defenderHpText, dHP, dMax);
-                    displayDamageNumber(dmg, !!turn.critical, !!turn.evaded, targetSide);
-                }
-            } else if (turn.action === 'potion' || turn.action === 'buff_start') {
-                // Reset cooldown visual
-                const cdObj = cds.find(x => x.id == turn.item_id && x.side == sideStr);
-                if(cdObj) { 
-                    cdObj.cur = cdObj.max; // Reseta para 7 (ou 15)
-                    cdObj.el.style.height = "100%"; // Barra cheia (preta)
-                }
-
-                if (turn.type === 'HEAL') {
-                    playSound('heal', { volume: 0.8 });
-                    if (isChallengerActor) cHP = Math.min(cMax, cHP + turn.value); else dHP = Math.min(dMax, dHP + turn.value);
-                    if (hasPvpUI) {
-                        updatePvpHpBar(challengerHpFill, challengerHpText, cHP, cMax);
-                        updatePvpHpBar(defenderHpFill, defenderHpText, dHP, dMax);
-                        displayFloatingText(`+${turn.value}`, '#00ff00', actorSide);
-                        flashPotionIcon(turn.item_id, actorSide);
-                    }
-                } else {
-                    if (turn.type === 'FURY') playSound('fury', { volume: 0.8 });
-                    else if (turn.type === 'DEX') playSound('dex', { volume: 0.8 });
-                    else playSound('atk', { volume: 0.8 });
-
-                    if (hasPvpUI) {
-                        const buffName = turn.type === 'FURY' ? "FÚRIA!" : (turn.type === 'DEX' ? "DESTREZA!" : "FORÇA!");
-                        displayFloatingText(buffName, '#ffaa00', actorSide);
-                        flashPotionIcon(turn.item_id, actorSide);
-                        addBuffIcon(actorSide, turn.item_id); 
-                    }
-                }
+        clearInterval(turnTimerInterval);
+        turnTimerInterval = setInterval(() => {
+            turnTimeLeft--;
+            updateTimerUI();
+            if (turnTimeLeft <= 0) {
+                performAction('ATTACK'); 
             }
-            await new Promise(r => setTimeout(r, 1000));
+        }, 1000);
+    }
+
+    function updateTimerUI() {
+        const el = document.getElementById("turnTimerValue");
+        const circle = document.getElementById("turnTimerCircle");
+        if(el) el.textContent = turnTimeLeft;
+        if(circle) {
+            if(turnTimeLeft <= 3) circle.style.borderColor = "red";
+            else circle.style.borderColor = "#FFC107";
+        }
+    }
+
+    async function performAction(type, itemId = null) {
+        if (!isMyTurn) return;
+        
+        if (type === 'ATTACK') {
+            clearInterval(turnTimerInterval);
+            isMyTurn = false;
+            
+            const attackBtn = document.getElementById("attackBtnContainer");
+            if (attackBtn) {
+                attackBtn.classList.add("attack-anim");
+                attackBtn.style.pointerEvents = "none";
+                attackBtn.style.filter = "grayscale(1)";
+            }
+            document.getElementById("turnTimerContainer").style.opacity = "0.3";
+            togglePlayerPotions(false);
+            
+            var preAttackState = JSON.parse(JSON.stringify(battleStateCache));
+            
+            animateActorMove(challengerSide);
         }
 
-        await new Promise(r => setTimeout(r, 1500));
-        if (hasPvpUI) pvpCombatModal.style.display = 'none';
-        // Limpeza
-        document.querySelectorAll('.active-buff-icon').forEach(e => e.remove());
-        document.querySelectorAll('.battle-potions-container').forEach(e => e.remove());
+        try {
+            const { data, error } = await supabase.rpc('process_arena_action', {
+                p_battle_id: currentBattleId,
+                p_action_type: type,
+                p_item_id: itemId
+            });
+
+            const res = normalizeRpcResult(data);
+            if (error || !res?.success) throw new Error("Erro na ação.");
+
+            if (type === 'POTION') {
+                updateBattleStateUI(res.state);
+                battleStateCache = res.state;
+                flashPotionIcon(itemId, challengerSide); 
+                
+                if (itemId === 43 || itemId === 44) playSound('heal');
+                else if (itemId >= 45) playSound('fury'); 
+                
+                renderBattlePotions(challengerSide, res.state.attacker_potions, 'left', true);
+                return;
+            }
+
+            if (type === 'ATTACK') {
+                const newState = res.state;
+                
+                // 1. Dano no Inimigo
+                const newDefHp = newState ? newState.defender_hp : 0;
+                const dmgDealt = Math.max(0, preAttackState.defender_hp - newDefHp);
+                
+                await new Promise(r => setTimeout(r, 400));
+                displayDamageNumber(dmgDealt, false, false, defenderSide);
+                
+                if(newState) updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, newState.defender_max_hp);
+                else updatePvpHpBar(defenderHpFill, defenderHpText, 0, preAttackState.defender_max_hp);
+                
+                if (res.finished) {
+                    endBattle(res.win, res);
+                    return;
+                }
+
+                // 2. Turno Inimigo
+                await new Promise(r => setTimeout(r, 800));
+                animateActorMove(defenderSide);
+                await new Promise(r => setTimeout(r, 300));
+
+                // 3. Dano no Jogador
+                const newAttHp = newState.attacker_hp;
+                const dmgReceived = Math.max(0, preAttackState.attacker_hp - newAttHp);
+                
+                displayDamageNumber(dmgReceived, false, false, challengerSide);
+                
+                // Atualiza barra do jogador e buffs
+                updateBattleStateUI(newState);
+                
+                battleStateCache = newState;
+                startPlayerTurn();
+            }
+
+        } catch (e) {
+            console.error(e);
+            challengeBtn.disabled = false;
+            if (type === 'ATTACK') {
+                 isMyTurn = true;
+                 startPlayerTurn();
+            }
+        }
+    }
+
+    // --- Helpers Visuais ---
+
+    function updateBattleStateUI(state) {
+        if (!state) return;
+        updatePvpHpBar(challengerHpFill, challengerHpText, state.attacker_hp, state.attacker_max_hp);
+        updatePvpHpBar(defenderHpFill, defenderHpText, state.defender_hp, state.defender_max_hp);
+        
+        renderActiveBuffs(challengerSide, state.attacker_buffs, state.turn_count);
+    }
+
+    // --- CORREÇÃO DE BUFFS (Posição e Animação) ---
+    function renderActiveBuffs(container, buffs, currentTurn) {
+        const old = container.querySelector('.active-buffs-row');
+        if (old) old.remove();
+
+        if (!buffs) return;
+
+        const row = document.createElement('div');
+        row.className = 'active-buffs-row';
+        row.style.cssText = 'position:absolute; top: 125px; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 10; pointer-events: none;';
+
+        Object.keys(buffs).forEach(key => {
+            const buff = buffs[key];
+            // Verifica se o buff ainda é válido para o turno atual
+            if (buff.ends_at_turn >= currentTurn) {
+                const img = document.createElement('img');
+                const itemName = POTION_MAP[buff.item_id] || `item_${buff.item_id}`;
+                img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+                img.style.width = '25px';
+                img.style.height = '25px';
+                
+                // CORREÇÃO: Usa 'blinkPotion' para coincidir com o CSS
+                img.style.animation = 'blinkPotion 1s infinite alternate';
+                
+                img.title = key;
+                row.appendChild(img);
+            }
+        });
+
+        if (row.children.length > 0) container.appendChild(row);
+    }
+
+    function renderBattlePotions(container, potions, side, interactive) {
+        const old = container.querySelector('.battle-potions-container');
+        if (old) old.remove();
+
+        if (!potions || !potions.length) return;
+
+        const ct = document.createElement('div');
+        ct.className = 'battle-potions-container';
+        ct.style.position = "absolute";
+        ct.style.top = "60px";
+        ct.style.display = "flex";
+        ct.style.flexDirection = "column";
+        ct.style.gap = "8px";
+        ct.style.zIndex = "20";
+        ct.style.background = "rgba(0,0,0,0.5)";
+        ct.style.padding = "4px";
+        ct.style.borderRadius = "6px";
+        if(side === 'left') ct.style.left = "-25px"; else ct.style.right = "-25px";
+
+        potions.forEach(p => {
+            const slot = document.createElement('div');
+            slot.className = 'battle-potion-slot';
+            if (interactive && p.qty > 0 && p.cd <= 0) {
+                slot.classList.add('potion-clickable');
+                slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
+            } else if (interactive) {
+                slot.classList.add('potion-disabled');
+            }
+
+            const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
+            const cdHeight = p.cd > 0 ? "100%" : "0%";
+            
+            slot.innerHTML = `
+                <img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;">
+                <span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${p.qty}</span>
+                <div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);"></div>
+            `;
+            ct.appendChild(slot);
+        });
+        container.appendChild(ct);
+    }
+
+    function togglePlayerPotions(enable) {
+        const slots = document.querySelectorAll('.battle-potion-slot.potion-clickable');
+        slots.forEach(s => {
+            s.style.pointerEvents = enable ? 'auto' : 'none';
+            s.style.filter = enable ? 'none' : 'grayscale(0.5)';
+        });
     }
 
     function updatePvpHpBar(el, txt, cur, max) {
@@ -683,7 +734,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             el.className = "evade-text";
             playSound('evade', { volume: 0.3 });
         } else {
-            el.textContent = dmg.toLocaleString();
+            const val = typeof dmg === 'number' ? dmg.toLocaleString() : dmg;
+            el.textContent = val;
             el.className = crit ? "crit-damage-number" : "damage-number";
             playSound(crit ? 'critical' : 'normal', { volume: crit ? 0.1 : 0.5 });
         }
@@ -692,112 +744,79 @@ document.addEventListener("DOMContentLoaded", async () => {
         setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
     }
 
-    // --- Helpers Visuais Poções ---
-    function displayFloatingText(text, color, sideElement) {
-        const el = document.createElement("div");
-        el.textContent = text;
-        el.style.position = "absolute";
-        el.style.top = "40%";
-        el.style.left = "50%";
-        el.style.transform = "translate(-50%, -50%)";
-        el.style.color = color;
-        el.style.fontWeight = "bold";
-        el.style.fontSize = "1.5em";
-        el.style.textShadow = "2px 2px 0 #000";
-        el.style.zIndex = "20";
-        el.style.animation = "floatUpPotion 1.5s ease-out forwards";
-        
-        if(!document.getElementById('anim-float-style')) {
-            const style = document.createElement('style');
-            style.id = 'anim-float-style';
-            style.innerHTML = `@keyframes floatUpPotion { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); } 20% { opacity: 1; transform: translate(-50%, -20px) scale(1.2); } 100% { opacity: 0; transform: translate(-50%, -60px) scale(1); } } @keyframes blinkPotion { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.9); } }`;
-            document.head.appendChild(style);
-        }
-        sideElement.appendChild(el);
-        setTimeout(() => el.remove(), 1500);
-    }
-
     function flashPotionIcon(itemId, sideElement) {
         const img = document.createElement("img");
         const itemName = POTION_MAP[itemId] || `item_${itemId}`; 
         img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`; 
         img.style.position = "absolute";
-        img.style.top = "60%";
+        img.style.top = "50%";
         img.style.left = "50%";
         img.style.width = "40px";
         img.style.height = "40px";
-        img.style.transform = "translate(-50%, -50%)";
         img.style.zIndex = "25";
-        img.style.opacity = "0";
-        img.style.transition = "opacity 0.2s, transform 0.5s";
+        img.style.animation = "floatUpPotion 1s ease-out forwards";
         sideElement.appendChild(img);
-        requestAnimationFrame(() => {
-            img.style.opacity = "1";
-            img.style.transform = "translate(-50%, -80%) scale(1.2)";
-            setTimeout(() => { img.style.opacity = "0"; setTimeout(() => img.remove(), 300); }, 600);
-        });
+        setTimeout(() => img.remove(), 1000);
+    }
+    
+    function animateActorMove(element) {
+        element.style.transition = "transform 0.1s";
+        element.style.transform = "scale(1.1) translateY(-10px)";
+        setTimeout(() => {
+            element.style.transform = "scale(1) translateY(0)";
+        }, 150);
     }
 
-    function addBuffIcon(sideElement, itemId) {
-        let ct = sideElement.querySelector('.buff-container');
-        if (!ct) {
-            ct = document.createElement('div');
-            ct.className = 'buff-container';
-            ct.style.position = "absolute";
-            ct.style.top = "130px"; // Abaixo do HP
-            ct.style.width = "100%";
-            ct.style.display = "flex";
-            ct.style.justifyContent = "center";
-            ct.style.gap = "5px";
-            ct.style.zIndex = "1500";
-            sideElement.appendChild(ct);
-        }
-        const icon = document.createElement("img");
-        const imgName = POTION_MAP[itemId] || "pocao_de_cura_r";
-        icon.src = `https://aden-rpg.pages.dev/assets/itens/${imgName}.webp`; 
-        icon.style.width = "35px";
-        icon.style.height = "35px";
-        icon.style.objectFit = "contain";
-        icon.style.animation = "blinkPotion 1s infinite"; 
-        icon.style.filter = "drop-shadow(0 0 2px gold)";
-        ct.appendChild(icon);
-        setTimeout(() => icon.remove(), 7000);
-    }
-
-    function renderBattlePotions(tgt, pots, side) {
-        if(!pots || !pots.length) return;
-        const ct = document.createElement('div');
-        ct.className = 'battle-potions-container';
-        ct.style.position = "absolute";
-        ct.style.top = "60px";
-        ct.style.display = "flex";
-        ct.style.flexDirection = "column";
-        ct.style.gap = "8px";
-        ct.style.zIndex = "20";
-        ct.style.background = "rgba(0,0,0,0.5)";
-        ct.style.padding = "4px";
-        ct.style.borderRadius = "6px";
-        if(side === 'left') ct.style.left = "-25px"; else ct.style.right = "-25px";
+    async function endBattle(win, data) {
+        clearInterval(turnTimerInterval);
         
-        pots.forEach(p => {
-            const slot = document.createElement('div');
-            slot.id = `bp-${side}-${p.item_id}`;
-            slot.style.width = "40px";
-            slot.style.height = "40px";
-            slot.style.position = "relative";
-            slot.style.border = "1px solid #777";
-            slot.style.background = "#111";
-            slot.style.borderRadius = "4px";
-            slot.style.overflow = "hidden";
+        if (win) playSound('win');
+        else playSound('loss');
 
-            const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
-            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:0;background:rgba(0,0,0,0.85);transition:height 1s linear;"></div>`;
-            ct.appendChild(slot);
-        });
-        tgt.appendChild(ct);
+        try {
+            ensureStreakDate();
+            if (win) {
+                currentStreak++;
+                saveStreak(currentStreak);
+                if (currentStreak >= 5) playSound('streak5', { volume: 0.9 });
+                else if (currentStreak === 4) playSound('streak4', { volume: 0.9 });
+                else if (currentStreak === 3) playSound('streak3', { volume: 0.9 });
+            } else {
+                currentStreak = 0;
+                saveStreak(0);
+            }
+        } catch(e){}
+
+        const msg = win 
+            ? `<strong style="color:#4CAF50;">Vitória!</strong><br>Você roubou ${data.points || 0} pontos.` 
+            : `<strong style="color:#f44336;">Derrota!</strong><br>Você perdeu ${data.points || 0} pontos.`;
+
+        let rewardsHTML = "";
+        if (win && data.rewards) {
+             const r = data.rewards;
+             let items = [];
+             const st = "display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:5px 8px;border-radius:5px;margin:2px;";
+             const imS = "width:30px;height:30px;margin-right:5px;object-fit:contain;";
+             
+             if(r.crystals > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${r.crystals}</div>`);
+             if(r.common > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${r.common}</div>`);
+             if(r.rare > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${r.rare}</div>`);
+             
+             if(items.length) rewardsHTML = `<div style="display:flex;flex-wrap:wrap;justify-content:center;margin-top:10px;gap:5px;">${items.join('')}</div>`;
+        }
+            
+        await new Promise(r => setTimeout(r, 1500));
+        
+        pvpCombatModal.style.display = "none";
+        
+        showModalAlert(msg + rewardsHTML, "Fim de Combate");
+        
+        challengeBtn.disabled = false;
+        loadArenaLoadout();
+        currentBattleId = null;
     }
 
-    // --- Ranking Logic (Original Completo) ---
+    // --- Ranking Logic ---
     async function fetchAndRenderRanking() {
         showLoading();
         try {
@@ -1000,6 +1019,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!user) { window.location.href = "index.html"; return; }
             userId = user.id;
 
+            // --- CORREÇÃO: Limpeza de batalhas abandonadas ---
+            await supabase.rpc("check_abandoned_battles");
+
             await checkAndResetArenaSeason();
             await supabase.rpc("reset_player_arena_attempts");
             await updateAttemptsUI();
@@ -1008,6 +1030,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         } catch (e) { console.error("Erro no boot:", e); } finally { hideLoading(); }
     }
+
+    // --- Aviso de Saída ---
+    window.addEventListener('beforeunload', (e) => {
+        if (currentBattleId) {
+            e.preventDefault();
+            e.returnValue = "Se você sair agora, perderá a batalha automaticamente.";
+            return e.returnValue;
+        }
+    });
 
     if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);
     if (openRankingBtn) openRankingBtn.addEventListener("click", () => { document.querySelector(".ranking-tab[data-tab='current']").click(); });

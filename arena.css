@@ -227,7 +227,7 @@ body, html {
     font-weight: bold;
     color: gold;
     padding-top: 50px;
-    margin-left: 3px;
+    margin-left: -3px;
 }
 .player-hp-bar {
     position: relative;
@@ -845,3 +845,8 @@ body, html {
     overflow: hidden; 
     text-overflow: ellipsis;
 }
+
+#attackBtnContainer:active { transform: scale(0.95); }
+.attack-anim { animation: attack-pulse 0.2s ease-in-out; }
+@keyframes attack-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+

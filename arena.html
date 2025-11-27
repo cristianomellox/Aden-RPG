@@ -22,6 +22,7 @@
     </div>
 
     <div id="arenaContainer">
+      
         <h2>Desafie um Oponente</h2>
         <p>Teste sua força contra outros jogadores e suba no ranking.</p>
         
@@ -63,7 +64,24 @@
     </div>
 
     <div id="pvpCombatModal" class="modal-overlay" style="display: none;">
+      <div id="turnTimerContainer" style="display:none; position: absolute; top: 20%; width: 100%; text-align: center; z-index: 100;">
+    <div id="turnTimerCircle" style="
+        width: 60px; height: 60px; 
+        background: radial-gradient(circle, #222, #000);
+        border: 4px solid #FFC107; border-radius: 50%;
+        display: flex; justify-content: center; align-items: center;
+        margin: 0 auto;
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+    ">
+        <span id="turnTimerValue" style="font-size: 1.8em; font-weight: bold; color: white;">10</span>
+    </div>
+    <div style="font-size: 0.9em; color: #fff; margin-top: 5px;"><strong>SEU TURNO!<br>Use poções e faça seu ataque!</strong></div>
+</div> 
         <div class="modal-content">
+          
+         
+          
+          
             <h2 id="pvpCountdown" style="display: none;">A batalha começará em 5</h2>
             <div id="pvpArena">
                 <div id="challengerSide" class="player-side">
@@ -89,7 +107,19 @@
                 </div>
             </div>
         </div>
+        
+        <div id="combatControls" style="display:none; position: absolute; bottom: 20%; width: 100%; justify-content: center; align-items: center; z-index: 100;">
+    
+    <div id="attackBtnContainer" style="position: relative; width: 80px; height: 80px; cursor: pointer; transition: transform 0.1s;">
+        <img src="https://aden-rpg.pages.dev/assets/attackbtn.webp" alt="Atacar" style="width: 100%; height: 100%; filter: drop-shadow(0 0 5px red);">
+        
     </div>
+
+</div>
+        
+        
+    </div>
+    
 
     <div id="confirmModal" class="modal-overlay" style="display: none;">
         <div class="modal-content">

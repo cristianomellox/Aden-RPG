@@ -850,3 +850,18 @@ body, html {
 .attack-anim { animation: attack-pulse 0.2s ease-in-out; }
 @keyframes attack-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
+#skip {
+  color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+    text-align: center;
+    background: linear-gradient(to bottom, red 20%, orange 100%);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 25px;
+    padding: 0 12px;
+}

@@ -1,29 +1,33 @@
-// arena.js — Versão Final Corrigida (Tempo Real, Segurança de Saída, Botão Funcional)
 document.addEventListener("DOMContentLoaded", async () => {
-    // --- Configuração do Supabase ---
+    // =======================================================================
+    // 1. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
+    // =======================================================================
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
     const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let userId = null;
 
-    // --- Variáveis de Estado de Batalha ---
+    // Estado da Batalha
     let currentBattleId = null;
     let turnTimerInterval = null;
     let turnTimeLeft = 10;
     let isMyTurn = false;
     let battleStateCache = null;
 
-    // --- DOM Elements ---
+    // Elementos DOM Principais
     const loadingOverlay = document.getElementById("loading-overlay");
     const challengeBtn = document.getElementById("challengeBtn");
     const arenaAttemptsLeftSpan = document.getElementById("arenaAttemptsLeft");
+    const skipBtn = document.getElementById("skip");
 
+    // Modais
     const pvpCombatModal = document.getElementById("pvpCombatModal");
     const confirmModal = document.getElementById("confirmModal");
     const confirmMessage = document.getElementById("confirmMessage");
-    const confirmActionBtn = document.getElementById("confirmActionBtn");
     const confirmTitle = document.getElementById("confirmTitle");
+    // IMPORTANTE: Referência dinâmica para o botão de confirmação
+    let confirmActionBtn = document.getElementById("confirmActionBtn");
 
     const rankingModal = document.getElementById("rankingModal");
     const openRankingBtn = document.getElementById("openRankingBtn");
@@ -36,7 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const seasonInfoContainer = document.getElementById("seasonInfoContainer");
     const seasonPastInfoSpan = document.getElementById("seasonPastInfo");
 
-    // PvP Modal Elements
+    // Elementos da Arena (Visual)
     const pvpCountdown = document.getElementById("pvpCountdown");
     const challengerSide = document.getElementById("challengerSide");
     const defenderSide = document.getElementById("defenderSide");
@@ -49,13 +53,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const challengerHpText = document.getElementById("challengerHpText");
     const defenderHpText = document.getElementById("defenderHpText");
     
-    // Poções Loadout
+    // Loadout de Poções
     const potionSelectModal = document.getElementById("potionSelectModal");
     const closePotionModalBtn = document.getElementById("closePotionModal");
     const potionListGrid = document.getElementById("potionListGrid");
     const potionSlots = document.querySelectorAll(".potion-slot");
 
-    // Mapeamento
+    // Mapa de IDs para Nomes de Arquivo
     const POTION_MAP = {
         43: "pocao_de_cura_r", 44: "pocao_de_cura_sr",
         45: "pocao_de_furia_r", 46: "pocao_de_furia_sr",
@@ -63,7 +67,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
     };
 
-    // --- Áudio ---
+    // =======================================================================
+    // 2. SISTEMA DE ÁUDIO
+    // =======================================================================
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffers = {};
     let backgroundMusic = null;
@@ -114,6 +120,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             } catch (err) {}
         }
+        // Fallback para HTML5 Audio se WebAudio falhar
         try {
             const a = new Audio(audioFiles[name] || audioFiles.normal);
             a.volume = Math.min(1, Math.max(0, vol));
@@ -159,24 +166,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, { once: true });
     }
 
-    // --- Utilitários ---
+    // =======================================================================
+    // 3. UTILITÁRIOS E CACHE
+    // =======================================================================
     function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
     function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
     const esc = (s) => (s === 0 || s) ? String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])) : "";
 
+    // --- CORREÇÃO IMPORTANTE: Modal Seguro ---
     function showModalAlert(message, title = "Aviso") {
         if (!confirmModal) { alert(message); return; }
+        
         if (confirmTitle) confirmTitle.textContent = title;
         if (confirmMessage) confirmMessage.innerHTML = message;
         
+        // Substituição do botão para limpar eventos antigos e atualizar referência global
         const newBtn = confirmActionBtn.cloneNode(true);
         confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn);
+        confirmActionBtn = newBtn; // ATUALIZA A VARIÁVEL GLOBAL
         
-        newBtn.onclick = () => { confirmModal.style.display = 'none'; };
+        confirmActionBtn.textContent = "Ok";
+        confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; };
+        
         confirmModal.style.display = 'flex';
     }
 
-    // --- Cache ---
+    // --- Cache LocalStorage ---
     const CACHE_TTL_24H = 1440;
     function setCache(key, data, ttlMinutes = CACHE_TTL_24H) {
         try { localStorage.setItem(key, JSON.stringify({ expires: Date.now() + ttlMinutes * 60000, data })); } catch {}
@@ -236,13 +251,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     challengeBtn.textContent = "Volte às 21h00";
                     challengeBtn.style.filter = "grayscale(1)";
                     challengeBtn.style.cursor = "not-allowed";
-                    challengeBtn.style.pointerEvents = "none"; 
                 } else {
                     challengeBtn.disabled = false;
                     challengeBtn.textContent = "Desafiar";
                     challengeBtn.style.filter = "none";
                     challengeBtn.style.cursor = "pointer";
-                    challengeBtn.style.pointerEvents = "auto";
                 }
             }
         } catch { if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = "Erro"; }
@@ -265,8 +278,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 localStorage.setItem(STREAK_DATE_KEY, today);
                 return 0;
             }
-            const n = parseInt(raw, 10);
-            return Number.isFinite(n) ? Math.max(0, n) : 0;
+            return parseInt(raw, 10) || 0;
         } catch (e) { return 0; }
     }
     function saveStreak(n) {
@@ -286,7 +298,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     ensureStreakDate();
 
-    // --- LOADOUT ---
+    // =======================================================================
+    // 4. LOADOUT E POÇÕES
+    // =======================================================================
     async function loadArenaLoadout() {
         if (!userId) return;
         const { data, error } = await supabase.rpc('get_my_arena_loadout');
@@ -312,82 +326,81 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    async function openPotionSelectModal(slotType, slotIndex) {
-        if (!potionSelectModal) return;
-        potionSelectModal.style.display = 'flex';
-        potionListGrid.innerHTML = '<p style="color:#fff;">Carregando...</p>';
-        
-        const allowedIds = [43, 44, 45, 46, 47, 48, 49, 50];
-        const { data: items, error } = await supabase
-            .from('inventory_items')
-            .select('*, items(*)')
-            .in('item_id', allowedIds)
-            .eq('player_id', userId)
-            .gt('quantity', 0);
-
-        potionListGrid.innerHTML = "";
-        
-        const unequipBtn = document.createElement('div');
-        unequipBtn.className = "inventory-item"; 
-        unequipBtn.style.border = "1px solid red";
-        unequipBtn.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;"><small>Remover</small>';
-        unequipBtn.onclick = async () => {
-            showLoading();
-            await supabase.rpc('unequip_arena_potion', { p_slot_type: slotType.toUpperCase(), p_slot_index: parseInt(slotIndex) });
-            hideLoading();
-            potionSelectModal.style.display = 'none';
-            await loadArenaLoadout();
-        };
-        potionListGrid.appendChild(unequipBtn);
-
-        if (error || !items || items.length === 0) {
-            const msg = document.createElement('p');
-            msg.textContent = "Você não possui poções de batalha no inventário.";
-            msg.style.color = "#ccc";
-            msg.style.gridColumn = "1 / -1";
-            potionListGrid.appendChild(msg);
-            return;
-        }
-
-        items.forEach(inv => {
-            const div = document.createElement('div');
-            div.className = "inventory-item";
-            div.style.cursor = "pointer";
-            div.innerHTML = `
-                <img src="https://aden-rpg.pages.dev/assets/itens/${inv.items.name}.webp" style="width:50px; height:50px;">
-                <span class="item-quantity">${inv.quantity}</span>
-                <div style="font-size:0.7em; margin-top:5px; color:#fff; overflow:hidden; text-overflow:ellipsis;">${inv.items.display_name}</div>
-            `;
-            div.onclick = async () => {
-                showLoading();
-                const { data: res, error: rpcErr } = await supabase.rpc('equip_arena_potion', { 
-                    p_slot_type: slotType.toUpperCase(), 
-                    p_slot_index: parseInt(slotIndex), 
-                    p_item_id: inv.item_id 
-                });
-                hideLoading();
-                const result = normalizeRpcResult(res);
-                if (rpcErr || (result && result.success === false)) {
-                    showModalAlert(result?.message || "Erro ao equipar poção.");
-                } else {
-                    potionSelectModal.style.display = 'none';
-                    await loadArenaLoadout();
-                }
-            };
-            potionListGrid.appendChild(div);
-        });
-    }
-
+    // Configuração dos Slots de Poção
     potionSlots.forEach(slot => {
-        slot.addEventListener('click', () => openPotionSelectModal(slot.dataset.type, slot.dataset.index));
+        slot.addEventListener('click', async () => {
+            if (!potionSelectModal) return;
+            potionSelectModal.style.display = 'flex';
+            potionListGrid.innerHTML = '<p style="color:#fff;">Carregando...</p>';
+            
+            const allowedIds = [43, 44, 45, 46, 47, 48, 49, 50];
+            const { data: items, error } = await supabase
+                .from('inventory_items')
+                .select('*, items(*)')
+                .in('item_id', allowedIds)
+                .eq('player_id', userId)
+                .gt('quantity', 0);
+
+            potionListGrid.innerHTML = "";
+            
+            // Botão remover
+            const unequipBtn = document.createElement('div');
+            unequipBtn.className = "inventory-item"; 
+            unequipBtn.style.border = "1px solid red";
+            unequipBtn.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Remover" style="width: 50px; height: 50px; margin-bottom: 5px;"><small>Remover</small>';
+            unequipBtn.onclick = async () => {
+                showLoading();
+                await supabase.rpc('unequip_arena_potion', { p_slot_type: slot.dataset.type.toUpperCase(), p_slot_index: parseInt(slot.dataset.index) });
+                hideLoading();
+                potionSelectModal.style.display = 'none';
+                await loadArenaLoadout();
+            };
+            potionListGrid.appendChild(unequipBtn);
+
+            if (!items || items.length === 0) {
+                const msg = document.createElement('p');
+                msg.textContent = "Sem poções de batalha.";
+                msg.style.color = "#ccc";
+                potionListGrid.appendChild(msg);
+                return;
+            }
+
+            items.forEach(inv => {
+                const div = document.createElement('div');
+                div.className = "inventory-item";
+                div.style.cursor = "pointer";
+                div.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/itens/${inv.items.name}.webp" style="width:50px; height:50px;">
+                    <span class="item-quantity">${inv.quantity}</span>
+                    <div style="font-size:0.7em; margin-top:5px; color:#fff;">${inv.items.display_name}</div>
+                `;
+                div.onclick = async () => {
+                    showLoading();
+                    const { data: res, error: rpcErr } = await supabase.rpc('equip_arena_potion', { 
+                        p_slot_type: slot.dataset.type.toUpperCase(), 
+                        p_slot_index: parseInt(slot.dataset.index), 
+                        p_item_id: inv.item_id 
+                    });
+                    hideLoading();
+                    const result = normalizeRpcResult(res);
+                    if (rpcErr || (result && result.success === false)) {
+                        showModalAlert(result?.message || "Erro ao equipar poção.");
+                    } else {
+                        potionSelectModal.style.display = 'none';
+                        await loadArenaLoadout();
+                    }
+                };
+                potionListGrid.appendChild(div);
+            });
+        });
     });
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
-    // --- LÓGICA DE COMBATE MANUAL ---
+    // 5. LÓGICA DE COMBATE
     // =======================================================================
 
-    // Injeção de CSS de Batalha (Mantida pois não é HTML de elemento)
+    // Injeção de CSS para animações
     const style = document.createElement('style');
     style.innerHTML = `
         #attackBtnContainer:active { transform: scale(0.95); }
@@ -401,29 +414,63 @@ document.addEventListener("DOMContentLoaded", async () => {
     `;
     document.head.appendChild(style);
 
-    // --- Configuração do Botão de Ataque (Movida para fora de injectBattleInterface) ---
+    // Configuração Botão Ataque
     const btnContainer = document.getElementById("attackBtnContainer");
     if (btnContainer) {
-        // Clonar para garantir que o listener seja o único ativo
         const newBtn = btnContainer.cloneNode(true);
         btnContainer.parentNode.replaceChild(newBtn, btnContainer);
 
         newBtn.addEventListener("click", async (e) => {
-            e.preventDefault(); 
-            e.stopPropagation();
-            
-            if (isMyTurn) {
-                await performAction('ATTACK');
-            }
+            e.preventDefault(); e.stopPropagation();
+            if (isMyTurn) await performAction('ATTACK');
         });
         
         newBtn.style.cursor = "pointer";
         newBtn.style.pointerEvents = "auto";
     }
 
-    // A função original injectBattleInterface foi removida, 
-    // pois os elementos já estão no HTML e o CSS acima cuida dos estilos.
+    // --- CORREÇÃO IMPORTANTE: Listener do SKIP ---
+    if (skipBtn) {
+        skipBtn.addEventListener("click", (e) => {
+            if (skipBtn.disabled || skipBtn.style.opacity === "0.5") return;
+            
+            if (confirmTitle) confirmTitle.textContent = "Pular Combate?";
+            if (confirmMessage) confirmMessage.innerHTML = "O sistema irá simular o restante da luta instantaneamente.<br>Isso não garante vitória!";
+            
+            // Substituição Segura do Botão
+            const newBtn = confirmActionBtn.cloneNode(true);
+            confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn); 
+            confirmActionBtn = newBtn; // ATUALIZA GLOBAL
+            
+            confirmActionBtn.textContent = "Sim, Pular";
+            confirmActionBtn.onclick = async () => {
+                confirmModal.style.display = 'none';
+                showLoading();
+                try {
+                    const { data, error } = await supabase.rpc('skip_arena_battle', { p_battle_id: currentBattleId });
+                    const res = normalizeRpcResult(data);
+                    
+                    if (error || !res?.success) throw new Error(res?.message || "Erro ao pular.");
+                    
+                    // Atualiza visual
+                    updatePvpHpBar(challengerHpFill, challengerHpText, res.win ? 1 : 0, 100);
+                    updatePvpHpBar(defenderHpFill, defenderHpText, res.win ? 0 : 1, 100);
+                    
+                    endBattle(res.win, res);
+                } catch (e) {
+                    showModalAlert(e.message || "Erro ao pular batalha.");
+                    isMyTurn = true;
+                    startPlayerTurn();
+                } finally {
+                    hideLoading();
+                }
+            };
+            
+            confirmModal.style.display = 'flex';
+        });
+    }
     
+    // Início do Desafio
     async function handleChallengeClick() {
         if (!challengeBtn || challengeBtn.disabled) return;
         if (arenaAttemptsLeftSpan.textContent === '0') return;
@@ -456,7 +503,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             const myInfo = await getCachedPlayerInfo(userId);
             
-            // REMOVIDA: injectBattleInterface();
             setupBattleUI(battleStateCache, myInfo, opponent);
             
             hideLoading();
@@ -499,6 +545,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
         renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
+        
+        // Reset visual do Skip ao iniciar
+        if (skipBtn) {
+            skipBtn.disabled = true;
+            skipBtn.style.opacity = "0.5";
+            skipBtn.style.cursor = "not-allowed";
+        }
     }
 
     function startPlayerTurn() {
@@ -506,6 +559,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         isMyTurn = true;
         turnTimeLeft = 10; 
         
+        // Ativa Skip se Turno >= 3
+        if (skipBtn) {
+            const t = battleStateCache ? battleStateCache.turn_count : 1;
+            if (t >= 3) {
+                skipBtn.disabled = false;
+                skipBtn.style.opacity = "1";
+                skipBtn.style.cursor = "pointer";
+            } else {
+                skipBtn.disabled = true;
+                skipBtn.style.opacity = "0.5";
+                skipBtn.style.cursor = "not-allowed";
+            }
+        }
+
         const timerContainer = document.getElementById("turnTimerContainer");
         const attackBtn = document.getElementById("attackBtnContainer");
         
@@ -534,11 +601,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const circle = document.getElementById("turnTimerCircle");
         if(el) el.textContent = turnTimeLeft;
         if(circle) {
-            if(turnTimeLeft <= 3) circle.style.borderColor = "red";
-            else circle.style.borderColor = "#FFC107";
+            circle.style.borderColor = (turnTimeLeft <= 3) ? "red" : "#FFC107";
         }
     }
 
+    // --- CORREÇÃO IMPORTANTE: Lógica de Ação (Ataque/Poção) ---
     async function performAction(type, itemId = null) {
         if (!isMyTurn) return;
         
@@ -551,17 +618,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 attackBtn.classList.add("attack-anim");
                 attackBtn.style.pointerEvents = "none";
                 attackBtn.style.filter = "grayscale(1)";
-            attackBtn.style.opacity = "0.5"; 
+                attackBtn.style.opacity = "0.5"; 
             }
+            if(skipBtn) skipBtn.disabled = true; 
             document.getElementById("turnTimerContainer").style.opacity = "0.3";
             togglePlayerPotions(false);
-            
-            var preAttackState = JSON.parse(JSON.stringify(battleStateCache));
             
             animateActorMove(challengerSide);
         }
 
         try {
+            // Guarda estado anterior para comparações
+            var preState = JSON.parse(JSON.stringify(battleStateCache));
+
             const { data, error } = await supabase.rpc('process_arena_action', {
                 p_battle_id: currentBattleId,
                 p_action_type: type,
@@ -571,57 +640,88 @@ document.addEventListener("DOMContentLoaded", async () => {
             const res = normalizeRpcResult(data);
             if (error || !res?.success) throw new Error("Erro na ação.");
 
+            // CASO 1: JOGADOR USOU POÇÃO
             if (type === 'POTION') {
                 updateBattleStateUI(res.state);
                 battleStateCache = res.state;
                 flashPotionIcon(itemId, challengerSide); 
                 
                 if (itemId === 43 || itemId === 44) playSound('heal');
-                else if (itemId >= 45) playSound('fury'); 
+                else playSound('fury'); 
                 
                 renderBattlePotions(challengerSide, res.state.attacker_potions, 'left', true);
-                return;
+                return; // Turno continua
             }
 
+            // CASO 2: JOGADOR ATACOU
             if (type === 'ATTACK') {
-                const newState = res.state;
-                
-                // 1. Dano no Inimigo
-                const newDefHp = newState ? newState.defender_hp : 0;
-                const dmgDealt = Math.max(0, preAttackState.defender_hp - newDefHp);
+                const newState = res.state || {}; 
+                const dmgDealt = Math.max(0, preState.defender_hp - (res.finished && res.win ? 0 : newState.defender_hp));
                 
                 await new Promise(r => setTimeout(r, 400));
-                displayDamageNumber(dmgDealt, false, false, defenderSide);
                 
-                if(newState) updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, newState.defender_max_hp);
-                else updatePvpHpBar(defenderHpFill, defenderHpText, 0, preAttackState.defender_max_hp);
-                
-                if (res.finished) {
-                    endBattle(res.win, res);
+                if (dmgDealt > 0 || (res.finished && res.win)) {
+                    displayDamageNumber(dmgDealt, false, false, defenderSide);
+                    updatePvpHpBar(defenderHpFill, defenderHpText, (res.finished && res.win ? 0 : newState.defender_hp), preState.defender_max_hp);
+                }
+
+                if (res.finished && res.win) {
+                    endBattle(true, res);
                     return;
                 }
 
-                // 2. Turno Inimigo
-                await new Promise(r => setTimeout(r, 800));
-                animateActorMove(defenderSide);
-                await new Promise(r => setTimeout(r, 300));
+                // --- TURNO INIMIGO ---
+                const attackerTookDamage = (!res.finished && newState.attacker_hp < preState.attacker_hp) || (res.finished && !res.win);
 
-                // 3. Dano no Jogador
-                const newAttHp = newState.attacker_hp;
-                const dmgReceived = Math.max(0, preAttackState.attacker_hp - newAttHp);
-                
-                displayDamageNumber(dmgReceived, false, false, challengerSide);
-                
-                // Atualiza barra do jogador e buffs
-                updateBattleStateUI(newState);
-                
-                battleStateCache = newState;
-                startPlayerTurn();
+                if (attackerTookDamage) {
+                    await new Promise(r => setTimeout(r, 600));
+
+                    // LÓGICA DE DETECÇÃO DE POÇÃO DO INIMIGO
+                    // Compara as listas de poções para ver se algo diminuiu
+                    let enemyUsedItem = null;
+                    const prePots = preState.defender_potions || [];
+                    const newPots = newState.defender_potions || [];
+                    
+                    for (let i = 0; i < prePots.length; i++) {
+                        const oldQ = prePots[i].qty;
+                        const newQ = newPots[i] ? newPots[i].qty : oldQ;
+                        if (newQ < oldQ) { enemyUsedItem = prePots[i].item_id; break; }
+                    }
+
+                    if (enemyUsedItem) {
+                        renderBattlePotions(defenderSide, newState.defender_potions, 'right', false);
+                        flashPotionIcon(enemyUsedItem, defenderSide);
+                        playSound(enemyUsedItem < 45 ? 'heal' : 'fury');
+                        // Atualiza HP visualmente se curou
+                        updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
+                        await new Promise(r => setTimeout(r, 800));
+                    }
+
+                    // Animação de Ataque do Inimigo
+                    animateActorMove(defenderSide);
+                    await new Promise(r => setTimeout(r, 300));
+
+                    const currentAttHp = res.finished && !res.win ? 0 : newState.attacker_hp;
+                    const dmgReceived = Math.max(0, preState.attacker_hp - currentAttHp);
+                    
+                    displayDamageNumber(dmgReceived, false, false, challengerSide);
+                    updatePvpHpBar(challengerHpFill, challengerHpText, currentAttHp, preState.attacker_max_hp);
+                }
+
+                if (res.finished) {
+                    await new Promise(r => setTimeout(r, 500));
+                    endBattle(res.win, res); 
+                } else {
+                    updateBattleStateUI(newState);
+                    battleStateCache = newState;
+                    startPlayerTurn();
+                }
             }
 
         } catch (e) {
             console.error(e);
             challengeBtn.disabled = false;
+            // Destrava turno em caso de erro para não congelar o jogo
             if (type === 'ATTACK') {
                  isMyTurn = true;
                  startPlayerTurn();
@@ -630,16 +730,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- Helpers Visuais ---
-
     function updateBattleStateUI(state) {
         if (!state) return;
         updatePvpHpBar(challengerHpFill, challengerHpText, state.attacker_hp, state.attacker_max_hp);
         updatePvpHpBar(defenderHpFill, defenderHpText, state.defender_hp, state.defender_max_hp);
-        
         renderActiveBuffs(challengerSide, state.attacker_buffs, state.turn_count);
+        renderActiveBuffs(defenderSide, state.defender_buffs, state.turn_count);
     }
 
-    // --- CORREÇÃO DE BUFFS (Posição e Animação) ---
     function renderActiveBuffs(container, buffs, currentTurn) {
         const old = container.querySelector('.active-buffs-row');
         if (old) old.remove();
@@ -652,17 +750,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         Object.keys(buffs).forEach(key => {
             const buff = buffs[key];
-            // Verifica se o buff ainda é válido para o turno atual
             if (buff.ends_at_turn >= currentTurn) {
                 const img = document.createElement('img');
                 const itemName = POTION_MAP[buff.item_id] || `item_${buff.item_id}`;
                 img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
                 img.style.width = '35px';
                 img.style.height = '35px';
-                
-                // CORREÇÃO: Usa 'blinkPotion' para coincidir com o CSS
                 img.style.animation = 'blinkPotion 1s infinite alternate';
-                
                 img.title = key;
                 row.appendChild(img);
             }
@@ -698,6 +792,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
             } else if (interactive) {
                 slot.classList.add('potion-disabled');
+            } else {
+                 // Estilo para inimigo
+                 slot.style.filter = "grayscale(1)";
+                 slot.style.opacity = "0.7";
             }
 
             const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
@@ -725,7 +823,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!el) return;
         const pct = Math.max(0, Math.min(100, (cur / (max || 1)) * 100));
         el.style.width = pct + '%';
-        if (txt) txt.textContent = `${cur.toLocaleString()} / ${max.toLocaleString()}`;
+        if (txt) txt.textContent = `${Math.floor(cur).toLocaleString()} / ${max.toLocaleString()}`;
     }
 
     function displayDamageNumber(dmg, crit, evd, target) {
@@ -753,8 +851,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         img.style.position = "absolute";
         img.style.top = "50%";
         img.style.left = "50%";
-        img.style.width = "40px";
-        img.style.height = "40px";
+        img.style.width = "50px";
+        img.style.height = "50px";
         img.style.zIndex = "25";
         img.style.animation = "floatUpPotion 1s ease-out forwards";
         sideElement.appendChild(img);
@@ -769,12 +867,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 150);
     }
 
+    // --- CORREÇÃO IMPORTANTE: Fim de Batalha ---
     async function endBattle(win, data) {
+        // 1. Limpa timer
         clearInterval(turnTimerInterval);
         
+        // 2. Toca som
         if (win) playSound('win');
         else playSound('loss');
 
+        // 3. Streak Local
         try {
             ensureStreakDate();
             if (win) {
@@ -789,36 +891,55 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         } catch(e){}
 
-        const msg = win 
-            ? `<strong style="color:#4CAF50;">Vitória!</strong><br>Você roubou ${data.points || 0} pontos.` 
-            : `<strong style="color:#f44336;">Derrota!</strong><br>Você perdeu ${data.points || 0} pontos.`;
+        // 4. Monta mensagem
+        let msg = win 
+            ? `<strong style="color:#4CAF50; font-size: 1.2em;">Vitória!</strong><br>Você roubou ${data.points || 0} pontos.` 
+            : `<strong style="color:#f44336; font-size: 1.2em;">Derrota!</strong><br>Você perdeu ${data.points || 0} pontos.`;
 
         let rewardsHTML = "";
-        if (win && data.rewards) {
-             const r = data.rewards;
-             let items = [];
-             const st = "display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:5px 8px;border-radius:5px;margin:2px;";
-             const imS = "width:30px;height:30px;margin-right:5px;object-fit:contain;";
-             
-             if(r.crystals > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${r.crystals}</div>`);
-             if(r.common > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${r.common}</div>`);
-             if(r.rare > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${r.rare}</div>`);
-             
-             if(items.length) rewardsHTML = `<div style="display:flex;flex-wrap:wrap;justify-content:center;margin-top:10px;gap:5px;">${items.join('')}</div>`;
+        try {
+            const r = data.rewards || {};
+            let items = [];
+            
+            const st = "display:flex; align-items:center; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:5px; margin:2px; font-weight:bold; border: 1px solid #555;";
+            const imS = "width:28px; height:28px; margin-right:8px; object-fit:contain;";
+            
+            // Tratamento robusto para chaves diferentes
+            const crystals = r.crystals || 0;
+            const commonQty = r.item_41 || r.common || 0;
+            const rareQty = r.item_42 || r.rare || 0;
+
+            if(crystals > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${crystals}</div>`);
+            if(commonQty > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${commonQty}</div>`);
+            if(rareQty > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${rareQty}</div>`);
+            
+            if(items.length) {
+                rewardsHTML = `<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; gap:8px; border-top:1px dashed #555; padding-top:10px;">${items.join('')}</div>`;
+            }
+        } catch (err) {
+            console.warn("Erro ao processar recompensas visuais:", err);
         }
             
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 1000));
         
         pvpCombatModal.style.display = "none";
         
-        showModalAlert(msg + rewardsHTML, "Fim de Combate");
+        // Exibe Modal Seguro
+        showModalAlert(msg + rewardsHTML, win ? "Vitória!" : "Fim de Combate");
         
+        // 5. RESET CRÍTICO DO ESTADO
         challengeBtn.disabled = false;
-        loadArenaLoadout();
         currentBattleId = null;
+        battleStateCache = null;
+        isMyTurn = false;
+        
+        await loadArenaLoadout();
+        await updateAttemptsUI();
     }
 
-    // --- Ranking Logic ---
+    // =======================================================================
+    // 6. RANKING E SISTEMA
+    // =======================================================================
     async function fetchAndRenderRanking() {
         showLoading();
         try {
@@ -1021,9 +1142,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!user) { window.location.href = "index.html"; return; }
             userId = user.id;
 
-            // --- CORREÇÃO: Limpeza de batalhas abandonadas ---
             await supabase.rpc("check_abandoned_battles");
-
             await checkAndResetArenaSeason();
             await supabase.rpc("reset_player_arena_attempts");
             await updateAttemptsUI();

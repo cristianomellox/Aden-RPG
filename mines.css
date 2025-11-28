@@ -169,8 +169,10 @@
 }
 
 #monsterImage {
-    width: 180px;
-    height: 240px;
+    width: 380px;
+    height: 380px;
+    margin-top: -60px;
+    
 }
 
 #monsterHpBar {

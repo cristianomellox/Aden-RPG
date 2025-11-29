@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const startAfkBtn = document.getElementById("start-afk");
     const idleScreen = document.getElementById("idle-screen");
     const dailyAttemptsLeftSpan = document.getElementById("daily-attempts-left");
-    const startAfkCooldownDisplay = document.getElementById("start-afk-cooldown-display");
+    const startAfkCooldownDisplay = document.getElementById("start-afk-cooldown-display"); // Mantido para garantir que não quebre, mas ficará oculto
     const saibaMaisBtn = document.getElementById("saiba-mais");
 
     const playerTotalXpSpan = document.getElementById("player-total-xp");
@@ -68,9 +68,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let playerAfkData = {};
     let afkStartTime = null;
     let timerInterval;
-    let startAfkCooldownActive = false;
-    const START_AFK_COOLDOWN_TIME_MS = 1000;
-    let countdownInterval;
+    // Removidas as variáveis de cooldown (startAfkCooldownActive, etc)
     const MAX_AFK_SECONDS = 4 * 60 * 60;
     const attackAnimationInterval = 1000;
 
@@ -106,6 +104,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         return cacheTimestamp < midnightUTC.getTime();
     }
 
+    // Função auxiliar para atualizar o estado do botão baseado nas tentativas
+    function updateStartAfkButtonState(attemptsLeft) {
+        if (attemptsLeft <= 0) {
+            startAfkBtn.disabled = true;
+            startAfkBtn.style.opacity = "0.5";
+            startAfkBtn.style.cursor = "not-allowed";
+        } else {
+            startAfkBtn.disabled = false;
+            startAfkBtn.style.opacity = "1";
+            startAfkBtn.style.cursor = "pointer";
+        }
+    }
+
     async function getAndSetPlayerAfkData(forceRefresh = false) {
         if (!userId) return null;
 
@@ -123,6 +134,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold);
                 afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
                 dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
+                
+                // Atualiza estado do botão
+                updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
+
                 console.log('Dados AFK do jogador carregados do cache.');
                 return playerAfkData;
             }
@@ -145,6 +160,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold);
         afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
         dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
+        
+        // Atualiza estado do botão
+        updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
+
         return playerAfkData;
     }
 
@@ -163,7 +182,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         idleMusic.play().catch(() => {});
         updateAfkRewardsPreview();
         getAndSetPlayerAfkData();
-        applyStartAfkCooldown();
+        // Removida a chamada para applyStartAfkCooldown()
+        if (startAfkCooldownDisplay) startAfkCooldownDisplay.style.display = "none";
     }
 
     function showCombatScreen() {
@@ -171,25 +191,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         combatScreen.style.display = "flex";
         idleMusic.pause();
         combatMusic.play().catch(() => {});
-    }
-
-    function applyStartAfkCooldown() {
-        startAfkBtn.disabled = true;
-        startAfkCooldownActive = true;
-        let timeLeft = START_AFK_COOLDOWN_TIME_MS / 1000;
-        startAfkCooldownDisplay.style.display = "inline";
-        startAfkCooldownDisplay.textContent = `(${timeLeft}s)`;
-        countdownInterval = setInterval(() => {
-            timeLeft--;
-            if (timeLeft > 0) {
-                startAfkCooldownDisplay.textContent = `(${timeLeft}s)`;
-            } else {
-                clearInterval(countdownInterval);
-                startAfkBtn.disabled = false;
-                startAfkCooldownActive = false;
-                startAfkCooldownDisplay.style.display = "none";
-            }
-        }, 1000);
     }
 
     function displayDamageNumber(damage, isCrit) {
@@ -221,9 +222,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     startAfkBtn.addEventListener("click", async () => {
-        if (startAfkCooldownActive || !userId) return;
+        // Removida verificação de cooldown, verifica apenas se o botão está desabilitado pelo atributo HTML ou sem ID
+        if (startAfkBtn.disabled || !userId) return;
         
-        // NÃO calculamos mais o HP aqui. O Backend decide.
         const { data, error } = await supabase.rpc('start_afk_adventure', { 
             p_player_id: userId
         });
@@ -259,7 +260,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 monsterHpBar.style.display = 'flex';
                 attacksLeftSpan.style.display = 'block';
 
-                // 🔑 O SEGREDO: Usamos o HP devolvido pelo Backend.
                 const monsterMaxHp = data.monster_hp_inicial; 
                 let currentMonsterHp = monsterMaxHp; 
                 
@@ -299,10 +299,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                         resultText.textContent = message;
                         resultModal.style.display = "block";
                         if (data.leveled_up) showLevelUpBalloon(data.new_level);
-                        setTimeout(() => {
-                            resultModal.style.display = "none";
-                            showIdleScreen();
-                        }, 3000);
+                        
+                        // 🛑 REMOVIDO o setTimeout que fechava automaticamente
+                        // O modal ficará aberto até o usuário clicar em Confirmar
                     }
                 };
                 animateAttack();
@@ -325,13 +324,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         startClientSideTimer();
         if (data.leveled_up) showLevelUpBalloon(data.new_level);
 
-        setTimeout(() => {
-            resultModal.style.display = "none";
-            showIdleScreen();
-        }, 3000);
+        // 🛑 REMOVIDO o setTimeout que fechava automaticamente
     });
 
-    confirmBtn.addEventListener("click", () => resultModal.style.display = "none");
+    // ✅ CORREÇÃO: O botão confirmar agora força o retorno à tela Idle e fecha o modal
+    confirmBtn.addEventListener("click", () => {
+        resultModal.style.display = "none";
+        showIdleScreen(); 
+    });
     
     returnMainIdleBtn.addEventListener("click", () => {
         window.location.href = "index.html?refresh=true";

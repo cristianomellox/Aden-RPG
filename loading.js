@@ -7,67 +7,70 @@ document.addEventListener('DOMContentLoaded', () => {
   const totalResources = resources.length;
   let loadedResources = 0;
   
-  // Condição para garantir que a barra de progresso chegue a 100%
-  let isProgressAt100 = false;
+  // Flags de controle
+  let resourcesLoaded = false;
   
-  // Função para esconder a tela
-  function hideLoadingScreen() {
-    loadingOverlay.classList.add('hidden');
-    setTimeout(() => {
-      loadingOverlay.remove();
-    }, 500);
-  }
-  
-  // Função para verificar se a tela pode ser escondida
-  function checkCompletion() {
-    // Esconde a tela se a barra de progresso já chegou a 100%
-    // E o evento 'onload' foi disparado (ou seja, a página está pronta)
-    if (isProgressAt100 && document.readyState === 'complete') {
-      hideLoadingScreen();
+  // Função global para tentar esconder a tela
+  // O script.js vai chamar isso quando o login for verificado
+  window.tryHideLoadingScreen = function() {
+    // Só esconde se:
+    // 1. Os recursos (imagens) carregaram 
+    // 2. A verificação de Auth do script.js terminou (window.authCheckComplete)
+    // 3. O documento está pronto
+    if (resourcesLoaded && window.authCheckComplete && document.readyState === 'complete') {
+       loadingOverlay.classList.add('hidden');
+       setTimeout(() => {
+         loadingOverlay.remove();
+       }, 500);
     }
-  }
+  };
 
   function updateProgress() {
     loadedResources++;
     const progressPercentage = Math.round((loadedResources / totalResources) * 100);
-    progressBar.style.width = `${progressPercentage}%`;
-    progressText.innerText = `${progressPercentage}%`;
+    
+    if (progressBar) progressBar.style.width = `${progressPercentage}%`;
+    if (progressText) progressText.innerText = `${progressPercentage}%`;
 
     if (loadedResources === totalResources) {
-      isProgressAt100 = true;
-      checkCompletion();
+      resourcesLoaded = true;
+      window.tryHideLoadingScreen(); // Tenta esconder, mas vai esperar o Auth
     }
   }
 
   // Monitora o evento 'onload' da janela
   window.addEventListener('load', () => {
-    checkCompletion();
+    // Força 100% visualmente se tudo carregou
+    if(progressBar) progressBar.style.width = `100%`;
+    if(progressText) progressText.innerText = `100%`;
+    resourcesLoaded = true;
+    window.tryHideLoadingScreen();
   });
 
-  // Se não houver recursos, esconde a tela no 'onload'
+  // Se não houver recursos, marca como carregado imediatamente
   if (totalResources === 0) {
-    window.addEventListener('load', hideLoadingScreen);
-    return;
+    resourcesLoaded = true;
+  } else {
+    // Monitora os recursos
+    resources.forEach(resource => {
+      if (resource.complete || resource.readyState >= 2) {
+        updateProgress();
+      } else {
+        resource.addEventListener('load', updateProgress);
+        resource.addEventListener('error', updateProgress);
+      }
+    });
   }
-  
-  // Monitora os recursos
-  resources.forEach(resource => {
-    if (resource.complete || resource.readyState >= 2) {
-      updateProgress();
-    } else {
-      resource.addEventListener('load', updateProgress);
-      resource.addEventListener('error', updateProgress);
-    }
-  });
 
-  // 🔒 Timeout de segurança: força 100% após 5 segundos
+  // 🔒 Timeout de segurança: força o desbloqueio visual após 4 segundos
+  // caso algo trave, mas ainda respeita o Auth se possível
   setTimeout(() => {
-    if (!isProgressAt100) {
-      progressBar.style.width = `100%`;
-      progressText.innerText = `100%`;
-      isProgressAt100 = true;
-      checkCompletion();
+    if (!resourcesLoaded) {
+      if(progressBar) progressBar.style.width = `100%`;
+      if(progressText) progressText.innerText = `100%`;
+      resourcesLoaded = true;
+      window.tryHideLoadingScreen();
     }
-  }, 5000);
+  }, 4000);
 
 });

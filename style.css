@@ -499,7 +499,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
         background-position: center center;
         background-size: cover;
         
-        display: flex;
+        display: none;
         flex-direction: column;
         align-items: center;
         justify-content: center;

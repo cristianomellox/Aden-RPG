@@ -803,50 +803,66 @@ function applyItemBonuses(player, equippedItems) {
 }
 
 // Função principal para buscar e exibir as informações do jogador (MODIFICADA COM CACHE)
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     
     const PLAYER_CACHE_KEY = 'player_data_cache';
-    const PLAYER_CACHE_TTL = 1; // 5 minutos. 24 horas (1440) quebraria a UI.
+    const PLAYER_CACHE_TTL = 1; // 5 minutos de cache para dados do banco (não afeta o Auth)
 
-    // 1. Tenta usar o cache se forceRefresh NÃO for true
+    // 1. Tenta usar o cache de DADOS DO JOGADOR se forceRefresh NÃO for true
     if (!forceRefresh) {
         const cachedPlayer = getCache(PLAYER_CACHE_KEY, PLAYER_CACHE_TTL);
         if (cachedPlayer) {
-            // console.log("Carregando dados do jogador do cache (5 min).");
             currentPlayerData = cachedPlayer;
-            currentPlayerId = cachedPlayer.id; // Garante que o ID esteja setado
+            currentPlayerId = cachedPlayer.id;
             renderPlayerUI(cachedPlayer, preserveActiveContainer);
             checkProgressionNotifications(cachedPlayer);
-            return; // Sai da função, usou o cache
+            return; 
         }
     }
     
-    // console.log("Buscando dados do jogador do Supabase (Cache expirado ou forçado).");
+    // 2. OTIMIZAÇÃO DE AUTH: Evita chamar getUser() (que gasta banda) repetidamente
+    let userId = currentPlayerId; // Tenta pegar da variável global primeiro
 
-    // 2. Se não houver cache ou se forceRefresh=true, busca no Supabase
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        updateUIVisibility(false);
-        currentPlayerData = null; // Limpa dados do jogador ao deslogar
-        localStorage.removeItem(PLAYER_CACHE_KEY); // Limpa o cache ao deslogar
-        return;
+    if (!userId) {
+        // Se não temos o ID na variável global, tentamos pegar da SESSÃO LOCAL (sem hit no servidor)
+        const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+        
+        if (sessionError || !session) {
+            // Se não tem sessão, aí sim tentamos getUser() como última tentativa ou deslogamos
+            const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+            if (userError || !user) {
+                updateUIVisibility(false);
+                currentPlayerData = null;
+                localStorage.removeItem(PLAYER_CACHE_KEY);
+                return;
+            }
+            userId = user.id;
+        } else {
+            userId = session.user.id;
+        }
     }
     
-    currentPlayerId = user.id; // Armazena o ID do usuário
+    // Atualiza a global caso tenha recuperado agora
+    currentPlayerId = userId; 
 
+    // 3. Busca os dados do jogador na tabela 'players'
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
-        .select('*') // Busca todas as colunas
-        .eq('id', user.id)
+        .select('*')
+        .eq('id', userId)
         .single();
         
     if (playerError || !player) {
+        // Se der erro ao buscar o jogador, pode ser que a sessão seja inválida ou o player não exista
+        console.error("Erro ao buscar jogador:", playerError);
         updateUIVisibility(false);
-        currentPlayerData = null; // Limpa dados em caso de erro
-        localStorage.removeItem(PLAYER_CACHE_KEY); // Limpa o cache em caso de erro
+        currentPlayerData = null; 
+        localStorage.removeItem(PLAYER_CACHE_KEY); 
         return;
     }
 
+    // 4. Busca os itens equipados (mantido igual)
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
         .select(`
@@ -869,7 +885,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
                 evasion
             )
         `)
-        .eq('player_id', user.id)
+        .eq('player_id', userId)
         .neq('equipped_slot', null);
 
     if (itemsError) {
@@ -877,6 +893,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     }
 
     const playerWithEquips = applyItemBonuses(player, equippedItems || []);
+    
+    // Cálculo do CP (mantido igual)
     playerWithEquips.combat_power = Math.floor(
         (playerWithEquips.attack * 12.5) +
         (playerWithEquips.min_attack * 1.5) +
@@ -887,25 +905,17 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         (playerWithEquips.evasion * 1)
     );
 
-    // Armazena os dados completos do jogador (com bônus) globalmente
+    // Armazena e Renderiza
     currentPlayerData = playerWithEquips;
-    
-    // 3. Salva os dados frescos no cache
     setCache(PLAYER_CACHE_KEY, playerWithEquips, PLAYER_CACHE_TTL);
-
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
-    
-    // Verifica notificações de progressão
     checkProgressionNotifications(playerWithEquips);
 
+    // Verifica nome padrão para abrir modal de edição
     if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
-
-        // --- CORREÇÃO DO AVATAR APLICADA ---
-        // Chama a função global do perfil_edit.js para carregar os avatares
         if (typeof window.updateProfileEditModal === 'function') {
             window.updateProfileEditModal(playerWithEquips);
         }
-
         const nameInput = document.getElementById('editPlayerName');
         if (nameInput) nameInput.value = '';
         profileEditModal.style.display = 'flex';
@@ -1034,7 +1044,8 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
     footerMenu.style.display = 'flex';
     welcomeContainer.style.display = 'block';
   } else {
-    authContainer.style.display = 'block'; // ✅ Corrigido
+    // ALTERAÇÃO: Usa flex em vez de block para manter a centralização
+    authContainer.style.display = 'flex'; 
     welcomeContainer.style.display = 'none';
     footerMenu.style.display = 'none';
     signInBtn.style.display = 'block';
@@ -1058,6 +1069,10 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 // });
 
 // Sessão e inicialização
+
+// Flag para indicar que o check de auth terminou
+window.authCheckComplete = false; 
+
 supabaseClient.auth.onAuthStateChange((event, session) => {
     if (session) {
         // Chama a função (que pode usar o cache ou não)
@@ -1065,9 +1080,21 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
         fetchAndDisplayPlayerInfo().then(() => {
             // Após o login e carregamento dos dados do jogador, processar as ações da URL.
             handleUrlActions();
+            
+            // SINALIZA QUE O AUTH TERMINOU (LOGADO)
+            window.authCheckComplete = true;
+            if (typeof window.tryHideLoadingScreen === 'function') {
+                window.tryHideLoadingScreen();
+            }
         });
     } else {
         updateUIVisibility(false);
+        
+        // SINALIZA QUE O AUTH TERMINOU (DESLOGADO)
+        window.authCheckComplete = true;
+        if (typeof window.tryHideLoadingScreen === 'function') {
+            window.tryHideLoadingScreen();
+        }
     }
 });
 

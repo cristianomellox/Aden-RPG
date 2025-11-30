@@ -207,63 +207,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 <script>
-  // --- SCRIPT DE BLOQUEIO DE TOPBAR ---
+  <script>
 (function() {
-    // Seletor universal do iframe da TopBar do Google
-    const targetSelector = 'iframe.goog-te-banner-frame';
-    
-    // Função que remove o elemento e limpa o body/html
-    function removeGoogleTranslateBar() {
-        const bar = document.querySelector(targetSelector);
-        if (bar) {
-            bar.remove();
-            console.log("Google Translate TopBar Removida.");
-            
-            // Limpa estilos teimosos que o Google injeta no HTML/BODY
-            document.body.style.top = '0px'; 
-            document.body.style.marginTop = '0px';
-            document.body.style.position = 'static';
-            document.documentElement.style.top = '0px';
-            document.documentElement.style.position = 'static';
-            
-            // Se o observer estiver ativo, desconecta-o, pois a remoção foi bem-sucedida
-            if (observer) {
-                observer.disconnect();
-            }
-            return true;
-        }
-        return false;
+
+    function forceResetBody() {
+        document.body.style.top = "0px !important";
+        document.body.style.position = "relative";
+        document.documentElement.style.top = "0px";
+        document.documentElement.style.position = "relative";
     }
 
-    // Tenta remover imediatamente (para o caso de já ter sido carregado)
-    removeGoogleTranslateBar();
+    function removeAllGoogleBars() {
+        // remove iframe clássico
+        document.querySelectorAll("iframe.goog-te-banner-frame").forEach(el => el.remove());
 
+        // remove novos containers que o Google adiciona
+        document.querySelectorAll(".skiptranslate").forEach(el => el.remove());
 
-    // 1. Cria um observer para monitorar mudanças no body
-    let observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            // Verifica se algum nó foi adicionado
-            if (mutation.addedNodes.length) {
-                // Tenta remover a barra (que pode ter sido um dos nós adicionados)
-                if (removeGoogleTranslateBar()) {
-                    // Se a remoção funcionar, desconecta o observer
-                    observer.disconnect();
-                }
-            }
-        });
+        // remove possíveis DIV wrappers que inserem padding
+        document.querySelectorAll("body > div[style*='translate'], body > div[style*='top']").forEach(el => el.remove());
+
+        // força reset no body/html
+        forceResetBody();
+    }
+
+    // tenta remover imediatamente
+    removeAllGoogleBars();
+
+    // OBSERVER — remove tudo o que o Google tentar adicionar
+    const obs = new MutationObserver(() => {
+        removeAllGoogleBars();
     });
 
-    // 2. Configura o observer para observar o BODY e seus descendentes
-    observer.observe(document.body, { 
-        childList: true, // Observa adição/remoção de nós
-        subtree: true    // Observa em todos os descendentes
+    obs.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style"]
     });
-    
-    // Opcional: Tenta forçar a remoção após 3 segundos, caso o observer falhe
-    setTimeout(removeGoogleTranslateBar, 3000); 
+
+    // tentativa extra após 2s
+    setTimeout(removeAllGoogleBars, 2000);
 
 })();
-// --- FIM DO SCRIPT DE BLOQUEIO ---
+</script>
+
 </script>
 </body>
 </html>

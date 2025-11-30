@@ -866,9 +866,11 @@ body, html {
     padding: 0 12px;
 }
 
-/* arena.css */
+/* ================================
+   AJUSTES PARA ESCONDER GOOGLE TRANSLATE WIDGET E TOPBAR
+   ================================ */
 
-/* Esconde o container do widget sem usar display:none (que quebra o script) */
+/* 1. Oculta o widget principal (select/dropdown) de forma segura */
 #google_translate_element {
     visibility: hidden;
     position: absolute;
@@ -878,18 +880,30 @@ body, html {
     top: -1000px; /* Joga para fora da tela */
 }
 
-/* Esconde a barra azul do Google no topo */
-.goog-te-banner-frame.skiptranslate {
+/* 2. Oculta a barra azul superior (TopBar/Banner Frame) */
+/* Este é o seletor principal do iframe que a maioria dos navegadores cria. */
+.goog-te-banner-frame.skiptranslate,
+.goog-te-banner-frame { /* Seletor de fallback */
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0px !important;
+    margin-top: 0px !important;
+    box-shadow: none !important;
+    border: none !important;
 } 
 
-/* Remove o espaço em branco que o Google tenta adicionar no topo do body */
+/* 3. Remove o espaço em branco adicionado ao body (o top: Xpx) */
+/* É crucial para que o seu #playerTopBar (fixo em top: 0) funcione corretamente. */
 body {
     top: 0px !important; 
-    position: static !important;
+    position: static !important; /* Volta o body para seu comportamento normal */
+    margin-top: 0px !important; /* Garante que não haja margem superior */
+    padding-top: 0px !important; /* Garante que não haja padding superior */
+    min-height: 100vh; /* Garante que o body ainda preencha a tela, se necessário */
 }
 
-/* Esconde tooltips do Google */
+/* 4. Oculta tooltips e highlights (já estava correto, mas mantido) */
 .goog-tooltip, .goog-tooltip:hover {
     display: none !important;
 }

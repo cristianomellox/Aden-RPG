@@ -10,42 +10,35 @@
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="arena.css" /> 
-    <style id="gt-hide-styles">
-/* Mantém o iframe presente (para não quebrar a tradução),
-   mas o empurra visualmente para fora e desativa interações */
-iframe.goog-te-banner-frame,
-iframe[id^="goog-"] {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 1px !important;
-  height: 1px !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  transform: translateY(-9999px) !important;
-  z-index: 0 !important;
+    <style>
+/* Remove o widget flutuante do rodapé */
+.goog-te-gadget,
+.goog-te-gadget-simple,
+.goog-te-gadget-icon,
+.goog-logo-link,
+.goog-te-banner, 
+.goog-te-menu-value {
+    display: none !important;
 }
 
-/* Força body/html a não serem empurrados */
-html, html[style], body, body[style] {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-  top: 0 !important;
-  position: static !important;
+/* remove o contêiner que o Google injeta no bottom */
+.goog-te-gadget > * {
+    display: none !important;
 }
 
-/* Uma camada de cobertura que irá ficar sobre a topbar */
-#gtbarCover {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 48px; /* valor inicial, será ajustado por JS */
-  background: rgba(18,18,18,0.95); /* ajuste para combinar com seu topbar */
-  z-index: 2147483646; /* extremamente alto, mas abaixo de alguns elementos internos */
-  pointer-events: none; /* permitir cliques passarem (se quiser impedir, mude para auto) */
-  transition: height 0.12s ease;
-  box-shadow: none;
+/* remove o pop-up flutuante */
+.goog-te-balloon-frame {
+    display: none !important;
+}
+
+/* remove a borda/área clicável */
+div[id*=':0.targetLanguage'] {
+    display: none !important;
+}
+
+/* remove iframe escondido no bottom */
+iframe.goog-te-menu-frame {
+    display: none !important;
 }
 </style>
 

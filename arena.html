@@ -10,6 +10,52 @@
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="arena.css" /> 
+    <!-- adiciona isto no <head> -->
+<style id="force-hide-google-translate">
+/* Esconde iframes e wrappers conhecidos do Google Translate */
+iframe.goog-te-banner-frame,
+iframe[id^="goog-"],
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+.skiptranslate,
+.goog-te-gadget,
+div.goog-te-banner-frame,
+div.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    opacity: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+}
+
+/* remove qualquer destaque/tooltip */
+.goog-tooltip, .goog-tooltip * { display: none !important; }
+
+/* força o body e html a não terem top/padding/margin impostos */
+html, html[style], body, body[style] {
+    top: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    position: static !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+/* Bloqueio extra para iframes cujo src contenha 'translate.google' */
+iframe[src*="translate.google"] {
+    display: none !important;
+}
+
+/* evita que o site reserve espaço para a barra */
+body > .goog-te-banner-frame,
+body > .skiptranslate {
+    display: none !important;
+}
+</style>
+
 </head>
 <body>
 
@@ -207,51 +253,84 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 <script>
-  <script>
 (function() {
+    // Remove nós e zera style inline de body/html repetidamente por alguns segundos
+    const selectorsToRemove = [
+        "iframe.goog-te-banner-frame",
+        "iframe[id^='goog-']",
+        ".goog-te-banner-frame",
+        ".goog-te-banner-frame.skiptranslate",
+        ".skiptranslate",
+        ".goog-te-gadget",
+        "iframe[src*='translate.google']"
+    ];
 
-    function forceResetBody() {
-        document.body.style.top = "0px !important";
-        document.body.style.position = "relative";
-        document.documentElement.style.top = "0px";
-        document.documentElement.style.position = "relative";
+    function removeNodes() {
+        selectorsToRemove.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                try { el.remove(); } catch(e) { /* nada */ }
+            });
+        });
+
+        // Remove wrappers diretos adicionados dentro do body
+        Array.from(document.body.children).forEach(ch => {
+            if (ch.classList && (ch.classList.contains("skiptranslate") || ch.classList.contains("goog-te-banner-frame"))) {
+                try { ch.remove(); } catch(e) {}
+            }
+        });
+
+        // Remove atributos style problemáticos no body/html
+        try {
+            if (document.body) {
+                document.body.style.top = "0px";
+                document.body.style.marginTop = "0px";
+                document.body.style.position = "static";
+                document.body.removeAttribute("data-goog-translate"); // se houver marcações
+            }
+            if (document.documentElement) {
+                document.documentElement.style.top = "0px";
+                document.documentElement.style.position = "static";
+            }
+        } catch(e) {}
     }
 
-    function removeAllGoogleBars() {
-        // remove iframe clássico
-        document.querySelectorAll("iframe.goog-te-banner-frame").forEach(el => el.remove());
+    // Run immediately
+    removeNodes();
 
-        // remove novos containers que o Google adiciona
-        document.querySelectorAll(".skiptranslate").forEach(el => el.remove());
-
-        // remove possíveis DIV wrappers que inserem padding
-        document.querySelectorAll("body > div[style*='translate'], body > div[style*='top']").forEach(el => el.remove());
-
-        // força reset no body/html
-        forceResetBody();
-    }
-
-    // tenta remover imediatamente
-    removeAllGoogleBars();
-
-    // OBSERVER — remove tudo o que o Google tentar adicionar
-    const obs = new MutationObserver(() => {
-        removeAllGoogleBars();
+    // Observer para remoções/atributos - observa todo documento e attributes (para detectar quando o Google muda style inline)
+    const globalObserver = new MutationObserver((mutations) => {
+        let found = false;
+        for (const m of mutations) {
+            // se for adição de nodes ou mudança de atributo style no body/html, tenta remover
+            if (m.addedNodes && m.addedNodes.length) found = true;
+            if (m.type === "attributes" && (m.target === document.body || m.target === document.documentElement)) found = true;
+        }
+        if (found) removeNodes();
     });
 
-    obs.observe(document.documentElement, {
+    globalObserver.observe(document.documentElement, {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["style"]
+        attributeFilter: ["style", "class"]
     });
 
-    // tentativa extra após 2s
-    setTimeout(removeAllGoogleBars, 2000);
+    // Intervalo curto (fallback) que tenta remover repetidamente enquanto o widget carrega
+    const interval = setInterval(removeNodes, 200);
+    // Para o interval depois de 6s (presume-se que já tenha escrito/remoído o que precisava)
+    setTimeout(() => {
+        clearInterval(interval);
+        // mantém o observer ativo por mais 6s e depois desconecta (reduz overhead)
+        setTimeout(() => globalObserver.disconnect(), 6000);
+    }, 6000);
+
+    // E por fim, uma última tentativa após 2s, 4s e 8s
+    setTimeout(removeNodes, 2000);
+    setTimeout(removeNodes, 4000);
+    setTimeout(removeNodes, 8000);
 
 })();
 </script>
 
-</script>
 </body>
 </html>

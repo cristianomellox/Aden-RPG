@@ -207,20 +207,49 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 <script>
-// faz patch do estilo que o Google tenta aplicar
-function fixGoogleTranslatePosition() {
-    // o Google força body { top: 40px } para empurrar a página
-    const bodyStyle = document.body.style;
-    if (bodyStyle.top && bodyStyle.top !== "0px") {
-        bodyStyle.top = "0px";
+// Função que injeta CSS dentro do iframe da barra do Google Translate
+function hideGoogleTopBar() {
+    const iframe = document.querySelector("iframe.goog-te-banner-frame");
+
+    if (!iframe) return; // ainda não carregou
+
+    try {
+        const innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+        // injeta CSS dentro do iframe
+        const style = innerDoc.createElement("style");
+        style.innerHTML = "body { display:none !important; }";
+        innerDoc.head.appendChild(style);
+
+        // esconde o iframe visualmente
+        iframe.style.display = "none";
+        iframe.style.visibility = "hidden";
+        iframe.style.opacity = "0";
+        iframe.style.height = "0px";
+        iframe.style.pointerEvents = "none";
+
+        console.log("Google topbar escondida com sucesso!");
+    } catch (e) {
+        console.warn("Ainda não foi possível acessar o iframe. Tentando novamente…");
+    }
+
+    // remove o top forçado no body
+    document.body.style.top = "0px";
+}
+
+// Zera sempre que o Google tentar empurrar para baixo
+function preventBodyPush() {
+    if (document.body.style.top && document.body.style.top !== "0px") {
+        document.body.style.top = "0px";
     }
 }
 
-// verifica regularmente
-setInterval(fixGoogleTranslatePosition, 50);
+// Roda várias vezes porque o Google injeta aos poucos
+setInterval(() => {
+    hideGoogleTopBar();
+    preventBodyPush();
+}, 100);
 
-// primeira execução
-fixGoogleTranslatePosition();
 </script>
 
 </body>

@@ -866,6 +866,28 @@ body, html {
     padding: 0 12px;
 }
 
+
+/* 1. Esconde o iframe da topbar do Google Translate */
 .goog-te-banner-frame {
-            display: none !important;
-        }
+    display: none !important;
+}
+
+/* 2. Remove a margem superior que o Google Translate injeta no body */
+/* Isso é crucial, pois a barra pode estar oculta, mas a margem ainda empurra o conteúdo */
+body {
+    top: 0px !important;
+    margin-top: 0px !important;
+}
+
+/* 3. (OPCIONAL) Método mais agressivo para remover o iframe e garantir que não haja deslocamento */
+.goog-tooltip-wrapper, 
+.goog-tooltip-wrapper *,
+.goog-te-spinner-pos {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 4. Remove o elemento 'powered by' que aparece no final da tradução (opcional) */
+#google_translate_element {
+    display: none !important;
+}

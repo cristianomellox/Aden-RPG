@@ -869,6 +869,7 @@ body, html {
 #google_translate_element {
     visibility: hidden;
     position: absolute;
+    display: none;
     top: -9999px;
     left: -9999px;
     height: 0;

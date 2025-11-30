@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -10,38 +10,6 @@
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="arena.css" /> 
-    <style>
-/* Remove o widget flutuante do rodapé */
-.goog-te-gadget,
-.goog-te-gadget-simple,
-.goog-te-gadget-icon,
-.goog-logo-link,
-.goog-te-banner, 
-.goog-te-menu-value {
-    display: none !important;
-}
-
-/* remove o contêiner que o Google injeta no bottom */
-.goog-te-gadget > * {
-    display: none !important;
-}
-
-/* remove o pop-up flutuante */
-.goog-te-balloon-frame {
-    display: none !important;
-}
-
-/* remove a borda/área clicável */
-div[id*=':0.targetLanguage'] {
-    display: none !important;
-}
-
-/* remove iframe escondido no bottom */
-iframe.goog-te-menu-frame {
-    display: none !important;
-}
-</style>
-
 </head>
 <body>
 
@@ -237,92 +205,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <script src="auto_translate.js"></script>
 
-<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit&inline=true"></script>
-
-<script>
-(function(){
-  // cria ou reutiliza o cover que esconde a barra
-  function ensureCover() {
-    let cover = document.getElementById("gtbarCover");
-    if (!cover) {
-      cover = document.createElement("div");
-      cover.id = "gtbarCover";
-      document.documentElement.appendChild(cover);
-    }
-    return cover;
-  }
-
-  // aplica estilos invisíveis ao iframe e ajusta a cobertura à altura real
-  function hideBarAndCover() {
-    const cover = ensureCover();
-
-    // localiza possíveis iframes do Google Translate
-    const candidates = Array.from(document.querySelectorAll("iframe")).filter(iframe => {
-      const src = iframe.getAttribute("src") || "";
-      // heurística: iframe que contém 'translate' no src ou tem a classe
-      return src.includes("translate.google") || iframe.classList.contains("goog-te-banner-frame") || iframe.id.startsWith("goog-");
-    });
-
-    // aplica "esconder visual" aos iframes encontrados
-    candidates.forEach(iframe => {
-      // aplica estilos inline (mais fortes que CSS externo em alguns casos)
-      iframe.style.position = "fixed";
-      iframe.style.top = "0";
-      iframe.style.left = "0";
-      iframe.style.width = "1px";
-      iframe.style.height = "1px";
-      iframe.style.opacity = "0";
-      iframe.style.pointerEvents = "none";
-      iframe.style.transform = "translateY(-9999px)";
-      iframe.style.zIndex = "0";
-    });
-
-    // tenta descobrir a altura real da barra (se existir) usando bounding boxes
-    // se não encontrar, mantém a altura padrão (48px)
-    let height = 48;
-    // verifica nodes diretos que o Google pode criar (mesmo cross origin)
-    const possible = Array.from(document.querySelectorAll("body > * , html > *")).find(el => {
-      const cls = (el.className || "");
-      if (cls && /goog-te|skiptranslate|googtranslate/i.test(cls)) return true;
-      const txt = (el.id || "") + " " + (el.className || "");
-      if (/goog-te|skiptranslate|googtranslate/i.test(txt)) return true;
-      return false;
-    });
-
-    if (possible) {
-      const rect = possible.getBoundingClientRect();
-      if (rect && rect.height > 2) height = Math.ceil(rect.height);
-    } else {
-      // última tentativa: medir qualquer iframe visível (se houver)
-      const ifr = document.querySelector("iframe");
-      if (ifr) {
-        const r = ifr.getBoundingClientRect();
-        if (r && r.height > 2) height = Math.ceil(r.height);
-      }
-    }
-
-    // ajustar cover para altura encontrada (um pouco de margem)
-    cover.style.height = Math.max(1, height + 6) + "px";
-    // coloca cover no topo (em caso do iframe ficar fora do body)
-    cover.style.top = "0px";
-  }
-
-  // roda frequentemente por alguns segundos até estabilizar
-  const interval = setInterval(hideBarAndCover, 100);
-  // corta o intervalo após 10s (reduz overhead)
-  setTimeout(() => { clearInterval(interval); }, 10000);
-
-  // adiciona observer para mudanças futuras (quando o google recriar a barra)
-  const obs = new MutationObserver((mutations) => {
-    hideBarAndCover();
-  });
-  obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
-
-  // execução inicial imediata
-  hideBarAndCover();
-
-})();
-</script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 
 </body>
 </html>

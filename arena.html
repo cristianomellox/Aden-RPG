@@ -206,5 +206,28 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Função para remover atributos que causam a barra
+    function fixGoogleTranslate() {
+        // 1. Remove o estilo "top: 0px" do body
+        document.body.style.top = ''; 
+        
+        // 2. Remove o estilo "position: fixed" ou "top: Xpx" do elemento HTML
+        document.documentElement.style.cssText = ''; 
+        document.documentElement.style.top = '';
+        
+        // 3. Remove a classe que força a posição fixa (se existir)
+        document.body.classList.remove('goog-te-spinner-pos-fixed');
+    }
+
+    // Tenta executar a correção imediatamente
+    fixGoogleTranslate();
+
+    // Tenta executar a correção após um pequeno atraso, pois o Google JS é lento
+    setTimeout(fixGoogleTranslate, 500); 
+    setTimeout(fixGoogleTranslate, 1500); // Garante que a correção pegue a TopBar
+});
+</script>
 </body>
 </html>

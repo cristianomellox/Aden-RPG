@@ -26,7 +26,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const confirmModal = document.getElementById("confirmModal");
     const confirmMessage = document.getElementById("confirmMessage");
     const confirmTitle = document.getElementById("confirmTitle");
-    // IMPORTANTE: Referência dinâmica para o botão de confirmação
     let confirmActionBtn = document.getElementById("confirmActionBtn");
 
     const rankingModal = document.getElementById("rankingModal");
@@ -120,7 +119,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             } catch (err) {}
         }
-        // Fallback para HTML5 Audio se WebAudio falhar
         try {
             const a = new Audio(audioFiles[name] || audioFiles.normal);
             a.volume = Math.min(1, Math.max(0, vol));
@@ -173,17 +171,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
     const esc = (s) => (s === 0 || s) ? String(s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])) : "";
 
-    // --- CORREÇÃO IMPORTANTE: Modal Seguro ---
     function showModalAlert(message, title = "Aviso") {
         if (!confirmModal) { alert(message); return; }
         
         if (confirmTitle) confirmTitle.textContent = title;
         if (confirmMessage) confirmMessage.innerHTML = message;
         
-        // Substituição do botão para limpar eventos antigos e atualizar referência global
         const newBtn = confirmActionBtn.cloneNode(true);
         confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn);
-        confirmActionBtn = newBtn; // ATUALIZA A VARIÁVEL GLOBAL
+        confirmActionBtn = newBtn;
         
         confirmActionBtn.textContent = "Ok";
         confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; };
@@ -191,7 +187,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         confirmModal.style.display = 'flex';
     }
 
-    // --- Cache LocalStorage ---
     const CACHE_TTL_24H = 1440;
     function setCache(key, data, ttlMinutes = CACHE_TTL_24H) {
         try { localStorage.setItem(key, JSON.stringify({ expires: Date.now() + ttlMinutes * 60000, data })); } catch {}
@@ -261,7 +256,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch { if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = "Erro"; }
     }
 
-    // --- Streak Logic ---
     const STREAK_KEY = 'arena_win_streak';
     const STREAK_DATE_KEY = 'arena_win_streak_date'; 
     function getTodayUTCDateString() {
@@ -326,7 +320,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Configuração dos Slots de Poção
     potionSlots.forEach(slot => {
         slot.addEventListener('click', async () => {
             if (!potionSelectModal) return;
@@ -343,7 +336,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             potionListGrid.innerHTML = "";
             
-            // Botão remover
             const unequipBtn = document.createElement('div');
             unequipBtn.className = "inventory-item"; 
             unequipBtn.style.border = "1px solid red";
@@ -400,7 +392,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 5. LÓGICA DE COMBATE
     // =======================================================================
 
-    // Injeção de CSS para animações
     const style = document.createElement('style');
     style.innerHTML = `
         #attackBtnContainer:active { transform: scale(0.95); }
@@ -414,7 +405,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     `;
     document.head.appendChild(style);
 
-    // Configuração Botão Ataque
     const btnContainer = document.getElementById("attackBtnContainer");
     if (btnContainer) {
         const newBtn = btnContainer.cloneNode(true);
@@ -429,7 +419,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         newBtn.style.pointerEvents = "auto";
     }
 
-    // --- CORREÇÃO IMPORTANTE: Listener do SKIP ---
     if (skipBtn) {
         skipBtn.addEventListener("click", (e) => {
             if (skipBtn.disabled || skipBtn.style.opacity === "0.5") return;
@@ -437,10 +426,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (confirmTitle) confirmTitle.textContent = "Pular Combate?";
             if (confirmMessage) confirmMessage.innerHTML = "O sistema irá simular o restante da luta instantaneamente.<br>Isso não garante vitória!";
             
-            // Substituição Segura do Botão
             const newBtn = confirmActionBtn.cloneNode(true);
             confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn); 
-            confirmActionBtn = newBtn; // ATUALIZA GLOBAL
+            confirmActionBtn = newBtn;
             
             confirmActionBtn.textContent = "Sim, Pular";
             confirmActionBtn.onclick = async () => {
@@ -452,7 +440,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     
                     if (error || !res?.success) throw new Error(res?.message || "Erro ao pular.");
                     
-                    // Atualiza visual
                     updatePvpHpBar(challengerHpFill, challengerHpText, res.win ? 1 : 0, 100);
                     updatePvpHpBar(defenderHpFill, defenderHpText, res.win ? 0 : 1, 100);
                     
@@ -470,7 +457,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
     
-    // Início do Desafio
     async function handleChallengeClick() {
         if (!challengeBtn || challengeBtn.disabled) return;
         if (arenaAttemptsLeftSpan.textContent === '0') return;
@@ -543,10 +529,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         updateBattleStateUI(state);
         
+        // Renderiza Inicial
         renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
         renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
         
-        // Reset visual do Skip ao iniciar
         if (skipBtn) {
             skipBtn.disabled = true;
             skipBtn.style.opacity = "0.5";
@@ -559,7 +545,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         isMyTurn = true;
         turnTimeLeft = 10; 
         
-        // Ativa Skip se Turno >= 3
         if (skipBtn) {
             const t = battleStateCache ? battleStateCache.turn_count : 1;
             if (t >= 3) {
@@ -605,7 +590,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // --- CORREÇÃO IMPORTANTE: Lógica de Ação (Ataque/Poção) ---
     async function performAction(type, itemId = null) {
         if (!isMyTurn) return;
         
@@ -628,7 +612,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         try {
-            // Guarda estado anterior para comparações
             var preState = JSON.parse(JSON.stringify(battleStateCache));
 
             const { data, error } = await supabase.rpc('process_arena_action', {
@@ -646,11 +629,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 battleStateCache = res.state;
                 flashPotionIcon(itemId, challengerSide); 
                 
+                // [CORREÇÃO] Sons distintos para cada tipo de poção
                 if (itemId === 43 || itemId === 44) playSound('heal');
-                else playSound('fury'); 
-                
+                else if (itemId === 45 || itemId === 46) playSound('fury'); 
+                else if (itemId === 47 || itemId === 48) playSound('dex'); // Destreza
+                else if (itemId === 49 || itemId === 50) playSound('atk'); // Ataque
+                else playSound('fury'); // Fallback
+
                 renderBattlePotions(challengerSide, res.state.attacker_potions, 'left', true);
-                return; // Turno continua
+                return; 
             }
 
             // CASO 2: JOGADOR ATACOU
@@ -676,8 +663,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (attackerTookDamage) {
                     await new Promise(r => setTimeout(r, 600));
 
-                    // LÓGICA DE DETECÇÃO DE POÇÃO DO INIMIGO
-                    // Compara as listas de poções para ver se algo diminuiu
                     let enemyUsedItem = null;
                     const prePots = preState.defender_potions || [];
                     const newPots = newState.defender_potions || [];
@@ -691,13 +676,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (enemyUsedItem) {
                         renderBattlePotions(defenderSide, newState.defender_potions, 'right', false);
                         flashPotionIcon(enemyUsedItem, defenderSide);
+                        // Som simplificado para inimigo (Cura ou Buff genérico)
                         playSound(enemyUsedItem < 45 ? 'heal' : 'fury');
-                        // Atualiza HP visualmente se curou
                         updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
                         await new Promise(r => setTimeout(r, 800));
                     }
 
-                    // Animação de Ataque do Inimigo
                     animateActorMove(defenderSide);
                     await new Promise(r => setTimeout(r, 300));
 
@@ -721,7 +705,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) {
             console.error(e);
             challengeBtn.disabled = false;
-            // Destrava turno em caso de erro para não congelar o jogo
             if (type === 'ATTACK') {
                  isMyTurn = true;
                  startPlayerTurn();
@@ -736,6 +719,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         updatePvpHpBar(defenderHpFill, defenderHpText, state.defender_hp, state.defender_max_hp);
         renderActiveBuffs(challengerSide, state.attacker_buffs, state.turn_count);
         renderActiveBuffs(defenderSide, state.defender_buffs, state.turn_count);
+        
+        // [CORREÇÃO] Redesenhar as poções do jogador para atualizar status de Cooldown (desbloquear slots após turno)
+        if (state.attacker_potions) {
+             renderBattlePotions(challengerSide, state.attacker_potions, 'left', true);
+        }
     }
 
     function renderActiveBuffs(container, buffs, currentTurn) {
@@ -787,18 +775,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         potions.forEach(p => {
             const slot = document.createElement('div');
             slot.className = 'battle-potion-slot';
+            // Só é clicável se tiver quantidade, cooldown 0 e for turno do jogador (interactive flag)
             if (interactive && p.qty > 0 && p.cd <= 0) {
                 slot.classList.add('potion-clickable');
                 slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
             } else if (interactive) {
                 slot.classList.add('potion-disabled');
             } else {
-                 // Estilo para inimigo
                  slot.style.filter = "grayscale(1)";
                  slot.style.opacity = "0.7";
             }
 
             const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
+            // Cooldown visual (cheio se > 0)
             const cdHeight = p.cd > 0 ? "100%" : "0%";
             
             slot.innerHTML = `
@@ -867,16 +856,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 150);
     }
 
-    // --- CORREÇÃO IMPORTANTE: Fim de Batalha ---
     async function endBattle(win, data) {
-        // 1. Limpa timer
         clearInterval(turnTimerInterval);
         
-        // 2. Toca som
         if (win) playSound('win');
         else playSound('loss');
 
-        // 3. Streak Local
         try {
             ensureStreakDate();
             if (win) {
@@ -891,7 +876,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         } catch(e){}
 
-        // 4. Monta mensagem
         let msg = win 
             ? `<strong style="color:#4CAF50; font-size: 1.2em;">Vitória!</strong><br>Você roubou ${data.points || 0} pontos.` 
             : `<strong style="color:#f44336; font-size: 1.2em;">Derrota!</strong><br>Você perdeu ${data.points || 0} pontos.`;
@@ -904,7 +888,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             const st = "display:flex; align-items:center; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:5px; margin:2px; font-weight:bold; border: 1px solid #555;";
             const imS = "width:28px; height:28px; margin-right:8px; object-fit:contain;";
             
-            // Tratamento robusto para chaves diferentes
             const crystals = r.crystals || 0;
             const commonQty = r.item_41 || r.common || 0;
             const rareQty = r.item_42 || r.rare || 0;
@@ -924,10 +907,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         pvpCombatModal.style.display = "none";
         
-        // Exibe Modal Seguro
         showModalAlert(msg + rewardsHTML, win ? "Vitória!" : "Fim de Combate");
         
-        // 5. RESET CRÍTICO DO ESTADO
         challengeBtn.disabled = false;
         currentBattleId = null;
         battleStateCache = null;
@@ -1152,7 +1133,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) { console.error("Erro no boot:", e); } finally { hideLoading(); }
     }
 
-    // --- Aviso de Saída ---
     window.addEventListener('beforeunload', (e) => {
         if (currentBattleId) {
             e.preventDefault();

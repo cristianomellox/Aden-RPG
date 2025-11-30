@@ -1,6 +1,6 @@
 // auto_translate.js — versão 2025 totalmente funcional
 
-const DEFAULT_LANG = "pt"; // idioma original do jogo
+const DEFAULT_LANG = "en"; // idioma original do jogo
 
 // ======================================================================
 // 1. Inicialização do Google Translate (widget oculto mas funcional)

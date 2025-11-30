@@ -10,6 +10,45 @@
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="arena.css" /> 
+    <style id="gt-hide-styles">
+/* Mantém o iframe presente (para não quebrar a tradução),
+   mas o empurra visualmente para fora e desativa interações */
+iframe.goog-te-banner-frame,
+iframe[id^="goog-"] {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-9999px) !important;
+  z-index: 0 !important;
+}
+
+/* Força body/html a não serem empurrados */
+html, html[style], body, body[style] {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  top: 0 !important;
+  position: static !important;
+}
+
+/* Uma camada de cobertura que irá ficar sobre a topbar */
+#gtbarCover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px; /* valor inicial, será ajustado por JS */
+  background: rgba(18,18,18,0.95); /* ajuste para combinar com seu topbar */
+  z-index: 2147483646; /* extremamente alto, mas abaixo de alguns elementos internos */
+  pointer-events: none; /* permitir cliques passarem (se quiser impedir, mude para auto) */
+  transition: height 0.12s ease;
+  box-shadow: none;
+}
+</style>
+
 </head>
 <body>
 
@@ -207,49 +246,88 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 <script>
-// Função que injeta CSS dentro do iframe da barra do Google Translate
-function hideGoogleTopBar() {
-    const iframe = document.querySelector("iframe.goog-te-banner-frame");
+(function(){
+  // cria ou reutiliza o cover que esconde a barra
+  function ensureCover() {
+    let cover = document.getElementById("gtbarCover");
+    if (!cover) {
+      cover = document.createElement("div");
+      cover.id = "gtbarCover";
+      document.documentElement.appendChild(cover);
+    }
+    return cover;
+  }
 
-    if (!iframe) return; // ainda não carregou
+  // aplica estilos invisíveis ao iframe e ajusta a cobertura à altura real
+  function hideBarAndCover() {
+    const cover = ensureCover();
 
-    try {
-        const innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+    // localiza possíveis iframes do Google Translate
+    const candidates = Array.from(document.querySelectorAll("iframe")).filter(iframe => {
+      const src = iframe.getAttribute("src") || "";
+      // heurística: iframe que contém 'translate' no src ou tem a classe
+      return src.includes("translate.google") || iframe.classList.contains("goog-te-banner-frame") || iframe.id.startsWith("goog-");
+    });
 
-        // injeta CSS dentro do iframe
-        const style = innerDoc.createElement("style");
-        style.innerHTML = "body { display:none !important; }";
-        innerDoc.head.appendChild(style);
+    // aplica "esconder visual" aos iframes encontrados
+    candidates.forEach(iframe => {
+      // aplica estilos inline (mais fortes que CSS externo em alguns casos)
+      iframe.style.position = "fixed";
+      iframe.style.top = "0";
+      iframe.style.left = "0";
+      iframe.style.width = "1px";
+      iframe.style.height = "1px";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
+      iframe.style.transform = "translateY(-9999px)";
+      iframe.style.zIndex = "0";
+    });
 
-        // esconde o iframe visualmente
-        iframe.style.display = "none";
-        iframe.style.visibility = "hidden";
-        iframe.style.opacity = "0";
-        iframe.style.height = "0px";
-        iframe.style.pointerEvents = "none";
+    // tenta descobrir a altura real da barra (se existir) usando bounding boxes
+    // se não encontrar, mantém a altura padrão (48px)
+    let height = 48;
+    // verifica nodes diretos que o Google pode criar (mesmo cross origin)
+    const possible = Array.from(document.querySelectorAll("body > * , html > *")).find(el => {
+      const cls = (el.className || "");
+      if (cls && /goog-te|skiptranslate|googtranslate/i.test(cls)) return true;
+      const txt = (el.id || "") + " " + (el.className || "");
+      if (/goog-te|skiptranslate|googtranslate/i.test(txt)) return true;
+      return false;
+    });
 
-        console.log("Google topbar escondida com sucesso!");
-    } catch (e) {
-        console.warn("Ainda não foi possível acessar o iframe. Tentando novamente…");
+    if (possible) {
+      const rect = possible.getBoundingClientRect();
+      if (rect && rect.height > 2) height = Math.ceil(rect.height);
+    } else {
+      // última tentativa: medir qualquer iframe visível (se houver)
+      const ifr = document.querySelector("iframe");
+      if (ifr) {
+        const r = ifr.getBoundingClientRect();
+        if (r && r.height > 2) height = Math.ceil(r.height);
+      }
     }
 
-    // remove o top forçado no body
-    document.body.style.top = "0px";
-}
+    // ajustar cover para altura encontrada (um pouco de margem)
+    cover.style.height = Math.max(1, height + 6) + "px";
+    // coloca cover no topo (em caso do iframe ficar fora do body)
+    cover.style.top = "0px";
+  }
 
-// Zera sempre que o Google tentar empurrar para baixo
-function preventBodyPush() {
-    if (document.body.style.top && document.body.style.top !== "0px") {
-        document.body.style.top = "0px";
-    }
-}
+  // roda frequentemente por alguns segundos até estabilizar
+  const interval = setInterval(hideBarAndCover, 100);
+  // corta o intervalo após 10s (reduz overhead)
+  setTimeout(() => { clearInterval(interval); }, 10000);
 
-// Roda várias vezes porque o Google injeta aos poucos
-setInterval(() => {
-    hideGoogleTopBar();
-    preventBodyPush();
-}, 100);
+  // adiciona observer para mudanças futuras (quando o google recriar a barra)
+  const obs = new MutationObserver((mutations) => {
+    hideBarAndCover();
+  });
+  obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
 
+  // execução inicial imediata
+  hideBarAndCover();
+
+})();
 </script>
 
 </body>

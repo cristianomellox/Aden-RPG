@@ -866,21 +866,3 @@ body, html {
     padding: 0 12px;
 }
 
-
-/* esconde visualmente a barra */
-.goog-te-banner-frame.skiptranslate {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-/* remove espaço que ela empurra */
-body {
-    top: 0px !important;
-}
-
-/* esconde o popup "Google oferecido por" */
-.goog-te-gadget-icon,
-.goog-te-gadget-simple {
-    display: none !important;
-}
-

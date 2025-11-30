@@ -865,3 +865,7 @@ body, html {
     height: 40px;
     padding: 0 12px;
 }
+
+.goog-te-banner-frame {
+            display: none !important;
+        }

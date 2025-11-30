@@ -14,69 +14,32 @@ function googleTranslateElementInit() {
 
     // Sincroniza o seletor com o cookie atual
     syncSelectorWithCookie();
+    
+    // >>> CHAMADA PARA REMOVER A BARRA APÓS A INICIALIZAÇÃO <<<
+    // Usamos um pequeno atraso para garantir que a barra tenha tempo de ser renderizada.
+    setTimeout(removeTranslateBar, 500);
 }
 
 // ======================================================================
-// 2. Lê o cookie "googtrans" para saber o idioma atual
+// 2. Função para remover o iframe da barra de tradução e o margin-top
 // ======================================================================
-function getCurrentLangFromCookie() {
-    const cookies = document.cookie.split(";").map(c => c.trim());
-
-    const googCookie = cookies.find(c => c.startsWith("googtrans="));
-    if (!googCookie) return DEFAULT_LANG;
-
-    const value = googCookie.replace("googtrans=", "").trim(); // ex: "/pt/en"
-    const parts = value.split("/");
-
-    // A última parte contém o idioma de destino
-    return parts[parts.length - 1] || DEFAULT_LANG;
-}
-
-// ======================================================================
-// 3. Sincroniza o <select> com o idioma armazenado
-// ======================================================================
-function syncSelectorWithCookie() {
-    const selector = document.getElementById("languageSelector");
-    if (!selector) return;
-
-    const lang = getCurrentLangFromCookie();
-
-    if (selector.querySelector(`option[value="${lang}"]`))
-        selector.value = lang;
-    else
-        selector.value = DEFAULT_LANG;
-}
-
-// ======================================================================
-// 4. Trocar idioma via cookies (novo método oficial)
-// ======================================================================
-function changeLanguage(lang) {
-    if (lang === DEFAULT_LANG) {
-        // limpar cookies (voltar para o português)
-        document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    } else {
-        const cookieValue = `/pt/${lang}`;
-
-        // define cookies nas duas versões necessárias
-        document.cookie = `googtrans=${cookieValue}; path=/;`;
-        document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
+function removeTranslateBar() {
+    // 1. Remove o iframe principal da barra (goog-te-banner-frame)
+    const topBar = document.querySelector('.goog-te-banner-frame');
+    if (topBar) {
+        topBar.style.display = 'none';
+        topBar.style.visibility = 'hidden';
+        console.log("Topbar do Google Translate removida via JavaScript.");
     }
-
-    // recarrega página para aplicar tradução
-    window.location.reload();
+    
+    // 2. Remove o margin-top que a barra adiciona à tag <body>
+    document.body.style.marginTop = '0px';
+    document.body.style.top = '0px';
+    
+    // 3. Remove a barra de rolagem horizontal que às vezes aparece
+    document.body.style.overflowX = 'hidden';
 }
 
 // ======================================================================
-// 5. Evento do seletor personalizado
-// ======================================================================
-document.addEventListener("DOMContentLoaded", () => {
-    const selector = document.getElementById("languageSelector");
-    if (!selector) return;
-
-    selector.addEventListener("change", e => {
-        changeLanguage(e.target.value);
-    });
-
-    syncSelectorWithCookie();
-});
+// 3. Lê o cookie "googtrans" para saber o idioma atual
+// ... (o restante do seu código JavaScript permanece o mesmo)

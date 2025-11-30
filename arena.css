@@ -866,13 +866,35 @@ body, html {
     padding: 0 12px;
 }
 
+/* arena.css */
+
+/* Esconde o container do widget sem usar display:none (que quebra o script) */
 #google_translate_element {
     visibility: hidden;
     position: absolute;
-    display: none;
-    top: -9999px;
-    left: -9999px;
-    height: 0;
-    width: 0;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
+    top: -1000px; /* Joga para fora da tela */
+}
+
+/* Esconde a barra azul do Google no topo */
+.goog-te-banner-frame.skiptranslate {
+    display: none !important;
+} 
+
+/* Remove o espaço em branco que o Google tenta adicionar no topo do body */
+body {
+    top: 0px !important; 
+    position: static !important;
+}
+
+/* Esconde tooltips do Google */
+.goog-tooltip, .goog-tooltip:hover {
+    display: none !important;
+}
+
+.goog-text-highlight {
+    background-color: transparent !important;
+    box-shadow: none !important;
 }

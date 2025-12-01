@@ -209,49 +209,139 @@ document.addEventListener("DOMContentLoaded", () => {
 // FIM DA MÚSICA DE FUNDO
 
 // =======================================================================
-// INÍCIO: SCRIPT DO INTRO (AGORA EXECUTA *DEPOIS* DA MÚSICA ESTAR DEFINIDA)
+// INÍCIO: SCRIPT DO INTRO (SELETOR DE IDIOMA + DESBLOQUEIO DE ÁUDIO)
 // =======================================================================
 
 (function(){
-  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v24';
+  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v27';
   const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
   const FORCE_SHOW_PARAM = 'show_intro';
 
   window.__introPlaying = false;
   window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
-if (window.__introSeen && !_forceShowIntroFromUrl()) {
-    return; // <--- ESTA É A LINHA QUE IMPEDE A EXIBIÇÃO
-}
+  
+  // Se já viu e não forçado pela URL, sai.
+  if (window.__introSeen && !_forceShowIntroFromUrl()) {
+    return; 
+  }
+
   function _forceShowIntroFromUrl() {
     try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; }
     catch(e){ return false; }
   }
 
-  
+  // --- Lista de Idiomas Suportados ---
+  const languages = [
+    { code: 'pt', label: 'Português', flag: '🇧🇷' },
+    { code: 'en', label: 'English', flag: '🇺🇸' },
+    { code: 'es', label: 'Español', flag: '🇪🇸' },
+    { code: 'zh-CN', label: '中文', flag: '🇨🇳' },
+    { code: 'ja', label: '日本語', flag: '🇯🇵' },
+    { code: 'ko', label: '한국어', flag: '🇰🇷' },
+    { code: 'id', label: 'Indonesian', flag: '🇮🇩' },
+    { code: 'tl', label: 'Filipino', flag: '🇵🇭' },
+    { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+    { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+    { code: 'fr', label: 'Français', flag: '🇫🇷' }
+  ];
 
-  // Create modal element using site's modal classes
+  // --- CSS Dinâmico para o Seletor ---
+  const style = document.createElement('style');
+  style.innerHTML = `
+    .lang-grid { 
+        display: grid; 
+        grid-template-columns: repeat(3, 1fr); 
+        gap: 8px; 
+        margin-bottom: 20px; 
+        max-height: 300px; 
+        overflow-y: auto;
+    }
+    .lang-opt { 
+        background: #1a1a1a; 
+        border: 1px solid #444; 
+        color: #bbb; 
+        padding: 8px 4px; 
+        cursor: pointer; 
+        border-radius: 6px; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center;
+        transition: all 0.2s;
+    }
+    .lang-opt:hover {
+        background: #2a2a2a; 
+        color: #fff;
+    }
+    .lang-opt.selected { 
+        border-color: #c9a94a; 
+        background: #2b2515; 
+        color: #c9a94a;
+        box-shadow: 0 0 8px rgba(201, 169, 74, 0.3);
+        font-weight: bold;
+    }
+    .lang-flag { font-size: 1.5em; margin-bottom: 4px; }
+    .lang-name { font-size: 0.8em; }
+    #welcomeOkBtn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+  `;
+  document.head.appendChild(style);
+
+  // --- Criação do Modal ---
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.id = 'welcomeModal';
-  // minimal inline styles to ensure visibility if site styles are not yet loaded
-  modal.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:2147483646;background:rgba(0,0,0,0.75);';
+  modal.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:2147483646;background:rgba(0,0,0,0.85);backdrop-filter:blur(3px);';
+  
   const modalContent = document.createElement('div');
   modalContent.className = 'modal-content';
-  modalContent.id = 'welcomeModalContent';
-  modalContent.style.cssText = 'max-width:520px;padding:20px;border-radius:10px;background:#0b0b0b;color:#fff;text-align:center;';
-  modalContent.innerHTML =
-    '<p style="font-size:16px;line-height:1.4;margin-bottom:16px;">' +
-    '<strong>Salve!</strong><br>' +
-    'Se não sabe o que fazer, leia o Tutorial no menu <strong>Opções > Tutorial</strong> e receba uma espada R.</p>';
+  modalContent.style.cssText = 'width:90%;max-width:400px;padding:25px;border-radius:12px;background:#0b0b0b;color:#fff;text-align:center;border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.8);';
+  
+  // Título
+  const title = document.createElement('h2');
+  title.innerHTML = "Bem-vindo / Welcome";
+  title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
+  modalContent.appendChild(title);
+
+  // Instrução
+  const subtitle = document.createElement('p');
+  subtitle.textContent = "Select your language to start:";
+  subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px;";
+  modalContent.appendChild(subtitle);
+
+  // Grid de Idiomas
+  const grid = document.createElement('div');
+  grid.className = 'lang-grid';
+  
+  let selectedLang = 'pt'; // Padrão
+
+  languages.forEach(lang => {
+    const opt = document.createElement('div');
+    opt.className = 'lang-opt';
+    if(lang.code === 'pt') opt.classList.add('selected');
+    
+    opt.innerHTML = `<span class="lang-flag">${lang.flag}</span><span class="lang-name">${lang.label}</span>`;
+    
+    opt.addEventListener('click', () => {
+        document.querySelectorAll('.lang-opt').forEach(el => el.classList.remove('selected'));
+        opt.classList.add('selected');
+        selectedLang = lang.code;
+    });
+    
+    grid.appendChild(opt);
+  });
+  modalContent.appendChild(grid);
+
+  // Botão Confirmar
   const okBtn = document.createElement('button');
   okBtn.id = 'welcomeOkBtn';
-  okBtn.textContent = 'OK';
-  okBtn.style.cssText = 'padding:10px 18px;font-size:16px;border-radius:8px;border:none;background:#c9a94a;color:#111;cursor:pointer;';
+  okBtn.innerHTML = '<strong>START GAME</strong>';
+  okBtn.style.cssText = 'width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; background: linear-gradient(180deg, #c9a94a, #8a7330); color:#000; cursor:pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);';
+  
   modalContent.appendChild(okBtn);
   modal.appendChild(modalContent);
   document.documentElement.appendChild(modal);
 
-  // Create overlay video container but keep hidden until OK clicked
+  // --- Overlay de Vídeo (Oculto inicialmente) ---
   const overlay = document.createElement('div');
   overlay.id = 'gameIntroOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;visibility:hidden;';
@@ -268,85 +358,82 @@ if (window.__introSeen && !_forceShowIntroFromUrl()) {
   overlay.appendChild(container);
   document.documentElement.appendChild(overlay);
 
-  // Prevent page interactions under modal/video while intro is active
   const prevOverflow = document.documentElement.style.overflow;
 
+  // --- Função para iniciar o jogo ---
   function startVideoFromUserGesture() {
     try {
-      // mark as seen so modal/video won't show again
+      // 1. Salva que o usuário viu o intro
       localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
       window.__introSeen = true;
 
-      // hide modal and show overlay
+      // 2. Define o Cookie de Idioma
+      if (selectedLang !== 'pt') {
+          // Define os cookies manualmente para garantir que a tradução ocorra no próximo reload/navegação
+          const cookieValue = `/pt/${selectedLang}`;
+          const domain = window.location.hostname;
+          document.cookie = `googtrans=${cookieValue}; path=/;`;
+          document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
+      } else {
+          // Garante que limpa se escolheu PT
+          document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+      }
+
+      // 3. UI Changes
       modal.remove();
       document.documentElement.style.overflow = 'hidden';
       overlay.style.visibility = 'visible';
       window.__introPlaying = true;
 
-      // play video with audio (user gesture from OK should allow playback with sound)
+      // 4. Play Video
       video.muted = false;
       const p = video.play();
       if (p !== undefined) {
-        p.then(()=> {
-          // success
-        }).catch(err => {
-          // If playback still blocked, try muted playback then wait for user gesture to unmute
-          console.warn('Intro play blocked despite user gesture, trying muted playback', err);
+        p.catch(err => {
+          console.warn('Intro play blocked, trying muted', err);
           video.muted = true;
           video.play().catch(()=>{});
-          // create a small hint button to unmute (but avoid UI clutter)
-          const unmuteHint = document.createElement('button');
-          unmuteHint.textContent = 'Ativar som';
-          unmuteHint.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483650;padding:8px 12px;border-radius:8px;border:none;background:rgba(255,255,255,0.12);color:#fff;';
-          unmuteHint.addEventListener('click', () => { video.muted = false; try{ unmuteHint.remove(); }catch(e){} });
-          document.documentElement.appendChild(unmuteHint);
         });
       }
 
-      // When video ends -> cleanup and start music
+      // 5. Cleanup when video ends
       video.addEventListener('ended', () => {
         try {
           window.__introPlaying = false;
           overlay.remove();
           document.documentElement.style.overflow = prevOverflow || '';
-          // start background music (agora chama para desmutar se estava muted)
+          
+          // Inicia a música do jogo
           if (typeof window.startBackgroundMusic === 'function') {
-            try { 
-              window.startBackgroundMusic(); 
-            } catch(e){ console.warn(e); }
+            window.startBackgroundMusic(); 
           }
+          
+          // Se o idioma não for PT, podemos forçar um reload suave aqui se a tradução não pegou
+          // Mas geralmente o cookie setado acima será lido pelo auto_translate.js na navegação.
+          if (selectedLang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
+             window.location.reload(); 
+          }
+
         } catch(e){ console.warn(e); }
       }, { once: true });
 
-    } catch(e){ console.warn('Erro ao iniciar vídeo do intro', e); }
+    } catch(e){ console.warn('Erro intro', e); }
   }
 
+  // --- Event Listener do Botão ---
   okBtn.addEventListener('click', function(ev){
     ev.stopPropagation();
     
-    // 1. Inicia a música de fundo IMEDIATAMENTE, mas FORÇANDO O MUDO
-    // Isso garante que o áudio está desbloqueado pelo clique, mas silencioso
+    // Inicia a música de fundo (Muted) para desbloquear o AudioContext
     if (typeof window.startBackgroundMusic === 'function') {
         window.startBackgroundMusic(true);
     }
     
-    // 2. Continua com a lógica normal de reprodução do vídeo
     startVideoFromUserGesture();
   });
 
-  // Also allow pressing Enter key when modal focused
-  okBtn.addEventListener('keyup', function(ev){ if(ev.key === 'Enter') okBtn.click(); });
-
-  // Safety: if page becomes hidden, pause video
-  document.addEventListener('visibilitychange', () => {
-    try {
-      if (document.visibilityState !== 'visible') {
-        if (!video.paused) video.pause();
-      }
-    } catch(e){}
-  });
 })();
-;
 // FIM DO SCRIPT DO INTRO
 
 // =======================================================================

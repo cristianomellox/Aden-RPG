@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // =======================================================================
 
 (function() {
-    const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v30';
+    const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v31';
     const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
     const FORCE_SHOW_PARAM = 'show_intro';
 
@@ -411,7 +411,8 @@ document.addEventListener("DOMContentLoaded", () => {
             overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;';
             
             const container = document.createElement('div');
-            container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;';
+            // FIX: Adicionado background-color: black para evitar o cinza do placeholder
+            container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;background-color: black;'; 
             
             const video = document.createElement('video');
             video.id = 'gameIntroVideo';
@@ -419,7 +420,8 @@ document.addEventListener("DOMContentLoaded", () => {
             video.setAttribute('playsinline', '');
             video.setAttribute('webkit-playsinline', '');
             video.setAttribute('preload', 'auto');
-            video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;';
+            // FIX: Adicionado background-color: black para o elemento de vídeo
+            video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;background-color: black;'; 
             
             container.appendChild(video);
             overlay.appendChild(container);

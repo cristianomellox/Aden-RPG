@@ -101,6 +101,35 @@ body, html {
       color: #ffcc66;
       background-color: rgba(0, 0, 0, 0.8);
     }
+    /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; 
+}
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
+}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -191,5 +220,10 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
 });
 </script>
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>

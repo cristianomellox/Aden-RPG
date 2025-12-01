@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="arena.css" /> 
 </head>
-<body>
+<body onload="removeTranslateBar()">
 
     <div id="playerTopBar">
         <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
@@ -31,6 +31,11 @@
         <div id="attemptsInfo">
             Desafios restantes: <span id="arenaAttemptsLeft">...</span>
         </div>
+        <select id="languageSelector">
+    <option value="pt">Português (BR)</option>
+    <option value="en">English (US)</option>
+    <option value="es">Español (ES)</option>
+</select>
         <div id="potionSlotsContainer">
     <div class="potion-group">
         <h3>Poções de Ataque</h3>
@@ -195,5 +200,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
     <script src="arena.js"></script>
+    
+    <div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
 </body>
 </html>

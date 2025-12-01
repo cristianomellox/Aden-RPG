@@ -209,232 +209,286 @@ document.addEventListener("DOMContentLoaded", () => {
 // FIM DA MÚSICA DE FUNDO
 
 // =======================================================================
-// INÍCIO: SCRIPT DO INTRO (SELETOR DE IDIOMA + DESBLOQUEIO DE ÁUDIO)
+// INÍCIO: SCRIPT DO INTRO E SELETOR DE IDIOMA (REFATORADO)
 // =======================================================================
 
-(function(){
-  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v28';
-  const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
-  const FORCE_SHOW_PARAM = 'show_intro';
+(function() {
+    const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v30';
+    const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
+    const FORCE_SHOW_PARAM = 'show_intro';
 
-  window.__introPlaying = false;
-  window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
-  
-  // Se já viu e não forçado pela URL, sai.
-  if (window.__introSeen && !_forceShowIntroFromUrl()) {
-    return; 
-  }
+    // --- Lista de Idiomas Suportados ---
+    const languages = [
+        { code: 'pt', label: 'Português', flag: '🇧🇷' },
+        { code: 'en', label: 'English', flag: '🇺🇸' },
+        { code: 'es', label: 'Español', flag: '🇪🇸' },
+        { code: 'zh-CN', label: '中文', flag: '🇨🇳' },
+        { code: 'ja', label: '日本語', flag: '🇯🇵' },
+        { code: 'ko', label: '한국어', flag: '🇰🇷' },
+        { code: 'id', label: 'Indonesian', flag: '🇮🇩' },
+        { code: 'tl', label: 'Filipino', flag: '🇵🇭' },
+        { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+        { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+        { code: 'fr', label: 'Français', flag: '🇫🇷' }
+    ];
 
-  function _forceShowIntroFromUrl() {
-    try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; }
-    catch(e){ return false; }
-  }
-
-  // --- Lista de Idiomas Suportados ---
-  const languages = [
-    { code: 'pt', label: 'Português', flag: '🇧🇷' },
-    { code: 'en', label: 'English', flag: '🇺🇸' },
-    { code: 'es', label: 'Español', flag: '🇪🇸' },
-    { code: 'zh-CN', label: '中文', flag: '🇨🇳' },
-    { code: 'ja', label: '日本語', flag: '🇯🇵' },
-    { code: 'ko', label: '한국어', flag: '🇰🇷' },
-    { code: 'id', label: 'Indonesian', flag: '🇮🇩' },
-    { code: 'tl', label: 'Filipino', flag: '🇵🇭' },
-    { code: 'ru', label: 'Русский', flag: '🇷🇺' },
-    { code: 'it', label: 'Italiano', flag: '🇮🇹' },
-    { code: 'fr', label: 'Français', flag: '🇫🇷' }
-  ];
-
-  // --- CSS Dinâmico para o Seletor ---
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .lang-grid { 
-        display: grid; 
-        grid-template-columns: repeat(3, 1fr); 
-        gap: 8px; 
-        margin-bottom: 20px; 
-        max-height: 300px; 
-        overflow-y: auto;
+    // Injeta o CSS do modal apenas uma vez
+    if (!document.getElementById('lang-modal-style')) {
+        const style = document.createElement('style');
+        style.id = 'lang-modal-style';
+        style.innerHTML = `
+        .lang-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 8px; 
+            margin-bottom: 20px; 
+            max-height: 300px; 
+            overflow-y: auto;
+        }
+        .lang-opt { 
+            background: #1a1a1a; 
+            border: 1px solid #444; 
+            color: #bbb; 
+            padding: 8px 4px; 
+            cursor: pointer; 
+            border-radius: 6px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .lang-opt:hover {
+            background: #2a2a2a; 
+            color: #fff;
+        }
+        .lang-opt.selected { 
+            border-color: #c9a94a; 
+            background: #2b2515; 
+            color: #c9a94a;
+            box-shadow: 0 0 8px rgba(201, 169, 74, 0.3);
+            font-weight: bold;
+        }
+        .lang-flag { font-size: 1.5em; margin-bottom: 4px; }
+        .lang-name { font-size: 0.8em; }
+        #welcomeOkBtn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+      `;
+        document.head.appendChild(style);
     }
-    .lang-opt { 
-        background: #1a1a1a; 
-        border: 1px solid #444; 
-        color: #bbb; 
-        padding: 8px 4px; 
-        cursor: pointer; 
-        border-radius: 6px; 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: center;
-        transition: all 0.2s;
-    }
-    .lang-opt:hover {
-        background: #2a2a2a; 
-        color: #fff;
-    }
-    .lang-opt.selected { 
-        border-color: #c9a94a; 
-        background: #2b2515; 
-        color: #c9a94a;
-        box-shadow: 0 0 8px rgba(201, 169, 74, 0.3);
-        font-weight: bold;
-    }
-    .lang-flag { font-size: 1.5em; margin-bottom: 4px; }
-    .lang-name { font-size: 0.8em; }
-    #welcomeOkBtn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
-  `;
-  document.head.appendChild(style);
 
-  // --- Criação do Modal ---
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.id = 'welcomeModal';
-  modal.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:2147483646;background:rgba(0,0,0,0.85);backdrop-filter:blur(3px);';
-  
-  const modalContent = document.createElement('div');
-  modalContent.className = 'modal-content';
-  modalContent.style.cssText = 'width:90%;max-width:400px;padding:25px;border-radius:12px;background:#0b0b0b;color:#fff;text-align:center;border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.8);';
-  
-  // Título
-  const title = document.createElement('h2');
-  title.innerHTML = "Bem-vindo / Welcome";
-  title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
-  modalContent.appendChild(title);
+    /**
+     * Função Global para abrir o Modal de Idioma
+     * @param {boolean} isUpdateMode - Se true, apenas troca o idioma e recarrega (sem vídeo).
+     */
+    window.openLanguageModal = function(isUpdateMode = false) {
+        // Remove modal anterior se existir (para evitar duplicatas)
+        const oldModal = document.getElementById('welcomeModal');
+        if (oldModal) oldModal.remove();
 
-  // Instrução
-  const subtitle = document.createElement('p');
-  subtitle.textContent = "Select your language to start:";
-  subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px;";
-  modalContent.appendChild(subtitle);
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'welcomeModal';
+        modal.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:2147483646;background:rgba(0,0,0,0.85);backdrop-filter:blur(3px);';
 
-  // Grid de Idiomas
-  const grid = document.createElement('div');
-  grid.className = 'lang-grid';
-  
-  let selectedLang = 'pt'; // Padrão
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        modalContent.style.cssText = 'width:90%;max-width:400px;padding:25px;border-radius:12px;background:#0b0b0b;color:#fff;text-align:center;border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.8);';
 
-  languages.forEach(lang => {
-    const opt = document.createElement('div');
-    opt.className = 'lang-opt';
-    if(lang.code === 'pt') opt.classList.add('selected');
-    
-    opt.innerHTML = `<span class="lang-flag">${lang.flag}</span><span class="lang-name">${lang.label}</span>`;
-    
-    opt.addEventListener('click', () => {
-        document.querySelectorAll('.lang-opt').forEach(el => el.classList.remove('selected'));
-        opt.classList.add('selected');
-        selectedLang = lang.code;
-    });
-    
-    grid.appendChild(opt);
-  });
-  modalContent.appendChild(grid);
+        // Título e Subtítulo baseados no modo
+        const titleText = isUpdateMode ? "Idioma / Language" : "Bem-vindo / Welcome";
+        const subText = isUpdateMode ? "Select new language:" : "Select your language to start:";
 
-  // Botão Confirmar
-  const okBtn = document.createElement('button');
-  okBtn.id = 'welcomeOkBtn';
-  okBtn.innerHTML = '<strong>START GAME</strong>';
-  okBtn.style.cssText = 'width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; background: linear-gradient(180deg, #c9a94a, #8a7330); color:#000; cursor:pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);';
-  
-  modalContent.appendChild(okBtn);
-  modal.appendChild(modalContent);
-  document.documentElement.appendChild(modal);
+        // Título HTML
+        const title = document.createElement('h2');
+        title.innerHTML = titleText;
+        title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
+        modalContent.appendChild(title);
 
-  // --- Overlay de Vídeo (Oculto inicialmente) ---
-  const overlay = document.createElement('div');
-  overlay.id = 'gameIntroOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;visibility:hidden;';
-  const container = document.createElement('div');
-  container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;';
-  const video = document.createElement('video');
-  video.id = 'gameIntroVideo';
-  video.src = INTRO_VIDEO_SRC;
-  video.setAttribute('playsinline','');
-  video.setAttribute('webkit-playsinline','');
-  video.setAttribute('preload','auto');
-  video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;';
-  container.appendChild(video);
-  overlay.appendChild(container);
-  document.documentElement.appendChild(overlay);
+        // Instrução HTML
+        const subtitle = document.createElement('p');
+        subtitle.textContent = subText;
+        subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px;";
+        modalContent.appendChild(subtitle);
 
-  const prevOverflow = document.documentElement.style.overflow;
+        // Grid de Idiomas
+        const grid = document.createElement('div');
+        grid.className = 'lang-grid';
 
-  // --- Função para iniciar o jogo ---
-  function startVideoFromUserGesture() {
-    try {
-      // 1. Salva que o usuário viu o intro
-      localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
-      window.__introSeen = true;
-
-      // 2. Define o Cookie de Idioma
-      if (selectedLang !== 'pt') {
-          // Define os cookies manualmente para garantir que a tradução ocorra no próximo reload/navegação
-          const cookieValue = `/pt/${selectedLang}`;
-          const domain = window.location.hostname;
-          document.cookie = `googtrans=${cookieValue}; path=/;`;
-          document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
-          
-          // *** ALTERAÇÃO PARA FORÇAR A TRADUÇÃO IMEDIATAMENTE (COM RECARGA) ***
-          modal.remove(); // Remove o modal antes do reload
-          window.location.reload();
-          return; // Interrompe a execução para a recarga
-          
-      } else {
-          // Garante que limpa se escolheu PT
-          document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-          document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-      }
-
-      // 3. UI Changes
-      modal.remove();
-      document.documentElement.style.overflow = 'hidden';
-      overlay.style.visibility = 'visible';
-      window.__introPlaying = true;
-
-      // 4. Play Video
-      video.muted = false;
-      const p = video.play();
-      if (p !== undefined) {
-        p.catch(err => {
-          console.warn('Intro play blocked, trying muted', err);
-          video.muted = true;
-          video.play().catch(()=>{});
-        });
-      }
-
-      // 5. Cleanup when video ends
-      video.addEventListener('ended', () => {
+        // Tenta pegar o idioma atual do cookie para pré-selecionar
+        let currentCookieLang = 'pt';
         try {
-          window.__introPlaying = false;
-          overlay.remove();
-          document.documentElement.style.overflow = prevOverflow || '';
-          
-          // Inicia a música do jogo
-          if (typeof window.startBackgroundMusic === 'function') {
-            window.startBackgroundMusic(); 
-          }
-          
-        } catch(e){ console.warn('Erro intro (video end)', e); }
-      }, { once: true });
+            const cookies = document.cookie.split(";");
+            const googCookie = cookies.find(c => c.trim().startsWith("googtrans="));
+            if (googCookie) {
+                const val = googCookie.split("=")[1];
+                const parts = val.split("/");
+                currentCookieLang = parts[parts.length - 1];
+            }
+        } catch (e) {}
 
-    } catch(e){ console.warn('Erro intro', e); }
-  }
+        let selectedLang = currentCookieLang || 'pt';
 
-  // --- Event Listener do Botão ---
-  okBtn.addEventListener('click', function(ev){
-    ev.stopPropagation();
-    
-    // Inicia a música de fundo (Muted) para desbloquear o AudioContext
-    if (typeof window.startBackgroundMusic === 'function') {
-        window.startBackgroundMusic(true);
+        languages.forEach(lang => {
+            const opt = document.createElement('div');
+            opt.className = 'lang-opt';
+            if (lang.code === selectedLang) opt.classList.add('selected');
+
+            opt.innerHTML = `<span class="lang-flag">${lang.flag}</span><span class="lang-name">${lang.label}</span>`;
+
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.lang-opt').forEach(el => el.classList.remove('selected'));
+                opt.classList.add('selected');
+                selectedLang = lang.code;
+            });
+
+            grid.appendChild(opt);
+        });
+        modalContent.appendChild(grid);
+
+        // Botão de Confirmar
+        const btnText = isUpdateMode ? "Confirm & Reload" : "<strong>START GAME</strong>";
+        const okBtn = document.createElement('button');
+        okBtn.id = 'welcomeOkBtn';
+        okBtn.innerHTML = btnText;
+        okBtn.style.cssText = 'width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; background: linear-gradient(180deg, #c9a94a, #8a7330); color:#000; cursor:pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);';
+        
+        // Botão Cancelar (Apenas no modo Update)
+        if (isUpdateMode) {
+             const cancelBtn = document.createElement('button');
+             cancelBtn.innerText = "Cancelar";
+             cancelBtn.style.cssText = 'width:100%; padding:10px; margin-top:10px; background:transparent; border:1px solid #444; color:#aaa; cursor:pointer; font-size:0.9em; border-radius:8px;';
+             cancelBtn.onclick = () => modal.remove();
+             modalContent.appendChild(okBtn);
+             modalContent.appendChild(cancelBtn);
+        } else {
+             modalContent.appendChild(okBtn);
+        }
+
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+
+        // --- Ação do Botão Confirmar ---
+        okBtn.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+
+            // 1. Aplica o Cookie de Tradução
+            if (selectedLang !== 'pt') {
+                const cookieValue = `/pt/${selectedLang}`;
+                const domain = window.location.hostname;
+                document.cookie = `googtrans=${cookieValue}; path=/;`;
+                document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
+            } else {
+                // Limpa cookie se for PT
+                document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+            }
+
+            // 2. Decide o fluxo (Update vs Intro)
+            if (isUpdateMode) {
+                // Modo Update: Apenas recarrega para aplicar a tradução
+                window.location.reload();
+            } else {
+                // Modo Intro: Inicia música/vídeo
+                if (typeof window.startBackgroundMusic === 'function') {
+                    window.startBackgroundMusic(true);
+                }
+                startVideoFromUserGesture(selectedLang, modal);
+            }
+        });
+    };
+
+    // Função interna para rodar o vídeo da intro
+    function startVideoFromUserGesture(lang, modalEl) {
+        try {
+            localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
+            window.__introSeen = true;
+
+            modalEl.remove(); // Remove o modal
+
+            // Cria overlay do vídeo
+            const overlay = document.createElement('div');
+            overlay.id = 'gameIntroOverlay';
+            overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;';
+            
+            const container = document.createElement('div');
+            container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;';
+            
+            const video = document.createElement('video');
+            video.id = 'gameIntroVideo';
+            video.src = INTRO_VIDEO_SRC;
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', '');
+            video.setAttribute('preload', 'auto');
+            video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;';
+            
+            container.appendChild(video);
+            overlay.appendChild(container);
+            document.documentElement.appendChild(overlay);
+
+            window.__introPlaying = true;
+            const prevOverflow = document.documentElement.style.overflow;
+            document.documentElement.style.overflow = 'hidden';
+
+            video.muted = false;
+            video.play().catch(() => {
+                video.muted = true;
+                video.play().catch(() => {});
+            });
+
+            video.addEventListener('ended', () => {
+                window.__introPlaying = false;
+                overlay.remove();
+                document.documentElement.style.overflow = prevOverflow || '';
+
+                if (typeof window.startBackgroundMusic === 'function') {
+                    window.startBackgroundMusic();
+                }
+
+                // Se não for PT, recarrega para garantir tradução se não aplicou ainda
+                if (lang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
+                    window.location.reload();
+                }
+            }, { once: true });
+
+        } catch (e) {
+            console.warn('Erro intro', e);
+        }
     }
-    
-    startVideoFromUserGesture();
-  });
+
+    // --- Lógica de Inicialização Automática (Intro) ---
+    function _forceShowIntroFromUrl() {
+        try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; } 
+        catch (e) { return false; }
+    }
+
+    window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
+
+    // Se ainda não viu a intro (ou forçado por URL), abre em modo Intro
+    if (!window.__introSeen || _forceShowIntroFromUrl()) {
+        // Pequeno delay para garantir que DOM carregou
+        setTimeout(() => window.openLanguageModal(false), 100);
+    }
 
 })();
+
+// Adiciona Listener ao botão do Menu de Opções
+document.addEventListener("DOMContentLoaded", () => {
+    const changeLangBtn = document.getElementById('changeLanguageBtn');
+    if (changeLangBtn) {
+        changeLangBtn.addEventListener('click', (e) => {
+            // Fecha o submenu ao clicar
+            const submenus = document.querySelectorAll('.footer-submenu');
+            submenus.forEach(s => s.style.display = 'none');
+            
+            // Abre o modal em modo "Update" (true)
+            window.openLanguageModal(true);
+        });
+    }
+});
+
+// =======================================================================
 // FIM DO SCRIPT DO INTRO
+// =======================================================================
 
 // =======================================================================
 // INÍCIO: RESTANTE DO SCRIPT (SUPABASE, CACHE, JOGADOR, ETC.)
@@ -842,8 +896,6 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
             document.getElementById('editProfileIcon').click();
         });
     }
-    document.getElementById('signOutBtn').addEventListener('click', signOut);
-
     document.getElementById('playerAvatar').src = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
     document.getElementById('playerNameText').textContent = player.name;
     document.getElementById('playerLevel').textContent = `Nv. ${player.level}`;
@@ -891,6 +943,7 @@ function applyItemBonuses(player, equippedItems) {
     return combinedStats;
 }
 
+// Função principal para buscar e exibir as informações do jogador (MODIFICADA COM CACHE)
 // Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     
@@ -1757,7 +1810,7 @@ commonSpiralTab.addEventListener('click', () => {
 
 advancedSpiralTab.addEventListener('click', () => {
     advancedSpiralTab.classList.add('active');
-    commonSpiralContent.classList.remove('active');
+    commonSpiralTab.classList.remove('active');
     advancedSpiralContent.style.display = 'block';
     commonSpiralContent.style.display = 'none';
 });

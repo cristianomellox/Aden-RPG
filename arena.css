@@ -862,6 +862,46 @@ body, html {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 25px;
+    height: 40px;
     padding: 0 12px;
+}
+
+/* =======================================================================
+   REMOÇÃO FORÇADA DA BARRA DO GOOGLE (FIX DEFINITIVO)
+   ======================================================================= */
+
+/* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+/* 2. Garante que o body nunca desça */
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; /* Previne deslocamento relativo */
+}
+
+/* 3. Esconde tooltips de tradução (popups ao passar o mouse no texto) */
+#goog-gt-tt, 
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* 4. Esconde o elemento original do widget se ele tentar aparecer */
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* 5. Previne que o Google injete texto 'Translated by Google' */
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
 }

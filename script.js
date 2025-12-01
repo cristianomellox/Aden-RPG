@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // =======================================================================
 
 (function(){
-  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v27';
+  const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v28';
   const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
   const FORCE_SHOW_PARAM = 'show_intro';
 
@@ -374,6 +374,12 @@ document.addEventListener("DOMContentLoaded", () => {
           const domain = window.location.hostname;
           document.cookie = `googtrans=${cookieValue}; path=/;`;
           document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
+          
+          // *** ALTERAÇÃO PARA FORÇAR A TRADUÇÃO IMEDIATAMENTE (COM RECARGA) ***
+          modal.remove(); // Remove o modal antes do reload
+          window.location.reload();
+          return; // Interrompe a execução para a recarga
+          
       } else {
           // Garante que limpa se escolheu PT
           document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -409,13 +415,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.startBackgroundMusic(); 
           }
           
-          // Se o idioma não for PT, podemos forçar um reload suave aqui se a tradução não pegou
-          // Mas geralmente o cookie setado acima será lido pelo auto_translate.js na navegação.
-          if (selectedLang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
-             window.location.reload(); 
-          }
-
-        } catch(e){ console.warn(e); }
+        } catch(e){ console.warn('Erro intro (video end)', e); }
       }, { once: true });
 
     } catch(e){ console.warn('Erro intro', e); }
@@ -842,6 +842,8 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
             document.getElementById('editProfileIcon').click();
         });
     }
+    document.getElementById('signOutBtn').addEventListener('click', signOut);
+
     document.getElementById('playerAvatar').src = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
     document.getElementById('playerNameText').textContent = player.name;
     document.getElementById('playerLevel').textContent = `Nv. ${player.level}`;
@@ -889,7 +891,6 @@ function applyItemBonuses(player, equippedItems) {
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador (MODIFICADA COM CACHE)
 // Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     
@@ -1756,7 +1757,7 @@ commonSpiralTab.addEventListener('click', () => {
 
 advancedSpiralTab.addEventListener('click', () => {
     advancedSpiralTab.classList.add('active');
-    commonSpiralTab.classList.remove('active');
+    commonSpiralContent.classList.remove('active');
     advancedSpiralContent.style.display = 'block';
     commonSpiralContent.style.display = 'none';
 });

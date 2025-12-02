@@ -1974,12 +1974,3 @@ font > font {
     position: static !important;
 }
 
-/* Impede Google Translate de alterar spans injetados */
-* span.goog-text-highlight,
-.goog-text-highlight {
-    background: transparent !important;
-    box-shadow: none !important;
-    display: inline !important;
-    padding: 0 !important;
-    margin: 0 !important;
-}

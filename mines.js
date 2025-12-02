@@ -1181,7 +1181,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const diffInSeconds = Math.floor(diffInMs / 1000);
     const formattedTime = formatTime(diffInSeconds);
     if (cycleInfoElement) {
-      cycleInfoElement.innerHTML = `Próxima sessão em: <strong>${formattedTime}</strong>`;
+      cycleInfoElement.innerHTML = `<strong>${formattedTime}</strong>`;
     }
   }
   updateCountdown();

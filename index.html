@@ -30,6 +30,8 @@
     id
 </div>
 </div>
+
+
 <div id="playerEmblemsRow">
 <div id="playerCombatPower">
 <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <span id="playerPower">0</span></div>
@@ -156,7 +158,8 @@
   <a href="go:bottle" class="footer-submenu-btn">Minigame Bottle</a>
   <a href="go:knife" class="footer-submenu-btn">Minigame Knife</a>
    <a href="tutorial.html" class="footer-submenu-btn">Tutorial</a>
-  <a href="suporte.html" class="footer-submenu-btn">Suporte</a>
+  <a href="javascript:void(0)" id="musicToggleBtn" class="footer-submenu-btn">
+    <span id="musicIcon">Músicas ON/OFF</span></a>
   <a href="sobre.html" class="footer-submenu-btn">Sobre</a>
   <a href="suporte.html" class="footer-submenu-btn">Suporte</a>
   <a href="javascript:void(0)" id="changeLanguageBtn" class="footer-submenu-btn">Idioma</a>
@@ -793,5 +796,53 @@ document.addEventListener("DOMContentLoaded", async () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+    const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+    const MUTED_ICON = 'https://aden-rpg.pages.dev/assets/muted.webp';
+    const UNMUTED_ICON = 'https://aden-rpg.pages.dev/assets/unmuted.webp';
+
+    // FUNÇÃO GLOBAL DE MUTE (usada pelo botão)
+    window.applyGlobalMuteToMusic = function(audioObject, defaultVolume) {
+        if (!audioObject || typeof audioObject.volume !== 'number') return;
+        const isMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+        audioObject.volume = isMuted ? 0 : defaultVolume; 
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const musicToggleBtn = document.getElementById('musicToggleBtn');
+        const musicIcon = document.getElementById('musicIcon');
+        let isMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+
+        if (musicIcon) musicIcon.src = isMuted ? MUTED_ICON : UNMUTED_ICON;
+
+        function updateTopBarMusicState() {
+            if (typeof backgroundMusic === 'object' && backgroundMusic !== null) {
+                window.applyGlobalMuteToMusic(backgroundMusic, 0.1); 
+            }
+        }
+
+        function toggleMusic() {
+            isMuted = !isMuted;
+            localStorage.setItem(MUSIC_MUTE_KEY, isMuted);
+            musicIcon.src = isMuted ? MUTED_ICON : UNMUTED_ICON;
+            updateTopBarMusicState();
+            
+            if (!isMuted && typeof startBackgroundMusic === 'function') {
+                startBackgroundMusic(); 
+            }
+        }
+
+        if (musicToggleBtn) {
+            musicToggleBtn.addEventListener('click', toggleMusic);
+        }
+        
+        let checkInterval = setInterval(() => {
+            if (typeof backgroundMusic === 'object' && backgroundMusic !== null) {
+                updateTopBarMusicState();
+                clearInterval(checkInterval);
+            }
+        }, 500); 
+    });
+</script>
 </body>
 </html>

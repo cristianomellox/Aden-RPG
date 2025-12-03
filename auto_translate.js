@@ -9,7 +9,7 @@ function googleTranslateElementInit() {
     new google.translate.TranslateElement({
         pageLanguage: DEFAULT_LANG,
         // LISTA ATUALIZADA DE IDIOMAS SOLICITADOS
-        includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr",
+        includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr,hi,ms,vi",
         layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
         autoDisplay: false
     }, "google_translate_element");

@@ -304,13 +304,18 @@ document.addEventListener("DOMContentLoaded", () => {
         // Título HTML
         const title = document.createElement('h2');
         title.innerHTML = titleText;
-        title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
+        title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em;";
         modalContent.appendChild(title);
+        
+        const betaTag = document.createElement('p');
+        betaTag.innerHTML = "(Tradução em fase Beta)";
+        betaTag.style.cssText = "font-size: 0.9em; color: lightblue; font-weight: bold; margin-top: -12px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
+        modalContent.appendChild(betaTag);
 
         // Instrução HTML
         const subtitle = document.createElement('p');
         subtitle.textContent = subText;
-        subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px;";
+        subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px; font-weight: bold;";
         modalContent.appendChild(subtitle);
 
         // Grid de Idiomas

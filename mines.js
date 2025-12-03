@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready");
+  console.log("[mines] DOM ready - Versão Completa Otimizada (Baixo Egress + PvP Full)");
 
   // --- Áudio (WebAudio + fallback) ---
   const audioFiles = {
@@ -16,7 +16,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function decodeAudioDataCompat(arrayBuffer) {
     try {
-      // compat: alguns navegadores aceitam Promise, outros usam callback
       return await new Promise((resolve, reject) => {
         audioContext.decodeAudioData(arrayBuffer, resolve, reject);
       });
@@ -28,23 +27,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function preload(name) {
     try {
-      const res = await fetch(audioFiles[name], { cache: 'reload' });
+      const res = await fetch(audioFiles[name], { cache: 'force-cache' });
       if (!res.ok) throw new Error("fetch " + res.status);
       const ab = await res.arrayBuffer();
       audioBuffers[name] = await decodeAudioDataCompat(ab);
-      // console.log(`[audio] pré-carregado ${name}`);
     } catch (e) {
       console.warn(`[audio] preload ${name} falhou, fallback ativado:`, e);
       audioBuffers[name] = null;
     }
   }
 
-  // Preload dos sons curtos que serão disparados com frequência
   preload('normal');
   preload('critical');
   preload('evade');
 
-  // Mantemos ambient e avisos em HTMLAudio (loop e desbloqueio fácil)
   const ambientMusic = new Audio(audioFiles.ambient);
   ambientMusic.volume = 0.05;
   ambientMusic.loop = true;
@@ -54,14 +50,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const obrigadoSound = new Audio(audioFiles.obrigado);
   obrigadoSound.volume = 0.5;
 
-  // Garante que o AudioContext é retomado após a primeira interação do usuário
   document.addEventListener("click", async () => {
     try { if (audioContext.state === 'suspended') await audioContext.resume(); } catch(e) {}
     avisoTelaSound.play().then(()=> { avisoTelaSound.pause(); avisoTelaSound.currentTime = 0; }).catch(()=>{});
     obrigadoSound.play().then(()=> { obrigadoSound.pause(); obrigadoSound.currentTime = 0; }).catch(()=>{});
   }, { once: true });
 
-  // Função universal para tocar sons (usa WebAudio se pré-carregado, senão fallback com new Audio)
   function playSound(name, opts = {}) {
     const vol = (typeof opts.volume === 'number') ? opts.volume : 1;
     const buf = audioBuffers[name];
@@ -79,7 +73,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.warn("[audio] WebAudio play falhou, fallback:", e);
       }
     }
-    // fallback HTMLAudio (cria nova instância para permitir sobreposição)
     try {
       const s = new Audio(audioFiles[name] || audioFiles.normal);
       s.volume = vol;
@@ -92,47 +85,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // --- Estado ---
+  // --- Estado Otimizado ---
   let userId = null;
-  // ALTERAÇÃO FINAL: Removidas variáveis de controle de polling que não são mais usadas.
-  // let monsterHpInterval = null;
-  let historyCache = [];
-  // let logsPollInterval = null;
-  // let minesRefreshInterval = null;
-  // let rankingInterval = null;
-  // let sessionCheckInterval = null;
-  // FIM DA ALTERAÇÃO FINAL
   let buyMode = 'attack';
-  let playerOwnedMineId = null;
   let currentMineId = null;
   let maxMonsterHealth = 1;
-  let attacksLeft = 0;
+  
+  // Estado Local de Ataques (Optimistic UI)
+  let localAttacksLeft = 0;
+  let nextAttackTime = null; // Timestamp em milissegundos
   let cooldownInterval = null;
+
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
   let hasAttackedOnce = false;
-
-  // ALTERAÇÃO FINAL: Função de resolução global para ser chamada em pontos chave.
-  async function resolveAllExpiredMinesGlobally() {
-    // Usamos .then() para não bloquear a interface do usuário. A função roda em segundo plano.
-    supabase.rpc('resolve_all_expired_mines').then(({ error }) => {
-      if (error) {
-        console.warn("[mines] Falha ao tentar resolver minas expiradas globalmente:", error.message);
-      }
-    });
-  }
-  // FIM DA ALTERAÇÃO FINAL
-  
-  // --- Controladores de auto-refresh de minas ---
-  // ALTERAÇÃO FINAL: Funções de polling desativadas.
-  function startMinesAutoRefresh() {
-    // Esta função não faz mais nada. O refresh é manual ou orientado a eventos.
-  }
-
-  function stopMinesAutoRefresh() {
-    // Esta função não faz mais nada.
-  }
-  // FIM DA ALTERAÇÃO FINAL
 
   // --- DOM ---
   const minesContainer = document.getElementById("minesContainer") || document.getElementById("minasContainer");
@@ -157,7 +123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cycleInfoElement = document.getElementById("cycleInfo");
   const refreshBtn = document.getElementById("refreshBtn");
   
-  // --- Footer & History DOM elements ---
+  // Footer & History
   const playerAttemptsSpan = document.getElementById("playerPVPAttemptsLeft");
   const buyPVPAttemptsBtn = document.getElementById("buyPVPAttemptsBtn");
   const playerMineSpan = document.getElementById("playerOwnedMine");
@@ -167,7 +133,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const closeHistoryBtn = document.getElementById("closeHistoryBtn");
   const newLogIndicator = document.querySelector(".new-log-indicator");
   
-  // --- Elementos do Modal PvP ---
+  // PvP Modal
   const pvpCombatModal = document.getElementById("pvpCombatModal");
   const pvpCountdown = document.getElementById("pvpCountdown");
   const challengerSide = document.getElementById("challengerSide");
@@ -181,7 +147,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const challengerHpText = document.getElementById("challengerHpText");
   const defenderHpText = document.getElementById("defenderHpText");
   
-  // Modal de compra PvE
+  // Buy Modals
   const buyModal = document.getElementById("buyModal");
   const buyPlayerGoldInfo = document.getElementById("buyPlayerGoldInfo");
   const buyAttackQtySpan = document.getElementById("buyAttackQty");
@@ -191,8 +157,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const buyCancelBtn = document.getElementById("buyCancelBtn");
   const buyConfirmBtn = document.getElementById("buyConfirmBtn");
 
+  const buyPvpModal = document.getElementById('buyPvpModal');
+  const buyPvpPlayerGoldInfo = document.getElementById('buyPvpPlayerGoldInfo');
+  const buyPvpQtySpan = document.getElementById('buyPvpQty');
+  const buyPvpCostInfo = document.getElementById('buyPvpCostInfo');
+  const buyPvpDecreaseQtyBtn = document.getElementById('buyPvpDecreaseQtyBtn');
+  const buyPvpIncreaseQtyBtn = document.getElementById('buyPvpIncreaseQtyBtn');
+  const buyPvpCancelBtn = document.getElementById('buyPvpCancelBtn');
+  const buyPvpConfirmBtn = document.getElementById('buyPvpConfirmBtn');
+
   if (!minesContainer) {
-    console.error("[mines] ERRO: não achei #minesContainer (ou #minasContainer)");
+    console.error("[mines] ERRO: não achei #minesContainer");
     return;
   }
 
@@ -225,24 +200,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
   
-  // --- Funções de atualização da barra de vida PvP ---
   function updatePvpHpBar(element, textElement, current, max) {
     const c = Math.max(0, Number(current || 0));
     const m = Math.max(1, Number(max || 1));
     const pct = Math.max(0, Math.min(100, (c / m) * 100));
-    if (element) {
-        element.style.width = `${pct}%`;
-    }
-    if (textElement) {
-        textElement.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
-    }
+    if (element) element.style.width = `${pct}%`;
+    if (textElement) textElement.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
   }
 
   function displayDamageNumber(damage, isCrit, isEvaded, targetElement) {
     if (!targetElement) return;
     const el = document.createElement("div");
     
-    // **CORREÇÃO AQUI**
     if (isEvaded) {
         el.textContent = "Desviou";
         el.className = "evade-text";
@@ -250,7 +219,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
         el.textContent = Number(damage).toLocaleString();
         el.className = isCrit ? "crit-damage-number" : "damage-number";
-        // Som do ataque (PvE/PvP)
         try {
           if (isCrit) playSound('critical', { volume: 0.1 });
           else playSound('normal', { volume: 0.5 });
@@ -268,7 +236,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function showModalAlert(message) {
     if (confirmModal && confirmMessage && confirmActionBtn && confirmCancelBtn) {
-      confirmMessage.innerHTML = message; // Use innerHTML para formatar
+      confirmMessage.innerHTML = message;
       confirmCancelBtn.style.display = 'none';
       confirmActionBtn.textContent = 'Ok';
       confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; };
@@ -278,50 +246,111 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // --- Ranking ---
-  // ALTERAÇÃO FINAL: Função de busca de ranking simplificada. A atualização de HP agora é feita via resposta do ataque.
-  async function fetchAndRenderDamageRanking() {
-    if (!currentMineId || !damageRankingList) return;
-    try {
-      const { data: rankingData, error: rankingError } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      if (rankingError) {
-        console.warn("[mines] get_mine_damage_ranking falhou:", rankingError.message);
-        return;
-      }
-      renderRanking(rankingData);
-    } catch (e) {
-      console.error("[mines] fetchAndRenderDamageRanking erro:", e);
-    }
-  }
-  
-  // ALTERAÇÃO FINAL: Nova função auxiliar para desacoplar a renderização da busca de dados.
+  // --- LÓGICA DE RANKING (Vindo do Ataque/Load) ---
   function renderRanking(rankingData) {
       if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
-      for (const row of (rankingData || [])) {
+      
+      if (!rankingData || rankingData.length === 0) {
+          damageRankingList.innerHTML = "<li style='text-align:center;color:#888'>Nenhum dano ainda</li>";
+          return;
+      }
+
+      for (const row of rankingData) {
+        const isMe = row.player_id === userId;
         const li = document.createElement("li");
         li.innerHTML = `
           <div class="ranking-entry">
             <img src="${esc(row.avatar_url || '/assets/default_avatar.png')}" alt="Avatar" class="ranking-avatar">
-            <span class="player-name">${esc(row.player_name)}</span>
+            <span class="player-name">${esc(row.player_name)} ${isMe ? '(Você)' : ''}</span>
             <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>
           </div>`;
         damageRankingList.appendChild(li);
       }
   }
-  // FIM DA ALTERAÇÃO FINAL
 
   async function refreshPlayerStats() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       await supabase.from('players').select('gold, crystals').eq('id', user.id).single();
-    } catch (e) {
-      console.warn("[mines] refreshPlayerStats:", e?.message || e);
+    } catch (e) {}
+  }
+
+  // --- HISTÓRICO INCREMENTAL (Cache) ---
+  const STORAGE_KEY_LOGS = 'pvp_logs_cache';
+  const STORAGE_KEY_LAST_SYNC = 'pvp_logs_last_sync';
+
+  function getLocalLogs() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY_LOGS) || '[]'); } catch { return []; }
+  }
+
+  function saveLocalLogs(logs) {
+      localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
+  }
+
+  async function syncAndCheckLogs() {
+      if (!userId) return;
+      const lastSync = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || '1970-01-01T00:00:00Z';
+      
+      try {
+          // Usa RPC incremental para economizar banda
+          const { data, error } = await supabase.rpc('sync_pvp_history', { 
+              p_player_id: userId, 
+              p_last_sync_time: lastSync 
+          });
+
+          if (error) { console.warn("Sync error:", error); return; }
+
+          const newLogs = data.new_logs || [];
+          if (newLogs.length > 0) {
+              const currentLogs = getLocalLogs();
+              // Adiciona novos e mantém limite de 50
+              const updatedLogs = [...currentLogs, ...newLogs];
+              if (updatedLogs.length > 50) updatedLogs.splice(0, updatedLogs.length - 50);
+              
+              saveLocalLogs(updatedLogs);
+              const lastLogTime = newLogs[newLogs.length - 1].attack_time;
+              localStorage.setItem(STORAGE_KEY_LAST_SYNC, lastLogTime);
+              
+              if (newLogIndicator) newLogIndicator.style.display = 'block';
+          }
+      } catch (e) {
+          console.warn("[mines] sync history error:", e);
+      }
+  }
+
+  function openHistory() {
+      const logs = getLocalLogs();
+      // Ordena decrescente para exibição
+      logs.sort((a, b) => new Date(b.attack_time) - new Date(a.attack_time));
+      renderHistoryList(logs);
+      if (newLogIndicator) newLogIndicator.style.display = 'none';
+      historyModal.style.display = 'flex';
+  }
+
+  function renderHistoryList(list) {
+    historyList.innerHTML = "";
+    if (list.length === 0) {
+        historyList.innerHTML = "<li>Nenhum ataque registrado.</li>";
+    } else {
+        for (const entry of list) {
+            const li = document.createElement("li");
+            const date = new Date(entry.attack_time).toLocaleString();
+            const victory = entry.damage_dealt_by_defender >= entry.damage_dealt_by_attacker;
+            li.innerHTML = `
+                <span><strong>Data:</strong> ${date}</span>
+                <span><strong>Atacante:</strong> ${esc(entry.attacker_name)}</span>
+                <span><strong>Dano Recebido:</strong> ${entry.damage_dealt_by_attacker.toLocaleString()}</span>
+                <span><strong>Dano Causado:</strong> ${entry.damage_dealt_by_defender.toLocaleString()}</span>
+                <span><strong>Resultado:</strong> <strong style="color: ${victory ? 'yellow' : 'red'};">${victory ? "Você venceu" : "Você perdeu"}</strong></span>
+            `;
+            historyList.appendChild(li);
+        }
     }
   }
 
-  // --- Compra de ataques ---
+  // --- Compra de ataques PvE ---
   let buyQty = 1;
   let buyPlayerGold = 0;
   let buyBaseBoughtCount = 0;
@@ -341,11 +370,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const total = calcTotalCost(buyQty, buyBaseBoughtCount);
     if (buyAttackCostInfo) buyAttackCostInfo.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
     if (buyPlayerGoldInfo) buyPlayerGoldInfo.innerHTML = `Você tem: <br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(buyPlayerGold || 0).toLocaleString()}</strong>`;
-    
   }
 
   async function openBuyModal() {
-    buyMode = 'attack'; // Garante que este modal é apenas para ataques PvE
+    buyMode = 'attack';
     if (!userId) { showModalAlert("Faça login para comprar."); return; }
     try {
       const { data: player, error } = await supabase.from("players").select("gold, attacks_bought_count").eq("id", userId).single();
@@ -373,7 +401,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let purchased = 0;
     let spent = 0;
     try {
-        const rpcFunction = 'buy_mine_attack'; // Apenas para PvE
+        const rpcFunction = 'buy_mine_attack';
         for (let i = 0; i < buyQty; i++) {
             const { data, error } = await supabase.rpc(rpcFunction, { p_player_id: userId });
             if (error || !data?.success) {
@@ -387,7 +415,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (purchased > 0) {
             showModalAlert(`Comprado(s) ${purchased} ataque(s) PvE por ${spent} Ouro.`);
             await refreshPlayerStats();
-            await updatePlayerAttacksUI();
+            // Ao comprar, precisamos sincronizar o contador local
+            await syncAttacksState();
         }
     } catch (e) {
       console.error("[mines] buyConfirm erro:", e);
@@ -398,15 +427,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
 
-  // --- Funções do Rodapé e Histórico ---
-  const buyPvpModal = document.getElementById('buyPvpModal');
-  const buyPvpPlayerGoldInfo = document.getElementById('buyPvpPlayerGoldInfo');
-  const buyPvpQtySpan = document.getElementById('buyPvpQty');
-  const buyPvpCostInfo = document.getElementById('buyPvpCostInfo');
-  const buyPvpDecreaseQtyBtn = document.getElementById('buyPvpDecreaseQtyBtn');
-  const buyPvpIncreaseQtyBtn = document.getElementById('buyPvpIncreaseQtyBtn');
-  const buyPvpCancelBtn = document.getElementById('buyPvpCancelBtn');
-  const buyPvpConfirmBtn = document.getElementById('buyPvpConfirmBtn');
+  // --- Compra PvP ---
   let buyPvpQty = 1;
   let buyPvpPlayerGold = 0;
   let buyPvpBaseBoughtCount = 0;
@@ -414,7 +435,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function calcPvpCost(qty, baseCount) {
     let total = 0;
     for (let i = 0; i < qty; i++) {
-      const group = Math.floor((baseCount + i) / 5); // a cada 5 compras aumenta
+      const group = Math.floor((baseCount + i) / 5);
       const cost = 30 + group * 5;
       total += cost;
     }
@@ -427,7 +448,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const total = calcPvpCost(buyPvpQty, buyPvpBaseBoughtCount);
     buyPvpCostInfo.innerHTML = `Custo total:<br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${total}</strong>`;
     buyPvpPlayerGoldInfo.innerHTML = `Você tem: <br><img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:30px;height:27px;vertical-align:-4px"><strong> ${Number(buyPvpPlayerGold || 0).toLocaleString()}</strong>`;
-    
   }
 
   async function openBuyPvpModal() {
@@ -435,185 +455,127 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         const { data: player, error } = await supabase.from("players").select("gold, mine_pvp_attempts_bought_count").eq("id", userId).single();
         if (error) throw error;
-
         buyPvpPlayerGold = player.gold || 0;
         buyPvpBaseBoughtCount = player.mine_pvp_attempts_bought_count || 0;
         buyPvpQty = 1;
         refreshBuyPvpModalUI();
         if (buyPvpModal) buyPvpModal.style.display = 'flex';
-    } catch (e) {
-        console.error("[mines] openBuyPvpModal erro:", e);
-        showModalAlert("Erro ao abrir modal de compra PvP.");
-    }
+    } catch (e) { showModalAlert("Erro ao abrir modal de compra PvP."); }
   }
 
-  function closeBuyPvpModal() {
-      if (buyPvpModal) buyPvpModal.style.display = 'none';
-  }
-
-  async function checkForNewPvpLogs() {
-    if (!userId || !newLogIndicator) return;
+  function closeBuyPvpModal() { if (buyPvpModal) buyPvpModal.style.display = 'none'; }
+  if (buyPvpIncreaseQtyBtn) buyPvpIncreaseQtyBtn.addEventListener("click", () => { buyPvpQty += 1; refreshBuyPvpModalUI(); });
+  if (buyPvpDecreaseQtyBtn) buyPvpDecreaseQtyBtn.addEventListener("click", () => { if (buyPvpQty > 1) buyPvpQty -= 1; refreshBuyPvpModalUI(); });
+  if (buyPvpCancelBtn) buyPvpCancelBtn.addEventListener("click", closeBuyPvpModal);
+  if (buyPvpConfirmBtn) buyPvpConfirmBtn.addEventListener("click", async () => {
+    closeBuyPvpModal(); showLoading();
+    let purchased = 0; let spent = 0;
     try {
-        const { data, error } = await supabase.rpc('get_pvp_history', { p_player_id: userId });
-        if (error) {
-            console.warn("[mines] Falha ao checar novos logs:", error.message);
-            return;
+        for (let i = 0; i < buyPvpQty; i++) {
+            const { data, error } = await supabase.rpc("buy_mine_pvp_attack", { p_player_id: userId });
+            if (error || !data?.success) {
+                if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
+                break;
+            }
+            purchased++; spent += (data.cost || 0);
+            buyPvpPlayerGold = Math.max(0, (buyPvpPlayerGold || 0) - (data.cost || 0));
         }
-
-        const defenderLogs = (data || []).filter(entry => entry.defender_id === userId);
-        const storedHistory = JSON.parse(localStorage.getItem('pvpHistory') || '[]');
-
-        // Compara a quantidade de logs no banco de dados com a do armazenamento local
-        if (defenderLogs.length > 0 && defenderLogs.length > storedHistory.length) {
-            newLogIndicator.style.display = 'block';
-        } else {
-            newLogIndicator.style.display = 'none';
+        if (purchased > 0) {
+            showModalAlert(`Comprado(s) ${purchased} tentativa(s) PvP por ${spent} Ouro.`);
+            await refreshPlayerStats();
+            await updatePVPAttemptsUI();
         }
+    } catch (e) { showModalAlert("Erro inesperado."); } finally { hideLoading(); }
+  });
 
-    } catch (e) {
-        console.error("[mines] Erro em checkForNewPvpLogs:", e);
-    }
-  }
-  
+  // --- UI Updates ---
   async function updatePVPAttemptsUI() {
     if (!userId) return;
     try {
         const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
         if (error) throw error;
-        
-        const attemptsLeft = data?.mine_pvp_attempts_left || 0;
-
-        if (playerAttemptsSpan) {
-            playerAttemptsSpan.textContent = attemptsLeft;
-        }
-    } catch (e) {
-        console.warn("[mines] updatePVPAttemptsUI failed:", e);
-    }
+        if (playerAttemptsSpan) playerAttemptsSpan.textContent = data?.mine_pvp_attempts_left || 0;
+    } catch (e) {}
   }
 
   async function updatePlayerMineUI() {
     if (!userId) return;
     try {
         const { data, error } = await supabase.from('mining_caverns').select('name, id').eq('owner_player_id', userId).single();
-        if (error && error.code !== 'PGRST116') { // PGRST116 = linha não encontrada
-            throw error;
-        }
-        if (playerMineSpan) {
-            playerMineSpan.textContent = data ? data.name : 'Nenhuma';
-        }
-    } catch (e) {
-        console.warn("[mines] updatePlayerMineUI failed:", e);
-    }
+        if (playerMineSpan) playerMineSpan.textContent = data ? data.name : 'Nenhuma';
+    } catch (e) {}
   }
 
-  async function fetchAndRenderHistory() {
-    showLoading();
-    try {
-        const { data, error } = await supabase.rpc('get_pvp_history', { p_player_id: userId });
-        if (error) throw error;
-
-        // 🔥 Filtra apenas os duelos onde o jogador foi defensor
-        historyCache = (data || []).filter(entry => entry.defender_id === userId);
-        
-        localStorage.setItem('pvpHistory', JSON.stringify(historyCache));
-        
-        // Esconde o aviso "Novo" imediatamente após carregar o histórico
-        if (newLogIndicator) newLogIndicator.style.display = 'none';
-
-        historyList.innerHTML = "";
-        if (historyCache.length === 0) {
-            historyList.innerHTML = "<li>Nenhum ataque registrado.</li>";
-        } else {
-            for (const entry of historyCache.slice(0, 10)) {
-                const li = document.createElement("li");
-                const date = new Date(entry.attack_time).toLocaleString();
-                let resultText, resultColor;
-                // A lógica de vitória/derrota é baseada no defensor
-                if (entry.damage_dealt_by_defender >= entry.damage_dealt_by_attacker) {
-                    resultText = "Você venceu";
-                    resultColor = "yellow";
-                } else {
-                    resultText = "Você perdeu";
-                    resultColor = "red";
-                }
-                li.innerHTML = `
-                    <span><strong>Data:</strong> ${date}</span>
-                    <span><strong>Atacante:</strong> ${esc(entry.attacker_name)}</span>
-                    <span><strong>Dano Recebido:</strong> ${entry.damage_dealt_by_attacker.toLocaleString()}</span>
-                    <span><strong>Dano Causado:</strong> ${entry.damage_dealt_by_defender.toLocaleString()}</span>
-                    <span><strong>Resultado:</strong> <strong style="color: ${resultColor};">${resultText}</strong></span>
-                `;
-                historyList.appendChild(li);
-            }
-        }
-        historyModal.style.display = 'flex';
-    } catch (e) {
-        console.error("[mines] Erro ao carregar histórico:", e);
-        showModalAlert("Erro ao carregar histórico.");
-    } finally {
-        hideLoading();
-    }
-  }
-
-  function closeHistory() {
-      if (historyModal) historyModal.style.display = 'none';
-  }
-
-  // --- UI ataques/cooldown ---
-  async function updatePlayerAttacksUI() {
-    try {
-      const { data: player, error } = await supabase.rpc("get_player_attacks_state", { _player_id: userId });
-      if (error) { console.error("Erro ao buscar ataques do jogador:", error); return; }
-      
-      attacksLeft = player.attacks_left;
-      const timeToNextAttack = player.time_to_next_attack;
-
-      if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
-      if (attacksLeft <= 0) {
-          if (attackBtn) {
-              // Adiciona a classe para aplicar grayscale e desabilitar visualmente
-              attackBtn.classList.add('disabled-attack-btn');
-          }
-          if (attackBtn) attackBtn.disabled = true; // Desabilita funcionalmente
-      } else {
-          if (attackBtn) {
-              // Remove a classe para reabilitar a aparência
-              attackBtn.classList.remove('disabled-attack-btn');
-          }
-          if (attackBtn) attackBtn.disabled = false; // Habilita funcionalmente
-      }
+  // --- SISTEMA DE COOLDOWN LOCAL (Sem Fetch Loop) ---
+  function startLocalCooldownTimer() {
       if (cooldownInterval) clearInterval(cooldownInterval);
-
-      if (attacksLeft < 5) {
-        let timeRemaining = timeToNextAttack;
-        if (attackCooldownSpan) attackCooldownSpan.textContent = `(+ 1 em ${Math.max(0, timeRemaining)}s)`;
-        cooldownInterval = setInterval(() => {
-          timeRemaining--;
-          if (timeRemaining > 0) {
-            if (attackCooldownSpan) attackCooldownSpan.textContent = `(+ 1 em ${timeRemaining}s)`;
-          } else {
-            clearInterval(cooldownInterval);
-            cooldownInterval = null;
-            updatePlayerAttacksUI();
+      const updateTimerUI = () => {
+          if (localAttacksLeft >= 5) {
+              if (attackCooldownSpan) attackCooldownSpan.textContent = "";
+              clearInterval(cooldownInterval);
+              return;
           }
-        }, 1000);
-      } else {
-        if (attackCooldownSpan) attackCooldownSpan.textContent = "";
-      }
-      if (buyAttackBtn) buyAttackBtn.disabled = false;
-    } catch (e) {
-      console.warn("[mines] updatePlayerAttacksUI:", e?.message || e);
-    }
+          if (!nextAttackTime) return;
+          const now = Date.now();
+          const diff = nextAttackTime - now;
+          if (diff <= 0) {
+              // Tempo acabou, ganha ataque
+              localAttacksLeft = Math.min(5, localAttacksLeft + 1);
+              updateAttacksDisplay();
+              if (localAttacksLeft < 5) {
+                  nextAttackTime = Date.now() + 30000;
+              } else {
+                  nextAttackTime = null;
+                  clearInterval(cooldownInterval);
+              }
+          } else {
+              const sec = Math.ceil(diff / 1000);
+              if (attackCooldownSpan) attackCooldownSpan.textContent = `(+ 1 em ${sec}s)`;
+          }
+      };
+      updateTimerUI();
+      cooldownInterval = setInterval(updateTimerUI, 1000);
   }
-  
-  // --- NOVA FUNÇÃO: Guilda Dominante ---
+
+  function updateAttacksDisplay() {
+      if (playerAttacksSpan) playerAttacksSpan.textContent = `${localAttacksLeft}/5`;
+      if (localAttacksLeft <= 0) {
+          if (attackBtn) { attackBtn.classList.add('disabled-attack-btn'); attackBtn.disabled = true; }
+      } else {
+          if (attackBtn) { attackBtn.classList.remove('disabled-attack-btn'); attackBtn.disabled = false; }
+      }
+  }
+
+  async function syncAttacksState() {
+      try {
+          // Busca estado real no servidor uma vez
+          const { data, error } = await supabase.rpc("get_player_attacks_state", { _player_id: userId });
+          if (error) throw error;
+          
+          localAttacksLeft = data.attacks_left;
+          
+          if (data.time_to_next_attack > 0) {
+              nextAttackTime = Date.now() + (data.time_to_next_attack * 1000);
+              startLocalCooldownTimer();
+          } else if (localAttacksLeft < 5) {
+               nextAttackTime = Date.now() + 30000;
+               startLocalCooldownTimer();
+          } else {
+               nextAttackTime = null;
+               if (cooldownInterval) clearInterval(cooldownInterval);
+               if (attackCooldownSpan) attackCooldownSpan.textContent = "";
+          }
+          updateAttacksDisplay();
+      } catch (e) {
+          console.warn("Sync attacks fail:", e);
+      }
+  }
+
+  // --- Guilda Dominante ---
   async function updateDominantGuild(mines, ownersMap) {
       const guilddomSpan = document.getElementById("guilddom");
       if (!guilddomSpan) return;
-
       const guildCounts = {};
-      
-      // Itera sobre as minas para contar quantos donos cada guilda tem
       for (const mine of mines) {
           if (mine.owner_player_id) {
               const owner = ownersMap[mine.owner_player_id];
@@ -622,54 +584,26 @@ document.addEventListener("DOMContentLoaded", async () => {
               }
           }
       }
-
-      let dominantGuildId = null;
-      let maxMines = 0;
-
-      // Encontra a guilda com o maior número de minas
+      let dominantGuildId = null; let maxMines = 0;
       for (const guildId in guildCounts) {
-          if (guildCounts[guildId] > maxMines) {
-              maxMines = guildCounts[guildId];
-              dominantGuildId = guildId;
-          }
+          if (guildCounts[guildId] > maxMines) { maxMines = guildCounts[guildId]; dominantGuildId = guildId; }
       }
-
       if (dominantGuildId) {
           try {
-              // Busca os detalhes da guilda dominante
-              const { data: guild, error } = await supabase
-                  .from('guilds')
-                  .select('name, flag_url')
-                  .eq('id', dominantGuildId)
-                  .single();
-
-              if (error) throw error;
-              
+              const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', dominantGuildId).single();
               if (guild) {
                   const flagUrl = guild.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-                  guilddomSpan.innerHTML = `
-                      <img src="${esc(flagUrl)}" style="width:50px; height:50px; border-radius: 4px; vertical-align: middle; margin-right: 8px;">
-                      <span style="font-weight: bold; color: yellow;">${esc(guild.name)}</span>
-                  `;
-              } else {
-                  guilddomSpan.textContent = 'Nenhuma.';
-              }
-          } catch (e) {
-              console.warn("[mines] Erro ao buscar guilda dominante:", e);
-              guilddomSpan.textContent = 'Nenhuma.';
-          }
-      } else {
-          guilddomSpan.textContent = 'Nenhuma.';
-      }
+                  guilddomSpan.innerHTML = `<img src="${esc(flagUrl)}" style="width:50px; height:50px; border-radius: 4px; vertical-align: middle; margin-right: 8px;"><span style="font-weight: bold; color: yellow;">${esc(guild.name)}</span>`;
+              } else { guilddomSpan.textContent = 'Nenhuma.'; }
+          } catch (e) { guilddomSpan.textContent = 'Nenhuma.'; }
+      } else { guilddomSpan.textContent = 'Nenhuma.'; }
   }
 
-
-  // --- Carregar minas + finalizar combates expirados ---
+  // --- Carregar minas ---
   async function loadMines() {
     showLoading();
     try {
-      // ALTERAÇÃO FINAL: A resolução de minas expiradas foi removida daqui para ser centralizada nos gatilhos.
-      let { data: mines, error } = await supabase
+      const { data: mines, error } = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
         .order("name", { ascending: true });
@@ -678,17 +612,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       const ownerIds = Array.from(new Set((mines || []).map(m => m.owner_player_id).filter(Boolean)));
       const ownersMap = {};
       if (ownerIds.length) {
-        const { data: ownersData, error: ownersError } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
-        if (ownersError) throw ownersError;
+        const { data: ownersData } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
         (ownersData || []).forEach(p => ownersMap[p.id] = p);
       }
 
       renderMines(mines || [], ownersMap);
-      
-      // Chama a nova função para atualizar a guilda dominante
       await updateDominantGuild(mines || [], ownersMap);
-
-      await checkForNewPvpLogs();
+      await syncAndCheckLogs();
       await updatePVPAttemptsUI();
       await updatePlayerMineUI();
     } catch (err) {
@@ -755,9 +685,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     showLoading();
     hasAttackedOnce = false;
     try {
-      // ALTERAÇÃO FINAL: Gatilho de resolução global ao entrar em um combate.
-      await resolveAllExpiredMinesGlobally();
-      // FIM DA ALTERAÇÃO FINAL
+      // Trigger global de limpeza de minas expiradas
+      supabase.rpc('resolve_all_expired_mines').then(()=>{});
 
       const sel = await supabase
         .from("mining_caverns")
@@ -773,7 +702,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       updateHpBar(cavern.monster_health, maxMonsterHealth);
       if (combatTitle) combatTitle.textContent = `Disputa pela ${esc(cavern.name)}`;
 
-      await updatePlayerAttacksUI();
+      await syncAttacksState();
 
       if (cavern.competition_end_time) {
         const remaining = Math.max(0, Math.floor((new Date(cavern.competition_end_time).getTime() - Date.now()) / 1000));
@@ -784,11 +713,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       if (combatModal) combatModal.style.display = "flex";
-      await fetchAndRenderDamageRanking();
+      
+      // Busca Ranking Inicial (Única vez)
+      const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
+      renderRanking(rankingData);
 
-      // ALTERAÇÃO FINAL: Removido início de polling de ranking e sessão.
       ambientMusic.play();
-      // FIM DA ALTERAÇÃO FINAL
     } catch (e) {
       console.error("[mines] startCombat erro:", e);
       showModalAlert("Erro ao entrar no combate.");
@@ -797,6 +727,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // --- Ataque PvE (OTIMIZADO) ---
+  async function attack() {
+    if (attackBtn) {
+        attackBtn.classList.remove('attack-anim');
+        void attackBtn.offsetWidth;
+        attackBtn.classList.add('attack-anim');
+    }
+    
+    if (!currentMineId) return;
+    if (attackBtn) attackBtn.disabled = true;
+
+    // --- Optimistic Update Local ---
+    if (localAttacksLeft > 0) {
+        localAttacksLeft--;
+        updateAttacksDisplay();
+        // Se não tinha timer, inicia um de 30s
+        if (!nextAttackTime) {
+            nextAttackTime = Date.now() + 30000;
+            startLocalCooldownTimer();
+        }
+    }
+
+    try {
+      const { data, error } = await supabase.rpc("attack_mine_monster", { _player_id: userId, _mine_id: currentMineId });
+      
+      if (error) throw error;
+      if (data.success === false) { 
+          showModalAlert(data.message); 
+          syncAttacksState(); // Rollback do ataque gasto se falhou
+          return; 
+      }
+
+      displayDamageNumber(data.damage_dealt, !!data.is_crit, false, monsterArea);
+      if (!hasAttackedOnce) { hasAttackedOnce = true; }
+      updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
+      
+      // Atualiza Ranking com dados do RPC
+      if (data.ranking) {
+          renderRanking(data.ranking);
+      }
+
+      // Sync do contador real
+      if (typeof data.attacks_left === 'number') {
+          localAttacksLeft = data.attacks_left;
+          updateAttacksDisplay();
+      }
+
+      if (data.competition_end_time && !combatTimerInterval) {
+        const remaining = Math.max(0, Math.floor((new Date(data.competition_end_time).getTime() - Date.now()) / 1000));
+        startCombatTimer(remaining);
+      }
+
+      if (data.owner_set) {
+        await new Promise(r => setTimeout(r, 1200));
+        showModalAlert("O monstro foi derrotado! Mina conquistada ou resetada.");
+        resetCombatUI();
+        await loadMines();
+      }
+    } catch (e) {
+      console.error("[mines] attack erro:", e);
+      syncAttacksState(); // Resync em caso de erro
+    } finally {
+        if (localAttacksLeft > 0 && attackBtn) attackBtn.disabled = false;
+    }
+  }
+
+  // --- Timers e UI Helper ---
   function startCombatTimer(seconds) {
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     combatTimeLeft = Math.max(0, Number(seconds || 0));
@@ -813,27 +810,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 1000);
   }
 
-  // ALTERAÇÃO FINAL: Função onCombatTimerEnd agora é um gatilho principal de resolução.
   async function onCombatTimerEnd() {
     try {
       if (!currentMineId) return;
       showLoading();
-      const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
-      hideLoading();
-      
-      if (error) {
-        console.error("[mines] end_mine_combat_session erro:", error);
-        showModalAlert("Erro ao encerrar a sessão de combate.");
-      } else {
-        const newOwnerId = data?.new_owner_id || null;
-        const newOwnerName = data?.new_owner_name || null;
-        if (newOwnerId) {
-          if (newOwnerId === userId) showModalAlert("Você causou o maior dano e conquistou a mina!");
-          else showModalAlert(`O tempo acabou! ${newOwnerName || "Outro jogador"} conquistou a mina.`);
-        } else {
-          showModalAlert("Tempo esgotado: ninguém causou dano. A mina foi resetada.");
-        }
-      }
+      await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
+      showModalAlert("Tempo esgotado!");
     } catch (e) {
       console.error("[mines] onCombatTimerEnd erro:", e);
     } finally {
@@ -841,100 +823,37 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadMines();
     }
   }
-  // FIM DA ALTERAÇÃO FINAL
 
-  // --- Ataque PvE ---
-  async function attack() {
-    if (attackBtn) {
-        // Remove a classe para garantir que a animação possa ser reativada
-        attackBtn.classList.remove('attack-anim');
-        // Força o navegador a reiniciar a animação (reflow)
-        void attackBtn.offsetWidth;
-        // Adiciona a classe para iniciar a animação de zoom
-        attackBtn.classList.add('attack-anim');
-    }
-    
-    if (!currentMineId) return;
-    if (attackBtn) attackBtn.disabled = true;
-    try {
-      const sel = await supabase.from("mining_caverns").select("status").eq("id", currentMineId).single();
-      if (sel.data?.status === "aberta") {
-        const res = await supabase.rpc("start_mine_combat", { _player_id: userId, _mine_id: currentMineId });
-        if (res.error || !res.data?.success) {
-          showModalAlert(res.error?.message || res.data?.message || "Falha ao iniciar combate.");
-          return;
-        }
-      }
-
-      // ALTERAÇÃO FINAL: A RPC de ataque agora retorna o ranking, otimizando a chamada.
-      const { data, error } = await supabase.rpc("attack_mine_monster", { _player_id: userId, _mine_id: currentMineId });
-      if (error) { showModalAlert("Erro ao atacar: " + error.message); return; }
-      if (data.success === false) { showModalAlert(data.message); await updatePlayerAttacksUI(); return; }
-
-      displayDamageNumber(data.damage_dealt, !!data.is_crit, false, monsterArea);
-      if (!hasAttackedOnce) { hasAttackedOnce = true; }
-      updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
-      
-      // Renderiza o ranking recebido diretamente da resposta do ataque.
-      if (data.ranking) {
-        renderRanking(data.ranking);
-      }
-      // FIM DA ALTERAÇÃO FINAL
-
-      attacksLeft = data.attacks_left;
-      if (playerAttacksSpan) playerAttacksSpan.textContent = `${attacksLeft}/5`;
-
-      if (data.competition_end_time && combatTimerInterval === null) {
-        const remaining = Math.max(0, Math.floor((new Date(data.competition_end_time).getTime() - Date.now()) / 1000));
-        startCombatTimer(remaining);
-      }
-
-      if (data.owner_set) {
-        await new Promise(r => setTimeout(r, 1200));
-        if (data.new_owner_id) {
-          if (data.new_owner_id === userId) showModalAlert("Você derrotou o monstro e conquistou a mina!");
-          else showModalAlert(`O monstro foi derrotado! ${data.new_owner_name || 'Outro jogador'} conquistou a mina.`);
-        } else {
-          showModalAlert("O monstro foi derrotado, mas a mina foi resetada.");
-        }
-        resetCombatUI();
-        await loadMines();
-      } else {
-        updatePlayerAttacksUI();
-      }
-    } catch (e) {
-      console.error("[mines] attack erro:", e);
-      showModalAlert("Erro ao atacar.");
-    } finally {
-        if (attackBtn) attackBtn.disabled = false;
-    }
+  function resetCombatUI() {
+    if (combatModal) combatModal.style.display = "none";
+    if (monsterHpFill) monsterHpFill.style.width = "100%";
+    if (monsterHpTextOverlay) monsterHpTextOverlay.textContent = "";
+    if (damageRankingList) damageRankingList.innerHTML = "";
+    currentMineId = null;
+    if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
+    if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
+    if (buyAttackBtn) { buyAttackBtn.disabled = true; }
+    ambientMusic.pause();
+    ambientMusic.currentTime = 0;
   }
 
-  // --- PvP: Abre modal de confirmação com aviso ---
+  // --- PvP Logic (Original preservada) ---
   async function challengeMine(targetMine, owner, allMines) {
     if (!userId) return;
-    
     const ownerName = owner.name || "Desconhecido";
-    
     showLoading();
     try {
         const { data: player, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
         if (error) throw error;
         
         let attemptsLeft = player.mine_pvp_attempts_left;
-        
-        if (attemptsLeft <= 0) {
-            showModalAlert("Você não tem mais tentativas de captura hoje.");
-            return;
-        }
+        if (attemptsLeft <= 0) { showModalAlert("Sem tentativas de PvP hoje."); return; }
 
         let warningMessage = "";
         const currentOwnedMine = allMines.find(m => m.owner_player_id === userId);
-        if (currentOwnedMine) {
-            warningMessage = `<br><br><strong style="color: #ffcc00;">AVISO:</strong> Você já é o dono da mina "${esc(currentOwnedMine.name)}". Ao desafiar, você abandonará sua mina atual.`;
-        }
+        if (currentOwnedMine) warningMessage = `<br><br><strong style="color: #ffcc00;">AVISO:</strong> Abandonará "${esc(currentOwnedMine.name)}".`;
 
-        confirmMessage.innerHTML = `Você tem <strong>${attemptsLeft}</strong> tentativa(s) restante(s).<br>Deseja desafiar <strong>${esc(ownerName)}</strong>?${warningMessage}`;
+        confirmMessage.innerHTML = `Tentativas: <strong>${attemptsLeft}</strong>.<br>Desafiar <strong>${esc(ownerName)}</strong>?${warningMessage}`;
         confirmCancelBtn.style.display = 'inline-block';
         confirmActionBtn.textContent = 'Desafiar';
         confirmModal.style.display = 'flex';
@@ -943,60 +862,29 @@ document.addEventListener("DOMContentLoaded", async () => {
             confirmModal.style.display = 'none';
             startPvpCombat(targetMine.id, owner.id, owner.name, owner.avatar_url);
         };
-
-        confirmCancelBtn.onclick = () => {
-            confirmModal.style.display = 'none';
-        };
-    } catch (e) {
-        console.error("[mines] challengeMine erro:", e);
-        showModalAlert("Erro ao verificar suas tentativas de PvP.");
-    } finally {
-        hideLoading();
-    }
+        confirmCancelBtn.onclick = () => confirmModal.style.display = 'none';
+    } catch (e) { showModalAlert("Erro PvP check."); } finally { hideLoading(); }
   }
 
-  // --- Inicia e simula o combate PvP ---
   async function startPvpCombat(mineId, ownerId, ownerName, ownerAvatar) {
     showLoading();
-    // assegura que as minas não fiquem sendo recarregadas durante a simulação PvP
-    // stopMinesAutoRefresh(); // Função agora está vazia
     try {
-        // Busca os stats de combate do desafiante
-        const { data: challengerData, error: challengerError } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
-        if (challengerError) throw challengerError;
-        if (!challengerData?.success) {
-            showModalAlert(challengerData?.message || "Erro ao obter os atributos do desafiante.");
-            return;
-        }
+        const { data: challengerData, error: ce } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
+        const { data: defenderData, error: de } = await supabase.rpc('get_player_combat_stats', { p_player_id: ownerId });
+        if (ce || de) throw "Erro stats";
         
-        // Busca os stats de combate do defensor
-        const { data: defenderData, error: defenderError } = await supabase.rpc('get_player_combat_stats', { p_player_id: ownerId });
-        if (defenderError) throw defenderError;
-        if (!defenderData?.success) {
-            showModalAlert(defenderData?.message || "Erro ao obter os atributos do defensor.");
-            return;
-        }
-        
-        // Busca o avatar do desafiante separadamente, pois a função RPC não o retorna
-        const { data: challengerInfo, error: challengerInfoError } = await supabase.from('players').select('avatar_url').eq('id', userId).single();
-        if (challengerInfoError) throw challengerInfoError;
+        const { data: challengerInfo } = await supabase.from('players').select('avatar_url').eq('id', userId).single();
 
         const challengerMaxHp = Number(challengerData.health || 0);
         const defenderMaxHp = Number(defenderData.health || 0);
-        
         let challengerCurrentHp = challengerMaxHp;
         let defenderCurrentHp = defenderMaxHp;
 
         const { data, error } = await supabase.rpc("capture_mine", { p_challenger_id: userId, p_mine_id: mineId });
-        if (error) throw error;
-        if (!data?.success) {
-            showModalAlert(data?.message || "O desafio falhou por um motivo desconhecido.");
-            return;
-        }
+        if (error || !data?.success) throw error || data?.message;
 
         challengerName.textContent = challengerData.name || "Desafiante";
         defenderName.textContent = ownerName || "Dono";
-        // Usa o URL do avatar buscado separadamente
         challengerAvatar.src = challengerInfo.avatar_url || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         defenderAvatar.src = ownerAvatar || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         
@@ -1005,11 +893,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         pvpCombatModal.style.display = 'flex';
         ambientMusic.play();
-      
-      // ALTERAÇÃO FINAL: Removido polling de sessão.
-      // if (sessionCheckInterval) clearInterval(sessionCheckInterval);
-      // sessionCheckInterval = setInterval(checkExpiredSessions, 15000);
-      // FIM DA ALTERAÇÃO FINAL
 
         pvpCountdown.style.display = 'block';
         for (let i = 4; i > 0; i--) {
@@ -1021,35 +904,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         const combatLog = data.combat.battle_log;
         for (const turn of combatLog) {
             const targetElement = turn.attacker_id === ownerId ? challengerSide : defenderSide;
-            
             if (turn.attacker_id === ownerId) {
-                // Defender atacou, desafiante recebeu dano
                 challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(turn.damage));
                 updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
             } else {
-                // Desafiante atacou, defensor recebeu dano
                 defenderCurrentHp = Math.max(0, defenderCurrentHp - Number(turn.damage));
                 updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
             }
-
             displayDamageNumber(turn.damage, turn.critical, turn.evaded, targetElement);
-            
             await new Promise(r => setTimeout(r, 1000));
         }
-
         await new Promise(r => setTimeout(r, 1000));
 
         const winnerId = data.combat?.winner_id;
-        const crystalsMsg = `Cristais distribuídos: ${data.crystals_distributed || 0}`;
-        if (winnerId === userId) {
-            showModalAlert(`VOCÊ VENCEU a batalha e conquistou a mina!<br>${crystalsMsg}`);
-        } else {
-            showModalAlert(`Você foi derrotado. O dono defendeu a mina!<br>${crystalsMsg}`);
-        }
+        if (winnerId === userId) showModalAlert(`VITÓRIA! Mina conquistada.`);
+        else showModalAlert(`DERROTA. O dono defendeu a mina.`);
 
     } catch (e) {
-        console.error("[mines] startPvpCombat erro:", e);
-        showModalAlert("Ocorreu um erro crítico ao desafiar a mina.");
+        console.error("PvP Error", e);
+        showModalAlert("Erro ao desafiar mina.");
     } finally {
         if(pvpCombatModal) pvpCombatModal.style.display = 'none';
         hideLoading();
@@ -1057,100 +930,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // --- Encerrar manualmente ---
-  async function endCombat() {
+  function endCombat() {
     resetCombatUI();
-    // AQUI: Reseta o estado do ataque ao sair do combate
     hasAttackedOnce = false;
-    await loadMines();
+    loadMines();
   }
-
-  function resetCombatUI() {
-    if (combatModal) combatModal.style.display = "none";
-    if (monsterHpFill) monsterHpFill.style.width = "100%";
-    if (monsterHpTextOverlay) monsterHpTextOverlay.textContent = "";
-    if (damageRankingList) damageRankingList.innerHTML = "";
-    currentMineId = null;
-    if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
-    if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
-    // ALTERAÇÃO FINAL: Removida limpeza de intervalos que não existem mais.
-    // if (rankingInterval) { clearInterval(rankingInterval); rankingInterval = null; }
-    // if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
-    // FIM DA ALTERAÇÃO FINAL
-    if (buyAttackBtn) { buyAttackBtn.disabled = true; }
-    ambientMusic.pause();
-    ambientMusic.currentTime = 0;
-  }
-
-  // --- Listeners globais ---
-  if (attackBtn) attackBtn.addEventListener("click", attack);
-  if (backBtn) backBtn.addEventListener("click", endCombat);
-  if (buyAttackBtn) {
-    buyAttackBtn.addEventListener("click", () => {
-      if (!hasAttackedOnce) {
-        showModalAlert("A compra de ataques só é possível após você realizar o primeiro ataque.");
-        return;
-      }
-      openBuyModal();
-    });
-  }
-  if (buyPVPAttemptsBtn) buyPVPAttemptsBtn.addEventListener("click", () => openBuyPvpModal());
-  if (openHistoryBtn) openHistoryBtn.addEventListener("click", fetchAndRenderHistory);
-  if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", closeHistory);
-  if (refreshBtn) refreshBtn.addEventListener("click", () => { loadMines(); });
-
-  if (buyPvpIncreaseQtyBtn) buyPvpIncreaseQtyBtn.addEventListener("click", () => { buyPvpQty += 1; refreshBuyPvpModalUI(); });
-  if (buyPvpDecreaseQtyBtn) buyPvpDecreaseQtyBtn.addEventListener("click", () => { if (buyPvpQty > 1) buyPvpQty -= 1; refreshBuyPvpModalUI(); });
-  if (buyPvpCancelBtn) buyPvpCancelBtn.addEventListener("click", closeBuyPvpModal);
-  if (buyPvpConfirmBtn) buyPvpConfirmBtn.addEventListener("click", async () => {
-    closeBuyPvpModal();
-    showLoading();
-    let purchased = 0;
-    let spent = 0;
-    try {
-        for (let i = 0; i < buyPvpQty; i++) {
-            const { data, error } = await supabase.rpc("buy_mine_pvp_attack", { p_player_id: userId });
-            if (error || !data?.success) {
-                if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
-                break;
-            }
-            purchased++;
-            spent += (data.cost || 0);
-            buyPvpPlayerGold = Math.max(0, (buyPvpPlayerGold || 0) - (data.cost || 0));
-        }
-        if (purchased > 0) {
-            showModalAlert(`Comprado(s) ${purchased} tentativa(s) PvP por ${spent} Ouro.`);
-            await refreshPlayerStats();
-            await updatePVPAttemptsUI();
-        }
-    } catch (e) {
-        console.error("[mines] buyPvpConfirm erro:", e);
-        showModalAlert("Erro inesperado durante a compra PvP.");
-    } finally {
-        hideLoading();
-    }
-  });
 
   // --- Boot ---
-  // ALTERAÇÃO FINAL: Função de boot agora inclui o gatilho de resolução global.
   async function boot() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = "login.html"; return; }
       userId = user.id;
 
-      // Gatilho de resolução global ao carregar a página.
-      await resolveAllExpiredMinesGlobally();
-      
-      await supabase.rpc('reset_player_pvp_attempts');
+      supabase.rpc('resolve_all_expired_mines');
+      supabase.rpc('reset_player_pvp_attempts');
 
-      await supabase.rpc('get_player_pvp_state', { p_player_id: userId });
+      await Promise.all([
+          loadMines(),
+          syncAndCheckLogs() // Sync inicial do histórico
+      ]);
       
-      await loadMines();
-      await refreshPlayerStats();
-      await updatePVPAttemptsUI();
-      await updatePlayerMineUI(); 
-      await checkForNewPvpLogs();
+      syncAttacksState(); // Setup inicial de cooldowns
+
     } catch (e) {
       console.error("[mines] auth erro:", e);
       window.location.href = "login.html";
@@ -1158,13 +960,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   boot();
-  // FIM DA ALTERAÇÃO FINAL
 
   window.addEventListener("beforeunload", () => {
-    // ALTERAÇÃO FINAL: Removida limpeza de intervalos de polling que não existem mais.
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     if (cooldownInterval) clearInterval(cooldownInterval);
-    // FIM DA ALTERAÇÃO FINAL
   });
 
   function updateCountdown() {
@@ -1179,54 +978,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     nextSessionDate.setHours(nextSessionHour, 0, 0, 0);
     const diffInMs = nextSessionDate.getTime() - now.getTime();
     const diffInSeconds = Math.floor(diffInMs / 1000);
-    const formattedTime = formatTime(diffInSeconds);
-    if (cycleInfoElement) {
-      cycleInfoElement.innerHTML = `<strong>${formattedTime}</strong>`;
-    }
+    if (cycleInfoElement) cycleInfoElement.innerHTML = ` <strong>${formatTime(diffInSeconds)}</strong>`;
   }
   updateCountdown();
   setInterval(updateCountdown, 1000);
 
-  document.addEventListener("visibilitychange", async () => {
-    // Se a aba ficar oculta
+  document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === 'hidden') {
-        
-      // NOVO: Pausa música ao sair
-      if (ambientMusic && !ambientMusic.paused) {
-        ambientMusic.pause();
-        // Marcamos que estava tocando, embora neste script o resetCombatUI 
-        // normalmente impeça o resume imediato, mantemos a flag por consistência.
-        ambientMusic._wasPlaying = true; 
-      }
-
-      // Se estiver em um combate, toca um aviso de saída
-      if (currentMineId) {
-        avisoTelaSound.currentTime = 0;
-        avisoTelaSound.play().catch(e => console.warn("Falha ao tocar aviso:", e));
-      }
-      return;
+      if (ambientMusic && !ambientMusic.paused) { ambientMusic.pause(); ambientMusic._wasPlaying = true; }
+      if (currentMineId) { avisoTelaSound.currentTime = 0; avisoTelaSound.play().catch(()=>{}); }
+    } else {
+        // Ao voltar, recarrega se não estiver em combate
+        if (!currentMineId) loadMines();
+        syncAndCheckLogs();
     }
-
-    // Se a aba voltar a ficar visível
-    if (currentMineId) {
-        // Busca o nome da mina para a mensagem de alerta
-        const { data: mineData, error: mineError } = await supabase
-            .from("mining_caverns")
-            .select("name")
-            .eq("id", currentMineId)
-            .single();
-
-        const mineName = mineData ? mineData.name : "Desconhecida";
-
-        // Exibe o alerta e reseta a UI
-        showModalAlert(`Você saiu da tela durante a disputa pela ${esc(mineName)}. Você pode retornar para a disputa. Esta medida é para evitar bugs.`);
-        resetCombatUI(); // Isso fechará o modal de combate e manterá o áudio pausado.
-    }
-
-    // ALTERAÇÃO FINAL: Atualiza a lista de minas ao voltar para a aba, se não estiver em combate.
-    if (!currentMineId) {
-      loadMines().catch(e => console.warn("[mines] loadMines on visibilitychange falhou:", e));
-    }
-    // FIM DA ALTERAÇÃO FINAL
   });
+
+  // Listeners
+  if (attackBtn) attackBtn.addEventListener("click", attack);
+  if (backBtn) backBtn.addEventListener("click", endCombat);
+  if (buyAttackBtn) buyAttackBtn.addEventListener("click", () => {
+      if (!hasAttackedOnce) { showModalAlert("Ataque ao menos uma vez para comprar."); return; }
+      openBuyModal();
+  });
+  if (buyPVPAttemptsBtn) buyPVPAttemptsBtn.addEventListener("click", () => openBuyPvpModal());
+  if (openHistoryBtn) openHistoryBtn.addEventListener("click", openHistory);
+  if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", () => historyModal.style.display = 'none');
+  if (refreshBtn) refreshBtn.addEventListener("click", () => { loadMines(); });
 });

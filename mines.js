@@ -975,11 +975,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function boot() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = "login.html"; return; }
+      if (!user) { window.location.href = "index.html"; return; }
       userId = user.id;
 
-      supabase.rpc('resolve_all_expired_mines');
-      supabase.rpc('reset_player_pvp_attempts');
+      await supabase.rpc('resolve_all_expired_mines');
+      await supabase.rpc('reset_player_pvp_attempts');
 
       await Promise.all([
           loadMines(),

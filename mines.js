@@ -887,7 +887,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const currentOwnedMine = allMines.find(m => m.owner_player_id === userId);
         if (currentOwnedMine) warningMessage = `<br><br><strong style="color: #ffcc00;">AVISO:</strong> Abandonará "${esc(currentOwnedMine.name)}".`;
 
-        confirmMessage.innerHTML = `Tentativas: <strong>${attemptsLeft}</strong>.<br>Desafiar <strong>${esc(ownerName)}</strong>?${warningMessage}`;
+        confirmMessage.innerHTML = `Você possui <strong>${attemptsLeft}</strong> tentativas PvP.<br>Deseja desafiar <strong>${esc(ownerName)}</strong>?${warningMessage}`;
         confirmCancelBtn.style.display = 'inline-block';
         confirmActionBtn.textContent = 'Desafiar';
         confirmModal.style.display = 'flex';

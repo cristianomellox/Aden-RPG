@@ -692,3 +692,30 @@ font > font {
     box-shadow: none !important;
     position: static !important;
 }
+
+/* Remove destaque e bordas de todos os elementos clicáveis */
+a,
+button,
+img,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+label,
+select,
+textarea {
+    outline: none !important;
+    border: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-focus-ring-color: transparent !important;
+    touch-action: manipulation;
+}
+a:focus, a:active,
+button:focus, button:active,
+img:focus, img:active,
+input:focus, input:active,
+select:focus, select:active,
+textarea:focus, textarea:active {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}

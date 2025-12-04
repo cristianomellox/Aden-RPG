@@ -798,6 +798,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 <script>
     const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+    // Nota: Como no seu HTML o ID musicIcon é uma tag <p>, a troca de ícones (.src)
+    // não funcionará visualmente a menos que você mude a tag para <img>. 
+    // Mas o foco aqui é o grayscale no botão.
     const MUTED_ICON = 'https://aden-rpg.pages.dev/assets/muted.webp';
     const UNMUTED_ICON = 'https://aden-rpg.pages.dev/assets/unmuted.webp';
 
@@ -813,7 +816,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         const musicIcon = document.getElementById('musicIcon');
         let isMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
 
-        if (musicIcon) musicIcon.src = isMuted ? MUTED_ICON : UNMUTED_ICON;
+        // Função auxiliar para atualizar o visual do botão (Grayscale)
+        function updateButtonVisual() {
+            if (musicToggleBtn) {
+                if (isMuted) {
+                    // Aplica escala de cinza e reduz levemente a opacidade
+                    musicToggleBtn.style.filter = "grayscale(100%)";
+                    musicToggleBtn.style.opacity = "0.7"; 
+                    if (musicIcon && musicIcon.tagName === 'IMG') musicIcon.src = MUTED_ICON;
+                } else {
+                    // Remove os efeitos (volta ao normal)
+                    musicToggleBtn.style.filter = "none";
+                    musicToggleBtn.style.opacity = "1";
+                    if (musicIcon && musicIcon.tagName === 'IMG') musicIcon.src = UNMUTED_ICON;
+                }
+            }
+        }
+
+        // 1. Aplica o visual correto assim que a página carrega
+        updateButtonVisual();
 
         function updateTopBarMusicState() {
             if (typeof backgroundMusic === 'object' && backgroundMusic !== null) {
@@ -824,7 +845,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         function toggleMusic() {
             isMuted = !isMuted;
             localStorage.setItem(MUSIC_MUTE_KEY, isMuted);
-            musicIcon.src = isMuted ? MUTED_ICON : UNMUTED_ICON;
+            
+            // 2. Atualiza o visual quando o botão é clicado
+            updateButtonVisual();
+            
             updateTopBarMusicState();
             
             if (!isMuted && typeof startBackgroundMusic === 'function') {

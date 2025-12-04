@@ -1,7 +1,9 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Completa Otimizada (Baixo Egress + PvP Full)");
+  console.log("[mines] DOM ready - Versão Final (Correção Visibility + Timer + Top 3)");
 
-  // --- Áudio (WebAudio + fallback) ---
+  // =================================================================
+  // 1. ÁUDIO SYSTEM
+  // =================================================================
   const audioFiles = {
     normal: "https://aden-rpg.pages.dev/assets/normal_hit.mp3",
     critical: "https://aden-rpg.pages.dev/assets/critical_hit.mp3",
@@ -37,6 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // Preload sons curtos essenciais
   preload('normal');
   preload('critical');
   preload('evade');
@@ -50,6 +53,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const obrigadoSound = new Audio(audioFiles.obrigado);
   obrigadoSound.volume = 0.5;
 
+  // Desbloqueio de áudio no primeiro clique
   document.addEventListener("click", async () => {
     try { if (audioContext.state === 'suspended') await audioContext.resume(); } catch(e) {}
     avisoTelaSound.play().then(()=> { avisoTelaSound.pause(); avisoTelaSound.currentTime = 0; }).catch(()=>{});
@@ -70,9 +74,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         source.onended = () => { try { source.disconnect(); gain.disconnect(); } catch(e){} };
         return;
       } catch (e) {
-        console.warn("[audio] WebAudio play falhou, fallback:", e);
+        // Fallback silencioso
       }
     }
+    // Fallback HTML5 Audio
     try {
       const s = new Audio(audioFiles[name] || audioFiles.normal);
       s.volume = vol;
@@ -80,28 +85,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch(e) {}
   }
 
-  // --- Supabase ---
+  // =================================================================
+  // 2. SUPABASE & ESTADO GLOBAL
+  // =================================================================
   const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // --- Estado Otimizado ---
   let userId = null;
-  let buyMode = 'attack';
   let currentMineId = null;
   let maxMonsterHealth = 1;
+  let hasAttackedOnce = false;
   
   // Estado Local de Ataques (Optimistic UI)
   let localAttacksLeft = 0;
   let nextAttackTime = null; // Timestamp em milissegundos
   let cooldownInterval = null;
+  
+  // Controle de Ranking Intermitente
+  let attackCycleCounter = 0; // Para atualizar ranking a cada 4 ataques
 
+  // Timers de Combate
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
-  let hasAttackedOnce = false;
 
-  // --- DOM ---
+  // =================================================================
+  // 3. SELETORES DOM
+  // =================================================================
   const minesContainer = document.getElementById("minesContainer") || document.getElementById("minasContainer");
+  
+  // Modal Combate PvE
   const combatModal = document.getElementById("combatModal");
   const combatTitle = document.getElementById("combatModalTitle");
   const combatTimerSpan = document.getElementById("combatTimer");
@@ -109,20 +122,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   const attackCooldownSpan = document.getElementById("attackCooldown");
   const attackBtn = document.getElementById("attackBtn");
   const backBtn = document.getElementById("backBtn");
-  const monsterImage = document.getElementById("monsterImage");
   const monsterHpFill = document.getElementById("monsterHpFill");
   const monsterHpTextOverlay = document.getElementById("monsterHpTextOverlay");
-  const loadingOverlay = document.getElementById("loading-overlay");
   const monsterArea = document.getElementById("monsterArea");
   const damageRankingList = document.getElementById("damageRankingList");
+  
+  // Modal Confirmação/Alerta
   const confirmModal = document.getElementById("confirmModal");
   const confirmMessage = document.getElementById("confirmMessage");
   const confirmCancelBtn = document.getElementById("confirmCancelBtn");
   const confirmActionBtn = document.getElementById("confirmActionBtn");
+  const loadingOverlay = document.getElementById("loading-overlay");
+
+  // Botões Gerais
   const buyAttackBtn = document.getElementById("buyAttackBtn");
-  const cycleInfoElement = document.getElementById("cycleInfo");
   const refreshBtn = document.getElementById("refreshBtn");
-  
+  const cycleInfoElement = document.getElementById("cycleInfo");
+
   // Footer & History
   const playerAttemptsSpan = document.getElementById("playerPVPAttemptsLeft");
   const buyPVPAttemptsBtn = document.getElementById("buyPVPAttemptsBtn");
@@ -132,8 +148,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const openHistoryBtn = document.getElementById("openHistoryBtn");
   const closeHistoryBtn = document.getElementById("closeHistoryBtn");
   const newLogIndicator = document.querySelector(".new-log-indicator");
-  
-  // PvP Modal
+
+  // PvP Modal (Visual Simulation)
   const pvpCombatModal = document.getElementById("pvpCombatModal");
   const pvpCountdown = document.getElementById("pvpCountdown");
   const challengerSide = document.getElementById("challengerSide");
@@ -146,8 +162,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const defenderHpFill = document.getElementById("defenderHpFill");
   const challengerHpText = document.getElementById("challengerHpText");
   const defenderHpText = document.getElementById("defenderHpText");
-  
-  // Buy Modals
+
+  // Buy PvE Modal
   const buyModal = document.getElementById("buyModal");
   const buyPlayerGoldInfo = document.getElementById("buyPlayerGoldInfo");
   const buyAttackQtySpan = document.getElementById("buyAttackQty");
@@ -157,6 +173,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const buyCancelBtn = document.getElementById("buyCancelBtn");
   const buyConfirmBtn = document.getElementById("buyConfirmBtn");
 
+  // Buy PvP Modal
   const buyPvpModal = document.getElementById('buyPvpModal');
   const buyPvpPlayerGoldInfo = document.getElementById('buyPvpPlayerGoldInfo');
   const buyPvpQtySpan = document.getElementById('buyPvpQty');
@@ -166,40 +183,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   const buyPvpCancelBtn = document.getElementById('buyPvpCancelBtn');
   const buyPvpConfirmBtn = document.getElementById('buyPvpConfirmBtn');
 
-  if (!minesContainer) {
-    console.error("[mines] ERRO: não achei #minesContainer");
-    return;
-  }
+  if (!minesContainer) { console.error("[mines] ERRO: Container de minas não encontrado."); return; }
 
-  // --- Utils ---
+  // =================================================================
+  // 4. FUNÇÕES UTILITÁRIAS
+  // =================================================================
   function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
   function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
   const esc = (s) => (s === 0 || s) ? String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;") : "";
 
+  // CORREÇÃO: Formatação do tempo (XXs quando < 1min)
   function formatTime(totalSeconds) {
     const s = Math.max(0, Math.floor(totalSeconds));
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const ss = String(s % 60).padStart(2, "0");
-    let result = '';
-    if (h > 0) result += `${h}h `;
-    if (m > 0) result += `${m}m `;
-    result += `${ss}s`;
-    return result.trim();
+    
+    if (h > 0) return `${h}h ${m}m ${ss}s`;
+    if (m > 0) return `${m}m ${ss}s`;
+    return `${ss}s`; // Apenas segundos se não houver minutos
   }
 
   function updateHpBar(cur, max) {
     const c = Math.max(0, Number(cur || 0));
     const m = Math.max(1, Number(max || 1));
-    if (monsterHpFill) {
-      const pct = Math.max(0, Math.min(100, (c / m) * 100));
-      monsterHpFill.style.width = `${pct}%`;
-    }
-    if (monsterHpTextOverlay) {
-      monsterHpTextOverlay.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
-    }
+    if (monsterHpFill) monsterHpFill.style.width = `${Math.min(100, (c / m) * 100)}%`;
+    if (monsterHpTextOverlay) monsterHpTextOverlay.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
   }
-  
+
   function updatePvpHpBar(element, textElement, current, max) {
     const c = Math.max(0, Number(current || 0));
     const m = Math.max(1, Number(max || 1));
@@ -211,7 +222,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   function displayDamageNumber(damage, isCrit, isEvaded, targetElement) {
     if (!targetElement) return;
     const el = document.createElement("div");
-    
     if (isEvaded) {
         el.textContent = "Desviou";
         el.className = "evade-text";
@@ -219,12 +229,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
         el.textContent = Number(damage).toLocaleString();
         el.className = isCrit ? "crit-damage-number" : "damage-number";
-        try {
-          if (isCrit) playSound('critical', { volume: 0.1 });
-          else playSound('normal', { volume: 0.5 });
-        } catch(_) {}
+        try { isCrit ? playSound('critical', { volume: 0.1 }) : playSound('normal', { volume: 0.5 }); } catch(_) {}
     }
-
     el.style.position = "absolute";
     el.style.top = `50%`;
     el.style.left = `50%`;
@@ -246,29 +252,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // --- LÓGICA DE RANKING (Vindo do Ataque/Load) ---
-  function renderRanking(rankingData) {
-      if (!damageRankingList) return;
-      damageRankingList.innerHTML = "";
-      
-      if (!rankingData || rankingData.length === 0) {
-          damageRankingList.innerHTML = "<li style='text-align:center;color:#888'>Nenhum dano ainda</li>";
-          return;
-      }
-
-      for (const row of rankingData) {
-        const isMe = row.player_id === userId;
-        const li = document.createElement("li");
-        li.innerHTML = `
-          <div class="ranking-entry">
-            <img src="${esc(row.avatar_url || '/assets/default_avatar.png')}" alt="Avatar" class="ranking-avatar">
-            <span class="player-name">${esc(row.player_name)} ${isMe ? '(Você)' : ''}</span>
-            <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>
-          </div>`;
-        damageRankingList.appendChild(li);
-      }
-  }
-
   async function refreshPlayerStats() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -277,7 +260,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (e) {}
   }
 
-  // --- HISTÓRICO INCREMENTAL (Cache) ---
+  // =================================================================
+  // 5. HISTÓRICO (INCREMENTAL / CACHE)
+  // =================================================================
   const STORAGE_KEY_LOGS = 'pvp_logs_cache';
   const STORAGE_KEY_LAST_SYNC = 'pvp_logs_last_sync';
 
@@ -294,7 +279,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const lastSync = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || '1970-01-01T00:00:00Z';
       
       try {
-          // Usa RPC incremental para economizar banda
           const { data, error } = await supabase.rpc('sync_pvp_history', { 
               p_player_id: userId, 
               p_last_sync_time: lastSync 
@@ -305,8 +289,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           const newLogs = data.new_logs || [];
           if (newLogs.length > 0) {
               const currentLogs = getLocalLogs();
-              // Adiciona novos e mantém limite de 50
               const updatedLogs = [...currentLogs, ...newLogs];
+              // Mantém cache limpo (últimos 50)
               if (updatedLogs.length > 50) updatedLogs.splice(0, updatedLogs.length - 50);
               
               saveLocalLogs(updatedLogs);
@@ -316,13 +300,12 @@ document.addEventListener("DOMContentLoaded", async () => {
               if (newLogIndicator) newLogIndicator.style.display = 'block';
           }
       } catch (e) {
-          console.warn("[mines] sync history error:", e);
+          console.warn("History sync error:", e);
       }
   }
 
   function openHistory() {
       const logs = getLocalLogs();
-      // Ordena decrescente para exibição
       logs.sort((a, b) => new Date(b.attack_time) - new Date(a.attack_time));
       renderHistoryList(logs);
       if (newLogIndicator) newLogIndicator.style.display = 'none';
@@ -350,7 +333,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // --- Compra de ataques PvE ---
+  // =================================================================
+  // 6. RANKING E UI
+  // =================================================================
+  function renderRanking(rankingData) {
+      if (!damageRankingList) return;
+      damageRankingList.innerHTML = "";
+      
+      if (!rankingData || rankingData.length === 0) {
+          damageRankingList.innerHTML = "<li style='text-align:center;color:#888'>Nenhum dano ainda</li>";
+          return;
+      }
+
+      for (const row of rankingData) {
+        const isMe = row.player_id === userId;
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="ranking-entry">
+            <img src="${esc(row.avatar_url || '/assets/default_avatar.png')}" alt="Av" class="ranking-avatar">
+            <span class="player-name">${esc(row.player_name)} ${isMe ? '(Você)' : ''}</span>
+            <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>
+          </div>`;
+        damageRankingList.appendChild(li);
+      }
+  }
+
+  // =================================================================
+  // 7. COMPRA DE ATAQUES (PVE)
+  // =================================================================
   let buyQty = 1;
   let buyPlayerGold = 0;
   let buyBaseBoughtCount = 0;
@@ -373,7 +383,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function openBuyModal() {
-    buyMode = 'attack';
     if (!userId) { showModalAlert("Faça login para comprar."); return; }
     try {
       const { data: player, error } = await supabase.from("players").select("gold, attacks_bought_count").eq("id", userId).single();
@@ -386,7 +395,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (buyModal) buyModal.style.display = "flex";
     } catch (e) {
       console.error("[mines] openBuyModal erro:", e);
-      showModalAlert("Erro ao abrir modal de compra.");
+      showModalAlert("Erro ao abrir modal.");
     }
   }
 
@@ -395,39 +404,52 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (buyIncreaseQtyBtn) buyIncreaseQtyBtn.addEventListener("click", () => { buyQty += 1; refreshBuyModalUI(); });
   if (buyDecreaseQtyBtn) buyDecreaseQtyBtn.addEventListener("click", () => { if (buyQty > 1) buyQty -= 1; refreshBuyModalUI(); });
   if (buyCancelBtn) buyCancelBtn.addEventListener("click", () => { closeBuyModal(); });
+  
   if (buyConfirmBtn) buyConfirmBtn.addEventListener("click", async () => {
     closeBuyModal();
     showLoading();
     let purchased = 0;
     let spent = 0;
     try {
-        const rpcFunction = 'buy_mine_attack';
         for (let i = 0; i < buyQty; i++) {
-            const { data, error } = await supabase.rpc(rpcFunction, { p_player_id: userId });
+            const { data, error } = await supabase.rpc('buy_mine_attack', { p_player_id: userId });
+            
             if (error || !data?.success) {
-                if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
+                if (purchased === 0) showModalAlert(error?.message || data?.message || "Erro na compra.");
                 break;
             }
             purchased += 1;
             spent += (data.cost || 0);
-            buyPlayerGold = Math.max(0, (buyPlayerGold || 0) - (data.cost || 0));
+            
+            // CORREÇÃO: Atualiza estado local com o retorno correto da compra (já regenerado)
+            if (typeof data.attacks_left === 'number') {
+                localAttacksLeft = data.attacks_left;
+                if (localAttacksLeft >= 5) {
+                    nextAttackTime = null;
+                    if (attackCooldownSpan) attackCooldownSpan.textContent = "";
+                    if (cooldownInterval) clearInterval(cooldownInterval);
+                }
+                updateAttacksDisplay();
+            }
         }
+        
         if (purchased > 0) {
-            showModalAlert(`Comprado(s) ${purchased} ataque(s) PvE por ${spent} Ouro.`);
+            showModalAlert(`Comprado(s) ${purchased} ataque(s).`);
             await refreshPlayerStats();
-            // Ao comprar, precisamos sincronizar o contador local
-            await syncAttacksState();
+            syncAttacksState();
         }
     } catch (e) {
       console.error("[mines] buyConfirm erro:", e);
-      showModalAlert("Erro inesperado durante a compra.");
+      showModalAlert("Erro inesperado.");
     } finally {
       hideLoading();
     }
   });
 
 
-  // --- Compra PvP ---
+  // =================================================================
+  // 8. COMPRA DE TENTATIVAS PVP
+  // =================================================================
   let buyPvpQty = 1;
   let buyPvpPlayerGold = 0;
   let buyPvpBaseBoughtCount = 0;
@@ -451,7 +473,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function openBuyPvpModal() {
-    if (!userId) { showModalAlert("Faça login para comprar."); return; }
+    if (!userId) { showModalAlert("Faça login."); return; }
     try {
         const { data: player, error } = await supabase.from("players").select("gold, mine_pvp_attempts_bought_count").eq("id", userId).single();
         if (error) throw error;
@@ -460,7 +482,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         buyPvpQty = 1;
         refreshBuyPvpModalUI();
         if (buyPvpModal) buyPvpModal.style.display = 'flex';
-    } catch (e) { showModalAlert("Erro ao abrir modal de compra PvP."); }
+    } catch (e) { showModalAlert("Erro ao abrir modal."); }
   }
 
   function closeBuyPvpModal() { if (buyPvpModal) buyPvpModal.style.display = 'none'; }
@@ -474,21 +496,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (let i = 0; i < buyPvpQty; i++) {
             const { data, error } = await supabase.rpc("buy_mine_pvp_attack", { p_player_id: userId });
             if (error || !data?.success) {
-                if (purchased === 0) showModalAlert(error?.message || data?.message || "Compra não pôde ser concluída.");
+                if (purchased === 0) showModalAlert(error?.message || data?.message || "Erro na compra.");
                 break;
             }
             purchased++; spent += (data.cost || 0);
             buyPvpPlayerGold = Math.max(0, (buyPvpPlayerGold || 0) - (data.cost || 0));
         }
         if (purchased > 0) {
-            showModalAlert(`Comprado(s) ${purchased} tentativa(s) PvP por ${spent} Ouro.`);
+            showModalAlert(`Comprado(s) ${purchased} tentativa(s) PvP.`);
             await refreshPlayerStats();
             await updatePVPAttemptsUI();
         }
     } catch (e) { showModalAlert("Erro inesperado."); } finally { hideLoading(); }
   });
 
-  // --- UI Updates ---
+  // =================================================================
+  // 9. UI HELPERS GERAIS
+  // =================================================================
   async function updatePVPAttemptsUI() {
     if (!userId) return;
     try {
@@ -501,38 +525,53 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function updatePlayerMineUI() {
     if (!userId) return;
     try {
-        const { data, error } = await supabase.from('mining_caverns').select('name, id').eq('owner_player_id', userId).single();
+        const { data } = await supabase.from('mining_caverns').select('name').eq('owner_player_id', userId).single();
         if (playerMineSpan) playerMineSpan.textContent = data ? data.name : 'Nenhuma';
     } catch (e) {}
   }
 
-  // --- SISTEMA DE COOLDOWN LOCAL (Sem Fetch Loop) ---
+  // =================================================================
+  // 10. SISTEMA DE COOLDOWN LOCAL (Correção de travamento no 1s)
+  // =================================================================
   function startLocalCooldownTimer() {
       if (cooldownInterval) clearInterval(cooldownInterval);
+      
       const updateTimerUI = () => {
           if (localAttacksLeft >= 5) {
               if (attackCooldownSpan) attackCooldownSpan.textContent = "";
-              clearInterval(cooldownInterval);
+              if (cooldownInterval) clearInterval(cooldownInterval);
+              nextAttackTime = null;
               return;
           }
+          
           if (!nextAttackTime) return;
+          
           const now = Date.now();
           const diff = nextAttackTime - now;
+          
           if (diff <= 0) {
               // Tempo acabou, ganha ataque
               localAttacksLeft = Math.min(5, localAttacksLeft + 1);
               updateAttacksDisplay();
+              
               if (localAttacksLeft < 5) {
+                  // Prepara próximo
                   nextAttackTime = Date.now() + 30000;
               } else {
+                  // Encheu, limpa
                   nextAttackTime = null;
+                  if (attackCooldownSpan) attackCooldownSpan.textContent = "";
                   clearInterval(cooldownInterval);
               }
           } else {
               const sec = Math.ceil(diff / 1000);
-              if (attackCooldownSpan) attackCooldownSpan.textContent = `(+ 1 em ${sec}s)`;
+              // Evita mostrar números negativos ou 0 travado
+              if (sec > 0 && attackCooldownSpan) {
+                   attackCooldownSpan.textContent = `(+ 1 em ${sec}s)`;
+              }
           }
       };
+      
       updateTimerUI();
       cooldownInterval = setInterval(updateTimerUI, 1000);
   }
@@ -548,19 +587,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function syncAttacksState() {
       try {
-          // Busca estado real no servidor uma vez
           const { data, error } = await supabase.rpc("get_player_attacks_state", { _player_id: userId });
           if (error) throw error;
           
           localAttacksLeft = data.attacks_left;
           
-          if (data.time_to_next_attack > 0) {
+          if (localAttacksLeft < 5 && data.time_to_next_attack > 0) {
               nextAttackTime = Date.now() + (data.time_to_next_attack * 1000);
               startLocalCooldownTimer();
-          } else if (localAttacksLeft < 5) {
+          } else if (localAttacksLeft < 5 && !nextAttackTime) {
                nextAttackTime = Date.now() + 30000;
                startLocalCooldownTimer();
-          } else {
+          } else if (localAttacksLeft >= 5) {
                nextAttackTime = null;
                if (cooldownInterval) clearInterval(cooldownInterval);
                if (attackCooldownSpan) attackCooldownSpan.textContent = "";
@@ -571,7 +609,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   }
 
-  // --- Guilda Dominante ---
+  // =================================================================
+  // 11. GUILDA DOMINANTE E MINAS
+  // =================================================================
   async function updateDominantGuild(mines, ownersMap) {
       const guilddomSpan = document.getElementById("guilddom");
       if (!guilddomSpan) return;
@@ -599,7 +639,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else { guilddomSpan.textContent = 'Nenhuma.'; }
   }
 
-  // --- Carregar minas ---
   async function loadMines() {
     showLoading();
     try {
@@ -622,8 +661,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       await updatePVPAttemptsUI();
       await updatePlayerMineUI();
     } catch (err) {
-      console.error("[mines] loadMines erro:", err);
-      minesContainer.innerHTML = `<p>Erro ao carregar minas: ${esc(err.message || err)}</p>`;
+      minesContainer.innerHTML = `<p>Erro: ${esc(err.message)}</p>`;
     } finally {
       hideLoading();
     }
@@ -675,17 +713,18 @@ document.addEventListener("DOMContentLoaded", async () => {
           else if (actionType === "challengeMine") challengeMine(mine, owner, mines);
         });
       }
-
       minesContainer.appendChild(card);
     }
   }
 
-  // --- Entrar/Iniciar Combate PvE ---
+  // =================================================================
+  // 12. COMBATE PVE (LÓGICA CENTRAL)
+  // =================================================================
   async function startCombat(mineId) {
     showLoading();
     hasAttackedOnce = false;
+    attackCycleCounter = 0;
     try {
-      // Trigger global de limpeza de minas expiradas
       supabase.rpc('resolve_all_expired_mines').then(()=>{});
 
       const sel = await supabase
@@ -693,9 +732,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
         .eq("id", mineId)
         .single();
+      
       if (sel.error || !sel.data) { showModalAlert("Caverna não encontrada."); return; }
       const cavern = sel.data;
-      if (cavern.owner_player_id) { showModalAlert('Esta mina já tem um dono. Use "Desafiar".'); return; }
+      if (cavern.owner_player_id) { showModalAlert('Mina já tem dono.'); return; }
 
       currentMineId = mineId;
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
@@ -714,20 +754,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (combatModal) combatModal.style.display = "flex";
       
-      // Busca Ranking Inicial (Única vez)
+      // Busca Ranking Inicial (Limitado a 3 visualmente)
       const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      renderRanking(rankingData);
+      renderRanking(rankingData ? rankingData.slice(0, 3) : []);
 
       ambientMusic.play();
     } catch (e) {
-      console.error("[mines] startCombat erro:", e);
-      showModalAlert("Erro ao entrar no combate.");
+      console.error(e);
+      showModalAlert("Erro ao entrar.");
     } finally {
       hideLoading();
     }
   }
 
-  // --- Ataque PvE (OTIMIZADO) ---
   async function attack() {
     if (attackBtn) {
         attackBtn.classList.remove('attack-anim');
@@ -738,11 +777,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!currentMineId) return;
     if (attackBtn) attackBtn.disabled = true;
 
-    // --- Optimistic Update Local ---
     if (localAttacksLeft > 0) {
         localAttacksLeft--;
         updateAttacksDisplay();
-        // Se não tinha timer, inicia um de 30s
         if (!nextAttackTime) {
             nextAttackTime = Date.now() + 30000;
             startLocalCooldownTimer();
@@ -755,20 +792,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (error) throw error;
       if (data.success === false) { 
           showModalAlert(data.message); 
-          syncAttacksState(); // Rollback do ataque gasto se falhou
+          syncAttacksState(); // Rollback
           return; 
       }
 
       displayDamageNumber(data.damage_dealt, !!data.is_crit, false, monsterArea);
-      if (!hasAttackedOnce) { hasAttackedOnce = true; }
+      if (!hasAttackedOnce) hasAttackedOnce = true;
       updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
       
-      // Atualiza Ranking com dados do RPC
-      if (data.ranking) {
+      // CORREÇÃO: Atualiza Ranking a cada 4 ataques ou no primeiro
+      attackCycleCounter++;
+      if (data.ranking && (attackCycleCounter === 1 || attackCycleCounter % 4 === 0)) {
           renderRanking(data.ranking);
       }
 
-      // Sync do contador real
       if (typeof data.attacks_left === 'number') {
           localAttacksLeft = data.attacks_left;
           updateAttacksDisplay();
@@ -781,22 +818,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (data.owner_set) {
         await new Promise(r => setTimeout(r, 1200));
-        showModalAlert("O monstro foi derrotado! Mina conquistada ou resetada.");
+        showModalAlert("Mina conquistada/resetada!");
         resetCombatUI();
         await loadMines();
       }
     } catch (e) {
-      console.error("[mines] attack erro:", e);
-      syncAttacksState(); // Resync em caso de erro
+      console.error(e);
+      syncAttacksState();
     } finally {
         if (localAttacksLeft > 0 && attackBtn) attackBtn.disabled = false;
     }
   }
 
-  // --- Timers e UI Helper ---
   function startCombatTimer(seconds) {
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     combatTimeLeft = Math.max(0, Number(seconds || 0));
+    // Usa formatação corrigida
     if (combatTimerSpan) combatTimerSpan.textContent = formatTime(combatTimeLeft);
     if (combatTimeLeft <= 0) { onCombatTimerEnd(); return; }
     combatTimerInterval = setInterval(() => {
@@ -817,7 +854,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
       showModalAlert("Tempo esgotado!");
     } catch (e) {
-      console.error("[mines] onCombatTimerEnd erro:", e);
     } finally {
       resetCombatUI();
       await loadMines();
@@ -826,18 +862,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function resetCombatUI() {
     if (combatModal) combatModal.style.display = "none";
-    if (monsterHpFill) monsterHpFill.style.width = "100%";
-    if (monsterHpTextOverlay) monsterHpTextOverlay.textContent = "";
-    if (damageRankingList) damageRankingList.innerHTML = "";
     currentMineId = null;
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
-    if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     ambientMusic.pause();
     ambientMusic.currentTime = 0;
   }
 
-  // --- PvP Logic (Original preservada) ---
+  // =================================================================
+  // 13. PVP (DESAFIO E SIMULAÇÃO)
+  // =================================================================
   async function challengeMine(targetMine, owner, allMines) {
     if (!userId) return;
     const ownerName = owner.name || "Desconhecido";
@@ -869,9 +903,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function startPvpCombat(mineId, ownerId, ownerName, ownerAvatar) {
     showLoading();
     try {
-        const { data: challengerData, error: ce } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
-        const { data: defenderData, error: de } = await supabase.rpc('get_player_combat_stats', { p_player_id: ownerId });
-        if (ce || de) throw "Erro stats";
+        const { data: challengerData } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
+        const { data: defenderData } = await supabase.rpc('get_player_combat_stats', { p_player_id: ownerId });
         
         const { data: challengerInfo } = await supabase.from('players').select('avatar_url').eq('id', userId).single();
 
@@ -936,7 +969,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadMines();
   }
 
-  // --- Boot ---
+  // =================================================================
+  // 14. INICIALIZAÇÃO E LISTENERS
+  // =================================================================
   async function boot() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -948,10 +983,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       await Promise.all([
           loadMines(),
-          syncAndCheckLogs() // Sync inicial do histórico
+          syncAndCheckLogs()
       ]);
       
-      syncAttacksState(); // Setup inicial de cooldowns
+      syncAttacksState(); 
 
     } catch (e) {
       console.error("[mines] auth erro:", e);
@@ -959,13 +994,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  boot();
-
-  window.addEventListener("beforeunload", () => {
-    if (combatTimerInterval) clearInterval(combatTimerInterval);
-    if (cooldownInterval) clearInterval(cooldownInterval);
+  // CORREÇÃO: Lógica de Visibility Change restaurada para evitar bugs de timer
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === 'hidden') {
+      if (ambientMusic && !ambientMusic.paused) { 
+          ambientMusic.pause(); 
+          ambientMusic._wasPlaying = true; 
+      }
+      
+      // Se estiver em combate e minimizar, sai do combate para evitar desync
+      if (currentMineId) { 
+          avisoTelaSound.currentTime = 0; 
+          avisoTelaSound.play().catch(()=>{}); 
+          
+          resetCombatUI();
+          showModalAlert("Você saiu da tela durante a disputa. Retornando ao menu para evitar erros de sincronia.");
+          loadMines();
+      }
+    } else {
+        // Ao voltar e estiver visível (e não foi resetado acima), atualiza lista se estiver no menu
+        if (!currentMineId) loadMines();
+        syncAndCheckLogs();
+    }
   });
 
+  // Cycle Countdown
   function updateCountdown() {
     const now = new Date();
     const currentHour = now.getHours();
@@ -980,19 +1033,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const diffInSeconds = Math.floor(diffInMs / 1000);
     if (cycleInfoElement) cycleInfoElement.innerHTML = ` <strong>${formatTime(diffInSeconds)}</strong>`;
   }
-  updateCountdown();
   setInterval(updateCountdown, 1000);
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === 'hidden') {
-      if (ambientMusic && !ambientMusic.paused) { ambientMusic.pause(); ambientMusic._wasPlaying = true; }
-      if (currentMineId) { avisoTelaSound.currentTime = 0; avisoTelaSound.play().catch(()=>{}); }
-    } else {
-        // Ao voltar, recarrega se não estiver em combate
-        if (!currentMineId) loadMines();
-        syncAndCheckLogs();
-    }
-  });
+  updateCountdown();
 
   // Listeners
   if (attackBtn) attackBtn.addEventListener("click", attack);
@@ -1005,4 +1047,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (openHistoryBtn) openHistoryBtn.addEventListener("click", openHistory);
   if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", () => historyModal.style.display = 'none');
   if (refreshBtn) refreshBtn.addEventListener("click", () => { loadMines(); });
+
+  boot();
 });

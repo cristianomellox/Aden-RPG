@@ -15,7 +15,7 @@ let selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 18; // <-- ALTERADO PARA 2
+const DB_VERSION = 18;
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -92,10 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     globalUser = user;
-    // =================================================================
-    // >>>>> CORREÇÃO APLICADA AQUI <<<<<
     // Força a busca de dados frescos do servidor ao carregar a página.
-    // =================================================================
     await loadPlayerAndItems();
 
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
@@ -723,6 +720,8 @@ function renderFragmentList(itemToLevelUp) {
 
     fragments.forEach(fragment => {
         const fragmentLi = document.createElement('li');
+        
+        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         fragmentLi.innerHTML = `
             <div class="fragment-info" style="display:flex; align-items:center; gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp"
@@ -731,7 +730,8 @@ function renderFragmentList(itemToLevelUp) {
             </div>
             <div class="fragment-quantity" style="display:flex; align-items:center; gap:6px;">
                 <label for="fragmentQuantityInput">Qtd:</label>
-                <input type="number" class="fragment-quantity-input" placeholder="0" max="${fragment.quantity}">
+                <input type="number" class="fragment-quantity-input" placeholder="0" max="${fragment.quantity}" style="width: 50px; text-align: center;">
+                <span class="btn-max-action" style="font-size: 0.75em; color: #FFD700; cursor: pointer; text-decoration: underline; font-weight: bold; margin-left: 2px;">MAX</span>
             </div>
         `;
         fragmentLi.setAttribute('data-inventory-item-id', fragment.id);
@@ -739,11 +739,20 @@ function renderFragmentList(itemToLevelUp) {
         fragmentLi.classList.add('inventory-item');
 
         fragmentLi.addEventListener('click', (e) => {
-            if (e.target && e.target.classList.contains('fragment-quantity-input')) return;
+            if (e.target && (e.target.classList.contains('fragment-quantity-input') || e.target.classList.contains('btn-max-action'))) return;
             fragmentLi.classList.toggle('selected');
         });
 
         const qtyInput = fragmentLi.querySelector('.fragment-quantity-input');
+        const maxBtn = fragmentLi.querySelector('.btn-max-action');
+
+        // Botão MAX
+        maxBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            qtyInput.value = fragment.quantity;
+            qtyInput.dispatchEvent(new Event('input'));
+        });
+
         qtyInput.addEventListener('input', () => {
             let v = parseInt(qtyInput.value || '0', 10);
             if (isNaN(v) || v < 0) v = 0;
@@ -929,6 +938,8 @@ function openRefineFragmentModal(item) {
         const li = document.createElement('li');
         li.className = 'inventory-item';
         li.setAttribute('data-inventory-item-id', fragmentInv.id);
+        
+        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         li.innerHTML = `
             <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
@@ -937,16 +948,26 @@ function openRefineFragmentModal(item) {
             </div>
             <div class="fragment-quantity" style="display:flex;align-items:center;gap:6px;">
                 <label>Qtd:</label>
-                <input type="number" class="fragment-quantity-input" max="${available}" placeholder="0">
+                <input type="number" class="fragment-quantity-input" max="${available}" placeholder="0" style="width: 50px; text-align: center;">
+                <span class="btn-max-action" style="font-size: 0.75em; color: #FFD700; cursor: pointer; text-decoration: underline; font-weight: bold; margin-left: 2px;">MAX</span>
             </div>
         `;
 
         li.addEventListener('click', (e) => {
-            if (e.target && e.target.classList.contains('fragment-quantity-input')) return;
+            if (e.target && (e.target.classList.contains('fragment-quantity-input') || e.target.classList.contains('btn-max-action'))) return;
             li.classList.toggle('selected');
         });
 
         const qtyInput = li.querySelector('.fragment-quantity-input');
+        const maxBtn = li.querySelector('.btn-max-action');
+
+        // Botão MAX
+        maxBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            qtyInput.value = available;
+            qtyInput.dispatchEvent(new Event('input'));
+        });
+
         qtyInput.addEventListener('input', () => {
             let val = parseInt(qtyInput.value || '0', 10);
             if (isNaN(val) || val < 0) val = 0;

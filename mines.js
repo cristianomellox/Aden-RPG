@@ -800,9 +800,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!hasAttackedOnce) hasAttackedOnce = true;
       updateHpBar(data.current_monster_health, data.max_monster_health || maxMonsterHealth);
       
-      // CORREÇÃO: Atualiza Ranking a cada 4 ataques ou no primeiro
+      // CORREÇÃO: Atualiza Ranking a cada 3 ataques ou no primeiro
       attackCycleCounter++;
-      if (data.ranking && (attackCycleCounter === 1 || attackCycleCounter % 4 === 0)) {
+      if (data.ranking && (attackCycleCounter === 1 || attackCycleCounter % 3 === 0)) {
           renderRanking(data.ranking);
       }
 

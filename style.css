@@ -1974,3 +1974,17 @@ font > font {
     position: static !important;
 }
 
+.map-hotspot {
+    background: transparent !important;
+    outline: none !important;
+    border: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-focus-ring-color: transparent !important;
+    touch-action: manipulation;
+}
+
+.map-hotspot:active,
+.map-hotspot:focus {
+    background: transparent !important;
+    outline: none !important;
+}

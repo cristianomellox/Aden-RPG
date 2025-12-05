@@ -19,12 +19,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // =======================================================================
+    // OTIMIZAÇÃO DE AUTH: getSession()
+    // =======================================================================
     let userId = null;
     try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) userId = user.id;
+        // Tenta obter a sessão do cache local (gerado pelo script.js) antes de ir à rede
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            userId = session.user.id;
+        } else {
+            console.warn("Nenhuma sessão ativa encontrada. O usuário pode precisar logar novamente.");
+        }
     } catch (e) {
-        console.error("Erro ao obter usuário:", e.message);
+        console.error("Erro ao obter sessão do usuário:", e.message);
     }
     
     // ✅ Cache de 24 horas

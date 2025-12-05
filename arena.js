@@ -203,9 +203,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function getCachedPlayerInfo(playerId) {
         if (!playerId) return null;
+
+        // OTIMIZAÇÃO: 1. Tenta pegar do cache global gerado pelo script.js (player_data_cache)
+        // Isso evita chamada ao DB se o usuário veio do menu principal
+        const globalCache = getCache('player_data_cache');
+        if (globalCache && globalCache.id === playerId) {
+            return globalCache;
+        }
+
+        // 2. Cache Local da Arena
         const key = `player_${playerId}`;
         let cached = getCache(key);
         if (cached) return cached;
+
+        // 3. Busca no Banco
         const { data } = await supabase.from('players')
             .select('id, name, avatar_url, guild_id, ranking_points')
             .eq('id', playerId).single();
@@ -1111,7 +1122,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function boot() {
         showLoading();
         try {
-            let { data: { user } } = await supabase.auth.getUser();
+            // OPTIMIZAÇÃO AUTH: Uso de getSession para evitar request de rede se possível
+            let { data: { session } } = await supabase.auth.getSession();
+            let user = session?.user;
+
             if (!user) {
                 await new Promise((resolve) => {
                     const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {

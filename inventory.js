@@ -83,15 +83,22 @@ async function removeCacheItem(itemId) {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM carregado. Iniciando script...');
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log('DOM carregado. Iniciando script inventory.js...');
+    
+    // =======================================================================
+    // OTIMIZAÇÃO DE AUTH: getSession()
+    // =======================================================================
+    // Substituído getUser() por getSession() para usar o cache local do token
+    const { data: { session } } = await supabase.auth.getSession();
 
-    if (!user) {
+    if (!session) {
+        console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
         window.location.href = "index.html?refresh=true";
         return;
     }
 
-    globalUser = user;
+    globalUser = session.user;
+    
     // Força a busca de dados frescos do servidor ao carregar a página.
     await loadPlayerAndItems();
 

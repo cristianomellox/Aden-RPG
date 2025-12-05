@@ -334,7 +334,7 @@ body, html {
     display: flex;
     align-items: center;
     padding: 8px;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid #777;
 }
 #rankingList li:last-child {
     border-bottom: none;
@@ -406,7 +406,7 @@ body, html {
 }
 .ranking-tab {
   background: none;
-  border: 1px solid #c9a94a;
+  border: 1px solid #c9a94a!important;
   color: #e0dccc;
   font-weight: bold;
   padding: 6px 12px;
@@ -414,7 +414,7 @@ body, html {
   cursor: pointer;
 }
 .ranking-tab.active {
-  background-color: #c9a94a;
+  background-color: #c9a94a!important;
   color: #000;
 }
 .tab-panel {
@@ -430,13 +430,13 @@ body, html {
 }
 #rankingHistoryList li {
   padding: 6px;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid #777!important;
   font-size: 0.95em;
 }
 .ranking-tab.active {
-  background-color: #c9a94a;
+  background-color: #c9a94a!important;
   color: #000;
-  box-shadow: 0 0 8px #c9a94a;
+  box-shadow: 0 0 8px #c9a94a!important;
 }
 /* --- Estilos para o Top 3 da Arena --- */
 
@@ -515,7 +515,7 @@ body, html {
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid #777;
   background: rgba(20, 20, 20, 0.4);
   transition: background 0.2s ease, transform 0.15s ease;
 }

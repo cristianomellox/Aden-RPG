@@ -367,12 +367,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // =======================================================================
+  // OTIMIZAÇÃO DE AUTH: getSession()
+  // =======================================================================
   async function getUserSession(){
-    try {
-      const { data } = await supabase.auth.getSession();
-      const session = data ? data.session : null;
-      if (session){ userId = session.user.id; return true; }
-    } catch(e){ console.error('getSession error', e); }
+    // Lê o token JWT diretamente do LocalStorage (Cache)
+    // Isso evita uma chamada de rede desnecessária (Egress)
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session){ 
+        userId = session.user.id; 
+        return true; 
+    }
+    
+    console.warn("Sessão não encontrada ou expirada. Redirecionando...");
     window.location.href = 'index.html';
     return false;
   }

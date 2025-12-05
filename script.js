@@ -558,6 +558,26 @@ function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
         return null;
     }
 }
+
+/**
+ * Atualiza o cache e a UI localmente sem ir ao servidor.
+ * Útil para atualizar saldo de Ouro/Cristais imediatamente.
+ * @param {Object} changes - Objeto com as mudanças (ex: { gold: 500, crystals: 1000 })
+ */
+function updateLocalPlayerData(changes) {
+    if (!currentPlayerData) return;
+
+    // Aplica as mudanças no objeto em memória
+    Object.keys(changes).forEach(key => {
+        currentPlayerData[key] = changes[key];
+    });
+
+    // Atualiza o Cache no LocalStorage
+    setCache('player_data_cache', currentPlayerData, 60);
+
+    // Redesenha a UI
+    renderPlayerUI(currentPlayerData, true);
+}
 // =======================================================================
 
 
@@ -953,51 +973,30 @@ function applyItemBonuses(player, equippedItems) {
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador (MODIFICADA COM CACHE)
 // Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
-    
     const PLAYER_CACHE_KEY = 'player_data_cache';
-    const PLAYER_CACHE_TTL = 1; // 5 minutos de cache para dados do banco (não afeta o Auth)
-
-    // 1. Tenta usar o cache de DADOS DO JOGADOR se forceRefresh NÃO for true
-    if (!forceRefresh) {
-        const cachedPlayer = getCache(PLAYER_CACHE_KEY, PLAYER_CACHE_TTL);
-        if (cachedPlayer) {
-            currentPlayerData = cachedPlayer;
-            currentPlayerId = cachedPlayer.id;
-            renderPlayerUI(cachedPlayer, preserveActiveContainer);
-            checkProgressionNotifications(cachedPlayer);
-            return; 
-        }
-    }
     
-    // 2. OTIMIZAÇÃO DE AUTH: Evita chamar getUser() (que gasta banda) repetidamente
-    let userId = currentPlayerId; // Tenta pegar da variável global primeiro
+    // Se não for forçado e já temos dados, retorna (Economia Máxima)
+    if (!forceRefresh && currentPlayerData) {
+        renderPlayerUI(currentPlayerData, preserveActiveContainer);
+        return;
+    }
 
+    // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
+    // NUNCA chamamos getUser() aqui para economizar Egress.
+    let userId = currentPlayerId;
     if (!userId) {
-        // Se não temos o ID na variável global, tentamos pegar da SESSÃO LOCAL (sem hit no servidor)
-        const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-        
-        if (sessionError || !session) {
-            // Se não tem sessão, aí sim tentamos getUser() como última tentativa ou deslogamos
-            const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-            if (userError || !user) {
-                updateUIVisibility(false);
-                currentPlayerData = null;
-                localStorage.removeItem(PLAYER_CACHE_KEY);
-                return;
-            }
-            userId = user.id;
-        } else {
-            userId = session.user.id;
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) {
+            updateUIVisibility(false);
+            return;
         }
+        userId = session.user.id;
+        currentPlayerId = userId;
     }
-    
-    // Atualiza a global caso tenha recuperado agora
-    currentPlayerId = userId; 
 
-    // 3. Busca os dados do jogador na tabela 'players'
+    // Busca apenas dados do jogo (Database Egress é muito mais barato que Auth Egress)
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
         .select('*')
@@ -1005,15 +1004,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         .single();
         
     if (playerError || !player) {
-        // Se der erro ao buscar o jogador, pode ser que a sessão seja inválida ou o player não exista
         console.error("Erro ao buscar jogador:", playerError);
-        updateUIVisibility(false);
-        currentPlayerData = null; 
-        localStorage.removeItem(PLAYER_CACHE_KEY); 
         return;
     }
 
-    // 4. Busca os itens equipados (mantido igual)
+    // Busca os itens equipados (mantido igual)
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
         .select(`
@@ -1058,7 +1053,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // Armazena e Renderiza
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, PLAYER_CACHE_TTL);
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 60); // Cache de 60 min
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 
@@ -1221,31 +1216,66 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 
 // Sessão e inicialização
 
-// Flag para indicar que o check de auth terminou
-window.authCheckComplete = false; 
+// =======================================================================
+// OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO
+// =======================================================================
+window.authCheckComplete = false;
 
-supabaseClient.auth.onAuthStateChange((event, session) => {
+async function checkAuthStatus() {
+    // getSession() lê do LocalStorage e NÃO gera Egress de rede se o token for válido
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+
     if (session) {
-        // Chama a função (que pode usar o cache ou não)
-        // O forceRefresh=false e preserveActiveContainer=false são os padrões
-        fetchAndDisplayPlayerInfo().then(() => {
-            // Após o login e carregamento dos dados do jogador, processar as ações da URL.
-            handleUrlActions();
-            
-            // SINALIZA QUE O AUTH TERMINOU (LOGADO)
-            window.authCheckComplete = true;
-            if (typeof window.tryHideLoadingScreen === 'function') {
-                window.tryHideLoadingScreen();
-            }
-        });
-    } else {
-        updateUIVisibility(false);
-        
-        // SINALIZA QUE O AUTH TERMINOU (DESLOGADO)
+        // Usuário tem uma sessão válida localmente.
+        currentPlayerId = session.user.id;
         window.authCheckComplete = true;
-        if (typeof window.tryHideLoadingScreen === 'function') {
-            window.tryHideLoadingScreen();
+
+        // Se NÃO tínhamos cache ou se ele é muito antigo, aí sim buscamos do banco
+        if (!currentPlayerData) {
+            console.log("🔄 Cache vazio. Buscando dados atualizados...");
+            fetchAndDisplayPlayerInfo(true); 
+        } else {
+            console.log("✅ Sessão válida. Mantendo dados do cache para economizar banda.");
+            // Opcional: Atualizar silenciosamente em background se o cache for > 10 min
+            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
         }
+        
+        if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        
+        // Após confirmar sessão, lidar com URLs
+        handleUrlActions();
+    } else {
+        // Sem sessão, mostra tela de login
+        updateUIVisibility(false);
+        window.authCheckComplete = true;
+        if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+    }
+}
+
+// 1. Tenta renderizar IMEDIATAMENTE usando o cache (Zero Network)
+document.addEventListener("DOMContentLoaded", async () => {
+    const cachedPlayer = getCache('player_data_cache', 60 * 24); // Tenta ler cache (até 24h se existir)
+    
+    if (cachedPlayer) {
+        console.log("⚡ Interface carregada via Cache (Sem consumo de Auth)");
+        currentPlayerData = cachedPlayer;
+        currentPlayerId = cachedPlayer.id;
+        renderPlayerUI(cachedPlayer); // Desenha a UI instantaneamente
+        checkProgressionNotifications(cachedPlayer);
+    }
+
+    // 2. Inicia verificação de Auth silenciosa
+    // Isso roda em segundo plano sem bloquear a UI
+    checkAuthStatus();
+});
+
+// Escuta mudanças APENAS para Login/Logout explícitos (não disparar em recargas de aba)
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && !currentPlayerData) {
+        fetchAndDisplayPlayerInfo(true);
+    } else if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('player_data_cache');
+        window.location.reload();
     }
 });
 
@@ -1864,9 +1894,13 @@ confirmPurchaseBtn.addEventListener('click', async () => {
         buyCardsMessage.textContent = `Erro: ${error.message}`;
     } else {
         buyCardsMessage.textContent = data;
+        
+        // Atualiza SALDO localmente sem refresh completo
+        const cost = quantity * 250;
+        updateLocalPlayerData({ crystals: (currentPlayerData.crystals - cost) });
+        
         await updateCardCounts();
-        // Força o refresh (true) e preserva o container (true)
-        await fetchAndDisplayPlayerInfo(true, true); 
+        
         setTimeout(() => {
             buyCardsModal.style.display = 'none';
         }, 2000);
@@ -1905,11 +1939,8 @@ confirmDrawBtn.addEventListener('click', async () => {
         drawConfirmModal.style.display = 'none';
         displayDrawResults(wonItems);
         await updateCardCounts();
-        // Não é necessário forçar refresh aqui, pois 'perform_spiral_draw'
-        // só gasta cartões, não ouro/cristais (o updateCardCounts já cuida disso)
-        // Mas se o sorteio der ouro/cristais, um refresh seria bom.
-        // Vamos adicionar por segurança.
-        await fetchAndDisplayPlayerInfo(true, true);
+        // Sorteio não gasta ouro/cristais, apenas itens. 
+        // Não é necessário refresh completo aqui.
     }
     confirmDrawBtn.disabled = false;
 });
@@ -1986,7 +2017,7 @@ buyButtons.forEach(button => {
     button.addEventListener('click', () => {
         const packageId = button.getAttribute('data-package');
         const itemName = button.getAttribute('data-name');
-        const itemCost = button.getAttribute('data-cost');
+        const itemCost = button.getAttribute('data-cost'); // Deve ser string de número
 
         // Prepara a mensagem do modal
         confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
@@ -2004,8 +2035,13 @@ buyButtons.forEach(button => {
                 if (error) throw error;
 
                 shopMessage.textContent = data;
-                // Força o refresh (true) e preserva o container (true)
-                await fetchAndDisplayPlayerInfo(true, true);
+                
+                // Atualiza SALDO localmente sem refresh completo
+                const cost = parseInt(itemCost);
+                if (!isNaN(cost)) {
+                    updateLocalPlayerData({ gold: (currentPlayerData.gold - cost) });
+                }
+
             } catch (error) {
                 shopMessage.textContent = `Erro: ${error.message}`;
             } finally {

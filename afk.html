@@ -56,24 +56,8 @@
 }
 
 
-/* Modal de Level Up */
-.modal {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.7);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 9999;
-}
 
-.modal-content {
-  background: black;
-  padding: 20px;
-  border-radius: 12px;
-  text-align: center;
-  max-height: 80vh;  
-  overflow-y: auto;   
-}
+
 
 #tutorial-modal .modal-content::-webkit-scrollbar {
         width: 0;  
@@ -456,6 +440,24 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
     <p id="result-text"></p>
     <button id="confirm-btn" class="btn">Confirmar</button>
   </div>
+  <div id="adventure-options-modal" class="modal" style="display: none;">
+  <div class="modal-content" style="max-width: 400px;">
+    <h2>Escolha sua Batalha</h2>
+    <p>Use uma tentativa diária para:</p>
+    
+    <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+      <button id="btn-farm-previous" class="btn" style="font-size: 1.2em;">
+        Farmar Estágio <span id="farm-stage-number">--</span>
+      </button>
+
+      <button id="btn-challenge-current" class="btn" style="font-size: 1.2em;">
+        Desafiar Estágio <span id="challenge-stage-number">--</span> 
+      </button>
+    </div>
+
+    <button id="close-adventure-options" class="btn" style="margin-top: 20px; background: transparent; border: 1px solid #555;">Cancelar</button>
+  </div>
+</div>
 
 
 <div id="levelUpModal" class="modal" style="display:none;">

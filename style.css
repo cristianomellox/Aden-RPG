@@ -2001,7 +2001,7 @@ label,
 select,
 textarea {
     outline: none !important;
-    border: none !important;
+    
     -webkit-tap-highlight-color: transparent !important;
     -webkit-focus-ring-color: transparent !important;
     touch-action: manipulation;

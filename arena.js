@@ -8,6 +8,38 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let userId = null;
 
+    // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+    function getLocalUserId() {
+        // 1. Tenta pegar do seu cache personalizado (criado no script.js)
+        try {
+            const cached = localStorage.getItem('player_data_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                // Verifica se não expirou
+                if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                    return parsed.data.id;
+                }
+            }
+        } catch (e) {}
+
+        // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+        try {
+            // Loop simples para achar a chave do supabase no localStorage se o nome variar
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                    const sessionStr = localStorage.getItem(k);
+                    const session = JSON.parse(sessionStr);
+                    if (session && session.user && session.user.id) {
+                        return session.user.id;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        return null;
+    }
+
     // Estado da Batalha
     let currentBattleId = null;
     let turnTimerInterval = null;
@@ -1122,21 +1154,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function boot() {
         showLoading();
         try {
-            // OPTIMIZAÇÃO AUTH: Uso de getSession para evitar request de rede se possível
-            let { data: { session } } = await supabase.auth.getSession();
-            let user = session?.user;
+            // OTIMIZAÇÃO ZERO EGRESS:
+            // Tenta pegar o ID do cache local primeiro
+            userId = getLocalUserId();
 
-            if (!user) {
-                await new Promise((resolve) => {
-                    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
-                        if (session?.user) { user = session.user; listener.subscription.unsubscribe(); resolve(); }
-                    });
-                    setTimeout(resolve, 5000);
-                });
+            // Se não achou no cache, aí sim tentamos a rede (fallback de segurança)
+            if (!userId) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) { window.location.href = "index.html"; return; }
+                userId = session.user.id;
             }
-            if (!user) { window.location.href = "index.html"; return; }
-            userId = user.id;
 
+            // A chamada RPC vai falhar se o token for inválido, servindo como validação
             await supabase.rpc("check_abandoned_battles");
             await checkAndResetArenaSeason();
             await supabase.rpc("reset_player_arena_attempts");
@@ -1144,7 +1173,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             ensureStreakDate();
             await loadArenaLoadout();
 
-        } catch (e) { console.error("Erro no boot:", e); } finally { hideLoading(); }
+        } catch (e) {
+            console.error("Erro no boot:", e);
+            // Se der erro de permissão, aí sim manda pro login
+            if (e.message && (e.message.includes('JWT') || e.message.includes('auth'))) {
+                window.location.href = "index.html";
+            }
+        } finally {
+            hideLoading();
+        }
     }
 
     window.addEventListener('beforeunload', (e) => {

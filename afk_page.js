@@ -19,19 +19,55 @@ document.addEventListener("DOMContentLoaded", async () => {
     const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+    function getLocalUserId() {
+        // 1. Tenta pegar do seu cache personalizado (criado no script.js)
+        try {
+            const cached = localStorage.getItem('player_data_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                // Verifica se não expirou
+                if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                    return parsed.data.id;
+                }
+            }
+        } catch (e) {}
+
+        // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+        try {
+            // Loop simples para achar a chave do supabase no localStorage se o nome variar
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                    const sessionStr = localStorage.getItem(k);
+                    const session = JSON.parse(sessionStr);
+                    if (session && session.user && session.user.id) {
+                        return session.user.id;
+                    }
+                }
+            }
+        } catch (e) {}
+
+        return null;
+    }
+
     // =======================================================================
-    // OTIMIZAÇÃO DE AUTH: getSession()
+    // OTIMIZAÇÃO DE AUTH: Zero Egress
     // =======================================================================
-    let userId = null;
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            userId = session.user.id;
-        } else {
-            console.warn("Nenhuma sessão ativa encontrada.");
+    let userId = getLocalUserId(); // Tenta cache primeiro
+
+    if (!userId) {
+        // Fallback para rede apenas se não achar no cache
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                userId = session.user.id;
+            } else {
+                console.warn("Nenhuma sessão ativa encontrada.");
+            }
+        } catch (e) {
+            console.error("Erro ao obter sessão:", e.message);
         }
-    } catch (e) {
-        console.error("Erro ao obter sessão:", e.message);
     }
     
     // ✅ Cache de 24 horas

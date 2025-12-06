@@ -186,8 +186,34 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!minesContainer) { console.error("[mines] ERRO: Container de minas não encontrado."); return; }
 
   // =================================================================
-  // 4. CACHE HELPER (NEW!) - Substitui Auth e Fetch Players
+  // 4. CACHE HELPER & AUTH OTIMISTA (ZERO EGRESS)
   // =================================================================
+  
+  // Função para pegar o ID do usuário sem ir na rede
+  function getLocalUserId() {
+    // 1. Tenta pegar do cache personalizado (player_data_cache)
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
+        }
+    } catch (e) {}
+
+    // 2. Tenta pegar do cache interno do Supabase
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) return session.user.id;
+            }
+        }
+    } catch (e) {}
+    return null;
+  }
+
   function getCachedPlayerData() {
     try {
       // Tenta usar variável global do script.js
@@ -420,12 +446,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     if (playerData) {
        buyPlayerGold = playerData.gold || 0;
-       // attacks_bought_count geralmente não está no cache principal (depende da sua implementação), 
-       // mas se não estiver, podemos buscar só ele ou assumir 0 se for crítico.
-       // Para precisão de custo, vamos fazer um fetch leve APENAS se não tivermos certeza,
-       // mas idealmente, attacks_bought_count deveria vir no login. 
-       // Vamos assumir fetch leve apenas da contagem se necessário, ou usar o cache se tiver.
-       
        // Fallback: Se não tiver no cache, fetch leve
        if (playerData.attacks_bought_count !== undefined) {
            buyBaseBoughtCount = playerData.attacks_bought_count;
@@ -1040,24 +1060,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =================================================================
   async function boot() {
     try {
-      // 1. Tenta usar a variável global (setada pelo script.js)
-      if (window.currentPlayerId) {
-          userId = window.currentPlayerId;
-      } 
-      // 2. Tenta ler o Cache do LocalStorage
-      else {
-          const cached = getCachedPlayerData();
-          if (cached && cached.id) {
-              userId = cached.id;
-          } 
-          // 3. Último caso: Session (mas sem getUser de rede se o token for válido)
-          else {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (!session) { window.location.href = "index.html"; return; }
-              userId = session.user.id;
-          }
+      // 1. Tenta usar o ID local (Zero Egress)
+      userId = getLocalUserId();
+      if (window.currentPlayerId) userId = window.currentPlayerId; // Override global se existir
+
+      // 2. Se não achou localmente, faz fallback para a rede (Egress)
+      if (!userId) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) { window.location.href = "index.html"; return; }
+          userId = session.user.id;
       }
 
+      // Executa lógica do jogo. Se o token local estiver expirado, o RPC falhará (401)
       await supabase.rpc('resolve_all_expired_mines');
       await supabase.rpc('reset_player_pvp_attempts');
 
@@ -1070,7 +1084,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     } catch (e) {
       console.error("[mines] auth erro:", e);
-      window.location.href = "login.html";
+      // Fallback seguro em caso de erro crítico
+      window.location.href = "index.html";
     }
   }
 

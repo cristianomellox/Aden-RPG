@@ -511,7 +511,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // =======================================================================
 // CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
 // =======================================================================
-const CACHE_TTL_MINUTES = 60; // Cache de 1 hora como padrão
+const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão
 
 /**
  * Salva dados no LocalStorage com um timestamp e TTL.
@@ -1053,7 +1053,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // Armazena e Renderiza
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, 60); // Cache de 60 min
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 60 min
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 

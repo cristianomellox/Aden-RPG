@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v8.2) - Correção definitiva de async/await");
+console.log("guild_raid.js (v8.2) - Correção definitiva de async/await + Auth Otimista");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -642,11 +642,82 @@ async function checkOtherPlayerDeaths() {
     }
 }
 
+// =======================================================================
+// OTIMIZAÇÃO DE AUTH: Zero Egress + Cache Local de Dados
+// =======================================================================
+
+function getLocalUserId() {
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+function getLocalPlayerData() {
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                return parsed.data;
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
 async function initSession() {
   try {
-    const { data } = await supabase.auth.getSession();
-    if (!data?.session) return;
-    userId = data.session.user.id;
+    // 1. Tentativa: Cache Completo (Ideal: Zero Network)
+    const cachedPlayer = getLocalPlayerData();
+    if (cachedPlayer) {
+        console.log("⚡ [Raid] Dados do jogador recuperados do cache.");
+        userId = cachedPlayer.id;
+        userName = cachedPlayer.name;
+        userGuildId = cachedPlayer.guild_id;
+        userRank = cachedPlayer.rank || "member";
+        if (cachedPlayer.avatar_url) {
+            const av = $id("raidPlayerAvatar");
+            if (av) av.src = cachedPlayer.avatar_url;
+        }
+        return; // Sucesso total sem rede
+    }
+
+    // 2. Tentativa: ID Local + Fetch Banco (Médio: Apenas DB egress, sem Auth)
+    let localId = getLocalUserId();
+    
+    // 3. Fallback: Auth API (Pior caso: Auth + DB egress)
+    if (!localId) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+            localId = data.session.user.id;
+        }
+    }
+
+    if (!localId) return; // Não logado
+
+    userId = localId;
+
+    // Busca detalhes no banco já que o cache completo falhou
     const { data: player, error } = await supabase.from("players").select("name, guild_id, rank, avatar_url").eq("id", userId).single();
     if (!error && player) {
       userName = player.name;

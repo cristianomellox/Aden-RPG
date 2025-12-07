@@ -81,23 +81,65 @@ async function removeCacheItem(itemId) {
     return tx.complete;
 }
 
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+function getLocalUserId() {
+    // 1. Tenta pegar do seu cache personalizado (criado no script.js)
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            // Verifica se não expirou (ex: 24h)
+            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+
+    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+    try {
+        // Loop simples para achar a chave do supabase no localStorage se o nome variar
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
     
     // =======================================================================
-    // OTIMIZAÇÃO DE AUTH: getSession()
+    // OTIMIZAÇÃO DE AUTH: Zero Egress Check
     // =======================================================================
-    // Substituído getUser() por getSession() para usar o cache local do token
-    const { data: { session } } = await supabase.auth.getSession();
+    
+    // 1. Otimização: Tenta obter ID localmente antes de perguntar ao servidor
+    const localId = getLocalUserId();
+    
+    if (localId) {
+        console.log("⚡ Auth Otimista: ID recuperado localmente.");
+        // Cria um objeto mock de usuário apenas com o ID, suficiente para as queries
+        globalUser = { id: localId };
+    } else {
+        // 2. Fallback: Se não achar local, pergunta ao Supabase (gera egress)
+        console.warn("Auth Cache Miss: Buscando sessão no servidor...");
+        const { data: { session } } = await supabase.auth.getSession();
 
-    if (!session) {
-        console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
-        window.location.href = "index.html?refresh=true";
-        return;
+        if (!session) {
+            console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
+            window.location.href = "index.html?refresh=true";
+            return;
+        }
+        globalUser = session.user;
     }
-
-    globalUser = session.user;
     
     // Força a busca de dados frescos do servidor ao carregar a página.
     await loadPlayerAndItems();

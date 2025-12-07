@@ -18,7 +18,7 @@
 <body>
 
     <div id="playerTopBar">
-        <a href="index.html" class="top-bar-link" title="Voltar">
+        <a href="go:pghome" class="top-bar-link" title="Voltar">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
        <div> <span id="pageTitle">Guilda</span></div>
@@ -532,8 +532,8 @@ O tempo de preparação é de 10 minutos.</li></ul>
         <center><h4>2. O Campo de Batalha</h4></center>
         <p>Cada cidade possui <strong>5 Objetivos</strong> que devem ser atacados e dominados para acumular <strong>Pontos de Honra</strong>:</p>
         <ul>
-            <li><strong>O Nexus (1 Ponto):</strong> Objetivo central, com 100.000 HP.</li>
-            <li><strong>Pontos de Controle (4 Pontos):</strong> Objetivos secundários, cada um com 50.000 HP.</li>
+            <li><strong>O Nexus (1 Ponto):</strong> Objetivo central, com 60.000 HP.</li>
+            <li><strong>Pontos de Controle (4 Pontos):</strong> Objetivos secundários, cada um com 30.000 HP.</li>
         </ul>
         <p>A guilda com mais Pontos de Honra no final da batalha vence e conquista a cidade.</p>
         <hr>
@@ -828,7 +828,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 logoutBanBtn.onclick = async () => {
                     await supabase.auth.signOut();
                     // Redireciona para o index para garantir que a sessão foi limpa
-                    window.location.href = "index.html?logout=true"; 
+                    window.location.href = "go:pghome?logout=true"; 
                 };
 
                 // Bloquear a rolagem da página por trás do modal
@@ -841,7 +841,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                 // Fallback de segurança se o HTML do modal não foi incluído
                 console.error("Modal de banimento não encontrado. Redirecionando como fallback.");
-                window.location.href = "index.html?logout=true"; 
+                window.location.href = "go:pghome?logout=true"; 
             }
         }
     } catch (e) {
@@ -934,7 +934,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.Audio.__isPatched = true;
     
     // Opcional: Se o botão de toggle for clicado para desmutar, precisamos restaurar a função
-    // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
+    // O script do go:pghome (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
 
 })();
 </script>

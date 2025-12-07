@@ -645,6 +645,40 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+// Adicionado para evitar chamadas auth.getSession() em arquivos secundários
+function getLocalUserId() {
+    // 1. Tenta pegar do seu cache personalizado (criado no script.js)
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            // Verifica se não expirou (ex: 24h)
+            if (parsed && parsed.data && parsed.data.id && (parsed.expires > Date.now() || !parsed.expires)) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+
+    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+    try {
+        // A chave pode variar dependendo da config, mas geralmente é sb-<project-ref>-auth-token
+        // Fazemos uma busca genérica por segurança
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 async function fetchAndDisplayCityOwner(cityName) {
     const cityNameLower = cityName.toLowerCase();
     

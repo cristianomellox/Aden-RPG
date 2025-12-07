@@ -637,98 +637,107 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 <script>
+// ... (Scripts de música e modal de história permanecem intactos) ...
+
 // =======================================================================
-// Lógica para Exibir Dono da Cidade (Implementação Solicitada)
+// Lógica para Exibir Dono da Cidade
 // MODIFICADO: Agora usa dois elementos (IMG e SPAN) separados para Bandeira e Nome.
+// Tamanho da bandeira: 40px (largura) x 42px (altura)
 // =======================================================================
 
-// Configuração do Supabase (Baseado em arena.js)
+// Configuração do Supabase
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-// Cria o cliente Supabase usando a variável global que deve ser exposta pelo cdn
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/**
- * Busca o dono da cidade (Guilda) e atualiza os elementos de Bandeira e Nome.
- * Ele detecta o nome da cidade a partir do título da página.
- * @param {string} cityName - O nome da cidade (e.g., 'Astrax').
- */
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+// Adicionado para evitar chamadas auth.getSession() em arquivos secundários
+function getLocalUserId() {
+    // 1. Tenta pegar do seu cache personalizado (criado no script.js)
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            // Verifica se não expirou (ex: 24h)
+            if (parsed && parsed.data && parsed.data.id && (parsed.expires > Date.now() || !parsed.expires)) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+
+    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+    try {
+        // A chave pode variar dependendo da config, mas geralmente é sb-<project-ref>-auth-token
+        // Fazemos uma busca genérica por segurança
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 async function fetchAndDisplayCityOwner(cityName) {
-    // Alvo para o nome da guilda (novo elemento)
-    const nameSpan = document.getElementById('guild_name_capital');
-    // Alvo para a bandeira da guilda (novo elemento)
-    const flagImg = document.getElementById('guild_flag_capital');
+    const cityNameLower = cityName.toLowerCase();
+    
+    // Alvos baseados na nova estrutura de IDs: guild_name_[cidade] e guild_flag_[cidade]
+    const nameSpan = document.getElementById(`guild_name_${cityNameLower}`);
+    const flagImg = document.getElementById(`guild_flag_${cityNameLower}`);
     const defaultText = 'Nenhuma.';
 
-    // Apenas para log de erro, o elemento principal que continha o ID de busca
-    const containerSpan = document.getElementById(`guildreg_${cityName.toLowerCase()}`);
-
-    if (!containerSpan) {
-        console.error(`Container element with ID guildreg_${cityName.toLowerCase()} not found.`);
-        return;
-    }
-    
-    // Verifica se os novos elementos existem
     if (!nameSpan || !flagImg) {
-        console.error(`Elementos internos (guild_name_capital/guild_flag_capital) não encontrados. Verifique a estrutura do HTML.`);
+        console.error(`Elementos de guilda para ${cityName} não encontrados (guild_name_${cityNameLower} ou guild_flag_${cityNameLower}).`);
         return;
     }
 
-    // Define o estado inicial/default (importante para o caso de não haver dono)
-    flagImg.style.display = 'none';
+    flagImg.style.display = 'none'; // Inicialmente oculta
     nameSpan.textContent = defaultText;
 
     try {
-        // Chama a função RPC (Stored Procedure) 'get_city_owners'
         const { data: ownersData, error } = await supabase.rpc('get_city_owners');
 
         if (error) {
             console.error('Erro Supabase ao buscar donos das cidades:', error);
-            // Em caso de erro, mantém o estado default
             return;
         }
 
-        const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityName.toLowerCase());
+        const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityNameLower);
 
         if (cityOwnerData && cityOwnerData.owner_guild_id) {
-            // A cidade tem um dono (guilda)
             const guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
-            // Usa um URL de fallback robusto caso a flag não exista no banco
             const guildFlagUrl = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'; 
 
             // 1. Atualiza o SRC da imagem e a torna visível
             flagImg.setAttribute('src', guildFlagUrl);
-            flagImg.style.display = 'inline-block'; // Garante que a imagem seja exibida
+            flagImg.style.display = 'inline-block'; 
             flagImg.setAttribute('alt', `Bandeira da Guilda ${guildName}`);
 
             // 2. Atualiza o TEXTO do nome
             nameSpan.textContent = guildName;
-
         } 
-        // Se a guilda for NULL, os elementos mantêm o valor inicial "Nenhuma." e a bandeira oculta.
 
     } catch (err) {
         console.error('Erro inesperado na função fetchAndDisplayCityOwner:', err);
-        // Em caso de erro, os elementos mantêm o valor inicial/default.
     }
 }
 
-// Inicia a busca do dono da cidade após o carregamento do DOM
+// Inicia a busca
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Obtém o nome da cidade a partir do título da página
-    // Exemplo: 'Astrax - Aden RPG' -> 'Astrax'
     const pageTitle = document.title;
-    
-    // Lista de cidades para garantir o mapeamento
     const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
-    
-    // Encontra o nome da cidade que está contido no título da página
     const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
 
     if (cityName) {
         fetchAndDisplayCityOwner(cityName);
     } else {
-        console.warn('Não foi possível determinar o nome da cidade a partir do título para buscar o dono.');
+        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
     }
 });
 </script>

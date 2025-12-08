@@ -950,53 +950,30 @@ if (!preserveActiveContainer) {
 }
 
 // Nova função auxiliar para aplicar os bônus dos itens aos atributos
-// =======================================================================
-// CORREÇÃO DE CÁLCULO DE STATUS (BASE MODELO + BASE INSTÂNCIA + BÔNUS)
-// =======================================================================
-
-// Nova função auxiliar para aplicar os bônus dos itens aos atributos
 function applyItemBonuses(player, equippedItems) {
-    // Clona os stats base do jogador para não mutar o objeto original incorretamente
     let combinedStats = { ...player };
-
     equippedItems.forEach(invItem => {
-        // 1. Soma Base do Modelo (Tabela 'items')
-        // Ex: Uma "Espada de Ferro" tem 10 de ataque base por definição
         if (invItem.items) {
             combinedStats.min_attack += invItem.items.min_attack || 0;
-            combinedStats.attack     += invItem.items.attack || 0;
-            combinedStats.defense    += invItem.items.defense || 0;
-            combinedStats.health     += invItem.items.health || 0;
+            combinedStats.attack += invItem.items.attack || 0;
+            combinedStats.defense += invItem.items.defense || 0;
+            combinedStats.health += invItem.items.health || 0;
             combinedStats.crit_chance += invItem.items.crit_chance || 0;
             combinedStats.crit_damage += invItem.items.crit_damage || 0;
-            combinedStats.evasion    += invItem.items.evasion || 0;
+            combinedStats.evasion += invItem.items.evasion || 0;
         }
-
-        // 2. Soma Base da Instância (Tabela 'inventory_items')
-        // Ex: Essa espada específica pode ter sido refinada e ter +5 de ataque base
-        combinedStats.min_attack += invItem.min_attack || 0;
-        combinedStats.attack     += invItem.attack || 0;
-        combinedStats.defense    += invItem.defense || 0;
-        combinedStats.health     += invItem.health || 0;
-        combinedStats.crit_chance += invItem.crit_chance || 0;
-        combinedStats.crit_damage += invItem.crit_damage || 0;
-        combinedStats.evasion    += invItem.evasion || 0;
-
-        // 3. Soma Bônus da Instância (Tabela 'inventory_items')
-        // Ex: Atributos adicionais aleatórios ou mágicos
         combinedStats.min_attack += invItem.min_attack_bonus || 0;
-        combinedStats.attack     += invItem.attack_bonus || 0;
-        combinedStats.defense    += invItem.defense_bonus || 0;
-        combinedStats.health     += invItem.health_bonus || 0;
+        combinedStats.attack += invItem.attack_bonus || 0;
+        combinedStats.defense += invItem.defense_bonus || 0;
+        combinedStats.health += invItem.health_bonus || 0;
         combinedStats.crit_chance += invItem.crit_chance_bonus || 0;
         combinedStats.crit_damage += invItem.crit_damage_bonus || 0;
-        combinedStats.evasion    += invItem.evasion_bonus || 0;
+        combinedStats.evasion += invItem.evasion_bonus || 0;
     });
-
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     const PLAYER_CACHE_KEY = 'player_data_cache';
     
@@ -1006,6 +983,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
+    // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
+    // NUNCA chamamos getUser() aqui para economizar Egress.
     let userId = currentPlayerId;
     if (!userId) {
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1017,7 +996,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         currentPlayerId = userId;
     }
 
-    // Busca apenas dados do jogo
+    // Busca apenas dados do jogo (Database Egress é muito mais barato que Auth Egress)
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
         .select('*')
@@ -1029,22 +1008,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // Busca os itens equipados (QUERY CORRIGIDA PARA INCLUIR STATUS BASE DA INSTÂNCIA)
+    // Busca os itens equipados (mantido igual)
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
         .select(`
             equipped_slot,
-            
-            -- Atributos Base da Instância (Faltavam estes)
-            min_attack,
-            attack,
-            defense,
-            health,
-            crit_chance,
-            crit_damage,
-            evasion,
-
-            -- Atributos de Bônus da Instância
             min_attack_bonus,
             attack_bonus,
             defense_bonus,
@@ -1052,8 +1020,6 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
             crit_chance_bonus,
             crit_damage_bonus,
             evasion_bonus,
-
-            -- Atributos do Modelo do Item
             items (
                 name,
                 min_attack,
@@ -1072,10 +1038,9 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         console.error('Erro ao buscar itens equipados:', itemsError.message);
     }
 
-    // Aplica a lógica corrigida de soma
     const playerWithEquips = applyItemBonuses(player, equippedItems || []);
     
-    // Cálculo do CP (Mantido idêntico)
+    // Cálculo do CP (mantido igual)
     playerWithEquips.combat_power = Math.floor(
         (playerWithEquips.attack * 12.5) +
         (playerWithEquips.min_attack * 1.5) +
@@ -1088,11 +1053,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // Armazena e Renderiza
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 24 horas
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 60 min
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 
-    // Verifica nome padrão
+    // Verifica nome padrão para abrir modal de edição
     if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
         if (typeof window.updateProfileEditModal === 'function') {
             window.updateProfileEditModal(playerWithEquips);

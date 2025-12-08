@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let pendingBatch = 0;              // Contagem de ataques na fila
   let batchFlushTimer = null;        // Timer para enviar se parar de clicar
   let currentMonsterHealthGlobal = 0; // HP Otimista Global
-  const BATCH_THRESHOLD = 3;         // Envia a cada 3 ataques
+  const BATCH_THRESHOLD = 5;         // Envia a cada 5 ataques
   const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas
 
   // =================================================================
@@ -1010,8 +1010,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (pendingBatch >= BATCH_THRESHOLD || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
         await processAttackQueue();
     } else {
-        // Envia após 2 segundos se o usuário parar
-        batchFlushTimer = setTimeout(processAttackQueue, 2000);
+        // Envia após 5 segundos se o usuário parar
+        batchFlushTimer = setTimeout(processAttackQueue, 5000);
     }
   }
 

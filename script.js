@@ -949,42 +949,65 @@ if (!preserveActiveContainer) {
     }
 }
 
-// Nova função auxiliar para aplicar os bônus dos itens aos atributos
+// =======================================================================
+// CORREÇÃO DEFINITIVA DE CÁLCULO DE STATUS (PLAYER + MODELO + INSTÂNCIA + BÔNUS)
+// =======================================================================
+
 function applyItemBonuses(player, equippedItems) {
+    // Começa com uma cópia dos status base do jogador (pelado)
     let combinedStats = { ...player };
+
+    // Garante que os campos existam para evitar NaN
+    const fields = ['min_attack', 'attack', 'defense', 'health', 'crit_chance', 'crit_damage', 'evasion'];
+    fields.forEach(f => combinedStats[f] = Number(combinedStats[f] || 0));
+
     equippedItems.forEach(invItem => {
+        // Camada 1: Atributos do Modelo (Tabela 'items')
+        // Ex: "Espada Longa" tem naturalmente 10 de Ataque
         if (invItem.items) {
-            combinedStats.min_attack += invItem.items.min_attack || 0;
-            combinedStats.attack += invItem.items.attack || 0;
-            combinedStats.defense += invItem.items.defense || 0;
-            combinedStats.health += invItem.items.health || 0;
-            combinedStats.crit_chance += invItem.items.crit_chance || 0;
-            combinedStats.crit_damage += invItem.items.crit_damage || 0;
-            combinedStats.evasion += invItem.items.evasion || 0;
+            combinedStats.min_attack  += (invItem.items.min_attack || 0);
+            combinedStats.attack      += (invItem.items.attack || 0);
+            combinedStats.defense     += (invItem.items.defense || 0);
+            combinedStats.health      += (invItem.items.health || 0);
+            combinedStats.crit_chance += (invItem.items.crit_chance || 0);
+            combinedStats.crit_damage += (invItem.items.crit_damage || 0);
+            combinedStats.evasion     += (invItem.items.evasion || 0);
         }
-        combinedStats.min_attack += invItem.min_attack_bonus || 0;
-        combinedStats.attack += invItem.attack_bonus || 0;
-        combinedStats.defense += invItem.defense_bonus || 0;
-        combinedStats.health += invItem.health_bonus || 0;
-        combinedStats.crit_chance += invItem.crit_chance_bonus || 0;
-        combinedStats.crit_damage += invItem.crit_damage_bonus || 0;
-        combinedStats.evasion += invItem.evasion_bonus || 0;
+
+        // Camada 2: Atributos Base da Instância (Tabela 'inventory_items')
+        // Ex: Refinamento ou atributos variáveis gerados no drop
+        combinedStats.min_attack  += (invItem.min_attack || 0);
+        combinedStats.attack      += (invItem.attack || 0);
+        combinedStats.defense     += (invItem.defense || 0);
+        combinedStats.health      += (invItem.health || 0);
+        combinedStats.crit_chance += (invItem.crit_chance || 0);
+        combinedStats.crit_damage += (invItem.crit_damage || 0);
+        combinedStats.evasion     += (invItem.evasion || 0);
+
+        // Camada 3: Bônus da Instância (Tabela 'inventory_items')
+        // Ex: Atributos mágicos adicionais (sufixo _bonus)
+        combinedStats.min_attack  += (invItem.min_attack_bonus || 0);
+        combinedStats.attack      += (invItem.attack_bonus || 0);
+        combinedStats.defense     += (invItem.defense_bonus || 0);
+        combinedStats.health      += (invItem.health_bonus || 0);
+        combinedStats.crit_chance += (invItem.crit_chance_bonus || 0);
+        combinedStats.crit_damage += (invItem.crit_damage_bonus || 0);
+        combinedStats.evasion     += (invItem.evasion_bonus || 0);
     });
+
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     const PLAYER_CACHE_KEY = 'player_data_cache';
     
-    // Se não for forçado e já temos dados, retorna (Economia Máxima)
+    // Se não for forçado e já temos dados em memória, usa eles para performance
     if (!forceRefresh && currentPlayerData) {
         renderPlayerUI(currentPlayerData, preserveActiveContainer);
         return;
     }
 
-    // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
-    // NUNCA chamamos getUser() aqui para economizar Egress.
     let userId = currentPlayerId;
     if (!userId) {
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -996,7 +1019,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         currentPlayerId = userId;
     }
 
-    // Busca apenas dados do jogo (Database Egress é muito mais barato que Auth Egress)
+    // 1. Busca dados base do Jogador
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
         .select('*')
@@ -1008,27 +1031,25 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // Busca os itens equipados (mantido igual)
+    // 2. Busca Itens Equipados com TODAS as colunas de status (Base + Bônus + Modelo)
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
         .select(`
             equipped_slot,
-            min_attack_bonus,
-            attack_bonus,
-            defense_bonus,
-            health_bonus,
-            crit_chance_bonus,
-            crit_damage_bonus,
-            evasion_bonus,
+            
+            -- Atributos da Instância (Refinamento/Roll Base)
+            min_attack, attack, defense, health, 
+            crit_chance, crit_damage, evasion,
+
+            -- Atributos de Bônus da Instância (Encantamentos)
+            min_attack_bonus, attack_bonus, defense_bonus, health_bonus, 
+            crit_chance_bonus, crit_damage_bonus, evasion_bonus,
+
+            -- Atributos do Modelo Original (Base do Item)
             items (
                 name,
-                min_attack,
-                attack,
-                defense,
-                health,
-                crit_chance,
-                crit_damage,
-                evasion
+                min_attack, attack, defense, health, 
+                crit_chance, crit_damage, evasion
             )
         `)
         .eq('player_id', userId)
@@ -1038,9 +1059,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         console.error('Erro ao buscar itens equipados:', itemsError.message);
     }
 
+    // 3. Aplica a matemática correta (Soma tudo)
     const playerWithEquips = applyItemBonuses(player, equippedItems || []);
     
-    // Cálculo do CP (mantido igual)
+    // 4. Recalcula o Combat Power (CP) usando os status TOTAIS (com equipamentos)
+    // Fórmula baseada na lógica vista no banco de dados e scripts anteriores
     playerWithEquips.combat_power = Math.floor(
         (playerWithEquips.attack * 12.5) +
         (playerWithEquips.min_attack * 1.5) +
@@ -1051,13 +1074,13 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         (playerWithEquips.evasion * 1)
     );
 
-    // Armazena e Renderiza
+    // 5. Salva e Renderiza
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 60 min
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 24 horas
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 
-    // Verifica nome padrão para abrir modal de edição
+    // Verifica se precisa abrir modal de edição de nome
     if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
         if (typeof window.updateProfileEditModal === 'function') {
             window.updateProfileEditModal(playerWithEquips);

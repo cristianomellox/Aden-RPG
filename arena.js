@@ -10,21 +10,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
     function getLocalUserId() {
-        // 1. Tenta pegar do seu cache personalizado (criado no script.js)
         try {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                // Verifica se não expirou
                 if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
                     return parsed.data.id;
                 }
             }
         } catch (e) {}
-
-        // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
         try {
-            // Loop simples para achar a chave do supabase no localStorage se o nome variar
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
                 if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -36,16 +31,236 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
         } catch (e) {}
-
         return null;
     }
 
-    // Estado da Batalha
-    let currentBattleId = null;
+    // --- ENGINE DE BATALHA LOCAL (SIMULAÇÃO CLIENT-SIDE) ---
+    class ArenaEngine {
+        constructor(playerStats, opponentData, playerLoadout) {
+            // Configura Jogador
+            this.player = {
+                id: userId,
+                name: playerStats.name || 'Você',
+                stats: playerStats,
+                hp: parseInt(playerStats.health),
+                maxHp: parseInt(playerStats.health),
+                buffs: {},
+                potions: JSON.parse(JSON.stringify(playerLoadout || []))
+            };
+            
+            // Configura Oponente
+            // O backend deve mandar 'combat_stats' e 'potions' dentro do objeto opponentData
+            const oppStats = opponentData.combat_stats || {};
+            this.opponent = {
+                id: opponentData.id,
+                name: opponentData.name || 'Oponente',
+                stats: oppStats,
+                hp: parseInt(oppStats.health || 1000),
+                maxHp: parseInt(oppStats.health || 1000),
+                buffs: {},
+                potions: opponentData.potions || [] 
+            };
+
+            this.turn = 1;
+            this.logs = [];
+            this.finished = false;
+            this.playerWon = false;
+            this.turnLimit = 100;
+        }
+
+        random(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Verifica buffs ativos
+        hasBuff(entity, type) {
+            return entity.buffs[type] && entity.buffs[type].ends_at >= this.turn;
+        }
+        
+        getBuffId(entity, type) {
+            return entity.buffs[type] ? entity.buffs[type].item_id : 0;
+        }
+
+        // Processa um turno completo (Ação Jogador -> Ação Inimigo se vivo)
+        processTurn(actionType, itemId = null) {
+            if (this.finished) return this.getState();
+
+            // Resetar cooldowns do jogador (logica simplificada: CD baixa 1 por turno de ataque)
+            if (actionType === 'ATTACK') {
+                this.player.potions.forEach(p => { if(p.cd > 0) p.cd--; });
+            }
+
+            // 1. AÇÃO DO JOGADOR
+            let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
+
+            if (actionType === 'POTION') {
+                const potIndex = this.player.potions.findIndex(p => p.item_id === itemId);
+                if (potIndex > -1) {
+                    const pot = this.player.potions[potIndex];
+                    if (pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
+                        this.applyEffect(this.player, pot.item_id);
+                        pot.quantity--;
+                        // Define CD: Cura=0 (instant), Buffs=1 (espera turno) - Ajuste conforme SQL original
+                        pot.cd = ([43,44].includes(pot.item_id)) ? 0 : 1;
+                        actionResult.heal = 1; // Flag para som
+                    }
+                }
+                // Poção não passa turno do inimigo imediatamente na lógica visual original, 
+                // apenas atualiza estado e espera jogador atacar.
+                return { ...this.getState(), actionResult };
+            }
+
+            if (actionType === 'ATTACK') {
+                // Cálculo de Dano Player
+                let dmg = (parseInt(this.player.stats.min_attack) || 0) + this.random(0, 10);
+                
+                // Buff ATK
+                let mult = 1.0;
+                if (this.hasBuff(this.player, 'ATK')) {
+                    mult += (this.getBuffId(this.player, 'ATK') === 49 ? 0.05 : 0.10);
+                }
+                dmg = Math.floor(dmg * mult);
+
+                // Crítico
+                let critChance = (parseInt(this.player.stats.crit_chance) || 5);
+                if (this.hasBuff(this.player, 'DEX')) {
+                    critChance += (this.getBuffId(this.player, 'DEX') === 47 ? 5 : 10);
+                }
+
+                let critMult = 1.5;
+                if (this.hasBuff(this.player, 'FURY')) {
+                    critMult = (this.getBuffId(this.player, 'FURY') === 45 ? 2.0 : 2.5);
+                }
+
+                if (this.random(0, 100) < critChance) {
+                    dmg = Math.floor(dmg * critMult);
+                    actionResult.crit = true;
+                }
+
+                actionResult.dmg = dmg;
+                this.opponent.hp = Math.max(0, this.opponent.hp - dmg);
+                
+                // Checa Vitória
+                if (this.opponent.hp <= 0) {
+                    this.finished = true;
+                    this.playerWon = true;
+                    return { ...this.getState(), actionResult };
+                }
+                
+                // 2. AÇÃO DO INIMIGO (AI Simplificada mas funcional)
+                this.processEnemyAI();
+                this.turn++;
+
+                // Checa Derrota ou Limite
+                if (this.player.hp <= 0) {
+                    this.finished = true;
+                    this.playerWon = false;
+                } else if (this.turn >= this.turnLimit) {
+                    this.finished = true;
+                    // Desempate por % de HP
+                    const pHp = this.player.hp / this.player.maxHp;
+                    const oHp = this.opponent.hp / this.opponent.maxHp;
+                    this.playerWon = pHp > oHp;
+                }
+            }
+
+            return { ...this.getState(), actionResult };
+        }
+
+        processEnemyAI() {
+            // Reduz CDs do inimigo
+            this.opponent.potions.forEach(p => { if(p.cd > 0) p.cd--; });
+
+            // 1. Tenta usar poção (Cura se < 70%, ou Buff aleatório)
+            let usedPotion = false;
+            for (let pot of this.opponent.potions) {
+                if (pot.quantity > 0 && pot.cd <= 0) {
+                    const isHeal = [43,44].includes(pot.item_id);
+                    if (isHeal && this.opponent.hp < (this.opponent.maxHp * 0.7)) {
+                        this.applyEffect(this.opponent, pot.item_id);
+                        pot.quantity--; pot.cd = 7; usedPotion = true; break;
+                    } 
+                    else if (!isHeal) {
+                        // Buff simples lógica
+                        this.applyEffect(this.opponent, pot.item_id);
+                        pot.quantity--; pot.cd = 15; usedPotion = true; break;
+                    }
+                }
+            }
+
+            // 2. Ataque
+            let dmg = (parseInt(this.opponent.stats.min_attack) || 0) + this.random(0, 5);
+            
+            // Buffs Inimigo
+            let mult = 1.0;
+            if (this.hasBuff(this.opponent, 'ATK')) mult += (this.getBuffId(this.opponent, 'ATK') === 49 ? 0.05 : 0.10);
+            dmg = Math.floor(dmg * mult);
+
+            let critChance = (parseInt(this.opponent.stats.crit_chance) || 5);
+            if (this.hasBuff(this.opponent, 'DEX')) critChance += (this.getBuffId(this.opponent, 'DEX') === 47 ? 5 : 10);
+            
+            let critMult = 1.5;
+            if (this.hasBuff(this.opponent, 'FURY')) critMult = (this.getBuffId(this.opponent, 'FURY') === 45 ? 2.0 : 2.5);
+
+            if (this.random(0, 100) < critChance) dmg = Math.floor(dmg * critMult);
+
+            this.player.hp = Math.max(0, this.player.hp - dmg);
+        }
+
+        applyEffect(target, itemId) {
+            // Cura
+            if (itemId === 43) target.hp = Math.min(target.maxHp, target.hp + 500);
+            else if (itemId === 44) target.hp = Math.min(target.maxHp, target.hp + 1000);
+            // Buffs
+            else {
+                let type = 'ATK';
+                if ([45,46].includes(itemId)) type = 'FURY';
+                if ([47,48].includes(itemId)) type = 'DEX';
+                
+                target.buffs[type] = {
+                    item_id: itemId,
+                    ends_at: this.turn + 5 // Duração fixa 5 turnos para simplificar
+                };
+            }
+        }
+
+        skipBattle() {
+            let safety = 0;
+            while (!this.finished && safety < 200) {
+                this.processTurn('ATTACK');
+                safety++;
+            }
+            return this.getState();
+        }
+
+        getState() {
+            return {
+                attacker_hp: this.player.hp,
+                attacker_max_hp: this.player.maxHp,
+                defender_hp: this.opponent.hp,
+                defender_max_hp: this.opponent.maxHp,
+                attacker_potions: this.player.potions, // Retorna para UI atualizar qtd/cd
+                defender_potions: this.opponent.potions,
+                attacker_buffs: this.player.buffs,
+                defender_buffs: this.opponent.buffs,
+                turn_count: this.turn,
+                finished: this.finished,
+                win: this.playerWon,
+                opponent_id: this.opponent.id
+            };
+        }
+    }
+
+    // Variáveis de Sessão em Lote
+    let currentSession = null;
+    let currentOpponentIndex = 0;
+    let sessionResults = [];
+    let currentBattleEngine = null; // Instância ativa
+
+    // Estado da UI
     let turnTimerInterval = null;
     let turnTimeLeft = 10;
     let isMyTurn = false;
-    let battleStateCache = null;
 
     // Elementos DOM Principais
     const loadingOverlay = document.getElementById("loading-overlay");
@@ -235,29 +450,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function getCachedPlayerInfo(playerId) {
         if (!playerId) return null;
-
-        // OTIMIZAÇÃO: 1. Tenta pegar do cache global gerado pelo script.js (player_data_cache)
-        // Isso evita chamada ao DB se o usuário veio do menu principal
         const globalCache = getCache('player_data_cache');
         if (globalCache && globalCache.id === playerId) {
             return globalCache;
         }
-
-        // 2. Cache Local da Arena
         const key = `player_${playerId}`;
         let cached = getCache(key);
         if (cached) return cached;
 
-        // 3. Busca no Banco
         const { data } = await supabase.from('players')
             .select('id, name, avatar_url, guild_id, ranking_points')
             .eq('id', playerId).single();
         if (data) setCache(key, data, CACHE_TTL_24H);
         return data;
-    }
-
-    function cacheOpponent(opponent) {
-        if (opponent?.id) setCache('last_opponent', opponent, 5);
     }
 
     function normalizeRpcResult(data) {
@@ -279,21 +484,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function updateAttemptsUI() {
         if (!userId) return;
         try {
-            const { data } = await supabase.from('players').select('arena_attempts_left').eq('id', userId).single();
-            const attempts = data?.arena_attempts_left ?? 0;
-            if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = attempts;
-            
-            if (challengeBtn) {
-                if (attempts <= 0) {
-                    challengeBtn.disabled = true;
-                    challengeBtn.textContent = "Volte às 21h00";
-                    challengeBtn.style.filter = "grayscale(1)";
-                    challengeBtn.style.cursor = "not-allowed";
-                } else {
-                    challengeBtn.disabled = false;
-                    challengeBtn.textContent = "Desafiar";
-                    challengeBtn.style.filter = "none";
-                    challengeBtn.style.cursor = "pointer";
+            // Se tivermos sessão ativa, usamos o contador local
+            if (currentSession && currentSession.attempts_left !== undefined) {
+                if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = currentSession.attempts_left - currentOpponentIndex;
+            } else {
+                const { data } = await supabase.from('players').select('arena_attempts_left').eq('id', userId).single();
+                const attempts = data?.arena_attempts_left ?? 0;
+                if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = attempts;
+                
+                if (challengeBtn) {
+                    if (attempts <= 0) {
+                        challengeBtn.disabled = true;
+                        challengeBtn.textContent = "Volte às 21h00";
+                        challengeBtn.style.filter = "grayscale(1)";
+                        challengeBtn.style.cursor = "not-allowed";
+                    } else {
+                        challengeBtn.disabled = false;
+                        challengeBtn.textContent = "Desafiar";
+                        challengeBtn.style.filter = "none";
+                        challengeBtn.style.cursor = "pointer";
+                    }
                 }
             }
         } catch { if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = "Erro"; }
@@ -432,7 +642,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
-    // 5. LÓGICA DE COMBATE
+    // 5. LÓGICA DE COMBATE (NOVA ESTRATÉGIA LOCAL)
     // =======================================================================
 
     const style = document.createElement('style');
@@ -478,19 +688,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                 confirmModal.style.display = 'none';
                 showLoading();
                 try {
-                    const { data, error } = await supabase.rpc('skip_arena_battle', { p_battle_id: currentBattleId });
-                    const res = normalizeRpcResult(data);
-                    
-                    if (error || !res?.success) throw new Error(res?.message || "Erro ao pular.");
-                    
-                    updatePvpHpBar(challengerHpFill, challengerHpText, res.win ? 1 : 0, 100);
-                    updatePvpHpBar(defenderHpFill, defenderHpText, res.win ? 0 : 1, 100);
-                    
-                    endBattle(res.win, res);
+                    // Simulação Local
+                    if (currentBattleEngine) {
+                        const res = currentBattleEngine.skipBattle();
+                        
+                        updatePvpHpBar(challengerHpFill, challengerHpText, res.win ? 1 : 0, 100);
+                        updatePvpHpBar(defenderHpFill, defenderHpText, res.win ? 0 : 1, 100);
+                        
+                        finishLocalFight(res);
+                    }
                 } catch (e) {
-                    showModalAlert(e.message || "Erro ao pular batalha.");
-                    isMyTurn = true;
-                    startPlayerTurn();
+                    showModalAlert("Erro na simulação local.");
                 } finally {
                     hideLoading();
                 }
@@ -500,6 +708,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
     
+    // --- LÓGICA DE SESSÃO DIÁRIA ---
     async function handleChallengeClick() {
         if (!challengeBtn || challengeBtn.disabled) return;
         if (arenaAttemptsLeftSpan.textContent === '0') return;
@@ -508,44 +717,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         showLoading();
         
         try {
-            const { data: findData, error: findError } = await supabase.rpc('find_arena_opponent');
-            const findResult = normalizeRpcResult(findData);
-            
-            if (findError || !findResult?.success) {
-                challengeBtn.disabled = false;
-                return showModalAlert(findResult?.message || "Nenhum oponente encontrado.");
-            }
-            
-            const opponent = findResult.opponent; 
-            cacheOpponent(opponent);
-
-            const { data: initData, error: initError } = await supabase.rpc('init_arena_battle_manual', { p_opponent_id: opponent.id });
-            const initResult = normalizeRpcResult(initData);
-            
-            if (initError || !initResult?.success) {
-                challengeBtn.disabled = false;
-                return showModalAlert(initResult?.message || "Falha ao iniciar batalha.");
-            }
-
-            currentBattleId = initResult.battle_id;
-            battleStateCache = initResult.state;
-            
-            const myInfo = await getCachedPlayerInfo(userId);
-            
-            setupBattleUI(battleStateCache, myInfo, opponent);
-            
-            hideLoading();
-
-            if (pvpCountdown) {
-                pvpCountdown.style.display = 'block';
-                for (let i = 3; i > 0; i--) {
-                    pvpCountdown.textContent = `A batalha começará em ${i}...`;
-                    await new Promise(r => setTimeout(r, 1000));
+            // 1. Verificar Cache de Sessão (Crash Recovery)
+            const savedSession = localStorage.getItem('arena_session_v1');
+            if (savedSession) {
+                currentSession = JSON.parse(savedSession);
+                sessionResults = currentSession.results || [];
+                currentOpponentIndex = sessionResults.length;
+            } else {
+                // 2. Buscar Nova Sessão do Servidor
+                const { data, error } = await supabase.rpc('get_arena_daily_session');
+                const result = normalizeRpcResult(data);
+                
+                if (error || !result?.success) {
+                    challengeBtn.disabled = false;
+                    return showModalAlert(result?.message || "Erro ao buscar oponentes.");
                 }
-                pvpCountdown.style.display = 'none';
+                
+                currentSession = result;
+                currentSession.results = [];
+                currentOpponentIndex = 0;
+                sessionResults = [];
+                localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
             }
 
-            startPlayerTurn();
+            startNextFight();
 
         } catch (e) {
             console.error("Erro no desafio:", e);
@@ -553,7 +748,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             showModalAlert("Erro inesperado: " + (e?.message || e));
             hideLoading();
         } finally {
-            await updateAttemptsUI();
+            hideLoading();
+        }
+    }
+
+    function startNextFight() {
+        if (!currentSession || currentOpponentIndex >= currentSession.opponents.length) {
+            commitSession();
+            return;
+        }
+
+        const opponent = currentSession.opponents[currentOpponentIndex];
+        const playerStats = currentSession.player_stats;
+        // Precisamos atualizar o loadout do player baseado no uso anterior se quisermos ser precisos,
+        // mas por simplicidade reiniciamos com o loadout base da sessão (assumindo que tem estoque)
+        // ou, idealmente, descontamos do objeto currentSession.loadout.
+        const loadout = currentSession.loadout; 
+
+        currentBattleEngine = new ArenaEngine(playerStats, opponent, loadout);
+        
+        const myInfo = { name: playerStats.name, avatar_url: playerStats.avatar_url };
+        const oppInfo = { name: opponent.name, avatar_url: opponent.avatar_url };
+        
+        setupBattleUI(currentBattleEngine.getState(), myInfo, oppInfo);
+        
+        if (pvpCountdown) {
+            pvpCountdown.style.display = 'block';
+            pvpCountdown.textContent = `Luta ${currentOpponentIndex + 1} de ${currentSession.opponents.length}`;
+            setTimeout(() => { pvpCountdown.style.display = 'none'; startPlayerTurn(); }, 2000);
+        } else {
+             startPlayerTurn();
         }
     }
 
@@ -572,7 +796,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         updateBattleStateUI(state);
         
-        // Renderiza Inicial
         renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
         renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
         
@@ -584,21 +807,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function startPlayerTurn() {
-        if (!currentBattleId) return;
         isMyTurn = true;
         turnTimeLeft = 10; 
         
         if (skipBtn) {
-            const t = battleStateCache ? battleStateCache.turn_count : 1;
-            if (t >= 0) {
-                skipBtn.disabled = false;
-                skipBtn.style.opacity = "1";
-                skipBtn.style.cursor = "pointer";
-            } else {
-                skipBtn.disabled = true;
-                skipBtn.style.opacity = "0.5";
-                skipBtn.style.cursor = "not-allowed";
-            }
+            skipBtn.disabled = false;
+            skipBtn.style.opacity = "1";
+            skipBtn.style.cursor = "pointer";
         }
 
         const timerContainer = document.getElementById("turnTimerContainer");
@@ -633,8 +848,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // --- NOVA FUNÇÃO DE AÇÃO LOCAL ---
     async function performAction(type, itemId = null) {
-        if (!isMyTurn) return;
+        if (!isMyTurn || !currentBattleEngine) return;
         
         if (type === 'ATTACK') {
             clearInterval(turnTimerInterval);
@@ -655,92 +871,63 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         try {
-            var preState = JSON.parse(JSON.stringify(battleStateCache));
-
-            const { data, error } = await supabase.rpc('process_arena_action', {
-                p_battle_id: currentBattleId,
-                p_action_type: type,
-                p_item_id: itemId
-            });
-
-            const res = normalizeRpcResult(data);
-            if (error || !res?.success) throw new Error("Erro na ação.");
+            const preState = currentBattleEngine.getState();
+            // PROCESSAMENTO LOCAL SÍNCRONO
+            const newStateFull = currentBattleEngine.processTurn(type, itemId);
+            const newState = newStateFull; // Remove wrapper se houver
+            const resultMeta = newStateFull.actionResult;
 
             // CASO 1: JOGADOR USOU POÇÃO
             if (type === 'POTION') {
-                updateBattleStateUI(res.state);
-                battleStateCache = res.state;
+                updateBattleStateUI(newState);
                 flashPotionIcon(itemId, challengerSide); 
                 
-                // [CORREÇÃO] Sons distintos para cada tipo de poção
-                if (itemId === 43 || itemId === 44) playSound('heal');
-                else if (itemId === 45 || itemId === 46) playSound('fury'); 
-                else if (itemId === 47 || itemId === 48) playSound('dex'); // Destreza
-                else if (itemId === 49 || itemId === 50) playSound('atk'); // Ataque
-                else playSound('fury'); // Fallback
+                if (resultMeta && resultMeta.heal) playSound('heal');
+                else if (itemId >= 49) playSound('atk');
+                else if (itemId >= 47) playSound('dex');
+                else playSound('fury');
 
-                renderBattlePotions(challengerSide, res.state.attacker_potions, 'left', true);
+                renderBattlePotions(challengerSide, newState.attacker_potions, 'left', true);
                 return; 
             }
 
             // CASO 2: JOGADOR ATACOU
             if (type === 'ATTACK') {
-                const newState = res.state || {}; 
-                const dmgDealt = Math.max(0, preState.defender_hp - (res.finished && res.win ? 0 : newState.defender_hp));
+                const dmgDealt = resultMeta.dmg || 0;
                 
                 await new Promise(r => setTimeout(r, 400));
                 
-                if (dmgDealt > 0 || (res.finished && res.win)) {
-                    displayDamageNumber(dmgDealt, false, false, defenderSide);
-                    updatePvpHpBar(defenderHpFill, defenderHpText, (res.finished && res.win ? 0 : newState.defender_hp), preState.defender_max_hp);
+                if (dmgDealt > 0 || (newState.finished && newState.win)) {
+                    displayDamageNumber(dmgDealt, resultMeta.crit, false, defenderSide);
+                    updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
                 }
 
-                if (res.finished && res.win) {
-                    endBattle(true, res);
+                if (newState.finished && newState.win) {
+                    finishLocalFight(newState);
                     return;
                 }
 
-                // --- TURNO INIMIGO ---
-                const attackerTookDamage = (!res.finished && newState.attacker_hp < preState.attacker_hp) || (res.finished && !res.win);
+                // --- TURNO INIMIGO (Já processado na engine, agora só animamos) ---
+                // O estado newState já tem o dano que o inimigo causou
+                const attackerTookDamage = newState.attacker_hp < preState.attacker_hp;
 
-                if (attackerTookDamage) {
+                if (attackerTookDamage || newState.finished) {
                     await new Promise(r => setTimeout(r, 600));
 
-                    let enemyUsedItem = null;
-                    const prePots = preState.defender_potions || [];
-                    const newPots = newState.defender_potions || [];
-                    
-                    for (let i = 0; i < prePots.length; i++) {
-                        const oldQ = prePots[i].qty;
-                        const newQ = newPots[i] ? newPots[i].qty : oldQ;
-                        if (newQ < oldQ) { enemyUsedItem = prePots[i].item_id; break; }
-                    }
-
-                    if (enemyUsedItem) {
-                        renderBattlePotions(defenderSide, newState.defender_potions, 'right', false);
-                        flashPotionIcon(enemyUsedItem, defenderSide);
-                        // Som simplificado para inimigo (Cura ou Buff genérico)
-                        playSound(enemyUsedItem < 45 ? 'heal' : 'fury');
-                        updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
-                        await new Promise(r => setTimeout(r, 800));
-                    }
-
+                    // Animação Inimigo (simplificada, apenas assume ataque)
                     animateActorMove(defenderSide);
                     await new Promise(r => setTimeout(r, 300));
 
-                    const currentAttHp = res.finished && !res.win ? 0 : newState.attacker_hp;
-                    const dmgReceived = Math.max(0, preState.attacker_hp - currentAttHp);
-                    
+                    const dmgReceived = preState.attacker_hp - newState.attacker_hp;
                     displayDamageNumber(dmgReceived, false, false, challengerSide);
-                    updatePvpHpBar(challengerHpFill, challengerHpText, currentAttHp, preState.attacker_max_hp);
+                    updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
                 }
 
-                if (res.finished) {
+                if (newState.finished) {
                     await new Promise(r => setTimeout(r, 500));
-                    endBattle(res.win, res); 
+                    finishLocalFight(newState);
                 } else {
                     updateBattleStateUI(newState);
-                    battleStateCache = newState;
                     startPlayerTurn();
                 }
             }
@@ -748,10 +935,91 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) {
             console.error(e);
             challengeBtn.disabled = false;
-            if (type === 'ATTACK') {
-                 isMyTurn = true;
-                 startPlayerTurn();
-            }
+        }
+    }
+
+    function finishLocalFight(finalState) {
+        clearInterval(turnTimerInterval);
+        
+        if (finalState.win) playSound('win');
+        else playSound('loss');
+
+        // Salva resultado no array da sessão
+        sessionResults.push({
+            opponent_id: finalState.opponent_id,
+            win: finalState.win,
+            turn_count: finalState.turn_count
+        });
+        
+        currentSession.results = sessionResults;
+        localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
+
+        currentOpponentIndex++;
+
+        // Mostra modal intermediário
+        showModalAlert(
+            finalState.win ? 
+            `<strong style="color:#4CAF50;">Vitória!</strong><br>Prepare-se para a próxima luta.` : 
+            `<strong style="color:#f44336;">Derrota!</strong><br>Prepare-se para a próxima luta.`,
+            "Resultado da Luta"
+        );
+
+        // Modifica o botão do modal para avançar
+        const nextBtn = confirmActionBtn;
+        if (currentOpponentIndex >= currentSession.opponents.length) {
+            nextBtn.textContent = "Ver Resultados Finais";
+            nextBtn.onclick = () => {
+                confirmModal.style.display = 'none';
+                commitSession();
+            };
+        } else {
+            nextBtn.textContent = "Próxima Luta >>";
+            nextBtn.onclick = () => {
+                confirmModal.style.display = 'none';
+                startNextFight();
+            };
+        }
+    }
+
+    async function commitSession() {
+        pvpCombatModal.style.display = "none";
+        showLoading();
+        
+        try {
+            const { data, error } = await supabase.rpc('commit_arena_session_results', {
+                p_results: sessionResults
+            });
+            
+            if (error) throw error;
+            const res = normalizeRpcResult(data);
+
+            // Limpa sessão local
+            localStorage.removeItem('arena_session_v1');
+            currentSession = null;
+            sessionResults = [];
+            currentBattleEngine = null;
+
+            // Exibe Recompensas Totais
+            let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
+            let rewardsHTML = "";
+            const items = [];
+            if(res.crystals > 0) items.push(`<div style="display:flex; align-items:center;"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:20px;"> +${res.crystals}</div>`);
+            if(res.items_common > 0) items.push(`<div>Cartão Comum +${res.items_common}</div>`);
+            if(res.items_rare > 0) items.push(`<div>Cartão Raro +${res.items_rare}</div>`);
+
+            if(items.length) rewardsHTML = `<div style="margin-top:10px; border-top:1px solid #555; padding-top:5px;">${items.join('<br>')}</div>`;
+
+            showModalAlert(msg + rewardsHTML, "Resumo Diário");
+            
+            // Atualiza UI geral
+            challengeBtn.disabled = false;
+            await loadArenaLoadout();
+            await updateAttemptsUI();
+
+        } catch (e) {
+            showModalAlert("Erro ao salvar resultados: " + e.message);
+        } finally {
+            hideLoading();
         }
     }
 
@@ -763,7 +1031,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         renderActiveBuffs(challengerSide, state.attacker_buffs, state.turn_count);
         renderActiveBuffs(defenderSide, state.defender_buffs, state.turn_count);
         
-        // [CORREÇÃO] Redesenhar as poções do jogador para atualizar status de Cooldown (desbloquear slots após turno)
         if (state.attacker_potions) {
              renderBattlePotions(challengerSide, state.attacker_potions, 'left', true);
         }
@@ -781,7 +1048,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         Object.keys(buffs).forEach(key => {
             const buff = buffs[key];
-            if (buff.ends_at_turn >= currentTurn) {
+            if (buff.ends_at > currentTurn) { // Ajuste: > currentTurn
                 const img = document.createElement('img');
                 const itemName = POTION_MAP[buff.item_id] || `item_${buff.item_id}`;
                 img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
@@ -819,7 +1086,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const slot = document.createElement('div');
             slot.className = 'battle-potion-slot';
             // Só é clicável se tiver quantidade, cooldown 0 e for turno do jogador (interactive flag)
-            if (interactive && p.qty > 0 && p.cd <= 0) {
+            if (interactive && p.quantity > 0 && (!p.cd || p.cd <= 0)) {
                 slot.classList.add('potion-clickable');
                 slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
             } else if (interactive) {
@@ -830,13 +1097,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
-            // Cooldown visual (cheio se > 0)
-            const cdHeight = p.cd > 0 ? "100%" : "0%";
+            const cdHeight = (p.cd > 0) ? "100%" : "0%";
             
             slot.innerHTML = `
                 <img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;">
-                <span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${p.qty}</span>
-                <div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);"></div>
+                <span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${p.quantity}</span>
+                <div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>
             `;
             ct.appendChild(slot);
         });
@@ -897,68 +1163,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         setTimeout(() => {
             element.style.transform = "scale(1) translateY(0)";
         }, 150);
-    }
-
-    async function endBattle(win, data) {
-        clearInterval(turnTimerInterval);
-        
-        if (win) playSound('win');
-        else playSound('loss');
-
-        try {
-            ensureStreakDate();
-            if (win) {
-                currentStreak++;
-                saveStreak(currentStreak);
-                if (currentStreak >= 5) playSound('streak5', { volume: 0.9 });
-                else if (currentStreak === 4) playSound('streak4', { volume: 0.9 });
-                else if (currentStreak === 3) playSound('streak3', { volume: 0.9 });
-            } else {
-                currentStreak = 0;
-                saveStreak(0);
-            }
-        } catch(e){}
-
-        let msg = win 
-            ? `<strong style="color:#4CAF50; font-size: 1.2em;">Vitória!</strong><br>Você roubou ${data.points || 0} pontos.` 
-            : `<strong style="color:#f44336; font-size: 1.2em;">Derrota!</strong><br>Você perdeu ${data.points || 0} pontos.`;
-
-        let rewardsHTML = "";
-        try {
-            const r = data.rewards || {};
-            let items = [];
-            
-            const st = "display:flex; align-items:center; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:5px; margin:2px; font-weight:bold; border: 1px solid #555;";
-            const imS = "width:28px; height:28px; margin-right:8px; object-fit:contain;";
-            
-            const crystals = r.crystals || 0;
-            const commonQty = r.item_41 || r.common || 0;
-            const rareQty = r.item_42 || r.rare || 0;
-
-            if(crystals > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${crystals}</div>`);
-            if(commonQty > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${commonQty}</div>`);
-            if(rareQty > 0) items.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${rareQty}</div>`);
-            
-            if(items.length) {
-                rewardsHTML = `<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; gap:8px; border-top:1px dashed #555; padding-top:10px;">${items.join('')}</div>`;
-            }
-        } catch (err) {
-            console.warn("Erro ao processar recompensas visuais:", err);
-        }
-            
-        await new Promise(r => setTimeout(r, 1000));
-        
-        pvpCombatModal.style.display = "none";
-        
-        showModalAlert(msg + rewardsHTML, win ? "Vitória!" : "Fim de Combate");
-        
-        challengeBtn.disabled = false;
-        currentBattleId = null;
-        battleStateCache = null;
-        isMyTurn = false;
-        
-        await loadArenaLoadout();
-        await updateAttemptsUI();
     }
 
     // =======================================================================
@@ -1154,28 +1358,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function boot() {
         showLoading();
         try {
-            // OTIMIZAÇÃO ZERO EGRESS:
-            // Tenta pegar o ID do cache local primeiro
             userId = getLocalUserId();
-
-            // Se não achou no cache, aí sim tentamos a rede (fallback de segurança)
             if (!userId) {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { window.location.href = "index.html"; return; }
                 userId = session.user.id;
             }
-
-            // A chamada RPC vai falhar se o token for inválido, servindo como validação
-            await supabase.rpc("check_abandoned_battles");
+            // Verifica sessão interrompida
+            if (localStorage.getItem('arena_session_v1')) {
+                // Se existe sessão salva, recupera UI
+                handleChallengeClick(); // Vai cair no "if savedSession"
+            }
+            
             await checkAndResetArenaSeason();
-            await supabase.rpc("reset_player_arena_attempts");
             await updateAttemptsUI();
             ensureStreakDate();
             await loadArenaLoadout();
 
         } catch (e) {
             console.error("Erro no boot:", e);
-            // Se der erro de permissão, aí sim manda pro login
             if (e.message && (e.message.includes('JWT') || e.message.includes('auth'))) {
                 window.location.href = "index.html";
             }
@@ -1185,10 +1386,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     window.addEventListener('beforeunload', (e) => {
-        if (currentBattleId) {
-            e.preventDefault();
-            e.returnValue = "Se você sair agora, perderá a batalha automaticamente.";
-            return e.returnValue;
+        if (currentSession && currentSession.results.length > 0 && currentSession.results.length < currentSession.opponents.length) {
+            // Aviso ao sair se estiver no meio de um lote
         }
     });
 

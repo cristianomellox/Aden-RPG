@@ -34,6 +34,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         return null;
     }
 
+    // Mapa de IDs para Nomes de Arquivo (Corrigido e Garantido)
+    const POTION_MAP = {
+        43: "pocao_de_cura_r", 44: "pocao_de_cura_sr",
+        45: "pocao_de_furia_r", 46: "pocao_de_furia_sr",
+        47: "pocao_de_destreza_r", 48: "pocao_de_destreza_sr",
+        49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
+    };
+
     // --- ENGINE DE BATALHA LOCAL (SIMULAÇÃO CLIENT-SIDE) ---
     class ArenaEngine {
         constructor(playerStats, opponentData, playerLoadout) {
@@ -45,11 +53,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(playerStats.health),
                 maxHp: parseInt(playerStats.health),
                 buffs: {},
-                potions: JSON.parse(JSON.stringify(playerLoadout || []))
+                // Clona e garante inicialização segura
+                potions: (playerLoadout || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.quantity) }))
             };
             
             // Configura Oponente
-            // O backend deve mandar 'combat_stats' e 'potions' dentro do objeto opponentData
             const oppStats = opponentData.combat_stats || {};
             this.opponent = {
                 id: opponentData.id,
@@ -58,7 +66,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(oppStats.health || 1000),
                 maxHp: parseInt(oppStats.health || 1000),
                 buffs: {},
-                potions: opponentData.potions || [] 
+                // Garante que o inimigo tenha CD inicializado como 0
+                potions: (opponentData.potions || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.qty || p.quantity || 1) }))
             };
 
             this.turn = 1;
@@ -94,19 +103,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
 
             if (actionType === 'POTION') {
-                const potIndex = this.player.potions.findIndex(p => p.item_id === itemId);
+                // Converte itemId para int para garantir comparação correta
+                const targetId = parseInt(itemId);
+                const potIndex = this.player.potions.findIndex(p => parseInt(p.item_id) === targetId);
+                
                 if (potIndex > -1) {
                     const pot = this.player.potions[potIndex];
                     if (pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
                         this.applyEffect(this.player, pot.item_id);
                         pot.quantity--;
-                        // Define CD: Cura=0 (instant), Buffs=1 (espera turno) - Ajuste conforme SQL original
-                        pot.cd = ([43,44].includes(pot.item_id)) ? 0 : 1;
-                        actionResult.heal = 1; // Flag para som
+                        // Define CD: Cura=0 (instant), Buffs=1 (espera turno)
+                        pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
+                        actionResult.heal = 1; 
                     }
                 }
-                // Poção não passa turno do inimigo imediatamente na lógica visual original, 
-                // apenas atualiza estado e espera jogador atacar.
                 return { ...this.getState(), actionResult };
             }
 
@@ -147,7 +157,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return { ...this.getState(), actionResult };
                 }
                 
-                // 2. AÇÃO DO INIMIGO (AI Simplificada mas funcional)
+                // 2. AÇÃO DO INIMIGO
                 this.processEnemyAI();
                 this.turn++;
 
@@ -173,20 +183,38 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // 1. Tenta usar poção (Cura se < 70%, ou Buff aleatório)
             let usedPotion = false;
+            // Ordena poções para priorizar cura se necessário (opcional, mas bom)
+            
             for (let pot of this.opponent.potions) {
+                // Garante números
+                const pId = parseInt(pot.item_id);
                 if (pot.quantity > 0 && pot.cd <= 0) {
-                    const isHeal = [43,44].includes(pot.item_id);
-                    if (isHeal && this.opponent.hp < (this.opponent.maxHp * 0.7)) {
-                        this.applyEffect(this.opponent, pot.item_id);
-                        pot.quantity--; pot.cd = 7; usedPotion = true; break;
+                    const isHeal = [43,44].includes(pId);
+                    
+                    if (isHeal) {
+                        if (this.opponent.hp < (this.opponent.maxHp * 0.7)) {
+                            this.applyEffect(this.opponent, pId);
+                            pot.quantity--; pot.cd = 7; usedPotion = true; 
+                            break; // Usa uma ação e para
+                        }
                     } 
-                    else if (!isHeal) {
-                        // Buff simples lógica
-                        this.applyEffect(this.opponent, pot.item_id);
-                        pot.quantity--; pot.cd = 15; usedPotion = true; break;
+                    else {
+                        // Buff simples lógica: só usa se não tiver o buff ativo
+                        let type = 'ATK';
+                        if ([45,46].includes(pId)) type = 'FURY';
+                        if ([47,48].includes(pId)) type = 'DEX';
+                        
+                        if (!this.hasBuff(this.opponent, type)) {
+                             this.applyEffect(this.opponent, pId);
+                             pot.quantity--; pot.cd = 15; usedPotion = true; 
+                             break;
+                        }
                     }
                 }
             }
+            
+            // Se usou poção, não ataca (simula turno gasto)
+            if (usedPotion) return;
 
             // 2. Ataque
             let dmg = (parseInt(this.opponent.stats.min_attack) || 0) + this.random(0, 5);
@@ -208,17 +236,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         applyEffect(target, itemId) {
+            const id = parseInt(itemId);
             // Cura
-            if (itemId === 43) target.hp = Math.min(target.maxHp, target.hp + 500);
-            else if (itemId === 44) target.hp = Math.min(target.maxHp, target.hp + 1000);
+            if (id === 43) target.hp = Math.min(target.maxHp, target.hp + 500);
+            else if (id === 44) target.hp = Math.min(target.maxHp, target.hp + 1000);
             // Buffs
             else {
                 let type = 'ATK';
-                if ([45,46].includes(itemId)) type = 'FURY';
-                if ([47,48].includes(itemId)) type = 'DEX';
+                if ([45,46].includes(id)) type = 'FURY';
+                if ([47,48].includes(id)) type = 'DEX';
                 
                 target.buffs[type] = {
-                    item_id: itemId,
+                    item_id: id,
                     ends_at: this.turn + 5 // Duração fixa 5 turnos para simplificar
                 };
             }
@@ -304,14 +333,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closePotionModalBtn = document.getElementById("closePotionModal");
     const potionListGrid = document.getElementById("potionListGrid");
     const potionSlots = document.querySelectorAll(".potion-slot");
-
-    // Mapa de IDs para Nomes de Arquivo
-    const POTION_MAP = {
-        43: "pocao_de_cura_r", 44: "pocao_de_cura_sr",
-        45: "pocao_de_furia_r", 46: "pocao_de_furia_sr",
-        47: "pocao_de_destreza_r", 48: "pocao_de_destreza_sr",
-        49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
-    };
 
     // =======================================================================
     // 2. SISTEMA DE ÁUDIO
@@ -484,7 +505,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function updateAttemptsUI() {
         if (!userId) return;
         try {
-            // Se tivermos sessão ativa, usamos o contador local
             if (currentSession && currentSession.attempts_left !== undefined) {
                 if (arenaAttemptsLeftSpan) arenaAttemptsLeftSpan.textContent = currentSession.attempts_left - currentOpponentIndex;
             } else {
@@ -642,7 +662,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
-    // 5. LÓGICA DE COMBATE (NOVA ESTRATÉGIA LOCAL)
+    // 5. LÓGICA DE COMBATE E UI
     // =======================================================================
 
     const style = document.createElement('style');
@@ -717,14 +737,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         showLoading();
         
         try {
-            // 1. Verificar Cache de Sessão (Crash Recovery)
             const savedSession = localStorage.getItem('arena_session_v1');
             if (savedSession) {
                 currentSession = JSON.parse(savedSession);
                 sessionResults = currentSession.results || [];
                 currentOpponentIndex = sessionResults.length;
             } else {
-                // 2. Buscar Nova Sessão do Servidor
                 const { data, error } = await supabase.rpc('get_arena_daily_session');
                 const result = normalizeRpcResult(data);
                 
@@ -760,9 +778,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const opponent = currentSession.opponents[currentOpponentIndex];
         const playerStats = currentSession.player_stats;
-        // Precisamos atualizar o loadout do player baseado no uso anterior se quisermos ser precisos,
-        // mas por simplicidade reiniciamos com o loadout base da sessão (assumindo que tem estoque)
-        // ou, idealmente, descontamos do objeto currentSession.loadout.
         const loadout = currentSession.loadout; 
 
         currentBattleEngine = new ArenaEngine(playerStats, opponent, loadout);
@@ -848,7 +863,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // --- NOVA FUNÇÃO DE AÇÃO LOCAL ---
     async function performAction(type, itemId = null) {
         if (!isMyTurn || !currentBattleEngine) return;
         
@@ -874,7 +888,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const preState = currentBattleEngine.getState();
             // PROCESSAMENTO LOCAL SÍNCRONO
             const newStateFull = currentBattleEngine.processTurn(type, itemId);
-            const newState = newStateFull; // Remove wrapper se houver
+            const newState = newStateFull; 
             const resultMeta = newStateFull.actionResult;
 
             // CASO 1: JOGADOR USOU POÇÃO
@@ -882,9 +896,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 updateBattleStateUI(newState);
                 flashPotionIcon(itemId, challengerSide); 
                 
+                // Conversão segura
+                const iId = parseInt(itemId);
                 if (resultMeta && resultMeta.heal) playSound('heal');
-                else if (itemId >= 49) playSound('atk');
-                else if (itemId >= 47) playSound('dex');
+                else if (iId >= 49) playSound('atk');
+                else if (iId >= 47) playSound('dex');
                 else playSound('fury');
 
                 renderBattlePotions(challengerSide, newState.attacker_potions, 'left', true);
@@ -907,14 +923,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
-                // --- TURNO INIMIGO (Já processado na engine, agora só animamos) ---
-                // O estado newState já tem o dano que o inimigo causou
+                // --- TURNO INIMIGO ---
                 const attackerTookDamage = newState.attacker_hp < preState.attacker_hp;
 
                 if (attackerTookDamage || newState.finished) {
                     await new Promise(r => setTimeout(r, 600));
 
-                    // Animação Inimigo (simplificada, apenas assume ataque)
+                    // Verifica se o inimigo usou algo no turno dele (pela diferença de quantidade)
+                    // Na engine atual simplificada, o turno do inimigo é processado junto.
+                    // Podemos verificar buffs ou HP para tocar sons de poção do inimigo se quisermos.
+                    // Por hora, apenas animamos ataque se houve dano.
+                    
                     animateActorMove(defenderSide);
                     await new Promise(r => setTimeout(r, 300));
 
@@ -941,8 +960,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     function finishLocalFight(finalState) {
         clearInterval(turnTimerInterval);
         
-        if (finalState.win) playSound('win');
-        else playSound('loss');
+        if (finalState.win) {
+            playSound('win');
+            try {
+                ensureStreakDate();
+                currentStreak++;
+                saveStreak(currentStreak);
+                
+                // Sons de Streak corrigidos (tocam na vitória)
+                if (currentStreak >= 5) playSound('streak5', { volume: 0.9 });
+                else if (currentStreak === 4) playSound('streak4', { volume: 0.9 });
+                else if (currentStreak === 3) playSound('streak3', { volume: 0.9 });
+            } catch(e){}
+        } else {
+            playSound('loss');
+            currentStreak = 0;
+            saveStreak(0);
+        }
 
         // Salva resultado no array da sessão
         sessionResults.push({
@@ -964,7 +998,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             "Resultado da Luta"
         );
 
-        // Modifica o botão do modal para avançar
         const nextBtn = confirmActionBtn;
         if (currentOpponentIndex >= currentSession.opponents.length) {
             nextBtn.textContent = "Ver Resultados Finais";
@@ -999,15 +1032,22 @@ document.addEventListener("DOMContentLoaded", async () => {
             sessionResults = [];
             currentBattleEngine = null;
 
-            // Exibe Recompensas Totais
+            // --- RESTAURAÇÃO DO VISUAL BONITO DAS RECOMPENSAS ---
             let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
             let rewardsHTML = "";
-            const items = [];
-            if(res.crystals > 0) items.push(`<div style="display:flex; align-items:center;"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:20px;"> +${res.crystals}</div>`);
-            if(res.items_common > 0) items.push(`<div>Cartão Comum +${res.items_common}</div>`);
-            if(res.items_rare > 0) items.push(`<div>Cartão Raro +${res.items_rare}</div>`);
-
-            if(items.length) rewardsHTML = `<div style="margin-top:10px; border-top:1px solid #555; padding-top:5px;">${items.join('<br>')}</div>`;
+            let itemsHTML = [];
+            
+            // Estilos copiados do código original
+            const st = "display:flex; align-items:center; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:5px; margin:2px; font-weight:bold; border: 1px solid #555;";
+            const imS = "width:28px; height:28px; margin-right:8px; object-fit:contain;";
+            
+            if(res.crystals > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${res.crystals}</div>`);
+            if(res.items_common > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${res.items_common}</div>`);
+            if(res.items_rare > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${res.items_rare}</div>`);
+            
+            if(itemsHTML.length) {
+                rewardsHTML = `<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; gap:8px; border-top:1px dashed #555; padding-top:10px;">${itemsHTML.join('')}</div>`;
+            }
 
             showModalAlert(msg + rewardsHTML, "Resumo Diário");
             
@@ -1048,9 +1088,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         Object.keys(buffs).forEach(key => {
             const buff = buffs[key];
-            if (buff.ends_at > currentTurn) { // Ajuste: > currentTurn
+            if (buff.ends_at > currentTurn) { 
                 const img = document.createElement('img');
-                const itemName = POTION_MAP[buff.item_id] || `item_${buff.item_id}`;
+                // Correção do mapeamento de imagens
+                const itemId = parseInt(buff.item_id);
+                const itemName = POTION_MAP[itemId] || `item_${itemId}`;
                 img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
                 img.style.width = '35px';
                 img.style.height = '35px';
@@ -1085,8 +1127,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         potions.forEach(p => {
             const slot = document.createElement('div');
             slot.className = 'battle-potion-slot';
-            // Só é clicável se tiver quantidade, cooldown 0 e for turno do jogador (interactive flag)
-            if (interactive && p.quantity > 0 && (!p.cd || p.cd <= 0)) {
+            
+            // Garante que quantity seja número
+            const qty = parseInt(p.quantity || 0);
+            const cd = parseInt(p.cd || 0);
+            
+            if (interactive && qty > 0 && cd <= 0) {
                 slot.classList.add('potion-clickable');
                 slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
             } else if (interactive) {
@@ -1096,12 +1142,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                  slot.style.opacity = "0.7";
             }
 
-            const name = POTION_MAP[p.item_id] || "pocao_de_cura_r";
-            const cdHeight = (p.cd > 0) ? "100%" : "0%";
+            // Correção da imagem: usa POTION_MAP com ID numérico
+            const itemId = parseInt(p.item_id);
+            const name = POTION_MAP[itemId] || `item_${itemId}`;
+            const cdHeight = (cd > 0) ? "100%" : "0%";
             
             slot.innerHTML = `
                 <img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;">
-                <span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${p.quantity}</span>
+                <span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span>
                 <div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>
             `;
             ct.appendChild(slot);
@@ -1144,7 +1192,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function flashPotionIcon(itemId, sideElement) {
         const img = document.createElement("img");
-        const itemName = POTION_MAP[itemId] || `item_${itemId}`; 
+        const iId = parseInt(itemId);
+        const itemName = POTION_MAP[iId] || `item_${iId}`; 
         img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`; 
         img.style.position = "absolute";
         img.style.top = "50%";

@@ -1144,8 +1144,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // Correção da imagem: usa POTION_MAP com ID numérico
             const itemId = parseInt(p.item_id);
-            const name = POTION_MAP[itemId] || `item_${itemId}`;
-            const cdHeight = (cd > 0) ? "100%" : "0%";
+            const name = p.item_name || POTION_MAP[itemId] || `item_${itemId}`;
+const cdHeight = (cd > 0) ? "100%" : "0%";
             
             slot.innerHTML = `
                 <img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;">

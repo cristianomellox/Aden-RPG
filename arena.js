@@ -590,7 +590,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         if (skipBtn) {
             const t = battleStateCache ? battleStateCache.turn_count : 1;
-            if (t >= 3) {
+            if (t >= 0) {
                 skipBtn.disabled = false;
                 skipBtn.style.opacity = "1";
                 skipBtn.style.cursor = "pointer";

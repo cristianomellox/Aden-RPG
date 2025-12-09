@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return null;
     }
 
-    // Mapa de IDs para Nomes de Arquivo (Corrigido e Garantido)
+    // Mapa de IDs para Nomes de Arquivo
     const POTION_MAP = {
         43: "pocao_de_cura_r", 44: "pocao_de_cura_sr",
         45: "pocao_de_furia_r", 46: "pocao_de_furia_sr",
@@ -53,7 +53,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(playerStats.health),
                 maxHp: parseInt(playerStats.health),
                 buffs: {},
-                // Clona e garante inicialização segura
                 potions: (playerLoadout || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.quantity) }))
             };
             
@@ -66,12 +65,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(oppStats.health || 1000),
                 maxHp: parseInt(oppStats.health || 1000),
                 buffs: {},
-                // Garante que o inimigo tenha CD inicializado como 0
                 potions: (opponentData.potions || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.qty || p.quantity || 1) }))
             };
 
             this.turn = 1;
-            this.logs = [];
             this.finished = false;
             this.playerWon = false;
             this.turnLimit = 100;
@@ -81,7 +78,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
 
-        // Verifica buffs ativos
         hasBuff(entity, type) {
             return entity.buffs[type] && entity.buffs[type].ends_at >= this.turn;
         }
@@ -90,20 +86,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             return entity.buffs[type] ? entity.buffs[type].item_id : 0;
         }
 
-        // Processa um turno completo (Ação Jogador -> Ação Inimigo se vivo)
+        // Processa um turno completo
         processTurn(actionType, itemId = null) {
             if (this.finished) return this.getState();
 
-            // Resetar cooldowns do jogador (logica simplificada: CD baixa 1 por turno de ataque)
+            // Resetar cooldowns do jogador
             if (actionType === 'ATTACK') {
                 this.player.potions.forEach(p => { if(p.cd > 0) p.cd--; });
             }
 
             // 1. AÇÃO DO JOGADOR
             let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
+            let enemyAction = null; // Armazena o que o inimigo fez
 
             if (actionType === 'POTION') {
-                // Converte itemId para int para garantir comparação correta
                 const targetId = parseInt(itemId);
                 const potIndex = this.player.potions.findIndex(p => parseInt(p.item_id) === targetId);
                 
@@ -112,35 +108,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
                         this.applyEffect(this.player, pot.item_id);
                         pot.quantity--;
-                        // Define CD: Cura=0 (instant), Buffs=1 (espera turno)
                         pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
                         actionResult.heal = 1; 
                     }
                 }
-                return { ...this.getState(), actionResult };
+                return { ...this.getState(), actionResult, enemyAction };
             }
 
             if (actionType === 'ATTACK') {
                 // Cálculo de Dano Player
                 let dmg = (parseInt(this.player.stats.min_attack) || 0) + this.random(0, 10);
-                
-                // Buff ATK
                 let mult = 1.0;
-                if (this.hasBuff(this.player, 'ATK')) {
-                    mult += (this.getBuffId(this.player, 'ATK') === 49 ? 0.05 : 0.10);
-                }
+                if (this.hasBuff(this.player, 'ATK')) mult += (this.getBuffId(this.player, 'ATK') === 49 ? 0.05 : 0.10);
                 dmg = Math.floor(dmg * mult);
 
-                // Crítico
                 let critChance = (parseInt(this.player.stats.crit_chance) || 5);
-                if (this.hasBuff(this.player, 'DEX')) {
-                    critChance += (this.getBuffId(this.player, 'DEX') === 47 ? 5 : 10);
-                }
+                if (this.hasBuff(this.player, 'DEX')) critChance += (this.getBuffId(this.player, 'DEX') === 47 ? 5 : 10);
 
                 let critMult = 1.5;
-                if (this.hasBuff(this.player, 'FURY')) {
-                    critMult = (this.getBuffId(this.player, 'FURY') === 45 ? 2.0 : 2.5);
-                }
+                if (this.hasBuff(this.player, 'FURY')) critMult = (this.getBuffId(this.player, 'FURY') === 45 ? 2.0 : 2.5);
 
                 if (this.random(0, 100) < critChance) {
                     dmg = Math.floor(dmg * critMult);
@@ -150,15 +136,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 actionResult.dmg = dmg;
                 this.opponent.hp = Math.max(0, this.opponent.hp - dmg);
                 
-                // Checa Vitória
                 if (this.opponent.hp <= 0) {
                     this.finished = true;
                     this.playerWon = true;
-                    return { ...this.getState(), actionResult };
+                    return { ...this.getState(), actionResult, enemyAction };
                 }
                 
-                // 2. AÇÃO DO INIMIGO
-                this.processEnemyAI();
+                // 2. AÇÃO DO INIMIGO (Agora retorna o que ele fez)
+                enemyAction = this.processEnemyAI();
                 this.turn++;
 
                 // Checa Derrota ou Limite
@@ -167,26 +152,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                     this.playerWon = false;
                 } else if (this.turn >= this.turnLimit) {
                     this.finished = true;
-                    // Desempate por % de HP
                     const pHp = this.player.hp / this.player.maxHp;
                     const oHp = this.opponent.hp / this.opponent.maxHp;
                     this.playerWon = pHp > oHp;
                 }
             }
 
-            return { ...this.getState(), actionResult };
+            return { ...this.getState(), actionResult, enemyAction };
         }
 
         processEnemyAI() {
+            // Relatório da ação do inimigo
+            let result = { type: 'NONE', itemId: 0, dmg: 0, crit: false };
+
             // Reduz CDs do inimigo
             this.opponent.potions.forEach(p => { if(p.cd > 0) p.cd--; });
 
-            // 1. Tenta usar poção (Cura se < 70%, ou Buff aleatório)
+            // 1. Tenta usar poção
             let usedPotion = false;
-            // Ordena poções para priorizar cura se necessário (opcional, mas bom)
-            
             for (let pot of this.opponent.potions) {
-                // Garante números
                 const pId = parseInt(pot.item_id);
                 if (pot.quantity > 0 && pot.cd <= 0) {
                     const isHeal = [43,44].includes(pId);
@@ -194,32 +178,30 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (isHeal) {
                         if (this.opponent.hp < (this.opponent.maxHp * 0.7)) {
                             this.applyEffect(this.opponent, pId);
-                            pot.quantity--; pot.cd = 7; usedPotion = true; 
-                            break; // Usa uma ação e para
+                            pot.quantity--; pot.cd = 7; usedPotion = true;
+                            result.type = 'POTION'; result.itemId = pId;
+                            break; 
                         }
                     } 
                     else {
-                        // Buff simples lógica: só usa se não tiver o buff ativo
                         let type = 'ATK';
                         if ([45,46].includes(pId)) type = 'FURY';
                         if ([47,48].includes(pId)) type = 'DEX';
                         
                         if (!this.hasBuff(this.opponent, type)) {
                              this.applyEffect(this.opponent, pId);
-                             pot.quantity--; pot.cd = 15; usedPotion = true; 
+                             pot.quantity--; pot.cd = 15; usedPotion = true;
+                             result.type = 'POTION'; result.itemId = pId;
                              break;
                         }
                     }
                 }
             }
             
-            // Se usou poção, não ataca (simula turno gasto)
-            if (usedPotion) return;
+            if (usedPotion) return result; // Retorna informando que usou poção
 
             // 2. Ataque
             let dmg = (parseInt(this.opponent.stats.min_attack) || 0) + this.random(0, 5);
-            
-            // Buffs Inimigo
             let mult = 1.0;
             if (this.hasBuff(this.opponent, 'ATK')) mult += (this.getBuffId(this.opponent, 'ATK') === 49 ? 0.05 : 0.10);
             dmg = Math.floor(dmg * mult);
@@ -230,26 +212,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             let critMult = 1.5;
             if (this.hasBuff(this.opponent, 'FURY')) critMult = (this.getBuffId(this.opponent, 'FURY') === 45 ? 2.0 : 2.5);
 
-            if (this.random(0, 100) < critChance) dmg = Math.floor(dmg * critMult);
+            if (this.random(0, 100) < critChance) {
+                dmg = Math.floor(dmg * critMult);
+                result.crit = true;
+            }
 
             this.player.hp = Math.max(0, this.player.hp - dmg);
+            
+            result.type = 'ATTACK';
+            result.dmg = dmg;
+            return result;
         }
 
         applyEffect(target, itemId) {
             const id = parseInt(itemId);
-            // Cura
             if (id === 43) target.hp = Math.min(target.maxHp, target.hp + 500);
             else if (id === 44) target.hp = Math.min(target.maxHp, target.hp + 1000);
-            // Buffs
             else {
                 let type = 'ATK';
                 if ([45,46].includes(id)) type = 'FURY';
                 if ([47,48].includes(id)) type = 'DEX';
-                
-                target.buffs[type] = {
-                    item_id: id,
-                    ends_at: this.turn + 5 // Duração fixa 5 turnos para simplificar
-                };
+                target.buffs[type] = { item_id: id, ends_at: this.turn + 5 };
             }
         }
 
@@ -268,7 +251,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 attacker_max_hp: this.player.maxHp,
                 defender_hp: this.opponent.hp,
                 defender_max_hp: this.opponent.maxHp,
-                attacker_potions: this.player.potions, // Retorna para UI atualizar qtd/cd
+                attacker_potions: this.player.potions,
                 defender_potions: this.opponent.potions,
                 attacker_buffs: this.player.buffs,
                 defender_buffs: this.opponent.buffs,
@@ -284,20 +267,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentSession = null;
     let currentOpponentIndex = 0;
     let sessionResults = [];
-    let currentBattleEngine = null; // Instância ativa
+    let currentBattleEngine = null;
 
-    // Estado da UI
     let turnTimerInterval = null;
     let turnTimeLeft = 10;
     let isMyTurn = false;
 
-    // Elementos DOM Principais
+    // Elementos DOM
     const loadingOverlay = document.getElementById("loading-overlay");
     const challengeBtn = document.getElementById("challengeBtn");
     const arenaAttemptsLeftSpan = document.getElementById("arenaAttemptsLeft");
     const skipBtn = document.getElementById("skip");
 
-    // Modais
     const pvpCombatModal = document.getElementById("pvpCombatModal");
     const confirmModal = document.getElementById("confirmModal");
     const confirmMessage = document.getElementById("confirmMessage");
@@ -309,13 +290,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closeRankingBtn = document.getElementById("closeRankingBtn");
     const rankingList = document.getElementById("rankingList");
     const seasonInfoSpan = document.getElementById("seasonInfo");
-
     const rankingListPast = document.getElementById("rankingListPast");
     const rankingHistoryList = document.getElementById("rankingHistoryList");
     const seasonInfoContainer = document.getElementById("seasonInfoContainer");
     const seasonPastInfoSpan = document.getElementById("seasonPastInfo");
 
-    // Elementos da Arena (Visual)
     const pvpCountdown = document.getElementById("pvpCountdown");
     const challengerSide = document.getElementById("challengerSide");
     const defenderSide = document.getElementById("defenderSide");
@@ -328,7 +307,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const challengerHpText = document.getElementById("challengerHpText");
     const defenderHpText = document.getElementById("defenderHpText");
     
-    // Loadout de Poções
     const potionSelectModal = document.getElementById("potionSelectModal");
     const closePotionModalBtn = document.getElementById("closePotionModal");
     const potionListGrid = document.getElementById("potionListGrid");
@@ -416,24 +394,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     function addCapturedListener(target, evt, handler, opts = {}) {
         try { target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts)); } catch (e) {}
     }
-
     function resumeAudioContext() {
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().catch(e => {});
-        }
+        if (audioContext.state === 'suspended') { audioContext.resume().catch(e => {}); }
     }
-
     const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
     for (const ev of primaryEvents) {
         addCapturedListener(window, ev, () => {
-            resumeAudioContext();
-            startBackgroundMusic();
-            unlockSfx();
+            resumeAudioContext(); startBackgroundMusic(); unlockSfx();
         }, { once: true });
     }
 
     // =======================================================================
-    // 3. UTILITÁRIOS E CACHE
+    // 3. UTILITÁRIOS E UI
     // =======================================================================
     function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
     function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
@@ -441,17 +413,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function showModalAlert(message, title = "Aviso") {
         if (!confirmModal) { alert(message); return; }
-        
         if (confirmTitle) confirmTitle.textContent = title;
         if (confirmMessage) confirmMessage.innerHTML = message;
-        
         const newBtn = confirmActionBtn.cloneNode(true);
         confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn);
         confirmActionBtn = newBtn;
-        
         confirmActionBtn.textContent = "Ok";
         confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; };
-        
         confirmModal.style.display = 'flex';
     }
 
@@ -467,23 +435,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (Date.now() > parsed.expires) { localStorage.removeItem(key); return null; }
             return parsed.data;
         } catch { return null; }
-    }
-
-    async function getCachedPlayerInfo(playerId) {
-        if (!playerId) return null;
-        const globalCache = getCache('player_data_cache');
-        if (globalCache && globalCache.id === playerId) {
-            return globalCache;
-        }
-        const key = `player_${playerId}`;
-        let cached = getCache(key);
-        if (cached) return cached;
-
-        const { data } = await supabase.from('players')
-            .select('id, name, avatar_url, guild_id, ranking_points')
-            .eq('id', playerId).single();
-        if (data) setCache(key, data, CACHE_TTL_24H);
-        return data;
     }
 
     function normalizeRpcResult(data) {
@@ -571,15 +522,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function loadArenaLoadout() {
         if (!userId) return;
         const { data, error } = await supabase.rpc('get_my_arena_loadout');
-        
         document.querySelectorAll('.potion-slot').forEach(el => {
             el.innerHTML = '<span style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; font-size:2em; color:#555; pointer-events:none;">+</span>';
             el.dataset.itemId = "";
             el.style.border = "1px dashed #555";
         });
-
         if (error) return console.error("Erro loadout:", error);
-
         if (data && Array.isArray(data)) {
             data.forEach(item => {
                 const typeMap = item.slot_type.toLowerCase() === 'attack' ? 'atk' : 'def';
@@ -664,7 +612,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     // 5. LÓGICA DE COMBATE E UI
     // =======================================================================
-
     const style = document.createElement('style');
     style.innerHTML = `
         #attackBtnContainer:active { transform: scale(0.95); }
@@ -682,12 +629,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnContainer) {
         const newBtn = btnContainer.cloneNode(true);
         btnContainer.parentNode.replaceChild(newBtn, btnContainer);
-
         newBtn.addEventListener("click", async (e) => {
             e.preventDefault(); e.stopPropagation();
             if (isMyTurn) await performAction('ATTACK');
         });
-        
         newBtn.style.cursor = "pointer";
         newBtn.style.pointerEvents = "auto";
     }
@@ -695,40 +640,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (skipBtn) {
         skipBtn.addEventListener("click", (e) => {
             if (skipBtn.disabled || skipBtn.style.opacity === "0.5") return;
-            
             if (confirmTitle) confirmTitle.textContent = "Pular Combate?";
             if (confirmMessage) confirmMessage.innerHTML = "O sistema irá simular o restante da luta instantaneamente.<br>Isso não garante vitória!";
-            
             const newBtn = confirmActionBtn.cloneNode(true);
             confirmActionBtn.parentNode.replaceChild(newBtn, confirmActionBtn); 
             confirmActionBtn = newBtn;
-            
             confirmActionBtn.textContent = "Sim, Pular";
             confirmActionBtn.onclick = async () => {
                 confirmModal.style.display = 'none';
                 showLoading();
                 try {
-                    // Simulação Local
                     if (currentBattleEngine) {
                         const res = currentBattleEngine.skipBattle();
-                        
                         updatePvpHpBar(challengerHpFill, challengerHpText, res.win ? 1 : 0, 100);
                         updatePvpHpBar(defenderHpFill, defenderHpText, res.win ? 0 : 1, 100);
-                        
                         finishLocalFight(res);
                     }
                 } catch (e) {
                     showModalAlert("Erro na simulação local.");
-                } finally {
-                    hideLoading();
-                }
+                } finally { hideLoading(); }
             };
-            
             confirmModal.style.display = 'flex';
         });
     }
     
-    // --- LÓGICA DE SESSÃO DIÁRIA ---
+    // --- LÓGICA DE SESSÃO ---
     async function handleChallengeClick() {
         if (!challengeBtn || challengeBtn.disabled) return;
         if (arenaAttemptsLeftSpan.textContent === '0') return;
@@ -745,29 +681,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                 const { data, error } = await supabase.rpc('get_arena_daily_session');
                 const result = normalizeRpcResult(data);
-                
                 if (error || !result?.success) {
                     challengeBtn.disabled = false;
                     return showModalAlert(result?.message || "Erro ao buscar oponentes.");
                 }
-                
                 currentSession = result;
                 currentSession.results = [];
                 currentOpponentIndex = 0;
                 sessionResults = [];
                 localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
             }
-
             startNextFight();
-
         } catch (e) {
             console.error("Erro no desafio:", e);
             challengeBtn.disabled = false;
             showModalAlert("Erro inesperado: " + (e?.message || e));
             hideLoading();
-        } finally {
-            hideLoading();
-        }
+        } finally { hideLoading(); }
     }
 
     function startNextFight() {
@@ -791,26 +721,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             pvpCountdown.style.display = 'block';
             pvpCountdown.textContent = `Luta ${currentOpponentIndex + 1} de ${currentSession.opponents.length}`;
             setTimeout(() => { pvpCountdown.style.display = 'none'; startPlayerTurn(); }, 2000);
-        } else {
-             startPlayerTurn();
-        }
+        } else { startPlayerTurn(); }
     }
 
     function setupBattleUI(state, me, opp) {
         pvpCombatModal.style.display = "flex";
-        
         document.getElementById("turnTimerContainer").style.display = "block";
         document.getElementById("combatControls").style.display = "flex";
         
         const defAvatar = 'https://aden-rpg.pages.dev/avatar01.webp';
         challengerName.textContent = me?.name || "Você";
         challengerAvatar.src = me?.avatar_url || defAvatar;
-        
         defenderName.textContent = opp?.name || "Oponente";
         defenderAvatar.src = opp?.avatar_url || defAvatar;
 
         updateBattleStateUI(state);
-        
         renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
         renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
         
@@ -848,9 +773,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         turnTimerInterval = setInterval(() => {
             turnTimeLeft--;
             updateTimerUI();
-            if (turnTimeLeft <= 0) {
-                performAction('ATTACK'); 
-            }
+            if (turnTimeLeft <= 0) { performAction('ATTACK'); }
         }, 1000);
     }
 
@@ -858,9 +781,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const el = document.getElementById("turnTimerValue");
         const circle = document.getElementById("turnTimerCircle");
         if(el) el.textContent = turnTimeLeft;
-        if(circle) {
-            circle.style.borderColor = (turnTimeLeft <= 3) ? "red" : "#FFC107";
-        }
+        if(circle) circle.style.borderColor = (turnTimeLeft <= 3) ? "red" : "#FFC107";
+    }
+
+    function playPotionSound(itemId) {
+        const id = parseInt(itemId);
+        if ([43,44].includes(id)) playSound('heal');
+        else if ([45,46].includes(id)) playSound('fury');
+        else if ([47,48].includes(id)) playSound('dex');
+        else if ([49,50].includes(id)) playSound('atk');
+        else playSound('heal'); // fallback
     }
 
     async function performAction(type, itemId = null) {
@@ -886,35 +816,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const preState = currentBattleEngine.getState();
-            // PROCESSAMENTO LOCAL SÍNCRONO
-            const newStateFull = currentBattleEngine.processTurn(type, itemId);
-            const newState = newStateFull; 
-            const resultMeta = newStateFull.actionResult;
+            // PROCESSAMENTO LOCAL
+            const resultData = currentBattleEngine.processTurn(type, itemId);
+            const newState = resultData; 
+            const playerResult = resultData.actionResult;
+            const enemyAction = resultData.enemyAction;
 
             // CASO 1: JOGADOR USOU POÇÃO
             if (type === 'POTION') {
                 updateBattleStateUI(newState);
                 flashPotionIcon(itemId, challengerSide); 
-                
-                // Conversão segura
-                const iId = parseInt(itemId);
-                if (resultMeta && resultMeta.heal) playSound('heal');
-                else if (iId >= 49) playSound('atk');
-                else if (iId >= 47) playSound('dex');
-                else playSound('fury');
-
+                playPotionSound(itemId);
                 renderBattlePotions(challengerSide, newState.attacker_potions, 'left', true);
                 return; 
             }
 
             // CASO 2: JOGADOR ATACOU
             if (type === 'ATTACK') {
-                const dmgDealt = resultMeta.dmg || 0;
-                
+                const dmgDealt = playerResult.dmg || 0;
                 await new Promise(r => setTimeout(r, 400));
                 
                 if (dmgDealt > 0 || (newState.finished && newState.win)) {
-                    displayDamageNumber(dmgDealt, resultMeta.crit, false, defenderSide);
+                    displayDamageNumber(dmgDealt, playerResult.crit, false, defenderSide);
                     updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
                 }
 
@@ -923,23 +846,34 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
-                // --- TURNO INIMIGO ---
-                const attackerTookDamage = newState.attacker_hp < preState.attacker_hp;
+                // --- TURNO INIMIGO (COM EFEITOS) ---
+                if (enemyAction) {
+                    await new Promise(r => setTimeout(r, 800)); // Pequena pausa após o ataque do player
 
-                if (attackerTookDamage || newState.finished) {
-                    await new Promise(r => setTimeout(r, 600));
+                    // Inimigo Usou Poção?
+                    if (enemyAction.type === 'POTION') {
+                        flashPotionIcon(enemyAction.itemId, defenderSide);
+                        playPotionSound(enemyAction.itemId);
+                        updateBattleStateUI(newState); // Atualiza buffs/hp
+                        
+                        // Mostra número de cura se houver cura
+                        if ([43,44].includes(enemyAction.itemId)) {
+                             const healed = newState.defender_hp - preState.defender_hp + dmgDealt; // Recalcula o que curou
+                             if (healed > 0) displayDamageNumber(`+${healed}`, false, false, defenderSide); // Verde? Seria ideal mudar cor
+                        }
+                        
+                        await new Promise(r => setTimeout(r, 800)); // Espera animação da poção
+                    }
 
-                    // Verifica se o inimigo usou algo no turno dele (pela diferença de quantidade)
-                    // Na engine atual simplificada, o turno do inimigo é processado junto.
-                    // Podemos verificar buffs ou HP para tocar sons de poção do inimigo se quisermos.
-                    // Por hora, apenas animamos ataque se houve dano.
-                    
-                    animateActorMove(defenderSide);
-                    await new Promise(r => setTimeout(r, 300));
-
-                    const dmgReceived = preState.attacker_hp - newState.attacker_hp;
-                    displayDamageNumber(dmgReceived, false, false, challengerSide);
-                    updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
+                    // Inimigo Atacou?
+                    if (enemyAction.type === 'ATTACK') {
+                        animateActorMove(defenderSide);
+                        await new Promise(r => setTimeout(r, 300));
+                        
+                        const dmgReceived = enemyAction.dmg || 0;
+                        displayDamageNumber(dmgReceived, false, false, challengerSide);
+                        updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
+                    }
                 }
 
                 if (newState.finished) {
@@ -950,7 +884,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     startPlayerTurn();
                 }
             }
-
         } catch (e) {
             console.error(e);
             challengeBtn.disabled = false;
@@ -959,15 +892,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function finishLocalFight(finalState) {
         clearInterval(turnTimerInterval);
-        
         if (finalState.win) {
             playSound('win');
             try {
                 ensureStreakDate();
                 currentStreak++;
                 saveStreak(currentStreak);
-                
-                // Sons de Streak corrigidos (tocam na vitória)
                 if (currentStreak >= 5) playSound('streak5', { volume: 0.9 });
                 else if (currentStreak === 4) playSound('streak4', { volume: 0.9 });
                 else if (currentStreak === 3) playSound('streak3', { volume: 0.9 });
@@ -978,7 +908,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             saveStreak(0);
         }
 
-        // Salva resultado no array da sessão
         sessionResults.push({
             opponent_id: finalState.opponent_id,
             win: finalState.win,
@@ -987,10 +916,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         currentSession.results = sessionResults;
         localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
-
         currentOpponentIndex++;
 
-        // Mostra modal intermediário
         showModalAlert(
             finalState.win ? 
             `<strong style="color:#4CAF50;">Vitória!</strong><br>Prepare-se para a próxima luta.` : 
@@ -1001,66 +928,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         const nextBtn = confirmActionBtn;
         if (currentOpponentIndex >= currentSession.opponents.length) {
             nextBtn.textContent = "Ver Resultados Finais";
-            nextBtn.onclick = () => {
-                confirmModal.style.display = 'none';
-                commitSession();
-            };
+            nextBtn.onclick = () => { confirmModal.style.display = 'none'; commitSession(); };
         } else {
             nextBtn.textContent = "Próxima Luta >>";
-            nextBtn.onclick = () => {
-                confirmModal.style.display = 'none';
-                startNextFight();
-            };
+            nextBtn.onclick = () => { confirmModal.style.display = 'none'; startNextFight(); };
         }
     }
 
     async function commitSession() {
         pvpCombatModal.style.display = "none";
         showLoading();
-        
         try {
-            const { data, error } = await supabase.rpc('commit_arena_session_results', {
-                p_results: sessionResults
-            });
-            
+            const { data, error } = await supabase.rpc('commit_arena_session_results', { p_results: sessionResults });
             if (error) throw error;
             const res = normalizeRpcResult(data);
-
-            // Limpa sessão local
             localStorage.removeItem('arena_session_v1');
             currentSession = null;
             sessionResults = [];
             currentBattleEngine = null;
 
-            // --- RESTAURAÇÃO DO VISUAL BONITO DAS RECOMPENSAS ---
             let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
-            let rewardsHTML = "";
             let itemsHTML = [];
-            
-            // Estilos copiados do código original
             const st = "display:flex; align-items:center; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:5px; margin:2px; font-weight:bold; border: 1px solid #555;";
             const imS = "width:28px; height:28px; margin-right:8px; object-fit:contain;";
-            
             if(res.crystals > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="${imS}"> +${res.crystals}</div>`);
             if(res.items_common > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" style="${imS}"> +${res.items_common}</div>`);
             if(res.items_rare > 0) itemsHTML.push(`<div style="${st}"><img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" style="${imS}"> +${res.items_rare}</div>`);
             
-            if(itemsHTML.length) {
-                rewardsHTML = `<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; gap:8px; border-top:1px dashed #555; padding-top:10px;">${itemsHTML.join('')}</div>`;
-            }
-
+            let rewardsHTML = itemsHTML.length ? `<div style="display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; gap:8px; border-top:1px dashed #555; padding-top:10px;">${itemsHTML.join('')}</div>` : "";
             showModalAlert(msg + rewardsHTML, "Resumo Diário");
             
-            // Atualiza UI geral
             challengeBtn.disabled = false;
             await loadArenaLoadout();
             await updateAttemptsUI();
-
-        } catch (e) {
-            showModalAlert("Erro ao salvar resultados: " + e.message);
-        } finally {
-            hideLoading();
-        }
+        } catch (e) { showModalAlert("Erro ao salvar resultados: " + e.message); } finally { hideLoading(); }
     }
 
     // --- Helpers Visuais ---
@@ -1070,65 +971,44 @@ document.addEventListener("DOMContentLoaded", async () => {
         updatePvpHpBar(defenderHpFill, defenderHpText, state.defender_hp, state.defender_max_hp);
         renderActiveBuffs(challengerSide, state.attacker_buffs, state.turn_count);
         renderActiveBuffs(defenderSide, state.defender_buffs, state.turn_count);
-        
-        if (state.attacker_potions) {
-             renderBattlePotions(challengerSide, state.attacker_potions, 'left', true);
-        }
+        if (state.attacker_potions) renderBattlePotions(challengerSide, state.attacker_potions, 'left', true);
     }
 
     function renderActiveBuffs(container, buffs, currentTurn) {
         const old = container.querySelector('.active-buffs-row');
         if (old) old.remove();
-
         if (!buffs) return;
-
         const row = document.createElement('div');
         row.className = 'active-buffs-row';
         row.style.cssText = 'position:absolute; top: 115px; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 10; pointer-events: none;';
-
         Object.keys(buffs).forEach(key => {
             const buff = buffs[key];
             if (buff.ends_at > currentTurn) { 
                 const img = document.createElement('img');
-                // Correção do mapeamento de imagens
                 const itemId = parseInt(buff.item_id);
                 const itemName = POTION_MAP[itemId] || `item_${itemId}`;
                 img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
-                img.style.width = '35px';
-                img.style.height = '35px';
+                img.style.width = '35px'; img.style.height = '35px';
                 img.style.animation = 'blinkPotion 1s infinite alternate';
                 img.title = key;
                 row.appendChild(img);
             }
         });
-
         if (row.children.length > 0) container.appendChild(row);
     }
 
     function renderBattlePotions(container, potions, side, interactive) {
         const old = container.querySelector('.battle-potions-container');
         if (old) old.remove();
-
         if (!potions || !potions.length) return;
-
         const ct = document.createElement('div');
         ct.className = 'battle-potions-container';
-        ct.style.position = "absolute";
-        ct.style.top = "60px";
-        ct.style.display = "flex";
-        ct.style.flexDirection = "column";
-        ct.style.gap = "8px";
-        ct.style.zIndex = "20";
-        ct.style.background = "rgba(0,0,0,0.5)";
-        ct.style.padding = "4px";
-        ct.style.borderRadius = "6px";
+        ct.style.cssText = "position:absolute; top:60px; display:flex; flex-direction:column; gap:8px; z-index:20; background:rgba(0,0,0,0.5); padding:4px; border-radius:6px;";
         if(side === 'left') ct.style.left = "-25px"; else ct.style.right = "-25px";
 
         potions.forEach(p => {
             const slot = document.createElement('div');
             slot.className = 'battle-potion-slot';
-            
-            // Garante que quantity seja número
             const qty = parseInt(p.quantity || 0);
             const cd = parseInt(p.cd || 0);
             
@@ -1138,20 +1018,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else if (interactive) {
                 slot.classList.add('potion-disabled');
             } else {
-                 slot.style.filter = "grayscale(1)";
-                 slot.style.opacity = "0.7";
+                 slot.style.filter = "grayscale(1)"; slot.style.opacity = "0.7";
             }
-
-            // Correção da imagem: usa POTION_MAP com ID numérico
             const itemId = parseInt(p.item_id);
+            // [CORREÇÃO] Usa o nome vindo do banco ou o mapa
             const name = p.item_name || POTION_MAP[itemId] || `item_${itemId}`;
-const cdHeight = (cd > 0) ? "100%" : "0%";
-            
-            slot.innerHTML = `
-                <img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;">
-                <span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span>
-                <div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>
-            `;
+            const cdHeight = (cd > 0) ? "100%" : "0%";
+            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
             ct.appendChild(slot);
         });
         container.appendChild(ct);
@@ -1159,10 +1032,7 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
 
     function togglePlayerPotions(enable) {
         const slots = document.querySelectorAll('.battle-potion-slot.potion-clickable');
-        slots.forEach(s => {
-            s.style.pointerEvents = enable ? 'auto' : 'none';
-            s.style.filter = enable ? 'none' : 'grayscale(0.5)';
-        });
+        slots.forEach(s => { s.style.pointerEvents = enable ? 'auto' : 'none'; s.style.filter = enable ? 'none' : 'grayscale(0.5)'; });
     }
 
     function updatePvpHpBar(el, txt, cur, max) {
@@ -1176,14 +1046,12 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
         if (!target) return;
         const el = document.createElement("div");
         if (evd) {
-            el.textContent = "Desviou";
-            el.className = "evade-text";
-            playSound('evade', { volume: 0.3 });
+            el.textContent = "Desviou"; el.className = "evade-text"; playSound('evade', { volume: 0.3 });
         } else {
-            const val = typeof dmg === 'number' ? dmg.toLocaleString() : dmg;
+            const val = (typeof dmg === 'number') ? dmg.toLocaleString() : dmg;
             el.textContent = val;
             el.className = crit ? "crit-damage-number" : "damage-number";
-            playSound(crit ? 'critical' : 'normal', { volume: crit ? 0.1 : 0.5 });
+            if(typeof dmg === 'number' || !String(dmg).includes('+')) playSound(crit ? 'critical' : 'normal', { volume: crit ? 0.1 : 0.5 });
         }
         target.appendChild(el);
         el.addEventListener("animationend", () => el.remove());
@@ -1195,13 +1063,7 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
         const iId = parseInt(itemId);
         const itemName = POTION_MAP[iId] || `item_${iId}`; 
         img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`; 
-        img.style.position = "absolute";
-        img.style.top = "50%";
-        img.style.left = "50%";
-        img.style.width = "50px";
-        img.style.height = "50px";
-        img.style.zIndex = "25";
-        img.style.animation = "floatUpPotion 1s ease-out forwards";
+        img.style.cssText = "position:absolute; top:50%; left:50%; width:50px; height:50px; z-index:25; animation: floatUpPotion 1s ease-out forwards;";
         sideElement.appendChild(img);
         setTimeout(() => img.remove(), 1000);
     }
@@ -1209,9 +1071,7 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
     function animateActorMove(element) {
         element.style.transition = "transform 0.1s";
         element.style.transform = "scale(1.1) translateY(-10px)";
-        setTimeout(() => {
-            element.style.transform = "scale(1) translateY(0)";
-        }, 150);
+        setTimeout(() => { element.style.transform = "scale(1) translateY(0)"; }, 150);
     }
 
     // =======================================================================
@@ -1336,7 +1196,6 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
             supabase.rpc('cleanup_old_arena_logs').then(()=>{});
-
             const cacheKey = 'arena_attack_history';
             let h = getCache(cacheKey);
             if (!h) {
@@ -1349,7 +1208,6 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
                     if (logsDirect) { h = logsDirect; setCache(cacheKey, h, 60); }
                 }
             }
-
             if (!h || !h.length) rankingHistoryList.innerHTML = "<li style='padding:12px;text-align:center;color:#aaa;'>Sem registros.</li>";
             else {
                 rankingHistoryList.innerHTML = "";
@@ -1371,20 +1229,11 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
             tab.addEventListener("click", async () => {
                 tabs.forEach(t => { t.classList.remove("active"); t.style.background = "none"; t.style.color = "#e0dccc"; });
                 tab.classList.add("active"); tab.style.background = "#c9a94a"; tab.style.color = "#000";
-                
                 document.querySelectorAll(".tab-panel").forEach(p => { p.classList.remove("active"); p.style.display = 'none'; });
-                
                 const tn = tab.dataset.tab;
-                if (tn === 'current') {
-                    document.getElementById('rankingCurrent').style.display = 'block';
-                    await fetchAndRenderRanking();
-                } else if (tn === 'past') {
-                    document.getElementById('rankingPast').style.display = 'block';
-                    await fetchPastSeasonRanking();
-                } else {
-                    document.getElementById('rankingHistory').style.display = 'block';
-                    await fetchAttackHistory();
-                }
+                if (tn === 'current') { document.getElementById('rankingCurrent').style.display = 'block'; await fetchAndRenderRanking(); }
+                else if (tn === 'past') { document.getElementById('rankingPast').style.display = 'block'; await fetchPastSeasonRanking(); }
+                else { document.getElementById('rankingHistory').style.display = 'block'; await fetchAttackHistory(); }
             });
         });
     }
@@ -1413,31 +1262,19 @@ const cdHeight = (cd > 0) ? "100%" : "0%";
                 if (!session) { window.location.href = "index.html"; return; }
                 userId = session.user.id;
             }
-            // Verifica sessão interrompida
-            if (localStorage.getItem('arena_session_v1')) {
-                // Se existe sessão salva, recupera UI
-                handleChallengeClick(); // Vai cair no "if savedSession"
-            }
-            
+            if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
             await checkAndResetArenaSeason();
             await updateAttemptsUI();
             ensureStreakDate();
             await loadArenaLoadout();
-
         } catch (e) {
             console.error("Erro no boot:", e);
-            if (e.message && (e.message.includes('JWT') || e.message.includes('auth'))) {
-                window.location.href = "index.html";
-            }
-        } finally {
-            hideLoading();
-        }
+            if (e.message && (e.message.includes('JWT') || e.message.includes('auth'))) { window.location.href = "index.html"; }
+        } finally { hideLoading(); }
     }
 
     window.addEventListener('beforeunload', (e) => {
-        if (currentSession && currentSession.results.length > 0 && currentSession.results.length < currentSession.opponents.length) {
-            // Aviso ao sair se estiver no meio de um lote
-        }
+        if (currentSession && currentSession.results.length > 0 && currentSession.results.length < currentSession.opponents.length) {}
     });
 
     if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);

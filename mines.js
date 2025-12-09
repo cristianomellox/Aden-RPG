@@ -94,6 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let userId = null;
   let currentMineId = null;
+  let myOwnedMineId = null; // VARIAVEL NOVA: Armazena ID da mina que sou dono
   let maxMonsterHealth = 1;
   let hasAttackedOnce = false;
 
@@ -689,10 +690,30 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function updateAttacksDisplay() {
       if (playerAttacksSpan) playerAttacksSpan.textContent = `${localAttacksLeft}/5`;
-      if (localAttacksLeft <= 0) {
-          if (attackBtn) { attackBtn.classList.add('disabled-attack-btn'); attackBtn.disabled = true; }
+      
+      // ALTERAÇÃO: Verifica se o jogador já tem uma mina E se não está na mina dele
+      const hasOtherMine = (myOwnedMineId !== null && myOwnedMineId !== currentMineId);
+
+      if (localAttacksLeft <= 0 || hasOtherMine) {
+          if (attackBtn) { 
+              attackBtn.classList.add('disabled-attack-btn'); 
+              attackBtn.disabled = true; 
+              
+              if (hasOtherMine) {
+                  attackBtn.style.filter = "grayscale(100%)";
+                  attackBtn.title = "Você já possui uma mina e não pode atacar outra.";
+              } else {
+                  attackBtn.style.filter = "none";
+                  attackBtn.title = "";
+              }
+          }
       } else {
-          if (attackBtn) { attackBtn.classList.remove('disabled-attack-btn'); attackBtn.disabled = false; }
+          if (attackBtn) { 
+              attackBtn.classList.remove('disabled-attack-btn'); 
+              attackBtn.disabled = false; 
+              attackBtn.style.filter = "none";
+              attackBtn.title = "";
+          }
       }
   }
 
@@ -765,6 +786,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { data: ownersData } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
         (ownersData || []).forEach(p => ownersMap[p.id] = p);
       }
+
+      // ALTERAÇÃO: Identifica se eu já sou dono de alguma mina
+      const myMine = (mines || []).find(m => m.owner_player_id === userId);
+      myOwnedMineId = myMine ? myMine.id : null;
 
       renderMines(mines || [], ownersMap);
       await updateDominantGuild(mines || [], ownersMap);

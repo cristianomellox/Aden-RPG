@@ -42,6 +42,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
     };
 
+    // --- RASTREADOR DE CONSUMO DE POÇÕES (NOVO) ---
+    // Armazena quanto foi gasto na sessão para enviar ao banco no final
+    let sessionConsumedPotions = {}; 
+
+    function trackConsumedPotion(itemId) {
+        const id = parseInt(itemId);
+        if (!sessionConsumedPotions[id]) sessionConsumedPotions[id] = 0;
+        sessionConsumedPotions[id]++;
+    }
+
     // --- ENGINE DE BATALHA LOCAL (SIMULAÇÃO CLIENT-SIDE) ---
     class ArenaEngine {
         constructor(playerStats, opponentData, playerLoadout) {
@@ -53,6 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(playerStats.health),
                 maxHp: parseInt(playerStats.health),
                 buffs: {},
+                // Clona para garantir que modificações locais não estraguem o objeto da sessão original
                 potions: (playerLoadout || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.quantity) }))
             };
             
@@ -90,60 +101,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         processTurn(actionType, itemId = null) {
             if (this.finished) return this.getState();
 
-            // Resetar cooldowns do jogador
+            // Resetar cooldowns do jogador no início do ataque
             if (actionType === 'ATTACK') {
                 this.player.potions.forEach(p => { if(p.cd > 0) p.cd--; });
             }
 
             // 1. AÇÃO DO JOGADOR
             let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
-            let enemyAction = null; // Armazena o que o inimigo fez
+            let enemyActions = []; // Agora retorna um ARRAY de ações da IA
 
             if (actionType === 'POTION') {
                 const targetId = parseInt(itemId);
-                const potIndex = this.player.potions.findIndex(p => parseInt(p.item_id) === targetId);
+                const pot = this.player.potions.find(p => parseInt(p.item_id) === targetId);
                 
-                if (potIndex > -1) {
-                    const pot = this.player.potions[potIndex];
-                    if (pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
-                        this.applyEffect(this.player, pot.item_id);
-                        pot.quantity--;
-                        pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
-                        actionResult.heal = 1; 
-                    }
+                if (pot && pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
+                    this.applyEffect(this.player, pot.item_id);
+                    pot.quantity--; // Deduz do visual da batalha
+                    trackConsumedPotion(pot.item_id); // Marca para deduzir do banco
+                    
+                    pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
+                    actionResult.heal = 1; 
                 }
-                return { ...this.getState(), actionResult, enemyAction };
+                return { ...this.getState(), actionResult, enemyActions };
             }
 
             if (actionType === 'ATTACK') {
                 // Cálculo de Dano Player
-                let dmg = (parseInt(this.player.stats.min_attack) || 0) + this.random(0, 10);
-                let mult = 1.0;
-                if (this.hasBuff(this.player, 'ATK')) mult += (this.getBuffId(this.player, 'ATK') === 49 ? 0.05 : 0.10);
-                dmg = Math.floor(dmg * mult);
+                let dmgResult = this.calculateDamage(this.player, this.opponent);
+                actionResult.dmg = dmgResult.value;
+                actionResult.crit = dmgResult.isCrit;
 
-                let critChance = (parseInt(this.player.stats.crit_chance) || 5);
-                if (this.hasBuff(this.player, 'DEX')) critChance += (this.getBuffId(this.player, 'DEX') === 47 ? 5 : 10);
-
-                let critMult = 1.5;
-                if (this.hasBuff(this.player, 'FURY')) critMult = (this.getBuffId(this.player, 'FURY') === 45 ? 2.0 : 2.5);
-
-                if (this.random(0, 100) < critChance) {
-                    dmg = Math.floor(dmg * critMult);
-                    actionResult.crit = true;
-                }
-
-                actionResult.dmg = dmg;
-                this.opponent.hp = Math.max(0, this.opponent.hp - dmg);
+                this.opponent.hp = Math.max(0, this.opponent.hp - dmgResult.value);
                 
                 if (this.opponent.hp <= 0) {
                     this.finished = true;
                     this.playerWon = true;
-                    return { ...this.getState(), actionResult, enemyAction };
+                    return { ...this.getState(), actionResult, enemyActions };
                 }
                 
-                // 2. AÇÃO DO INIMIGO (Agora retorna o que ele fez)
-                enemyAction = this.processEnemyAI();
+                // 2. AÇÃO DO INIMIGO (Agora suporta Múltiplas ações: Potions -> Attack)
+                enemyActions = this.processEnemyAI();
                 this.turn++;
 
                 // Checa Derrota ou Limite
@@ -158,70 +155,80 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
 
-            return { ...this.getState(), actionResult, enemyAction };
+            return { ...this.getState(), actionResult, enemyActions };
         }
 
         processEnemyAI() {
-            // Relatório da ação do inimigo
-            let result = { type: 'NONE', itemId: 0, dmg: 0, crit: false };
+            let actions = [];
 
-            // Reduz CDs do inimigo
+            // 1. Reduz CDs do inimigo
             this.opponent.potions.forEach(p => { if(p.cd > 0) p.cd--; });
 
-            // 1. Tenta usar poção
-            let usedPotion = false;
+            // 2. Tenta usar poções (Loop para permitir usar mais de uma se disponível)
+            // Prioridade: Cura se HP baixo, depois Buffs
             for (let pot of this.opponent.potions) {
-                const pId = parseInt(pot.item_id);
                 if (pot.quantity > 0 && pot.cd <= 0) {
-                    const isHeal = [43,44].includes(pId);
+                    const pId = parseInt(pot.item_id);
+                    let used = false;
                     
-                    if (isHeal) {
-                        if (this.opponent.hp < (this.opponent.maxHp * 0.7)) {
+                    // Lógica de Cura
+                    if ([43,44].includes(pId)) {
+                        if (this.opponent.hp < (this.opponent.maxHp * 0.65)) {
+                            let oldHp = this.opponent.hp;
                             this.applyEffect(this.opponent, pId);
-                            pot.quantity--; pot.cd = 7; usedPotion = true;
-                            result.type = 'POTION'; result.itemId = pId;
-                            break; 
+                            let healedAmount = this.opponent.hp - oldHp;
+                            
+                            pot.quantity--; pot.cd = 7; 
+                            actions.push({ type: 'POTION', itemId: pId, healed: healedAmount });
                         }
                     } 
+                    // Lógica de Buffs
                     else {
                         let type = 'ATK';
                         if ([45,46].includes(pId)) type = 'FURY';
                         if ([47,48].includes(pId)) type = 'DEX';
+                        if ([49,50].includes(pId)) type = 'ATK';
                         
                         if (!this.hasBuff(this.opponent, type)) {
                              this.applyEffect(this.opponent, pId);
-                             pot.quantity--; pot.cd = 15; usedPotion = true;
-                             result.type = 'POTION'; result.itemId = pId;
-                             break;
+                             pot.quantity--; pot.cd = 15;
+                             actions.push({ type: 'POTION', itemId: pId });
                         }
                     }
                 }
             }
             
-            if (usedPotion) return result; // Retorna informando que usou poção
+            // 3. Ataque (O inimigo sempre ataca após se preparar)
+            let dmgResult = this.calculateDamage(this.opponent, this.player);
+            this.player.hp = Math.max(0, this.player.hp - dmgResult.value);
+            
+            actions.push({
+                type: 'ATTACK',
+                dmg: dmgResult.value,
+                crit: dmgResult.isCrit
+            });
 
-            // 2. Ataque
-            let dmg = (parseInt(this.opponent.stats.min_attack) || 0) + this.random(0, 5);
+            return actions;
+        }
+
+        calculateDamage(attacker, defender) {
+            let dmg = (parseInt(attacker.stats.min_attack) || 0) + this.random(0, 5);
             let mult = 1.0;
-            if (this.hasBuff(this.opponent, 'ATK')) mult += (this.getBuffId(this.opponent, 'ATK') === 49 ? 0.05 : 0.10);
+            if (this.hasBuff(attacker, 'ATK')) mult += (this.getBuffId(attacker, 'ATK') === 49 ? 0.05 : 0.10);
             dmg = Math.floor(dmg * mult);
 
-            let critChance = (parseInt(this.opponent.stats.crit_chance) || 5);
-            if (this.hasBuff(this.opponent, 'DEX')) critChance += (this.getBuffId(this.opponent, 'DEX') === 47 ? 5 : 10);
-            
-            let critMult = 1.5;
-            if (this.hasBuff(this.opponent, 'FURY')) critMult = (this.getBuffId(this.opponent, 'FURY') === 45 ? 2.0 : 2.5);
+            let critChance = (parseInt(attacker.stats.crit_chance) || 5);
+            if (this.hasBuff(attacker, 'DEX')) critChance += (this.getBuffId(attacker, 'DEX') === 47 ? 5 : 10);
 
+            let critMult = 1.5;
+            if (this.hasBuff(attacker, 'FURY')) critMult = (this.getBuffId(attacker, 'FURY') === 45 ? 2.0 : 2.5);
+
+            let isCrit = false;
             if (this.random(0, 100) < critChance) {
                 dmg = Math.floor(dmg * critMult);
-                result.crit = true;
+                isCrit = true;
             }
-
-            this.player.hp = Math.max(0, this.player.hp - dmg);
-            
-            result.type = 'ATTACK';
-            result.dmg = dmg;
-            return result;
+            return { value: dmg, isCrit: isCrit };
         }
 
         applyEffect(target, itemId) {
@@ -232,6 +239,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 let type = 'ATK';
                 if ([45,46].includes(id)) type = 'FURY';
                 if ([47,48].includes(id)) type = 'DEX';
+                if ([49,50].includes(id)) type = 'ATK';
                 target.buffs[type] = { item_id: id, ends_at: this.turn + 5 };
             }
         }
@@ -820,7 +828,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const resultData = currentBattleEngine.processTurn(type, itemId);
             const newState = resultData; 
             const playerResult = resultData.actionResult;
-            const enemyAction = resultData.enemyAction;
+            const enemyActions = resultData.enemyActions; // Agora é um Array
 
             // CASO 1: JOGADOR USOU POÇÃO
             if (type === 'POTION') {
@@ -846,33 +854,33 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
-                // --- TURNO INIMIGO (COM EFEITOS) ---
-                if (enemyAction) {
+                // --- TURNO INIMIGO (COM EFEITOS SEQUENCIAIS) ---
+                if (enemyActions && enemyActions.length > 0) {
                     await new Promise(r => setTimeout(r, 800)); // Pequena pausa após o ataque do player
 
-                    // Inimigo Usou Poção?
-                    if (enemyAction.type === 'POTION') {
-                        flashPotionIcon(enemyAction.itemId, defenderSide);
-                        playPotionSound(enemyAction.itemId);
-                        updateBattleStateUI(newState); // Atualiza buffs/hp
+                    for (const action of enemyActions) {
                         
-                        // Mostra número de cura se houver cura
-                        if ([43,44].includes(enemyAction.itemId)) {
-                             const healed = newState.defender_hp - preState.defender_hp + dmgDealt; // Recalcula o que curou
-                             if (healed > 0) displayDamageNumber(`+${healed}`, false, false, defenderSide); // Verde? Seria ideal mudar cor
+                        // Inimigo Usou Poção
+                        if (action.type === 'POTION') {
+                            flashPotionIcon(action.itemId, defenderSide);
+                            playPotionSound(action.itemId);
+                            updateBattleStateUI(currentBattleEngine.getState()); // Atualiza visual intermediário
+                            
+                            if (action.healed) {
+                                displayDamageNumber(`+${action.healed}`, false, false, defenderSide);
+                            }
+                            await new Promise(r => setTimeout(r, 1000)); // Espera animação da poção
                         }
-                        
-                        await new Promise(r => setTimeout(r, 800)); // Espera animação da poção
-                    }
 
-                    // Inimigo Atacou?
-                    if (enemyAction.type === 'ATTACK') {
-                        animateActorMove(defenderSide);
-                        await new Promise(r => setTimeout(r, 300));
-                        
-                        const dmgReceived = enemyAction.dmg || 0;
-                        displayDamageNumber(dmgReceived, false, false, challengerSide);
-                        updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
+                        // Inimigo Atacou
+                        else if (action.type === 'ATTACK') {
+                            animateActorMove(defenderSide);
+                            await new Promise(r => setTimeout(r, 300));
+                            
+                            const dmgReceived = action.dmg || 0;
+                            displayDamageNumber(dmgReceived, action.crit, false, challengerSide);
+                            updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
+                        }
                     }
                 }
 
@@ -939,13 +947,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         pvpCombatModal.style.display = "none";
         showLoading();
         try {
-            const { data, error } = await supabase.rpc('commit_arena_session_results', { p_results: sessionResults });
+            // Converte consumo para array e envia
+            const consumedArray = Object.keys(sessionConsumedPotions).map(k => ({
+                item_id: parseInt(k),
+                qty: sessionConsumedPotions[k]
+            }));
+
+            const { data, error } = await supabase.rpc('commit_arena_session_results', { 
+                p_results: sessionResults,
+                p_consumed_items: consumedArray // Parâmetro novo no SQL
+            });
+
             if (error) throw error;
             const res = normalizeRpcResult(data);
+            
+            // Limpa tudo
             localStorage.removeItem('arena_session_v1');
             currentSession = null;
             sessionResults = [];
             currentBattleEngine = null;
+            sessionConsumedPotions = {}; // Limpa consumo
 
             let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
             let itemsHTML = [];
@@ -1241,6 +1262,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function checkAndResetArenaSeason() {
         try {
             const now = new Date();
+            // Verifica se é dia 1 para a Season
             if (now.getUTCDate() !== 1) return;
             const lastResetRaw = localStorage.getItem('arena_last_season_reset');
             const keyData = lastResetRaw ? JSON.parse(lastResetRaw) : null;
@@ -1253,6 +1275,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch {}
     }
 
+    // --- NOVO: Verifica e Reseta tentativas diárias ---
+    async function checkAndResetDailyAttempts() {
+        const todayKey = getTodayUTCDateString();
+        const lastCheck = localStorage.getItem('arena_last_daily_check');
+        
+        if (lastCheck !== todayKey) {
+            try {
+                // Chama a procedure SQL que reseta se for um novo dia no servidor
+                await supabase.rpc('reset_arena_daily_attempts');
+                localStorage.setItem('arena_last_daily_check', todayKey);
+            } catch(e) {
+                console.error("Falha ao resetar tentativas diárias", e);
+            }
+        }
+    }
+
     async function boot() {
         showLoading();
         try {
@@ -1263,7 +1301,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 userId = session.user.id;
             }
             if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
+            
+            // Checks de Reset
             await checkAndResetArenaSeason();
+            await checkAndResetDailyAttempts(); // <--- Novo check diário
+
             await updateAttemptsUI();
             ensureStreakDate();
             await loadArenaLoadout();

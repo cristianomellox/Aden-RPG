@@ -188,7 +188,7 @@ async function initializePlayerData() {
     }
 
     renderPlayerData();
-}
+
 
         
         // Inicia o Loop de Simulação Local (roda a cada 1s)

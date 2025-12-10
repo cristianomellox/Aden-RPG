@@ -150,7 +150,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- DATA MANAGEMENT (Cache & Sync) ---
-    .
+    
     function isDailyAttemptsStale(cacheTimestamp) {
         if (!cacheTimestamp) return true;
 

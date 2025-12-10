@@ -45,11 +45,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     // --- RASTREADOR DE CONSUMO DE POÇÕES ---
     // Armazena quanto foi gasto na sessão para enviar ao banco no final
     let sessionConsumedPotions = {}; 
+    
+    // [NOVO] Rastreador de consumo dos oponentes
+    // Estrutura: { "opponent_uuid": { "item_id": quantidade } }
+    let sessionOpponentsConsumed = {};
 
     function trackConsumedPotion(itemId) {
         const id = parseInt(itemId);
         if (!sessionConsumedPotions[id]) sessionConsumedPotions[id] = 0;
         sessionConsumedPotions[id]++;
+    }
+
+    // [NOVO] Função para rastrear consumo do oponente
+    function trackOpponentConsumption(opponentId, itemId) {
+        const id = parseInt(itemId);
+        if (!sessionOpponentsConsumed[opponentId]) {
+            sessionOpponentsConsumed[opponentId] = {};
+        }
+        if (!sessionOpponentsConsumed[opponentId][id]) {
+            sessionOpponentsConsumed[opponentId][id] = 0;
+        }
+        sessionOpponentsConsumed[opponentId][id]++;
     }
 
     // [CORREÇÃO 1] Função para atualizar o 'currentSession' globalmente e no LocalStorage
@@ -226,7 +242,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                             this.applyEffect(this.opponent, pId);
                             let healedAmount = this.opponent.hp - oldHp;
                             
-                            pot.quantity--; pot.cd = 7; 
+                            pot.quantity--; 
+                            pot.cd = 7; 
+                            
+                            // [NOVO] Rastreia consumo do oponente para salvar no banco
+                            trackOpponentConsumption(this.opponent.id, pId);
+
                             actions.push({ type: 'POTION', itemId: pId, healed: healedAmount });
                         }
                     } 
@@ -239,7 +260,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                         
                         if (!this.hasBuff(this.opponent, type)) {
                              this.applyEffect(this.opponent, pId);
-                             pot.quantity--; pot.cd = 15;
+                             pot.quantity--; 
+                             pot.cd = 15;
+                             
+                             // [NOVO] Rastreia consumo do oponente para salvar no banco
+                             trackOpponentConsumption(this.opponent.id, pId);
+                             
                              actions.push({ type: 'POTION', itemId: pId });
                         }
                     }
@@ -1011,15 +1037,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         pvpCombatModal.style.display = "none";
         showLoading();
         try {
-            // Converte consumo para array e envia
+            // Converte consumo do JOGADOR para array e envia
             const consumedArray = Object.keys(sessionConsumedPotions).map(k => ({
                 item_id: parseInt(k),
                 qty: sessionConsumedPotions[k]
             }));
 
+            // [NOVO] Converte consumo dos OPONENTES para array
+            let opponentsConsumedArray = [];
+            Object.keys(sessionOpponentsConsumed).forEach(oppId => {
+                const itemsMap = sessionOpponentsConsumed[oppId];
+                Object.keys(itemsMap).forEach(itemId => {
+                    opponentsConsumedArray.push({
+                        opponent_id: oppId,
+                        item_id: parseInt(itemId),
+                        qty: itemsMap[itemId]
+                    });
+                });
+            });
+
             const { data, error } = await supabase.rpc('commit_arena_session_results', { 
                 p_results: sessionResults,
-                p_consumed_items: consumedArray // Parâmetro novo no SQL
+                p_consumed_items: consumedArray, // Parâmetro novo no SQL
+                p_opponents_consumed: opponentsConsumedArray // [NOVO] Parâmetro para inimigos
             });
 
             if (error) throw error;
@@ -1030,7 +1070,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             currentSession = null;
             sessionResults = [];
             currentBattleEngine = null;
-            sessionConsumedPotions = {}; // Limpa consumo
+            sessionConsumedPotions = {}; 
+            sessionOpponentsConsumed = {}; // [NOVO] Limpa consumo oponente
 
             let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
             let itemsHTML = [];

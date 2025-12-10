@@ -154,42 +154,88 @@ document.addEventListener("DOMContentLoaded", async () => {
     // CORREÇÃO APLICADA: Verifica se o dia (UTC) mudou desde que o cache foi salvo.
     // Se a data de hoje (UTC) for diferente da data do cache (UTC), força o refresh.
     function isDailyAttemptsStale(cacheTimestamp) {
-    if (!cacheTimestamp) return true;
+        if (!cacheTimestamp) return true;
 
-    const nowUTC = new Date().toISOString().split('T')[0];
-    const cacheUTC = new Date(cacheTimestamp).toISOString().split('T')[0];
+        const now = new Date();
+        const cacheDate = new Date(cacheTimestamp);
 
-    return nowUTC !== cacheUTC;  // mudou o dia? precisa buscar no servidor
-}
+        // Obtém a data em formato string "YYYY-MM-DD" baseada em UTC
+        const currentDateString = now.toISOString().split('T')[0];
+        const cacheDateString = cacheDate.toISOString().split('T')[0];
 
-async function initializePlayerData() {
-    const cacheKey = `playerAfkData_${userId}`;
-    const cached = localStorage.getItem(cacheKey);
+        // Se a data de hoje (UTC) for diferente da data do cache (UTC), 
+        // significa que virou o dia e precisamos buscar dados novos no servidor (acionando o reset SQL).
+        return currentDateString !== cacheDateString;
+    }
 
-    let shouldUseCache = false;
-
-    if (cached) {
-        const parsed = JSON.parse(cached);
-        const timestamp = parsed.timestamp;
-
-        // Usa cache apenas se for o mesmo dia UTC
-        if (!isDailyAttemptsStale(timestamp)) {
-            playerAfkData = parsed.data;
-            shouldUseCache = true;
-            console.log("Usando cache do mesmo dia UTC");
+    // Atualiza a UI com os dados que já temos na memória
+    function renderPlayerData() {
+        if (!playerAfkData) return;
+        
+        if (playerAfkData.last_afk_start_time) {
+            afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
+        } else {
+            // Se for null, define agora para começar a contar
+            afkStartTime = Date.now();
         }
+
+        playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
+        playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
+        afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
+        dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
+        
+        updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
+        
+        // Força atualização imediata da simulação
+        updateLocalSimulation();
     }
 
-    if (!shouldUseCache) {
-        console.log("Dia mudou, buscando servidor");
-        const { data } = await supabase.rpc('get_player_afk_data', { uid: userId });
-        playerAfkData = data;
-        saveToCache(playerAfkData);
+    function saveToCache(data) {
+        if(!userId) return;
+        const cacheKey = `playerAfkData_${userId}`;
+        localStorage.setItem(cacheKey, JSON.stringify({ data: data, timestamp: Date.now() }));
     }
 
-    renderPlayerData();
+    async function initializePlayerData() {
+        if (!userId) return;
 
+        const cacheKey = `playerAfkData_${userId}`;
+        const cached = localStorage.getItem(cacheKey);
 
+        let shouldUseCache = false;
+
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached);
+                const data = parsed.data;
+                const timestamp = parsed.timestamp;
+
+                // Usa cache se: 
+                // 1. Não expirou (24h de segurança geral) 
+                // 2. E (PRINCIPAL) não virou o dia (reset diário detectado pela data UTC)
+                if (Date.now() - timestamp < CACHE_EXPIRATION_MS && !isDailyAttemptsStale(timestamp)) {
+                    playerAfkData = data;
+                    shouldUseCache = true;
+                    console.log("Usando Cache Local (Mesmo dia UTC)");
+                }
+            } catch (e) {
+                console.warn("Erro ao ler cache, forçando atualização.");
+            }
+        }
+
+        if (!shouldUseCache) {
+            console.log("Cache antigo ou virada de dia detectada. Buscando do Servidor...");
+            // Esta chamada vai disparar o SQL que reseta as tentativas
+            const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
+            if (error) {
+                console.error("Erro ao obter dados:", error);
+                return;
+            }
+            playerAfkData = data;
+            saveToCache(playerAfkData);
+        }
+
+        renderPlayerData();
         
         // Inicia o Loop de Simulação Local (roda a cada 1s)
         if (localSimulationInterval) clearInterval(localSimulationInterval);

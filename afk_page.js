@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM RESET LEVE...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -151,20 +151,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- DATA MANAGEMENT (Cache & Sync) ---
     
-    // Verifica se já passou das 21h (Reset Diário) em relação ao cache
-    function isDailyAttemptsStale(cacheTimestamp) {
-        const now = new Date();
-        const cacheDate = new Date(cacheTimestamp);
-        
-        // Define o horário de corte: 21h UTC-3 (Horário de Brasília)
-        // Se estivermos em UTC, 21h BRT é 00h UTC do dia seguinte
-        // Simplificando: Reseta se o dia mudou.
-        // Melhor lógica: Verificar se a data atual > data do cache E passou das 21h no dia anterior.
-        // Implementação simples de segurança: Se o cache tem mais de 20h, força refresh.
-        const HOURS_20 = 20 * 60 * 60 * 1000;
-        return (now.getTime() - cacheTimestamp) > HOURS_20;
-    }
-
     // Atualiza a UI com os dados que já temos na memória
     function renderPlayerData() {
         if (!playerAfkData) return;
@@ -203,16 +189,45 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (cached) {
             const { data, timestamp } = JSON.parse(cached);
-            // Usa cache se: não expirou (24h) E tentativas diárias não parecem velhas
-            if (Date.now() - timestamp < CACHE_EXPIRATION_MS && !isDailyAttemptsStale(timestamp)) {
+            
+            // 1. Verifica Validade Geral do Cache (24h)
+            if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
                 playerAfkData = data;
                 shouldUseCache = true;
-                console.log("Usando Cache Local (Zero Egress)");
+                
+                // 2. OTIMIZAÇÃO DE RESET DIÁRIO (Zero Egress parcial)
+                // Verifica se virou o dia em UTC desde o último reset registrado no cache
+                const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
+                const now = new Date();
+                
+                // Compara Dia, Mês e Ano em UTC (compatível com servidor)
+                const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
+                                    now.getUTCMonth() !== lastResetDate.getUTCMonth() || 
+                                    now.getUTCFullYear() !== lastResetDate.getUTCFullYear();
+
+                if (isNewDayUtc) {
+                    console.log("Virada de dia detectada (UTC). Verificando reset via RPC leve...");
+                    // Chama RPC leve apenas para atualizar tentativas
+                    const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
+                    
+                    if (!resetError && resetData) {
+                        console.log("Status do Reset Diário:", resetData);
+                        // Atualiza apenas os campos necessários no objeto local
+                        playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
+                        if (resetData.reset_performed) {
+                            playerAfkData.last_attempt_reset = new Date().toISOString(); 
+                        }
+                        // Salva o cache atualizado para não chamar RPC de novo hoje
+                        saveToCache(playerAfkData);
+                    }
+                } else {
+                    console.log("Usando Cache Local (Zero Egress) - Mesmo dia UTC");
+                }
             }
         }
 
         if (!shouldUseCache) {
-            console.log("Cache inválido ou inexistente. Buscando do Servidor...");
+            console.log("Cache inválido ou inexistente. Buscando dados completos do Servidor...");
             const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
             if (error) {
                 console.error("Erro ao obter dados:", error);

@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
     };
 
-    // --- RASTREADOR DE CONSUMO DE POÇÕES (NOVO) ---
+    // --- RASTREADOR DE CONSUMO DE POÇÕES ---
     // Armazena quanto foi gasto na sessão para enviar ao banco no final
     let sessionConsumedPotions = {}; 
 
@@ -50,6 +50,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         const id = parseInt(itemId);
         if (!sessionConsumedPotions[id]) sessionConsumedPotions[id] = 0;
         sessionConsumedPotions[id]++;
+    }
+
+    // [CORREÇÃO 1] Função para atualizar o 'currentSession' globalmente e no LocalStorage
+    // Isso garante que a próxima luta (ou um refresh) pegue a quantidade atualizada.
+    function syncSessionLoadout(itemId, newQuantity) {
+        if (!currentSession || !currentSession.loadout) return;
+        
+        // Atualiza a memória
+        currentSession.loadout.forEach(p => {
+            if (parseInt(p.item_id) === parseInt(itemId)) {
+                p.quantity = newQuantity;
+            }
+        });
+
+        // Atualiza o cache persistente
+        localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
     }
 
     // --- ENGINE DE BATALHA LOCAL (SIMULAÇÃO CLIENT-SIDE) ---
@@ -63,12 +79,39 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(playerStats.health),
                 maxHp: parseInt(playerStats.health),
                 buffs: {},
-                // Clona para garantir que modificações locais não estraguem o objeto da sessão original
-                potions: (playerLoadout || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.quantity) }))
+                potions: []
             };
+
+            // [CORREÇÃO 2] Deduplicação de Poções do Jogador
+            // Se houver erros no banco (ex: item igual em slots diferentes),
+            // isso consolida em uma única entrada baseada no ID para evitar duplicidade visual e lógica.
+            const uniquePotions = {};
+            if (Array.isArray(playerLoadout)) {
+                playerLoadout.forEach(p => {
+                    const pId = parseInt(p.item_id);
+                    // Só adiciona se ainda não processou esse ID
+                    if (!uniquePotions[pId]) {
+                        uniquePotions[pId] = { 
+                            ...p, 
+                            cd: 0, 
+                            quantity: parseInt(p.quantity) 
+                        };
+                    }
+                });
+            }
+            this.player.potions = Object.values(uniquePotions);
             
             // Configura Oponente
             const oppStats = opponentData.combat_stats || {};
+            // Deduplicação também para o oponente, por segurança
+            const uniqueOppPotions = {};
+            (opponentData.potions || []).forEach(p => {
+                const pId = parseInt(p.item_id);
+                if(!uniqueOppPotions[pId]) {
+                    uniqueOppPotions[pId] = { ...p, cd: 0, quantity: parseInt(p.qty || p.quantity || 1) };
+                }
+            });
+
             this.opponent = {
                 id: opponentData.id,
                 name: opponentData.name || 'Oponente',
@@ -76,7 +119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 hp: parseInt(oppStats.health || 1000),
                 maxHp: parseInt(oppStats.health || 1000),
                 buffs: {},
-                potions: (opponentData.potions || []).map(p => ({ ...p, cd: 0, quantity: parseInt(p.qty || p.quantity || 1) }))
+                potions: Object.values(uniqueOppPotions)
             };
 
             this.turn = 1;
@@ -108,22 +151,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // 1. AÇÃO DO JOGADOR
             let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
-            let enemyActions = []; // Agora retorna um ARRAY de ações da IA
+            let enemyActions = [];
 
             if (actionType === 'POTION') {
                 const targetId = parseInt(itemId);
                 const pot = this.player.potions.find(p => parseInt(p.item_id) === targetId);
                 
-                // [ATUALIZAÇÃO] Verificação rigorosa e consumo imediato
+                // [CORREÇÃO] Consumo com sincronização global
                 if (pot && pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
                     this.applyEffect(this.player, pot.item_id);
-                    pot.quantity--; // Deduz do visual da batalha localmente
-                    trackConsumedPotion(pot.item_id); // Marca para deduzir do banco
+                    
+                    pot.quantity--; // Deduz localmente na engine
+                    trackConsumedPotion(pot.item_id); // Marca para o banco
+                    
+                    // [IMPORTANTE] Atualiza o objeto de sessão global para persistir entre lutas
+                    syncSessionLoadout(pot.item_id, pot.quantity);
                     
                     pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
                     actionResult.heal = 1; 
                 } else {
-                    // Se não tiver quantidade, não faz nada e retorna o estado atual
                     return { ...this.getState(), actionResult, enemyActions };
                 }
                 return { ...this.getState(), actionResult, enemyActions };
@@ -143,7 +189,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return { ...this.getState(), actionResult, enemyActions };
                 }
                 
-                // 2. AÇÃO DO INIMIGO (Agora suporta Múltiplas ações: Potions -> Attack)
+                // 2. AÇÃO DO INIMIGO
                 enemyActions = this.processEnemyAI();
                 this.turn++;
 
@@ -168,12 +214,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             // 1. Reduz CDs do inimigo
             this.opponent.potions.forEach(p => { if(p.cd > 0) p.cd--; });
 
-            // 2. Tenta usar poções (Loop para permitir usar mais de uma se disponível)
-            // Prioridade: Cura se HP baixo, depois Buffs
+            // 2. Tenta usar poções
             for (let pot of this.opponent.potions) {
                 if (pot.quantity > 0 && pot.cd <= 0) {
                     const pId = parseInt(pot.item_id);
-                    let used = false;
                     
                     // Lógica de Cura
                     if ([43,44].includes(pId)) {
@@ -202,7 +246,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
             
-            // 3. Ataque (O inimigo sempre ataca após se preparar)
+            // 3. Ataque
             let dmgResult = this.calculateDamage(this.opponent, this.player);
             this.player.hp = Math.max(0, this.player.hp - dmgResult.value);
             
@@ -449,7 +493,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch { return null; }
     }
 
-    // [NOVO] Calcula minutos restantes até a meia-noite UTC (para Ranking Atual e Histórico)
+    // Calcula minutos restantes até a meia-noite UTC (para Ranking Atual e Histórico)
     function getMinutesToMidnightUTC() {
         const now = new Date();
         const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
@@ -457,7 +501,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return Math.max(1, Math.floor(diffMs / 60000));
     }
 
-    // [NOVO] Calcula minutos restantes até o dia 1 do próximo mês UTC (para Ranking Passado)
+    // Calcula minutos restantes até o dia 1 do próximo mês UTC (para Ranking Passado)
     function getMinutesToNextMonthUTC() {
         const now = new Date();
         const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
@@ -1051,7 +1095,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         potions.forEach(p => {
             const qty = parseInt(p.quantity || 0);
             
-            // [ATUALIZAÇÃO] Se quantidade for 0, não renderiza o slot visualmente (efeito de "retirar do slot")
+            // Se quantidade for 0, não renderiza o slot visualmente
             if (qty <= 0) return; 
 
             const slot = document.createElement('div');
@@ -1134,7 +1178,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const result = normalizeRpcResult(rpcData);
                     if (result?.success && Array.isArray(result.ranking)) {
                         rankingData = result.ranking;
-                        // [ATUALIZAÇÃO] Cache até a meia-noite UTC
+                        // Cache até a meia-noite UTC
                         if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, getMinutesToMidnightUTC());
                     } else rankingData = await fallbackFetchTopPlayers();
                 }
@@ -1200,7 +1244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     else if (r?.result?.ranking) candidate = r.result.ranking;
                     if (Array.isArray(candidate) && candidate.length) {
                         d = candidate;
-                        // [ATUALIZAÇÃO] Cache dura até o dia 1 do próximo mês UTC
+                        // Cache dura até o dia 1 do próximo mês UTC
                         setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC());
                     }
                 } catch {}
@@ -1213,7 +1257,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         if (typeof rv === 'string') try { rv = JSON.parse(rv); } catch {}
                         if (Array.isArray(rv)) { 
                             d = rv; 
-                            // [ATUALIZAÇÃO] Cache dura até o dia 1 do próximo mês UTC
+                            // Cache dura até o dia 1 do próximo mês UTC
                             setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC()); 
                         }
                     }
@@ -1258,13 +1302,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const r = normalizeRpcResult(data);
                 if (r?.success && Array.isArray(r.logs) && r.logs.length) {
                     h = r.logs; 
-                    // [ATUALIZAÇÃO] Cache dura até meia-noite UTC
+                    // Cache dura até meia-noite UTC
                     setCache(cacheKey, h, getMinutesToMidnightUTC());
                 } else if (userId) {
                     const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(200);
                     if (logsDirect) { 
                         h = logsDirect; 
-                        // [ATUALIZAÇÃO] Cache dura até meia-noite UTC
+                        // Cache dura até meia-noite UTC
                         setCache(cacheKey, h, getMinutesToMidnightUTC()); 
                     }
                 }
@@ -1345,7 +1389,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Checks de Reset
             await checkAndResetArenaSeason();
-            await checkAndResetDailyAttempts(); // <--- Novo check diário
+            await checkAndResetDailyAttempts();
 
             await updateAttemptsUI();
             ensureStreakDate();

@@ -150,19 +150,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- DATA MANAGEMENT (Cache & Sync) ---
-    
-    // CORREÇÃO APLICADA: Verifica se o dia (UTC) mudou desde que o cache foi salvo.
-    // Isso garante que assim que virar o dia (00:00 UTC / 21:00 BRT), o cache seja invalidado
-    // e o sistema busque os dados novos, acionando o reset de tentativas no SQL.
+    .
     function isDailyAttemptsStale(cacheTimestamp) {
         if (!cacheTimestamp) return true;
 
         const now = new Date();
         const cacheDate = new Date(cacheTimestamp);
 
-        // Obtém a data em formato string "YYYY-MM-DD" baseada em UTC
-        // Se a data de hoje (UTC) for diferente da data do cache (UTC), 
-        // significa que virou o dia e precisamos buscar dados novos.
+        // Compara apenas a parte da data (YYYY-MM-DD) em UTC
         const currentDateString = now.toISOString().split('T')[0];
         const cacheDateString = cacheDate.toISOString().split('T')[0];
 
@@ -176,24 +171,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (playerAfkData.last_afk_start_time) {
             afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
         } else {
-            // Se for null, define agora para começar a contar
             afkStartTime = Date.now();
         }
 
         playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
         playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
         afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
+        
+        // Assegura que mostramos 0 se o valor for nulo/indefinido
         dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
         
         updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
-        
-        // Força atualização imediata da simulação
         updateLocalSimulation();
     }
 
     function saveToCache(data) {
         if(!userId) return;
         const cacheKey = `playerAfkData_${userId}`;
+        // Guarda o timestamp atual para comparações futuras
         localStorage.setItem(cacheKey, JSON.stringify({ data: data, timestamp: Date.now() }));
     }
 
@@ -211,23 +206,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const data = parsed.data;
                 const timestamp = parsed.timestamp;
 
-                // CORREÇÃO APLICADA:
-                // Usa cache se: 
-                // 1. Não expirou (24h) 
-                // 2. E não virou o dia (reset diário)
+                // Usa cache APENAS se:
+                // 1. O cache tem menos de 24h (segurança geral)
+                // 2. E ainda estamos no mesmo dia UTC (para garantir o reset das tentativas)
                 if (Date.now() - timestamp < CACHE_EXPIRATION_MS && !isDailyAttemptsStale(timestamp)) {
                     playerAfkData = data;
                     shouldUseCache = true;
-                    console.log("Usando Cache Local (Zero Egress)");
+                    console.log("Usando Cache Local (Mesmo dia UTC)");
                 }
             } catch (e) {
-                console.warn("Erro ao ler cache:", e);
+                console.warn("Cache corrompido, a forçar atualização.");
             }
         }
 
         if (!shouldUseCache) {
-            console.log("Cache antigo ou virada de dia detectada. Buscando do Servidor...");
-            // Esta chamada vai disparar o SQL que reseta as tentativas se necessário
+            console.log("Cache antigo ou dia novo detetado. A buscar dados ao Servidor...");
+            // Esta chamada RPC vai desencadear o reset SQL se for um novo dia
             const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
             if (error) {
                 console.error("Erro ao obter dados:", error);
@@ -239,10 +233,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         renderPlayerData();
         
-        // Inicia o Loop de Simulação Local (roda a cada 1s)
         if (localSimulationInterval) clearInterval(localSimulationInterval);
         localSimulationInterval = setInterval(updateLocalSimulation, 1000);
     }
+
+
 
     function updateStartAfkButtonState(attemptsLeft) {
         if (attemptsLeft <= 0) {

@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO (Com Reset Diário)...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -151,22 +151,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- DATA MANAGEMENT (Cache & Sync) ---
     
-    // CORREÇÃO APLICADA: Verifica se o dia (UTC) mudou desde que o cache foi salvo.
-    // Se a data de hoje (UTC) for diferente da data do cache (UTC), força o refresh.
-    function isDailyAttemptsStale(cacheTimestamp) {
-        if (!cacheTimestamp) return true;
-
-        const now = new Date();
-        const cacheDate = new Date(cacheTimestamp);
-
-        // Obtém a data em formato string "YYYY-MM-DD" baseada em UTC
-        const currentDateString = now.toISOString().split('T')[0];
-        const cacheDateString = cacheDate.toISOString().split('T')[0];
-
-        // Se a data de hoje (UTC) for diferente da data do cache (UTC), 
-        // significa que virou o dia e precisamos buscar dados novos no servidor (acionando o reset SQL).
-        return currentDateString !== cacheDateString;
-    }
+    // A função isDailyAttemptsStale foi removida/simplificada, pois vamos forçar a busca de tentativas no servidor.
 
     // Atualiza a UI com os dados que já temos na memória
     function renderPlayerData() {
@@ -182,7 +167,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
         playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
         afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
-        dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
+        // Agora, este valor é garantidamente o mais fresco do servidor.
+        dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0; 
         
         updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
         
@@ -210,22 +196,51 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const data = parsed.data;
                 const timestamp = parsed.timestamp;
 
-                // Usa cache se: 
-                // 1. Não expirou (24h de segurança geral) 
-                // 2. E (PRINCIPAL) não virou o dia (reset diário detectado pela data UTC)
-                if (Date.now() - timestamp < CACHE_EXPIRATION_MS && !isDailyAttemptsStale(timestamp)) {
+                // Usa o cache principal se ele não tiver expirado (24h)
+                if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
                     playerAfkData = data;
                     shouldUseCache = true;
-                    console.log("Usando Cache Local (Mesmo dia UTC)");
+                    console.log("Usando Cache Local para dados AFK estáticos.");
                 }
             } catch (e) {
-                console.warn("Erro ao ler cache, forçando atualização.");
+                console.warn("Cache corrompido, a forçar atualização completa.");
+                // Fallthrough para o bloco !shouldUseCache
             }
         }
 
+        // 1. Se o cache foi usado, fazemos uma chamada ao servidor para SINCRONIZAR 
+        // as tentativas diárias, forçando a execução da lógica de reset no SQL.
+        if (shouldUseCache) {
+            console.log("Sincronizando tentativas diárias e dados críticos do Servidor...");
+            
+            // Esta chamada RPC tem a lógica de reset de tentativas no SQL
+            const { data: server_data, error: server_error } = 
+                await supabase.rpc('get_player_afk_data', { uid: userId });
+
+            if (server_error) {
+                console.error("Erro ao sincronizar tentativas:", server_error);
+                // Em caso de falha na sincronização, melhor buscar tudo do zero no próximo passo.
+                shouldUseCache = false; 
+            } else {
+                // Sobrescreve as propriedades que devem estar sempre atualizadas com o valor fresco do servidor.
+                playerAfkData.daily_attempts_left = server_data.daily_attempts_left;
+                playerAfkData.last_attempt_reset = server_data.last_attempt_reset;
+                
+                // Também atualiza o XP/Gold/Stage, para corrigir qualquer dessincronização potencial, 
+                // antes de salvar o cache.
+                playerAfkData.xp = server_data.xp;
+                playerAfkData.gold = server_data.gold;
+                playerAfkData.current_afk_stage = server_data.current_afk_stage; 
+
+                // Salva o cache completo, incluindo o novo valor de tentativas
+                saveToCache(playerAfkData); 
+                console.log("Dados críticos sincronizados com sucesso.");
+            }
+        } 
+        
+        // 2. Se o cache não foi usado, ou houve falha na sincronização, buscamos TUDO.
         if (!shouldUseCache) {
-            console.log("Cache antigo ou virada de dia detectada. Buscando do Servidor...");
-            // Esta chamada vai disparar o SQL que reseta as tentativas
+            console.log("Cache inválido ou falha na sincronização. A buscar TODOS os dados do Servidor...");
             const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
             if (error) {
                 console.error("Erro ao obter dados:", error);

@@ -114,13 +114,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const targetId = parseInt(itemId);
                 const pot = this.player.potions.find(p => parseInt(p.item_id) === targetId);
                 
+                // [ATUALIZAÇÃO] Verificação rigorosa e consumo imediato
                 if (pot && pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
                     this.applyEffect(this.player, pot.item_id);
-                    pot.quantity--; // Deduz do visual da batalha
+                    pot.quantity--; // Deduz do visual da batalha localmente
                     trackConsumedPotion(pot.item_id); // Marca para deduzir do banco
                     
                     pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
                     actionResult.heal = 1; 
+                } else {
+                    // Se não tiver quantidade, não faz nada e retorna o estado atual
+                    return { ...this.getState(), actionResult, enemyActions };
                 }
                 return { ...this.getState(), actionResult, enemyActions };
             }
@@ -443,6 +447,22 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (Date.now() > parsed.expires) { localStorage.removeItem(key); return null; }
             return parsed.data;
         } catch { return null; }
+    }
+
+    // [NOVO] Calcula minutos restantes até a meia-noite UTC (para Ranking Atual e Histórico)
+    function getMinutesToMidnightUTC() {
+        const now = new Date();
+        const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+        const diffMs = midnight - now;
+        return Math.max(1, Math.floor(diffMs / 60000));
+    }
+
+    // [NOVO] Calcula minutos restantes até o dia 1 do próximo mês UTC (para Ranking Passado)
+    function getMinutesToNextMonthUTC() {
+        const now = new Date();
+        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
+        const diffMs = nextMonth - now;
+        return Math.max(1, Math.floor(diffMs / 60000));
     }
 
     function normalizeRpcResult(data) {
@@ -1022,18 +1042,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         const old = container.querySelector('.battle-potions-container');
         if (old) old.remove();
         if (!potions || !potions.length) return;
+        
         const ct = document.createElement('div');
         ct.className = 'battle-potions-container';
         ct.style.cssText = "position:absolute; top:60px; display:flex; flex-direction:column; gap:8px; z-index:20; background:rgba(0,0,0,0.5); padding:4px; border-radius:6px;";
         if(side === 'left') ct.style.left = "-25px"; else ct.style.right = "-25px";
 
         potions.forEach(p => {
+            const qty = parseInt(p.quantity || 0);
+            
+            // [ATUALIZAÇÃO] Se quantidade for 0, não renderiza o slot visualmente (efeito de "retirar do slot")
+            if (qty <= 0) return; 
+
             const slot = document.createElement('div');
             slot.className = 'battle-potion-slot';
-            const qty = parseInt(p.quantity || 0);
             const cd = parseInt(p.cd || 0);
             
-            if (interactive && qty > 0 && cd <= 0) {
+            if (interactive && cd <= 0) {
                 slot.classList.add('potion-clickable');
                 slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
             } else if (interactive) {
@@ -1042,7 +1067,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                  slot.style.filter = "grayscale(1)"; slot.style.opacity = "0.7";
             }
             const itemId = parseInt(p.item_id);
-            // [CORREÇÃO] Usa o nome vindo do banco ou o mapa
             const name = p.item_name || POTION_MAP[itemId] || `item_${itemId}`;
             const cdHeight = (cd > 0) ? "100%" : "0%";
             slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
@@ -1110,7 +1134,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const result = normalizeRpcResult(rpcData);
                     if (result?.success && Array.isArray(result.ranking)) {
                         rankingData = result.ranking;
-                        if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, 15);
+                        // [ATUALIZAÇÃO] Cache até a meia-noite UTC
+                        if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, getMinutesToMidnightUTC());
                     } else rankingData = await fallbackFetchTopPlayers();
                 }
             }
@@ -1175,7 +1200,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     else if (r?.result?.ranking) candidate = r.result.ranking;
                     if (Array.isArray(candidate) && candidate.length) {
                         d = candidate;
-                        setCache('arena_last_season_cache', d, 60);
+                        // [ATUALIZAÇÃO] Cache dura até o dia 1 do próximo mês UTC
+                        setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC());
                     }
                 } catch {}
                 
@@ -1185,7 +1211,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                         snap = snaps[0];
                         let rv = snap.ranking;
                         if (typeof rv === 'string') try { rv = JSON.parse(rv); } catch {}
-                        if (Array.isArray(rv)) { d = rv; setCache('arena_last_season_cache', d, 60); }
+                        if (Array.isArray(rv)) { 
+                            d = rv; 
+                            // [ATUALIZAÇÃO] Cache dura até o dia 1 do próximo mês UTC
+                            setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC()); 
+                        }
                     }
                 }
             }
@@ -1216,19 +1246,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
-            supabase.rpc('cleanup_old_arena_logs').then(()=>{});
+            
+            // Só executa a limpeza se não tiver cache
             const cacheKey = 'arena_attack_history';
             let h = getCache(cacheKey);
+            
             if (!h) {
+                supabase.rpc('cleanup_old_arena_logs').then(()=>{});
+                
                 const { data } = await supabase.rpc('get_arena_attack_logs');
                 const r = normalizeRpcResult(data);
                 if (r?.success && Array.isArray(r.logs) && r.logs.length) {
-                    h = r.logs; setCache(cacheKey, h, 60);
+                    h = r.logs; 
+                    // [ATUALIZAÇÃO] Cache dura até meia-noite UTC
+                    setCache(cacheKey, h, getMinutesToMidnightUTC());
                 } else if (userId) {
                     const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(200);
-                    if (logsDirect) { h = logsDirect; setCache(cacheKey, h, 60); }
+                    if (logsDirect) { 
+                        h = logsDirect; 
+                        // [ATUALIZAÇÃO] Cache dura até meia-noite UTC
+                        setCache(cacheKey, h, getMinutesToMidnightUTC()); 
+                    }
                 }
             }
+            
             if (!h || !h.length) rankingHistoryList.innerHTML = "<li style='padding:12px;text-align:center;color:#aaa;'>Sem registros.</li>";
             else {
                 rankingHistoryList.innerHTML = "";

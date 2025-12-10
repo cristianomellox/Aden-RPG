@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO (Com Reset Diário)...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -151,18 +151,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- DATA MANAGEMENT (Cache & Sync) ---
     
-    // Verifica se já passou das 21h (Reset Diário) em relação ao cache
+    // CORREÇÃO APLICADA: Verifica se o dia (UTC) mudou desde que o cache foi salvo.
+    // Isso garante que assim que virar o dia (00:00 UTC / 21:00 BRT), o cache seja invalidado
+    // e o sistema busque os dados novos, acionando o reset de tentativas no SQL.
     function isDailyAttemptsStale(cacheTimestamp) {
+        if (!cacheTimestamp) return true;
+
         const now = new Date();
         const cacheDate = new Date(cacheTimestamp);
-        
-        // Define o horário de corte: 21h UTC-3 (Horário de Brasília)
-        // Se estivermos em UTC, 21h BRT é 00h UTC do dia seguinte
-        // Simplificando: Reseta se o dia mudou.
-        // Melhor lógica: Verificar se a data atual > data do cache E passou das 21h no dia anterior.
-        // Implementação simples de segurança: Se o cache tem mais de 20h, força refresh.
-        const HOURS_20 = 20 * 60 * 60 * 1000;
-        return (now.getTime() - cacheTimestamp) > HOURS_20;
+
+        // Obtém a data em formato string "YYYY-MM-DD" baseada em UTC
+        // Se a data de hoje (UTC) for diferente da data do cache (UTC), 
+        // significa que virou o dia e precisamos buscar dados novos.
+        const currentDateString = now.toISOString().split('T')[0];
+        const cacheDateString = cacheDate.toISOString().split('T')[0];
+
+        return currentDateString !== cacheDateString;
     }
 
     // Atualiza a UI com os dados que já temos na memória
@@ -202,17 +206,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         let shouldUseCache = false;
 
         if (cached) {
-            const { data, timestamp } = JSON.parse(cached);
-            // Usa cache se: não expirou (24h) E tentativas diárias não parecem velhas
-            if (Date.now() - timestamp < CACHE_EXPIRATION_MS && !isDailyAttemptsStale(timestamp)) {
-                playerAfkData = data;
-                shouldUseCache = true;
-                console.log("Usando Cache Local (Zero Egress)");
+            try {
+                const parsed = JSON.parse(cached);
+                const data = parsed.data;
+                const timestamp = parsed.timestamp;
+
+                // CORREÇÃO APLICADA:
+                // Usa cache se: 
+                // 1. Não expirou (24h) 
+                // 2. E não virou o dia (reset diário)
+                if (Date.now() - timestamp < CACHE_EXPIRATION_MS && !isDailyAttemptsStale(timestamp)) {
+                    playerAfkData = data;
+                    shouldUseCache = true;
+                    console.log("Usando Cache Local (Zero Egress)");
+                }
+            } catch (e) {
+                console.warn("Erro ao ler cache:", e);
             }
         }
 
         if (!shouldUseCache) {
-            console.log("Cache inválido ou inexistente. Buscando do Servidor...");
+            console.log("Cache antigo ou virada de dia detectada. Buscando do Servidor...");
+            // Esta chamada vai disparar o SQL que reseta as tentativas se necessário
             const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
             if (error) {
                 console.error("Erro ao obter dados:", error);

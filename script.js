@@ -2337,6 +2337,17 @@ function enableMapInteraction() {
     const originalRenderPlayerUI = window.renderPlayerUI;
     if (typeof originalRenderPlayerUI === 'function') {
         window.renderPlayerUI = function(player, preserveActiveContainer) {
+          try {
+                const CACHE_DURATION_MS = 12 * 60 * 60 * 1000; // 12 horas
+                const cacheData = {
+                    data: player,
+                    expires: Date.now() + CACHE_DURATION_MS
+                };
+                localStorage.setItem('player_data_cache', JSON.stringify(cacheData));
+                console.log("player_data_cache salvo com expiração em 12h.");
+            } catch (e) {
+                console.error("Erro ao salvar player_data_cache no localStorage:", e);
+            }
             originalRenderPlayerUI(player, preserveActiveContainer);
             setTimeout(enableMapInteraction, 150);
         };

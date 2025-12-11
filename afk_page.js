@@ -105,7 +105,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- VISUAL FORMATTING ---
     function formatNumberCompact(num) {
-        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(num);
+        // Alterado para exibir número completo com separadores (ex: 1,500)
+        return new Intl.NumberFormat('en-US').format(num);
     }
 
     // --- CORE LOGIC: SIMULAÇÃO LOCAL (Zero Egress) ---

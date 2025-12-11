@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow" />
   <title>Ranking de Poder de Combate - Aden RPG</title>
   <style>
-    /* ... Estilos base inalterados ... */
+    /* ... Estilos base (Intactos) ... */
     body, html { margin:0;padding:0;height:100%;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;overflow-y:auto;
       background:url('https://aden-rpg.pages.dev/assets/ranking_cp.webp') no-repeat center center fixed;background-size:cover;color:#e0dccc;
       text-shadow: 1px 1px 2px #000;
@@ -41,7 +41,7 @@
     .rank-avatar-cp { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #888; margin-right: 10px; flex-shrink: 0; }
     .rank-player-info-cp { flex-grow: 1; text-align: left; }
     
-    /* Container para nome e olho ficarem alinhados */
+    /* Wrapper para nome e olho */
     .rank-player-name-wrapper { display: flex; align-items: center; gap: 8px; }
     
     .rank-player-name-cp {
@@ -51,7 +51,7 @@
     }
     .rank-player-name-cp:hover { color: gold; text-decoration: underline; }
     
-    /* Estilo do Olho Dourado (SVG) */
+    /* Olho Dourado SVG */
     .rank-eye-icon {
         width: 20px; height: 20px; fill: #fff; cursor: pointer; opacity: 0.8; transition: opacity 0.2s, transform 0.2s;
     }
@@ -73,7 +73,7 @@
     #rankingListCP li:nth-child(3) .rank-position-cp, #rankingListCP li:nth-child(3) .rank-power-cp { color: #CD7F32; font-size: 1.1em; text-shadow: 0 0 8px #CD7F32; }
     #rankingListCP li:nth-child(3) .rank-avatar-cp { border: 3px solid #CD7F32; box-shadow: 0 0 10px rgba(205, 127, 50, 0.7); }
     
-    /* Modal Styles */
+    /* === MODAL STYLES (INTACTOS PARA MANTER O VISUAL) === */
     #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
     .modal-content-player { background-color: #2c2c2c; padding: 20px; border: 1px solid #c9a94a; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #e0dccc; position: relative; }
     #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; }
@@ -88,8 +88,29 @@
     #playerAvatarEquip { width: 85px; height: 85px; border-radius: 50%; border: 4px solid #c9a94a; object-fit: cover; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
     #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
     .equipment-slots-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 250px; margin: 0 auto; }
-    .equipment-slot { background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; display: flex; align-items: center; justify-content: center; position: relative; overflow: visible; border-radius: 5px; }
+    
+    /* Configuração Crítica dos Slots para Manter Visual Original */
+    .equipment-slot { 
+        background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; 
+        display: flex; align-items: center; justify-content: center; position: relative; 
+        overflow: visible; /* Importante para o nível sair um pouco pra fora se necessário */
+        border-radius: 5px; 
+    }
     .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+    
+    /* Estilo do Nível do Item (Restaurado) */
+    .item-level {
+        position: absolute;
+        bottom: -10px;
+        right: 7px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        font-size: 0.6em;
+        padding: 0 3px;
+        border-radius: 4px;
+        z-index: 99999;
+    }
+
     .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
     .stat-line span:first-child { color: #aaa; }
@@ -220,7 +241,7 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL (24 HORAS) - Separado do ranking
+    // CACHE #2: PLAYER MODAL (24 HORAS)
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
@@ -323,14 +344,13 @@
           if (playerId) {
               const playerModal = document.getElementById('playerModal');
               if (playerModal) playerModal.style.display = 'flex';
-              // Chama a função global, que vamos sobrescrever abaixo
               window.fetchPlayerData(playerId);
           }
       });
     }
 
     // ====================================================================================
-    // FETCH DETALHES DO JOGADOR (COM CACHE 24H)
+    // FETCH DETALHES DO JOGADOR (COM CACHE 24H E CORREÇÃO VISUAL)
     // ====================================================================================
     window.fetchPlayerDetailsWithCache = async function(playerId) {
         resetModalUI();
@@ -345,7 +365,7 @@
         if (!supabase) return;
 
         try {
-            // A) Buscar Jogador (sem join para evitar erros de relacionamento inexistente)
+            // A) Buscar Jogador
             const { data: player, error: pErr } = await supabase
                 .from('players')
                 .select('*')
@@ -353,7 +373,7 @@
                 .single();
             if (pErr) throw pErr;
 
-            // B) Buscar Guilda (separado)
+            // B) Buscar Guilda
             let guildInfo = { name: 'Sem Guilda', flag: 'https://aden-rpg.pages.dev/assets/guildaflag.webp' };
             if(player.guild_id){
                 const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
@@ -363,11 +383,12 @@
                 }
             }
 
-            // C) Buscar Itens Equipados
+            // C) Buscar Itens Equipados (Incluindo 'level' para o visual)
             const { data: equippedItems, error: iErr } = await supabase
                 .from('inventory_items')
                 .select(`
                     equipped_slot,
+                    level, 
                     min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
                     crit_chance_bonus, crit_damage_bonus, evasion_bonus,
                     items ( id, name, image_url, min_attack, attack, defense, health, crit_chance, crit_damage, evasion )
@@ -402,6 +423,7 @@
         }
     };
 
+    // Função de Preenchimento Visual (Restaurada para o layout original)
     function populatePlayerModal(data) {
         const { basic, stats, items } = data;
 
@@ -438,18 +460,30 @@
             if(el) { el.textContent = val; el.classList.remove('shimmer'); }
         }
 
+        // Limpa slots
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
+        
+        // Renderiza itens com a bolinha de nível
         items.forEach(invItem => {
             if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
                 const slotId = `${invItem.equipped_slot}-slot`;
                 const slotDiv = document.getElementById(slotId);
-                if(slotDiv) slotDiv.innerHTML = `<img src="${invItem.items.image_url}" alt="Item">`;
+                if(slotDiv) {
+                    // Monta o HTML interno com a imagem e a bolinha de nível
+                    let itemHtml = `<img src="${invItem.items.image_url}" alt="Item">`;
+                    
+                    // Se o item tiver nível (ex: +10), adiciona a div .item-level
+                    if(invItem.level > 0) {
+                        itemHtml += `<div class="item-level">+${invItem.level}</div>`;
+                    }
+                    
+                    slotDiv.innerHTML = itemHtml;
+                }
             }
         });
 
         const sendBtn = document.getElementById('sendmp');
         sendBtn.style.display = 'flex';
-        // Ajuste para o link correto de mensagem
         sendBtn.href = "go:msg:" + basic.name; 
     }
 
@@ -467,7 +501,7 @@
         document.getElementById('sendmp').style.display = 'none';
     }
 
-    // Sobrescreve a função global para garantir que o clique use nossa lógica com cache
+    // Sobrescreve a função global
     window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
 
     // ====================================================================================

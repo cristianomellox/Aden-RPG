@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Otimizada (Batching + Cache 12h)");
+  console.log("[mines] DOM ready - Versão Otimizada (Batching + Cache 12h + Sessão Persistente)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let userId = null;
   let currentMineId = null;
-  let myOwnedMineId = null; // VARIAVEL NOVA: Armazena ID da mina que sou dono
+  let myOwnedMineId = null; 
   let maxMonsterHealth = 1;
   let hasAttackedOnce = false;
 
@@ -114,6 +114,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentMonsterHealthGlobal = 0; // HP Otimista Global
   const BATCH_THRESHOLD = 5;         // Envia a cada 5 ataques
   const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas
+  
+  // NOVA VARIÁVEL: Controle do primeiro ataque
+  let isFirstAttackSequence = true; 
 
   // =================================================================
   // 3. SELETORES DOM
@@ -230,7 +233,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return null;
   }
 
-  // --- NOVO: CACHE DE COMBAT STATS (12 HORAS) ---
+  // --- CACHE DE COMBAT STATS (12 HORAS) ---
   async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
     if (!userId) return null;
     const now = Date.now();
@@ -244,13 +247,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Verifica validade (12h)
             if (now - parsed.timestamp < STATS_CACHE_DURATION) {
                 cachedCombatStats = parsed.data;
-                // console.log("[Cache] Usando stats cacheados (Válido por 12h)");
                 return cachedCombatStats;
             }
         } catch(e) { console.warn("Cache stats inválido", e); }
     }
 
-    // console.log("[Cache] Stats expirados ou inexistentes. Buscando do DB...");
     // Busca do Backend (1 requisição a cada 12h)
     const { data, error } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
     
@@ -854,12 +855,86 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // =================================================================
-  // 13. COMBATE PVE (LÓGICA OTIMIZADA COM BATCH)
+  // 13. COMBATE PVE (LÓGICA OTIMIZADA COM BATCH & SESSÃO PERSISTENTE)
   // =================================================================
+
+  // --- PERSISTÊNCIA OTIMISTA ---
+  function getOptimisticCacheKey() {
+      if (!userId || !currentMineId) return null;
+      return `mine_optimistic_state_${currentMineId}_${userId}`;
+  }
+
+  function saveOptimisticState(debounceFlushTime) {
+      const key = getOptimisticCacheKey();
+      if (!key) return;
+      const state = {
+          timestamp: Date.now(),
+          hp: currentMonsterHealthGlobal,
+          stamina: localAttacksLeft,
+          pending: pendingBatch,
+          flushTime: debounceFlushTime,
+          isFirst: isFirstAttackSequence,
+          hasAttacked: hasAttackedOnce
+      };
+      localStorage.setItem(key, JSON.stringify(state));
+  }
+
+  function clearOptimisticState() {
+      const key = getOptimisticCacheKey();
+      if (key) localStorage.removeItem(key);
+  }
+
+  function restoreOptimisticState(cavern) {
+      const key = getOptimisticCacheKey();
+      if (!key) return false;
+      
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+
+      try {
+          const cached = JSON.parse(raw);
+          // Validade do Cache: 5 minutos
+          if (Date.now() - cached.timestamp > 5 * 60 * 1000) {
+              clearOptimisticState();
+              return false;
+          }
+
+          // Restaura Valores Otimistas
+          currentMonsterHealthGlobal = cached.hp;
+          localAttacksLeft = cached.stamina;
+          pendingBatch = cached.pending;
+          isFirstAttackSequence = cached.isFirst;
+          hasAttackedOnce = cached.hasAttacked;
+          
+          updateHpBar(currentMonsterHealthGlobal, cavern.initial_monster_health);
+          updateAttacksDisplay();
+
+          // Lógica de Retomada do Batch
+          if (pendingBatch > 0) {
+              // Se o tempo de flush já passou enquanto estava fora, envia agora
+              if (cached.flushTime && Date.now() >= cached.flushTime) {
+                  // console.log("[Mines] Flush atrasado recuperado. Enviando batch...");
+                  processAttackQueue(); 
+              } else {
+                  // Se ainda tem tempo, reinicia o timer com o tempo restante
+                  const remaining = Math.max(100, cached.flushTime - Date.now());
+                  if (batchFlushTimer) clearTimeout(batchFlushTimer);
+                  batchFlushTimer = setTimeout(processAttackQueue, remaining);
+              }
+          }
+          return true;
+
+      } catch (e) {
+          console.warn("Erro ao restaurar sessão:", e);
+          clearOptimisticState();
+          return false;
+      }
+  }
+
   async function startCombat(mineId) {
     showLoading();
     hasAttackedOnce = false;
-    attackCycleCounter = 0;
+    isFirstAttackSequence = true;
     
     // Reset de variaveis de batch
     pendingBatch = 0;
@@ -881,15 +956,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       currentMineId = mineId;
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
       
-      // Inicializa HP Global para lógica otimista
+      // Inicializa com dados do servidor
       currentMonsterHealthGlobal = cavern.monster_health;
       updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
       
-      if (combatTitle) combatTitle.textContent = `Disputa pela ${esc(cavern.name)}`;
-
       // Garante que o cache de stats está pronto (12h)
       await getOrUpdatePlayerStatsCache();
       await syncAttacksState();
+
+      // Tenta Restaurar Sessão Otimista (Se existir e for recente)
+      // Se restaurar, pendingBatch e HP serão atualizados do localStorage
+      restoreOptimisticState(cavern);
+
+      if (combatTitle) combatTitle.textContent = `Disputa pela ${esc(cavern.name)}`;
 
       if (cavern.competition_end_time) {
         const remaining = Math.max(0, Math.floor((new Date(cavern.competition_end_time).getTime() - Date.now()) / 1000));
@@ -913,7 +992,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // NOVA FUNÇÃO: Cálculo Local
+  // Cálculo Local
   function calculateLocalDamage(stats, currentMonsterHp) {
       const min = stats.min_attack || 0;
       const max = stats.attack || 0;
@@ -933,7 +1012,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return { damage: finalDamage, isCrit: isCrit };
   }
 
-  // NOVA FUNÇÃO: Processar Fila
+  // Processar Fila
   async function processAttackQueue() {
       if (pendingBatch === 0) return;
 
@@ -942,6 +1021,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Reseta fila imediata
       pendingBatch = 0;
       if (batchFlushTimer) clearTimeout(batchFlushTimer);
+
+      // Limpa cache otimista pois estamos enviando
+      clearOptimisticState();
 
       try {
           const { data, error } = await supabase.rpc("batch_attack_mine", { 
@@ -998,10 +1080,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!currentMineId) return;
 
     // Check Local Stamina
-    if (localAttacksLeft <= 0) {
-        // Se a UI diz que acabou, não deixa clicar. O sync confirmará.
-        return; 
-    }
+    if (localAttacksLeft <= 0) return; 
 
     // Se não tiver stats, busca agora (fallback)
     if (!cachedCombatStats) await getOrUpdatePlayerStatsCache();
@@ -1029,14 +1108,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 5. Adiciona à Fila (Batch)
     pendingBatch++;
 
-    // 6. Lógica de Envio (Debounce ou Threshold)
+    // --- NOVA LÓGICA: PRIMEIRO ATAQUE vs BATCH ---
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
+    // Se for o primeiro ataque da sequência, envia imediatamente
+    if (isFirstAttackSequence) {
+        isFirstAttackSequence = false; // Próximos irão para batch
+        await processAttackQueue();    // Envia este (pendingBatch=1) agora
+        return;
+    }
+
+    // Se não for o primeiro, usa lógica de Batch
     if (pendingBatch >= BATCH_THRESHOLD || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
         await processAttackQueue();
     } else {
-        // Envia após 5 segundos se o usuário parar
+        // Debounce de 5 segundos + Salvamento Otimista
+        const flushTime = Date.now() + 5000;
         batchFlushTimer = setTimeout(processAttackQueue, 5000);
+        saveOptimisticState(flushTime);
     }
   }
 
@@ -1071,9 +1160,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function resetCombatUI() {
     if (combatModal) combatModal.style.display = "none";
+    
+    // Limpa cache otimista ao sair da sessão
+    clearOptimisticState();
     currentMineId = null;
+    
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
+    
     // Limpa filas pendentes
     pendingBatch = 0;
     if(batchFlushTimer) clearTimeout(batchFlushTimer);
@@ -1233,15 +1327,20 @@ document.addEventListener("DOMContentLoaded", async () => {
           avisoTelaSound.currentTime = 0; 
           avisoTelaSound.play().catch(()=>{}); 
           
-          // Força envio do que tiver pendente antes de sair
+          // Força envio do que tiver pendente antes de sair (Best Effort)
           processAttackQueue();
           
-          resetCombatUI();
-          showModalAlert("Você saiu da tela durante a disputa. Retornando ao menu para evitar erros de sincronia.");
-          loadMines();
+          // NÃO resetamos mais a UI aqui, confiamos na persistência se ele voltar
+          // resetCombatUI();
       }
     } else {
-        if (!currentMineId) loadMines();
+        if (currentMineId && document.visibilityState === 'visible') {
+           // Se voltou e estamos em combate, tenta restaurar se algo falhou
+           // A função restoreOptimisticState é chamada no start, mas aqui podemos apenas
+           // verificar se o flush timer precisa ser reativado
+        } else if (!currentMineId) {
+           loadMines();
+        }
         syncAndCheckLogs();
     }
   });

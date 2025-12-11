@@ -1123,7 +1123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         await processAttackQueue();
     } else {
         // Debounce de 5 segundos + Salvamento Otimista
-        const flushTime = Date.now() + 5000;
+        const flushTime = Date.now() + 60000;
         batchFlushTimer = setTimeout(processAttackQueue, 5000);
         saveOptimisticState(flushTime);
     }

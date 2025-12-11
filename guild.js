@@ -17,11 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       data: data,
       expiry: now.getTime() + ttl,
     };
-    try {
-        localStorage.setItem(key, JSON.stringify(item));
-    } catch (e) {
-        console.warn('LocalStorage cheio ou erro ao salvar cache', e);
-    }
+    localStorage.setItem(key, JSON.stringify(item));
   }
 
   /**
@@ -34,29 +30,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!itemStr) {
       return null;
     }
-    try {
-        const item = JSON.parse(itemStr);
-        const now = new Date();
-        if (now.getTime() > item.expiry) {
-          localStorage.removeItem(key);
-          return null;
-        }
-        return item.data;
-    } catch(e) {
-        return null;
+    const item = JSON.parse(itemStr);
+    const now = new Date();
+    if (now.getTime() > item.expiry) {
+      localStorage.removeItem(key);
+      return null;
     }
+    return item.data;
   }
 
   /**
    * Calcula o tempo em milissegundos até a próxima segunda-feira às 00:00 UTC.
-   * Usado para caches de Ranking e Visualização Pública de Guilda.
+   * Usado para caches de Ranking e Busca de Guilda.
    */
   function getTtlUntilNextMonday() {
     const now = new Date();
     const day = now.getUTCDay(); // 0 (Dom) a 6 (Sáb)
     // Calcula dias até a próxima segunda (1). Se hoje for segunda, considera a próxima semana (7 dias)
     let daysToAdd = (8 - day) % 7;
-    // Se for 0 (segunda) e já passou do inicio do dia, joga para a próxima semana
     if (daysToAdd === 0 && now.getUTCHours() >= 0) {
        daysToAdd = 7;
     }
@@ -66,8 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     nextMonday.setUTCHours(0, 0, 0, 0);
     
     const ttl = nextMonday.getTime() - now.getTime();
-    // Garante no mínimo 1 hora se algo der errado no cálculo, para evitar loops
-    return ttl > 0 ? ttl : 60 * 60 * 1000;
+    return ttl > 0 ? ttl : 24 * 60 * 60 * 1000;
   }
   // --- FIM: NOVAS FUNÇÕES DE CACHE ---
 
@@ -456,8 +446,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return false;
   }
 
-  // Função para renderizar a UI com os dados da guilda (VISÃO DA PRÓPRIA GUILDA DO JOGADOR)
-  // ESTA FUNÇÃO CONTINUA USANDO CACHE CURTO (60 MINUTOS) E PERMITE CLICAR EM MEMBROS
+  // Função para renderizar a UI com os dados da guilda
   async function renderGuildUI(guildData) {
       currentGuildData = guildData;
       const deleteGuildBtn = document.getElementById('deleteguild');
@@ -592,8 +581,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
   
-  // FUNÇÃO DE VISUALIZAÇÃO PÚBLICA (MODAL AO CLICAR NO RANKING/BUSCA)
-  // USARÁ CACHE LONGO (ATÉ SEGUNDA-FEIRA) E NÃO PERMITE CLICAR EM JOGADORES
   async function fetchAndDisplayGuildInfo(guildId) {
     if (!viewGuildModal) return;
     try {
@@ -604,11 +591,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         let guildData = null;
         let guildPowerValue = 0;
 
-        // SE NÃO TIVER CACHE (OU EXPIROU), BUSCA TUDO E SALVA
         if (!cachedWrap) {
             console.log(`Buscando dados públicos da guilda ${guildId} (sem cache ou expirado)`);
             
-            // 1. Busca Dados Básicos e Jogadores (Tabela guilds)
+            // 1. Busca Dados Básicos e Jogadores
             const { data, error: guildError } = await supabase
                 .from('guilds')
                 .select('*, players!players_guild_id_fkey(*)')
@@ -621,8 +607,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             guildData = data;
 
-            // 2. Busca o Poder de Combate CORRETO via RPC (Banco de Dados)
-            // Isso garante que o valor seja o mesmo do Ranking
+            // 2. Busca o Poder de Combate CORRETO via RPC (Fonte da Verdade)
+            // Isso garante que o valor seja igual ao do Ranking
             try {
                 const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: guildId });
                 if (!powerError && powerData) {
@@ -638,19 +624,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.error("Erro ao buscar CP da guilda via RPC, usando fallback local.", e);
             }
 
-            // Fallback apenas se RPC falhar completamente
+            // Fallback se RPC falhar (o que causava o erro de 1.4k, mas aqui é só fallback)
             if (!guildPowerValue) {
                  const visibleP = (guildData.players || []).filter(p => p.rank !== 'admin');
                  guildPowerValue = visibleP.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
             }
             
             // 3. Salva no cache com expiração na próxima segunda-feira meia-noite UTC
-            // O payload contem AMBOS os dados (info da guilda + poder calculado)
+            // Salvamos um objeto contendo ambos os dados
             const cachePayload = { guildData, guildPowerValue };
             setCache(cacheKey, cachePayload, getTtlUntilNextMonday());
 
         } else {
-             // SE JÁ TIVER CACHE, USA DIRETO (ZERO CHAMADAS DE REDE)
              console.log(`Dados públicos da guilda ${guildId} carregados do cache (7 dias).`);
              guildData = cachedWrap.guildData;
              guildPowerValue = cachedWrap.guildPowerValue;
@@ -668,7 +653,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Usa a contagem de jogadores visíveis
         guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
-        // Exibe o poder calculado via RPC (recuperado do cache ou fresco)
+        // Exibe o poder calculado via RPC (recuperado ou do cache)
         const compactPower = formatNumberCompact(guildPowerValue || 0);
         guildViewPower.textContent = compactPower;
 
@@ -679,8 +664,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         sorted.forEach(m => {
             const li = document.createElement('li');
-            // IMPORTANTE: NÃO adiciona classe 'player-link' nem 'data-player-id'
-            // Isso garante que não seja clicável para abrir o modal do jogador
+            // ALTERADO: Removida a classe 'player-link' e o atributo 'data-player-id'
+            // para que o clique NÃO abra o modal do jogador.
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">

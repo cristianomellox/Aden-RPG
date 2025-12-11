@@ -112,10 +112,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   let pendingBatch = 0;              // Contagem de ataques na fila
   let batchFlushTimer = null;        // Timer para enviar se parar de clicar
   let currentMonsterHealthGlobal = 0; // HP Otimista Global
+  
+  // CONFIGURAÇÃO DE BATCH E DEBOUNCE
   const BATCH_THRESHOLD = 5;         // Envia a cada 5 ataques
+  const DEBOUNCE_TIME_MS = 5000;     // Tempo de espera (pode aumentar para testar, ex: 60000)
   const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas
   
-  // NOVA VARIÁVEL: Controle do primeiro ataque
+  // Controle do primeiro ataque
   let isFirstAttackSequence = true; 
 
   // =================================================================
@@ -873,7 +876,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           stamina: localAttacksLeft,
           pending: pendingBatch,
           flushTime: debounceFlushTime,
-          isFirst: isFirstAttackSequence,
+          isFirst: isFirstAttackSequence, // Flag crucial
           hasAttacked: hasAttackedOnce
       };
       localStorage.setItem(key, JSON.stringify(state));
@@ -903,7 +906,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           currentMonsterHealthGlobal = cached.hp;
           localAttacksLeft = cached.stamina;
           pendingBatch = cached.pending;
-          isFirstAttackSequence = cached.isFirst;
+          isFirstAttackSequence = cached.isFirst; // Recupera se é a primeira vez ou não
           hasAttackedOnce = cached.hasAttacked;
           
           updateHpBar(currentMonsterHealthGlobal, cavern.initial_monster_health);
@@ -1114,6 +1117,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Se for o primeiro ataque da sequência, envia imediatamente
     if (isFirstAttackSequence) {
         isFirstAttackSequence = false; // Próximos irão para batch
+        // Salva estado para garantir que se o user der F5 agora, não conta como primeiro de novo
+        saveOptimisticState(null);
         await processAttackQueue();    // Envia este (pendingBatch=1) agora
         return;
     }
@@ -1123,8 +1128,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         await processAttackQueue();
     } else {
         // Debounce de 5 segundos + Salvamento Otimista
-        const flushTime = Date.now() + 60000;
-        batchFlushTimer = setTimeout(processAttackQueue, 5000);
+        const flushTime = Date.now() + DEBOUNCE_TIME_MS;
+        batchFlushTimer = setTimeout(processAttackQueue, DEBOUNCE_TIME_MS);
         saveOptimisticState(flushTime);
     }
   }

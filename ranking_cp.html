@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow" />
   <title>Ranking de Poder de Combate - Aden RPG</title>
   <style>
-    /* ... Estilos originais mantidos ... */
+    /* ... Estilos base inalterados ... */
     body, html { margin:0;padding:0;height:100%;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;overflow-y:auto;
       background:url('https://aden-rpg.pages.dev/assets/ranking_cp.webp') no-repeat center center fixed;background-size:cover;color:#e0dccc;
       text-shadow: 1px 1px 2px #000;
@@ -28,10 +28,8 @@
     
     @media(max-width:700px){.avatar{width:40px;height:40px;} }
 
-    /* === ESTILOS DE LISTA === */
-    #rankingListCP {
-        list-style: none; padding: 0; margin: 0; width: 100%; max-width: 99vw;
-    }
+    /* === ESTILOS DA LISTA E OLHO === */
+    #rankingListCP { list-style: none; padding: 0; margin: 0; width: 100%; max-width: 99vw; }
     #rankingListCP li {
         display: flex; align-items: center; justify-content: space-between;
         padding: 10px 15px; border-bottom: 1px solid rgba(201,169,74,0.2);
@@ -39,18 +37,13 @@
     }
     #rankingListCP li:hover { background: rgba(201, 169, 74, 0.06); }
     
-    .rank-position-cp {
-        font-size: 1.1em; font-weight: bold; color: #FFC107; width: 40px; flex-shrink: 0; text-align: center;
-    }
-    .rank-avatar-cp {
-        width: 45px; height: 45px; border-radius: 50%; border: 2px solid #888; margin-right: 10px; flex-shrink: 0;
-    }
-    .rank-player-info-cp {
-        flex-grow: 1; text-align: left;
-    }
-    .rank-player-name-wrapper {
-        display: flex; align-items: center; gap: 8px; /* Espaço entre nome e olho */
-    }
+    .rank-position-cp { font-size: 1.1em; font-weight: bold; color: #FFC107; width: 40px; flex-shrink: 0; text-align: center; }
+    .rank-avatar-cp { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #888; margin-right: 10px; flex-shrink: 0; }
+    .rank-player-info-cp { flex-grow: 1; text-align: left; }
+    
+    /* Container para nome e olho ficarem alinhados */
+    .rank-player-name-wrapper { display: flex; align-items: center; gap: 8px; }
+    
     .rank-player-name-cp {
         display: block; font-size: 1em; font-weight: bold; color: #e0dccc;
         white-space: nowrap; overflow-x: hidden; text-overflow: ellipsis; max-width: 180px;
@@ -58,18 +51,16 @@
     }
     .rank-player-name-cp:hover { color: gold; text-decoration: underline; }
     
-    /* Novo estilo do ícone de olho */
+    /* Estilo do Olho Dourado (SVG) */
     .rank-eye-icon {
-        width: 18px; height: 18px; fill: #c9a94a; cursor: pointer; opacity: 0.7; transition: opacity 0.2s, transform 0.2s;
+        width: 20px; height: 20px; fill: #fff; cursor: pointer; opacity: 0.8; transition: opacity 0.2s, transform 0.2s;
     }
-    .rank-eye-icon:hover { opacity: 1; transform: scale(1.1); }
+    .rank-eye-icon:hover { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 2px gold); }
 
     .rank-guild-name-cp { display: block; font-size: 0.85em; color: lightblue; font-weight: bold; }
-    .rank-power-cp {
-        font-size: 1.1em; font-weight: bold; color: #4CAF50; text-align: right; min-width: 120px; flex-shrink: 0;
-    }
+    .rank-power-cp { font-size: 1.1em; font-weight: bold; color: #4CAF50; text-align: right; min-width: 120px; flex-shrink: 0; }
 
-    /* Top 3 Styles (Mantidos) */
+    /* Top 3 Cores */
     #rankingListCP li:nth-child(1) { background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09); border-left: 5px solid gold; }
     #rankingListCP li:nth-child(1) .rank-position-cp, #rankingListCP li:nth-child(1) .rank-power-cp { color: #FFD700; font-size: 1.2em; text-shadow: 0 0 8px #FFD700, 0 0 15px #000; }
     #rankingListCP li:nth-child(1) .rank-avatar-cp { border: 3px solid #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.7); }
@@ -82,7 +73,7 @@
     #rankingListCP li:nth-child(3) .rank-position-cp, #rankingListCP li:nth-child(3) .rank-power-cp { color: #CD7F32; font-size: 1.1em; text-shadow: 0 0 8px #CD7F32; }
     #rankingListCP li:nth-child(3) .rank-avatar-cp { border: 3px solid #CD7F32; box-shadow: 0 0 10px rgba(205, 127, 50, 0.7); }
     
-    /* Modal Styles (Mantidos) */
+    /* Modal Styles */
     #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
     .modal-content-player { background-color: #2c2c2c; padding: 20px; border: 1px solid #c9a94a; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #e0dccc; position: relative; }
     #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; }
@@ -99,7 +90,6 @@
     .equipment-slots-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 250px; margin: 0 auto; }
     .equipment-slot { background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; display: flex; align-items: center; justify-content: center; position: relative; overflow: visible; border-radius: 5px; }
     .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-    .item-level { position: absolute; bottom: -10px; right: 7px; background-color: rgba(0, 0, 0, 0.7); color: #fff; font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999; }
     .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
     .stat-line span:first-child { color: #aaa; }
@@ -111,7 +101,8 @@
     #sendmp:hover { background-color: #1e84d4; }
     @media(max-width:700px){ .rank-player-name-cp { max-width: 120px; font-size: 0.9em; } .rank-guild-name-cp { font-size: 0.75em; } .rank-power-cp { font-size: 1em; min-width: 90px; } #rankingListCP li { padding: 8px 10px; } }
     #cpIcon { width: 26px; height: 38px; margin-top: 8px; margin-left: -6px; position: relative; }
-    /* Hide Google Translate garbage */
+    
+    /* Traductor clean */
     .goog-te-banner-frame.skiptranslate, .skiptranslate, .goog-te-balloon-frame, .goog-te-gadget { display: none !important; visibility: hidden !important; height: 0 !important; }
     body { top: 0px !important; margin-top: 0px !important; position: static !important; }
     font > font { background-color: transparent !important; box-shadow: none !important; position: static !important; }
@@ -204,13 +195,9 @@
     // ====================================================================================
     function calculateNextMondayUTC(){
         const now = new Date();
-        const day = now.getUTCDay(); // 0 (Dom) a 6 (Sab)
-        // Se hoje for Segunda (1), o resto é 0. O operador || 7 força a ser 7 dias (próxima semana).
-        // Se hoje for Domingo (0), (8-0)%7 = 1 (Amanhã).
-        // Se hoje for Terça (2), (8-2)%7 = 6 (Daqui a 6 dias).
+        const day = now.getUTCDay();
         let daysUntilNextMonday = (8 - day) % 7;
         if(daysUntilNextMonday === 0) daysUntilNextMonday = 7; 
-
         const nextMon = new Date(now);
         nextMon.setUTCDate(now.getUTCDate() + daysUntilNextMonday);
         nextMon.setUTCHours(0,0,0,0);
@@ -233,7 +220,7 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL (24 HORAS)
+    // CACHE #2: PLAYER MODAL (24 HORAS) - Separado do ranking
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
@@ -241,11 +228,7 @@
             const raw = localStorage.getItem(key);
             if (!raw) return null;
             const obj = JSON.parse(raw);
-            // Expira em 24 horas
-            if (!obj.e || Date.now() >= obj.e) {
-                localStorage.removeItem(key);
-                return null;
-            }
+            if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(key); return null; }
             return obj.v;
         } catch (e) { return null; }
     }
@@ -253,22 +236,19 @@
     function setPlayerCache(playerId, data) {
         try {
             const key = `player_details_v2_${playerId}`;
-            // Expiração = Agora + 24 horas (em ms)
-            const expirationTime = Date.now() + (24 * 60 * 60 * 1000);
+            const expirationTime = Date.now() + (24 * 60 * 60 * 1000); // 24 horas
             localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
-        } catch (e) { console.warn("Erro ao salvar cache local", e); }
+        } catch (e) { console.warn("Erro ao salvar cache local do player", e); }
     }
 
     // ====================================================================================
-    // LÓGICA DE CP (Compartilhada)
+    // LÓGICA DE CP
     // ====================================================================================
     function applyItemBonuses(player, equippedItems){
         let combinedStats = Object.assign({}, player); 
-        // Reset base stats as safe numbers
         ['min_attack','attack','defense','health','crit_chance','crit_damage','evasion'].forEach(k => combinedStats[k] = safeNum(combinedStats[k]));
 
         (equippedItems || []).forEach(invItem => {
-            // Stats base do item
             if (invItem.items) {
                 combinedStats.min_attack += safeNum(invItem.items.min_attack);
                 combinedStats.attack += safeNum(invItem.items.attack);
@@ -278,7 +258,6 @@
                 combinedStats.crit_damage += safeNum(invItem.items.crit_damage);
                 combinedStats.evasion += safeNum(invItem.items.evasion);
             }
-            // Bônus de aprimoramento/encantamento
             combinedStats.min_attack += safeNum(invItem.min_attack_bonus);
             combinedStats.attack += safeNum(invItem.attack_bonus);
             combinedStats.defense += safeNum(invItem.defense_bonus);
@@ -303,7 +282,7 @@
     }
 
     // ====================================================================================
-    // RENDERIZAÇÃO DO RANKING
+    // RENDERIZAÇÃO
     // ====================================================================================
     function renderRanking(list){
       const w = document.getElementById('rankingWrapper');
@@ -316,7 +295,7 @@
         const pos = i+1;
         const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
         
-        // Ícone de Olho SVG
+        // Ícone de Olho
         const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
 
         html += `<li data-player-id="${esc(p.id)}">
@@ -332,182 +311,89 @@
           <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
         </li>`;
       }
-      
       html += '</ol></div>';
       w.innerHTML = html;
       
-      // Listener unificado para cliques na lista (Nome ou Olho)
+      // Evento de clique unificado
       document.getElementById('rankingListCP').addEventListener('click', (e) => {
-          // Verifica se clicou no nome OU no ícone do olho
           const trigger = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
           if (!trigger) return;
           
           const playerId = trigger.dataset.playerId;
           if (playerId) {
-              // Abre o modal imediatamente
               const playerModal = document.getElementById('playerModal');
               if (playerModal) playerModal.style.display = 'flex';
-              
-              // Chama a função OTIMIZADA com cache
-              fetchPlayerDetailsWithCache(playerId);
+              // Chama a função global, que vamos sobrescrever abaixo
+              window.fetchPlayerData(playerId);
           }
       });
     }
 
     // ====================================================================================
-    // FETCH DO RANKING (PRINCIPAL)
-    // ====================================================================================
-    async function fetchTop100ByCombatPower(){
-      const cacheKey = 'ranking_cp_weekly_v1';
-      const cached = getRankingCache(cacheKey);
-      
-      if(cached){ 
-          console.log("Usando cache semanal do ranking.");
-          renderRanking(cached); 
-          return; 
-      }
-      
-      if(!supabase){ document.getElementById('loading').textContent = 'Supabase não inicializado.'; return; }
-
-      try {
-        document.getElementById('loading').textContent = 'Buscando ranking (semanal)...';
-        // Passo 1: Buscar players
-        const { data: players, error: pErr } = await supabase
-          .from('players')
-          .select('id,name,avatar_url,guild_id,attack,defense,health,min_attack,crit_chance,crit_damage,evasion')
-          .neq('is_banned', true)
-          .limit(500); // Trazemos mais para garantir que o cálculo de CP filtre os Top 100 reais
-
-        if(pErr) throw pErr;
-        if(!players || players.length===0){ renderRanking([]); return; }
-
-        const ids = players.map(x=>x.id);
-
-        // Passo 2: Buscar itens equipados desses players
-        const { data: items, error: iErr } = await supabase
-          .from('inventory_items')
-          .select(`
-             player_id,
-             equipped_slot,
-             min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
-             crit_chance_bonus, crit_damage_bonus, evasion_bonus,
-             items ( min_attack, attack, defense, health, crit_chance, crit_damage, evasion )
-          `)
-          .in('player_id', ids)
-          .not('equipped_slot','is',null);
-
-        if(iErr) console.warn('Erro ao buscar itens:', iErr);
-
-        // Organizar itens por player
-        const itemsByPlayer = {};
-        (items || []).forEach(it => {
-          if(!itemsByPlayer[it.player_id]) itemsByPlayer[it.player_id] = [];
-          itemsByPlayer[it.player_id].push(it);
-        });
-
-        // Passo 3: Buscar Guildas
-        const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
-        const guildsById = {};
-        if(uniqueGuilds.length){
-          const { data: guilds } = await supabase.from('guilds').select('id,name').in('id', uniqueGuilds);
-          (guilds||[]).forEach(g => guildsById[g.id] = g.name);
-        }
-
-        // Calcular CP
-        const computed = players.map(p => {
-          const equipped = itemsByPlayer[p.id] || [];
-          const combined = applyItemBonuses(p, equipped);
-          const cp = calculateCombatPowerFromCombined(combined);
-          return {
-            id: p.id,
-            name: p.name,
-            avatar_url: p.avatar_url,
-            guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
-            cp
-          };
-        });
-
-        // Ordenar e pegar Top 100
-        computed.sort((a,b) => b.cp - a.cp);
-        const top100 = computed.slice(0,100);
-        
-        setRankingCache(cacheKey, top100);
-        renderRanking(top100);
-
-      } catch(err){
-        console.error('Erro:', err);
-        document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;
-      }
-    }
-
-    // ====================================================================================
-    // FETCH DETALHES DO JOGADOR (OTIMIZADO COM CACHE 24H)
-    // Substitui a lógica que estaria no playerModal.js
+    // FETCH DETALHES DO JOGADOR (COM CACHE 24H)
     // ====================================================================================
     window.fetchPlayerDetailsWithCache = async function(playerId) {
-        // Limpa UI para estado de carregamento
         resetModalUI();
         
-        // 1. Tenta pegar do cache
+        // 1. Verificar Cache
         const cachedData = getPlayerCache(playerId);
         if (cachedData) {
-            console.log("Usando cache 24h para jogador:", playerId);
             populatePlayerModal(cachedData);
             return;
         }
 
-        // 2. Se não tiver cache, busca no Supabase
         if (!supabase) return;
 
         try {
-            // Busca Player + Guilda
+            // A) Buscar Jogador (sem join para evitar erros de relacionamento inexistente)
             const { data: player, error: pErr } = await supabase
                 .from('players')
-                .select('*, guilds(name, flag_url)')
+                .select('*')
                 .eq('id', playerId)
                 .single();
-
             if (pErr) throw pErr;
 
-            // Busca Itens Equipados + Imagens dos itens
+            // B) Buscar Guilda (separado)
+            let guildInfo = { name: 'Sem Guilda', flag: 'https://aden-rpg.pages.dev/assets/guildaflag.webp' };
+            if(player.guild_id){
+                const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
+                if(guild){
+                    guildInfo.name = guild.name;
+                    if(guild.flag_url) guildInfo.flag = guild.flag_url;
+                }
+            }
+
+            // C) Buscar Itens Equipados
             const { data: equippedItems, error: iErr } = await supabase
                 .from('inventory_items')
                 .select(`
                     equipped_slot,
                     min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
                     crit_chance_bonus, crit_damage_bonus, evasion_bonus,
-                    items (
-                        id, name, image_url,
-                        min_attack, attack, defense, health, crit_chance, crit_damage, evasion
-                    )
+                    items ( id, name, image_url, min_attack, attack, defense, health, crit_chance, crit_damage, evasion )
                 `)
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            if (iErr) console.warn("Erro ao buscar itens do modal", iErr);
-
-            // Calcula Stats Totais
+            // D) Calcular e Montar Objeto
             const combinedStats = applyItemBonuses(player, equippedItems || []);
             const finalCP = calculateCombatPowerFromCombined(combinedStats);
 
-            // Monta o objeto de dados completo
             const fullPlayerData = {
                 basic: {
                     name: player.name,
                     level: player.level,
                     avatar_url: player.avatar_url,
-                    guild_name: player.guilds?.name || 'Sem Guilda',
-                    guild_flag: player.guilds?.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp',
+                    guild_name: guildInfo.name,
+                    guild_flag: guildInfo.flag,
                     cp: finalCP
                 },
                 stats: combinedStats,
                 items: equippedItems || []
             };
 
-            // Salva no cache (24h)
+            // E) Salvar no Cache e Renderizar
             setPlayerCache(playerId, fullPlayerData);
-
-            // Popula a tela
             populatePlayerModal(fullPlayerData);
 
         } catch (error) {
@@ -516,21 +402,17 @@
         }
     };
 
-    // Função auxiliar para preencher o HTML do Modal
     function populatePlayerModal(data) {
         const { basic, stats, items } = data;
 
-        // Infos Básicas
         document.getElementById('playerName').textContent = basic.name;
         document.getElementById('playerName').classList.remove('shimmer');
-        
         document.getElementById('playerLevel').textContent = 'Nv. ' + safeNum(basic.level);
         document.getElementById('playerLevel').classList.remove('shimmer');
-
+        
         const gFlag = document.getElementById('playerGuildFlag');
         gFlag.src = basic.guild_flag;
         gFlag.classList.remove('shimmer');
-
         const gName = document.getElementById('playerGuildName');
         gName.textContent = basic.guild_name;
         gName.classList.remove('shimmer');
@@ -543,7 +425,6 @@
         avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
         avatarImg.classList.remove('shimmer');
 
-        // Stats
         const statMap = {
             'playerAttack': stats.attack,
             'playerDefense': stats.defense,
@@ -554,35 +435,25 @@
         };
         for (const [id, val] of Object.entries(statMap)) {
             const el = document.getElementById(id);
-            if(el) {
-                el.textContent = val;
-                el.classList.remove('shimmer');
-            }
+            if(el) { el.textContent = val; el.classList.remove('shimmer'); }
         }
 
-        // Equipamentos (Imagens nos slots)
-        // Limpar slots primeiro
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
-        
         items.forEach(invItem => {
             if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
-                const slotId = `${invItem.equipped_slot}-slot`; // Ex: weapon-slot
+                const slotId = `${invItem.equipped_slot}-slot`;
                 const slotDiv = document.getElementById(slotId);
-                if(slotDiv) {
-                    slotDiv.innerHTML = `<img src="${invItem.items.image_url}" alt="Item" title="${invItem.items.name}">`;
-                }
+                if(slotDiv) slotDiv.innerHTML = `<img src="${invItem.items.image_url}" alt="Item">`;
             }
         });
 
-        // Configurar link de mensagem
         const sendBtn = document.getElementById('sendmp');
         sendBtn.style.display = 'flex';
-        // Supomos que a URL de mensagem seja go:msg:NOME
+        // Ajuste para o link correto de mensagem
         sendBtn.href = "go:msg:" + basic.name; 
     }
 
     function resetModalUI() {
-        // Adiciona classes shimmer de volta e limpa textos
         const shimmers = ['playerName', 'playerLevel', 'playerGuildName', 'playerCombatPower', 'playerAvatarEquip',
                           'playerAttack', 'playerDefense', 'playerHealth', 'playerEvasion', 'playerCritChance', 'playerCritDamage'];
         shimmers.forEach(id => {
@@ -595,16 +466,87 @@
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         document.getElementById('sendmp').style.display = 'none';
     }
-    
-    // Sobrescrever a função global antiga se ela existir
+
+    // Sobrescreve a função global para garantir que o clique use nossa lógica com cache
     window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
+
+    // ====================================================================================
+    // FETCH RANKING PRINCIPAL
+    // ====================================================================================
+    async function fetchTop100ByCombatPower(){
+      const cacheKey = 'ranking_cp_weekly_v2';
+      const cached = getRankingCache(cacheKey);
+      
+      if(cached){ 
+          renderRanking(cached); 
+          return; 
+      }
+      
+      if(!supabase){ document.getElementById('loading').textContent = 'Supabase erro.'; return; }
+
+      try {
+        document.getElementById('loading').textContent = 'Buscando ranking...';
+        
+        // 1. Players
+        const { data: players, error: pErr } = await supabase
+          .from('players')
+          .select('id,name,avatar_url,guild_id,attack,defense,health,min_attack,crit_chance,crit_damage,evasion')
+          .neq('is_banned', true)
+          .limit(500); 
+
+        if(pErr) throw pErr;
+        if(!players || players.length===0){ renderRanking([]); return; }
+        const ids = players.map(x=>x.id);
+
+        // 2. Items
+        const { data: items, error: iErr } = await supabase
+          .from('inventory_items')
+          .select(`player_id, equipped_slot, min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
+             crit_chance_bonus, crit_damage_bonus, evasion_bonus, items ( min_attack, attack, defense, health, crit_chance, crit_damage, evasion )`)
+          .in('player_id', ids)
+          .not('equipped_slot','is',null);
+
+        const itemsByPlayer = {};
+        (items || []).forEach(it => {
+          if(!itemsByPlayer[it.player_id]) itemsByPlayer[it.player_id] = [];
+          itemsByPlayer[it.player_id].push(it);
+        });
+
+        // 3. Guilds
+        const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
+        const guildsById = {};
+        if(uniqueGuilds.length){
+          const { data: guilds } = await supabase.from('guilds').select('id,name').in('id', uniqueGuilds);
+          (guilds||[]).forEach(g => guildsById[g.id] = g.name);
+        }
+
+        const computed = players.map(p => {
+          const equipped = itemsByPlayer[p.id] || [];
+          const combined = applyItemBonuses(p, equipped);
+          const cp = calculateCombatPowerFromCombined(combined);
+          return {
+            id: p.id, name: p.name, avatar_url: p.avatar_url,
+            guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
+            cp
+          };
+        });
+
+        computed.sort((a,b) => b.cp - a.cp);
+        const top100 = computed.slice(0,100);
+        
+        setRankingCache(cacheKey, top100);
+        renderRanking(top100);
+
+      } catch(err){
+        document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;
+      }
+    }
 
     document.addEventListener('DOMContentLoaded', fetchTop100ByCombatPower);
   })();
   </script>
   
   <script>
-    // Scale Lock Script
     document.addEventListener("DOMContentLoaded", () => {
       const testEl = document.createElement("div");
       testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";

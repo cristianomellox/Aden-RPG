@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow" />
   <title>Ranking de Poder de Combate - Aden RPG</title>
   <style>
-    /* ... Estilos já existentes (não alterados) ... */
+    /* ... Estilos originais mantidos ... */
     body, html { margin:0;padding:0;height:100%;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;overflow-y:auto;
       background:url('https://aden-rpg.pages.dev/assets/ranking_cp.webp') no-repeat center center fixed;background-size:cover;color:#e0dccc;
       text-shadow: 1px 1px 2px #000;
@@ -19,376 +19,102 @@
     max-width:999px;margin:20px auto;border-radius:10px;box-shadow:0 0 20px rgba(0,0,0,0.8);
      background-color: rgba(0,0,0,0.5);
     }
-    #rankingContent h2{color:#c9a94a;margin-top:0;font-size:1.6em;text-align:center;
-      
-    }
-    #atualiza {color:#fff;border-bottom:4px solid #c9a94a;margin-top:-20px!important;font-size:1em;text-align:center;
-      margin-bottom: 15px;
-    }
+    #rankingContent h2{color:#c9a94a;margin-top:0;font-size:1.6em;text-align:center;}
+    #atualiza {color:#fff;border-bottom:4px solid #c9a94a;margin-top:-20px!important;font-size:1em;text-align:center; margin-bottom: 15px;}
 
     .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid rgba(201,169,74,0.6);}
     .pulse{animation:pulse 2s infinite;} @keyframes pulse{0%{box-shadow:0 0 0px rgba(255,215,0,0.9);}70%{box-shadow:0 0 16px rgba(255,215,0,0.12);}100%{box-shadow:0 0 0 rgba(255,215,0,0);} }
     .loading{text-align:center;padding:20px;font-size:1.05em;opacity:0.9;}
     
-    @media(max-width:700px){.avatar{width:40px;height:40px;} /* .ranking-table th,.ranking-table td{padding:8px 10px;font-size:0.9rem;} */}
+    @media(max-width:700px){.avatar{width:40px;height:40px;} }
 
-    /* === NOVOS ESTILOS DE LISTA (Baseados em arena.css) === */
+    /* === ESTILOS DE LISTA === */
     #rankingListCP {
-        list-style: none; /* Remove números padrão */
-        padding: 0;
-        margin: 0;
-        width: 100%;
-        max-width: 99vw;
+        list-style: none; padding: 0; margin: 0; width: 100%; max-width: 99vw;
     }
     #rankingListCP li {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 15px;
-        border-bottom: 1px solid rgba(201,169,74,0.2); /* Borda sutil */
-        background: rgba(20, 20, 20, 0.4);
-        transition: background 0.2s ease;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 15px; border-bottom: 1px solid rgba(201,169,74,0.2);
+        background: rgba(20, 20, 20, 0.4); transition: background 0.2s ease;
     }
-    #rankingListCP li:hover {
-        background: rgba(201, 169, 74, 0.06);
-    }
+    #rankingListCP li:hover { background: rgba(201, 169, 74, 0.06); }
+    
     .rank-position-cp {
-        font-size: 1.1em;
-        font-weight: bold;
-        color: #FFC107;
-        width: 40px;
-        flex-shrink: 0;
-        text-align: center;
+        font-size: 1.1em; font-weight: bold; color: #FFC107; width: 40px; flex-shrink: 0; text-align: center;
     }
     .rank-avatar-cp {
-        width: 45px;
-        height: 45px;
-        border-radius: 50%;
-        border: 2px solid #888;
-        margin-right: 10px;
-        flex-shrink: 0;
+        width: 45px; height: 45px; border-radius: 50%; border: 2px solid #888; margin-right: 10px; flex-shrink: 0;
     }
     .rank-player-info-cp {
-        flex-grow: 1;
-        text-align: left;
+        flex-grow: 1; text-align: left;
+    }
+    .rank-player-name-wrapper {
+        display: flex; align-items: center; gap: 8px; /* Espaço entre nome e olho */
     }
     .rank-player-name-cp {
-        display: block;
-        font-size: 1em;
-        font-weight: bold;
-        color: #e0dccc;
-        white-space: nowrap; 
-        overflow-x: hidden;
-        text-overflow: ellipsis; 
-        max-width: 180px;
-        cursor: pointer; /* Adicionado para indicar clique */
+        display: block; font-size: 1em; font-weight: bold; color: #e0dccc;
+        white-space: nowrap; overflow-x: hidden; text-overflow: ellipsis; max-width: 180px;
+        cursor: pointer;
     }
-    .rank-player-name-cp:hover {
-        color: gold;
-        text-decoration: underline;
+    .rank-player-name-cp:hover { color: gold; text-decoration: underline; }
+    
+    /* Novo estilo do ícone de olho */
+    .rank-eye-icon {
+        width: 18px; height: 18px; fill: #c9a94a; cursor: pointer; opacity: 0.7; transition: opacity 0.2s, transform 0.2s;
     }
-    .rank-guild-name-cp {
-        display: block;
-        font-size: 0.85em;
-        color: lightblue;
-        font-weight: bold;
-    }
+    .rank-eye-icon:hover { opacity: 1; transform: scale(1.1); }
+
+    .rank-guild-name-cp { display: block; font-size: 0.85em; color: lightblue; font-weight: bold; }
     .rank-power-cp {
-        font-size: 1.1em;
-        font-weight: bold;
-        color: #4CAF50; /* Cor de destaque para o CP */
-        text-align: right;
-        min-width: 120px;
-        flex-shrink: 0;
+        font-size: 1.1em; font-weight: bold; color: #4CAF50; text-align: right; min-width: 120px; flex-shrink: 0;
     }
 
-    /* Estilos do Top 3 (Ouro, Prata, Bronze) - Replicado de arena.css */
-    /* 1º Lugar (Ouro) */
-    #rankingListCP li:nth-child(1) {
-        background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09);
-        border-left: 5px solid gold;
-    }
-    #rankingListCP li:nth-child(1) .rank-position-cp,
-    #rankingListCP li:nth-child(1) .rank-power-cp {
-        color: #FFD700; 
-        font-size: 1.2em; 
-        text-shadow: 0 0 8px #FFD700, 0 0 15px #000;
-    }
-    #rankingListCP li:nth-child(1) .rank-avatar-cp {
-        border: 3px solid #FFD700;
-        box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
-    }
+    /* Top 3 Styles (Mantidos) */
+    #rankingListCP li:nth-child(1) { background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09); border-left: 5px solid gold; }
+    #rankingListCP li:nth-child(1) .rank-position-cp, #rankingListCP li:nth-child(1) .rank-power-cp { color: #FFD700; font-size: 1.2em; text-shadow: 0 0 8px #FFD700, 0 0 15px #000; }
+    #rankingListCP li:nth-child(1) .rank-avatar-cp { border: 3px solid #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.7); }
 
-    /* 2º Lugar (Prata) */
-    #rankingListCP li:nth-child(2) {
-        background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c);
-        border-left: 5px solid silver;
-    }
-    #rankingListCP li:nth-child(2) .rank-position-cp,
-    #rankingListCP li:nth-child(2) .rank-power-cp {
-        color: silver; 
-        font-size: 1.15em;
-        text-shadow: 0 0 8px silver;
-    }
-    #rankingListCP li:nth-child(2) .rank-avatar-cp {
-        border: 3px solid silver;
-        box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
-    }
+    #rankingListCP li:nth-child(2) { background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c); border-left: 5px solid silver; }
+    #rankingListCP li:nth-child(2) .rank-position-cp, #rankingListCP li:nth-child(2) .rank-power-cp { color: silver; font-size: 1.15em; text-shadow: 0 0 8px silver; }
+    #rankingListCP li:nth-child(2) .rank-avatar-cp { border: 3px solid silver; box-shadow: 0 0 10px rgba(192, 192, 192, 0.7); }
 
-    /* 3º Lugar (Bronze) */
-    #rankingListCP li:nth-child(3) {
-        background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5));
-        border-left: 5px solid #CD7F32;
-    }
-    #rankingListCP li:nth-child(3) .rank-position-cp,
-    #rankingListCP li:nth-child(3) .rank-power-cp {
-        color: #CD7F32; 
-        font-size: 1.1em;
-        text-shadow: 0 0 8px #CD7F32;
-    }
-    #rankingListCP li:nth-child(3) .rank-avatar-cp {
-        border: 3px solid #CD7F32;
-        box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
-    }
-    /* Fim dos novos estilos */
+    #rankingListCP li:nth-child(3) { background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5)); border-left: 5px solid #CD7F32; }
+    #rankingListCP li:nth-child(3) .rank-position-cp, #rankingListCP li:nth-child(3) .rank-power-cp { color: #CD7F32; font-size: 1.1em; text-shadow: 0 0 8px #CD7F32; }
+    #rankingListCP li:nth-child(3) .rank-avatar-cp { border: 3px solid #CD7F32; box-shadow: 0 0 10px rgba(205, 127, 50, 0.7); }
     
-    /* === Estilos do Modal === */
-    #playerModal {
-        display: none; /* Inicia escondido */
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        overflow: auto;
-        background-color: rgba(0,0,0,0.8);
-        align-items: center;
-        justify-content: center;
-    }
-    .modal-content-player {
-        background-color: #2c2c2c;
-        padding: 20px;
-        border: 1px solid #c9a94a;
-        width: 90%;
-        max-width: 500px;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-        color: #e0dccc;
-        position: relative;
-    }
-    #closePlayerModal {
-        position: absolute;
-        top: 10px;
-        right: 15px;
-        color: #aaa;
-        font-size: 28px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: color 0.2s;
-    }
-    #closePlayerModal:hover,
-    #closePlayerModal:focus {
-        color: white;
-        text-decoration: none;
-        cursor: pointer;
-    }
-    
-    .player-header {
-        text-align: center;
-        margin-bottom: 15px;
-    }
-    #playerName {
-        font-size: 1.8em;
-        color: #FFD700;
-        margin-bottom: 5px;
-        font-weight: bold;
-    }
-    .player-level-guild {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 2px;
-        margin-bottom: 10px;
-        flex-direction: column;
-    }
-    #playerGuildFlag {
-        width: 30px;
-        height: 30px;
-        border-radius: 5px;
-        object-fit: cover;
-    }
-    #playerGuildName {
-        font-size: 1.4em;
-        color: lightblue;
-    }
-    #playerLevel {
-        font-size: 1.2em;
-        color: #ccc;
-        font-weight: bold;
-    }
-
-    .player-visuals {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-    #playerAvatarEquip {
-        width: 85px;
-        height: 85px;
-        border-radius: 50%;
-        border: 4px solid #c9a94a;
-        object-fit: cover;
-        box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
-    }
-    #playerCombatPower {
-        font-size: 2em;
-        font-weight: bold;
-        color: #4CAF50;
-        background: linear-gradient(to bottom, white, orange, orange);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-top: 10px;
-        text-shadow: none!important;
-    }
-
-    .equipment-slots-container {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-        max-width: 250px;
-        margin: 0 auto;
-    }
-    .equipment-slot {
-        background-color: #383838;
-        border: 1px dashed #555;
-        height: 55px;
-        width: 55px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        overflow: visible;
-        border-radius: 5px;
-    }
-    .equipment-slot img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    .item-level {
-        position: absolute;
-        bottom: -10px;
-        right: 7px;
-        background-color: rgba(0, 0, 0, 0.7);
-        color: #fff;
-        font-size: 0.6em;
-        padding: 0 3px;
-        border-radius: 4px;
-        z-index: 99999;
-    }
-
-    .player-stats {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-        margin-top: 20px;
-        padding: 10px;
-        border-top: 1px solid #444;
-    }
-    .stat-line {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.8em;
-    }
-    .stat-line span:first-child {
-        color: #aaa;
-    }
-    .stat-line span:last-child {
-        font-weight: bold;
-        color: #fff;
-    }
-
-    .shimmer {
-        /* Adicionado shimmer para feedback de carregamento */
-        background: linear-gradient(-90deg, #383838 0%, #444444 50%, #383838 100%);
-        background-size: 400% 400%;
-        animation: shimmer 1.2s ease-in-out infinite;
-        color: transparent !important;
-    }
-    @keyframes shimmer {
-        0% { background-position: -100% 0; }
-        100% { background-position: 100% 0; }
-    }
-    .shimmer::before {
-        content: '\00a0'; /* Espaço não quebra para forçar altura */
-    }
-
-    #sendmp {
-        display: none; /* Controlado por playerModal.js */
-        width: 100%;
-        padding: 10px;
-        margin-top: 20px;
-        background-color: #2196F3;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 1em;
-        font-weight: bold;
-        transition: background-color 0.2s;
-        text-align: center;
-        text-decoration: none; /* Estilizar como botão, mas é um link */
-    }
-    #sendmp:hover {
-        background-color: #1e84d4;
-    }
-
-    @media(max-width:700px){
-        .rank-player-name-cp { max-width: 120px; font-size: 0.9em; }
-        .rank-guild-name-cp { font-size: 0.75em; }
-        .rank-power-cp { font-size: 1em; min-width: 90px; }
-        #rankingListCP li { padding: 8px 10px; }
-    }
-    #cpIcon {
-  width: 26px;
-  height: 38px;
-  margin-top: 8px;
-  margin-left: -6px;
-  position: relative;
-}
-
-/* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
-.goog-te-banner-frame.skiptranslate, 
-.skiptranslate {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-}
-
-body {
-    top: 0px !important; 
-    margin-top: 0px !important;
-    position: static !important; 
-}
-.goog-te-balloon-frame {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-.goog-te-gadget {
-    display: none !important;
-    height: 0 !important;
-    overflow: hidden !important;
-}
-
-font > font {
-    background-color: transparent !important;
-    box-shadow: none !important;
-    position: static !important;
-}
+    /* Modal Styles (Mantidos) */
+    #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
+    .modal-content-player { background-color: #2c2c2c; padding: 20px; border: 1px solid #c9a94a; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #e0dccc; position: relative; }
+    #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; }
+    #closePlayerModal:hover { color: white; }
+    .player-header { text-align: center; margin-bottom: 15px; }
+    #playerName { font-size: 1.8em; color: #FFD700; margin-bottom: 5px; font-weight: bold; }
+    .player-level-guild { display: flex; justify-content: center; align-items: center; gap: 2px; margin-bottom: 10px; flex-direction: column; }
+    #playerGuildFlag { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; }
+    #playerGuildName { font-size: 1.4em; color: lightblue; }
+    #playerLevel { font-size: 1.2em; color: #ccc; font-weight: bold; }
+    .player-visuals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    #playerAvatarEquip { width: 85px; height: 85px; border-radius: 50%; border: 4px solid #c9a94a; object-fit: cover; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
+    #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
+    .equipment-slots-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 250px; margin: 0 auto; }
+    .equipment-slot { background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; display: flex; align-items: center; justify-content: center; position: relative; overflow: visible; border-radius: 5px; }
+    .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
+    .item-level { position: absolute; bottom: -10px; right: 7px; background-color: rgba(0, 0, 0, 0.7); color: #fff; font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999; }
+    .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
+    .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
+    .stat-line span:first-child { color: #aaa; }
+    .stat-line span:last-child { font-weight: bold; color: #fff; }
+    .shimmer { background: linear-gradient(-90deg, #383838 0%, #444444 50%, #383838 100%); background-size: 400% 400%; animation: shimmer 1.2s ease-in-out infinite; color: transparent !important; }
+    @keyframes shimmer { 0% { background-position: -100% 0; } 100% { background-position: 100% 0; } }
+    .shimmer::before { content: '\00a0'; }
+    #sendmp { display: none; width: 100%; padding: 10px; margin-top: 20px; background-color: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: bold; transition: background-color 0.2s; text-align: center; text-decoration: none; }
+    #sendmp:hover { background-color: #1e84d4; }
+    @media(max-width:700px){ .rank-player-name-cp { max-width: 120px; font-size: 0.9em; } .rank-guild-name-cp { font-size: 0.75em; } .rank-power-cp { font-size: 1em; min-width: 90px; } #rankingListCP li { padding: 8px 10px; } }
+    #cpIcon { width: 26px; height: 38px; margin-top: 8px; margin-left: -6px; position: relative; }
+    /* Hide Google Translate garbage */
+    .goog-te-banner-frame.skiptranslate, .skiptranslate, .goog-te-balloon-frame, .goog-te-gadget { display: none !important; visibility: hidden !important; height: 0 !important; }
+    body { top: 0px !important; margin-top: 0px !important; position: static !important; }
+    font > font { background-color: transparent !important; box-shadow: none !important; position: static !important; }
   </style>
 </head>
 <body>
@@ -402,7 +128,7 @@ font > font {
 
   <div id="rankingContent">
     <h2>Top 100</h2>
-   <center> <div id="atualiza">(Atualiza todos os dias às 21h00)</div></center>
+   <center> <div id="atualiza">(Atualiza semanalmente: Segunda-feira 00:00 UTC)</div></center>
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
 
@@ -451,10 +177,13 @@ font > font {
         <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
       </div>
       
-      <button id="sendmp" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 0 0;"><img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem</button>
+      <a id="sendmp" href="#" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 10px;">
+          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem
+      </a>
 
     </div>
   </div>
+
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="playerModal.js"></script> 
   <script src="number_format.js"></script>
@@ -462,55 +191,84 @@ font > font {
 
   <script>
   (function(){
-    // ... FUNÇÕES DE CACHE ...
+    // CONFIG DO SUPABASE
     const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
     const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabase = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-    function calculateMidnightUTCTimestamp(){
+    function esc(s){ return String(s||''); }
+    function safeNum(n){ return typeof n === 'number' ? n : (n?Number(n):0); }
+
+    // ====================================================================================
+    // CACHE #1: RANKING SEMANAL (SEGUNDA-FEIRA 00:00 UTC)
+    // ====================================================================================
+    function calculateNextMondayUTC(){
         const now = new Date();
-        const midnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
-        return midnightUTC.getTime();
+        const day = now.getUTCDay(); // 0 (Dom) a 6 (Sab)
+        // Se hoje for Segunda (1), o resto é 0. O operador || 7 força a ser 7 dias (próxima semana).
+        // Se hoje for Domingo (0), (8-0)%7 = 1 (Amanhã).
+        // Se hoje for Terça (2), (8-2)%7 = 6 (Daqui a 6 dias).
+        let daysUntilNextMonday = (8 - day) % 7;
+        if(daysUntilNextMonday === 0) daysUntilNextMonday = 7; 
+
+        const nextMon = new Date(now);
+        nextMon.setUTCDate(now.getUTCDate() + daysUntilNextMonday);
+        nextMon.setUTCHours(0,0,0,0);
+        return nextMon.getTime();
     }
 
-    function setCache(key, value){
-        const expirationTime = calculateMidnightUTCTimestamp();
-        try {
-            localStorage.setItem(key, JSON.stringify({ v:value, e: expirationTime }));
-        } catch(e){}
+    function setRankingCache(key, value){
+        const expirationTime = calculateNextMondayUTC();
+        try { localStorage.setItem(key, JSON.stringify({ v:value, e: expirationTime })); } catch(e){}
     }
 
-    function getCache(key){
+    function getRankingCache(key){
         try {
             const raw = localStorage.getItem(key);
             if(!raw) return null;
             const obj = JSON.parse(raw);
-            if(!obj.e || Date.now()>=obj.e){
+            if(!obj.e || Date.now()>=obj.e){ localStorage.removeItem(key); return null; }
+            return obj.v;
+        } catch(e){ return null; }
+    }
+
+    // ====================================================================================
+    // CACHE #2: PLAYER MODAL (24 HORAS)
+    // ====================================================================================
+    function getPlayerCache(playerId) {
+        try {
+            const key = `player_details_v2_${playerId}`;
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            const obj = JSON.parse(raw);
+            // Expira em 24 horas
+            if (!obj.e || Date.now() >= obj.e) {
                 localStorage.removeItem(key);
                 return null;
             }
             return obj.v;
-        } catch(e){
-            return null;
-        }
+        } catch (e) { return null; }
     }
-    // ====================================================================================
-    
-    function esc(s){ return String(s||''); }
-    function safeNum(n){ return typeof n === 'number' ? n : (n?Number(n):0); }
 
-    // ====== applyItemBonuses (idêntica ao script.js) ======
+    function setPlayerCache(playerId, data) {
+        try {
+            const key = `player_details_v2_${playerId}`;
+            // Expiração = Agora + 24 horas (em ms)
+            const expirationTime = Date.now() + (24 * 60 * 60 * 1000);
+            localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
+        } catch (e) { console.warn("Erro ao salvar cache local", e); }
+    }
+
+    // ====================================================================================
+    // LÓGICA DE CP (Compartilhada)
+    // ====================================================================================
     function applyItemBonuses(player, equippedItems){
         let combinedStats = Object.assign({}, player); 
-        combinedStats.min_attack = safeNum(combinedStats.min_attack);
-        combinedStats.attack = safeNum(combinedStats.attack);
-        combinedStats.defense = safeNum(combinedStats.defense);
-        combinedStats.health = safeNum(combinedStats.health);
-        combinedStats.crit_chance = safeNum(combinedStats.crit_chance);
-        combinedStats.crit_damage = safeNum(combinedStats.crit_damage);
-        combinedStats.evasion = safeNum(combinedStats.evasion);
+        // Reset base stats as safe numbers
+        ['min_attack','attack','defense','health','crit_chance','crit_damage','evasion'].forEach(k => combinedStats[k] = safeNum(combinedStats[k]));
 
         (equippedItems || []).forEach(invItem => {
+            // Stats base do item
             if (invItem.items) {
                 combinedStats.min_attack += safeNum(invItem.items.min_attack);
                 combinedStats.attack += safeNum(invItem.items.attack);
@@ -520,6 +278,7 @@ font > font {
                 combinedStats.crit_damage += safeNum(invItem.items.crit_damage);
                 combinedStats.evasion += safeNum(invItem.items.evasion);
             }
+            // Bônus de aprimoramento/encantamento
             combinedStats.min_attack += safeNum(invItem.min_attack_bonus);
             combinedStats.attack += safeNum(invItem.attack_bonus);
             combinedStats.defense += safeNum(invItem.defense_bonus);
@@ -531,29 +290,21 @@ font > font {
         return combinedStats;
     }
 
-    // ====== fórmula idêntica ao fetchAndDisplayPlayerInfo do seu script.js ======
-    function calculateCombatPowerFromCombined(playerCombined){
-        const atk = safeNum(playerCombined.attack);
-        const minAtk = safeNum(playerCombined.min_attack);
-        const critChance = safeNum(playerCombined.crit_chance);
-        const critDamage = safeNum(playerCombined.crit_damage);
-        const defense = safeNum(playerCombined.defense);
-        const health = safeNum(playerCombined.health);
-        const evasion = safeNum(playerCombined.evasion);
-
-        const cp = Math.floor(
-            (atk * 12.5) +
-            (minAtk * 1.5) +
-            (critChance * 5.35) +
-            (critDamage * 6.5) +
-            (defense * 2) +
-            (health * 3.2625) +
-            (evasion * 1)
+    function calculateCombatPowerFromCombined(stats){
+        return Math.floor(
+            (safeNum(stats.attack) * 12.5) +
+            (safeNum(stats.min_attack) * 1.5) +
+            (safeNum(stats.crit_chance) * 5.35) +
+            (safeNum(stats.crit_damage) * 6.5) +
+            (safeNum(stats.defense) * 2) +
+            (safeNum(stats.health) * 3.2625) +
+            (safeNum(stats.evasion) * 1)
         );
-        return cp;
     }
 
-    // Render (ALTERADA para lista + clique)
+    // ====================================================================================
+    // RENDERIZAÇÃO DO RANKING
+    // ====================================================================================
     function renderRanking(list){
       const w = document.getElementById('rankingWrapper');
       if(!list || list.length === 0){ w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>'; return; }
@@ -565,12 +316,17 @@ font > font {
         const pos = i+1;
         const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
         
-        // Uso das classes de lista
+        // Ícone de Olho SVG
+        const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
+
         html += `<li data-player-id="${esc(p.id)}">
           <span class="rank-position-cp">${pos}</span>
           <img class="rank-avatar-cp ${pos===1?'pulse':''}" src="${avatar}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
           <div class="rank-player-info-cp">
-            <span class="rank-player-name-cp player-link" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
+            <div class="rank-player-name-wrapper">
+                <span class="rank-player-name-cp" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
+                ${eyeIcon}
+            </div>
             <span class="rank-guild-name-cp">${esc(p.guild_name||'Sem Guilda')}</span>
           </div>
           <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
@@ -580,70 +336,76 @@ font > font {
       html += '</ol></div>';
       w.innerHTML = html;
       
-      // Adiciona listener de clique na lista após a renderização
+      // Listener unificado para cliques na lista (Nome ou Olho)
       document.getElementById('rankingListCP').addEventListener('click', (e) => {
-          const nameSpan = e.target.closest('.rank-player-name-cp');
-          if (!nameSpan) return;
-          const playerId = nameSpan.dataset.playerId;
+          // Verifica se clicou no nome OU no ícone do olho
+          const trigger = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
+          if (!trigger) return;
           
+          const playerId = trigger.dataset.playerId;
           if (playerId) {
+              // Abre o modal imediatamente
               const playerModal = document.getElementById('playerModal');
-              if (playerModal) playerModal.style.display = 'flex'; // Exibe o modal
-              // Chama a função global do playerModal.js
-              window.fetchPlayerData(playerId); 
+              if (playerModal) playerModal.style.display = 'flex';
+              
+              // Chama a função OTIMIZADA com cache
+              fetchPlayerDetailsWithCache(playerId);
           }
       });
     }
 
-    // ====== Fetch e cálculo corretos (Mantidos) ======
+    // ====================================================================================
+    // FETCH DO RANKING (PRINCIPAL)
+    // ====================================================================================
     async function fetchTop100ByCombatPower(){
-      const cacheKey = 'ranking_cp_top_100_correct_v1';
-      const cached = getCache(cacheKey);
-      if(cached){ renderRanking(cached); return; }
+      const cacheKey = 'ranking_cp_weekly_v1';
+      const cached = getRankingCache(cacheKey);
+      
+      if(cached){ 
+          console.log("Usando cache semanal do ranking.");
+          renderRanking(cached); 
+          return; 
+      }
+      
       if(!supabase){ document.getElementById('loading').textContent = 'Supabase não inicializado.'; return; }
 
       try {
-        document.getElementById('loading').textContent = 'Buscando jogadores...';
+        document.getElementById('loading').textContent = 'Buscando ranking (semanal)...';
+        // Passo 1: Buscar players
         const { data: players, error: pErr } = await supabase
           .from('players')
           .select('id,name,avatar_url,guild_id,attack,defense,health,min_attack,crit_chance,crit_damage,evasion')
           .neq('is_banned', true)
-          .limit(500); 
+          .limit(500); // Trazemos mais para garantir que o cálculo de CP filtre os Top 100 reais
 
         if(pErr) throw pErr;
         if(!players || players.length===0){ renderRanking([]); return; }
 
         const ids = players.map(x=>x.id);
 
+        // Passo 2: Buscar itens equipados desses players
         const { data: items, error: iErr } = await supabase
           .from('inventory_items')
           .select(`
              player_id,
              equipped_slot,
-             min_attack_bonus,
-             attack_bonus,
-             defense_bonus,
-             health_bonus,
-             crit_chance_bonus,
-             crit_damage_bonus,
-             evasion_bonus,
-             items (
-               min_attack, attack, defense, health, crit_chance, crit_damage, evasion
-             )
+             min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
+             crit_chance_bonus, crit_damage_bonus, evasion_bonus,
+             items ( min_attack, attack, defense, health, crit_chance, crit_damage, evasion )
           `)
           .in('player_id', ids)
           .not('equipped_slot','is',null);
 
-        if(iErr){
-          console.warn('Erro ao buscar itens equipados (join items):', iErr);
-        }
+        if(iErr) console.warn('Erro ao buscar itens:', iErr);
 
+        // Organizar itens por player
         const itemsByPlayer = {};
         (items || []).forEach(it => {
           if(!itemsByPlayer[it.player_id]) itemsByPlayer[it.player_id] = [];
           itemsByPlayer[it.player_id].push(it);
         });
 
+        // Passo 3: Buscar Guildas
         const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
         const guildsById = {};
         if(uniqueGuilds.length){
@@ -651,6 +413,7 @@ font > font {
           (guilds||[]).forEach(g => guildsById[g.id] = g.name);
         }
 
+        // Calcular CP
         const computed = players.map(p => {
           const equipped = itemsByPlayer[p.id] || [];
           const combined = applyItemBonuses(p, equipped);
@@ -660,58 +423,204 @@ font > font {
             name: p.name,
             avatar_url: p.avatar_url,
             guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
-            cp,
-            combined
+            cp
           };
         });
 
+        // Ordenar e pegar Top 100
         computed.sort((a,b) => b.cp - a.cp);
         const top100 = computed.slice(0,100);
         
-        setCache(cacheKey, top100);
-        
+        setRankingCache(cacheKey, top100);
         renderRanking(top100);
 
       } catch(err){
-        console.error('Erro ao buscar ranking CP corrigido:', err);
-        document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro ao carregar ranking: ${esc(err.message||err)}</div>`;
+        console.error('Erro:', err);
+        document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;
       }
     }
+
+    // ====================================================================================
+    // FETCH DETALHES DO JOGADOR (OTIMIZADO COM CACHE 24H)
+    // Substitui a lógica que estaria no playerModal.js
+    // ====================================================================================
+    window.fetchPlayerDetailsWithCache = async function(playerId) {
+        // Limpa UI para estado de carregamento
+        resetModalUI();
+        
+        // 1. Tenta pegar do cache
+        const cachedData = getPlayerCache(playerId);
+        if (cachedData) {
+            console.log("Usando cache 24h para jogador:", playerId);
+            populatePlayerModal(cachedData);
+            return;
+        }
+
+        // 2. Se não tiver cache, busca no Supabase
+        if (!supabase) return;
+
+        try {
+            // Busca Player + Guilda
+            const { data: player, error: pErr } = await supabase
+                .from('players')
+                .select('*, guilds(name, flag_url)')
+                .eq('id', playerId)
+                .single();
+
+            if (pErr) throw pErr;
+
+            // Busca Itens Equipados + Imagens dos itens
+            const { data: equippedItems, error: iErr } = await supabase
+                .from('inventory_items')
+                .select(`
+                    equipped_slot,
+                    min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
+                    crit_chance_bonus, crit_damage_bonus, evasion_bonus,
+                    items (
+                        id, name, image_url,
+                        min_attack, attack, defense, health, crit_chance, crit_damage, evasion
+                    )
+                `)
+                .eq('player_id', playerId)
+                .not('equipped_slot', 'is', null);
+
+            if (iErr) console.warn("Erro ao buscar itens do modal", iErr);
+
+            // Calcula Stats Totais
+            const combinedStats = applyItemBonuses(player, equippedItems || []);
+            const finalCP = calculateCombatPowerFromCombined(combinedStats);
+
+            // Monta o objeto de dados completo
+            const fullPlayerData = {
+                basic: {
+                    name: player.name,
+                    level: player.level,
+                    avatar_url: player.avatar_url,
+                    guild_name: player.guilds?.name || 'Sem Guilda',
+                    guild_flag: player.guilds?.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp',
+                    cp: finalCP
+                },
+                stats: combinedStats,
+                items: equippedItems || []
+            };
+
+            // Salva no cache (24h)
+            setPlayerCache(playerId, fullPlayerData);
+
+            // Popula a tela
+            populatePlayerModal(fullPlayerData);
+
+        } catch (error) {
+            console.error("Erro ao carregar detalhes:", error);
+            document.getElementById('playerName').textContent = "Erro ao carregar";
+        }
+    };
+
+    // Função auxiliar para preencher o HTML do Modal
+    function populatePlayerModal(data) {
+        const { basic, stats, items } = data;
+
+        // Infos Básicas
+        document.getElementById('playerName').textContent = basic.name;
+        document.getElementById('playerName').classList.remove('shimmer');
+        
+        document.getElementById('playerLevel').textContent = 'Nv. ' + safeNum(basic.level);
+        document.getElementById('playerLevel').classList.remove('shimmer');
+
+        const gFlag = document.getElementById('playerGuildFlag');
+        gFlag.src = basic.guild_flag;
+        gFlag.classList.remove('shimmer');
+
+        const gName = document.getElementById('playerGuildName');
+        gName.textContent = basic.guild_name;
+        gName.classList.remove('shimmer');
+
+        const cpDiv = document.getElementById('playerCombatPower');
+        cpDiv.textContent = formatNumberCompact(basic.cp);
+        cpDiv.classList.remove('shimmer');
+
+        const avatarImg = document.getElementById('playerAvatarEquip');
+        avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+        avatarImg.classList.remove('shimmer');
+
+        // Stats
+        const statMap = {
+            'playerAttack': stats.attack,
+            'playerDefense': stats.defense,
+            'playerHealth': stats.health,
+            'playerEvasion': stats.evasion,
+            'playerCritChance': stats.crit_chance + '%',
+            'playerCritDamage': stats.crit_damage + '%'
+        };
+        for (const [id, val] of Object.entries(statMap)) {
+            const el = document.getElementById(id);
+            if(el) {
+                el.textContent = val;
+                el.classList.remove('shimmer');
+            }
+        }
+
+        // Equipamentos (Imagens nos slots)
+        // Limpar slots primeiro
+        document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
+        
+        items.forEach(invItem => {
+            if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
+                const slotId = `${invItem.equipped_slot}-slot`; // Ex: weapon-slot
+                const slotDiv = document.getElementById(slotId);
+                if(slotDiv) {
+                    slotDiv.innerHTML = `<img src="${invItem.items.image_url}" alt="Item" title="${invItem.items.name}">`;
+                }
+            }
+        });
+
+        // Configurar link de mensagem
+        const sendBtn = document.getElementById('sendmp');
+        sendBtn.style.display = 'flex';
+        // Supomos que a URL de mensagem seja go:msg:NOME
+        sendBtn.href = "go:msg:" + basic.name; 
+    }
+
+    function resetModalUI() {
+        // Adiciona classes shimmer de volta e limpa textos
+        const shimmers = ['playerName', 'playerLevel', 'playerGuildName', 'playerCombatPower', 'playerAvatarEquip',
+                          'playerAttack', 'playerDefense', 'playerHealth', 'playerEvasion', 'playerCritChance', 'playerCritDamage'];
+        shimmers.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.classList.add('shimmer');
+                if(el.tagName !== 'IMG') el.textContent = '';
+            }
+        });
+        document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
+        document.getElementById('sendmp').style.display = 'none';
+    }
+    
+    // Sobrescrever a função global antiga se ela existir
+    window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
 
     document.addEventListener('DOMContentLoaded', fetchTop100ByCombatPower);
   })();
   </script>
+  
   <script>
-document.addEventListener("DOMContentLoaded", () => {
-  // cria um elemento para medir o tamanho real de 1rem
-  const testEl = document.createElement("div");
-  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
-  testEl.textContent = "M";
-  document.body.appendChild(testEl);
-
-  const actualRem = testEl.getBoundingClientRect().height;
-  document.body.removeChild(testEl);
-
-  console.log("[scale-lock] 1rem real:", actualRem, "px");
-
-  // queremos sempre 16px como base (modo padrão)
-  const targetRem = 16;
-  const correction = targetRem / actualRem;
-
-  const style = document.createElement("style");
-  style.textContent = `
-    html { font-size: ${16 * correction}px !important; }
-    body { font-size: 1.3rem !important; }
-  `;
-  document.head.appendChild(style);
-
-  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
-});
-</script>
-<div id="google_translate_element"></div>
-
-<script src="auto_translate.js"></script>
-
-<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    // Scale Lock Script
+    document.addEventListener("DOMContentLoaded", () => {
+      const testEl = document.createElement("div");
+      testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+      testEl.textContent = "M";
+      document.body.appendChild(testEl);
+      const actualRem = testEl.getBoundingClientRect().height;
+      document.body.removeChild(testEl);
+      const targetRem = 16;
+      const correction = targetRem / actualRem;
+      const style = document.createElement("style");
+      style.textContent = `html { font-size: ${16 * correction}px !important; } body { font-size: 1.3rem !important; }`;
+      document.head.appendChild(style);
+    });
+  </script>
+  <div id="google_translate_element"></div>
+  <script src="auto_translate.js"></script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>

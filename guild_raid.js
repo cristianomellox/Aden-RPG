@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v8.2) - Correção definitiva de async/await + Auth Otimista");
+console.log("guild_raid.js (v9.0) - Zero Egress + Batch Sync + Otimista");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -6,11 +6,15 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
-const RAID_POLL_MS = 20000;
+const RAID_POLL_MS = 20000; // Polling mantido para checar estado dos outros
 const SECONDARY_POLL_MS = 80000;
 const REVIVE_CHECK_MS = 10000;
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
+
+// Configurações Batch / Otimista
+const BATCH_THRESHOLD = 3; // Envia ao servidor a cada 3 ataques acumulados
+const BATCH_DEBOUNCE_MS = 60000; // Ou após 3 segundos sem clicar
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -48,9 +52,16 @@ let deathNotificationQueue = [];
 let isDisplayingDeathNotification = false;
 let processedDeathTimestamps = new Set(); 
 
-// --- NOVO: Variáveis para o ataque visual do chefe ---
+// --- Variáveis para o ataque visual do chefe ---
 let visualBossAttackInterval = null;
 let nextBossAttackAt = null;
+
+// --- STATE OTIMISTA & BATCH ---
+let playerStatsCache = null; // { min_attack, attack, crit_chance, crit_damage }
+let pendingAttacksQueue = 0; // Quantos ataques estão na fila
+let batchSyncTimer = null; // Timer do debounce
+let localDamageDealtInBatch = 0; // Dano acumulado visualmente
+let isBatchSyncing = false; // Flag para evitar duplicação
 
 // Sistema de Fila de Ações e Controle de Mídia
 let actionQueue = [];
@@ -94,6 +105,56 @@ function showRaidAlert(message) {
   okBtn.onclick = () => {
     modal.style.display = "none";
   };
+}
+
+// --- Funções de Persistência Batch ---
+function saveBatchState() {
+    if (!currentRaidId) return;
+    const data = {
+        queue: pendingAttacksQueue,
+        dmg: localDamageDealtInBatch,
+        raidId: currentRaidId,
+        ts: Date.now()
+    };
+    localStorage.setItem('raid_batch_state', JSON.stringify(data));
+}
+
+function loadBatchState() {
+    try {
+        const raw = localStorage.getItem('raid_batch_state');
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        // Recupera apenas se for da mesma raid e recente (10 min)
+        if (data.raidId === currentRaidId && (Date.now() - data.ts < 600000)) {
+            pendingAttacksQueue = data.queue || 0;
+            localDamageDealtInBatch = data.dmg || 0;
+            if (pendingAttacksQueue > 0) {
+                 // Tenta sincronizar logo se houver pendências
+                 triggerBatchSync(); 
+            }
+        } else {
+            // Limpa dados velhos
+            localStorage.removeItem('raid_batch_state');
+        }
+    } catch(e) {}
+}
+
+// --- Cache de Stats do Jogador ---
+async function cachePlayerStats() {
+    if (playerStatsCache) return; // Já carregado
+    if (!userId) return;
+    try {
+        const { data, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
+        if (data && !error) {
+            playerStatsCache = {
+                min_attack: Number(data.min_attack || 0),
+                attack: Number(data.attack || 0),
+                crit_chance: Number(data.crit_chance || 0),
+                crit_damage: Number(data.crit_damage || 0)
+            };
+            console.log("Stats cacheados:", playerStatsCache);
+        }
+    } catch(e) { console.warn("Erro ao cachear stats:", e); }
 }
 
 
@@ -687,7 +748,6 @@ function getLocalPlayerData() {
 
 async function initSession() {
   try {
-    // 1. Tentativa: Cache Completo (Ideal: Zero Network)
     const cachedPlayer = getLocalPlayerData();
     if (cachedPlayer) {
         console.log("⚡ [Raid] Dados do jogador recuperados do cache.");
@@ -699,13 +759,11 @@ async function initSession() {
             const av = $id("raidPlayerAvatar");
             if (av) av.src = cachedPlayer.avatar_url;
         }
-        return; // Sucesso total sem rede
+        return; 
     }
 
-    // 2. Tentativa: ID Local + Fetch Banco (Médio: Apenas DB egress, sem Auth)
     let localId = getLocalUserId();
     
-    // 3. Fallback: Auth API (Pior caso: Auth + DB egress)
     if (!localId) {
         const { data } = await supabase.auth.getSession();
         if (data?.session) {
@@ -713,11 +771,10 @@ async function initSession() {
         }
     }
 
-    if (!localId) return; // Não logado
+    if (!localId) return; 
 
     userId = localId;
 
-    // Busca detalhes no banco já que o cache completo falhou
     const { data: player, error } = await supabase.from("players").select("name, guild_id, rank, avatar_url").eq("id", userId).single();
     if (!error && player) {
       userName = player.name;
@@ -823,6 +880,9 @@ async function continueLoadingRaid(raidData) {
     await loadMonsterForFloor(currentFloor);
     await loadAttempts();
     await loadInitialPlayerState();
+    await cachePlayerStats(); // Cachear stats para o modo otimista
+    loadBatchState(); // Recupera fila de batch se houver
+
     await refreshRanking();
     await checkPendingRaidRewards();
 
@@ -922,16 +982,24 @@ function updateAttackUI() {
   const cooldownEl = $id("raidAttackCooldown");
   const attackBtn = $id("raidAttackBtn");
   if (!attacksEl || !cooldownEl || !attackBtn) return;
-  const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
-  attacksEl.textContent = `${shownAttacks} / ${MAX_ATTACKS}`;
+  const { shownAttacks } = computeShownAttacksAndRemaining();
+  
+  // Deduz visualmente os ataques que estão na fila de envio
+  const visualAttacksLeft = Math.max(0, shownAttacks - pendingAttacksQueue);
+
+  attacksEl.textContent = `${visualAttacksLeft} / ${MAX_ATTACKS}`;
+  
+  // Cooldown continua baseado no último ataque real/oficial
+  const { secondsToNext } = computeShownAttacksAndRemaining();
   cooldownEl.textContent = secondsToNext > 0 ? `+ 1 em ${formatTime(secondsToNext)}` : "";
+  
   const playerDead = isPlayerDeadLocal();
   if (playerDead || isProcessingAction) { 
     attackBtn.style.pointerEvents = "none";
     attackBtn.style.filter = "grayscale(80%)";
   } else {
-    attackBtn.style.pointerEvents = shownAttacks > 0 ? "" : "none";
-    attackBtn.style.filter = shownAttacks > 0 ? "" : "grayscale(60%)";
+    attackBtn.style.pointerEvents = visualAttacksLeft > 0 ? "" : "none";
+    attackBtn.style.filter = visualAttacksLeft > 0 ? "" : "grayscale(60%)";
   }
 }
 
@@ -964,6 +1032,8 @@ async function loadInitialPlayerState() {
 
 async function refreshAttemptsServerSideOnceIfNeeded() {
   if (!currentRaidId || !userId || refreshAttemptsPending) return;
+  // Com batching, a lógica de refresh é menos crítica, pois o cliente calcula.
+  // Mas mantemos caso haja drift grande.
   const { shownAttacks } = computeShownAttacksAndRemaining();
   const shouldRefresh = (shownAttacks > attacksLeft);
   if (!shouldRefresh) return;
@@ -983,70 +1053,139 @@ async function refreshAttemptsServerSideOnceIfNeeded() {
   }
 }
 
-async function performAttack() {
+// --- FUNÇÃO DE ATAQUE OTIMISTA (Substitui performAttack) ---
+async function performAttackOptimistic() {
     if (!currentRaidId || !userId || isProcessingAction) return;
-    if (isPlayerDeadLocal()) {
-        showRaidAlert("Você está morto. Aguarde reviver.");
-        return;
-    }
+    if (isPlayerDeadLocal()) { showRaidAlert("Você está morto."); return; }
+    
+    // 1. Verificar Cooldown Local
     const { shownAttacks } = computeShownAttacksAndRemaining();
-    if (shownAttacks <= 0) {
+    const visualAttacksLeft = shownAttacks - pendingAttacksQueue; 
+
+    if (visualAttacksLeft <= 0) {
+        // Tenta um refresh de emergência
         await refreshAttemptsServerSideOnceIfNeeded();
-        if (computeShownAttacksAndRemaining().shownAttacks <= 0) {
+        if ((computeShownAttacksAndRemaining().shownAttacks - pendingAttacksQueue) <= 0) {
             showRaidAlert("Sem ataques. Aguarde regeneração.");
             return;
         }
     }
-    const attackBtn = $id("raidAttackBtn");
-    if (attackBtn) attackBtn.style.pointerEvents = "none";
-    try {
-        const { data: payload, error } = await supabase.rpc("perform_raid_attack", { p_raid_id: currentRaidId, p_player_id: userId });
-        if (error || !payload?.success) {
-            showRaidAlert(error?.message || payload?.message || "Ataque não realizado");
-            await loadAttempts();
-            return;
-        }
-        
-        if (payload.attacks_left !== null) attacksLeft = Number(payload.attacks_left);
-        lastAttackAt = payload.last_attack_at ? new Date(payload.last_attack_at) : (attacksLeft < MAX_ATTACKS ? new Date() : null);
-        
-        if (payload.player_rank && payload.new_total_damage) {
-            updatePlayerRankUi(payload.player_rank, payload.new_total_damage);
-        }
 
-        updateAttackUI();
-        displayFloatingDamageOver($id("raidMonsterArea"), payload.damage_dealt ?? 0, payload.is_crit === true);
-        playHitSound(payload.is_crit === true);
-        
-        const monsterImg = $id("raidMonsterImage");
-        if (monsterImg) {
-            monsterImg.classList.add('shake-animation');
-            setTimeout(() => monsterImg.classList.remove('shake-animation'), 1000);
-        }
+    // 2. Calcular Dano Local (RNG JS)
+    if (!playerStatsCache) await cachePlayerStats();
+    
+    const { min_attack, attack, crit_chance, crit_damage } = playerStatsCache || { min_attack: 1, attack: 5, crit_chance: 0, crit_damage: 0 };
+    const isCrit = (Math.random() * 100) < crit_chance;
+    let damage = Math.floor(Math.random() * ((attack - min_attack) + 1) + min_attack);
+    if (isCrit) damage = Math.floor(damage * (1 + crit_damage / 100.0));
+    damage = Math.max(1, damage);
 
-        if (payload.monster_health !== null) updateHpBar(payload.monster_health, payload.max_monster_health || maxMonsterHealth);
-        
-        if (payload.monster_health !== null && Number(payload.monster_health) <= 0) {
-            const floorDefeated = currentFloor; 
-            const wasBoss = floorDefeated % 5 === 0;
-            const rewardCallback = () => {
-                showRewardModal(payload.xp_reward, payload.crystals_reward, () => {
-                    setTimeout(() => loadRaid().catch(()=>{}), 200);
-                }, undefined, payload.items_dropped);
-            };
-            if (wasBoss) {
-                queueAction(() => playVideo(BOSS_DEATH_VIDEO_URL, rewardCallback));
-            } else {
-                rewardCallback();
-            }
-            return;
-        }
-    } catch (e) {
-        console.error("performAttack erro:", e);
-    } finally {
-        if (attackBtn) attackBtn.style.pointerEvents = "";
-        updateAttackUI(); 
+    // 3. Atualizar UI Imediatamente (Feedback Instantâneo)
+    displayFloatingDamageOver($id("raidMonsterArea"), damage, isCrit);
+    playHitSound(isCrit);
+    
+    // Atualiza barra de vida do monstro localmente
+    const currentMonsterHp = Number($id("raidMonsterHpText").textContent.split('/')[0].replace(/[^\d]/g, ''));
+    const newVisualHp = Math.max(0, currentMonsterHp - damage);
+    updateHpBar(newVisualHp, maxMonsterHealth);
+    
+    const monsterImg = $id("raidMonsterImage");
+    if (monsterImg) {
+        monsterImg.classList.add('shake-animation');
+        setTimeout(() => monsterImg.classList.remove('shake-animation'), 300);
     }
+
+    // 4. Adicionar à Fila de Sync
+    pendingAttacksQueue++;
+    localDamageDealtInBatch += damage;
+    
+    // Inicia cooldown visual se estava full
+    if (attacksLeft >= MAX_ATTACKS && lastAttackAt === null) {
+         lastAttackAt = new Date(); 
+    }
+    
+    updateAttackUI(); 
+    saveBatchState(); 
+
+    // 5. Decisão de Sync
+    if (batchSyncTimer) clearTimeout(batchSyncTimer);
+    
+    if (pendingAttacksQueue >= BATCH_THRESHOLD || newVisualHp <= 0) {
+        triggerBatchSync();
+    } else {
+        batchSyncTimer = setTimeout(triggerBatchSync, BATCH_DEBOUNCE_MS);
+    }
+}
+
+async function triggerBatchSync() {
+    if (pendingAttacksQueue === 0 || isBatchSyncing) return;
+    isBatchSyncing = true;
+
+    const attacksToSend = pendingAttacksQueue;
+    const expectedDamage = localDamageDealtInBatch; 
+
+    // Limpa fila local PROVISORIAMENTE (Optimistic success)
+    pendingAttacksQueue = 0;
+    localDamageDealtInBatch = 0;
+    saveBatchState(); 
+    if (batchSyncTimer) clearTimeout(batchSyncTimer);
+
+    // Atualiza UI para refletir fila vazia
+    updateAttackUI();
+
+    try {
+        console.log(`[Sync] Enviando lote de ${attacksToSend} ataques...`);
+        
+        const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
+            p_player_id: userId,
+            p_raid_id: currentRaidId,
+            p_attack_count: attacksToSend
+        });
+
+        if (error || !data.success) {
+            throw new Error(error?.message || data?.message || "Erro no sync");
+        }
+
+        // --- RECONCILIAÇÃO ---
+        updateHpBar(data.monster_health, data.max_monster_health);
+
+        // Atualizar Tentativas Reais (Correção de Drift)
+        attacksLeft = data.attacks_left;
+        lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+        updateAttackUI();
+
+        // Atualizar Rank e Dano Total
+        updatePlayerRankUi(data.player_rank, data.new_total_damage);
+
+        // Checar Morte (Recompensas)
+        if (data.monster_health <= 0) {
+             const floorDefeated = currentFloor; 
+             const wasBoss = floorDefeated % 5 === 0;
+             const rewardCallback = () => {
+                showRewardModal(data.xp_reward, data.crystals_reward, () => {
+                    setTimeout(() => loadRaid().catch(()=>{}), 200);
+                }, undefined, data.items_dropped);
+             };
+
+             if (wasBoss) {
+                queueAction(() => playVideo(BOSS_DEATH_VIDEO_URL, rewardCallback));
+             } else {
+                rewardCallback();
+             }
+        }
+
+    } catch (e) {
+        console.error("Falha no Sync Batch:", e);
+        // Rollback: Devolve os ataques para a fila para tentar de novo
+        pendingAttacksQueue += attacksToSend;
+        localDamageDealtInBatch += expectedDamage;
+        saveBatchState();
+        updateAttackUI();
+        // Tenta de novo em 5s
+        batchSyncTimer = setTimeout(() => { isBatchSyncing = false; triggerBatchSync(); }, 5000);
+        return; // Retorna aqui para não setar isBatchSyncing false abaixo
+    }
+    isBatchSyncing = false;
 }
 
 function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
@@ -1286,6 +1425,10 @@ async function checkPendingRaidRewards() {
 
 function startPolling() {
   stopPolling();
+  // Polling ajustado para 20s. 
+  // Nota: A atualização do player agora acontece no triggerBatchSync,
+  // mas o polling ainda é necessário para ver dano dos outros, morte de outros, 
+  // ataques do boss em tempo real no servidor, etc.
   pollInterval = setInterval(async () => {
     if (!currentRaidId || !userId || isProcessingAction) return;
 
@@ -1308,7 +1451,11 @@ function startPolling() {
       return;
     }
 
-    updateHpBar(state.monster_health, state.initial_monster_health);
+    // Só atualiza HP visual se não estivermos "batendo" agora (evitar jitter)
+    if (pendingAttacksQueue === 0) {
+        updateHpBar(state.monster_health, state.initial_monster_health);
+    }
+    
     updatePlayerHpUi(state.player_health, playerMaxHealth);
     syncBossAttackTimer(state.last_boss_attack_at);
 
@@ -1348,8 +1495,12 @@ function startUISecondTicker() {
   stopUISecondTicker();
   uiSecondInterval = setInterval(async () => {
     updateAttackUI();
-    if (computeShownAttacksAndRemaining().secondsToNext === 0 && computeShownAttacksAndRemaining().shownAttacks > attacksLeft) {
-      await refreshAttemptsServerSideOnceIfNeeded();
+    // Se o cliente acha que deve ter ataques mas o servidor ainda não confirmou,
+    // podemos checar se o contador local já estourou o cooldown.
+    const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
+    // Se visualmente temos 0 e timer 0, mas attacksLeft é menor do que devia
+    if (secondsToNext === 0 && shownAttacks > attacksLeft && pendingAttacksQueue === 0) {
+       await refreshAttemptsServerSideOnceIfNeeded();
     }
   }, 1000);
 }
@@ -1390,6 +1541,9 @@ function closeCombatModal(){
   deathNotificationQueue = [];
   isDisplayingDeathNotification = false;
   processedDeathTimestamps.clear();
+
+  // Garante que se fechar, tenta enviar o que sobrou
+  if (pendingAttacksQueue > 0) triggerBatchSync();
 
   stopPolling(); 
   stopSecondaryPolling();
@@ -1476,13 +1630,19 @@ function bindEvents() {
     }
   });
 
+  // Alterado para chamar performAttackOptimistic
   $id("raidAttackBtn")?.addEventListener("click", async (e) => {
     try { unlockMedia(); } catch(e) { console.warn('unlockMedia error', e); }
-    try { await performAttack(); } catch(err) { console.error('performAttack error', err); }
+    try { await performAttackOptimistic(); } catch(err) { console.error('performAttackOptimistic error', err); }
 });
 
   $id("cancelRaidBtn")?.addEventListener("click", closeRaidModal);
   $id("raidBackBtn")?.addEventListener("click", () => closeCombatModal());
+  
+  // Salva batch ao sair da página
+  window.addEventListener('beforeunload', () => {
+      if (pendingAttacksQueue > 0) triggerBatchSync();
+  });
 }
 
 async function mainInit() {
@@ -1571,6 +1731,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (purchased > 0) {
           showRaidAlert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
+          // Atualiza attacksLeft localmente ao comprar
+          attacksLeft += purchased; 
+          updateAttackUI();
           if (typeof loadAttempts === 'function') await loadAttempts();
         }
       } catch (e) {
@@ -1615,6 +1778,5 @@ async function checkActiveRaidOnEntry() {
     console.error("checkActiveRaidOnEntry error:", e);
   }
 }
-
 
 setTimeout(() => { checkActiveRaidOnEntry().catch(()=>{}); }, 800);

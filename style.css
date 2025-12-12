@@ -429,23 +429,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 }
 
 /* Estilo para a imagem do monstro */
-#monsterImage {
-    display: block;
-    width: 180px;
-    height: 380px;
-    margin: 0 auto 10px auto;
-    object-fit: contain;
-    filter: none;
-    /* Animação de flutuação */
-    animation: float 3s ease-in-out infinite;
-}
 
-/* Keyframes para a animação de flutuação */
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); } /* ALTERADO: 8px para cima e para baixo */
-    100% { transform: translateY(0px); }
-}
 
 
 /* Estilo para a porcentagem de HP do monstro */
@@ -454,12 +438,6 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     font-weight: bold;
     margin-top: 10px;
     color: #e0dccc;
-}
-
-
-#monsterImage {
-    
-    object-fit: contain;
 }
 
 #authContainer,

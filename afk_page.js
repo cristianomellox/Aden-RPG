@@ -398,7 +398,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                             normalHitSound.currentTime = 0;
                             normalHitSound.play().catch(()=>{});
                         }
-
+const mImg = document.getElementById("monsterImage");
+        if (mImg) {
+            mImg.classList.remove('shake-animation'); // Remove classe anterior se houver
+            void mImg.offsetWidth; // Força o navegador a reconhecer a remoção (Reflow)
+            mImg.classList.add('shake-animation'); // Adiciona a animação
+            
+            // Remove a classe após 300ms para voltar a flutuar
+            setTimeout(() => {
+                mImg.classList.remove('shake-animation');
+            }, 300);
+        }
                         currentMonsterHp = Math.max(0, currentMonsterHp - attack.damage);
                         const pct = (currentMonsterHp / monsterMaxHp) * 100;
                         monsterHpFill.style.width = `${pct}%`;

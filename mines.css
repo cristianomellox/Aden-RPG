@@ -169,11 +169,23 @@
 }
 
 #monsterImage {
+    display: block;
     width: 380px;
     height: 380px;
-    margin-top: -40px;
-    
+    margin: 0 auto 10px auto;
+    object-fit: contain;
+    filter: none;
+    /* Animação de flutuação */
+    animation: float 3s ease-in-out infinite;
 }
+
+/* Keyframes para a animação de flutuação */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); } /* ALTERADO: 8px para cima e para baixo */
+    100% { transform: translateY(0px); }
+}
+
 
 #monsterHpBar {
     width: 100%;

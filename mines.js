@@ -1107,7 +1107,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
     displayDamageNumber(damage, isCrit, false, monsterArea);
     if (!hasAttackedOnce) hasAttackedOnce = true;
-
+const mImg = document.getElementById("monsterImage");
+    if (mImg) {
+        mImg.classList.remove('shake-animation');
+        void mImg.offsetWidth; // Força reflow (reinicia animação)
+        mImg.classList.add('shake-animation');
+        setTimeout(() => mImg.classList.remove('shake-animation'), 300);
+    }
     // 5. Adiciona à Fila (Batch)
     pendingBatch++;
 
@@ -1265,6 +1271,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
             }
             displayDamageNumber(turn.damage, turn.critical, turn.evaded, targetElement);
+            const victimAvatarId = turn.attacker_id === ownerId ? "challengerAvatar" : "defenderAvatar";
+            const vImg = document.getElementById(victimAvatarId);
+            
+            if (vImg) {
+                vImg.classList.remove('shake-animation');
+                void vImg.offsetWidth; // Força reflow
+                vImg.classList.add('shake-animation');
+                setTimeout(() => vImg.classList.remove('shake-animation'), 300);
+            }
             await new Promise(r => setTimeout(r, 1000));
         }
         await new Promise(r => setTimeout(r, 1000));

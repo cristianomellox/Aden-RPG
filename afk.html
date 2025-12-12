@@ -166,11 +166,44 @@ color: yellow;
     }
 
     #monsterImage {
-      max-width: 90%;
-    max-height: 90%;
-      margin: 15px 0;
-      border-radius: 8px;
-    }
+    display: block;
+    width: 180px;
+    height: 380px;
+    margin: 0 auto 10px auto;
+    object-fit: contain;
+    filter: none;
+    /* Animação de flutuação */
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Keyframes para a animação de flutuação */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); } /* ALTERADO: 8px para cima e para baixo */
+    100% { transform: translateY(0px); }
+}
+
+/* Animação de Tremida (Shake) */
+@keyframes shake {
+  0% { transform: translate(1px, 1px) rotate(0deg); }
+  10% { transform: translate(-1px, -2px) rotate(-1deg); }
+  20% { transform: translate(-3px, 0px) rotate(1deg); }
+  30% { transform: translate(3px, 2px) rotate(0deg); }
+  40% { transform: translate(1px, -1px) rotate(1deg); }
+  50% { transform: translate(-1px, 2px) rotate(-1deg); }
+  60% { transform: translate(-3px, 1px) rotate(0deg); }
+  70% { transform: translate(3px, 1px) rotate(-1deg); }
+  80% { transform: translate(-1px, -1px) rotate(1deg); }
+  90% { transform: translate(1px, 2px) rotate(0deg); }
+  100% { transform: translate(1px, -2px) rotate(-1deg); }
+}
+
+.shake-animation {
+  /* !important garante que sobrescreva a animação de flutuar (float) durante o dano */
+  animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both !important; 
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
 
     /* Modal de Resultados */
     #result-modal {
@@ -212,17 +245,6 @@ color: yellow;
         gap: 0.75rem;
     }
 
-/* Para centralizar a imagem do monstro */
-#monsterImage {
-    display: block; /* Garante que a imagem se comporte como um bloco */
-    margin-left: auto; /* Centraliza horizontalmente */
-    margin-right: auto; /* Centraliza horizontalmente */
-    max-width: 80%; /* Ajuste o tamanho máximo se necessário */
-    
-    /* Outros estilos existentes da imagem */
-    position: relative; /* Importante para posicionar os números de dano em relação a ele */
-    z-index: 1; /* Garante que a imagem fique atrás dos números de dano */
-}
 
 /* Estilos básicos para os números de dano flutuantes */
 .normal-damage-number, .crit-damage-number {
@@ -345,10 +367,6 @@ color: yellow;
     100% { transform: translateY(0px); }
 }
 
-#monsterImage {
-    animation: float 2s ease-in-out infinite;
-    /* Certifique-se de que não há outras animações aqui */
-}
 #result-modal, .modal, #music-permission-modal {
 background-image: url('https://aden-rpg.pages.dev/assets/divperga.webp'); 
         background-repeat: no-repeat;

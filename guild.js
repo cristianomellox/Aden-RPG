@@ -446,7 +446,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return false;
   }
 
-  // Função para renderizar a UI com os dados da guilda (Sua Guilda)
+  // Função para renderizar a UI com os dados da guilda
   async function renderGuildUI(guildData) {
       currentGuildData = guildData;
       const deleteGuildBtn = document.getElementById('deleteguild');
@@ -500,38 +500,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const roles = ['leader','co-leader','member'];
         // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
-        
         sorted.forEach(m => {
           const li = document.createElement('li');
-          
-          // Ícone de Olho (SVG) para ver perfil
-          const eyeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="view-player-icon" data-id="${m.id}" style="cursor: pointer; margin-left: 8px; vertical-align: middle;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
-
           li.innerHTML = `
             <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}"
                  style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
             <div class="member-details">
-              <span>${m.name} ${eyeIcon}</span>
+              <span class="player-link" data-player-id="${m.id}">${m.name}</span>
               <span class="member-level">Nv. ${m.level || 1}</span>
             </div>
             <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
-          
-          // Evento de clique no ícone de olho
-          const eyeEl = li.querySelector('.view-player-icon');
-          if (eyeEl) {
-              eyeEl.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  // Chama a função global se existir
-                  if (typeof fetchPlayerData === 'function') {
-                      const pModal = document.getElementById('playerModal');
-                      if(pModal) pModal.style.display = 'flex';
-                      fetchPlayerData(m.id);
-                  } else {
-                      console.warn("fetchPlayerData não encontrado.");
-                  }
-              });
-          }
-
           guildMemberListElement.appendChild(li);
         });
       }
@@ -603,7 +581,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
   
-  // Função para exibir guilda pública (Ranking/Busca)
   async function fetchAndDisplayGuildInfo(guildId) {
     if (!viewGuildModal) return;
     try {
@@ -631,6 +608,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             guildData = data;
 
             // 2. Busca o Poder de Combate CORRETO via RPC (Fonte da Verdade)
+            // Isso garante que o valor seja igual ao do Ranking
             try {
                 const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: guildId });
                 if (!powerError && powerData) {
@@ -646,18 +624,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.error("Erro ao buscar CP da guilda via RPC, usando fallback local.", e);
             }
 
-            // Fallback se RPC falhar
+            // Fallback se RPC falhar (o que causava o erro de 1.4k, mas aqui é só fallback)
             if (!guildPowerValue) {
                  const visibleP = (guildData.players || []).filter(p => p.rank !== 'admin');
                  guildPowerValue = visibleP.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
             }
             
             // 3. Salva no cache com expiração na próxima segunda-feira meia-noite UTC
+            // Salvamos um objeto contendo ambos os dados
             const cachePayload = { guildData, guildPowerValue };
             setCache(cacheKey, cachePayload, getTtlUntilNextMonday());
 
         } else {
-             console.log(`Dados públicos da guilda ${guildId} carregados do cache.`);
+             console.log(`Dados públicos da guilda ${guildId} carregados do cache (7 dias).`);
              guildData = cachedWrap.guildData;
              guildPowerValue = cachedWrap.guildPowerValue;
         }
@@ -668,50 +647,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         // --- FIM DA LÓGICA ---
 
         const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-        if (guildViewName) guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:150px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
-        if (guildViewDescription) guildViewDescription.textContent = guildData.description || '';
-        if (guildViewLevelValue) guildViewLevelValue.textContent = guildData.level || 1;
+        guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:150px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
+        guildViewDescription.textContent = guildData.description || '';
+        guildViewLevelValue.textContent = guildData.level || 1;
         // Usa a contagem de jogadores visíveis
-        if (guildViewMemberCountHeader) guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
+        guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
         // Exibe o poder calculado via RPC (recuperado ou do cache)
         const compactPower = formatNumberCompact(guildPowerValue || 0);
-        if (guildViewPower) guildViewPower.textContent = compactPower;
+        guildViewPower.textContent = compactPower;
 
-        if (guildViewMemberList) {
-            guildViewMemberList.innerHTML = '';
-            const roles = ['leader', 'co-leader', 'member'];
-            // Usa a lista de jogadores visíveis para renderizar
-            const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
-            
-            sorted.forEach(m => {
-                const li = document.createElement('li');
-                
-                // Ícone de Aviãozinho (SVG) para mandar mensagem -> redireciona para Index
-                const planeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00bfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="msg-player-icon" data-id="${m.id}" style="cursor: pointer; margin-left: 8px; vertical-align: middle;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
-
-                li.innerHTML = `
-                    <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
-                        style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
-                    <div class="member-details">
-                        <span>${m.name} ${planeIcon}</span>
-                        <span class="member-level">Nv. ${m.level || 1}</span>
-                    </div>
-                    <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
-                
-                // Evento para enviar mensagem
-                const planeEl = li.querySelector('.msg-player-icon');
-                if (planeEl) {
-                    planeEl.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        // Fluxo: ir para o Index para enviar mensagem
-                        window.location.href = `index.html?chat_target=${m.id}`;
-                    });
-                }
-
-                guildViewMemberList.appendChild(li);
-            });
-        }
+        guildViewMemberList.innerHTML = '';
+        const roles = ['leader', 'co-leader', 'member'];
+        // Usa a lista de jogadores visíveis para renderizar
+        const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
+        
+        sorted.forEach(m => {
+            const li = document.createElement('li');
+            // ALTERADO: Removida a classe 'player-link' e o atributo 'data-player-id'
+            // para que o clique NÃO abra o modal do jogador.
+            li.innerHTML = `
+                <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
+                     style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
+                <div class="member-details">
+                    <span>${m.name}</span>
+                    <span class="member-level">Nv. ${m.level || 1}</span>
+                </div>
+                <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
+            guildViewMemberList.appendChild(li);
+        });
 
         viewGuildModal.style.display = 'flex';
     } catch (e) {
@@ -762,7 +726,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const li = document.createElement('li');
         
         li.className = 'ranking-item-clickable';
-        // Define o dataset corretamente
         li.dataset.guildId = g.guild_id;
 
         li.innerHTML = `
@@ -777,6 +740,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                               <img alt="poder" src="https://aden-rpg.pages.dev/assets/CPicon.webp" style="width:18px; height:24px; margin-top:-2px;">
                               <span style="color:orange; font-weight:bold; font-size:1.1em;">${compactPower}</span>
                           </div>
+                          <span class="member-level" 
+                                style="font-weight: bold; color: lightblue; padding-left:10px; border-left:2px solid #777; font-size: 0.8em;">
+                              
+                          </span>
                       </div>
                   </div>
               </div>
@@ -789,8 +756,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         listEl.appendChild(li);
       });
 
-      // Event listener no container (delegação) para abrir modal
-      // Garante que o fetchAndDisplayGuildInfo seja chamado
       listEl.addEventListener('click', (ev) => {
           const item = ev.target.closest('li');
           if (item && item.dataset.guildId) {
@@ -1106,12 +1071,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         data.forEach(g => {
           const li = document.createElement('li');
           li.className = 'search-item-clickable';
-          // Define dataset corretamente
-          if (g.id) { 
-              li.dataset.guildId = g.id; 
-          }
+          if (g.id) { li.dataset.guildId = g.id; }
           else { console.error('Guilda inválida nos resultados de busca:', g); return; }
-
           li.innerHTML = `<div style="display:flex;align-items:center;text-align: left;gap:8px;"><img src="${g.flag_url||'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" style="width:100px;height:110px;border-radius:4px;"><div><br><strong>${g.name}</strong><div style="font-size:0.9em;color:white;">${g.description||''}</div><div style="font-size:0.85em; color: white;">Membros: ${g.members_count||0}/${g.max_members||0}</div></div></div>`;
           const btnImg = document.createElement('img');
           btnImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
@@ -1125,7 +1086,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
   
-  // Event listener para abrir a guilda clicada na busca
   if (searchGuildResults) {
     searchGuildResults.addEventListener('click', (ev) => {
         const item = ev.target.closest('li');

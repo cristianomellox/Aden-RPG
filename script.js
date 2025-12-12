@@ -496,38 +496,115 @@ if (window.localDB) {
 
 /**
  * Carrega as definições de itens do IndexedDB para a memória (Map global).
- * Isso é essencial para que o sistema de Espiral e outras UIs funcionem sem rewrite.
+ * Isso é essencial para que o sistema de Espiral e o CÁLCULO DE CP funcionem.
  */
 async function loadItemsIntoMemory() {
     try {
-        // Assume que localDB tem um método helper ou usamos transação direta se formos íntimos da classe
-        // Vamos usar uma função helper simulada se não existir, ou adicionar ao LocalGameDB
-        // Como o localDB foi definido em outro arquivo, vamos acessar via transação manual aqui por segurança
-        // ou criar um método getAllItems no local_database.js.
-        // Dado que não posso editar o arquivo anterior agora, farei via transação raw.
-        
         if (!window.localDB.db) return; // DB ainda não abriu
         
-        const tx = window.localDB.db.transaction('items', 'readonly');
-        const store = tx.objectStore('items');
-        const req = store.getAll();
-        
-        req.onsuccess = () => {
-            const items = req.result || [];
-            itemDefinitions.clear();
-            items.forEach(item => {
-                itemDefinitions.set(item.item_id, item);
-            });
-            console.log(`Carregados ${items.length} itens para memória.`);
-        };
+        return new Promise((resolve) => {
+             const tx = window.localDB.db.transaction('items', 'readonly');
+             const store = tx.objectStore('items');
+             const req = store.getAll();
+             
+             req.onsuccess = () => {
+                 const items = req.result || [];
+                 itemDefinitions.clear();
+                 items.forEach(item => {
+                     // Garante que a chave seja número para matching
+                     itemDefinitions.set(Number(item.item_id), item);
+                 });
+                 console.log(`Carregados ${items.length} itens para memória (RAM).`);
+                 resolve();
+             };
+             req.onerror = () => {
+                 console.warn("Erro ao ler items do DB.");
+                 resolve();
+             }
+        });
     } catch(e) {
         console.warn("Erro ao carregar itens para memória:", e);
     }
 }
 
 /**
+ * SOBRESCREVE A LÓGICA DE CÁLCULO DO LOCAL_DATABASE.JS
+ * Esta versão usa o 'itemDefinitions' (RAM) que é muito mais confiável e rápido
+ * do que tentar ler item por item do IndexedDB dentro de um loop.
+ */
+if (window.localDB) {
+    window.localDB.calculateStatsAndCP = async function(userId) {
+        console.log("⚡ Calculando Stats com lógica Otimizada (RAM)...");
+        const player = await this.getPlayer(userId);
+        if (!player) return null;
+
+        const inventory = await this.getInventory(userId);
+        
+        // Base Stats do Jogador
+        let stats = {
+            attack: player.attack || 0,
+            min_attack: player.min_attack || 0,
+            defense: player.defense || 0,
+            health: player.health || 0,
+            crit_chance: Number(player.crit_chance || 0),
+            crit_damage: Number(player.crit_damage || 0),
+            evasion: player.evasion || 0
+        };
+
+        // Itera sobre itens equipados
+        for (const invItem of inventory) {
+            if (invItem.equipped_slot) {
+                // 1. Soma Bônus do Inventário (Reforja/Encantamento)
+                stats.attack += (invItem.attack_bonus || 0);
+                stats.min_attack += (invItem.min_attack_bonus || 0);
+                stats.defense += (invItem.defense_bonus || 0);
+                stats.health += (invItem.health_bonus || 0);
+                stats.crit_chance += Number(invItem.crit_chance_bonus || 0);
+                stats.crit_damage += Number(invItem.crit_damage_bonus || 0);
+                stats.evasion += (invItem.evasion_bonus || 0);
+
+                // 2. Busca Atributos Base do Item (Usando RAM MAP)
+                // Força Number para garantir o match
+                const itemDef = itemDefinitions.get(Number(invItem.item_id));
+                
+                if (itemDef) {
+                    stats.attack += (itemDef.attack || 0);
+                    stats.min_attack += (itemDef.min_attack || 0);
+                    stats.defense += (itemDef.defense || 0);
+                    stats.health += (itemDef.health || 0);
+                    stats.crit_chance += Number(itemDef.crit_chance || 0);
+                    stats.crit_damage += Number(itemDef.crit_damage || 0);
+                    stats.evasion += (itemDef.evasion || 0);
+                } else {
+                    console.warn(`Item ID ${invItem.item_id} não encontrado nas definições! Stats base ignorados.`);
+                }
+            }
+        }
+
+        // Fórmula de CP
+        const cp = Math.floor(
+            (stats.attack * 12.5) +
+            (stats.min_attack * 1.5) +
+            (stats.crit_chance * 5.35) +
+            (stats.crit_damage * 6.5) +
+            (stats.defense * 2) +
+            (stats.health * 3.2625) +
+            (stats.evasion * 1)
+        );
+
+        // Atualiza o objeto do jogador localmente
+        player.combat_power = cp;
+        
+        // Salva o novo CP no banco local
+        await this.updatePlayerLocal(player);
+
+        return player;
+    };
+}
+
+
+/**
  * Função principal para carregar dados.
- * AGORA ELA É INTELIGENTE:
  * 1. Tenta carregar do IndexedDB.
  * 2. Se for muito antigo (> 7 dias), faz fetch no Supabase e atualiza DB.
  * 3. Se for recente, NÃO CHAMA O SUPABASE (Zero Egress).
@@ -561,11 +638,10 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         }
     }
 
-    // Carrega definições de itens para a memória RAM (necessário para Espiral/UI)
+    // Carrega definições de itens para a memória RAM (necessário para Cálculo correto de CP)
     await loadItemsIntoMemory();
 
     // 2. Recalcula stats e CP localmente (Garante consistência com lógica SQL)
-    // Isso lê do IndexedDB (items + inventory + player), soma tudo e atualiza o player no DB local
     const updatedPlayer = await window.localDB.calculateStatsAndCP(userId);
 
     if (updatedPlayer) {
@@ -587,7 +663,6 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
 /**
  * Atualiza o cache e a UI localmente de forma OTIMISTA.
- * Usado quando gastamos Ouro/Cristais ou alteramos stats.
  */
 async function updateLocalPlayerData(changes) {
     if (!currentPlayerData) return;

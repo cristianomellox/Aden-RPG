@@ -372,7 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
             } else {
                 document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+                document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
             }
 
             if (isUpdateMode) {
@@ -592,22 +592,10 @@ if (window.localDB) {
             (stats.evasion * 1)
         );
 
-        // === CORREÇÃO CRÍTICA ===
-        // Atribui os stats TOTAIS calculados (com equipamentos) de volta ao objeto 'player'.
-        // Isso garante que o 'renderPlayerUI' use o valor correto do ataque total.
-        player.attack = stats.attack;
-        player.min_attack = stats.min_attack;
-        player.defense = stats.defense;
-        player.health = stats.health;
-        player.crit_chance = stats.crit_chance;
-        player.crit_damage = stats.crit_damage;
-        player.evasion = stats.evasion;
-        // === FIM DA CORREÇÃO CRÍTICA ===
-        
         // Atualiza o objeto do jogador localmente
         player.combat_power = cp;
         
-        // Salva o novo CP (e os novos atributos totais) no banco local
+        // Salva o novo CP no banco local
         await this.updatePlayerLocal(player);
 
         return player;
@@ -1180,7 +1168,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('closePlayerInfoBtn');
     if (avatar && modal && closeBtn && modalContent && playerInfoDiv) {
         avatar.addEventListener('click', () => {
-            // Recria o conteúdo dinâmico, garantindo que o playerInfoDiv (que já foi atualizado por renderPlayerUI) seja copiado
             modalContent.innerHTML = playerInfoDiv.innerHTML;
             modal.style.display = 'flex';
             const modalEditProfileBtn = modal.querySelector('#editProfileBtn');

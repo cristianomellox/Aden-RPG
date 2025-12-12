@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return false;
   }
 
-  // Função para renderizar a UI da SU GUILDA
+  // Função para renderizar a UI da SUA GUILDA
   async function renderGuildUI(guildData) {
       currentGuildData = guildData;
       const deleteGuildBtn = document.getElementById('deleteguild');
@@ -615,7 +615,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             sorted.forEach(m => {
                 const li = document.createElement('li');
                 
-                // SVG DO AVIÃOZINHO PARA ENVIAR MENSAGEM
+                // --- MUDANÇA: ÍCONE DE AVIÃOZINHO PARA MENSAGEM ---
+                // Substitui o antigo olho. O ID é usado para redirecionar para o index.
                 const planeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00bfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="msg-player-icon" data-id="${m.id}" style="cursor: pointer; margin-left: 8px; vertical-align: middle;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
                 li.innerHTML = `
@@ -627,11 +628,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                     </div>
                     <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
                 
-                // Evento para enviar mensagem (Redireciona para o Index com fluxo de chat)
+                // Evento para enviar mensagem
                 const planeEl = li.querySelector('.msg-player-icon');
                 if (planeEl) {
                     planeEl.addEventListener('click', (e) => {
-                        e.stopPropagation();
+                        e.stopPropagation(); // Impede outros cliques
+                        // Redireciona para o Index com o parâmetro de chat
                         window.location.href = `index.html?chat_target=${m.id}`;
                     });
                 }
@@ -686,7 +688,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const li = document.createElement('li');
         
         li.className = 'ranking-item-clickable';
-        // Define o dataset corretamente (fallback para id se guild_id não existir)
+        // --- RESTAURADO: Atribuição do ID ao dataset ---
+        // Essencial para o clique funcionar
         li.dataset.guildId = g.guild_id || g.id;
 
         li.innerHTML = `
@@ -714,7 +717,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
   }
 
-  // EVENT DELEGATION PARA O RANKING (Movido para o escopo principal para evitar duplicação)
+  // --- RESTAURADO: EVENT LISTENER PARA O RANKING ---
+  // Isso garante que o clique no ranking funcione usando delegação de eventos
   if (guildRankingList) {
       guildRankingList.addEventListener('click', (ev) => {
           const item = ev.target.closest('li');
@@ -1026,6 +1030,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         data.forEach(g => {
           const li = document.createElement('li');
           li.className = 'search-item-clickable';
+          // --- RESTAURADO: Atribuição do ID ao dataset ---
           if (g.id) { 
               li.dataset.guildId = g.id; 
           }
@@ -1036,6 +1041,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           btnImg.src = "https://aden-rpg.pages.dev/assets/aceitar.webp";
           btnImg.alt = "Solicitar Entrada";
           btnImg.style.cssText = "width: 30px; height: 30px; vertical-align: -1px; margin-left: 5px; cursor: pointer;";
+          // Evita que o clique no botão abra o modal (stopPropagation já estava aqui, mas agora funciona com o listener abaixo)
           btnImg.onclick = (e) => { e.stopPropagation(); requestJoinGuild(g.id, g.name); };
           li.appendChild(btnImg);
           searchGuildResults.appendChild(li);
@@ -1044,13 +1050,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
   
-  // Event listener para abrir a guilda clicada na busca
+  // --- RESTAURADO: EVENT LISTENER PARA A BUSCA ---
+  // A versão antiga usava esta lógica exata para abrir o modal
   if (searchGuildResults) {
     searchGuildResults.addEventListener('click', (ev) => {
         const item = ev.target.closest('li');
         if (item && item.dataset.guildId) {
-            searchGuildModal.style.display = 'none';
-            fetchAndDisplayGuildInfo(item.dataset.guildId);
+            searchGuildModal.style.display = 'none'; // Fecha o modal de busca
+            fetchAndDisplayGuildInfo(item.dataset.guildId); // Abre o modal da guilda
         }
     });
   }

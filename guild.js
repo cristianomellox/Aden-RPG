@@ -5,9 +5,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!supabase) { console.error("Supabase não iniciado"); return; }
 
   // --- INÍCIO: NOVAS FUNÇÕES DE CACHE ---
-  /**
-   * Armazena dados no localStorage com um tempo de expiração.
-   */
   function setCache(key, data, ttl) {
     const now = new Date();
     const item = {
@@ -17,14 +14,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     localStorage.setItem(key, JSON.stringify(item));
   }
 
-  /**
-   * Recupera dados do localStorage se não estiverem expirados.
-   */
   function getCache(key) {
     const itemStr = localStorage.getItem(key);
-    if (!itemStr) {
-      return null;
-    }
+    if (!itemStr) return null;
     const item = JSON.parse(itemStr);
     const now = new Date();
     if (now.getTime() > item.expiry) {
@@ -34,27 +26,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     return item.data;
   }
 
-  /**
-   * Calcula o tempo em milissegundos até a próxima segunda-feira às 00:00 UTC.
-   */
   function getTtlUntilNextMonday() {
     const now = new Date();
-    const day = now.getUTCDay(); // 0 (Dom) a 6 (Sáb)
+    const day = now.getUTCDay();
     let daysToAdd = (8 - day) % 7;
     if (daysToAdd === 0 && now.getUTCHours() >= 0) {
        daysToAdd = 7;
     }
-    
     const nextMonday = new Date(now);
     nextMonday.setUTCDate(now.getUTCDate() + daysToAdd);
     nextMonday.setUTCHours(0, 0, 0, 0);
-    
     const ttl = nextMonday.getTime() - now.getTime();
     return ttl > 0 ? ttl : 24 * 60 * 60 * 1000;
   }
   // --- FIM: NOVAS FUNÇÕES DE CACHE ---
 
-  // --- INÍCIO: LÓGICA DO MODAL DE INFORMAÇÕES (SUBSTITUTO DO ALERT) ---
+  // --- MODAIS (INFO, CONFIRM, PROMPT) ---
   document.body.insertAdjacentHTML('beforeend', `
     <div id="infoModal" class="modal" style="display: none; z-index: 1500;">
       <div class="modal-content">
@@ -80,9 +67,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   infoModalOkBtn.addEventListener('click', closeInfoModal);
   infoModalCloseBtn.addEventListener('click', closeInfoModal);
   infoModal.addEventListener('click', (event) => { if (event.target === infoModal) { closeInfoModal(); } });
-  // --- FIM: LÓGICA DO MODAL DE INFORMAÇÕES ---
 
-  // --- INÍCIO: LÓGICA DO MODAL DE CONFIRMAÇÃO (SUBSTITUTO DO CONFIRM) ---
   document.body.insertAdjacentHTML('beforeend', `
     <div id="confirmModal" class="modal" style="display: none; z-index: 1600; background: none!important;">
       <div class="modal-content">
@@ -137,28 +122,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         confirmModalConfirmBtn.textContent = "Confirmar";
     }
 
-    confirmModalConfirmBtn.addEventListener(
-        "click",
-        () => {
+    confirmModalConfirmBtn.addEventListener("click", () => {
             closeConfirmModal();
             if (confirmModalConfirmBtn._countdownInterval) {
                 clearInterval(confirmModalConfirmBtn._countdownInterval);
                 confirmModalConfirmBtn._countdownInterval = null;
             }
             onConfirm();
-        },
-        { once: true }
-    );
+        }, { once: true });
 
     confirmModal.style.display = "flex";
     confirmModalConfirmBtn.focus();
-}
+  }
   confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
   confirmModalCloseBtn.addEventListener('click', closeConfirmModal);
   confirmModal.addEventListener('click', (event) => { if (event.target === infoModal) { closeConfirmModal(); } });
-  // --- FIM: LÓGICA DO MODAL DE CONFIRMAÇÃO ---
 
-  // --- INÍCIO: LÓGICA DO MODAL DE PROMPT (SUBSTITUTO DO PROMPT) ---
     document.body.insertAdjacentHTML('beforeend', `
     <div id="promptModal" class="modal" style="display: none; z-index: 1700;">
       <div class="modal-content">
@@ -181,14 +160,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const closePromptModal = () => { promptModal.style.display = 'none'; };
   function showPromptModal(message, onConfirm) {
     promptModalMessage.textContent = message;
-    promptModalInput.value = ''; 
+    promptModalInput.value = '';
     const newConfirmBtn = promptModalConfirmBtn.cloneNode(true);
     promptModalConfirmBtn.parentNode.replaceChild(newConfirmBtn, promptModalConfirmBtn);
     promptModalConfirmBtn = newConfirmBtn;
     promptModalConfirmBtn.addEventListener('click', () => {
       const inputValue = promptModalInput.value.trim();
       closePromptModal();
-      onConfirm(inputValue); 
+      onConfirm(inputValue);
     }, { once: true });
     promptModal.style.display = 'flex';
     promptModalInput.focus();
@@ -196,12 +175,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   promptModalCancelBtn.addEventListener('click', closePromptModal);
   promptModalCloseBtn.addEventListener('click', closePromptModal);
   promptModal.addEventListener('click', (event) => { if (event.target === promptModal) { closePromptModal(); } });
-  // --- FIM: LÓGICA DO MODAL DE PROMPT ---
 
   let userId = null;
   let userGuildId = null;
   let currentGuildData = null;
-  let userRank = 'member'; 
+  let userRank = 'member';
 
   // DOM helpers
   const $ = (s) => document.querySelector(s);
@@ -245,7 +223,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const guildPowerEl = $('#guildPower');
   const guildRankingList = $('#guildRankingList');
   
-  // Referências DOM para o modal de visualização de guilda
+  // Referências do modal de visualização de guilda
   const viewGuildModal = $('#viewGuildModal');
   const viewGuildCloseBtn = $('#viewGuildCloseBtn');
   const guildViewContainer = $('#guildViewContainer');
@@ -255,7 +233,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const guildViewLevelValue = $('#guildViewLevelValue');
   const guildViewMemberCountHeader = $('#guildViewMemberCountHeader');
   const guildViewMemberList = $('#guildViewMemberList');
-  const viewJoinGuildBtn = $('#viewJoinGuildBtn');
 
   // --- Main tabs ---
   function activateMainTab(tabId){
@@ -288,7 +265,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       p.style.display = (p.id === tabId) ? 'block' : 'none';
     });
     $$('#editTabMenu .edit-tab-btn, #editTabs .edit-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
-
     markTabNotification(tabId, false);
     if (tabId === 'tab-requests' || tabId === 'tab-notice'){
       updateGuildNotifications(false);
@@ -331,7 +307,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function checkGuildNotifications(guildData){
     if (!editGuildBtn) return;
     let hasRequests = false, hasNotice = false;
-    
     const readRequests = localStorage.getItem(`guild_${guildData.id}_tab-requests_read`);
     const readNotice = localStorage.getItem(`guild_${guildData.id}_tab-notice_read`);
 
@@ -383,7 +358,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =======================================================================
   // OTIMIZAÇÃO DE AUTH: Zero Egress Check
   // =======================================================================
-  
   function getLocalUserId() {
     try {
         const cached = localStorage.getItem('player_data_cache');
@@ -407,7 +381,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
     } catch (e) {}
-
     return null;
   }
 
@@ -419,7 +392,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     const { data: { session } } = await supabase.auth.getSession();
-    
     if (session){ 
         userId = session.user.id; 
         return true; 
@@ -430,7 +402,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return false;
   }
 
-  // Função para renderizar a UI com os dados da guilda (Sua Guilda - Privado)
+  // Função para renderizar a UI da SU GUILDA
   async function renderGuildUI(guildData) {
       currentGuildData = guildData;
       const deleteGuildBtn = document.getElementById('deleteguild');
@@ -502,12 +474,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                       const pModal = document.getElementById('playerModal');
                       if(pModal) pModal.style.display = 'flex';
                       fetchPlayerData(m.id);
-                  } else {
-                      console.warn("fetchPlayerData não encontrado.");
                   }
               });
           }
-
           guildMemberListElement.appendChild(li);
         });
       }
@@ -531,7 +500,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         editGuildBtn.style.display = 'inline-block';
         editGuildBtn.onclick = () => openEditGuildModal(currentGuildData);
       }
-
       if (editGuildBtn) checkGuildNotifications(guildData);
   }
 
@@ -560,7 +528,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.log("Buscando dados frescos da guilda (sem cache).");
       const { data: guildData, error: guildError } = await supabase.from('guilds').select('*, players!players_guild_id_fkey(*)').eq('id', userGuildId).single();
       if (guildError || !guildData){
-        console.error('Erro guildData', guildError);
         if (guildInfoContainer) guildInfoContainer.style.display='none';
         if (noGuildContainer) noGuildContainer.style.display='block';
         return;
@@ -576,13 +543,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   // Função para exibir guilda pública (Ranking/Busca)
   async function fetchAndDisplayGuildInfo(guildId) {
-    if (!guildId || guildId === 'undefined') {
-        console.error("Tentativa de abrir guilda com ID inválido.");
-        return;
-    }
-    const viewGuildModal = document.getElementById('viewGuildModal');
     if (!viewGuildModal) return;
-
     try {
         const cacheKey = `guild_view_public_${guildId}`;
         const cachedWrap = getCache(cacheKey);
@@ -641,7 +602,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (guildViewName) guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:150px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
         if (guildViewDescription) guildViewDescription.textContent = guildData.description || '';
         if (guildViewLevelValue) guildViewLevelValue.textContent = guildData.level || 1;
-        
         if (guildViewMemberCountHeader) guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
         const compactPower = formatNumberCompact(guildPowerValue || 0);
@@ -655,9 +615,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             sorted.forEach(m => {
                 const li = document.createElement('li');
                 
-                // Ícone de Aviãozinho para enviar mensagem (SVG)
-                // Redireciona para Index com chat_target
-                const planeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00bfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="msg-player-icon" data-id="${m.id}" style="cursor: pointer; margin-left: 8px; vertical-align: middle;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+                // SVG DO AVIÃOZINHO PARA ENVIAR MENSAGEM
+                const planeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00bfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="msg-player-icon" data-id="${m.id}" style="cursor: pointer; margin-left: 8px; vertical-align: middle;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 
                 li.innerHTML = `
                     <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
@@ -668,12 +627,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     </div>
                     <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
                 
-                // Evento para enviar mensagem
+                // Evento para enviar mensagem (Redireciona para o Index com fluxo de chat)
                 const planeEl = li.querySelector('.msg-player-icon');
                 if (planeEl) {
                     planeEl.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        // Redireciona para o index com o alvo do chat
                         window.location.href = `index.html?chat_target=${m.id}`;
                     });
                 }
@@ -718,9 +676,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       listEl.innerHTML = '';
       data.forEach((g, idx)=>{
-        // Robustez: Usa guild_id se disponível, senão id (dependendo do retorno do RPC/Query)
-        const gid = g.guild_id || g.id;
-        if (!gid) {
+        if (!g.guild_id && !g.id) {
           console.error('AVISO: Guilda com ID inválido no ranking.', g);
           return;
         }
@@ -730,8 +686,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const li = document.createElement('li');
         
         li.className = 'ranking-item-clickable';
-        // Define o dataset corretamente
-        li.dataset.guildId = gid;
+        // Define o dataset corretamente (fallback para id se guild_id não existir)
+        li.dataset.guildId = g.guild_id || g.id;
 
         li.innerHTML = `
           <div class="ranking-item-content">
@@ -757,9 +713,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         listEl.appendChild(li);
       });
   }
-  
-  // Listener global para clique no ranking (Delegation)
-  // Isso garante que funcione mesmo se o innerHTML for recriado e corrige o problema de "não abrir"
+
+  // EVENT DELEGATION PARA O RANKING (Movido para o escopo principal para evitar duplicação)
   if (guildRankingList) {
       guildRankingList.addEventListener('click', (ev) => {
           const item = ev.target.closest('li');
@@ -768,6 +723,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
       });
   }
+
 
   async function openEditGuildModal(guildData){
     if (!editGuildModal) return;
@@ -930,7 +886,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action', { p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action: 'promote', p_message: null });
         showInfoModal('Promovido com sucesso!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); 
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao promover: ' + (e.message || e), 'error'); console.error(e); }
@@ -944,7 +900,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'demote', p_message:null });
         showInfoModal('Cargo de Co-Líder revogado.', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); 
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao revogar: ' + (e.message || e), 'error'); console.error(e); }
@@ -958,7 +914,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
         showInfoModal('Liderança transferida com sucesso!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); 
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
       } catch(e){ showInfoModal('Erro ao transferir liderança: ' + (e.message || e), 'error'); console.error(e); }
@@ -972,7 +928,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'expel', p_message:null });
         showInfoModal('Membro expulso.', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); 
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao expulsar: ' + (e.message || e), 'error'); console.error(e); }
@@ -994,7 +950,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: req.player_id, p_action: 'reject', p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe).' });
         showInfoModal('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
-      localStorage.removeItem(`guild_info_${userGuildId}`); 
+      localStorage.removeItem(`guild_info_${userGuildId}`);
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
     } catch(e){
@@ -1024,7 +980,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { error } = await supabase.rpc('update_guild_info', { p_guild_id: userGuildId, p_player_id: userId, p_name: newName, p_description: newDesc, p_flag_url: newFlag });
         if (error) throw error;
         showInfoModal('Guilda atualizada com sucesso!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); 
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
       } catch(e){ showInfoModal('Erro ao atualizar a guilda: ' + (e.message || e), 'error'); console.error(e); }
@@ -1038,7 +994,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { error } = await supabase.rpc('update_guild_notice', { p_guild_id: userGuildId, p_player_id: userId, p_notice: notice });
         if (error) throw error;
         showInfoModal('Aviso da guilda atualizado!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); 
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao atualizar aviso: ' + (e.message || e), 'error'); console.error(e); }
@@ -1070,7 +1026,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         data.forEach(g => {
           const li = document.createElement('li');
           li.className = 'search-item-clickable';
-          // Define dataset corretamente usando ID
           if (g.id) { 
               li.dataset.guildId = g.id; 
           }
@@ -1164,7 +1119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const { error } = await supabase.rpc('delete_guild', { p_guild_id: userGuildId, p_player_id: userId });
           if (error) throw error;
           showInfoModal('Guilda deletada com sucesso.', 'success');
-          localStorage.removeItem(`guild_info_${userGuildId}`); 
+          localStorage.removeItem(`guild_info_${userGuildId}`);
           userGuildId = null;
           currentGuildData = null;
           await loadGuildInfo();
@@ -1184,7 +1139,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const { error } = await supabase.rpc('leave_guild', { p_player_id: userId });
           if (error) throw error;
           showInfoModal('Você saiu da guilda.', 'success');
-          localStorage.removeItem(`guild_info_${userGuildId}`); 
+          localStorage.removeItem(`guild_info_${userGuildId}`);
           userGuildId = null;
           currentGuildData = null;
           await loadGuildInfo();

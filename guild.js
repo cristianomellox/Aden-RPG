@@ -504,9 +504,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
         
-        // --- ÍCONE DE OLHO (SVG BRANCO) ---
+        // --- ÍCONE DE OLHO (SVG BRANCO) - TAMANHO AUMENTADO PARA 22px ---
         const eyeIcon = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
             <circle cx="12" cy="12" r="3" fill="black"/>
           </svg>
@@ -652,19 +652,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
         
         // --- ÍCONE DE AVIÃOZINHO DE PAPEL (SVG DOURADO) ---
-        const paperPlaneIcon = `
-          <svg onclick="event.stopPropagation(); window.location.href='index.html?page=pv&targetId=${guildData.players ? guildData.players.id : ''}'" 
-               xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
-               style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
-            <line x1="22" x2="11" y1="2" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        `;
-
+        // Ação alterada para 'go:pv?id='
+        
         sorted.forEach(m => {
-            // Recriar o ícone para cada membro para injetar o ID correto
             const thisPaperPlaneIcon = `
-              <svg onclick="event.stopPropagation(); window.location.href='index.html?page=pv&targetId=${m.id}'" 
+              <svg onclick="event.stopPropagation(); window.location.href='go:pv?id=${m.id}'" 
                    xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
                    style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
                 <line x1="22" x2="11" y1="2" y2="13" />
@@ -674,16 +666,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const li = document.createElement('li');
             // Removemos a classe 'player-link' e o atributo 'data-player-id' para evitar abrir o modal padrão
+            // Ícone movido para dentro do span do nome
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
                 <div class="member-details">
-                    <span>${m.name}</span>
+                    <span style="display:flex; align-items:center;">${m.name} ${thisPaperPlaneIcon}</span>
                     <span class="member-level">Nv. ${m.level || 1}</span>
                 </div>
                 <div style="display:flex; flex-direction:column; align-items:end; margin-left: auto;">
                     <small style="color:gold; display:inline-flex; align-items:center;">
-                        ${traduzCargo(m.rank)} ${thisPaperPlaneIcon}
+                        ${traduzCargo(m.rank)}
                     </small>
                 </div>`;
             guildViewMemberList.appendChild(li);

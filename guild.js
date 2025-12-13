@@ -655,8 +655,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Ação alterada para 'go:pv?id='
         
         sorted.forEach(m => {
+          const navUrl = `index.html?action=open_pv&target_id=${m.id}&target_name=${encodeURIComponent(m.name)}`;
             const thisPaperPlaneIcon = `
-              <svg onclick="event.stopPropagation(); window.location.href='go:msg:${m.name}'" 
+              <svg onclick="event.stopPropagation(); window.location.href='${navUrl}'" 
                    xmlns="http://www.w3.org/2000/svg" width="22" height="20" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
                    style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
                 <line x1="22" x2="11" y1="2" y2="13" />

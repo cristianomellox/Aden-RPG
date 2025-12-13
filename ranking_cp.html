@@ -156,9 +156,9 @@
         <div class="player-level-guild">
           <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width: 50px; height: 55px;">
           <div id="playerGuildName" class="shimmer">Nome da Guilda</div></div>
-          
+          <!-- troquei display flex para none -->
         </div>
-        <div style="display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
+        <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
        <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
       </div>
 
@@ -290,6 +290,7 @@
         return combinedStats;
     }
 
+    // Mantido APENAS para o Ranking (lista principal)
     function calculateCombatPowerFromCombined(stats){
         return Math.floor(
             (safeNum(stats.attack) * 12.5) +
@@ -398,7 +399,8 @@
 
             // D) Calcular e Montar Objeto
             const combinedStats = applyItemBonuses(player, equippedItems || []);
-            const finalCP = calculateCombatPowerFromCombined(combinedStats);
+            // IMPORTANTE: Aqui definimos CP como 0 para não recalcular no modal
+            const finalCP = 0; 
 
             const fullPlayerData = {
                 basic: {
@@ -557,6 +559,7 @@
         const computed = players.map(p => {
           const equipped = itemsByPlayer[p.id] || [];
           const combined = applyItemBonuses(p, equipped);
+          // O ranking continua usando o cálculo de CP
           const cp = calculateCombatPowerFromCombined(combined);
           return {
             id: p.id, name: p.name, avatar_url: p.avatar_url,
@@ -568,6 +571,7 @@
         computed.sort((a,b) => b.cp - a.cp);
         const top100 = computed.slice(0,100);
         
+        // Cache configurado para expirar na próxima Segunda-feira (Weekly)
         setRankingCache(cacheKey, top100);
         renderRanking(top100);
 

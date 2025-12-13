@@ -506,7 +506,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         // --- ÍCONE DE OLHO (SVG BRANCO) - TAMANHO AUMENTADO PARA 22px ---
         const eyeIcon = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
             <circle cx="12" cy="12" r="3" fill="black"/>
           </svg>
@@ -656,8 +656,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         sorted.forEach(m => {
             const thisPaperPlaneIcon = `
-              <svg onclick="event.stopPropagation(); window.location.href='index.html?id=${m.id}'" 
-                   xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+              <svg id="sendMP" 
+                   xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
                    style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
                 <line x1="22" x2="11" y1="2" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />

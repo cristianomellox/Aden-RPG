@@ -656,7 +656,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         sorted.forEach(m => {
             const thisPaperPlaneIcon = `
-              <svg onclick="event.stopPropagation(); window.location.href='go:pv?id=${m.id}'" 
+              <svg onclick="event.stopPropagation(); window.location.href='index.html?id=${m.id}'" 
                    xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
                    style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
                 <line x1="22" x2="11" y1="2" y2="13" />

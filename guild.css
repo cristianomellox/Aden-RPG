@@ -752,7 +752,9 @@ body {
 #playerModal .modal-content { width: 360px; max-width: calc(100% - 40px); background:#2e2e2e; padding:16px; border-radius:10px; border:1px solid #444; box-shadow: 0 6px 24px rgba(0,0,0,0.6); color:#e0dccc; position:relative; text-align:center; }
 
 #playerModal #playerName { font-size:1.25em; font-weight:80; margin:0; color:#fff; }
-#playerModal #playerLevel { font-size:0.95em; color:#dcd6c8; margin-top:6px; margin-bottom:8px; }
+#playerModal #playerLevel { font-size:0.95em; color:#dcd6c8; margin-top:6px;  
+  
+}
 
 /* avatar + guild header centralizados: guild-header fica dentro do avatar container para garantir posição acima do avatar */
 #playerModal #equipmentAndAvatarContainer { display:flex; justify-content:space-around; align-items:center; gap:12px; margin-top:6px; margin-bottom:8px; }

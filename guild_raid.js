@@ -1422,6 +1422,13 @@ async function checkPendingRaidRewards() {
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }
 }
+function clearGuildCache(guildId) {
+    if (!guildId) return;
+    try {
+        localStorage.removeItem(`guild_info_${guildId}`);
+        console.log(`[Raid] Cache da guilda ${guildId} limpo após fim da raid.`);
+    } catch (e) { console.warn(e); }
+}
 
 function startPolling() {
   stopPolling();
@@ -1439,6 +1446,7 @@ function startPolling() {
 
     if (error || !state || !state.success) {
       if (!state?.active) {
+        clearGuildCache(userGuildId);
           closeCombatModal();
           showRaidAlert("A Raid terminou.");
       }

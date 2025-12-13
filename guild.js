@@ -503,13 +503,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         const roles = ['leader','co-leader','member'];
         // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
+        
+        // --- ÍCONE DE OLHO (SVG BRANCO) ---
+        const eyeIcon = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" fill="black"/>
+          </svg>
+        `;
+
         sorted.forEach(m => {
           const li = document.createElement('li');
           li.innerHTML = `
             <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}"
                  style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
             <div class="member-details">
-              <span class="player-link" data-player-id="${m.id}">${m.name}</span>
+              <span class="player-link" data-player-id="${m.id}" style="display:inline-flex; align-items:center;">
+                ${m.name} ${eyeIcon}
+              </span>
               <span class="member-level">Nv. ${m.level || 1}</span>
             </div>
             <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
@@ -576,7 +587,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       
       // Salva os novos dados no cache por 1 hora
-      setCache(cacheKey, guildData, 60 * 60 * 1000);
+      setCache(cacheKey, guildData, 24 * 60 * 60 * 1000);
       await renderGuildUI(guildData);
 
     } catch(e){
@@ -640,10 +651,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
         
+        // --- ÍCONE DE AVIÃOZINHO DE PAPEL (SVG DOURADO) ---
+        const paperPlaneIcon = `
+          <svg onclick="event.stopPropagation(); window.location.href='index.html?page=pv&targetId=${guildData.players ? guildData.players.id : ''}'" 
+               xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+               style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
+            <line x1="22" x2="11" y1="2" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        `;
+
         sorted.forEach(m => {
+            // Recriar o ícone para cada membro para injetar o ID correto
+            const thisPaperPlaneIcon = `
+              <svg onclick="event.stopPropagation(); window.location.href='index.html?page=pv&targetId=${m.id}'" 
+                   xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="gold" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+                   style="vertical-align: middle; margin-left: 6px; cursor: pointer; z-index: 10;">
+                <line x1="22" x2="11" y1="2" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            `;
+
             const li = document.createElement('li');
-            // ALTERADO: Removida a classe 'player-link' e o atributo 'data-player-id'
-            // para que o clique NÃO abra o modal do jogador.
+            // Removemos a classe 'player-link' e o atributo 'data-player-id' para evitar abrir o modal padrão
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
@@ -651,7 +681,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <span>${m.name}</span>
                     <span class="member-level">Nv. ${m.level || 1}</span>
                 </div>
-                <small style="margin-left:8px;color:gold; margin-top: -20px">${traduzCargo(m.rank)}</small>`;
+                <div style="display:flex; flex-direction:column; align-items:end; margin-left: auto;">
+                    <small style="color:gold; display:inline-flex; align-items:center;">
+                        ${traduzCargo(m.rank)} ${thisPaperPlaneIcon}
+                    </small>
+                </div>`;
             guildViewMemberList.appendChild(li);
         });
 
@@ -973,7 +1007,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: req.player_id, p_action: 'reject', p_message: 'Removida automaticamente (jogador já tinha guilda ou não existe).' });
         showInfoModal('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
-      localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+      
+      // GARANTIA: Limpa o cache ao aceitar para atualizar a lista imediatamente
+      if (userGuildId) localStorage.removeItem(`guild_info_${userGuildId}`);
+      
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
     } catch(e){

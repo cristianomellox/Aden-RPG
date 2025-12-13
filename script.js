@@ -110,11 +110,13 @@ document.addEventListener("visibilitychange", () => {
     // Usuário saiu da aba ou minimizou: Pausa a música se estiver tocando
     if (!backgroundMusic.paused) {
       backgroundMusic.pause();
+      // console.log("🎵 Música pausada (aba em segundo plano).");
     }
   } else if (document.visibilityState === 'visible') {
     // Usuário voltou: Retoma APENAS se a música já tivesse sido iniciada anteriormente
     if (musicStarted && backgroundMusic.paused) {
       backgroundMusic.play().catch(e => console.warn("⚠️ Falha ao retomar música automaticamente:", e));
+      // console.log("🎵 Música retomada (aba ativa).");
     }
   }
 });
@@ -124,6 +126,8 @@ document.addEventListener("visibilitychange", () => {
 // Os listeners de interação SÓ podem ser adicionados após o DOM carregar
 document.addEventListener("DOMContentLoaded", () => {
   
+  // NENHUM 'new Audio()' aqui. Isso foi o erro.
+
   // Função utilitária para registrar listeners com opções comuns
   function addCapturedListener(target, evt, handler, opts = {}) {
     try {
@@ -134,6 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 1) Eventos primários que normalmente desbloqueiam áudio
+  // (Estes listeners agora chamam a função global, que DESMUTA o áudio se ele estiver muted)
   const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
   for (const ev of primaryEvents) {
     addCapturedListener(window, ev, function onPrimary(e) {
@@ -180,8 +185,8 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
   for (const sel of mapSelectors) {
     document.querySelectorAll(sel).forEach(el => {
-      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
-      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); }); // Chama sem forceMute: Desmuta ou Inicia normal
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); }); // Chama sem forceMute: Desmuta ou Inicia normal
       addCapturedListener(el, "touchmove", handleMoveForMusic);
       addCapturedListener(el, "pointermove", handleMoveForMusic);
     });
@@ -204,7 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // FIM DA MÚSICA DE FUNDO
 
 // =======================================================================
-// INÍCIO: SCRIPT DO INTRO E SELETOR DE IDIOMA
+// INÍCIO: SCRIPT DO INTRO E SELETOR DE IDIOMA (REFATORADO)
 // =======================================================================
 
 (function() {
@@ -279,6 +284,7 @@ document.addEventListener("DOMContentLoaded", () => {
      * @param {boolean} isUpdateMode - Se true, apenas troca o idioma e recarrega (sem vídeo).
      */
     window.openLanguageModal = function(isUpdateMode = false) {
+        // Remove modal anterior se existir (para evitar duplicatas)
         const oldModal = document.getElementById('welcomeModal');
         if (oldModal) oldModal.remove();
 
@@ -291,9 +297,11 @@ document.addEventListener("DOMContentLoaded", () => {
         modalContent.className = 'modal-content';
         modalContent.style.cssText = 'width:90%;max-width:400px;padding:25px;border-radius:12px;background:#0b0b0b;color:#fff;text-align:center;border: 1px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.8);';
 
+        // Título e Subtítulo baseados no modo
         const titleText = isUpdateMode ? "Idioma / Language" : "Bem-vindo / Welcome";
         const subText = isUpdateMode ? "Select new language:" : "Select your language to start:";
 
+        // Título HTML
         const title = document.createElement('h2');
         title.innerHTML = titleText;
         title.style.cssText = "margin-top:0; color: #c9a94a; font-size: 1.2em;";
@@ -304,14 +312,17 @@ document.addEventListener("DOMContentLoaded", () => {
         betaTag.style.cssText = "font-size: 0.9em; color: lightblue; font-weight: bold; margin-top: -12px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px;";
         modalContent.appendChild(betaTag);
 
+        // Instrução HTML
         const subtitle = document.createElement('p');
         subtitle.textContent = subText;
         subtitle.style.cssText = "font-size: 0.9em; color: #aaa; margin-bottom: 10px; font-weight: bold;";
         modalContent.appendChild(subtitle);
 
+        // Grid de Idiomas
         const grid = document.createElement('div');
         grid.className = 'lang-grid';
 
+        // Tenta pegar o idioma atual do cookie para pré-selecionar
         let currentCookieLang = 'pt';
         try {
             const cookies = document.cookie.split(";");
@@ -342,12 +353,14 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         modalContent.appendChild(grid);
 
+        // Botão de Confirmar
         const btnText = isUpdateMode ? "Confirm & Reload" : "<strong>START GAME</strong>";
         const okBtn = document.createElement('button');
         okBtn.id = 'welcomeOkBtn';
         okBtn.innerHTML = btnText;
         okBtn.style.cssText = 'width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; background: linear-gradient(180deg, #c9a94a, #8a7330); color:#000; cursor:pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);';
         
+        // Botão Cancelar (Apenas no modo Update)
         if (isUpdateMode) {
              const cancelBtn = document.createElement('button');
              cancelBtn.innerText = "Cancelar";
@@ -362,22 +375,28 @@ document.addEventListener("DOMContentLoaded", () => {
         modal.appendChild(modalContent);
         document.body.appendChild(modal);
 
+        // --- Ação do Botão Confirmar ---
         okBtn.addEventListener('click', function(ev) {
             ev.stopPropagation();
 
+            // 1. Aplica o Cookie de Tradução
             if (selectedLang !== 'pt') {
                 const cookieValue = `/pt/${selectedLang}`;
                 const domain = window.location.hostname;
                 document.cookie = `googtrans=${cookieValue}; path=/;`;
                 document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
             } else {
+                // Limpa cookie se for PT
                 document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
                 document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
             }
 
+            // 2. Decide o fluxo (Update vs Intro)
             if (isUpdateMode) {
+                // Modo Update: Apenas recarrega para aplicar a tradução
                 window.location.reload();
             } else {
+                // Modo Intro: Inicia música/vídeo
                 if (typeof window.startBackgroundMusic === 'function') {
                     window.startBackgroundMusic(true);
                 }
@@ -386,18 +405,21 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
+    // Função interna para rodar o vídeo da intro
     function startVideoFromUserGesture(lang, modalEl) {
         try {
             localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
             window.__introSeen = true;
 
-            modalEl.remove();
+            modalEl.remove(); // Remove o modal
 
+            // Cria overlay do vídeo
             const overlay = document.createElement('div');
             overlay.id = 'gameIntroOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;';
             
             const container = document.createElement('div');
+            // FIX: Adicionado background-color: black para evitar o cinza do placeholder
             container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;background-color: black;'; 
             
             const video = document.createElement('video');
@@ -406,6 +428,7 @@ document.addEventListener("DOMContentLoaded", () => {
             video.setAttribute('playsinline', '');
             video.setAttribute('webkit-playsinline', '');
             video.setAttribute('preload', 'auto');
+            // FIX: Adicionado background-color: black para o elemento de vídeo
             video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;background-color: black;'; 
             
             container.appendChild(video);
@@ -431,6 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     window.startBackgroundMusic();
                 }
 
+                // Se não for PT, recarrega para garantir tradução se não aplicou ainda
                 if (lang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
                     window.location.reload();
                 }
@@ -441,6 +465,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // --- Lógica de Inicialização Automática (Intro) ---
     function _forceShowIntroFromUrl() {
         try { const qp = new URLSearchParams(location.search); return qp.get(FORCE_SHOW_PARAM) === '1'; } 
         catch (e) { return false; }
@@ -448,18 +473,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.__introSeen = !!localStorage.getItem(INTRO_LOCALSTORAGE_KEY);
 
+    // Se ainda não viu a intro (ou forçado por URL), abre em modo Intro
     if (!window.__introSeen || _forceShowIntroFromUrl()) {
+        // Pequeno delay para garantir que DOM carregou
         setTimeout(() => window.openLanguageModal(false), 100);
     }
 
 })();
 
+// Adiciona Listener ao botão do Menu de Opções
 document.addEventListener("DOMContentLoaded", () => {
     const changeLangBtn = document.getElementById('changeLanguageBtn');
     if (changeLangBtn) {
         changeLangBtn.addEventListener('click', (e) => {
+            // Fecha o submenu ao clicar
             const submenus = document.querySelectorAll('.footer-submenu');
             submenus.forEach(s => s.style.display = 'none');
+            
+            // Abre o modal em modo "Update" (true)
             window.openLanguageModal(true);
         });
     }
@@ -470,7 +501,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // =======================================================================
 
 // =======================================================================
-// INÍCIO: RESTANTE DO SCRIPT (SUPABASE, DB LOCAL, JOGADOR, ETC.)
+// INÍCIO: RESTANTE DO SCRIPT (SUPABASE, CACHE, JOGADOR, ETC.)
 // =======================================================================
 
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -478,207 +509,83 @@ const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =======================================================================
-// LÓGICA DE DADOS OTIMIZADA (LOCAL-FIRST / ZERO EGRESS)
+// CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
 // =======================================================================
-
-let currentPlayerId = null; 
-let currentPlayerData = null; 
-let itemDefinitions = new Map(); // Mapa global de itens (necessário para o Espiral/Gacha e UI)
-
-// Inicializa o DB assim que o script carrega
-if (window.localDB) {
-    window.localDB.init().then(() => {
-        console.log("IndexedDB Inicializado.");
-    }).catch(e => console.error("Falha DB", e));
-} else {
-    console.error("ERRO CRÍTICO: local_database.js não foi carregado!");
-}
+const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão
 
 /**
- * Carrega as definições de itens do IndexedDB para a memória (Map global).
- * Isso é essencial para que o sistema de Espiral e o CÁLCULO DE CP funcionem.
+ * Salva dados no LocalStorage com um timestamp e TTL.
+ * @param {string} key A chave para o cache.
+ * @param {any} data Os dados a serem salvos (serão convertidos para JSON).
+ * @param {number} [ttlMinutes=CACHE_TTL_MINUTES] Tempo de vida em minutos.
  */
-async function loadItemsIntoMemory() {
-    try {
-        if (!window.localDB.db) return; // DB ainda não abriu
-        
-        return new Promise((resolve) => {
-             const tx = window.localDB.db.transaction('items', 'readonly');
-             const store = tx.objectStore('items');
-             const req = store.getAll();
-             
-             req.onsuccess = () => {
-                 const items = req.result || [];
-                 itemDefinitions.clear();
-                 items.forEach(item => {
-                     // Garante que a chave seja número para matching
-                     itemDefinitions.set(Number(item.item_id), item);
-                 });
-                 console.log(`Carregados ${items.length} itens para memória (RAM).`);
-                 resolve();
-             };
-             req.onerror = () => {
-                 console.warn("Erro ao ler items do DB.");
-                 resolve();
-             }
-        });
-    } catch(e) {
-        console.warn("Erro ao carregar itens para memória:", e);
-    }
-}
-
-/**
- * SOBRESCREVE A LÓGICA DE CÁLCULO DO LOCAL_DATABASE.JS
- * Esta versão usa o 'itemDefinitions' (RAM) que é muito mais confiável e rápido
- * do que tentar ler item por item do IndexedDB dentro de um loop.
- */
-if (window.localDB) {
-    window.localDB.calculateStatsAndCP = async function(userId) {
-        console.log("⚡ Calculando Stats com lógica Otimizada (RAM)...");
-        const player = await this.getPlayer(userId);
-        if (!player) return null;
-
-        const inventory = await this.getInventory(userId);
-        
-        // Base Stats do Jogador
-        let stats = {
-            attack: player.attack || 0,
-            min_attack: player.min_attack || 0,
-            defense: player.defense || 0,
-            health: player.health || 0,
-            crit_chance: Number(player.crit_chance || 0),
-            crit_damage: Number(player.crit_damage || 0),
-            evasion: player.evasion || 0
-        };
-
-        // Itera sobre itens equipados
-        for (const invItem of inventory) {
-            if (invItem.equipped_slot) {
-                // 1. Soma Bônus do Inventário (Reforja/Encantamento)
-                stats.attack += (invItem.attack_bonus || 0);
-                stats.min_attack += (invItem.min_attack_bonus || 0);
-                stats.defense += (invItem.defense_bonus || 0);
-                stats.health += (invItem.health_bonus || 0);
-                stats.crit_chance += Number(invItem.crit_chance_bonus || 0);
-                stats.crit_damage += Number(invItem.crit_damage_bonus || 0);
-                stats.evasion += (invItem.evasion_bonus || 0);
-
-                // 2. Busca Atributos Base do Item (Usando RAM MAP)
-                // Força Number para garantir o match
-                const itemDef = itemDefinitions.get(Number(invItem.item_id));
-                
-                if (itemDef) {
-                    stats.attack += (itemDef.attack || 0);
-                    stats.min_attack += (itemDef.min_attack || 0);
-                    stats.defense += (itemDef.defense || 0);
-                    stats.health += (itemDef.health || 0);
-                    stats.crit_chance += Number(itemDef.crit_chance || 0);
-                    stats.crit_damage += Number(itemDef.crit_damage || 0);
-                    stats.evasion += (itemDef.evasion || 0);
-                } else {
-                    console.warn(`Item ID ${invItem.item_id} não encontrado nas definições! Stats base ignorados.`);
-                }
-            }
-        }
-
-        // Fórmula de CP
-        const cp = Math.floor(
-            (stats.attack * 12.5) +
-            (stats.min_attack * 1.5) +
-            (stats.crit_chance * 5.35) +
-            (stats.crit_damage * 6.5) +
-            (stats.defense * 2) +
-            (stats.health * 3.2625) +
-            (stats.evasion * 1)
-        );
-
-        // Atualiza o objeto do jogador localmente
-        player.combat_power = cp;
-        
-        // Salva o novo CP no banco local
-        await this.updatePlayerLocal(player);
-
-        return player;
+function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
+    const cacheItem = {
+        expires: Date.now() + (ttlMinutes * 60 * 1000), // Salva o timestamp de expiração
+        data: data
     };
+    try {
+        localStorage.setItem(key, JSON.stringify(cacheItem));
+    } catch (e) {
+        console.warn("Falha ao salvar no localStorage (provavelmente cheio):", e);
+    }
 }
 
-
 /**
- * Função principal para carregar dados.
- * 1. Tenta carregar do IndexedDB.
- * 2. Se for muito antigo (> 7 dias), faz fetch no Supabase e atualiza DB.
- * 3. Se for recente, NÃO CHAMA O SUPABASE (Zero Egress).
+ * Busca dados do LocalStorage e verifica se expiraram.
+ * @param {string} key A chave do cache.
+ * @param {number} [defaultTtlMinutes=CACHE_TTL_MINUTES] TTL padrão (não usado se o item já tem 'expires').
+ * @returns {any|null} Os dados (se encontrados e não expirados) ou null.
  */
-async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
-    
-    // Pega o ID da sessão
-    let userId = currentPlayerId;
-    if (!userId) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) {
-            updateUIVisibility(false);
-            return;
-        }
-        userId = session.user.id;
-        currentPlayerId = userId;
-    }
+function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
+    try {
+        const cachedItem = localStorage.getItem(key);
+        if (!cachedItem) return null;
 
-    // 1. Verifica se precisa de sincronização completa (Regra de 1 semana)
-    const needsSync = await window.localDB.needsSync(userId);
-
-    if (needsSync || forceRefresh) {
-        console.log("☁️ Realizando sincronização com o servidor...");
-        showFloatingMessage("Sincronizando dados...", 1000);
-        try {
-            // Baixa tudo e salva no IndexedDB
-            await window.localDB.fullSync(userId, supabaseClient);
-        } catch (e) {
-            console.error("Erro na sync:", e);
-            showFloatingMessage("Erro ao sincronizar. Usando dados offline.");
-        }
-    }
-
-    // Carrega definições de itens para a memória RAM (necessário para Cálculo correto de CP)
-    await loadItemsIntoMemory();
-
-    // 2. Recalcula stats e CP localmente (Garante consistência com lógica SQL)
-    const updatedPlayer = await window.localDB.calculateStatsAndCP(userId);
-
-    if (updatedPlayer) {
-        currentPlayerData = updatedPlayer; // Atualiza variável global
-        renderPlayerUI(currentPlayerData, preserveActiveContainer);
-        checkProgressionNotifications(currentPlayerData);
+        const { expires, data } = JSON.parse(cachedItem);
         
-        // Verifica nome padrão
-        if (/^Nome_[0-9a-fA-F]{6}$/.test(currentPlayerData.name)) {
-            if (typeof window.updateProfileEditModal === 'function') window.updateProfileEditModal(currentPlayerData);
-            const nameInput = document.getElementById('editPlayerName');
-            if (nameInput) nameInput.value = '';
-            profileEditModal.style.display = 'flex';
+        // Se não tiver 'expires' (formato antigo) ou se 'expires' não for um número, usa o TTL padrão
+        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1); // Força expiração se for formato antigo
+
+        if (Date.now() > expirationTime) {
+            localStorage.removeItem(key);
+            return null;
         }
-    } else {
-        console.error("Dados do jogador não encontrados localmente após tentativa de sync.");
+        return data;
+    } catch (e) {
+        console.error("Falha ao ler cache:", e);
+        localStorage.removeItem(key); // Remove item corrompido
+        return null;
     }
 }
 
 /**
- * Atualiza o cache e a UI localmente de forma OTIMISTA.
+ * Atualiza o cache e a UI localmente sem ir ao servidor.
+ * Útil para atualizar saldo de Ouro/Cristais imediatamente.
+ * @param {Object} changes - Objeto com as mudanças (ex: { gold: 500, crystals: 1000 })
  */
-async function updateLocalPlayerData(changes) {
+function updateLocalPlayerData(changes) {
     if (!currentPlayerData) return;
 
-    // 1. Aplica as mudanças no objeto em memória
+    // Aplica as mudanças no objeto em memória
     Object.keys(changes).forEach(key => {
         currentPlayerData[key] = changes[key];
     });
 
-    // 2. Salva no IndexedDB (Persistência robusta)
-    await window.localDB.updatePlayerLocal(currentPlayerData);
+    // Atualiza o Cache no LocalStorage
+    setCache('player_data_cache', currentPlayerData, 1440);
 
-    // 3. Redesenha a UI imediatamente
+    // Redesenha a UI
     renderPlayerUI(currentPlayerData, true);
 }
+// =======================================================================
 
+
+// =======================================================================
+// DADOS DO JOGADOR E DEFINIÇÕES DE MISSÃO
+// =======================================================================
+let currentPlayerId = null; // Armazena o ID do usuário logado
+let currentPlayerData = null; // Armazena todos os dados do jogador (com bônus)
 
 // Definições das Missões de Progressão (Client-side para UI)
 const mission_definitions = {
@@ -694,34 +601,57 @@ const mission_definitions = {
         { req: 30, item_id: 26, qty: 5, desc: "Alcance nível 30.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" }
     ],
     afk: [
+        // --- Itens Iniciais (Ajuste o nome das imagens) ---
         { req: 2, item_id: 13, qty: 1, desc: "Alcance o estágio 2 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/asa_guardia.webp" }, 
         { req: 3, item_id: 10, qty: 10, desc: "Alcance o estágio 3 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_anel_runico.webp" },
+        
+        // --- Estágio 4 e 5 (Existentes) ---
         { req: 4, crystals: 1500, qty: 1500, desc: "Alcance o estágio 4 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 5, crystals: 100, qty: 100, desc: "Alcance o estágio 5 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágios 6 a 9 (500 Cristais) ---
         { req: 6, crystals: 500, qty: 500, desc: "Alcance o estágio 6 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 7, crystals: 500, qty: 500, desc: "Alcance o estágio 7 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 8, crystals: 500, qty: 500, desc: "Alcance o estágio 8 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 9, crystals: 500, qty: 500, desc: "Alcance o estágio 9 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágio 10 (Existente) ---
         { req: 10, crystals: 500, qty: 500, desc: "Alcance o estágio 10 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágios 11 a 14 (1000 Cristais) ---
         { req: 11, crystals: 1000, qty: 1000, desc: "Alcance o estágio 11 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 12, crystals: 1000, qty: 1000, desc: "Alcance o estágio 12 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 13, crystals: 1000, qty: 1000, desc: "Alcance o estágio 13 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 14, crystals: 1000, qty: 1000, desc: "Alcance o estágio 14 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágio 15 (Existente) ---
         { req: 15, crystals: 1500, qty: 1500, desc: "Alcance o estágio 15 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágios 16 a 19 (1000 Cristais) ---
         { req: 16, crystals: 1000, qty: 1000, desc: "Alcance o estágio 16 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 17, crystals: 1000, qty: 1000, desc: "Alcance o estágio 17 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 18, crystals: 1000, qty: 1000, desc: "Alcance o estágio 18 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 19, crystals: 1000, qty: 1000, desc: "Alcance o estágio 19 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágio 20 (Existente) ---
         { req: 20, crystals: 2500, qty: 2500, desc: "Alcance o estágio 20 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágios 21 a 24 (1000 Cristais) ---
         { req: 21, crystals: 1000, qty: 1000, desc: "Alcance o estágio 21 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 22, crystals: 1000, qty: 1000, desc: "Alcance o estágio 22 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 23, crystals: 1000, qty: 1000, desc: "Alcance o estágio 23 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 24, crystals: 1000, qty: 1000, desc: "Alcance o estágio 24 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágio 25 (Existente) ---
         { req: 25, crystals: 3000, qty: 3000, desc: "Alcance o estágio 25 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágios 26 a 29 (1000 Cristais) ---
         { req: 26, crystals: 1000, qty: 1000, desc: "Alcance o estágio 26 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 27, crystals: 1000, qty: 1000, desc: "Alcance o estágio 27 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 28, crystals: 1000, qty: 1000, desc: "Alcance o estágio 28 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 29, crystals: 1000, qty: 1000, desc: "Alcance o estágio 29 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
+
+        // --- Estágios 30+ (Existentes) ---
         { req: 30, crystals: 3000, qty: 3000, desc: "Alcance o estágio 30 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 35, crystals: 3000, qty: 3000, desc: "Alcance o estágio 35 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 40, crystals: 3000, qty: 3000, desc: "Alcance o estágio 40 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
@@ -740,7 +670,7 @@ const mission_definitions = {
 };
 
 // =======================================================================
-// FUNÇÃO PARA LIDAR COM AÇÕES NA URL
+// FUNÇÃO PARA LIDAR COM AÇÕES NA URL (REABRIR LOJA OU ABRIR PV)
 // =======================================================================
 async function handleUrlActions() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -800,6 +730,9 @@ async function handleUrlActions() {
 }
 
 
+// Cache de definições de itens para uso no Espiral e outras funcionalidades
+let itemDefinitions = new Map();
+
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
 const playerInfoDiv = document.getElementById('playerInfoDiv');
@@ -822,6 +755,7 @@ const welcomeContainer = document.getElementById('welcomeContainer');
 
 const floatingMessageDiv = document.getElementById('floatingMessage');
 const footerMenu = document.getElementById('footerMenu');
+// const homeBtn = document.getElementById('homeBtn'); // REMOVIDO
 
 // --- Elementos para recuperação de senha ---
 const forgotPasswordLink = document.getElementById('forgotPasswordLink');
@@ -851,6 +785,47 @@ const confirmPurchaseFinalBtn = document.getElementById('confirmPurchaseFinalBtn
 const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
 
 
+// Função para carregar definições de itens no cache local (MODIFICADA COM CACHE PERSISTENTE)
+async function loadItemDefinitions() {
+    const CACHE_KEY = 'item_definitions_cache';
+    const CACHE_TTL_24H = 1440; // 24 horas * 60 minutos
+
+    // 1. Tenta carregar do cache em memória (RAM) - lógica original
+    if (itemDefinitions.size > 0) return;
+
+    // 2. Tenta carregar do cache persistente (LocalStorage)
+    const cachedData = getCache(CACHE_KEY, CACHE_TTL_24H);
+    if (cachedData) {
+        // Recria o Map a partir dos dados [key, value] salvos no cache
+        try {
+             itemDefinitions = new Map(cachedData);
+             console.log('Definições de itens carregadas do LocalStorage.');
+             return;
+        } catch(e) {
+            console.warn("Falha ao parsear cache de itens, buscando novamente.", e);
+            localStorage.removeItem(CACHE_KEY); // Limpa cache corrompido
+        }
+    }
+
+    // 3. Se não houver cache, busca no Supabase
+    console.log('Buscando definições de itens do Supabase...');
+    const { data, error } = await supabaseClient.from('items').select('item_id, name');
+    if (error) {
+        console.error('Erro ao carregar definições de itens:', error);
+        return;
+    }
+    
+    const dataForCache = []; // Array [key, value] para salvar no localStorage
+    for (const item of data) {
+        itemDefinitions.set(item.item_id, item);
+        dataForCache.push([item.item_id, item]); // Salva como [key, value]
+    }
+    
+    // 4. Salva no cache persistente para a próxima vez com TTL de 24h
+    setCache(CACHE_KEY, dataForCache, CACHE_TTL_24H);
+    console.log('Definições de itens carregadas do Supabase e salvas no cache.');
+}
+
 // Funções de Notificação Flutuante
 function showFloatingMessage(message, duration = 5000) {
     if (!floatingMessageDiv) return;
@@ -865,7 +840,7 @@ function showFloatingMessage(message, duration = 5000) {
         }, 500);
     }, duration);
 }
-window.showFloatingMessage = showFloatingMessage; 
+window.showFloatingMessage = showFloatingMessage; // Expor globalmente
 
 // Funções de Autenticação
 async function signIn() {
@@ -918,9 +893,10 @@ async function verifyOtp() {
 }
 
 async function signOut() {
-    // Limpa chave de sincronização e cache do jogador
-    localStorage.removeItem('aden_last_full_sync');
-    localStorage.removeItem('player_data_cache'); // Legado, mantido por garantia
+    // --- CORREÇÃO DE CACHE APLICADA ---
+    // Limpa explicitamente o cache do jogador antes de sair e recarregar
+    // Isso previne que o próximo usuário veja os dados do anterior
+    localStorage.removeItem('player_data_cache');
     
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
@@ -973,6 +949,124 @@ if (!preserveActiveContainer) {
     }
 }
 
+// Nova função auxiliar para aplicar os bônus dos itens aos atributos
+function applyItemBonuses(player, equippedItems) {
+    let combinedStats = { ...player };
+    equippedItems.forEach(invItem => {
+        if (invItem.items) {
+            combinedStats.min_attack += invItem.items.min_attack || 0;
+            combinedStats.attack += invItem.items.attack || 0;
+            combinedStats.defense += invItem.items.defense || 0;
+            combinedStats.health += invItem.items.health || 0;
+            combinedStats.crit_chance += invItem.items.crit_chance || 0;
+            combinedStats.crit_damage += invItem.items.crit_damage || 0;
+            combinedStats.evasion += invItem.items.evasion || 0;
+        }
+        combinedStats.min_attack += invItem.min_attack_bonus || 0;
+        combinedStats.attack += invItem.attack_bonus || 0;
+        combinedStats.defense += invItem.defense_bonus || 0;
+        combinedStats.health += invItem.health_bonus || 0;
+        combinedStats.crit_chance += invItem.crit_chance_bonus || 0;
+        combinedStats.crit_damage += invItem.crit_damage_bonus || 0;
+        combinedStats.evasion += invItem.evasion_bonus || 0;
+    });
+    return combinedStats;
+}
+
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
+async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
+    const PLAYER_CACHE_KEY = 'player_data_cache';
+    
+    // Se não for forçado e já temos dados, retorna (Economia Máxima)
+    if (!forceRefresh && currentPlayerData) {
+        renderPlayerUI(currentPlayerData, preserveActiveContainer);
+        return;
+    }
+
+    // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
+    // NUNCA chamamos getUser() aqui para economizar Egress.
+    let userId = currentPlayerId;
+    if (!userId) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) {
+            updateUIVisibility(false);
+            return;
+        }
+        userId = session.user.id;
+        currentPlayerId = userId;
+    }
+
+    // Busca apenas dados do jogo (Database Egress é muito mais barato que Auth Egress)
+    const { data: player, error: playerError } = await supabaseClient
+        .from('players')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+    if (playerError || !player) {
+        console.error("Erro ao buscar jogador:", playerError);
+        return;
+    }
+
+    // Busca os itens equipados (mantido igual)
+    const { data: equippedItems, error: itemsError } = await supabaseClient
+        .from('inventory_items')
+        .select(`
+            equipped_slot,
+            min_attack_bonus,
+            attack_bonus,
+            defense_bonus,
+            health_bonus,
+            crit_chance_bonus,
+            crit_damage_bonus,
+            evasion_bonus,
+            items (
+                name,
+                min_attack,
+                attack,
+                defense,
+                health,
+                crit_chance,
+                crit_damage,
+                evasion
+            )
+        `)
+        .eq('player_id', userId)
+        .neq('equipped_slot', null);
+
+    if (itemsError) {
+        console.error('Erro ao buscar itens equipados:', itemsError.message);
+    }
+
+    const playerWithEquips = applyItemBonuses(player, equippedItems || []);
+    
+    // Cálculo do CP (mantido igual)
+    playerWithEquips.combat_power = Math.floor(
+        (playerWithEquips.attack * 12.5) +
+        (playerWithEquips.min_attack * 1.5) +
+        (playerWithEquips.crit_chance * 5.35) +
+        (playerWithEquips.crit_damage * 6.5) +
+        (playerWithEquips.defense * 2) +
+        (playerWithEquips.health * 3.2625) +
+        (playerWithEquips.evasion * 1)
+    );
+
+    // Armazena e Renderiza
+    currentPlayerData = playerWithEquips;
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 60 min
+    renderPlayerUI(playerWithEquips, preserveActiveContainer);
+    checkProgressionNotifications(playerWithEquips);
+
+    // Verifica nome padrão para abrir modal de edição
+    if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
+        if (typeof window.updateProfileEditModal === 'function') {
+            window.updateProfileEditModal(playerWithEquips);
+        }
+        const nameInput = document.getElementById('editPlayerName');
+        if (nameInput) nameInput.value = '';
+        profileEditModal.style.display = 'flex';
+    }
+}
 // === Botão de copiar ID do jogador ===
 document.addEventListener('DOMContentLoaded', () => {
   const copiarIdDiv = document.getElementById('copiarid');
@@ -991,6 +1085,7 @@ document.addEventListener('DOMContentLoaded', () => {
       copiarIdDiv.classList.add('copied');
       copiarIdDiv.textContent = 'Copiado!';
 
+      // Reinsere o ícone SVG junto do texto
       copiarIdDiv.insertAdjacentHTML('afterbegin', `
        
       `);
@@ -1088,7 +1183,7 @@ if (updatePasswordBtn) {
     });
 }
 
-// --- UI ---
+// --- UI ---// --- UI ---
 window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
   if (isLoggedIn) {
     authContainer.style.display = 'none';
@@ -1113,51 +1208,77 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
 signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
+// homeBtn.addEventListener('click', () => { // REMOVIDO
+//     updateUIVisibility(true, 'welcomeContainer');
+//     fetchAndDisplayPlayerInfo(true, true);
+//     showFloatingMessage("Você está na página inicial!");
+// });
 
-// -----------------------------------------------------------
-// Inicialização do Jogo e Autenticação (Otimizada)
-// -----------------------------------------------------------
+// Sessão e inicialização
+
+// =======================================================================
+// OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO
+// =======================================================================
+window.authCheckComplete = false;
 
 async function checkAuthStatus() {
-    // Apenas verifica se existe token válido localmente (Sem chamada de rede se válido)
+    // getSession() lê do LocalStorage e NÃO gera Egress de rede se o token for válido
     const { data: { session }, error } = await supabaseClient.auth.getSession();
 
     if (session) {
+        // Usuário tem uma sessão válida localmente.
         currentPlayerId = session.user.id;
         window.authCheckComplete = true;
 
-        // Inicia fluxo Local-First
-        await fetchAndDisplayPlayerInfo(false); 
+        // Se NÃO tínhamos cache ou se ele é muito antigo, aí sim buscamos do banco
+        if (!currentPlayerData) {
+            console.log("🔄 Cache vazio. Buscando dados atualizados...");
+            fetchAndDisplayPlayerInfo(true); 
+        } else {
+            console.log("✅ Sessão válida. Mantendo dados do cache para economizar banda.");
+            // Opcional: Atualizar silenciosamente em background se o cache for > 10 min
+            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
+        }
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        
+        // Após confirmar sessão, lidar com URLs
         handleUrlActions();
     } else {
+        // Sem sessão, mostra tela de login
         updateUIVisibility(false);
         window.authCheckComplete = true;
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
     }
 }
 
-// Listener de Login/Logout
+// 1. Tenta renderizar IMEDIATAMENTE usando o cache (Zero Network)
+document.addEventListener("DOMContentLoaded", async () => {
+    const cachedPlayer = getCache('player_data_cache', 60 * 24); // Tenta ler cache (até 24h se existir)
+    
+    if (cachedPlayer) {
+        console.log("⚡ Interface carregada via Cache (Sem consumo de Auth)");
+        currentPlayerData = cachedPlayer;
+        currentPlayerId = cachedPlayer.id;
+        renderPlayerUI(cachedPlayer); // Desenha a UI instantaneamente
+        checkProgressionNotifications(cachedPlayer);
+    }
+
+    // 2. Inicia verificação de Auth silenciosa
+    // Isso roda em segundo plano sem bloquear a UI
+    checkAuthStatus();
+});
+
+// Escuta mudanças APENAS para Login/Logout explícitos (não disparar em recargas de aba)
 supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN' && !currentPlayerData) {
-        // Ao logar, forçamos um check que provavelmente fará o sync inicial
-        fetchAndDisplayPlayerInfo(false); 
+        fetchAndDisplayPlayerInfo(true);
     } else if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('aden_last_full_sync');
         localStorage.removeItem('player_data_cache');
         window.location.reload();
     }
 });
 
-// Inicialização
-document.addEventListener("DOMContentLoaded", async () => {
-    // Aguarda DB iniciar (o script local_database.js já deve ter iniciado, mas garantimos aqui)
-    if (window.localDB) {
-        await window.localDB.init();
-    }
-    checkAuthStatus();
-});
 
 
 // --- Modal de avatar ---
@@ -1202,6 +1323,9 @@ if (closeProfileModalBtn) {
 
 // === MENU LATERAL (LOSANGOS) ===
 document.addEventListener("DOMContentLoaded", () => {
+  
+  // Carrega as definições de itens ao iniciar a página (agora usa cache).
+  loadItemDefinitions();
     
   const missionsBtn = document.getElementById("missionsBtn");
   const missionsSub = document.getElementById("missionsSubmenu");
@@ -1234,6 +1358,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const modalMessages = {
     titulosModal: "Títulos em breve!",
+    // "progressaoModal" removido daqui
     comercioModal: "Comércio em breve!",
     rankingModal: "Ranking em breve!",
     petsModal: "Pets em breve!"
@@ -1248,6 +1373,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       
+      // NOVA LÓGICA PARA PROGRESSÃO
       if (key === "progressaoModal") {
         openProgressionModal();
         return;
@@ -1279,13 +1405,14 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.style.display = "none";
   });
   
+  // Listener para fechar o novo modal de progressão
   const closeProgressionBtn = document.getElementById('closeProgressionModalBtn');
   if (closeProgressionBtn) {
       closeProgressionBtn.addEventListener('click', closeProgressionModal);
   }
 
   // ===============================================
-  // === LÓGICA DO NOVO FOOTER MENU ===
+  // === INÍCIO - LÓGICA DO NOVO FOOTER MENU ===
   // ===============================================
   const recursosBtn = document.getElementById('recursosBtn');
   const pvpBtnFooter = document.getElementById('pvpBtnFooter');
@@ -1312,13 +1439,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!isVisible) {
           submenu.style.display = 'flex';
           
+          // Posiciona o submenu acima do botão
           const btnRect = button.getBoundingClientRect();
           const footerRect = document.getElementById('footerMenu').getBoundingClientRect();
-          submenu.style.bottom = (window.innerHeight - footerRect.top) + 5 + 'px';
+          submenu.style.bottom = (window.innerHeight - footerRect.top) + 5 + 'px'; // 5px de espaço
 
+          // Centraliza o submenu horizontalmente com o botão
           const submenuRect = submenu.getBoundingClientRect();
           let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
 
+          // Ajusta se sair da tela
           if (newLeft < 5) { newLeft = 5; }
           if ((newLeft + submenuRect.width) > (window.innerWidth - 5)) { 
               newLeft = (window.innerWidth - submenuRect.width - 5);
@@ -1330,7 +1460,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (recursosBtn) {
       recursosBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
+          e.stopPropagation(); // Impede que o 'document' click feche imediatamente
           toggleFooterSubmenu(recursosSubmenu, recursosBtn);
       });
   }
@@ -1347,16 +1477,24 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
 
+  // Fecha submenus ao clicar em qualquer outro lugar
+  // Adiciona ao listener 'click' principal do 'document' que já existe para o sideMenu
   const originalDocClickListener = document.onclick;
   document.addEventListener('click', (e) => {
+      // Chama o listener original se existir
       if (typeof originalDocClickListener === 'function') {
           originalDocClickListener(e);
       }
 
+      // Lógica para fechar os submenus do footer
       if (!e.target.closest('.footer-submenu') && !e.target.closest('.footer-btn')) {
           closeAllFooterSubmenus();
       }
   });
+  // ===============================================
+  // === FIM - LÓGICA DO NOVO FOOTER MENU ===
+  // ===============================================
+
 });
 
 
@@ -1364,6 +1502,10 @@ document.addEventListener("DOMContentLoaded", () => {
 // === LÓGICA DO SISTEMA DE PROGRESSÃO (NOVO) ===
 // ===============================================
 
+/**
+ * Verifica se há missões de progressão resgatáveis (APENAS Level e AFK).
+ * Isso é rápido e pode ser chamado após o login.
+ */
 function checkProgressionNotifications(player) {
     if (!player) return;
 
@@ -1383,7 +1525,7 @@ function checkProgressionNotifications(player) {
         }
     }
 
-    // 2. Checar AFK
+    // 2. Checar AFK (só checa se ainda não achou resgatável)
     if (!hasClaimable) {
         const afkIndex = state.afk || 0;
         if (afkIndex < mission_definitions.afk.length) {
@@ -1394,7 +1536,8 @@ function checkProgressionNotifications(player) {
         }
     }
     
-    // 3. Checar Misc
+    // 3. Checar Misc (só checa se ainda não achou resgatável)
+    // Vamos checar apenas os que não exigem busca no inventário (Misc 2 e 3)
      if (!hasClaimable) {
         const miscIndex = state.misc || 0;
         if (miscIndex === 1) { // Missão "Dispute uma mina"
@@ -1408,10 +1551,14 @@ function checkProgressionNotifications(player) {
         }
     }
 
+
     missionsDot.style.display = hasClaimable ? 'block' : 'none';
     progressionDot.style.display = hasClaimable ? 'block' : 'none';
 }
 
+/**
+ * Abre o modal de progressão e chama a renderização
+ */
 function openProgressionModal() {
     const modal = document.getElementById('progressionModal');
     if (modal) {
@@ -1420,6 +1567,9 @@ function openProgressionModal() {
     }
 }
 
+/**
+ * Fecha o modal de progressão
+ */
 function closeProgressionModal() {
     const modal = document.getElementById('progressionModal');
     if (modal) {
@@ -1427,6 +1577,9 @@ function closeProgressionModal() {
     }
 }
 
+/**
+ * Renderiza o conteúdo do modal de progressão
+ */
 async function renderProgressionModal() {
     const container = document.getElementById('progressionListContainer');
     if (!container) return;
@@ -1436,7 +1589,7 @@ async function renderProgressionModal() {
         return;
     }
     
-    container.innerHTML = ''; 
+    container.innerHTML = ''; // Limpa o conteúdo
     const player = currentPlayerData;
     const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
 
@@ -1510,6 +1663,7 @@ async function renderProgressionModal() {
         miscCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
     } else {
         const mission = mission_definitions.misc[miscIndex];
+        // A verificação de "canClaim" para "misc" é assíncrona ou depende de dados variados
         const canClaim = await checkMiscRequirement(miscIndex, player);
         miscCatDiv.innerHTML += `
             <div class="mission-item">
@@ -1530,19 +1684,25 @@ async function renderProgressionModal() {
     }
     container.appendChild(miscCatDiv);
     
+    // Adiciona listeners aos botões de resgate
     container.querySelectorAll('.claim-btn').forEach(btn => {
         btn.addEventListener('click', handleProgressionClaim);
     });
 }
 
+/**
+ * Verifica o requisito para a missão "misc" atual.
+ */
 async function checkMiscRequirement(missionIndex, player) {
     if (missionIndex === 0) {
         // "Construa ou adquira um novo equipamento na bolsa."
         try {
+            // Tenta usar RPC (se você a criou)
              const { data, error: rpcError } = await supabaseClient
                 .rpc('count_player_equipment', { p_player_id: player.id });
 
             if (rpcError) {
+                 // Fallback para a query com JOIN (mais lenta)
                  console.warn("RPC count_player_equipment não encontrada, usando query com join.");
                  const { count: inventoryCount, error: inventoryError } = await supabaseClient
                     .from('inventory_items')
@@ -1558,6 +1718,7 @@ async function checkMiscRequirement(missionIndex, player) {
 
         } catch (err) {
             console.error("Erro ao checar inventário para missão misc 0:", err);
+            // Fallback 2 (caso a primeira query falhe por algum motivo)
              try {
                 const { count: finalCount, error: finalError } = await supabaseClient
                     .from('inventory_items')
@@ -1570,14 +1731,17 @@ async function checkMiscRequirement(missionIndex, player) {
         }
     } else if (missionIndex === 1) {
         // "Dispute uma mina de cristal."
-        return !!player.last_attack_time;
+        return !!player.last_attack_time; // Retorna true se last_attack_time não for null/undefined
     } else if (missionIndex === 2) {
         // "Compre um ataque na Raid de guilda."
-        return (player.raid_attacks_bought_count || 0) > 0; 
+        return (player.raid_attacks_bought_count || 0) > 0; //
     }
     return false;
 }
 
+/**
+ * Lida com o clique no botão "Resgatar" (MODIFICADO PARA ATUALIZAR O CACHE)
+ */
 async function handleProgressionClaim(event) {
     const button = event.target;
     const category = button.dataset.category;
@@ -1587,6 +1751,8 @@ async function handleProgressionClaim(event) {
     button.textContent = "Aguarde...";
 
     try {
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Removido o underscore "_" extra
         const { data, error } = await supabaseClient.rpc('claim_progression_reward', {
             p_category: category
         });
@@ -1595,14 +1761,21 @@ async function handleProgressionClaim(event) {
 
         showFloatingMessage(data.message || 'Recompensa resgatada com sucesso!');
 
+        // MODIFICADO: Em vez de atualizar manualmente, força um refresh
+        // que atualizará a UI, o cache e a variável global 'currentPlayerData'.
+        // O segundo 'true' (preserveActiveContainer) é vital para não fechar o modal.
         await fetchAndDisplayPlayerInfo(true, true); 
 
+        // A checagem de notificação agora usará o 'currentPlayerData' atualizado pela função acima
         checkProgressionNotifications(currentPlayerData);
+        
+        // Re-renderiza o modal de progressão
         await renderProgressionModal();
 
     } catch (error) {
         console.error(`Erro ao resgatar recompensa [${category}]:`, error);
         showFloatingMessage(`Erro: ${error.message.replace('Error: ', '')}`);
+        // Re-habilita o botão em caso de erro
         button.disabled = false;
         button.textContent = "Resgatar";
     }
@@ -1816,6 +1989,7 @@ if (closeShopModalBtn) {
     });
 }
 
+// Lógica para alternar entre as abas da loja
 const shopTabs = document.querySelectorAll('.shop-tab-btn');
 const shopContents = document.querySelectorAll('.shop-content');
 
@@ -1835,19 +2009,22 @@ shopTabs.forEach(tab => {
     });
 });
 
+// Lógica para os botões de compra com modal de confirmação
 const buyButtons = document.querySelectorAll('.shop-buy-btn');
-let purchaseHandler = null; 
+let purchaseHandler = null; // Variável para armanezar a função de compra
 
 buyButtons.forEach(button => {
     button.addEventListener('click', () => {
         const packageId = button.getAttribute('data-package');
         const itemName = button.getAttribute('data-name');
-        const itemCost = button.getAttribute('data-cost'); 
+        const itemCost = button.getAttribute('data-cost'); // Deve ser string de número
 
+        // Prepara a mensagem do modal
         confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
         
+        // Define o que o botão "Confirmar" fará (MODIFICADO PARA ATUALIZAR O CACHE)
         purchaseHandler = async () => {
-            purchaseConfirmModal.style.display = 'none'; 
+            purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
             button.disabled = true;
             shopMessage.textContent = 'Processando sua compra...';
 
@@ -1872,19 +2049,22 @@ buyButtons.forEach(button => {
             }
         };
 
+        // Mostra o modal de confirmação
         purchaseConfirmModal.style.display = 'flex';
     });
 });
 
+// Listener para o botão de confirmação final
 confirmPurchaseFinalBtn.addEventListener('click', () => {
     if (purchaseHandler) {
         purchaseHandler();
     }
 });
 
+// Listener para o botão de cancelar
 cancelPurchaseBtn.addEventListener('click', () => {
     purchaseConfirmModal.style.display = 'none';
-    purchaseHandler = null;
+    purchaseHandler = null; // Limpa o handler
 });
 
 // =======================================================================

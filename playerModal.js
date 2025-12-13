@@ -204,29 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return totalStats;
     }
 
-    /**
-     * Calcula o Poder de Combate (CP) localmente com base nas estatísticas totais.
-     * Esta função substitui a RPC não existente.
-     * @param {object} stats - O objeto de estatísticas totais (base + itens).
-     * @returns {number} O valor do CP calculado.
-     */
-    function calculateCombatPowerLocal(stats) {
-        try {
-            const cpLocal = Math.floor(
-                (safeNum(stats.attack) * 12.5) +
-                (safeNum(stats.min_attack) * 1.5) +
-                (safeNum(stats.crit_chance) * 5.35) +
-                (safeNum(stats.crit_damage) * 6.5) +
-                (safeNum(stats.defense) * 2) +
-                (safeNum(stats.health) * 3.2625) +
-                (safeNum(stats.evasion) * 1)
-            );
-            return cpLocal;
-        } catch (e) {
-            console.error("Erro no cálculo local de CP:", e);
-            return 0;
-        }
-    }
+    // --- CÁLCULO DE CP REMOVIDO DO MODAL ---
 
 
     async function populateModal(player, equippedItems = [], guildData = null) {
@@ -259,8 +237,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (playerCritDamageEl) playerCritDamageEl.textContent = `${Math.floor(stats.crit_damage)}%`;
             if (playerEvasionEl) playerEvasionEl.textContent = `${Math.floor(stats.evasion)}%`;
 
-            // CP (Apenas cálculo local)
-            const cp = calculateCombatPowerLocal(stats);
+            // CP (Removido cálculo, definindo como vazio ou 0)
+            const cp = 0; 
             if (combatPowerEl) combatPowerEl.textContent = `${formatNumberCompact(Number(cp) || 0)}`;
 
             // Remove shimmer
@@ -464,10 +442,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // --- Salva os novos dados e a IMPRESSÃO DIGITAL no cache ---
             try {
-                // Cálculo de CP local para salvar no cache.
+                // Cálculo de CP local para salvar no cache REMOVIDO
                 const allItems = items || [];
-                const totalStats = calcularAtributosTotais(player, allItems);
-                const cp = calculateCombatPowerLocal(totalStats);
+                const cp = 0; // Removido
                 
                 // Cria a nova Impressão Digital para salvar
                 const newFingerprint = {
@@ -475,7 +452,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     equipped_count: allItems.length
                 };
                 
-                // Salva o conjunto completo de dados + o CP + a Impressão Digital
+                // Salva o conjunto completo de dados + o CP (0) + a Impressão Digital
                 setCache(cacheKey, { player, items: allItems, guildData, combatPower: cp, equipmentFingerprint: newFingerprint }, CACHE_TTL_MS);
                 console.log(`[playerModal.js] Novos dados, CP (${cp}) e Fingerprint salvos no cache para ${playerId}`);
             } catch (e) {

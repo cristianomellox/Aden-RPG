@@ -511,7 +511,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // =======================================================================
 // CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
 // =======================================================================
-const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão
+const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão (24h)
 
 /**
  * Salva dados no LocalStorage com um timestamp e TTL.
@@ -906,17 +906,13 @@ async function signOut() {
 }
 
 // Função helper para renderizar a UI com os dados do jogador
+// ALTERADO: Removidos stats detalhados (Atk, Def, HP, Crit, Evasão)
+// Apenas exibe Nome, Facção e Botões
 function renderPlayerUI(player, preserveActiveContainer = false) {
     authContainer.style.display = 'none';
     playerInfoDiv.innerHTML = `
-      <p>Olá, ${player.name}!</p>
+      <p class="hellop">${player.name}!</p>
       <p>Facção: ${player.faction}</p>
-      <p>Ataque: ${player.min_attack} - ${player.attack}</p>
-      <p>Defesa: ${player.defense}</p>
-      <p>HP: ${player.health ?? 0}</p>
-      <p>Taxa Crítica: ${player.crit_chance ?? 0}%</p>
-      <p>Dano Crítico: ${player.crit_damage ?? 0}%</p>
-      <p>Evasão: ${player.evasion ?? 0}%</p>
       <button id="editProfileBtn">Editar Perfil</button>
       <button id="signOutBtn">Deslogar</button>
     `;
@@ -944,12 +940,13 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
             </div>
         `;
     }
-if (!preserveActiveContainer) {
+    if (!preserveActiveContainer) {
         updateUIVisibility(true, 'welcomeContainer');
     }
 }
 
 // Nova função auxiliar para aplicar os bônus dos itens aos atributos
+// RESTAURADA: Usada para o cálculo de CP
 function applyItemBonuses(player, equippedItems) {
     let combinedStats = { ...player };
     equippedItems.forEach(invItem => {
@@ -973,7 +970,8 @@ function applyItemBonuses(player, equippedItems) {
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador (OTIMIZADA PARA MENOS CONSUMO DE AUTH)
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
+// RESTAURADA: Busca itens e calcula CP, mas exibe UI limpa
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     const PLAYER_CACHE_KEY = 'player_data_cache';
     
@@ -996,7 +994,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         currentPlayerId = userId;
     }
 
-    // Busca apenas dados do jogo (Database Egress é muito mais barato que Auth Egress)
+    // Busca apenas dados do jogo
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
         .select('*')
@@ -1008,7 +1006,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // Busca os itens equipados (mantido igual)
+    // Busca os itens equipados (para calcular o CP corretamente)
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
         .select(`
@@ -1038,9 +1036,10 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         console.error('Erro ao buscar itens equipados:', itemsError.message);
     }
 
+    // Calcula os atributos totais
     const playerWithEquips = applyItemBonuses(player, equippedItems || []);
     
-    // Cálculo do CP (mantido igual)
+    // Cálculo do CP (Mantido)
     playerWithEquips.combat_power = Math.floor(
         (playerWithEquips.attack * 12.5) +
         (playerWithEquips.min_attack * 1.5) +
@@ -1053,7 +1052,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // Armazena e Renderiza
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 60 min
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 24 horas (1440 min)
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 

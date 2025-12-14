@@ -1001,23 +1001,44 @@ textarea:focus, textarea:active {
     box-shadow: 0 0 10px rgba(205, 127, 50, 0.7); 
 }
 
-/* EFEITO TOP 3 (igual ao da aba "Atual") */
-#rankingListPast li:nth-child(1) { background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09); border-left: 5px solid gold; }
-#rankingListPast li:nth-child(1) .rank-position, #rankingListPast li:nth-child(1) .rank-points { color: #FFD700; text-shadow: 0 0 6px #FFD700, 0 0 10px #000; }
-#rankingListPast li:nth-child(1) .rank-avatar { 
-    border: 3px solid #FFD700; /* Borda Dourada Adicionada */
-    /* Adicionado o efeito de pulse */
-    animation: pulse 2s infinite; 
+/* ===== TOP 3 – ARENA ATUAL ===== */
+
+/* 🥇 1º Lugar – Ouro */
+#rankingList li:nth-child(1) .rank-avatar {
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+    animation: pulse 2s infinite;
 }
-#rankingListPast li:nth-child(2) { background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c); border-left: 5px solid silver; }
-#rankingListPast li:nth-child(2) .rank-position, #rankingListPast li:nth-child(2) .rank-points { color: silver; text-shadow: 0 0 6px silver; }
-#rankingListPast li:nth-child(2) .rank-avatar { 
-    border: 3px solid silver; /* Borda Prata Adicionada */
-    box-shadow: 0 0 10px rgba(192, 192, 192, 0.7); 
+
+/* 🥈 2º Lugar – Prata */
+#rankingList li:nth-child(2) .rank-avatar {
+    border: 3px solid silver;
+    box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
 }
-#rankingListPast li:nth-child(3) { background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5)); border-left: 5px solid #CD7F32; }
-#rankingListPast li:nth-child(3) .rank-position, #rankingListPast li:nth-child(3) .rank-points { color: #CD7F32; text-shadow: 0 0 6px #CD7F32; }
-#rankingListPast li:nth-child(3) .rank-avatar { 
-    border: 3px solid #CD7F32; /* Borda Bronze Adicionada */
-    box-shadow: 0 0 10px rgba(205, 127, 50, 0.7); 
+
+/* 🥉 3º Lugar – Bronze */
+#rankingList li:nth-child(3) .rank-avatar {
+    border: 3px solid #CD7F32;
+    box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
+}
+
+/* ===== TOP 3 – ARENA PASSADA ===== */
+
+/* 🥇 1º Lugar – Ouro */
+#rankingListPast li:nth-child(1) .rank-avatar {
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+    animation: pulse 2s infinite;
+}
+
+/* 🥈 2º Lugar – Prata */
+#rankingListPast li:nth-child(2) .rank-avatar {
+    border: 3px solid silver;
+    box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
+}
+
+/* 🥉 3º Lugar – Bronze */
+#rankingListPast li:nth-child(3) .rank-avatar {
+    border: 3px solid #CD7F32;
+    box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
 }

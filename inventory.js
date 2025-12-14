@@ -8,96 +8,105 @@ let playerBaseStats = {};
 let allInventoryItems = [];
 let selectedItem = null;
 
-
 // ===============================
-// IndexedDB utilitário simples (Cache 24h)
+// Cache Persistente (Apenas Equipados e Status)
 // ===============================
-const DB_NAME = "aden_inventory_db";
-const STORE_NAME = "inventory_store";
-const META_STORE = "meta_store";
-const DB_VERSION = 18;
+const CACHE_KEY_STATS = "aden_persistent_stats";
+const CACHE_KEY_EQUIPPED = "aden_persistent_equipped";
 
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = (e) => {
-            console.log('IndexedDB: Upgrade necessário. Limpando caches antigos.');
-            const db = e.target.result;
-            if (db.objectStoreNames.contains(STORE_NAME)) {
-                db.deleteObjectStore(STORE_NAME);
-            }
-            if (db.objectStoreNames.contains(META_STORE)) {
-                db.deleteObjectStore(META_STORE);
-            }
-            db.createObjectStore(STORE_NAME, { keyPath: "id" });
-            db.createObjectStore(META_STORE, { keyPath: "key" });
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+// Salva o estado atual dos equipados e status no LocalStorage
+function savePersistentCache() {
+    try {
+        localStorage.setItem(CACHE_KEY_STATS, JSON.stringify(playerBaseStats));
+        localStorage.setItem(CACHE_KEY_EQUIPPED, JSON.stringify(equippedItems));
+    } catch (e) {
+        console.warn("Erro ao salvar cache persistente:", e);
+    }
 }
 
-async function saveCache(items) {
-    const db = await openDB();
-    const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    store.clear();
-    items.forEach(item => store.put(item));
-    tx.objectStore(META_STORE).put({ key: "last_updated", value: Date.now() });
-    return tx.complete;
+// Limpa o cache (usado nas ações de modificação)
+function invalidatePersistentCache() {
+    try {
+        localStorage.removeItem(CACHE_KEY_STATS);
+        localStorage.removeItem(CACHE_KEY_EQUIPPED);
+        console.log("🧹 Cache persistente invalidado.");
+    } catch (e) {
+        console.error(e);
+    }
 }
 
-async function loadCache() {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readonly");
-    return new Promise((resolve, reject) => {
-        const req = tx.objectStore(STORE_NAME).getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+// Carrega o cache inicial para exibição instantânea
+function loadPersistentCache() {
+    try {
+        const stats = localStorage.getItem(CACHE_KEY_STATS);
+        const equipped = localStorage.getItem(CACHE_KEY_EQUIPPED);
+        
+        if (stats && equipped) {
+            playerBaseStats = JSON.parse(stats);
+            equippedItems = JSON.parse(equipped);
+            return true;
+        }
+    } catch (e) {
+        console.warn("Cache persistente inválido ou vazio.");
+    }
+    return false;
 }
 
-async function getLastUpdated() {
-    const db = await openDB();
-    const tx = db.transaction(META_STORE, "readonly");
-    return new Promise((resolve) => {
-        const req = tx.objectStore(META_STORE).get("last_updated");
-        req.onsuccess = () => resolve(req.result ? req.result.value : null);
-        req.onerror = () => resolve(null);
-    });
-}
+// --- Funções de Compatibilidade para Scripts Externos (refundir.js / desconstruir.js) ---
+// Esses scripts esperam essas funções. Reescrevemos para manipular a memória global e salvar no LS se necessário.
 
 async function updateCacheItem(item) {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(item);
-    return tx.complete;
+    // Atualiza o item na lista global em memória
+    const index = allInventoryItems.findIndex(i => i.id === item.id);
+    if (index !== -1) {
+        allInventoryItems[index] = item;
+    } else {
+        allInventoryItems.push(item);
+    }
+
+    // Se o item estiver equipado, precisamos atualizar o cache persistente
+    if (item.equipped_slot !== null) {
+        const equipIndex = equippedItems.findIndex(i => i.id === item.id);
+        if (equipIndex !== -1) {
+            equippedItems[equipIndex] = item;
+        } else {
+            equippedItems.push(item); // Novo equip
+        }
+        savePersistentCache();
+        calculatePlayerStats();
+        renderEquippedItems();
+    }
+    return true; // Retorna promessa resolvida simulada
 }
 
 async function removeCacheItem(itemId) {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(itemId);
-    return tx.complete;
+    // Remove da memória global
+    allInventoryItems = allInventoryItems.filter(i => i.id !== itemId);
+    
+    // Se estava equipado, remove dos equipados e atualiza cache
+    const wasEquipped = equippedItems.some(i => i.id === itemId);
+    if (wasEquipped) {
+        equippedItems = equippedItems.filter(i => i.id !== itemId);
+        savePersistentCache();
+        calculatePlayerStats();
+        renderEquippedItems();
+    }
+    return true;
 }
 
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 function getLocalUserId() {
-    // 1. Tenta pegar do seu cache personalizado (criado no script.js)
     try {
         const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
-            // Verifica se não expirou (ex: 24h)
             if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
                 return parsed.data.id;
             }
         }
     } catch (e) {}
 
-    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
     try {
-        // Loop simples para achar a chave do supabase no localStorage se o nome variar
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -113,23 +122,16 @@ function getLocalUserId() {
     return null;
 }
 
-
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM carregado. Iniciando script inventory.js...');
+    console.log('DOM carregado. Iniciando script inventory.js (Refatorado)...');
     
-    // =======================================================================
-    // OTIMIZAÇÃO DE AUTH: Zero Egress Check
-    // =======================================================================
-    
-    // 1. Otimização: Tenta obter ID localmente antes de perguntar ao servidor
+    // 1. Auth Otimista
     const localId = getLocalUserId();
     
     if (localId) {
         console.log("⚡ Auth Otimista: ID recuperado localmente.");
-        // Cria um objeto mock de usuário apenas com o ID, suficiente para as queries
         globalUser = { id: localId };
     } else {
-        // 2. Fallback: Se não achar local, pergunta ao Supabase (gera egress)
         console.warn("Auth Cache Miss: Buscando sessão no servidor...");
         const { data: { session } } = await supabase.auth.getSession();
 
@@ -141,13 +143,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         globalUser = session.user;
     }
     
-    // Força a busca de dados frescos do servidor ao carregar a página.
+    // Carrega dados
     await loadPlayerAndItems();
 
+    // Event Listeners
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
-        console.log('Botão de refresh clicado. Forçando a recarga do Supabase.');
-        await loadPlayerAndItems(true); // Força refresh
+        console.log('Botão de refresh clicado. Forçando a recarga.');
+        await loadPlayerAndItems(true);
     });
 
     document.querySelectorAll('.tab-button').forEach(button => {
@@ -264,60 +267,24 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 async function loadPlayerAndItems(forceRefresh = false) {
-    // Tenta carregar do sessionStorage primeiro para carregamento instantâneo
-    if (!forceRefresh) {
-        const cachedSessionItems = sessionStorage.getItem('inventoryItems');
-        const cachedSessionStats = sessionStorage.getItem('playerStats');
-        if (cachedSessionItems && cachedSessionStats) {
-            try {
-                allInventoryItems = JSON.parse(cachedSessionItems);
-                playerBaseStats = JSON.parse(cachedSessionStats);
-                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                calculatePlayerStats();
-                renderEquippedItems();
-                loadItems('all', allInventoryItems);
-                console.log('✅ Dados carregados do sessionStorage.');
-                return;
-            } catch (e) {
-                console.warn('Falha ao ler sessionStorage. Indo para IndexedDB/Supabase.', e);
-                sessionStorage.clear();
-            }
-        }
+    // 1. Tentar carregar Cache Persistente (Equipamentos e Status) para UX instantânea
+    const hasCache = loadPersistentCache();
+    
+    if (hasCache && !forceRefresh) {
+        console.log('✅ Cache persistente carregado. Renderizando interface prévia.');
+        calculatePlayerStats();
+        renderEquippedItems();
+        // Não carregamos a bolsa aqui, pois a instrução é sempre buscar a bolsa atualizada.
+        // Remove shimmer se existir
+        removeShimmerEffects();
+    } else {
+        // Se não tem cache, aplica shimmer inicial
+        applyInitialShimmer();
     }
 
-    const lastUpdated = await getLastUpdated();
-    const isExpired = !lastUpdated || (Date.now() - lastUpdated > 15 * 60 * 1000);
-    const canUseCache = !forceRefresh && !isExpired;
+    console.log('🚀 Buscando dados atualizados do servidor (Players + Inventário)...');
 
-    console.log('[CACHE] forceRefresh=', forceRefresh, ' isExpired=', isExpired, ' lastUpdated=', lastUpdated);
-
-    if (canUseCache) {
-        try {
-            const [itemsFromCache, cachedStats] = await Promise.all([loadCache(), loadPlayerStatsFromCache()]);
-            if (cachedStats) {
-                playerBaseStats = cachedStats;
-            }
-            if (Array.isArray(itemsFromCache)) {
-                allInventoryItems = itemsFromCache;
-                // Salva no sessionStorage para acessos futuros nesta aba
-                sessionStorage.setItem('inventoryItems', JSON.stringify(allInventoryItems));
-                sessionStorage.setItem('playerStats', JSON.stringify(playerBaseStats));
-
-                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                calculatePlayerStats();
-                renderEquippedItems();
-                loadItems('all', allInventoryItems);
-                console.log('✅ Dados carregados do cache (sem egress).');
-                return;
-            } else {
-                console.warn('Cache inválido (itens). Indo para fallback Supabase...');
-            }
-        } catch (e) {
-            console.warn('Falha ao ler cache. Fallback Supabase...', e);
-        }
-    }
-
-    console.log('🚀 Iniciando carregamento de dados do jogador e itens do Supabase...');
+    // 2. Busca Player
     const { data: player, error: playerError } = await supabase
         .from('players')
         .select(`
@@ -336,10 +303,11 @@ async function loadPlayerAndItems(forceRefresh = false) {
 
     if (playerError) {
         console.error('❌ Erro ao buscar dados do jogador:', playerError.message);
-        showCustomAlert('Erro ao carregar dados do jogador. Tente recarregar a página.');
+        showCustomAlert('Erro ao carregar dados do jogador.');
         return;
     }
 
+    // 3. Busca Inventário Completo
     const { data: items, error: itemsError } = await supabase
         .from('inventory_items')
         .select(`
@@ -381,24 +349,25 @@ async function loadPlayerAndItems(forceRefresh = false) {
 
     if (itemsError) {
         console.error('❌ Erro ao buscar itens do inventário:', itemsError.message);
-        showCustomAlert('Erro ao carregar itens. Tente recarregar a página.');
+        showCustomAlert('Erro ao carregar itens.');
         return;
     }
 
+    // 4. Atualiza Memória Global
     playerBaseStats = player;
     allInventoryItems = items || [];
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
-    await saveCache(allInventoryItems);
-    console.log('💾 Dados salvos no cache.');
 
-    // Salva também no sessionStorage
-    sessionStorage.setItem('inventoryItems', JSON.stringify(allInventoryItems));
-    sessionStorage.setItem('playerStats', JSON.stringify(playerBaseStats));
+    // 5. Salva no Cache Persistente (substitui o antigo)
+    savePersistentCache();
 
+    // 6. Renderiza UI Final
     calculatePlayerStats();
     renderEquippedItems();
     loadItems('all', allInventoryItems);
-    console.log('✅ Inventário renderizado com sucesso.');
+    removeShimmerEffects();
+    
+    console.log('✅ Sincronização completa.');
 }
 
 function calculatePlayerStats() {
@@ -425,20 +394,19 @@ function calculatePlayerStats() {
     });
 
     document.getElementById('playerAvatarEquip').src = currentStats.avatar_url || '';
-    // Auto-reset de cache se avatar ou stats inválidos
-    if (!currentStats.avatar_url || isNaN(currentStats.attack) || isNaN(currentStats.defense)) {
-        console.warn('⚠️ Cache inválido detectado. Limpando IndexedDB...');
-        indexedDB.deleteDatabase(DB_NAME);
-        loadPlayerAndItems(true);
-        return;
-    }
 
-    document.getElementById('playerAttack').textContent = `${currentStats.min_attack} - ${currentStats.attack}`;
-    document.getElementById('playerDefense').textContent = currentStats.defense;
-    document.getElementById('playerHealth').textContent = currentStats.health;
-    document.getElementById('playerCritChance').textContent = `${currentStats.crit_chance}%`;
-    document.getElementById('playerCritDamage').textContent = `${currentStats.crit_damage}%`;
-    document.getElementById('playerEvasion').textContent = `${currentStats.evasion}%`;
+    // Atualiza DOM
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
+    setText('playerAttack', `${Math.floor(currentStats.min_attack || 0)} - ${Math.floor(currentStats.attack || 0)}`);
+    setText('playerDefense', Math.floor(currentStats.defense || 0));
+    setText('playerHealth', Math.floor(currentStats.health || 0));
+    setText('playerCritChance', `${currentStats.crit_chance || 0}%`);
+    setText('playerCritDamage', `${currentStats.crit_damage || 0}%`);
+    setText('playerEvasion', `${currentStats.evasion || 0}%`);
 }
 
 function renderEquippedItems() {
@@ -457,7 +425,6 @@ function renderEquippedItems() {
                 const imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.name}_${totalStars}estrelas.webp`;
                 slotDiv.innerHTML = `<img src="${imgSrc}" alt="${item.display_name}">`;
         
-                // Adiciona o nível do item, se não for um fragmento ou outros e for nível 1 ou maior
                 if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && invItem.level && invItem.level >= 1) {
                     const levelElement = document.createElement('div');
                     levelElement.className = 'item-level';
@@ -481,7 +448,6 @@ async function loadItems(tab = 'all', itemsList = null) {
     bagItemsGrid.innerHTML = '';
 
     const filteredItems = items.filter(item => {
-        // Filtra itens com quantidade > 0 e que não estejam equipados
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
         if (tab === 'all') return true;
         if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
@@ -499,7 +465,6 @@ async function loadItems(tab = 'all', itemsList = null) {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'inventory-item';
 
-        // Verifica a condição para adicionar a classe de animação
         if (item.items.item_type === 'fragmento' && item.items.crafts_item_id && item.quantity >= 30) {
             itemDiv.classList.add('zoom-border');
         }
@@ -517,8 +482,6 @@ async function loadItems(tab = 'all', itemsList = null) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-
-        // Adiciona o nível do item, se não for um fragmento ou outros e for nível 1 ou maior
         if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level && item.level >= 1) {
             const levelElement = document.createElement('div');
             levelElement.className = 'item-level';
@@ -566,7 +529,6 @@ function showItemDetails(item) {
     const isEquipment = !['consumivel', 'fragmento', 'outros'].includes(item.items.item_type);
     const isEquipable = ['arma', 'Arma', 'Escudo', 'Anel', 'anel', 'Elmo', 'elmo', 'Asa', 'asa', 'Armadura', 'armadura', 'Colar', 'colar'].includes(item.items.item_type);
 
-    // Ocultar ou exibir a barra de progresso e o botão de "Evoluir"
     if (isEquipment) {
         const level = item.level || 0;
         const maxLevelForStar = (item.items.stars + (item.refine_level || 0) + 1) * 5;
@@ -591,7 +553,6 @@ function showItemDetails(item) {
         document.getElementById('detailItemLevel').textContent = '';
     }
 
-    // Ocultar ou exibir o container de estatísticas, refino e ações
     const itemStats = document.getElementById('itemStats');
     const refineSectionDiv = document.getElementById('itemRefineSection');
     const itemActionsDiv = document.getElementById('itemActions');
@@ -614,7 +575,6 @@ function showItemDetails(item) {
             if ((item.evasion_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus EVASÃO: +${item.evasion_bonus}%</p>`;
         }
     
-        // Lógica para exibir os atributos de refundição nos elementos corretos
         const refineRow1 = document.getElementById('refineRow1');
         const refineRow2 = document.getElementById('refineRow2');
         const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
@@ -693,7 +653,6 @@ function showItemDetails(item) {
         if (itemActionsDiv) itemActionsDiv.style.display = 'none';
     }
 
-    // Lógica específica para o botão de Equipar/Remover
     const equipBtnModal = document.getElementById('equipBtnModal');
     if (isEquipable) {
         const isEquipped = item.equipped_slot !== null;
@@ -712,7 +671,6 @@ function getXpRequired(level, rarity) {
     return base + (level * 45);
 }
 
-// Converte nome do campo para nome visível
 function formatAttrName(attr) {
     switch (attr) {
         case "attack_bonus": return "ATK";
@@ -743,10 +701,11 @@ async function handleEquipUnequip(item, isEquipped) {
             return;
         }
 
+        invalidatePersistentCache(); // Limpa cache pois status/slot mudaram
         showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
         document.getElementById('itemDetailsModal').style.display = 'none';
         
-        await loadPlayerAndItems(true); // Força a recarga completa para garantir a atualização
+        await loadPlayerAndItems(true); 
     } catch (err) {
         console.error('Erro geral ao equipar/desequipar:', err);
         showCustomAlert('Ocorreu um erro inesperado.');
@@ -770,7 +729,6 @@ function renderFragmentList(itemToLevelUp) {
     fragments.forEach(fragment => {
         const fragmentLi = document.createElement('li');
         
-        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         fragmentLi.innerHTML = `
             <div class="fragment-info" style="display:flex; align-items:center; gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp"
@@ -795,7 +753,6 @@ function renderFragmentList(itemToLevelUp) {
         const qtyInput = fragmentLi.querySelector('.fragment-quantity-input');
         const maxBtn = fragmentLi.querySelector('.btn-max-action');
 
-        // Botão MAX
         maxBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             qtyInput.value = fragment.quantity;
@@ -881,7 +838,6 @@ async function showCraftingModal(fragment) {
         `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
     document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
 
-    // Ajuste aqui para carregar a imagem do item criado corretamente, incluindo as estrelas
     document.getElementById('craftingTargetImage').src =
         `https://aden-rpg.pages.dev/assets/itens/${itemToCraft.name}_${itemToCraft.stars}estrelas.webp`;
 
@@ -988,7 +944,6 @@ function openRefineFragmentModal(item) {
         li.className = 'inventory-item';
         li.setAttribute('data-inventory-item-id', fragmentInv.id);
         
-        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         li.innerHTML = `
             <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
@@ -1010,7 +965,6 @@ function openRefineFragmentModal(item) {
         const qtyInput = li.querySelector('.fragment-quantity-input');
         const maxBtn = li.querySelector('.btn-max-action');
 
-        // Botão MAX
         maxBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             qtyInput.value = available;
@@ -1053,6 +1007,7 @@ async function handleRefineMulti(item, selections) {
             showCustomAlert(`Erro ao refinar: ${data.error}`);
         } else if (data && data.success) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
+            invalidatePersistentCache();
             showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
             await loadPlayerAndItems(true);
             document.getElementById('itemDetailsModal').style.display = 'none';
@@ -1083,6 +1038,7 @@ async function handleLevelUpMulti(item, selections) {
         if (data && data.error) {
             showCustomAlert(`Erro ao subir de nível: ${data.error}`);
         } else if (data && data.success) {
+            invalidatePersistentCache();
             showCustomAlert(`Item evoluído para Nível ${data.new_level}! XP atual: ${data.new_xp}.`);
             await loadPlayerAndItems(true);
             document.getElementById('itemDetailsModal').style.display = 'none';
@@ -1111,6 +1067,7 @@ async function handleCraft(itemId, fragmentId) {
         if (data && data.error) {
             showCustomAlert(`Erro ao construir: ${data.error}`);
         } else if (data && data.success) {
+            // Construção não afeta equipados diretamente, mas atualiza inventário
             showCustomAlert(`Item construído com sucesso!`);
             await loadPlayerAndItems(true);
             document.getElementById('craftingModal').style.display = 'none';
@@ -1125,98 +1082,24 @@ async function handleCraft(itemId, fragmentId) {
 
 
 // ===============================
-// >>> Cache & Shimmer FIX PATCH (appended) <<<
+// Shimmer Effects
 // ===============================
 
-// Aplica shimmer cedo (antes de qualquer preenchimento) e remove depois
-(function applyInitialShimmer(){
-  function addShimmer(){
+function applyInitialShimmer(){
     ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
       .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('shimmer'); });
-  }
+}
+
+function removeShimmerEffects() {
+    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
+    .forEach(id => document.getElementById(id)?.classList.remove('shimmer'));
+}
+
+// Inicializa Shimmer se necessário
+(function initShimmer(){
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addShimmer, { once: true });
+    document.addEventListener('DOMContentLoaded', applyInitialShimmer, { once: true });
   } else {
-    addShimmer();
+    applyInitialShimmer();
   }
 })();
-
-// Ler stats do jogador do IndexedDB (META_STORE)
-async function loadPlayerStatsFromCache() {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(META_STORE, "readonly");
-    return await new Promise((resolve) => {
-      const req = tx.objectStore(META_STORE).get("player_stats");
-      req.onsuccess = () => resolve(req.result ? req.result.value : null);
-      req.onerror = () => resolve(null);
-    });
-  } catch (e) {
-    console.warn('Falha ao ler player_stats do cache:', e);
-    return null;
-  }
-}
-
-// Salvar itens + playerBaseStats no cache (mantém a mesma assinatura usada no projeto)
-async function saveCache(items) {
-  const db = await openDB();
-  const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
-  const store = tx.objectStore(STORE_NAME);
-  store.clear();
-  (items || []).forEach(item => store.put(item));
-  try {
-    tx.objectStore(META_STORE).put({ key: "last_updated", value: Date.now() });
-    if (typeof playerBaseStats === 'object' && playerBaseStats) {
-      tx.objectStore(META_STORE).put({ key: "player_stats", value: playerBaseStats });
-    }
-  } catch (e) {
-    console.warn('Falha ao salvar META_STORE:', e);
-  }
-  return tx.complete;
-}
-
-// Não apaga IndexedDB automaticamente; apenas tenta recuperar/fazer fallback
-function calculatePlayerStats() {
-  const stats = { ...playerBaseStats };
-  const isNum = (v) => Number.isFinite(Number(v));
-
-  // Agrega bônus dos itens equipados sem causar NaN
-  (equippedItems || []).forEach(invItem => {
-    const it = invItem.items || {};
-    stats.min_attack = (Number(stats.min_attack) || 0) + (Number(it.min_attack) || 0) + (Number(invItem.min_attack_bonus) || 0);
-    stats.attack     = (Number(stats.attack)     || 0) + (Number(it.attack)     || 0) + (Number(invItem.attack_bonus)     || 0);
-    stats.defense    = (Number(stats.defense)    || 0) + (Number(it.defense)    || 0) + (Number(invItem.defense_bonus)    || 0);
-    stats.health     = (Number(stats.health)     || 0) + (Number(it.health)     || 0) + (Number(invItem.health_bonus)     || 0);
-    stats.crit_chance= (Number(stats.crit_chance)|| 0) + (Number(it.crit_chance)|| 0) + (Number(invItem.crit_chance_bonus)|| 0);
-    stats.crit_damage= (Number(stats.crit_damage)|| 0) + (Number(it.crit_damage)|| 0) + (Number(invItem.crit_damage_bonus)|| 0);
-    stats.evasion    = (Number(stats.evasion)    || 0) + (Number(it.evasion)    || 0) + (Number(invItem.evasion_bonus)    || 0);
-  });
-
-  // Se não houver stats válidos no cache, mantenha shimmer e não reseta o DB
-  const ok = isNum(stats.attack) && isNum(stats.defense) && isNum(stats.min_attack) && isNum(stats.health);
-  if (!ok) {
-    console.warn('Stats incompletos no cache; mantendo shimmer. (Sem reset de cache)');
-    return;
-  }
-
-  // Preenche avatar (não erra se vazio) e remove shimmer
-  const avatarEl = document.getElementById('playerAvatarEquip');
-  if (avatarEl && stats.avatar_url) avatarEl.src = stats.avatar_url;
-
-  ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
-    .forEach(id => document.getElementById(id)?.classList.remove('shimmer'));
-
-  const atkSpan = document.getElementById('playerAttack');
-  const defSpan = document.getElementById('playerDefense');
-  const hpSpan  = document.getElementById('playerHealth');
-  const ccSpan  = document.getElementById('playerCritChance');
-  const cdSpan  = document.getElementById('playerCritDamage');
-  const evSpan  = document.getElementById('playerEvasion');
-
-  if (atkSpan) atkSpan.textContent = `${Math.max(0, Math.floor(stats.min_attack))} - ${Math.max(0, Math.floor(stats.attack))}`;
-  if (defSpan) defSpan.textContent = `${Math.max(0, Math.floor(stats.defense))}`;
-  if (hpSpan)  hpSpan.textContent  = `${Math.max(0, Math.floor(stats.health))}`;
-  if (ccSpan)  ccSpan.textContent  = `${(Number(stats.crit_chance) || 0)}%`;
-  if (cdSpan)  cdSpan.textContent  = `${(Number(stats.crit_damage) || 0)}%`;
-  if (evSpan)  evSpan.textContent  = `${(Number(stats.evasion) || 0)}%`;
-}

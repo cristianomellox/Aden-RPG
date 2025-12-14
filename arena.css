@@ -933,11 +933,11 @@ textarea:focus, textarea:active {
     -webkit-tap-highlight-color: transparent !important;
 }
 /* --- EFEITO PULSE DO RANKING CP (INSERIDO) --- */
-.pulse { animation: pulse 3s infinite; }
+.pulse { animation: pulse 2s infinite; }
 @keyframes pulse {
-    0%{box-shadow:0 0 0px rgba(255,215,0,0.9);}
-    70%{box-shadow:0 0 36px rgba(255,215,0,0.7);}
-    100%{box-shadow:0 0 0 rgba(255,215,0,0.4);}
+    0%{box-shadow:0 0 0px rgba(255,215,0,1);}
+    70%{box-shadow:0 0 36px rgba(255,215,0,0.9);}
+    100%{box-shadow:0 0 0 rgba(255,215,0,0.8);}
 }
 
 /* Trecho a ser MODIFICADO (Ranking Atual) */
@@ -951,5 +951,5 @@ textarea:focus, textarea:active {
 #rankingListPast li:nth-child(1) .rank-avatar { 
     border: 3px solid #FFD700; 
     /* Adicionado o efeito de pulse */
-    animation: pulse 3s infinite; 
+    animation: pulse 2s infinite; 
 }

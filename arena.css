@@ -932,3 +932,24 @@ textarea:focus, textarea:active {
     outline: none !important;
     -webkit-tap-highlight-color: transparent !important;
 }
+/* --- EFEITO PULSE DO RANKING CP (INSERIDO) --- */
+.pulse { animation: pulse 2s infinite; }
+@keyframes pulse {
+    0%{box-shadow:0 0 0px rgba(255,215,0,0.9);}
+    70%{box-shadow:0 0 26px rgba(255,215,0,0.5);}
+    100%{box-shadow:0 0 0 rgba(255,215,0,0.2);}
+}
+
+/* Trecho a ser MODIFICADO (Ranking Atual) */
+#rankingList li:nth-child(1) .rank-avatar { /* Borda do avatar */ 
+    border: 3px solid #FFD700; 
+    /* Adicionado o efeito de pulse */
+    animation: pulse 2s infinite; 
+}
+
+/* Trecho a ser MODIFICADO (Ranking Passada) */
+#rankingListPast li:nth-child(1) .rank-avatar { 
+    border: 3px solid #FFD700; 
+    /* Adicionado o efeito de pulse */
+    animation: pulse 2s infinite; 
+}

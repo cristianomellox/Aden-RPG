@@ -161,11 +161,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadPlayerAndItems();
 
     // Event Listeners
-    document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
+    const refreshButtons = document.querySelectorAll('#refreshBtn, #refreshBtnBag');
+
+refreshButtons.forEach(button => {
+    button.addEventListener('click', async (e) => {
         e.preventDefault();
-        console.log('Botão de refresh clicado. Forçando a recarga do Supabase.');
-        await loadPlayerAndItems(true);
+        console.log(`Botão de refresh (${button.id}) clicado. Forçando a recarga do Supabase.`);
+        await loadPlayerAndItems(true); // loadPlayerAndItems é a função que recarrega a bolsa
     });
+});
 
     document.querySelectorAll('.tab-button').forEach(button => {
         button.addEventListener('click', () => {

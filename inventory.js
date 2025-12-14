@@ -2,77 +2,154 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// =================================================================
-// CONFIGURAÇÃO DE CACHE
-// =================================================================
-const EQUIPPED_STATS_CACHE_KEY = 'aden_equipped_stats_cache';
-const PLAYER_DATA_CACHE_KEY = 'player_data_cache'; // Usado pelo MPA/Minas
-
-// Estado Global
 let globalUser = null;
 let equippedItems = [];
 let playerBaseStats = {};
 let allInventoryItems = [];
 let selectedItem = null;
 
-// =================================================================
-// FUNÇÕES UTILITÁRIAS DE AUTH
-// =================================================================
+
+// ===============================
+// IndexedDB utilitário simples (Cache 24h)
+// ===============================
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 18;
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            console.log('IndexedDB: Upgrade necessário. Limpando caches antigos.');
+            const db = e.target.result;
+            if (db.objectStoreNames.contains(STORE_NAME)) {
+                db.deleteObjectStore(STORE_NAME);
+            }
+            if (db.objectStoreNames.contains(META_STORE)) {
+                db.deleteObjectStore(META_STORE);
+            }
+            db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            db.createObjectStore(META_STORE, { keyPath: "key" });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function saveCache(items) {
+    const db = await openDB();
+    const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.clear();
+    items.forEach(item => store.put(item));
+    tx.objectStore(META_STORE).put({ key: "last_updated", value: Date.now() });
+    return tx.complete;
+}
+
+async function loadCache() {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    return new Promise((resolve, reject) => {
+        const req = tx.objectStore(STORE_NAME).getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getLastUpdated() {
+    const db = await openDB();
+    const tx = db.transaction(META_STORE, "readonly");
+    return new Promise((resolve) => {
+        const req = tx.objectStore(META_STORE).get("last_updated");
+        req.onsuccess = () => resolve(req.result ? req.result.value : null);
+        req.onerror = () => resolve(null);
+    });
+}
+
+async function updateCacheItem(item) {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(item);
+    return tx.complete;
+}
+
+async function removeCacheItem(itemId) {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(itemId);
+    return tx.complete;
+}
+
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 function getLocalUserId() {
+    // 1. Tenta pegar do seu cache personalizado (criado no script.js)
     try {
-        // Tenta pegar do cache do MPA primeiro
-        const cached = localStorage.getItem(PLAYER_DATA_CACHE_KEY);
+        const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
-            if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
-        }
-        
-        // Fallback: Tenta pegar da sessão do Supabase no LocalStorage
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                const session = JSON.parse(localStorage.getItem(k));
-                if (session && session.user && session.user.id) return session.user.id;
+            // Verifica se não expirou (ex: 24h)
+            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
+                return parsed.data.id;
             }
         }
     } catch (e) {}
+
+    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+    try {
+        // Loop simples para achar a chave do supabase no localStorage se o nome variar
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+
     return null;
 }
 
-// =================================================================
-// INICIALIZAÇÃO E EVENTOS
-// =================================================================
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM carregado. Iniciando inventory.js otimizado...');
 
-    // 1. Auth Otimista
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM carregado. Iniciando script inventory.js...');
+    
+    // =======================================================================
+    // OTIMIZAÇÃO DE AUTH: Zero Egress Check
+    // =======================================================================
+    
+    // 1. Otimização: Tenta obter ID localmente antes de perguntar ao servidor
     const localId = getLocalUserId();
+    
     if (localId) {
+        console.log("⚡ Auth Otimista: ID recuperado localmente.");
+        // Cria um objeto mock de usuário apenas com o ID, suficiente para as queries
         globalUser = { id: localId };
     } else {
+        // 2. Fallback: Se não achar local, pergunta ao Supabase (gera egress)
+        console.warn("Auth Cache Miss: Buscando sessão no servidor...");
         const { data: { session } } = await supabase.auth.getSession();
+
         if (!session) {
+            console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
             window.location.href = "index.html?refresh=true";
             return;
         }
         globalUser = session.user;
     }
-
-    // 2. Carregamento Inicial
+    
+    // Força a busca de dados frescos do servidor ao carregar a página.
     await loadPlayerAndItems();
 
-    // 3. Event Listeners
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
-        // Limpa cache visualmente para dar feedback de refresh
-        localStorage.removeItem(EQUIPPED_STATS_CACHE_KEY); 
-        await loadPlayerAndItems(true);
+        console.log('Botão de refresh clicado. Forçando a recarga do Supabase.');
+        await loadPlayerAndItems(true); // Força refresh
     });
 
-    setupUIListeners();
-});
-
-function setupUIListeners() {
     document.querySelectorAll('.tab-button').forEach(button => {
         button.addEventListener('click', () => {
             document.querySelector('.tab-button.active')?.classList.remove('active');
@@ -90,20 +167,28 @@ function setupUIListeners() {
     });
 
     document.getElementById('levelUpBtn')?.addEventListener('click', () => {
-        if (!selectedItem) return showCustomAlert('Nenhum item selecionado.');
+        if (!selectedItem) {
+            showCustomAlert('Nenhum item selecionado para evoluir.');
+            return;
+        }
         document.getElementById('fragmentSelectModal').style.display = 'flex';
         renderFragmentList(selectedItem);
     });
 
     document.getElementById('refineBtn')?.addEventListener('click', () => {
-        selectedItem ? openRefineFragmentModal(selectedItem) : showCustomAlert('Nenhum item selecionado.');
+        if (selectedItem) {
+            openRefineFragmentModal(selectedItem);
+        } else {
+            showCustomAlert('Nenhum item selecionado para refinar.');
+        }
     });
 
     document.getElementById('craftBtn')?.addEventListener('click', () => {
-        if (selectedItem?.items?.crafts_item_id) {
-            handleCraft(selectedItem.items.crafts_item_id, selectedItem.id);
+        if (selectedItem && selectedItem.items && selectedItem.items.crafts_item_id) {
+            const itemToCraftId = selectedItem.items.crafts_item_id;
+            handleCraft(itemToCraftId, selectedItem.id);
         } else {
-            showCustomAlert('Informações incompletas.');
+            showCustomAlert('Informações de construção incompletas.');
         }
     });
 
@@ -115,394 +200,531 @@ function setupUIListeners() {
         document.getElementById('refineFragmentModal').style.display = 'none';
     });
 
-    document.getElementById('confirmFragmentSelection')?.addEventListener('click', handleFragmentSelection);
+    document.getElementById('confirmFragmentSelection')?.addEventListener('click', () => {
+        const item = selectedItem;
+        const selections = [];
+        let totalSelecionado = 0;
+
+        document.querySelectorAll('#fragmentList li.selected').forEach(li => {
+            const quantityInput = li.querySelector('.fragment-quantity-input');
+            const qty = parseInt(quantityInput.value, 10) || 0;
+            if (qty > 0) {
+                selections.push({
+                    fragment_id: li.dataset.inventoryItemId,
+                    qty,
+                    rarity: li.dataset.rarity
+                });
+                totalSelecionado += qty;
+            }
+        });
+
+        if (selections.length === 0) {
+            showCustomAlert('Selecione pelo menos um fragmento e uma quantidade válida.');
+            return;
+        }
+
+        const fragmentRarity = selections[0]?.rarity || item.items.rarity;
+        const maxNecessario = calcularFragmentosNecessariosParaCap(item, fragmentRarity);
+
+        if (totalSelecionado > maxNecessario) {
+            showCustomAlert(`Você só precisa de ${maxNecessario} fragmentos para atingir o limite. Ajuste a quantidade.`);
+            return;
+        }
+
+        handleLevelUpMulti(item, selections);
+    });
+
     document.getElementById('customAlertOkBtn')?.addEventListener('click', () => {
         document.getElementById('customAlertModal').style.display = 'none';
     });
+});
+
+function showCustomAlert(message) {
+    const modal = document.getElementById('customAlertModal');
+    document.getElementById('customAlertMessage').textContent = message;
+    modal.style.display = 'flex';
 }
 
-function handleFragmentSelection() {
-    const item = selectedItem;
-    const selections = [];
-    let totalSelecionado = 0;
+function showCustomConfirm(message, onConfirm) {
+    const modal = document.getElementById('customConfirmModal');
+    document.getElementById('customConfirmMessage').textContent = message;
+    modal.style.display = 'flex';
 
-    document.querySelectorAll('#fragmentList li.selected').forEach(li => {
-        const qty = parseInt(li.querySelector('.fragment-quantity-input').value, 10) || 0;
-        if (qty > 0) {
-            selections.push({
-                fragment_id: li.dataset.inventoryItemId,
-                qty,
-                rarity: li.dataset.rarity
-            });
-            totalSelecionado += qty;
+    const confirmYesBtn = document.getElementById('customConfirmYesBtn');
+    const confirmNoBtn = document.getElementById('customConfirmNoBtn');
+
+    confirmYesBtn.onclick = () => {
+        modal.style.display = 'none';
+        onConfirm();
+    };
+
+    confirmNoBtn.onclick = () => {
+        modal.style.display = 'none';
+    };
+}
+
+async function loadPlayerAndItems(forceRefresh = false) {
+    // Tenta carregar do sessionStorage primeiro para carregamento instantâneo
+    if (!forceRefresh) {
+        const cachedSessionItems = sessionStorage.getItem('inventoryItems');
+        const cachedSessionStats = sessionStorage.getItem('playerStats');
+        if (cachedSessionItems && cachedSessionStats) {
+            try {
+                allInventoryItems = JSON.parse(cachedSessionItems);
+                playerBaseStats = JSON.parse(cachedSessionStats);
+                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+                calculatePlayerStats();
+                renderEquippedItems();
+                loadItems('all', allInventoryItems);
+                console.log('✅ Dados carregados do sessionStorage.');
+                return;
+            } catch (e) {
+                console.warn('Falha ao ler sessionStorage. Indo para IndexedDB/Supabase.', e);
+                sessionStorage.clear();
+            }
         }
-    });
-
-    if (selections.length === 0) return showCustomAlert('Selecione ao menos um fragmento.');
-
-    const fragmentRarity = selections[0]?.rarity || item.items.rarity;
-    const maxNecessario = calcularFragmentosNecessariosParaCap(item, fragmentRarity);
-
-    if (totalSelecionado > maxNecessario) {
-        return showCustomAlert(`Você só precisa de ${maxNecessario} fragmentos. Ajuste a quantidade.`);
     }
 
-    handleLevelUpMulti(item, selections);
-}
+    const lastUpdated = await getLastUpdated();
+    const isExpired = !lastUpdated || (Date.now() - lastUpdated > 15 * 60 * 1000);
+    const canUseCache = !forceRefresh && !isExpired;
 
-// =================================================================
-// LÓGICA CORE: CARREGAMENTO E CACHE
-// =================================================================
-async function loadPlayerAndItems(forceRefresh = false) {
-    // 1. Fase Instantânea: Carregar cache persistente de EQUIPADOS e STATUS
-    // Isso garante que o jogador veja seu avatar e status imediatamente, sem esperar a rede.
-    if (!forceRefresh) {
+    console.log('[CACHE] forceRefresh=', forceRefresh, ' isExpired=', isExpired, ' lastUpdated=', lastUpdated);
+
+    if (canUseCache) {
         try {
-            const cachedData = localStorage.getItem(EQUIPPED_STATS_CACHE_KEY);
-            if (cachedData) {
-                const parsed = JSON.parse(cachedData);
-                // Renderiza imediatamente com dados antigos
-                if (parsed.playerStats && parsed.equippedItems) {
-                    playerBaseStats = parsed.playerStats;
-                    equippedItems = parsed.equippedItems;
-                    calculatePlayerStats(); // Recalcula e atualiza DOM
-                    renderEquippedItems();
-                    console.log('⚡ Cache persistente carregado.');
-                }
+            const [itemsFromCache, cachedStats] = await Promise.all([loadCache(), loadPlayerStatsFromCache()]);
+            if (cachedStats) {
+                playerBaseStats = cachedStats;
+            }
+            if (Array.isArray(itemsFromCache)) {
+                allInventoryItems = itemsFromCache;
+                // Salva no sessionStorage para acessos futuros nesta aba
+                sessionStorage.setItem('inventoryItems', JSON.stringify(allInventoryItems));
+                sessionStorage.setItem('playerStats', JSON.stringify(playerBaseStats));
+
+                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+                calculatePlayerStats();
+                renderEquippedItems();
+                loadItems('all', allInventoryItems);
+                console.log('✅ Dados carregados do cache (sem egress).');
+                return;
+            } else {
+                console.warn('Cache inválido (itens). Indo para fallback Supabase...');
             }
         } catch (e) {
-            console.warn('Erro ao ler cache persistente:', e);
+            console.warn('Falha ao ler cache. Fallback Supabase...', e);
         }
     }
 
-    // 2. Fase de Rede: Buscar dados frescos do Supabase (Bolsa + Atualizações)
-    // A bolsa (allInventoryItems) é sempre carregada da rede para evitar "atraso" em novos itens.
-    console.log('🌐 Buscando dados atualizados no servidor...');
-    
-    // Promise.all para paralelizar as requisições
-    const [playerRes, itemsRes] = await Promise.all([
-        supabase.from('players').select('*').eq('id', globalUser.id).single(),
-        supabase.from('inventory_items').select(`
-            *,
-            items (
-                item_id, name, display_name, item_type, rarity, stars, crafts_item_id,
-                min_attack, attack, defense, health, crit_chance, crit_damage, evasion, description
-            )
-        `).eq('player_id', globalUser.id)
-    ]);
+    console.log('🚀 Iniciando carregamento de dados do jogador e itens do Supabase...');
+    const { data: player, error: playerError } = await supabase
+        .from('players')
+        .select(`
+            avatar_url,
+            min_attack,
+            attack,
+            defense,
+            crit_chance,
+            crit_damage,
+            evasion,
+            health,
+            crystals
+        `)
+        .eq('id', globalUser.id)
+        .single();
 
-    if (playerRes.error || itemsRes.error) {
-        console.error('Erro Supabase:', playerRes.error || itemsRes.error);
-        showCustomAlert('Erro de conexão. Tente novamente.');
+    if (playerError) {
+        console.error('❌ Erro ao buscar dados do jogador:', playerError.message);
+        showCustomAlert('Erro ao carregar dados do jogador. Tente recarregar a página.');
         return;
     }
 
-    // 3. Atualização de Estado
-    playerBaseStats = playerRes.data;
-    allInventoryItems = itemsRes.data || [];
-    
-    // Filtra equipados com base nos dados frescos
+    const { data: items, error: itemsError } = await supabase
+        .from('inventory_items')
+        .select(`
+            id,
+            item_id,
+            quantity,
+            equipped_slot,
+            level,
+            refine_level,
+            xp_progress,
+            min_attack_bonus,
+            attack_bonus,
+            defense_bonus,
+            health_bonus,
+            crit_chance_bonus,
+            crit_damage_bonus,
+            evasion_bonus,
+            reforge_slot1,
+            reforge_slot2,
+            items (
+                item_id,
+                name,
+                display_name,
+                item_type,
+                rarity,
+                stars,
+                crafts_item_id,
+                min_attack,
+                attack,
+                defense,
+                health,
+                crit_chance,
+                crit_damage,
+                evasion,
+                description
+            )
+        `)
+        .eq('player_id', globalUser.id);
+
+    if (itemsError) {
+        console.error('❌ Erro ao buscar itens do inventário:', itemsError.message);
+        showCustomAlert('Erro ao carregar itens. Tente recarregar a página.');
+        return;
+    }
+
+    playerBaseStats = player;
+    allInventoryItems = items || [];
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
+    await saveCache(allInventoryItems);
+    console.log('💾 Dados salvos no cache.');
 
-    // 4. Atualiza UI e Cálculos
-    calculatePlayerStats(); // Recalcula com dados frescos (soma base + itens)
-    renderEquippedItems();  // Re-renderiza slots
-    
-    // Renderiza a bolsa (que não tem cache, sempre fresca)
-    const currentTab = document.querySelector('.tab-button.active')?.id.replace('tab-', '') || 'all';
-    loadItems(currentTab, allInventoryItems);
+    // Salva também no sessionStorage
+    sessionStorage.setItem('inventoryItems', JSON.stringify(allInventoryItems));
+    sessionStorage.setItem('playerStats', JSON.stringify(playerBaseStats));
 
-    // 5. Salvar Cache Persistente (Sobrescreve o anterior)
-    const cacheObj = {
-        playerStats: playerBaseStats,
-        equippedItems: equippedItems,
-        timestamp: Date.now()
-    };
-    localStorage.setItem(EQUIPPED_STATS_CACHE_KEY, JSON.stringify(cacheObj));
-
-    // 6. Atualizar Cache do MPA (player_data_cache)
-    // Isso mantém a compatibilidade com o sistema de minas
-    const mpaCacheObj = {
-        data: playerBaseStats,
-        timestamp: Date.now(),
-        expires: Date.now() + (24 * 60 * 60 * 1000) // 24h validade
-    };
-    localStorage.setItem(PLAYER_DATA_CACHE_KEY, JSON.stringify(mpaCacheObj));
-    
-    console.log('✅ Dados atualizados e caches salvos.');
+    calculatePlayerStats();
+    renderEquippedItems();
+    loadItems('all', allInventoryItems);
+    console.log('✅ Inventário renderizado com sucesso.');
 }
 
-// =================================================================
-// CÁLCULO DE STATUS (CORRIGIDO)
-// =================================================================
 function calculatePlayerStats() {
-    // Começa com os status base (pelados) do jogador
-    let stats = {
-        min_attack: Number(playerBaseStats.min_attack) || 0,
-        attack: Number(playerBaseStats.attack) || 0,
-        defense: Number(playerBaseStats.defense) || 0,
-        health: Number(playerBaseStats.health) || 0,
-        crit_chance: Number(playerBaseStats.crit_chance) || 0,
-        crit_damage: Number(playerBaseStats.crit_damage) || 0,
-        evasion: Number(playerBaseStats.evasion) || 0,
-        avatar_url: playerBaseStats.avatar_url || ''
-    };
+    let currentStats = { ...playerBaseStats };
 
-    // Soma os status de cada item equipado
     equippedItems.forEach(invItem => {
-        const itemBase = invItem.items || {}; // Dados da tabela 'items'
-        
-        // 1. Soma Status Base do Item (O que o item dá nativamente)
-        stats.min_attack += Number(itemBase.min_attack) || 0;
-        stats.attack += Number(itemBase.attack) || 0;
-        stats.defense += Number(itemBase.defense) || 0;
-        stats.health += Number(itemBase.health) || 0;
-        stats.crit_chance += Number(itemBase.crit_chance) || 0;
-        stats.crit_damage += Number(itemBase.crit_damage) || 0;
-        stats.evasion += Number(itemBase.evasion) || 0;
+        if (invItem.items) {
+            currentStats.min_attack += invItem.items.min_attack || 0;
+            currentStats.attack += invItem.items.attack || 0;
+            currentStats.defense += invItem.items.defense || 0;
+            currentStats.health += invItem.items.health || 0;
+            currentStats.crit_chance += invItem.items.crit_chance || 0;
+            currentStats.crit_damage += invItem.items.crit_damage || 0;
+            currentStats.evasion += invItem.items.evasion || 0;
+        }
 
-        // 2. Soma Bônus do Item (Evolução, Refino, Refundição - tabela 'inventory_items')
-        stats.min_attack += Number(invItem.min_attack_bonus) || 0;
-        stats.attack += Number(invItem.attack_bonus) || 0;
-        stats.defense += Number(invItem.defense_bonus) || 0;
-        stats.health += Number(invItem.health_bonus) || 0;
-        stats.crit_chance += Number(invItem.crit_chance_bonus) || 0;
-        stats.crit_damage += Number(invItem.crit_damage_bonus) || 0;
-        stats.evasion += Number(invItem.evasion_bonus) || 0;
+        currentStats.min_attack += invItem.min_attack_bonus || 0;
+        currentStats.attack += invItem.attack_bonus || 0;
+        currentStats.defense += invItem.defense_bonus || 0;
+        currentStats.health += invItem.health_bonus || 0;
+        currentStats.crit_chance += invItem.crit_chance_bonus || 0;
+        currentStats.crit_damage += invItem.crit_damage_bonus || 0;
+        currentStats.evasion += invItem.evasion_bonus || 0;
     });
 
-    // Atualiza DOM
-    const avatarEl = document.getElementById('playerAvatarEquip');
-    if (avatarEl && stats.avatar_url) avatarEl.src = stats.avatar_url;
+    document.getElementById('playerAvatarEquip').src = currentStats.avatar_url || '';
+    // Auto-reset de cache se avatar ou stats inválidos
+    if (!currentStats.avatar_url || isNaN(currentStats.attack) || isNaN(currentStats.defense)) {
+        console.warn('⚠️ Cache inválido detectado. Limpando IndexedDB...');
+        indexedDB.deleteDatabase(DB_NAME);
+        loadPlayerAndItems(true);
+        return;
+    }
 
-    updateStatDOM('playerAttack', `${Math.floor(stats.min_attack)} - ${Math.floor(stats.attack)}`);
-    updateStatDOM('playerDefense', Math.floor(stats.defense));
-    updateStatDOM('playerHealth', Math.floor(stats.health));
-    updateStatDOM('playerCritChance', `${stats.crit_chance.toFixed(1).replace(/\.0$/, '')}%`);
-    updateStatDOM('playerCritDamage', `${stats.crit_damage.toFixed(1).replace(/\.0$/, '')}%`);
-    updateStatDOM('playerEvasion', `${stats.evasion.toFixed(1).replace(/\.0$/, '')}%`);
-
-    // Remove shimmer effect
-    document.querySelectorAll('.shimmer').forEach(el => el.classList.remove('shimmer'));
+    document.getElementById('playerAttack').textContent = `${currentStats.min_attack} - ${currentStats.attack}`;
+    document.getElementById('playerDefense').textContent = currentStats.defense;
+    document.getElementById('playerHealth').textContent = currentStats.health;
+    document.getElementById('playerCritChance').textContent = `${currentStats.crit_chance}%`;
+    document.getElementById('playerCritDamage').textContent = `${currentStats.crit_damage}%`;
+    document.getElementById('playerEvasion').textContent = `${currentStats.evasion}%`;
 }
 
-function updateStatDOM(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-}
-
-// =================================================================
-// RENDERIZAÇÃO DA UI
-// =================================================================
 function renderEquippedItems() {
     const slots = ['weapon', 'ring', 'helm', 'special1', 'amulet', 'wing', 'armor', 'special2'];
-    // Limpa slots primeiro
     slots.forEach(slot => {
-        const el = document.getElementById(`${slot}-slot`);
-        if(el) el.innerHTML = '';
+        const slotDiv = document.getElementById(`${slot}-slot`);
+        if (slotDiv) slotDiv.innerHTML = '';
     });
 
     equippedItems.forEach(invItem => {
-        if (invItem.items && invItem.equipped_slot) {
+        const item = invItem.items;
+        if (item && invItem.equipped_slot) {
             const slotDiv = document.getElementById(`${invItem.equipped_slot}-slot`);
             if (slotDiv) {
-                const totalStars = (invItem.items.stars || 0) + (invItem.refine_level || 0);
-                const imgSrc = `https://aden-rpg.pages.dev/assets/itens/${invItem.items.name}_${totalStars}estrelas.webp`;
-                
-                let html = `<img src="${imgSrc}" alt="${invItem.items.display_name}">`;
-                
-                if (invItem.level && invItem.level >= 1) {
-                    html += `<div class="item-level">Nv. ${invItem.level}</div>`;
+                const totalStars = (invItem.items?.stars || 0) + (invItem.refine_level || 0);
+                const imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.name}_${totalStars}estrelas.webp`;
+                slotDiv.innerHTML = `<img src="${imgSrc}" alt="${item.display_name}">`;
+        
+                // Adiciona o nível do item, se não for um fragmento ou outros e for nível 1 ou maior
+                if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && invItem.level && invItem.level >= 1) {
+                    const levelElement = document.createElement('div');
+                    levelElement.className = 'item-level';
+                    levelElement.textContent = `Nv. ${invItem.level}`;
+                    slotDiv.appendChild(levelElement);
                 }
-                
-                slotDiv.innerHTML = html;
-                slotDiv.onclick = () => showItemDetails(invItem);
+
+                slotDiv.addEventListener('click', () => {
+                    showItemDetails(invItem);
+                });
             }
         }
     });
 }
 
-function loadItems(tab = 'all', itemsList = null) {
+async function loadItems(tab = 'all', itemsList = null) {
     const items = itemsList || allInventoryItems;
-    const grid = document.getElementById('bagItemsGrid');
-    if (!grid) return;
+    const bagItemsGrid = document.getElementById('bagItemsGrid');
+    if (!bagItemsGrid) return;
 
-    grid.innerHTML = '';
+    bagItemsGrid.innerHTML = '';
 
-    const filtered = items.filter(item => {
+    const filteredItems = items.filter(item => {
+        // Filtra itens com quantidade > 0 e que não estejam equipados
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
-        const type = item.items.item_type;
         if (tab === 'all') return true;
-        if (tab === 'equipment') return type !== 'fragmento' && type !== 'outros';
-        if (tab === 'fragments') return type === 'fragmento';
-        if (tab === 'others') return type === 'outros';
+        if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
+        if (tab === 'fragments' && item.items.item_type === 'fragmento') return true;
+        if (tab === 'others' && item.items.item_type === 'outros') return true;
         return false;
     });
 
-    if (filtered.length === 0) {
-        grid.innerHTML = '<p class="empty-inventory-message">Nenhum item.</p>';
+    if (filteredItems.length === 0) {
+        bagItemsGrid.innerHTML = '<p class="empty-inventory-message">Nenhum item nesta categoria.</p>';
         return;
     }
 
-    filtered.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'inventory-item';
-        
-        // Efeito visual para fragmentos prontos para craft
+    filteredItems.forEach(item => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'inventory-item';
+
+        // Verifica a condição para adicionar a classe de animação
         if (item.items.item_type === 'fragmento' && item.items.crafts_item_id && item.quantity >= 30) {
-            div.classList.add('zoom-border');
+            itemDiv.classList.add('zoom-border');
         }
 
         let imgSrc;
         if (item.items.item_type === 'fragmento') {
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
         } else {
-            const stars = (item.items.stars || 0) + (item.refine_level || 0);
-            imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${stars}estrelas.webp`;
+            const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
+            imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
         }
 
-        let html = `<img src="${imgSrc}">`;
+        itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}">`;
         if ((item.items.item_type === 'fragmento' || item.items.item_type === 'outros') && item.quantity > 1) {
-            html += `<span class="item-quantity">${item.quantity}</span>`;
-        }
-        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level >= 1) {
-            html += `<div class="item-level">Lv. ${item.level}</div>`;
+            itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-        div.innerHTML = html;
-        div.dataset.inventoryItemId = item.id;
-        div.onclick = () => {
+
+        // Adiciona o nível do item, se não for um fragmento ou outros e for nível 1 ou maior
+        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level && item.level >= 1) {
+            const levelElement = document.createElement('div');
+            levelElement.className = 'item-level';
+            levelElement.textContent = `Lv. ${item.level}`;
+            itemDiv.appendChild(levelElement);
+        }
+
+        itemDiv.dataset.inventoryItemId = item.id;
+        bagItemsGrid.appendChild(itemDiv);
+
+        itemDiv.addEventListener('click', async () => {
             if (item.items.item_type === 'fragmento' && item.items.crafts_item_id) {
                 showCraftingModal(item);
             } else {
                 showItemDetails(item);
             }
-        };
-        grid.appendChild(div);
+        });
     });
 }
 
-// =================================================================
-// MODAIS E AÇÕES
-// =================================================================
 function showItemDetails(item) {
     selectedItem = item;
-    const modal = document.getElementById('itemDetailsModal');
-    if (!modal) return;
+    const itemDetails = document.getElementById('itemDetailsModal');
+    if (!itemDetails) return;
 
-    // Imagem
-    const stars = (item.items.stars || 0) + (item.refine_level || 0);
-    const imgSrc = item.items.item_type === 'fragmento' 
-        ? `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`
-        : `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${stars}estrelas.webp`;
+    document.getElementById('itemDetailsContent').dataset.currentItem = JSON.stringify(item);
 
+    let imgSrc;
+    if (item.items.item_type === 'fragmento') {
+        imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
+    } else {
+        const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
+        imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
+    }
     document.getElementById('detailItemImage').src = imgSrc;
-    document.getElementById('detailItemName').textContent = item.items.display_name;
+
+    const itemDescriptionDiv = document.getElementById('itemDescription');
+    if (itemDescriptionDiv) {
+        itemDescriptionDiv.textContent = item.items.description || 'Nenhuma descrição disponível.';
+    }
+
     document.getElementById('detailItemRarity').textContent = item.items.rarity;
-    document.getElementById('itemDescription').textContent = item.items.description || 'Sem descrição.';
+    document.getElementById('detailItemName').textContent = item.items.display_name;
+  
+    const isEquipment = !['consumivel', 'fragmento', 'outros'].includes(item.items.item_type);
+    const isEquipable = ['arma', 'Arma', 'Escudo', 'Anel', 'anel', 'Elmo', 'elmo', 'Asa', 'asa', 'Armadura', 'armadura', 'Colar', 'colar'].includes(item.items.item_type);
 
-    // Lógica de Equipamento
-    const isEquip = !['consumivel', 'fragmento', 'outros'].includes(item.items.item_type);
-    const isEquipableType = ['arma','Arma','Escudo','Anel','anel','Elmo','elmo','Asa','asa','Armadura','armadura','Colar','colar'].includes(item.items.item_type);
+    // Ocultar ou exibir a barra de progresso e o botão de "Evoluir"
+    if (isEquipment) {
+        const level = item.level || 0;
+        const maxLevelForStar = (item.items.stars + (item.refine_level || 0) + 1) * 5;
+        const xpRequired = getXpRequired(level, item.items.rarity);
+        const xpProgress = item.xp_progress || 0;
+        const xpPercentage = xpRequired > 0 ? (xpProgress / xpRequired) * 100 : 0;
 
-    if (isEquip) {
-        // Barra de XP e Nível
-        const maxLevel = Math.min(((item.items.stars || 0) + (item.refine_level || 0) + 1) * 5, 30);
-        const xpReq = getXpRequired(item.level || 0, item.items.rarity);
-        const xpPct = xpReq > 0 ? ((item.xp_progress || 0) / xpReq) * 100 : 0;
-
-        document.getElementById('detailItemLevel').textContent = `Nv. ${item.level||0} / ${maxLevel}`;
-        document.getElementById('levelXpBar').style.width = `${Math.min(xpPct, 100)}%`;
-        document.getElementById('levelXpText').textContent = `${item.xp_progress||0} / ${xpReq}`;
+        document.getElementById('detailItemLevel').textContent = `Nv. ${level} / ${Math.min(maxLevelForStar, 30)}`;
+        document.getElementById('levelXpBar').style.width = `${Math.min(xpPercentage, 100)}%`;
+        document.getElementById('levelXpText').textContent = `${xpProgress} / ${xpRequired}`;
         document.querySelector('.progress-bar-container').style.display = 'block';
-        
-        document.getElementById('levelUpBtn').style.display = (item.level >= maxLevel) ? 'none' : 'block';
 
-        // Stats
-        renderItemStats(item);
-        renderRefineInfo(item, stars);
-
-        document.getElementById('itemStats').style.display = 'block';
-        document.getElementById('itemRefineSection').style.display = 'block';
-        document.getElementById('itemActions').style.display = 'flex';
+        const levelUpBtn = document.getElementById('levelUpBtn');
+        if (level >= Math.min(maxLevelForStar, 30)) {
+            levelUpBtn.style.display = 'none';
+        } else {
+            levelUpBtn.style.display = 'block';
+        }
     } else {
         document.querySelector('.progress-bar-container').style.display = 'none';
         document.getElementById('levelUpBtn').style.display = 'none';
-        document.getElementById('itemStats').style.display = 'none';
-        document.getElementById('itemRefineSection').style.display = 'none';
-        document.getElementById('itemActions').style.display = 'none';
+        document.getElementById('detailItemLevel').textContent = '';
     }
 
-    // Botão Equipar
-    const equipBtn = document.getElementById('equipBtnModal');
-    if (isEquipableType) {
-        equipBtn.textContent = item.equipped_slot ? 'Retirar' : 'Equipar';
-        equipBtn.style.display = 'block';
-        equipBtn.onclick = () => handleEquipUnequip(item, !!item.equipped_slot);
-    } else {
-        equipBtn.style.display = 'none';
-    }
+    // Ocultar ou exibir o container de estatísticas, refino e ações
+    const itemStats = document.getElementById('itemStats');
+    const refineSectionDiv = document.getElementById('itemRefineSection');
+    const itemActionsDiv = document.getElementById('itemActions');
 
-    modal.style.display = 'flex';
-}
-
-function renderItemStats(item) {
-    const div = document.getElementById('itemStats');
-    let html = '';
-    const base = item.items;
-    
-    // Base Stats
-    if(base.attack) html += `<p>ATK Base: ${base.attack}</p>`;
-    if(base.defense) html += `<p>DEF Base: ${base.defense}</p>`;
-    if(base.health) html += `<p>HP Base: ${base.health}</p>`;
-    if(base.crit_chance) html += `<p>CRIT Base: ${base.crit_chance}%</p>`;
-    if(base.crit_damage) html += `<p>DANO CRIT Base: +${base.crit_damage}%</p>`;
-    if(base.evasion) html += `<p>EVASÃO Base: +${base.evasion}%</p>`;
-
-    // Bonus Stats
-    if(item.attack_bonus) html += `<p class="bonus-stat">Bônus ATK: +${item.attack_bonus}</p>`;
-    if(item.defense_bonus) html += `<p class="bonus-stat">Bônus DEF: +${item.defense_bonus}</p>`;
-    if(item.health_bonus) html += `<p class="bonus-stat">Bônus HP: +${item.health_bonus}</p>`;
-    if(item.crit_chance_bonus) html += `<p class="bonus-stat">Bônus TAXA CRIT: +${item.crit_chance_bonus}%</p>`;
-    if(item.crit_damage_bonus) html += `<p class="bonus-stat">Bônus DANO CRIT: +${item.crit_damage_bonus}%</p>`;
-    if(item.evasion_bonus) html += `<p class="bonus-stat">Bônus EVASÃO: +${item.evasion_bonus}%</p>`;
-
-    div.innerHTML = html;
-}
-
-function renderRefineInfo(item, totalStars) {
-    const renderSlot = (slot, minStars, elId) => {
-        const el = document.getElementById(elId);
-        if (!el) return;
-        
-        if (slot) {
-            const name = formatAttrName(slot.attr);
-            let val = slot.value;
-            if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(name)) val += '%';
-            
-            el.innerHTML = `
-                <img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;">
-                <p style="font-size:1.1em;">${name} +${val}</p>
-            `;
-            el.style.background = slot.color;
-            el.style.color = "black";
-            el.style.height = "15px";
-        } else if (totalStars >= minStars) {
-            el.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.9em;">Liberado para Refundição</p>`;
-            el.style.background = ''; el.style.color = '';
-        } else {
-            el.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/locked.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.7em;">Refine para ${minStars} estrelas</p>`;
-            el.style.background = ''; el.style.color = '';
+    if (isEquipment) {
+        if (itemStats) {
+            itemStats.style.display = 'block';
+            itemStats.innerHTML = '';
+            if ((item.items.attack || 0) > 0) { itemStats.innerHTML += `<p>ATK Base: ${item.items.attack}</p>`; }
+            if ((item.items.defense || 0) > 0) { itemStats.innerHTML += `<p>DEF Base: ${item.items.defense}</p>`; }
+            if ((item.items.health || 0) > 0) { itemStats.innerHTML += `<p>HP Base: ${item.items.health}</p>`; }
+            if ((item.items.crit_chance || 0) > 0) { itemStats.innerHTML += `<p>CRIT Base: ${item.items.crit_chance}%</p>`; }
+            if ((item.items.crit_damage || 0) > 0) { itemStats.innerHTML += `<p>DANO CRIT Base: +${item.items.crit_damage}%</p>`; }
+            if ((item.items.evasion || 0) > 0) { itemStats.innerHTML += `<p>EVASÃO Base: +${item.items.evasion}%</p>`; }
+            if ((item.attack_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus ATK: +${item.attack_bonus}</p>`;
+            if ((item.defense_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DEF: +${item.defense_bonus}</p>`;
+            if ((item.health_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus HP: +${item.health_bonus}</p>`;
+            if ((item.crit_chance_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus TAXA CRIT: +${item.crit_chance_bonus}%</p>`;
+            if ((item.crit_damage_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DANO CRIT: +${item.crit_damage_bonus}%</p>`;
+            if ((item.evasion_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus EVASÃO: +${item.evasion_bonus}%</p>`;
         }
-    };
+    
+        // Lógica para exibir os atributos de refundição nos elementos corretos
+        const refineRow1 = document.getElementById('refineRow1');
+        const refineRow2 = document.getElementById('refineRow2');
+        const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
 
-    renderSlot(item.reforge_slot1, 4, 'refineRow1');
-    renderSlot(item.reforge_slot2, 5, 'refineRow2');
+        if (refineRow1) {
+            if (item.reforge_slot1) {
+                const formattedName = formatAttrName(item.reforge_slot1.attr);
+                let formattedValue = item.reforge_slot1.value;
+
+                if (formattedName === 'TAXA CRIT' || formattedName === 'DANO CRIT' || formattedName === 'EVASÃO') {
+                    formattedValue += '%';
+                }
+
+                refineRow1.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 38px; height: 38px;">
+                    <p style="font-size: 1.1em;">${formattedName} +${formattedValue}</p>
+                `;
+                refineRow1.style.background = item.reforge_slot1.color;
+                refineRow1.style.color = "black";
+                refineRow1.style.height = "15px";
+            } else if (totalStars >= 4) {
+                refineRow1.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Liberado" class="refine-icon" style="width: 38px; height: 38px;">
+                    <p style="font-size: 0.9em;">Liberado para Refundição</p>
+                `;
+                refineRow1.style.background = '';
+                refineRow1.style.color = '';
+            } else {
+                refineRow1.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon" style="width: 38px; height: 38px;">
+                    <p style="font-size: 0.7em;">Refine para 4 estrelas para desbloquear</p>
+                `;
+                refineRow1.style.background = '';
+                refineRow1.style.color = '';
+            }
+        }
+
+        if (refineRow2) {
+            if (item.reforge_slot2) {
+                const formattedName = formatAttrName(item.reforge_slot2.attr);
+                let formattedValue = item.reforge_slot2.value;
+
+                if (formattedName === 'TAXA CRIT' || formattedName === 'DANO CRIT' || formattedName === 'EVASÃO') {
+                    formattedValue += '%';
+                }
+                
+                refineRow2.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 38px; height: 38px;">
+                    <p style="font-size: 1.1em;">${formattedName} +${formattedValue}</p>
+                `;
+                refineRow2.style.background = item.reforge_slot2.color;
+                refineRow2.style.color = "black";
+                refineRow2.style.height = "15px";
+            } else if (totalStars >= 5) {
+                refineRow2.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Liberado" class="refine-icon" style="width: 38px; height: 38px;">
+                    <p style="font-size: 0.9em;">Liberado para Refundição</p>
+                `;
+                refineRow2.style.background = '';
+                refineRow2.style.color = '';
+            } else {
+                refineRow2.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon" style="width: 38px; height: 38px;">
+                    <p style="font-size: 0.7em;">Refine para 5 estrelas para desbloquear</p>
+                `;
+                refineRow2.style.background = '';
+                refineRow2.style.color = '';
+            }
+        }
+
+        if (refineSectionDiv) refineSectionDiv.style.display = 'block';
+        if (itemActionsDiv) itemActionsDiv.style.display = 'flex';
+    } else {
+        if (itemStats) itemStats.style.display = 'none';
+        if (refineSectionDiv) refineSectionDiv.style.display = 'none';
+        if (itemActionsDiv) itemActionsDiv.style.display = 'none';
+    }
+
+    // Lógica específica para o botão de Equipar/Remover
+    const equipBtnModal = document.getElementById('equipBtnModal');
+    if (isEquipable) {
+        const isEquipped = item.equipped_slot !== null;
+        equipBtnModal.textContent = isEquipped ? 'Retirar' : 'Equipar';
+        equipBtnModal.style.display = 'block';
+        equipBtnModal.onclick = () => handleEquipUnequip(item, isEquipped);
+    } else {
+        equipBtnModal.style.display = 'none';
+    }
+    itemDetails.style.display = 'flex';
 }
 
-// =================================================================
-// HANDLERS DE AÇÃO
-// =================================================================
+function getXpRequired(level, rarity) {
+    const xpBase = { 'R': 20, 'SR': 40, 'SSR': 80 };
+    const base = xpBase[rarity] || 40;
+    return base + (level * 45);
+}
+
+// Converte nome do campo para nome visível
+function formatAttrName(attr) {
+    switch (attr) {
+        case "attack_bonus": return "ATK";
+        case "defense_bonus": return "DEF";
+        case "health_bonus": return "HP";
+        case "crit_chance_bonus": return "TAXA CRIT";
+        case "crit_damage_bonus": return "DANO CRIT";
+        case "evasion_bonus": return "EVASÃO";
+        default: return attr;
+    }
+}
+
 async function handleEquipUnequip(item, isEquipped) {
     try {
         const { data, error } = await supabase.rpc('toggle_equip', {
@@ -511,36 +733,307 @@ async function handleEquipUnequip(item, isEquipped) {
             p_equip_status: !isEquipped
         });
 
-        if (error) throw error;
-        if (data && data.error) throw new Error(data.error);
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert('Erro ao equipar/desequipar item: ' + error.message);
+            return;
+        }
+        if (data && data.error) {
+            showCustomAlert(data.error);
+            return;
+        }
 
-        showCustomAlert(isEquipped ? 'Desequipado.' : 'Equipado.');
+        showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
         document.getElementById('itemDetailsModal').style.display = 'none';
         
-        // Atualiza e refaz o cache
-        await loadPlayerAndItems(true);
+        await loadPlayerAndItems(true); // Força a recarga completa para garantir a atualização
     } catch (err) {
-        showCustomAlert(err.message);
+        console.error('Erro geral ao equipar/desequipar:', err);
+        showCustomAlert('Ocorreu um erro inesperado.');
     }
 }
 
-async function handleLevelUpMulti(item, selections) {
-    document.getElementById('fragmentSelectModal').style.display = 'none';
-    try {
-        const { data, error } = await supabase.rpc('level_up_item', {
-            p_inventory_item_id: item.id,
-            p_fragments: selections
+function renderFragmentList(itemToLevelUp) {
+    const fragmentListContainer = document.getElementById('fragmentList');
+    fragmentListContainer.innerHTML = '';
+
+    const fragments = allInventoryItems.filter(item => item.items.item_type === 'fragmento' && item.quantity > 0);
+
+    if (fragments.length === 0) {
+        fragmentListContainer.innerHTML = '<p>Você não tem fragmentos para usar.</p>';
+        document.getElementById('confirmFragmentSelection').disabled = true;
+        return;
+    }
+
+    document.getElementById('confirmFragmentSelection').disabled = false;
+
+    fragments.forEach(fragment => {
+        const fragmentLi = document.createElement('li');
+        
+        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
+        fragmentLi.innerHTML = `
+            <div class="fragment-info" style="display:flex; align-items:center; gap:8px;">
+                <img src="https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp"
+                     alt="${fragment.items.display_name}" style="width:40px; height:40px; object-fit:contain;">
+                <span>${fragment.items.display_name} (x${fragment.quantity})</span>
+            </div>
+            <div class="fragment-quantity" style="display:flex; align-items:center; gap:6px;">
+                <label for="fragmentQuantityInput">Qtd:</label>
+                <input type="number" class="fragment-quantity-input" placeholder="0" max="${fragment.quantity}" style="width: 50px; text-align: center;">
+                <span class="btn-max-action" style="font-size: 0.75em; color: #FFD700; cursor: pointer; text-decoration: underline; font-weight: bold; margin-left: 2px;">MAX</span>
+            </div>
+        `;
+        fragmentLi.setAttribute('data-inventory-item-id', fragment.id);
+        fragmentLi.setAttribute('data-rarity', fragment.items.rarity);
+        fragmentLi.classList.add('inventory-item');
+
+        fragmentLi.addEventListener('click', (e) => {
+            if (e.target && (e.target.classList.contains('fragment-quantity-input') || e.target.classList.contains('btn-max-action'))) return;
+            fragmentLi.classList.toggle('selected');
         });
 
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
+        const qtyInput = fragmentLi.querySelector('.fragment-quantity-input');
+        const maxBtn = fragmentLi.querySelector('.btn-max-action');
 
-        showCustomAlert(`Nível ${data.new_level}!`);
-        document.getElementById('itemDetailsModal').style.display = 'none';
-        await loadPlayerAndItems(true);
-    } catch (err) {
-        showCustomAlert(err.message);
+        // Botão MAX
+        maxBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            qtyInput.value = fragment.quantity;
+            qtyInput.dispatchEvent(new Event('input'));
+        });
+
+        qtyInput.addEventListener('input', () => {
+            let v = parseInt(qtyInput.value || '0', 10);
+            if (isNaN(v) || v < 0) v = 0;
+            if (v > fragment.quantity) {
+                qtyInput.value = fragment.quantity;
+                showCustomAlert(`Você só tem ${fragment.quantity} fragmentos disponíveis.`);
+            } else {
+                qtyInput.value = v;
+            }
+            if (parseInt(qtyInput.value, 10) > 0) {
+                fragmentLi.classList.add('selected');
+            } else {
+                fragmentLi.classList.remove('selected');
+            }
+        });
+
+        fragmentListContainer.appendChild(fragmentLi);
+    });
+}
+
+function getXpGainPerFragmentByRarity(rarity) {
+    if (rarity === 'R') return 40;
+    if (rarity === 'SR') return 80;
+    if (rarity === 'SSR') return 160;
+    return 40;
+}
+
+function calcularFragmentosNecessariosParaCap(item, fragmentRarity) {
+    try {
+        const currentLevel = item.level || 0;
+        const xpProgress = item.xp_progress || 0;
+        const baseRarity = item.items?.rarity;
+        if (!baseRarity) return 0;
+
+        const capLevel = Math.min(((item.items?.stars || 0) + (item.refine_level || 0) + 1) * 5, 30);
+        if (currentLevel >= capLevel) return 0;
+
+        let totalXpNeeded = 0;
+        for (let lvl = currentLevel; lvl < capLevel; lvl++) {
+            const xpRequired = getXpRequired(lvl, baseRarity);
+            if (lvl === currentLevel) {
+                totalXpNeeded += Math.max(0, xpRequired - xpProgress);
+            } else {
+                totalXpNeeded += xpRequired;
+            }
+        }
+
+        const xpPerFragment = getXpGainPerFragmentByRarity(fragmentRarity);
+        if (xpPerFragment <= 0) return 0;
+        return Math.max(0, Math.ceil(totalXpNeeded / xpPerFragment));
+    } catch (e) {
+        console.error('Erro ao calcular fragmentos necessários:', e);
+        return 0;
     }
+}
+
+async function showCraftingModal(fragment) {
+    selectedItem = fragment;
+    const craftingModal = document.getElementById('craftingModal');
+    if (!craftingModal) return;
+
+    document.getElementById('craftingContent').dataset.currentFragment = JSON.stringify(fragment);
+
+    const { data: itemToCraft, error: itemError } = await supabase
+        .from('items')
+        .select(`name, display_name, rarity, stars`)
+        .eq('item_id', fragment.items.crafts_item_id)
+        .single();
+
+    if (itemError) {
+        console.error('Erro ao buscar item a ser construído:', itemError.message);
+        showCustomAlert('Não foi possível carregar os detalhes de construção.');
+        return;
+    }
+
+    document.getElementById('craftingFragmentImage').src =
+        `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
+    document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
+
+    // Ajuste aqui para carregar a imagem do item criado corretamente, incluindo as estrelas
+    document.getElementById('craftingTargetImage').src =
+        `https://aden-rpg.pages.dev/assets/itens/${itemToCraft.name}_${itemToCraft.stars}estrelas.webp`;
+
+    const crystalCost = { 'R': 100, 'SR': 300, 'SSR': 600 };
+    const fragmentsNeeded = 30;
+
+    document.getElementById('craftingFragmentQuantity').textContent = ` ${fragment.quantity}`;
+    document.getElementById('fragmentsNeeded').textContent = `${fragmentsNeeded} (você tem: ${fragment.quantity})`;
+    document.getElementById('crystalCost').textContent = crystalCost[itemToCraft.rarity] || 0;
+
+    craftingModal.style.display = 'flex';
+}
+
+function getCapLevelForCurrentStar(item) {
+    const cap = ((item.items?.stars || 0) + (item.refine_level || 0) + 1) * 5;
+    return Math.min(cap, 30);
+}
+
+function getRefineFragmentsRequired(capLevel, rarity) {
+    const table = { 5: 40, 10: 60, 15: 90, 20: 120, 25: 160 };
+    return table[capLevel] || null;
+}
+
+function getRefineCrystalsRequired(capLevel, rarity) {
+    const table = {
+        5:  { 'R': 400,  'SR': 800,   'SSR': 1600 },
+        10: { 'R': 1200, 'SR': 2400,  'SSR': 4000 },
+        15: { 'R': 1800, 'SR': 3200,  'SSR': 6000 },
+        20: { 'R': 2600, 'SR': 4500,  'SSR': 9000 },
+        25: { 'R': 3200, 'SR': 6000,  'SSR': 12000 }
+    };
+    return table[capLevel]?.[rarity] || 0;
+}
+
+function openRefineFragmentModal(item) {
+    const modal = document.getElementById('refineFragmentModal');
+    const list = document.getElementById('refineFragmentList');
+    const costsText = document.getElementById('refineCostsText');
+    const confirmBtn = document.getElementById('confirmRefineSelectionRefine');
+
+    if (!modal || !list || !costsText || !confirmBtn) {
+        showCustomAlert('Estrutura do modal de refino não encontrada.');
+        return;
+    }
+
+    const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
+    if (totalStars >= 5) {
+        showCustomAlert('Este item já está no refinamento máximo (5★).');
+        return;
+    }
+
+    const capLevel = getCapLevelForCurrentStar(item);
+    if ((item.level || 0) !== capLevel) {
+        showCustomAlert(`Você precisa atingir o nível ${capLevel} para refinar.`);
+        return;
+    }
+
+    const requiredFragments = getRefineFragmentsRequired(capLevel, item.items?.rarity);
+    const requiredCrystals = getRefineCrystalsRequired(capLevel, item.items?.rarity);
+    if (!requiredFragments) {
+        showCustomAlert('Não foi possível determinar o custo de refino para este nível.');
+        return;
+    }
+
+    const sameRarityFragments = (allInventoryItems || []).filter(inv =>
+        inv.items?.item_type === 'fragmento' &&
+        inv.items?.rarity === item.items?.rarity &&
+        (inv.quantity || 0) > 0
+    );
+
+    list.innerHTML = '';
+    costsText.textContent = `Custo: ${requiredFragments} fragmentos ${item.items?.rarity} + ${requiredCrystals} cristais.`;
+
+    if (sameRarityFragments.length === 0) {
+        list.innerHTML = '<p>Você não possui fragmentos desta raridade.</p>';
+        confirmBtn.disabled = true;
+        modal.style.display = 'flex';
+        return;
+    }
+
+    confirmBtn.disabled = false;
+    confirmBtn.onclick = () => {
+        const selections = [];
+        list.querySelectorAll('li.selected').forEach(li => {
+            const qty = parseInt(li.querySelector('.fragment-quantity-input')?.value || '0', 10);
+            if (qty > 0) {
+                selections.push({ fragment_id: li.getAttribute('data-inventory-item-id'), qty });
+            }
+        });
+
+        const sum = selections.reduce((acc, s) => acc + s.qty, 0);
+        if (sum !== requiredFragments) {
+            showCustomAlert(`A soma das quantidades deve ser exatamente ${requiredFragments}. (atual: ${sum})`);
+            return;
+        }
+
+        modal.style.display = 'none';
+        handleRefineMulti(item, selections);
+    };
+
+    sameRarityFragments.forEach(fragmentInv => {
+        const available = fragmentInv.quantity || 0;
+        const li = document.createElement('li');
+        li.className = 'inventory-item';
+        li.setAttribute('data-inventory-item-id', fragmentInv.id);
+        
+        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
+        li.innerHTML = `
+            <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
+                <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
+                     alt="${fragmentInv.items.display_name}" style="width:40px;height:40px;object-fit:contain;">
+                <span>${fragmentInv.items.display_name} (x${available})</span>
+            </div>
+            <div class="fragment-quantity" style="display:flex;align-items:center;gap:6px;">
+                <label>Qtd:</label>
+                <input type="number" class="fragment-quantity-input" max="${available}" placeholder="0" style="width: 50px; text-align: center;">
+                <span class="btn-max-action" style="font-size: 0.75em; color: #FFD700; cursor: pointer; text-decoration: underline; font-weight: bold; margin-left: 2px;">MAX</span>
+            </div>
+        `;
+
+        li.addEventListener('click', (e) => {
+            if (e.target && (e.target.classList.contains('fragment-quantity-input') || e.target.classList.contains('btn-max-action'))) return;
+            li.classList.toggle('selected');
+        });
+
+        const qtyInput = li.querySelector('.fragment-quantity-input');
+        const maxBtn = li.querySelector('.btn-max-action');
+
+        // Botão MAX
+        maxBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            qtyInput.value = available;
+            qtyInput.dispatchEvent(new Event('input'));
+        });
+
+        qtyInput.addEventListener('input', () => {
+            let val = parseInt(qtyInput.value || '0', 10);
+            if (isNaN(val) || val < 0) val = 0;
+            if (val > available) {
+                qtyInput.value = available;
+                showCustomAlert(`Você só tem ${available} fragmentos disponíveis.`);
+            } else {
+                qtyInput.value = val;
+            }
+            if (parseInt(qtyInput.value, 10) > 0) li.classList.add('selected');
+            else li.classList.remove('selected');
+        });
+
+        list.appendChild(li);
+    });
+
+    modal.style.display = 'flex';
 }
 
 async function handleRefineMulti(item, selections) {
@@ -549,14 +1042,56 @@ async function handleRefineMulti(item, selections) {
             _inventory_item_id: item.id,
             _fragments: selections
         });
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
 
-        showCustomAlert('Item refinado!');
-        document.getElementById('itemDetailsModal').style.display = 'none';
-        await loadPlayerAndItems(true);
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert(`Erro ao refinar: ${error.message}`);
+            return;
+        }
+    
+        if (data && data.error) {
+            showCustomAlert(`Erro ao refinar: ${data.error}`);
+        } else if (data && data.success) {
+            const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
+            showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
+            await loadPlayerAndItems(true);
+            document.getElementById('itemDetailsModal').style.display = 'none';
+        } else {
+            showCustomAlert('Não foi possível refinar o item. Tente novamente.');
+        }
     } catch (err) {
-        showCustomAlert(err.message);
+        console.error('Erro geral ao refinar:', err);
+        showCustomAlert('Ocorreu um erro ao tentar refinar o item.');
+    }
+}
+
+async function handleLevelUpMulti(item, selections) {
+    document.getElementById('fragmentSelectModal').style.display = 'none';
+
+    try {
+        const { data, error } = await supabase.rpc('level_up_item', {
+            p_inventory_item_id: item.id,
+            p_fragments: selections
+        });
+
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert(`Erro ao subir de nível: ${error.message}`);
+            return;
+        }
+
+        if (data && data.error) {
+            showCustomAlert(`Erro ao subir de nível: ${data.error}`);
+        } else if (data && data.success) {
+            showCustomAlert(`Item evoluído para Nível ${data.new_level}! XP atual: ${data.new_xp}.`);
+            await loadPlayerAndItems(true);
+            document.getElementById('itemDetailsModal').style.display = 'none';
+        } else {
+            showCustomAlert('Não foi possível evoluir o item. Tente novamente.');
+        }
+    } catch (err) {
+        console.error('Erro geral ao subir o nível:', err);
+        showCustomAlert('Ocorreu um erro ao tentar subir o nível do item.');
     }
 }
 
@@ -566,152 +1101,122 @@ async function handleCraft(itemId, fragmentId) {
             p_item_id: itemId,
             p_fragment_id: fragmentId
         });
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
 
-        showCustomAlert('Item construído!');
-        document.getElementById('craftingModal').style.display = 'none';
-        await loadPlayerAndItems(true); // Atualiza bolsa
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert(`Erro ao construir o item: ${error.message}`);
+            return;
+        }
+
+        if (data && data.error) {
+            showCustomAlert(`Erro ao construir: ${data.error}`);
+        } else if (data && data.success) {
+            showCustomAlert(`Item construído com sucesso!`);
+            await loadPlayerAndItems(true);
+            document.getElementById('craftingModal').style.display = 'none';
+        } else {
+            showCustomAlert('Não foi possível construir o item. Tente novamente.');
+        }
     } catch (err) {
-        showCustomAlert(err.message);
+        console.error('Erro geral ao construir:', err);
+        showCustomAlert('Ocorreu um erro ao tentar construir o item.');
     }
 }
 
-// =================================================================
-// HELPERS
-// =================================================================
-function showCustomAlert(msg) {
-    document.getElementById('customAlertMessage').textContent = msg;
-    document.getElementById('customAlertModal').style.display = 'flex';
-}
 
-function showCustomConfirm(msg, onConfirm) {
-    const modal = document.getElementById('customConfirmModal');
-    document.getElementById('customConfirmMessage').textContent = msg;
-    modal.style.display = 'flex';
-    document.getElementById('customConfirmYesBtn').onclick = () => {
-        modal.style.display = 'none';
-        onConfirm();
-    };
-    document.getElementById('customConfirmNoBtn').onclick = () => modal.style.display = 'none';
-}
+// ===============================
+// >>> Cache & Shimmer FIX PATCH (appended) <<<
+// ===============================
 
-function formatAttrName(attr) {
-    const map = {
-        "attack_bonus": "ATK", "defense_bonus": "DEF", "health_bonus": "HP",
-        "crit_chance_bonus": "TAXA CRIT", "crit_damage_bonus": "DANO CRIT", "evasion_bonus": "EVASÃO"
-    };
-    return map[attr] || attr;
-}
-
-function getXpRequired(level, rarity) {
-    const base = { 'R': 20, 'SR': 40, 'SSR': 80 }[rarity] || 40;
-    return base + (level * 45);
-}
-
-// Funções para renderizar lista de fragmentos e modais auxiliares
-// (Mantidas conforme lógica original, apenas limpas para brevidade)
-function renderFragmentList(item) {
-    const container = document.getElementById('fragmentList');
-    container.innerHTML = '';
-    const frags = allInventoryItems.filter(i => i.items.item_type === 'fragmento' && i.quantity > 0);
-    
-    if (frags.length === 0) {
-        container.innerHTML = '<p>Sem fragmentos.</p>';
-        document.getElementById('confirmFragmentSelection').disabled = true;
-        return;
-    }
-    
-    document.getElementById('confirmFragmentSelection').disabled = false;
-    frags.forEach(frag => {
-        const li = document.createElement('li');
-        li.className = 'inventory-item';
-        li.dataset.inventoryItemId = frag.id;
-        li.dataset.rarity = frag.items.rarity;
-        li.innerHTML = `
-            <div style="display:flex;align-items:center;gap:8px;">
-                <img src="https://aden-rpg.pages.dev/assets/itens/${frag.items.name}.webp" style="width:40px;">
-                <span>${frag.items.display_name} (x${frag.quantity})</span>
-            </div>
-            <input type="number" class="fragment-quantity-input" placeholder="0" max="${frag.quantity}" style="width:50px;">
-        `;
-        li.onclick = (e) => {
-             if(e.target.tagName !== 'INPUT') li.classList.toggle('selected');
-        };
-        container.appendChild(li);
-    });
-}
-
-function calcularFragmentosNecessariosParaCap(item, rarity) {
-    const cap = Math.min(((item.items.stars||0) + (item.refine_level||0) + 1) * 5, 30);
-    if ((item.level||0) >= cap) return 0;
-    
-    let needed = 0;
-    for(let l = item.level||0; l < cap; l++) {
-        const req = getXpRequired(l, item.items.rarity);
-        needed += (l === (item.level||0)) ? Math.max(0, req - (item.xp_progress||0)) : req;
-    }
-    const xpPerFrag = { 'R': 40, 'SR': 80, 'SSR': 160 }[rarity] || 40;
-    return Math.ceil(needed / xpPerFrag);
-}
-
-// Helpers de Refino e Crafting (Abertura de Modal)
-function openRefineFragmentModal(item) {
-    const totalStars = (item.items.stars||0) + (item.refine_level||0);
-    if(totalStars >= 5) return showCustomAlert('Máximo atingido.');
-    
-    const cap = (totalStars + 1) * 5;
-    if((item.level||0) !== cap) return showCustomAlert(`Necessário nível ${cap}.`);
-    
-    // Lógica de custo simplificada para exibição
-    const reqFrag = {5:40, 10:60, 15:90, 20:120, 25:160}[cap];
-    const reqCry = ({5:{R:400,SR:800,SSR:1600}, 10:{R:1200,SR:2400,SSR:4000}})[cap]?.[item.items.rarity] || 0; 
-    
-    // ... (restante da lógica de renderização do modal de refino mantida da original, simplificada aqui pois é extensa)
-    // Para economizar tokens, assuma que a lógica de UI do modal de refino segue o padrão do fragmentList acima.
-    // A função handleRefineMulti fará o trabalho pesado.
-    
-    // Reutilizando lógica existente no arquivo original para preencher #refineFragmentList
-    const modal = document.getElementById('refineFragmentModal');
-    const list = document.getElementById('refineFragmentList');
-    const btn = document.getElementById('confirmRefineSelectionRefine');
-    
-    const frags = allInventoryItems.filter(i => i.items.item_type === 'fragmento' && i.items.rarity === item.items.rarity && i.quantity > 0);
-    list.innerHTML = '';
-    document.getElementById('refineCostsText').textContent = `Custo: ${reqFrag} fragmentos + Cristais`;
-
-    frags.forEach(frag => {
-        const li = document.createElement('li');
-        li.dataset.inventoryItemId = frag.id;
-        li.innerHTML = `<span>${frag.items.display_name} (x${frag.quantity})</span> <input type="number" class="fragment-quantity-input" style="width:50px;">`;
-        list.appendChild(li);
-        li.onclick = (e) => { if(e.target.tagName!=='INPUT') li.classList.toggle('selected'); }
-    });
-    
-    btn.onclick = () => {
-        const sels = [];
-        list.querySelectorAll('li.selected').forEach(li => {
-            const q = parseInt(li.querySelector('input').value)||0;
-            if(q>0) sels.push({fragment_id: li.dataset.inventoryItemId, qty: q});
-        });
-        modal.style.display='none';
-        handleRefineMulti(item, sels);
-    }
-    modal.style.display = 'flex';
-}
-
-async function showCraftingModal(fragment) {
-    selectedItem = fragment;
-    const { data: target } = await supabase.from('items').select('*').eq('item_id', fragment.items.crafts_item_id).single();
-    if(!target) return;
-    
-    document.getElementById('craftingTargetImage').src = `https://aden-rpg.pages.dev/assets/itens/${target.name}_${target.stars}estrelas.webp`;
-    document.getElementById('craftingFragmentQuantity').textContent = fragment.quantity;
-    document.getElementById('craftingModal').style.display = 'flex';
-}
-
-// Shimmer Effect Inicial (Executa imediatamente para UX)
-(function(){
-    const ids = ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion'];
-    ids.forEach(id => document.getElementById(id)?.classList.add('shimmer'));
+// Aplica shimmer cedo (antes de qualquer preenchimento) e remove depois
+(function applyInitialShimmer(){
+  function addShimmer(){
+    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('shimmer'); });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addShimmer, { once: true });
+  } else {
+    addShimmer();
+  }
 })();
+
+// Ler stats do jogador do IndexedDB (META_STORE)
+async function loadPlayerStatsFromCache() {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(META_STORE, "readonly");
+    return await new Promise((resolve) => {
+      const req = tx.objectStore(META_STORE).get("player_stats");
+      req.onsuccess = () => resolve(req.result ? req.result.value : null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    console.warn('Falha ao ler player_stats do cache:', e);
+    return null;
+  }
+}
+
+// Salvar itens + playerBaseStats no cache (mantém a mesma assinatura usada no projeto)
+async function saveCache(items) {
+  const db = await openDB();
+  const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+  const store = tx.objectStore(STORE_NAME);
+  store.clear();
+  (items || []).forEach(item => store.put(item));
+  try {
+    tx.objectStore(META_STORE).put({ key: "last_updated", value: Date.now() });
+    if (typeof playerBaseStats === 'object' && playerBaseStats) {
+      tx.objectStore(META_STORE).put({ key: "player_stats", value: playerBaseStats });
+    }
+  } catch (e) {
+    console.warn('Falha ao salvar META_STORE:', e);
+  }
+  return tx.complete;
+}
+
+// Não apaga IndexedDB automaticamente; apenas tenta recuperar/fazer fallback
+function calculatePlayerStats() {
+  const stats = { ...playerBaseStats };
+  const isNum = (v) => Number.isFinite(Number(v));
+
+  // Agrega bônus dos itens equipados sem causar NaN
+  (equippedItems || []).forEach(invItem => {
+    const it = invItem.items || {};
+    stats.min_attack = (Number(stats.min_attack) || 0) + (Number(it.min_attack) || 0) + (Number(invItem.min_attack_bonus) || 0);
+    stats.attack     = (Number(stats.attack)     || 0) + (Number(it.attack)     || 0) + (Number(invItem.attack_bonus)     || 0);
+    stats.defense    = (Number(stats.defense)    || 0) + (Number(it.defense)    || 0) + (Number(invItem.defense_bonus)    || 0);
+    stats.health     = (Number(stats.health)     || 0) + (Number(it.health)     || 0) + (Number(invItem.health_bonus)     || 0);
+    stats.crit_chance= (Number(stats.crit_chance)|| 0) + (Number(it.crit_chance)|| 0) + (Number(invItem.crit_chance_bonus)|| 0);
+    stats.crit_damage= (Number(stats.crit_damage)|| 0) + (Number(it.crit_damage)|| 0) + (Number(invItem.crit_damage_bonus)|| 0);
+    stats.evasion    = (Number(stats.evasion)    || 0) + (Number(it.evasion)    || 0) + (Number(invItem.evasion_bonus)    || 0);
+  });
+
+  // Se não houver stats válidos no cache, mantenha shimmer e não reseta o DB
+  const ok = isNum(stats.attack) && isNum(stats.defense) && isNum(stats.min_attack) && isNum(stats.health);
+  if (!ok) {
+    console.warn('Stats incompletos no cache; mantendo shimmer. (Sem reset de cache)');
+    return;
+  }
+
+  // Preenche avatar (não erra se vazio) e remove shimmer
+  const avatarEl = document.getElementById('playerAvatarEquip');
+  if (avatarEl && stats.avatar_url) avatarEl.src = stats.avatar_url;
+
+  ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
+    .forEach(id => document.getElementById(id)?.classList.remove('shimmer'));
+
+  const atkSpan = document.getElementById('playerAttack');
+  const defSpan = document.getElementById('playerDefense');
+  const hpSpan  = document.getElementById('playerHealth');
+  const ccSpan  = document.getElementById('playerCritChance');
+  const cdSpan  = document.getElementById('playerCritDamage');
+  const evSpan  = document.getElementById('playerEvasion');
+
+  if (atkSpan) atkSpan.textContent = `${Math.max(0, Math.floor(stats.min_attack))} - ${Math.max(0, Math.floor(stats.attack))}`;
+  if (defSpan) defSpan.textContent = `${Math.max(0, Math.floor(stats.defense))}`;
+  if (hpSpan)  hpSpan.textContent  = `${Math.max(0, Math.floor(stats.health))}`;
+  if (ccSpan)  ccSpan.textContent  = `${(Number(stats.crit_chance) || 0)}%`;
+  if (cdSpan)  cdSpan.textContent  = `${(Number(stats.crit_damage) || 0)}%`;
+  if (evSpan)  evSpan.textContent  = `${(Number(stats.evasion) || 0)}%`;
+}

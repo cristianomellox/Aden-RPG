@@ -936,7 +936,7 @@ textarea:focus, textarea:active {
 .pulse { animation: pulse 2s infinite; }
 @keyframes pulse {
     0%{box-shadow:0 0 0px rgba(255,215,0,1);}
-    70%{box-shadow:0 0 36px rgba(255,215,0,0.9);}
+    70%{box-shadow:2px 2px 56px rgba(255,215,0,0.9);}
     100%{box-shadow:0 0 0 rgba(255,215,0,0.8);}
 }
 

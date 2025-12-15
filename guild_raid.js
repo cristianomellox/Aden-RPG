@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v10.0) - No Polling + Full Optimistic + Egress Saver");
+console.log("guild_raid.js (v12.0) - Cache Attempts + Boss Buff (7%) + Optimized Stats");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -6,8 +6,9 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
+const ATTEMPTS_CACHE_DURATION_MS = 15 * 60 * 1000; // 15 Minutos de cache
+
 // POLLINGS REMOVIDOS para economizar egress
-const REVIVE_CHECK_MS = 1000; // Agora é apenas um ticker local
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
@@ -873,8 +874,38 @@ async function loadMonsterForFloor(floor) {
   }
 }
 
+// CACHE DE TENTATIVAS LOCAL
+function saveAttemptsCache(left, last) {
+    if (!userId) return;
+    const cacheKey = `raid_attempts_${userId}`;
+    const data = {
+        left: left,
+        last: last,
+        ts: Date.now()
+    };
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+}
+
 async function loadAttempts() {
   if (!currentRaidId || !userId) return;
+  
+  // Tenta carregar do cache primeiro (15 min)
+  try {
+      const cacheKey = `raid_attempts_${userId}`;
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+          const cached = JSON.parse(raw);
+          if (Date.now() - cached.ts < ATTEMPTS_CACHE_DURATION_MS) {
+              attacksLeft = cached.left;
+              lastAttackAt = cached.last ? new Date(cached.last) : null;
+              updateAttackUI();
+              console.log("[Raid] Ataques carregados do cache local.");
+              return;
+          }
+      }
+  } catch(e) {}
+
+  // Fallback para servidor
   try {
     const { data, error } = await supabase.from("guild_raid_attempts").select("attempts_left, last_attack_at").eq("raid_id", currentRaidId).eq("player_id", userId).single();
     if (error || !data) {
@@ -884,6 +915,7 @@ async function loadAttempts() {
       attacksLeft = Number(data.attempts_left || 0);
       lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
     }
+    saveAttemptsCache(attacksLeft, lastAttackAt);
     updateAttackUI();
   } catch (e) {
     console.error("loadAttempts", e);
@@ -1022,6 +1054,8 @@ async function performAttackOptimistic() {
     
     updateAttackUI(); 
     saveBatchState(); 
+    // Salva cache de tentativas para persistir o decremento visual
+    saveAttemptsCache(attacksLeft, lastAttackAt);
 
     // 5. Decisão de Sync
     if (batchSyncTimer) clearTimeout(batchSyncTimer);
@@ -1064,15 +1098,22 @@ async function triggerBatchSync() {
         // --- RECONCILIAÇÃO ---
         updateHpBar(data.monster_health, data.max_monster_health);
         
-        // Sincroniza HP do jogador (importante se houve dano de boss no servidor que não vimos)
+        // Sincroniza HP do jogador (com persistência otimista)
         if (data.player_health !== undefined) {
-            localPlayerHp = data.player_health;
+            // Se o servidor disser que estamos mortos (0) ou full (reviveu), aceitamos a verdade do servidor.
+            // Caso contrário, mantemos o menor valor (nosso dano local ou dano do servidor).
+            if (data.player_health <= 0 || data.player_health >= playerMaxHealth) {
+                localPlayerHp = data.player_health;
+            } else {
+                localPlayerHp = Math.min(localPlayerHp, data.player_health);
+            }
             updatePlayerHpUi(localPlayerHp, playerMaxHealth);
         }
 
         // Atualizar Tentativas Reais (Correção de Drift e Compras)
         attacksLeft = data.attacks_left;
         lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+        saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
 
         // Checar Morte (Recompensas)
@@ -1239,10 +1280,8 @@ async function simulateLocalBossAttackLogic() {
     const randomAttackVideo = BOSS_ATTACK_VIDEO_URLS[Math.floor(Math.random() * BOSS_ATTACK_VIDEO_URLS.length)];
     queueAction(() => {
         playVideo(randomAttackVideo, () => {
-             // Cálculo Otimista de Dano
-             // base_health * 0.02 - (def/10)
-             // Nota: maxMonsterHealth aqui é o HP do monstro, não do Boss Base Config. 
-             // Mas assumimos que maxMonsterHealth carregado no loadRaid é o correto para o cálculo.
+             // Cálculo Otimista de Dano com BUFF (0.07)
+             // base_health * 0.07 - (def/10)
              
              const stats = playerStatsCache || { defense: 0, evasion: 0, health: 1 };
              
@@ -1254,7 +1293,8 @@ async function simulateLocalBossAttackLogic() {
                  return;
              }
 
-             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.02));
+             // AUMENTO DE DANO: 2% -> 4%
+             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.04));
              const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
              
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
@@ -1566,9 +1606,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (purchased > 0) {
           showRaidAlert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
-          // Correção de inconsistência: Adiciona explicitamente ao state local
-          // Como removemos polling, isso não será sobrescrito erroneamente
+          // Adiciona localmente e salva no cache para evitar perda no sync
           attacksLeft += purchased; 
+          saveAttemptsCache(attacksLeft, lastAttackAt);
           updateAttackUI();
         }
       } catch (e) {

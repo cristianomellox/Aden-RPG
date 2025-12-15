@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v12.0) - Cache Attempts + Boss Buff (7%) + Optimized Stats");
+console.log("guild_raid.js (v12.2) - Fix: Boss HP Regen & Counter Sync");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -14,7 +14,7 @@ const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
 // Configurações Batch / Otimista
 const BATCH_THRESHOLD = 3; // Envia ao servidor a cada 3 ataques acumulados
-const BATCH_DEBOUNCE_MS = 60000; 
+const BATCH_DEBOUNCE_MS = 70000; 
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -1100,12 +1100,21 @@ async function triggerBatchSync() {
         
         // Sincroniza HP do jogador (com persistência otimista)
         if (data.player_health !== undefined) {
-            // Se o servidor disser que estamos mortos (0) ou full (reviveu), aceitamos a verdade do servidor.
-            // Caso contrário, mantemos o menor valor (nosso dano local ou dano do servidor).
-            if (data.player_health <= 0 || data.player_health >= playerMaxHealth) {
-                localPlayerHp = data.player_health;
+            // [CORREÇÃO] Não forçar reset se server > max, a menos que reviveu.
+            // Agora o servidor Roda o Boss Attack, então data.player_health virá reduzido se levou dano.
+            if (data.player_health <= 0) {
+                // Morreu
+                localPlayerHp = 0;
+            } else if (data.revive_until && new Date(data.revive_until) > new Date()) {
+                 // Está morto
+                localPlayerHp = 0;
             } else {
-                localPlayerHp = Math.min(localPlayerHp, data.player_health);
+                 // Vivo. Se server > local, pode ser desync de "full heal" vs "dano local".
+                 // Confiamos no menor valor para não dar susto no player,
+                 // A MENOS que a diferença seja absurda (ex: reviveu).
+                 // Como o SQL agora aplica dano do boss no sync, o valor do server deve ser confiável e baixo.
+                 // Mas manteremos Math.min para suavidade se houver lag de tick.
+                 localPlayerHp = Math.min(localPlayerHp, data.player_health);
             }
             updatePlayerHpUi(localPlayerHp, playerMaxHealth);
         }
@@ -1318,7 +1327,7 @@ async function simulateLocalBossAttackLogic() {
 
 function handleOptimisticDeath() {
     // Define timer de revive local (60s padrão - 3s de margem vídeo)
-    const reviveTimeMs = 57000; 
+    const reviveTimeMs = 52000; 
     _playerReviveUntil = new Date(Date.now() + reviveTimeMs).toISOString();
     
     updateAttackUI(); // Bloqueia botões

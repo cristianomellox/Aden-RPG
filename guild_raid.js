@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v9.0) - Zero Egress + Batch Sync + Otimista");
+console.log("guild_raid.js (v10.0) - No Polling + Full Optimistic + Egress Saver");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -6,15 +6,14 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
-const RAID_POLL_MS = 20000; // Polling mantido para checar estado dos outros
-const SECONDARY_POLL_MS = 80000;
-const REVIVE_CHECK_MS = 10000;
+// POLLINGS REMOVIDOS para economizar egress
+const REVIVE_CHECK_MS = 1000; // Agora é apenas um ticker local
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
 // Configurações Batch / Otimista
 const BATCH_THRESHOLD = 3; // Envia ao servidor a cada 3 ataques acumulados
-const BATCH_DEBOUNCE_MS = 60000; // Ou após 3 segundos sem clicar
+const BATCH_DEBOUNCE_MS = 60000; 
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -41,23 +40,23 @@ const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
 // Variáveis de estado
 let userId = null, userGuildId = null, userRank = "member", userName = null;
 let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1, playerMaxHealth = 1;
+let localPlayerHp = 1; // Controle otimista de HP
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
-let pollInterval = null, secondaryPollInterval = null, uiSecondInterval = null, raidTimerInterval = null, reviveTickerInterval = null, reviveUITickerInterval = null, countdownInterval = null;
+let uiSecondInterval = null, raidTimerInterval = null, reviveUITickerInterval = null, countdownInterval = null;
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
-let playerRankInfo = { rank: null, damage: 0 };
 
 // --- Variáveis de estado para notificação de morte ---
 let deathNotificationQueue = [];
 let isDisplayingDeathNotification = false;
 let processedDeathTimestamps = new Set(); 
 
-// --- Variáveis para o ataque visual do chefe ---
-let visualBossAttackInterval = null;
-let nextBossAttackAt = null;
+// --- Variáveis para o ataque visual/lógico do chefe ---
+let optimisticBossInterval = null;
+let nextBossAttackTime = 0;
 
 // --- STATE OTIMISTA & BATCH ---
-let playerStatsCache = null; // { min_attack, attack, crit_chance, crit_damage }
+let playerStatsCache = null; // { min_attack, attack, crit_chance, crit_damage, defense, evasion, health }
 let pendingAttacksQueue = 0; // Quantos ataques estão na fila
 let batchSyncTimer = null; // Timer do debounce
 let localDamageDealtInBatch = 0; // Dano acumulado visualmente
@@ -129,19 +128,17 @@ function loadBatchState() {
             pendingAttacksQueue = data.queue || 0;
             localDamageDealtInBatch = data.dmg || 0;
             if (pendingAttacksQueue > 0) {
-                 // Tenta sincronizar logo se houver pendências
                  triggerBatchSync(); 
             }
         } else {
-            // Limpa dados velhos
             localStorage.removeItem('raid_batch_state');
         }
     } catch(e) {}
 }
 
-// --- Cache de Stats do Jogador ---
+// --- Cache de Stats do Jogador (Expandido para Defesa/Esquiva) ---
 async function cachePlayerStats() {
-    if (playerStatsCache) return; // Já carregado
+    if (playerStatsCache) return; 
     if (!userId) return;
     try {
         const { data, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
@@ -150,13 +147,17 @@ async function cachePlayerStats() {
                 min_attack: Number(data.min_attack || 0),
                 attack: Number(data.attack || 0),
                 crit_chance: Number(data.crit_chance || 0),
-                crit_damage: Number(data.crit_damage || 0)
+                crit_damage: Number(data.crit_damage || 0),
+                defense: Number(data.defense || 0),
+                evasion: Number(data.evasion || 0),
+                health: Number(data.health || 0)
             };
-            console.log("Stats cacheados:", playerStatsCache);
+            // Atualiza Max Health baseado nos itens cacheados
+            playerMaxHealth = Math.max(1, playerStatsCache.health);
+            console.log("Stats cacheados (Otimista):", playerStatsCache);
         }
     } catch(e) { console.warn("Erro ao cachear stats:", e); }
 }
-
 
 // --- Sistema de Fila de Ações ---
 function processNextAction() {
@@ -426,46 +427,6 @@ function ensurePlayerHpUi() {
   container.appendChild(pArea);
 }
 
-function ensurePlayerRankUi() {
-    let rankEl = $id("raidPlayerRankInfo");
-    if (rankEl) return;
-
-    const container = $id("raidDamageRankingContainer");
-    if (!container) return;
-    
-    rankEl = document.createElement("div");
-    rankEl.id = "raidPlayerRankInfo";
-    rankEl.style.cssText = "text-align: center; margin-top: 10px; margin-bottom: 10px; padding: 5px; background-color: rgba(0, 0, 0, 0.2); border-radius: 5px; font-size: 0.9em;";
-    
-    const title = document.createElement("strong");
-    title.textContent = "Sua Posição";
-    
-    const details = document.createElement("div");
-    details.id = "raidPlayerRankDetails";
-    details.textContent = "Ataque para atualizar...";
-
-    rankEl.appendChild(title);
-    rankEl.appendChild(details);
-
-    container.insertBefore(rankEl, container.firstChild);
-}
-
-function updatePlayerRankUi(rank, totalDamage) {
-    ensurePlayerRankUi();
-    const detailsEl = $id("raidPlayerRankDetails");
-    if (!detailsEl) return;
-
-    if (rank && totalDamage > 0) {
-        playerRankInfo = { rank, damage: totalDamage };
-        detailsEl.innerHTML = `
-            <span style="color: #ffc107;">#${rank}</span> com 
-            <span style="color: #ffdddd;">${totalDamage.toLocaleString()}</span> de dano
-        `;
-    } else {
-        detailsEl.textContent = "Você ainda não causou dano.";
-    }
-}
-
 function updatePlayerHpUi(cur, max) {
   ensurePlayerHpUi();
   const fill = $id("raidPlayerHpFill");
@@ -654,7 +615,7 @@ function processDeathNotificationQueue() {
 
 async function checkOtherPlayerDeaths() {
     if (!currentRaidId) return;
-
+    // Função auxiliar chamada apenas quando há interação/sync para não gerar polling
     try {
         const { data: raidData, error: raidError } = await supabase
             .from('guild_raids')
@@ -662,45 +623,38 @@ async function checkOtherPlayerDeaths() {
             .eq('id', currentRaidId)
             .single();
 
-        if (raidError || !raidData || !Array.isArray(raidData.recent_deaths)) {
-            if(raidError) console.warn("Erro ao buscar mortes da raid:", raidError.message);
-            return;
-        }
+        if (raidError || !raidData || !Array.isArray(raidData.recent_deaths)) return;
 
         const newDeaths = raidData.recent_deaths.filter(death => !processedDeathTimestamps.has(death.timestamp));
 
-        if (newDeaths.length === 0) {
-            return;
-        }
+        if (newDeaths.length === 0) return;
 
         newDeaths.forEach(death => processedDeathTimestamps.add(death.timestamp));
         
         const newPlayerIds = newDeaths.map(death => death.player_id);
+        // Filtra para não mostrar minha própria morte pelo banner global (já vi local)
+        const others = newPlayerIds.filter(id => id !== userId);
+        
+        if (others.length === 0) return;
 
         const { data: players, error: playersError } = await supabase
             .from('players')
             .select('id, name')
-            .in('id', newPlayerIds);
+            .in('id', others);
 
-        if (playersError) {
-            console.warn("Erro ao buscar nomes dos jogadores:", playersError.message);
-            return;
-        }
+        if (playersError) return;
 
         const playerNamesMap = new Map(players.map(p => [p.id, p.name]));
         
-        newDeaths.forEach(death => {
-            const name = playerNamesMap.get(death.player_id);
+        others.forEach(pid => {
+            const name = playerNamesMap.get(pid);
             if (name) {
                 deathNotificationQueue.push(name);
             }
         });
-
         processDeathNotificationQueue();
 
-    } catch (e) {
-        console.error("Exceção em checkOtherPlayerDeaths:", e);
-    }
+    } catch (e) {}
 }
 
 // =======================================================================
@@ -804,13 +758,7 @@ async function handleRaidCountdown(raidData) {
     if (attackPara) attackPara.style.display = 'none';
     const countdownContainer = $id('raidCountdownContainer');
     if (countdownContainer) countdownContainer.style.display = 'block';
-    let starterName = 'O líder da guilda';
-    try {
-        const { data: logData, error } = await supabase.from('guild_logs').select('players(name)').eq('guild_id', raidData.guild_id).eq('action', 'start_guild_raid').order('created_at', { ascending: false }).limit(1).single();
-        if (!error && logData?.players?.name) starterName = logData.players.name;
-    } catch(e) {
-        console.warn("Não foi possível buscar o nome de quem iniciou a raid.", e);
-    }
+    
     const msgEl = $id('raidCountdownMessage');
     if (msgEl) msgEl.innerHTML = `A Raid foi iniciada.<br>A Torre da Desolação começará em:`;
     const timerEl = $id('raidCountdownTimer');
@@ -883,20 +831,19 @@ async function continueLoadingRaid(raidData) {
     await cachePlayerStats(); // Cachear stats para o modo otimista
     loadBatchState(); // Recupera fila de batch se houver
 
-    await refreshRanking();
     await checkPendingRaidRewards();
 
     deathNotificationQueue = [];
     isDisplayingDeathNotification = false;
     processedDeathTimestamps.clear(); 
-    playerRankInfo = { rank: null, damage: 0 };
-    updatePlayerRankUi(null, 0);
+    
+    // Configura ranking UI apenas para remover elemento se existir (limpeza)
+    const rankEl = $id("raidDamageRankingList");
+    if(rankEl) rankEl.innerHTML = "";
 
-    startPolling();
-    startSecondaryPolling();
     startUISecondTicker();
     startRaidTimer();
-    startVisualBossAttackTicker(raidData.last_boss_attack_at);
+    startOptimisticBossCombat(); // Ticker otimista do chefe
     startFloorMusic();
     openCombatModal();
 }
@@ -924,21 +871,6 @@ async function loadMonsterForFloor(floor) {
   } catch (e) {
     console.error("loadMonsterForFloor", e);
   }
-}
-
-async function refreshRanking() {
-  if (!currentRaidId) return;
-  try {
-    const { data } = await supabase.from("guild_raid_damage").select("player_id, damage, players(name)").eq("raid_id", currentRaidId).order("damage", { ascending: false }).limit(10);
-    const ul = $id("raidDamageRankingList");
-    if (!ul) return;
-    ul.innerHTML = "";
-    (data || []).forEach(r => {
-      const li = document.createElement("li");
-      li.textContent = `${r.players?.name || "??"} — ${Number(r.damage || 0).toLocaleString()}`;
-      ul.appendChild(li);
-    });
-  } catch (e) { console.error("refreshRanking", e); }
 }
 
 async function loadAttempts() {
@@ -1018,42 +950,30 @@ async function loadInitialPlayerState() {
         return;
     }
     playerMaxHealth = playerDetails.health || 1;
+    // Otimista: Seta vida cheia ou busca da tabela se tivesse
+    // Mas o get_player_details retorna o MAXIMO. Precisamos do atual.
+    // Buscaremos do players table para o initial load
+    const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until, avatar_url").eq("id", userId).single();
+    if(pData) {
+        localPlayerHp = pData.raid_player_health !== null ? pData.raid_player_health : playerMaxHealth;
+        _playerReviveUntil = pData.revive_until;
+        if(pData.avatar_url && $id("raidPlayerAvatar")) $id("raidPlayerAvatar").src = pData.avatar_url;
+    } else {
+        localPlayerHp = playerMaxHealth;
+    }
     
-    updatePlayerHpUi(playerMaxHealth, playerMaxHealth);
+    updatePlayerHpUi(localPlayerHp, playerMaxHealth);
 
-    const av = $id("raidPlayerAvatar");
-    const { data: pData } = await supabase.from("players").select("avatar_url").eq("id", userId).single();
-    if (av && pData?.avatar_url) av.src = pData.avatar_url;
+    if (isPlayerDeadLocal()) {
+        if (!reviveUITickerInterval) startReviveUITicker();
+    }
 
   } catch (e) {
     console.error("loadInitialPlayerState", e);
   }
 }
 
-async function refreshAttemptsServerSideOnceIfNeeded() {
-  if (!currentRaidId || !userId || refreshAttemptsPending) return;
-  // Com batching, a lógica de refresh é menos crítica, pois o cliente calcula.
-  // Mas mantemos caso haja drift grande.
-  const { shownAttacks } = computeShownAttacksAndRemaining();
-  const shouldRefresh = (shownAttacks > attacksLeft);
-  if (!shouldRefresh) return;
-  refreshAttemptsPending = true;
-  try {
-    const { data } = await supabase.rpc("refresh_guild_raid_attempts", { p_raid_id: currentRaidId, p_player_id: userId });
-    const payload = Array.isArray(data) ? data[0] : data;
-    if (payload) {
-      attacksLeft = Number(payload.attempts_left || 0);
-      lastAttackAt = payload.last_attack_at ? new Date(payload.last_attack_at) : null;
-    }
-    updateAttackUI();
-  } catch (e) {
-    console.error("refreshAttemptsServerSideOnceIfNeeded", e);
-  } finally {
-    refreshAttemptsPending = false;
-  }
-}
-
-// --- FUNÇÃO DE ATAQUE OTIMISTA (Substitui performAttack) ---
+// --- FUNÇÃO DE ATAQUE OTIMISTA ---
 async function performAttackOptimistic() {
     if (!currentRaidId || !userId || isProcessingAction) return;
     if (isPlayerDeadLocal()) { showRaidAlert("Você está morto."); return; }
@@ -1063,12 +983,8 @@ async function performAttackOptimistic() {
     const visualAttacksLeft = shownAttacks - pendingAttacksQueue; 
 
     if (visualAttacksLeft <= 0) {
-        // Tenta um refresh de emergência
-        await refreshAttemptsServerSideOnceIfNeeded();
-        if ((computeShownAttacksAndRemaining().shownAttacks - pendingAttacksQueue) <= 0) {
-            showRaidAlert("Sem ataques. Aguarde regeneração.");
-            return;
-        }
+        showRaidAlert("Sem ataques. Aguarde regeneração.");
+        return;
     }
 
     // 2. Calcular Dano Local (RNG JS)
@@ -1099,7 +1015,7 @@ async function performAttackOptimistic() {
     pendingAttacksQueue++;
     localDamageDealtInBatch += damage;
     
-    // Inicia cooldown visual se estava full
+    // Inicia cooldown visual se estava full e tinha ataques sobrando
     if (attacksLeft >= MAX_ATTACKS && lastAttackAt === null) {
          lastAttackAt = new Date(); 
     }
@@ -1130,7 +1046,6 @@ async function triggerBatchSync() {
     saveBatchState(); 
     if (batchSyncTimer) clearTimeout(batchSyncTimer);
 
-    // Atualiza UI para refletir fila vazia
     updateAttackUI();
 
     try {
@@ -1148,14 +1063,17 @@ async function triggerBatchSync() {
 
         // --- RECONCILIAÇÃO ---
         updateHpBar(data.monster_health, data.max_monster_health);
+        
+        // Sincroniza HP do jogador (importante se houve dano de boss no servidor que não vimos)
+        if (data.player_health !== undefined) {
+            localPlayerHp = data.player_health;
+            updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+        }
 
-        // Atualizar Tentativas Reais (Correção de Drift)
+        // Atualizar Tentativas Reais (Correção de Drift e Compras)
         attacksLeft = data.attacks_left;
         lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
         updateAttackUI();
-
-        // Atualizar Rank e Dano Total
-        updatePlayerRankUi(data.player_rank, data.new_total_damage);
 
         // Checar Morte (Recompensas)
         if (data.monster_health <= 0) {
@@ -1173,17 +1091,21 @@ async function triggerBatchSync() {
                 rewardCallback();
              }
         }
+        
+        // Verifica mortes globais (apenas ao syncar, para economizar polling)
+        if (currentFloor % 5 === 0) {
+            checkOtherPlayerDeaths();
+        }
 
     } catch (e) {
         console.error("Falha no Sync Batch:", e);
-        // Rollback: Devolve os ataques para a fila para tentar de novo
+        // Rollback: Devolve os ataques para a fila
         pendingAttacksQueue += attacksToSend;
         localDamageDealtInBatch += expectedDamage;
         saveBatchState();
         updateAttackUI();
-        // Tenta de novo em 5s
         batchSyncTimer = setTimeout(() => { isBatchSyncing = false; triggerBatchSync(); }, 5000);
-        return; // Retorna aqui para não setar isBatchSyncing false abaixo
+        return; 
     }
     isBatchSyncing = false;
 }
@@ -1281,120 +1203,110 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
   }
 }
 
-function getSimulatedBossDamage() {
-    const baseDamage = Math.max(1, Math.floor(maxMonsterHealth * 0.02));
-    return baseDamage;
+// ==========================================================
+// SISTEMA OTIMISTA DE CHEFE (Substitui Polling de Boss Tick)
+// ==========================================================
+function startOptimisticBossCombat() {
+    stopOptimisticBossCombat();
+    if ((currentFloor % 5) !== 0) return;
+
+    // Sincroniza timer inicial (arbitrário ou baseado no last_attack_at do load)
+    // Se não tiver info, assume que próximo ataque é em 30s
+    const now = Date.now();
+    nextBossAttackTime = now + (BOSS_ATTACK_INTERVAL_SECONDS * 1000);
+
+    optimisticBossInterval = setInterval(async () => {
+        if (isProcessingAction || isPlayerDeadLocal()) return;
+        
+        const now = Date.now();
+        if (now >= nextBossAttackTime) {
+            // Executa ataque local
+            await simulateLocalBossAttackLogic();
+            nextBossAttackTime = now + (BOSS_ATTACK_INTERVAL_SECONDS * 1000);
+        }
+    }, 1000); // Checa a cada segundo
 }
 
-function simulateLocalBossAttack() {
-    if (isProcessingAction || isPlayerDeadLocal()) return;
+function stopOptimisticBossCombat() {
+    if (optimisticBossInterval) clearInterval(optimisticBossInterval);
+    optimisticBossInterval = null;
+}
 
+async function simulateLocalBossAttackLogic() {
+    if (!playerStatsCache) await cachePlayerStats();
+    
+    // Vídeo e Visual
     const randomAttackVideo = BOSS_ATTACK_VIDEO_URLS[Math.floor(Math.random() * BOSS_ATTACK_VIDEO_URLS.length)];
     queueAction(() => {
         playVideo(randomAttackVideo, () => {
-            const visualDamage = getSimulatedBossDamage();
-            displayFloatingDamageOver($id("raidPlayerArea"), visualDamage, false);
-            
-            const playerAvatar = $id("raidPlayerAvatar");
-            if (playerAvatar) {
+             // Cálculo Otimista de Dano
+             // base_health * 0.02 - (def/10)
+             // Nota: maxMonsterHealth aqui é o HP do monstro, não do Boss Base Config. 
+             // Mas assumimos que maxMonsterHealth carregado no loadRaid é o correto para o cálculo.
+             
+             const stats = playerStatsCache || { defense: 0, evasion: 0, health: 1 };
+             
+             // Check evasion
+             const isEvaded = (Math.random() * 100) < stats.evasion;
+             
+             if (isEvaded) {
+                 displayFloatingDamageOver($id("raidPlayerArea"), "Errou!", false);
+                 return;
+             }
+
+             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.02));
+             const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
+             
+             localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
+             updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+             
+             displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, false);
+             
+             const playerAvatar = $id("raidPlayerAvatar");
+             if (playerAvatar) {
                 playerAvatar.classList.add('shake-animation');
                 setTimeout(() => playerAvatar.classList.remove('shake-animation'), 1000);
-            }
+             }
+
+             // Check Death
+             if (localPlayerHp <= 0) {
+                 handleOptimisticDeath();
+             }
         });
     });
 }
 
-function syncBossAttackTimer(lastAttackAtFromServer) {
-    if (!lastAttackAtFromServer) {
-        nextBossAttackAt = null; 
-        return;
-    }
-
-    const now = new Date().getTime();
-    const lastAttackTime = new Date(lastAttackAtFromServer).getTime();
-    const intervalMs = BOSS_ATTACK_INTERVAL_SECONDS * 1000;
-
-    const timeSinceLast = now - lastAttackTime;
-    if (timeSinceLast < 0) {
-        nextBossAttackAt = new Date(lastAttackTime + intervalMs);
-        return;
-    }
-
-    const ticksPassed = Math.floor(timeSinceLast / intervalMs);
-    const nextAttackTimestamp = lastAttackTime + (ticksPassed + 1) * intervalMs;
-    nextBossAttackAt = new Date(nextAttackTimestamp);
-}
-
-function startVisualBossAttackTicker(lastAttackAtFromServer) {
-    stopVisualBossAttackTicker();
-    if (currentFloor % 5 !== 0) return;
-
-    syncBossAttackTimer(lastAttackAtFromServer);
-
-    visualBossAttackInterval = setInterval(() => {
-        if (!nextBossAttackAt || isProcessingAction) return;
-
-        if (new Date() >= nextBossAttackAt) {
-            simulateLocalBossAttack();
-            nextBossAttackAt = new Date(nextBossAttackAt.getTime() + (BOSS_ATTACK_INTERVAL_SECONDS * 1000));
-        }
-    }, 500);
-}
-
-function stopVisualBossAttackTicker() {
-    if (visualBossAttackInterval) clearInterval(visualBossAttackInterval);
-    visualBossAttackInterval = null;
-    nextBossAttackAt = null;
-}
-
-function startReviveTicker() {
-  stopReviveTicker();
-  reviveTickerInterval = setInterval(async () => {
-    if (!_playerReviveUntil) return;
+function handleOptimisticDeath() {
+    // Define timer de revive local (60s padrão - 3s de margem vídeo)
+    const reviveTimeMs = 57000; 
+    _playerReviveUntil = new Date(Date.now() + reviveTimeMs).toISOString();
     
-    const remaining = (new Date(_playerReviveUntil) - new Date()) / 1000;
-    
-    if (remaining <= 0) {
-      const { data: reviveResult, error } = await supabase.rpc("player_revive_if_needed", { p_player_id: userId });
-
-      if (error) {
-        console.error("Erro ao tentar reviver jogador:", error);
-        await loadInitialPlayerState();
-        return;
-      }
-
-      if (reviveResult && reviveResult.action === 'revived') {
-        _playerReviveUntil = null;
-        updatePlayerHpUi(reviveResult.new_health, reviveResult.new_health);
-        updateAttackUI();
-        
-        stopReviveTicker();
-        stopReviveUITicker();
-      } else {
-        const { data: state } = await supabase.rpc('get_raid_essential_state', { p_raid_id: currentRaidId, p_player_id: userId });
-         if(state) _playerReviveUntil = state.revive_until;
-      }
-    }
-  }, REVIVE_CHECK_MS);
+    updateAttackUI(); // Bloqueia botões
+    displayDeathNotification(userName || "Você"); // Banner para mim mesmo
+    startReviveUITicker();
 }
 
 function startReviveUITicker() {
     stopReviveUITicker();
     reviveUITickerInterval = setInterval(() => {
         if (!_playerReviveUntil) {
-            setPlayerReviveOverlayText(0);
             stopReviveUITicker();
             return;
         }
         const remaining = Math.ceil((new Date(_playerReviveUntil) - new Date()) / 1000);
         setPlayerReviveOverlayText(Math.max(0, remaining));
 
+        if (remaining <= 0) {
+            // Revive Local Otimista
+            _playerReviveUntil = null;
+            localPlayerHp = playerMaxHealth;
+            updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+            setPlayerReviveOverlayText(0);
+            updateAttackUI(); // Desbloqueia botões
+            stopReviveUITicker();
+            // Nota: Não chamamos servidor. Quando o jogador atacar, o servidor verá que o tempo passou e autorizará.
+        }
     }, 1000);
-}
-
-function stopReviveTicker() {
-  if (reviveTickerInterval) clearInterval(reviveTickerInterval);
-  reviveTickerInterval = null;
 }
 
 function stopReviveUITicker() {
@@ -1422,94 +1334,13 @@ async function checkPendingRaidRewards() {
     }
   } catch (e) { console.error("checkPendingRaidRewards", e); }
 }
-function clearGuildCache(guildId) {
-    if (!guildId) return;
-    try {
-        localStorage.removeItem(`guild_info_${guildId}`);
-        console.log(`[Raid] Cache da guilda ${guildId} limpo após fim da raid.`);
-    } catch (e) { console.warn(e); }
-}
-
-function startPolling() {
-  stopPolling();
-  // Polling ajustado para 20s. 
-  // Nota: A atualização do player agora acontece no triggerBatchSync,
-  // mas o polling ainda é necessário para ver dano dos outros, morte de outros, 
-  // ataques do boss em tempo real no servidor, etc.
-  pollInterval = setInterval(async () => {
-    if (!currentRaidId || !userId || isProcessingAction) return;
-
-    const { data: state, error } = await supabase.rpc('get_raid_essential_state', {
-      p_raid_id: currentRaidId,
-      p_player_id: userId
-    });
-
-    if (error || !state || !state.success) {
-      if (!state?.active) {
-        clearGuildCache(userGuildId);
-          closeCombatModal();
-          showRaidAlert("A Raid terminou.");
-      }
-      return;
-    }
-
-    if (!state.active) {
-      closeCombatModal();
-      showRaidAlert("A Raid terminou.");
-      return;
-    }
-
-    // Só atualiza HP visual se não estivermos "batendo" agora (evitar jitter)
-    if (pendingAttacksQueue === 0) {
-        updateHpBar(state.monster_health, state.initial_monster_health);
-    }
-    
-    updatePlayerHpUi(state.player_health, playerMaxHealth);
-    syncBossAttackTimer(state.last_boss_attack_at);
-
-    _playerReviveUntil = state.revive_until;
-    if (isPlayerDeadLocal()) {
-      if (!reviveTickerInterval) startReviveTicker();
-      if (!reviveUITickerInterval) startReviveUITicker();
-    } else {
-      if (reviveTickerInterval) stopReviveTicker();
-      if (reviveUITickerInterval) stopReviveUITicker();
-    }
-  }, RAID_POLL_MS);
-}
-
-function startSecondaryPolling() {
-    stopSecondaryPolling();
-    secondaryPollInterval = setInterval(() => {
-        if (!currentRaidId || isProcessingAction) return;
-        refreshRanking().catch(e => console.warn("Falha ao atualizar ranking geral:", e));
-        if (currentFloor % 5 === 0) {
-            checkOtherPlayerDeaths().catch(e => console.warn("Falha ao checar mortes:", e));
-        }
-    }, SECONDARY_POLL_MS);
-}
-
-function stopPolling() {
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = null;
-}
-
-function stopSecondaryPolling() {
-    if (secondaryPollInterval) clearInterval(secondaryPollInterval);
-    secondaryPollInterval = null;
-}
 
 function startUISecondTicker() {
   stopUISecondTicker();
   uiSecondInterval = setInterval(async () => {
     updateAttackUI();
-    // Se o cliente acha que deve ter ataques mas o servidor ainda não confirmou,
-    // podemos checar se o contador local já estourou o cooldown.
-    const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
-    // Se visualmente temos 0 e timer 0, mas attacksLeft é menor do que devia
-    if (secondsToNext === 0 && shownAttacks > attacksLeft && pendingAttacksQueue === 0) {
-       await refreshAttemptsServerSideOnceIfNeeded();
-    }
+    // Como polling foi removido, não forçamos refresh via server se o visual estiver desincronizado
+    // Apenas confiamos na lógica local + syncs esporádicos
   }, 1000);
 }
 
@@ -1553,12 +1384,9 @@ function closeCombatModal(){
   // Garante que se fechar, tenta enviar o que sobrou
   if (pendingAttacksQueue > 0) triggerBatchSync();
 
-  stopPolling(); 
-  stopSecondaryPolling();
   stopUISecondTicker(); 
   clearRaidTimer(); 
-  stopVisualBossAttackTicker();
-  stopReviveTicker();
+  stopOptimisticBossCombat();
   stopReviveUITicker();
   stopAllFloorMusic();
   clearCountdown();
@@ -1638,7 +1466,6 @@ function bindEvents() {
     }
   });
 
-  // Alterado para chamar performAttackOptimistic
   $id("raidAttackBtn")?.addEventListener("click", async (e) => {
     try { unlockMedia(); } catch(e) { console.warn('unlockMedia error', e); }
     try { await performAttackOptimistic(); } catch(err) { console.error('performAttackOptimistic error', err); }
@@ -1739,10 +1566,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (purchased > 0) {
           showRaidAlert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
-          // Atualiza attacksLeft localmente ao comprar
+          // Correção de inconsistência: Adiciona explicitamente ao state local
+          // Como removemos polling, isso não será sobrescrito erroneamente
           attacksLeft += purchased; 
           updateAttackUI();
-          if (typeof loadAttempts === 'function') await loadAttempts();
         }
       } catch (e) {
         console.error("[raid] buyConfirm erro:", e);

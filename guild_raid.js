@@ -1080,12 +1080,7 @@ async function triggerBatchSync() {
             throw new Error(error.message);
         }
 
-        // [FIX - Race Condition / Clock Skew]
-        // O servidor pode retornar "dead" se o tempo do servidor estiver um pouco atrás do cliente,
-        // mesmo que o cliente já tenha revivido.
-        // Se revive_until estiver no futuro, mas MUITO próximo de agora (ex: < 5s) e nós estivermos
-        // localmente vivos, ignoramos o sinal de morte para evitar o loop de morte/glitch visual.
-        
+      
         let serverReviveUntil = data.revive_until ? new Date(data.revive_until) : null;
         const now = new Date();
 
@@ -1093,8 +1088,8 @@ async function triggerBatchSync() {
             const msUntilRevive = serverReviveUntil.getTime() - now.getTime();
             const isLocallyAlive = !_playerReviveUntil || new Date(_playerReviveUntil) <= now;
 
-            // Se for um "atraso" pequeno (menos de 5s) e já estamos vivos, ignoramos.
-            if (isLocallyAlive && msUntilRevive < 5000) {
+            
+            if (isLocallyAlive && msUntilRevive < 13000) {
                  console.log("[Sync] Ignorando sinal de morte do servidor (Clock Skew/Race Condition)", msUntilRevive);
             } else {
                  // É uma morte real ou tempo restante longo

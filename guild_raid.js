@@ -1322,7 +1322,7 @@ async function simulateLocalBossAttackLogic() {
 }
 
 function handleOptimisticDeath() {
-    const reviveTimeMs = 52000; 
+    const reviveTimeMs = 57000; 
     _playerReviveUntil = new Date(Date.now() + reviveTimeMs).toISOString();
     
     updateAttackUI(); 

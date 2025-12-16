@@ -12,7 +12,7 @@ const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
 const BATCH_THRESHOLD = 3;
-const BATCH_DEBOUNCE_MS = 7000;
+const BATCH_DEBOUNCE_MS = 40000;
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -1300,7 +1300,7 @@ async function simulateLocalBossAttackLogic() {
                  return;
              }
 
-             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.04));
+             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.07));
              const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
              
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
@@ -1322,7 +1322,7 @@ async function simulateLocalBossAttackLogic() {
 }
 
 function handleOptimisticDeath() {
-    const reviveTimeMs = 57000; 
+    const reviveTimeMs = 62000; 
     _playerReviveUntil = new Date(Date.now() + reviveTimeMs).toISOString();
     
     updateAttackUI(); 

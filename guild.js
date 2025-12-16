@@ -587,7 +587,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       
       // Salva os novos dados no cache por 1 hora
-      setCache(cacheKey, guildData, 60 * 60 * 1000);
+      setCache(cacheKey, guildData, 24 * 60 * 60 * 1000);
       await renderGuildUI(guildData);
 
     } catch(e){

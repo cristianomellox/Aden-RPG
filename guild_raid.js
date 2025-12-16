@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v13.1) - Fix: 0/3 Stuck & Death Banner Sync");
+console.log("guild_raid.js (v13.2) - Fix: Death Loop Race Condition");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -1076,36 +1076,49 @@ async function triggerBatchSync() {
             p_attack_count: attacksToSend
         });
 
-        // [FIX - Tratamento de Erro vs Morte]
         if (error) {
             throw new Error(error.message);
         }
 
-        // Se o sucesso for false mas tiver revive_until, tratamos como morte, não erro
-        // O SQL atualizado retorna success: true mesmo se morto, mas vamos garantir.
-        if (data.revive_until && new Date(data.revive_until) > new Date()) {
-             // O jogador morreu durante o batch ou já estava morto
-             _playerReviveUntil = data.revive_until;
-             localPlayerHp = 0;
-             updatePlayerHpUi(0, playerMaxHealth);
-             
-             // Inicia timer de revive
-             if (!reviveUITickerInterval) startReviveUITicker();
-             
-             // Mostra banner se ainda não mostrou
-             displayDeathNotification(userName || "Você");
-             
-             // NÃO faz rollback de ataques se morreu. Os ataques foram "gastos" ou invalidados.
-             // Apenas atualiza o contador real do server
-             if (data.attacks_left !== undefined) {
-                 attacksLeft = data.attacks_left;
-                 lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
-                 saveAttemptsCache(attacksLeft, lastAttackAt);
-             }
-             updateAttackUI();
-             
-             isBatchSyncing = false;
-             return;
+        // [FIX - Race Condition / Clock Skew]
+        // O servidor pode retornar "dead" se o tempo do servidor estiver um pouco atrás do cliente,
+        // mesmo que o cliente já tenha revivido.
+        // Se revive_until estiver no futuro, mas MUITO próximo de agora (ex: < 5s) e nós estivermos
+        // localmente vivos, ignoramos o sinal de morte para evitar o loop de morte/glitch visual.
+        
+        let serverReviveUntil = data.revive_until ? new Date(data.revive_until) : null;
+        const now = new Date();
+
+        if (serverReviveUntil && serverReviveUntil > now) {
+            const msUntilRevive = serverReviveUntil.getTime() - now.getTime();
+            const isLocallyAlive = !_playerReviveUntil || new Date(_playerReviveUntil) <= now;
+
+            // Se for um "atraso" pequeno (menos de 5s) e já estamos vivos, ignoramos.
+            if (isLocallyAlive && msUntilRevive < 5000) {
+                 console.log("[Sync] Ignorando sinal de morte do servidor (Clock Skew/Race Condition)", msUntilRevive);
+            } else {
+                 // É uma morte real ou tempo restante longo
+                 _playerReviveUntil = data.revive_until;
+                 localPlayerHp = 0;
+                 updatePlayerHpUi(0, playerMaxHealth);
+                 
+                 // Inicia timer de revive
+                 if (!reviveUITickerInterval) startReviveUITicker();
+                 
+                 // Mostra banner se ainda não mostrou
+                 displayDeathNotification(userName || "Você");
+                 
+                 // NÃO faz rollback de ataques se morreu. Os ataques foram "gastos" ou invalidados.
+                 if (data.attacks_left !== undefined) {
+                     attacksLeft = data.attacks_left;
+                     lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+                     saveAttemptsCache(attacksLeft, lastAttackAt);
+                 }
+                 updateAttackUI();
+                 
+                 isBatchSyncing = false;
+                 return;
+            }
         }
 
         if (!data.success) {
@@ -1116,6 +1129,7 @@ async function triggerBatchSync() {
         updateHpBar(data.monster_health, data.max_monster_health);
         
         if (data.player_health !== undefined) {
+             // Só atualiza HP para baixo se não estiver morto (a lógica de morte foi tratada acima)
              localPlayerHp = Math.min(localPlayerHp, data.player_health);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
         }

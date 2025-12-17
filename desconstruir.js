@@ -111,55 +111,36 @@
       if (details) hideModal(details);
 
       try {
-        // 1) Remove o item destruído
-        allInventoryItems = allInventoryItems.filter(inv => inv.id !== itemId);
-        await removeCacheItem(itemId);
-
-        // 2) Atualiza fragmentos retornados
-        const fragMap = { R: 19, SR: 21, SSR: 22 };
-        for (const [rarity, qty] of Object.entries(execData.fragments_returned || {})) {
-          if (qty > 0) {
-            const fragId = fragMap[rarity];
-            const { data: fragData } = await __client
-              .from("inventory_items")
-              .select("*, items(*)")
-              .eq("player_id", globalUser.id)
-              .eq("item_id", fragId)
-              .single();
-
-            if (fragData) {
-              const idx = allInventoryItems.findIndex(it => it.item_id === fragId);
-              if (idx !== -1) {
-                allInventoryItems[idx].quantity = fragData.quantity;
-              } else {
-                allInventoryItems.push(fragData);
-              }
-              await updateCacheItem(fragData);
-            }
-          }
+        // =======================================================
+        // LÓGICA ZERO EGRESS ATUALIZADA
+        // =======================================================
+        
+        // 1) Remove o item destruído do cache local
+        if (typeof removeCacheItem === 'function' && Array.isArray(allInventoryItems)) {
+             allInventoryItems = allInventoryItems.filter(inv => inv.id !== itemId);
+             await removeCacheItem(itemId);
         }
 
-        // 3) Atualiza cristais do jogador
-        const { data: updatedPlayer } = await __client
-          .from("players")
-          .select("crystals")
-          .eq("id", globalUser.id)
-          .single();
-
-        if (updatedPlayer) {
-          playerBaseStats.crystals = updatedPlayer.crystals;
+        // 2) Adiciona/Atualiza os fragmentos retornados
+        if (execData.new_inventory_items && window.adenUpdateInventoryItem) {
+            await window.adenUpdateInventoryItem(execData.new_inventory_items);
         }
 
-        // 4) Render UI
-        equippedItems = allInventoryItems.filter(it => it.equipped_slot !== null);
-        calculatePlayerStats();
-        renderEquippedItems();
-        loadItems("all", allInventoryItems);
+        // 3) Atualiza cristais do jogador (playerBaseStats)
+        if (typeof playerBaseStats !== 'undefined' && execData.crystals_spent) {
+            playerBaseStats.crystals = Math.max(0, (playerBaseStats.crystals || 0) - execData.crystals_spent);
+            if (typeof saveCache === 'function') saveCache(allInventoryItems); // Salva stats
+        }
+        
+        // 4) Atualiza UI
+        if (typeof calculatePlayerStats === 'function') calculatePlayerStats();
+        if (typeof renderEquippedItems === 'function') renderEquippedItems();
+        if (typeof loadItems === 'function') loadItems("all");
 
         showAlert(`Item desconstruído!\n\nRetorno:\nR: ${execData.fragments_returned.R}\nSR: ${execData.fragments_returned.SR}\nSSR: ${execData.fragments_returned.SSR}\nCristais gastos: ${execData.crystals_spent}`);
       } catch (err) {
         console.error("Erro pós-desconstrução:", err);
-        showAlert("Item desconstruído, mas houve falha ao atualizar a bolsa.");
+        showAlert("Item desconstruído, mas houve falha ao atualizar a visualização.");
       }
     };
   }

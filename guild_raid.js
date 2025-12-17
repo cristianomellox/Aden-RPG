@@ -1,4 +1,4 @@
-console.log("guild_raid.js (v14.0) - Fix: Egress Optimization & Smart Sync");
+console.log("guild_raid.js (v13.1) - Fix: 0/3 Stuck & Death Banner Sync");
 
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
@@ -11,10 +11,8 @@ const ATTEMPTS_CACHE_DURATION_MS = 15 * 60 * 1000;
 const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
-// Configuração de Batch e Sync
-const BATCH_THRESHOLD = 3; 
-const BATCH_DEBOUNCE_MS = 4000; // 4 segundos
-const HEARTBEAT_INTERVAL_MS = 10000; // 10 segundos (baixa frequência para economizar egress)
+const BATCH_THRESHOLD = 3;
+const BATCH_DEBOUNCE_MS = 40000;
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -56,13 +54,12 @@ let processedDeathTimestamps = new Set();
 let optimisticBossInterval = null;
 let nextBossAttackTime = 0;
 
-// Otimista & Batch & Heartbeat
+// Otimista & Batch
 let playerStatsCache = null; 
 let pendingAttacksQueue = 0; 
 let batchSyncTimer = null; 
 let localDamageDealtInBatch = 0; 
 let isBatchSyncing = false; 
-let heartbeatInterval = null; // Novo Heartbeat
 
 let isSwitchingFloors = false; 
 
@@ -769,69 +766,6 @@ async function handleRaidCountdown(raidData) {
     countdownInterval = setInterval(updateTimer, 1000);
 }
 
-// -------------------------------------------------------------
-// [NOVO] Heartbeat Inteligente para Sync Econômico (Substitui Realtime)
-// -------------------------------------------------------------
-function startRaidHeartbeat() {
-    stopRaidHeartbeat();
-    heartbeatInterval = setInterval(async () => {
-        // 1. Condições de Economia Máxima:
-        if (!currentRaidId || !userId || isProcessingAction) return;
-        if (document.hidden) return; // Não roda se aba estiver minimizada
-        if (isBatchSyncing || pendingAttacksQueue > 0) return; // Não roda se já estiver sincronizando via batch
-        
-        try {
-            // Payload minúsculo (~200 bytes)
-            const { data, error } = await supabase.rpc("get_raid_essential_state", { 
-                p_raid_id: currentRaidId, 
-                p_player_id: userId 
-            });
-
-            if (error || !data || !data.success) return;
-
-            if (!data.active) {
-                showRaidAlert("A Raid foi encerrada.");
-                closeCombatModal();
-                return;
-            }
-
-            // 2. Detecção de Mudança de Andar (Sync de Teleporte)
-            // Se o max_health mudou, é outro monstro -> Reload total
-            if (data.initial_monster_health && data.initial_monster_health !== maxMonsterHealth) {
-                console.log("[Heartbeat] Novo andar detectado. Recarregando...");
-                loadRaid();
-                return;
-            }
-
-            // 3. Reconciliação Passiva de HP (Apenas se não estamos atacando)
-            if (pendingAttacksQueue === 0) {
-                updateHpBar(data.monster_health, data.initial_monster_health);
-                // Sync passivo de vida do player (regeneração ou dano de boss fora de tela)
-                if (data.player_health !== undefined) {
-                    if (Math.abs(localPlayerHp - data.player_health) > 5) {
-                        localPlayerHp = data.player_health;
-                        updatePlayerHpUi(localPlayerHp, playerMaxHealth);
-                    }
-                }
-            }
-
-            // 4. Morte Remota
-            if (data.monster_health <= 0 && maxMonsterHealth > 0) {
-                console.log("[Heartbeat] Boss morreu remotamente. Recarregando...");
-                loadRaid();
-            }
-
-        } catch (e) {
-            console.warn("[Heartbeat] Skip", e);
-        }
-    }, HEARTBEAT_INTERVAL_MS);
-}
-
-function stopRaidHeartbeat() {
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = null;
-}
-
 async function loadRaid() {
     if (!userGuildId) return;
     stopAllFloorMusic();
@@ -895,10 +829,6 @@ async function continueLoadingRaid(raidData) {
     startRaidTimer();
     startOptimisticBossCombat();
     startFloorMusic();
-    
-    // [NOVO] Inicia o Heartbeat econômico
-    startRaidHeartbeat();
-    
     openCombatModal();
 }
 
@@ -974,7 +904,11 @@ async function loadAttempts() {
 function computeShownAttacksAndRemaining() {
   const now = new Date();
   
+  // [FIX 1 - Robustez do Timer]
+  // Se temos menos que o máximo e o timer é nulo, houve um desync.
+  // Forçamos um "lastAttackAt" para agora para evitar UI travada em 0/3 sem texto.
   if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
+      // Auto-correção visual: assume que gastou agora
       return { shownAttacks: attacksLeft, secondsToNext: ATTACK_COOLDOWN_SECONDS };
   }
 
@@ -1007,6 +941,7 @@ function updateAttackUI() {
 
   attacksEl.textContent = `${visualAttacksLeft} / ${MAX_ATTACKS}`;
   
+  // [FIX] Se estiver 0/3 e timer vazio, exibe algo genérico ou força estado de espera
   if (visualAttacksLeft < MAX_ATTACKS && secondsToNext <= 0) {
       cooldownEl.textContent = "Recuperando...";
   } else {
@@ -1141,18 +1076,27 @@ async function triggerBatchSync() {
             p_attack_count: attacksToSend
         });
 
+        // [FIX - Tratamento de Erro vs Morte]
         if (error) {
             throw new Error(error.message);
         }
 
+        // Se o sucesso for false mas tiver revive_until, tratamos como morte, não erro
+        // O SQL atualizado retorna success: true mesmo se morto, mas vamos garantir.
         if (data.revive_until && new Date(data.revive_until) > new Date()) {
+             // O jogador morreu durante o batch ou já estava morto
              _playerReviveUntil = data.revive_until;
              localPlayerHp = 0;
              updatePlayerHpUi(0, playerMaxHealth);
              
+             // Inicia timer de revive
              if (!reviveUITickerInterval) startReviveUITicker();
+             
+             // Mostra banner se ainda não mostrou
              displayDeathNotification(userName || "Você");
              
+             // NÃO faz rollback de ataques se morreu. Os ataques foram "gastos" ou invalidados.
+             // Apenas atualiza o contador real do server
              if (data.attacks_left !== undefined) {
                  attacksLeft = data.attacks_left;
                  lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
@@ -1168,12 +1112,25 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
-        // --- Sucesso Normal & Correção de "HP Passeando" ---
-        // Se o servidor diz que o HP está cheio (max resetou), ou mudou drasticamente, aceita.
-        // Se o HP está baixo, usamos o valor do servidor (que já computou nosso dano e o dos outros).
+        // --- Sucesso Normal ---
+        updateHpBar(data.monster_health, data.max_monster_health);
         
+        if (data.player_health !== undefined) {
+             localPlayerHp = Math.min(localPlayerHp, data.player_health);
+             updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+        }
+
+        attacksLeft = data.attacks_left;
+        lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
+        
+        if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
+            lastAttackAt = new Date();
+        }
+
+        saveAttemptsCache(attacksLeft, lastAttackAt);
+        updateAttackUI();
+
         if (data.monster_health <= 0) {
-            updateHpBar(0, data.max_monster_health);
              const floorDefeated = currentFloor; 
              const wasBoss = floorDefeated % 5 === 0;
              const rewardCallback = () => {
@@ -1188,32 +1145,9 @@ async function triggerBatchSync() {
                 rewardCallback();
              }
         } else {
-             // Atualiza HP Visual (Resolve o Rubber Banding pois o pendente agora é zero)
-             updateHpBar(data.monster_health, data.max_monster_health);
-             
-             // Se o Max HP do server for diferente do local, houve troca de andar "silenciosa"
-             if (data.max_monster_health && data.max_monster_health !== maxMonsterHealth) {
-                 maxMonsterHealth = data.max_monster_health;
-                 // Opcional: loadRaid() se quiser garantir sincronia de imagens
-             }
-
-             if (data.player_health !== undefined) {
-                 localPlayerHp = Math.min(localPlayerHp, data.player_health);
-                 updatePlayerHpUi(localPlayerHp, playerMaxHealth);
-            }
-
-            isSwitchingFloors = false;
+             isSwitchingFloors = false;
+             updateAttackUI();
         }
-
-        attacksLeft = data.attacks_left;
-        lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
-        
-        if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
-            lastAttackAt = new Date();
-        }
-
-        saveAttemptsCache(attacksLeft, lastAttackAt);
-        updateAttackUI();
         
         if (currentFloor % 5 === 0) {
             checkOtherPlayerDeaths();
@@ -1221,6 +1155,7 @@ async function triggerBatchSync() {
 
     } catch (e) {
         console.error("Falha no Sync Batch:", e);
+        // Rollback APENAS se for erro de rede/lógica, não morte
         pendingAttacksQueue += attacksToSend;
         localDamageDealtInBatch += expectedDamage;
         isSwitchingFloors = false;
@@ -1365,7 +1300,7 @@ async function simulateLocalBossAttackLogic() {
                  return;
              }
 
-             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.07));
+             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
              const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
              
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
@@ -1493,10 +1428,6 @@ function closeCombatModal(){
   stopReviveUITicker();
   stopAllFloorMusic();
   clearCountdown();
-  
-  // Parar Heartbeat
-  stopRaidHeartbeat();
-
   actionQueue = [];
   isProcessingAction = false;
   isSwitchingFloors = false;

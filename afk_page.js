@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM RESET LEVE...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
     const MIN_COLLECT_SECONDS = 3600;    // 1 hora
     const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000;
+    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas para stats de combate
 
     // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");
@@ -71,6 +72,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let afkStartTime = null;
     let timerInterval;
     let localSimulationInterval;
+    let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
 
     // --- HELPER DE AUTH ---
     function getLocalUserId() {
@@ -105,7 +107,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- VISUAL FORMATTING ---
     function formatNumberCompact(num) {
-        // Alterado para exibir número completo com separadores (ex: 1,500)
         return new Intl.NumberFormat('en-US').format(num);
     }
 
@@ -114,7 +115,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!afkStartTime || !playerAfkData) return;
 
         const now = Date.now();
-        // Garante que não ultrapasse o tempo máximo
         let secondsElapsed = Math.floor((now - afkStartTime) / 1000);
         
         // Timer Visual
@@ -125,7 +125,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const seconds = remainingSeconds % 60;
         afkTimerSpan.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-        // Reward Calculation (Simulando get_afk_rewards_preview.sql)
+        // Reward Calculation
         const cappedSeconds = Math.min(secondsElapsed, MAX_AFK_SECONDS);
         const stage = playerAfkData.current_afk_stage || 1;
         
@@ -150,16 +150,40 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // --- NOVO: CACHE DE COMBAT STATS (Sincronizado com Mina) ---
+    async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
+        if (!userId) return null;
+        const now = Date.now();
+        // NOTA: Usa a MESMA chave da mina para compartilhar o cache
+        const cacheKey = `player_combat_stats_${userId}`; 
+        
+        // Tenta ler do LocalStorage
+        let stored = localStorage.getItem(cacheKey);
+        if (stored && !forceUpdate) {
+            try {
+                const parsed = JSON.parse(stored);
+                // Verifica validade (12h)
+                if (now - parsed.timestamp < STATS_CACHE_DURATION) {
+                    cachedCombatStats = parsed.data;
+                    console.log("[AFK] Combat stats carregados do cache local.");
+                    return cachedCombatStats;
+                }
+            } catch(e) { console.warn("Cache stats inválido", e); }
+        }
+    
+        // Se não tiver cache ou expirou, não precisamos chamar o servidor explicitamente aqui
+        // pois a função 'start_afk_adventure' no SQL já lida com a geração do cache se faltar.
+        return null;
+    }
+
     // --- DATA MANAGEMENT (Cache & Sync) ---
     
-    // Atualiza a UI com os dados que já temos na memória
     function renderPlayerData() {
         if (!playerAfkData) return;
         
         if (playerAfkData.last_afk_start_time) {
             afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
         } else {
-            // Se for null, define agora para começar a contar
             afkStartTime = Date.now();
         }
 
@@ -169,8 +193,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
         
         updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
-        
-        // Força atualização imediata da simulação
         updateLocalSimulation();
     }
 
@@ -183,64 +205,64 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function initializePlayerData() {
         if (!userId) return;
 
+        // 1. Tenta carregar/validar cache de combate (para estar pronto e consistente com mina)
+        await getOrUpdatePlayerStatsCache();
+
+        // 2. Lógica padrão de dados AFK
         const cacheKey = `playerAfkData_${userId}`;
         const cached = localStorage.getItem(cacheKey);
-
         let shouldUseCache = false;
 
         if (cached) {
             const { data, timestamp } = JSON.parse(cached);
-            
-            // 1. Verifica Validade Geral do Cache (24h)
             if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
                 playerAfkData = data;
                 shouldUseCache = true;
                 
-                // 2. OTIMIZAÇÃO DE RESET DIÁRIO (Zero Egress parcial)
-                // Verifica se virou o dia em UTC desde o último reset registrado no cache
+                // OTIMIZAÇÃO DE RESET DIÁRIO
                 const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
                 const now = new Date();
-                
-                // Compara Dia, Mês e Ano em UTC (compatível com servidor)
                 const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
                                     now.getUTCMonth() !== lastResetDate.getUTCMonth() || 
                                     now.getUTCFullYear() !== lastResetDate.getUTCFullYear();
 
                 if (isNewDayUtc) {
                     console.log("Virada de dia detectada (UTC). Verificando reset via RPC leve...");
-                    // Chama RPC leve apenas para atualizar tentativas
                     const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
-                    
                     if (!resetError && resetData) {
-                        console.log("Status do Reset Diário:", resetData);
-                        // Atualiza apenas os campos necessários no objeto local
                         playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
                         if (resetData.reset_performed) {
                             playerAfkData.last_attempt_reset = new Date().toISOString(); 
                         }
-                        // Salva o cache atualizado para não chamar RPC de novo hoje
                         saveToCache(playerAfkData);
                     }
-                } else {
-                    console.log("Usando Cache Local (Zero Egress) - Mesmo dia UTC");
                 }
             }
         }
 
         if (!shouldUseCache) {
-            console.log("Cache inválido ou inexistente. Buscando dados completos do Servidor...");
+            console.log("Cache inválido ou inexistente. Buscando dados completos...");
             const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
             if (error) {
                 console.error("Erro ao obter dados:", error);
                 return;
             }
             playerAfkData = data;
+            
+            // Sincroniza o cache local de combate com o que veio do banco, se houver
+            if (playerAfkData.cached_combat_stats) {
+                const statsKey = `player_combat_stats_${userId}`;
+                localStorage.setItem(statsKey, JSON.stringify({
+                    timestamp: Date.now(),
+                    data: playerAfkData.cached_combat_stats
+                }));
+            }
+            
             saveToCache(playerAfkData);
         }
 
         renderPlayerData();
         
-        // Inicia o Loop de Simulação Local (roda a cada 1s)
         if (localSimulationInterval) clearInterval(localSimulationInterval);
         localSimulationInterval = setInterval(updateLocalSimulation, 1000);
     }
@@ -259,11 +281,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- AÇÕES DO JOGADOR ---
 
-    // 1. Coleta de Recompensas (Otimizado)
     collectBtn.addEventListener("click", async () => {
         if (!userId || collectBtn.disabled) return;
-        
-        collectBtn.disabled = true; // Previne clique duplo
+        collectBtn.disabled = true; 
         
         const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
         
@@ -273,18 +293,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // STATE PATCHING: Atualiza o objeto local com a resposta do servidor
-        // Em vez de recarregar tudo com get_player_afk_data
         playerAfkData.xp += data.xp_earned;
         playerAfkData.gold += data.gold_earned;
-        playerAfkData.last_afk_start_time = new Date().toISOString(); // Reset timer local
+        playerAfkData.last_afk_start_time = new Date().toISOString();
         
         if (data.leveled_up) {
             playerAfkData.level = data.new_level;
             showLevelUpBalloon(data.new_level);
         }
 
-        // Salva novo estado no cache e renderiza
         saveToCache(playerAfkData);
         renderPlayerData();
 
@@ -292,7 +309,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         resultModal.style.display = "block";
     });
 
-    // 2. Iniciar Aventura / Combate
     async function triggerAdventure(isFarming) {
         if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
 
@@ -305,50 +321,34 @@ document.addEventListener("DOMContentLoaded", async () => {
             const msg = data?.message || error?.message || "Erro desconhecido.";
             resultText.textContent = msg;
             resultModal.style.display = "block";
-            // Em caso de erro, forçamos um refresh real para garantir sincronia
             localStorage.removeItem(`playerAfkData_${userId}`);
             initializePlayerData();
             return;
         }
 
-        // STATE PATCHING: O servidor retornou tudo que precisamos.
-        // Não fazemos GET request. Apenas atualizamos a memória.
-        
-        // 1. Consome tentativa
         playerAfkData.daily_attempts_left = data.daily_attempts_left;
         
-        // 2. Adiciona ganhos se venceu
         if (data.venceu) {
             playerAfkData.xp += data.xp_ganho;
             playerAfkData.gold += data.gold_ganho;
-            
-            // Se não estava farmando e venceu, subiu de estágio
             if (!isFarming) {
                 playerAfkData.current_afk_stage = (playerAfkData.current_afk_stage || 1) + 1;
             }
         }
         
-        // 3. Level Up
         if (data.leveled_up) {
             playerAfkData.level = data.new_level;
         }
 
-        // 4. Salva Cache Atualizado
         saveToCache(playerAfkData);
-        
-        // 5. Atualiza UI "Passiva" (XP total, tentativas, etc)
         renderPlayerData();
 
-        // --- VISUALIZAÇÃO DO COMBATE ---
-        
         if (isFarming) {
-            // Farm Rápido (Skip Animation)
             const message = `FARM CONCLUÍDO! Ganhou ${formatNumberCompact(data.xp_ganho)} XP e ${formatNumberCompact(data.gold_ganho)} Ouro! (Estágio mantido)`;
             resultText.textContent = message;
             resultModal.style.display = "block";
             if (data.leveled_up) showLevelUpBalloon(data.new_level);
         } else {
-            // Desafio (Com Animação)
             runCombatAnimation(data);
         }
     }
@@ -398,17 +398,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                             normalHitSound.currentTime = 0;
                             normalHitSound.play().catch(()=>{});
                         }
-const mImg = document.getElementById("monsterImage");
-        if (mImg) {
-            mImg.classList.remove('shake-animation'); // Remove classe anterior se houver
-            void mImg.offsetWidth; // Força o navegador a reconhecer a remoção (Reflow)
-            mImg.classList.add('shake-animation'); // Adiciona a animação
-            
-            // Remove a classe após 300ms para voltar a flutuar
-            setTimeout(() => {
-                mImg.classList.remove('shake-animation');
-            }, 300);
-        }
+                        const mImg = document.getElementById("monsterImage");
+                        if (mImg) {
+                            mImg.classList.remove('shake-animation');
+                            void mImg.offsetWidth;
+                            mImg.classList.add('shake-animation');
+                            setTimeout(() => {
+                                mImg.classList.remove('shake-animation');
+                            }, 300);
+                        }
                         currentMonsterHp = Math.max(0, currentMonsterHp - attack.damage);
                         const pct = (currentMonsterHp / monsterMaxHp) * 100;
                         monsterHpFill.style.width = `${pct}%`;
@@ -417,10 +415,8 @@ const mImg = document.getElementById("monsterImage");
                         currentAttackIndex++;
                         attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
                         
-                        // Velocidade da animação
                         setTimeout(animateAttack, 1000);
                     } else {
-                        // Fim da Luta
                         let message = "";
                         if (data.venceu) {
                             message = `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!`;
@@ -444,7 +440,7 @@ const mImg = document.getElementById("monsterImage");
         combatScreen.style.display = "none";
         combatMusic.pause();
         idleMusic.play().catch(() => {});
-        renderPlayerData(); // Re-renderiza dados atualizados do cache
+        renderPlayerData(); 
     }
 
     function showCombatScreen() {
@@ -456,18 +452,16 @@ const mImg = document.getElementById("monsterImage");
 
     function displayDamageNumber(damage, isCrit) {
         const damageNum = document.createElement("div");
-        damageNum.textContent = formatNumberCompact(damage); // Formata número do dano também
+        damageNum.textContent = formatNumberCompact(damage);
         damageNum.className = isCrit ? "crit-damage-number" : "normal-damage-number";
         
-        // Posição centralizada no monstro
-        // Nota: Ajuste fino pode ser necessário dependendo do CSS do combat-screen
         damageNum.style.position = "absolute";
         damageNum.style.left = "50%";
         damageNum.style.top = "40%";
         damageNum.style.transform = "translate(-50%, -50%)";
         
         damageNum.style.animation = "floatAndFade 1.5s forwards";
-        combatScreen.appendChild(damageNum); // Anexa ao container relativo
+        combatScreen.appendChild(damageNum);
         damageNum.addEventListener("animationend", () => damageNum.remove());
     }
 
@@ -484,7 +478,6 @@ const mImg = document.getElementById("monsterImage");
     musicPermissionBtn.addEventListener("click", () => {
         musicPermissionModal.style.display = "none";
         [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
-            // "Pre-warm" audio contexts
             audio.play().then(() => {
                 audio.pause();
                 audio.currentTime = 0;

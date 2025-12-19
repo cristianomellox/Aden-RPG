@@ -284,14 +284,10 @@ async function loadPlayerAndItems(forceRefresh = false) {
         .eq('id', globalUser.id)
         .single();
 
-    if (metaError) {
-        console.error('Erro ao verificar versão do cache:', metaError);
-    }
-
     const localTimestamp = await getLastUpdated();
     
     // Verifica se podemos usar o cache local (Zero Egress)
-    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
+    // Se forceRefresh for true, ou se não tivermos timestamp local (cache limpo), NÃO usa cache.
     const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
 
     console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
@@ -303,27 +299,34 @@ async function loadPlayerAndItems(forceRefresh = false) {
                 loadPlayerStatsFromCache()
             ]);
 
-            // Se o cache local estiver saudável, usamos ele
-            if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
+            // Se o cache local estiver saudável (e tiver itens), usamos ele
+            if (itemsFromCache && itemsFromCache.length > 0 && statsFromCache) {
                 console.log('✅ Zero Egress: Usando dados do IndexedDB.');
                 allInventoryItems = itemsFromCache;
                 playerBaseStats = statsFromCache;
                 equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
                 
                 renderUI();
-                return; // Encerra aqui, nenhuma chamada pesada ao banco
+                return; 
             }
         } catch (e) {
             console.warn('Erro ao ler cache local. Baixando do servidor...', e);
         }
     }
 
-    // 2. Fetch via RPC Seguro (Correção do "Bolsa Vazia")
-    // Em vez de select direto, chamamos uma RPC que garante que os dados existem.
-    console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
+    // 2. Fetch via RPC Seguro
+    // AQUI ESTÁ A CORREÇÃO:
+    // Se forceRefresh for true, OU se o timestamp local for nulo (limpeza de cache),
+    // mandamos p_force_recalc: true para o SQL recalcular tudo.
+    const shouldForceServerRecalc = forceRefresh || !localTimestamp;
+
+    console.log(`⬇️ Baixando cache do servidor (Forçar Recálculo: ${shouldForceServerRecalc})...`);
     
     const { data: playerData, error: rpcError } = await supabase
-        .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
+        .rpc('get_player_data_lazy', { 
+            p_player_id: globalUser.id,
+            p_force_recalc: shouldForceServerRecalc 
+        });
 
     if (rpcError) {
         console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
@@ -338,7 +341,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
 
     // 3. Salva no IndexedDB para a próxima vez
     await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-    console.log('💾 Cache local atualizado.');
+    console.log('💾 Cache local restaurado e atualizado.');
 
     renderUI();
 }

@@ -2006,7 +2006,7 @@ button, .btn {
 }
 #playerNameText {
  text-shadow: none!important;
-  background: linear-gradient(to bottom, white 0%, silver 50%, white 100%)!important;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, silver 100%)!important;
   -webkit-background-clip: text!important;
   -webkit-text-fill-color: transparent!important; 
 }

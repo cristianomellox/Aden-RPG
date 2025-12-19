@@ -573,7 +573,7 @@ function updateLocalPlayerData(changes) {
     });
 
     // Atualiza o Cache no LocalStorage
-    setCache('player_data_cache', currentPlayerData, 4320);
+    setCache('player_data_cache', currentPlayerData, 1440);
 
     // Redesenha a UI
     renderPlayerUI(currentPlayerData, true);

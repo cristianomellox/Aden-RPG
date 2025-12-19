@@ -15,7 +15,7 @@ let selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 28; // Incrementado para limpar caches antigos e evitar conflitos
+const DB_VERSION = 29; // Incrementado para limpar caches antigos e evitar conflitos
 
 function openDB() {
     return new Promise((resolve, reject) => {

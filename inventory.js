@@ -277,72 +277,69 @@ function showCustomConfirm(message, onConfirm) {
 async function loadPlayerAndItems(forceRefresh = false) {
     if (!globalUser) return;
 
-    // 1. Check de Timestamp (Leitura Leve)
-    const { data: serverMeta, error: metaError } = await supabase
-        .from('players')
-        .select('last_inventory_update')
-        .eq('id', globalUser.id)
-        .single();
-
-    const localTimestamp = await getLastUpdated();
-    
-    // Verifica se podemos usar o cache local (Zero Egress)
-    // Se forceRefresh for true, ou se não tivermos timestamp local (cache limpo), NÃO usa cache.
-    const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
-
-    console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
-
-    if (canUseCache) {
-        try {
-            const [itemsFromCache, statsFromCache] = await Promise.all([
-                loadCache(),
-                loadPlayerStatsFromCache()
-            ]);
-
-            // Se o cache local estiver saudável (e tiver itens), usamos ele
-            if (itemsFromCache && itemsFromCache.length > 0 && statsFromCache) {
-                console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                allInventoryItems = itemsFromCache;
-                playerBaseStats = statsFromCache;
-                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                
-                renderUI();
-                return; 
+    // Tenta carregar do cache compartilhado (LocalStorage)
+    // O problema estava aqui: ele confiava cegamente nesse cache
+    let cacheData = null;
+    try {
+        const cachedStr = localStorage.getItem('player_data_cache');
+        if (cachedStr) {
+            const parsed = JSON.parse(cachedStr);
+            // VALIDAÇÃO EXTRA: Só usa o cache se tiver itens!
+            // Se tiver 0 itens, assume que é bug de cache vazio e ignora.
+            if (parsed && parsed.data && parsed.data.cached_inventory && parsed.data.cached_inventory.length > 0) {
+                cacheData = parsed.data;
             }
-        } catch (e) {
-            console.warn('Erro ao ler cache local. Baixando do servidor...', e);
         }
-    }
+    } catch (e) { console.warn('Cache inválido', e); }
 
-    // 2. Fetch via RPC Seguro
-    // AQUI ESTÁ A CORREÇÃO:
-    // Se forceRefresh for true, OU se o timestamp local for nulo (limpeza de cache),
-    // mandamos p_force_recalc: true para o SQL recalcular tudo.
-    const shouldForceServerRecalc = forceRefresh || !localTimestamp;
-
-    console.log(`⬇️ Baixando cache do servidor (Forçar Recálculo: ${shouldForceServerRecalc})...`);
-    
-    const { data: playerData, error: rpcError } = await supabase
-        .rpc('get_player_data_lazy', { 
-            p_player_id: globalUser.id,
-            p_force_recalc: shouldForceServerRecalc 
-        });
-
-    if (rpcError) {
-        console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
-        showCustomAlert('Erro ao carregar inventário. Tente atualizar a página.');
+    // Decide se usa cache ou força servidor
+    // Se forceRefresh for true OU se não temos cache válido -> Vai pro servidor
+    if (!forceRefresh && cacheData) {
+        console.log("✅ Usando cache validado (tem itens).");
+        allInventoryItems = cacheData.cached_inventory;
+        playerBaseStats = cacheData.cached_combat_stats || {};
+        equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+        renderUI();
         return;
     }
 
-    // Atualiza variáveis globais com o retorno da RPC
+    // Se chegou aqui, é porque o cache estava vazio ou foi forçado.
+    console.log("⚠️ Cache vazio ou inválido. Forçando recálculo no servidor...");
+
+    // Chama a RPC com p_force_recalc: true para obrigar o banco a ler os itens
+    const { data: playerData, error: rpcError } = await supabase
+        .rpc('get_player_data_lazy', { 
+            p_player_id: globalUser.id,
+            p_force_recalc: true 
+        });
+
+    if (rpcError) {
+        console.error('Erro RPC:', rpcError);
+        showCustomAlert('Erro de conexão. Tente novamente.');
+        return;
+    }
+
+    // Atualiza memória
     playerBaseStats = playerData.cached_combat_stats || {};
     allInventoryItems = playerData.cached_inventory || [];
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // 3. Salva no IndexedDB para a próxima vez
+    // Salva o cache NOVO e CORRETO (substituindo o cache vazio que estava bugando o AFK)
+    // Isso vai consertar o AFK indiretamente, pois ele lê essa mesma chave
+    const newCacheObj = {
+        data: playerData,
+        timestamp: Date.now(),
+        expires: Date.now() + (24 * 60 * 60 * 1000)
+    };
+    
+    // Atualiza o IndexedDB (para esta página)
     await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-    console.log('💾 Cache local restaurado e atualizado.');
+    
+    // Atualiza o LocalStorage (para corrigir a página AFK)
+    // Nota: Adaptamos a estrutura para bater com o que o script.js espera
+    localStorage.setItem('player_data_cache', JSON.stringify(newCacheObj));
 
+    console.log('💾 Cache global reparado com sucesso.');
     renderUI();
 }
 

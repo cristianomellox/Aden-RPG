@@ -2004,12 +2004,7 @@ button, .btn {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-#playerNameText {
- text-shadow: none!important;
-  background: linear-gradient(to bottom, lightblue 0%, white 50%, silver 100%)!important;
-  -webkit-background-clip: text!important;
-  -webkit-text-fill-color: transparent!important; 
-}
+
 #playerPower {
   font-size: 1.4em!important;
 }

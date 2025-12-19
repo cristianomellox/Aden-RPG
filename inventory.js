@@ -372,9 +372,10 @@ function updateStatsUI(stats) {
     if (atkSpan) atkSpan.textContent = `${Math.floor(stats.min_attack || 0)} - ${Math.floor(stats.attack || 0)}`;
     if (defSpan) defSpan.textContent = `${Math.floor(stats.defense || 0)}`;
     if (hpSpan)  hpSpan.textContent  = `${Math.floor(stats.health || 0)}`;
-    if (ccSpan)  ccSpan.textContent  = `${(stats.crit_chance || 0).toFixed(1)}%`;
-    if (cdSpan)  cdSpan.textContent  = `${(stats.crit_damage || 0).toFixed(1)}%`;
-    if (evSpan)  evSpan.textContent  = `${(stats.evasion || 0).toFixed(1)}%`;
+    // CÓDIGO NOVO (Inteiros, sem .0)
+if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
+if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
+if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
 }
 
 // Mantido apenas como compatibilidade, pois o cálculo real agora vem do servidor

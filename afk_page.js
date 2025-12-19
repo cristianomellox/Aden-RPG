@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO (AUTH ROBUSTA)...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -73,36 +73,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     let timerInterval;
     let localSimulationInterval;
     let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
+    let userId = null; // Inicializa nulo
 
-    // --- HELPER DE AUTH ---
-    function getLocalUserId() {
+    // --- NOVA LÓGICA DE INICIALIZAÇÃO (CORREÇÃO DE AUTH) ---
+    async function initAfkPage() {
+        // 1. Tenta resolver o User ID (Cache de Dados -> Sessão Supabase)
+        // Isso previne que a limpeza do cache de dados quebre a autenticação
         try {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
+                if (parsed?.data?.id) userId = parsed.data.id;
             }
         } catch (e) {}
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                    const session = JSON.parse(localStorage.getItem(k));
-                    if (session?.user?.id) return session.user.id;
-                }
-            }
-        } catch (e) {}
-        return null;
-    }
 
-    let userId = getLocalUserId();
-
-    // Fallback de Auth (Rede)
-    if (!userId) {
-        try {
+        // Se não achou no cache de dados, busca na sessão (Token Local do Supabase)
+        if (!userId) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session) userId = session.user.id;
-        } catch (e) { console.error(e); }
+        }
+
+        if (!userId) {
+            console.error("Usuário não logado. Redirecionando...");
+            window.location.href = "index.html";
+            return;
+        }
+
+        // Agora que temos certeza do ID, carregamos os dados do jogo
+        await initializePlayerData();
+        
+        // Listeners e UI só ativam depois do Auth e Dados estarem prontos
+        setupEventListeners();
     }
 
     // --- VISUAL FORMATTING ---
@@ -281,34 +282,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- AÇÕES DO JOGADOR ---
 
-    collectBtn.addEventListener("click", async () => {
-        if (!userId || collectBtn.disabled) return;
-        collectBtn.disabled = true; 
-        
-        const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
-        
-        if (error) {
-            console.error("Erro ao coletar:", error);
-            collectBtn.disabled = false;
-            return;
-        }
-
-        playerAfkData.xp += data.xp_earned;
-        playerAfkData.gold += data.gold_earned;
-        playerAfkData.last_afk_start_time = new Date().toISOString();
-        
-        if (data.leveled_up) {
-            playerAfkData.level = data.new_level;
-            showLevelUpBalloon(data.new_level);
-        }
-
-        saveToCache(playerAfkData);
-        renderPlayerData();
-
-        resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned)} XP e ${formatNumberCompact(data.gold_earned)} Ouro!`;
-        resultModal.style.display = "block";
-    });
-
     async function triggerAdventure(isFarming) {
         if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
 
@@ -321,6 +294,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const msg = data?.message || error?.message || "Erro desconhecido.";
             resultText.textContent = msg;
             resultModal.style.display = "block";
+            // Se der erro, tentamos limpar o cache para forçar um refresh na próxima
             localStorage.removeItem(`playerAfkData_${userId}`);
             initializePlayerData();
             return;
@@ -473,48 +447,78 @@ document.addEventListener("DOMContentLoaded", async () => {
         setTimeout(() => balloon.style.display = "none", 5000);
     }
 
-    // --- EVENT LISTENERS ---
+    // --- EVENT LISTENERS (Encapsulados) ---
+    function setupEventListeners() {
+        collectBtn.addEventListener("click", async () => {
+            if (!userId || collectBtn.disabled) return;
+            collectBtn.disabled = true; 
+            
+            const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
+            
+            if (error) {
+                console.error("Erro ao coletar:", error);
+                collectBtn.disabled = false;
+                return;
+            }
 
-    musicPermissionBtn.addEventListener("click", () => {
-        musicPermissionModal.style.display = "none";
-        [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
-            audio.play().then(() => {
-                audio.pause();
-                audio.currentTime = 0;
-            }).catch(()=>{});
+            playerAfkData.xp += data.xp_earned;
+            playerAfkData.gold += data.gold_earned;
+            playerAfkData.last_afk_start_time = new Date().toISOString();
+            
+            if (data.leveled_up) {
+                playerAfkData.level = data.new_level;
+                showLevelUpBalloon(data.new_level);
+            }
+
+            saveToCache(playerAfkData);
+            renderPlayerData();
+
+            resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned)} XP e ${formatNumberCompact(data.gold_earned)} Ouro!`;
+            resultModal.style.display = "block";
         });
-        showIdleScreen();
-    });
 
-    startAfkBtn.addEventListener("click", () => {
-        if (startAfkBtn.disabled || !userId) return;
-        const currentStage = playerAfkData.current_afk_stage || 1;
-        if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
-        if (currentStage > 1) {
-            if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
-            if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
-        } else {
-            if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
-        }
-        if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
-    });
+        musicPermissionBtn.addEventListener("click", () => {
+            musicPermissionModal.style.display = "none";
+            [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
+                audio.play().then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }).catch(()=>{});
+            });
+            showIdleScreen();
+        });
 
-    if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
-    if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
-    if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
+        startAfkBtn.addEventListener("click", () => {
+            if (startAfkBtn.disabled || !userId) return;
+            const currentStage = playerAfkData.current_afk_stage || 1;
+            if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
+            if (currentStage > 1) {
+                if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
+                if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
+            } else {
+                if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
+            }
+            if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
+        });
 
-    confirmBtn.addEventListener("click", () => {
-        resultModal.style.display = "none";
-        showIdleScreen(); 
-    });
-    
-    returnMainIdleBtn.addEventListener("click", () => {
-        window.location.href = "index.html?refresh=true";
-    });
+        if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
+        if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
+        if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
 
-    saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
-    closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
+        confirmBtn.addEventListener("click", () => {
+            resultModal.style.display = "none";
+            showIdleScreen(); 
+        });
+        
+        returnMainIdleBtn.addEventListener("click", () => {
+            window.location.href = "index.html?refresh=true";
+        });
+
+        saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
+        closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
+    }
 
     // --- INICIALIZAÇÃO ---
-    initializePlayerData();
+    // Inicia o fluxo seguro de auth e carregamento
+    initAfkPage();
 });

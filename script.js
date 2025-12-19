@@ -573,7 +573,7 @@ function updateLocalPlayerData(changes) {
     });
 
     // Atualiza o Cache no LocalStorage
-    setCache('player_data_cache', currentPlayerData, 1440);
+    setCache('player_data_cache2', currentPlayerData, 1440);
 
     // Redesenha a UI
     renderPlayerUI(currentPlayerData, true);
@@ -896,7 +896,7 @@ async function signOut() {
     // --- CORREÇÃO DE CACHE APLICADA ---
     // Limpa explicitamente o cache do jogador antes de sair e recarregar
     // Isso previne que o próximo usuário veja os dados do anterior
-    localStorage.removeItem('player_data_cache');
+    localStorage.removeItem('player_data_cache2');
     
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
@@ -973,7 +973,7 @@ function applyItemBonuses(player, equippedItems) {
 // Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
 // RESTAURADA: Busca itens e calcula CP, mas exibe UI limpa
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
-    const PLAYER_CACHE_KEY = 'player_data_cache';
+    const PLAYER_CACHE_KEY = 'player_data_cache2';
     
     // Se não for forçado e já temos dados, retorna (Economia Máxima)
     if (!forceRefresh && currentPlayerData) {
@@ -1236,7 +1236,7 @@ async function checkAuthStatus() {
         } else {
             console.log("✅ Sessão válida. Mantendo dados do cache para economizar banda.");
             // Opcional: Atualizar silenciosamente em background se o cache for > 10 min
-            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
+            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache2') || '{}').expires;
         }
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
@@ -1253,7 +1253,7 @@ async function checkAuthStatus() {
 
 // 1. Tenta renderizar IMEDIATAMENTE usando o cache (Zero Network)
 document.addEventListener("DOMContentLoaded", async () => {
-    const cachedPlayer = getCache('player_data_cache', 60 * 24); // Tenta ler cache (até 24h se existir)
+    const cachedPlayer = getCache('player_data_cache2', 60 * 24); // Tenta ler cache (até 24h se existir)
     
     if (cachedPlayer) {
         console.log("⚡ Interface carregada via Cache (Sem consumo de Auth)");
@@ -1273,7 +1273,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN' && !currentPlayerData) {
         fetchAndDisplayPlayerInfo(true);
     } else if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('player_data_cache');
+        localStorage.removeItem('player_data_cache2');
         window.location.reload();
     }
 });

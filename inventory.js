@@ -104,7 +104,7 @@ async function removeCacheItem(itemId) {
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 function getLocalUserId() {
     try {
-        const cached = localStorage.getItem('player_data_cache2');
+        const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
             if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {

@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("🛠️ MODO DE RECUPERAÇÃO: afk_page.js iniciado...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -19,13 +19,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- CONFIGURAÇÕES ---
-    const XP_RATE_PER_SEC = 1.0 / 1800; 
-    const GOLD_RATE_PER_SEC = 0;        
-    const MAX_AFK_SECONDS = 4 * 60 * 60; 
-    const MIN_COLLECT_SECONDS = 3600;    
-    
-    // UI ELEMENTS
+    // --- CONFIGURAÇÕES DE CÁLCULO (Sincronizado com SQL) ---
+    const XP_RATE_PER_SEC = 1.0 / 1800; // Conforme SQL
+    const GOLD_RATE_PER_SEC = 0;        // Conforme SQL
+    const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
+    const MIN_COLLECT_SECONDS = 3600;    // 1 hora
+    const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000;
+    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas para stats de combate
+
+    // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");
     const afkGoldSpan = document.getElementById("afk-gold");
     const afkTimerSpan = document.getElementById("afk-timer");
@@ -34,6 +36,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const startAfkBtn = document.getElementById("start-afk");
     const idleScreen = document.getElementById("idle-screen");
     const dailyAttemptsLeftSpan = document.getElementById("daily-attempts-left");
+    const startAfkCooldownDisplay = document.getElementById("start-afk-cooldown-display");
+    const saibaMaisBtn = document.getElementById("saiba-mais");
     const playerTotalXpSpan = document.getElementById("player-total-xp");
     const playerTotalGoldSpan = document.getElementById("player-total-gold");
     
@@ -62,45 +66,58 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closeAdventureOptionsBtn = document.getElementById("close-adventure-options");
     const farmStageNumberSpan = document.getElementById("farm-stage-number");
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
-    const saibaMaisBtn = document.getElementById("saiba-mais");
 
-    // STATE
-    let playerAfkData = {}; 
+    // --- STATE MANAGEMENT ---
+    let playerAfkData = {}; // Cache em memória
     let afkStartTime = null;
+    let timerInterval;
     let localSimulationInterval;
-    let userId = null;
+    let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
 
-    // --- INICIALIZAÇÃO ROBUSTA ---
-    async function initAfkPage() {
-        // 1. Obter User ID via Sessão (Garante que pega o ID real)
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session && session.user) {
-            userId = session.user.id;
-            console.log("✅ Usuário identificado:", userId);
-        } else {
-            console.error("❌ Sessão não encontrada. Redirecionando para login.");
-            window.location.href = "index.html";
-            return;
-        }
-
-        // 2. Carregar dados IGNORANDO CACHE ANTIGO
-        await initializePlayerDataForceDB();
-        
-        setupEventListeners();
+    // --- HELPER DE AUTH ---
+    function getLocalUserId() {
+        try {
+            const cached = localStorage.getItem('player_data_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
+            }
+        } catch (e) {}
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                    const session = JSON.parse(localStorage.getItem(k));
+                    if (session?.user?.id) return session.user.id;
+                }
+            }
+        } catch (e) {}
+        return null;
     }
 
+    let userId = getLocalUserId();
+
+    // Fallback de Auth (Rede)
+    if (!userId) {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) userId = session.user.id;
+        } catch (e) { console.error(e); }
+    }
+
+    // --- VISUAL FORMATTING ---
     function formatNumberCompact(num) {
         return new Intl.NumberFormat('en-US').format(num);
     }
 
-    // --- SIMULAÇÃO LOCAL ---
+    // --- CORE LOGIC: SIMULAÇÃO LOCAL (Zero Egress) ---
     function updateLocalSimulation() {
         if (!afkStartTime || !playerAfkData) return;
 
         const now = Date.now();
         let secondsElapsed = Math.floor((now - afkStartTime) / 1000);
         
+        // Timer Visual
         const displaySeconds = Math.min(secondsElapsed, MAX_AFK_SECONDS);
         const remainingSeconds = Math.max(0, MAX_AFK_SECONDS - displaySeconds);
         const hours = Math.floor(remainingSeconds / 3600);
@@ -108,27 +125,62 @@ document.addEventListener("DOMContentLoaded", async () => {
         const seconds = remainingSeconds % 60;
         afkTimerSpan.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
+        // Reward Calculation
+        const cappedSeconds = Math.min(secondsElapsed, MAX_AFK_SECONDS);
         const stage = playerAfkData.current_afk_stage || 1;
-        let xpEarned = Math.floor(displaySeconds * XP_RATE_PER_SEC * stage);
-        let goldEarned = Math.floor(displaySeconds * GOLD_RATE_PER_SEC);
+        
+        let xpEarned = Math.floor(cappedSeconds * XP_RATE_PER_SEC * stage);
+        let goldEarned = Math.floor(cappedSeconds * GOLD_RATE_PER_SEC);
 
+        // Nível 100 cap
         if ((playerAfkData.level || 1) >= 100) xpEarned = 0;
 
         afkXpSpan.textContent = formatNumberCompact(xpEarned);
         afkGoldSpan.textContent = formatNumberCompact(goldEarned);
 
+        // Botão Coletar
         const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
         collectBtn.disabled = !isCollectable;
-        collectBtn.style.opacity = isCollectable ? "1" : "0.5";
-        collectBtn.style.cursor = isCollectable ? "pointer" : "not-allowed";
+        if(collectBtn.disabled) {
+            collectBtn.style.opacity = "0.5";
+            collectBtn.style.cursor = "not-allowed";
+        } else {
+             collectBtn.style.opacity = "1";
+             collectBtn.style.cursor = "pointer";
+        }
     }
 
+    // --- NOVO: CACHE DE COMBAT STATS (Sincronizado com Mina) ---
+    async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
+        if (!userId) return null;
+        const now = Date.now();
+        // NOTA: Usa a MESMA chave da mina para compartilhar o cache
+        const cacheKey = `player_combat_stats_${userId}`; 
+        
+        // Tenta ler do LocalStorage
+        let stored = localStorage.getItem(cacheKey);
+        if (stored && !forceUpdate) {
+            try {
+                const parsed = JSON.parse(stored);
+                // Verifica validade (12h)
+                if (now - parsed.timestamp < STATS_CACHE_DURATION) {
+                    cachedCombatStats = parsed.data;
+                    console.log("[AFK] Combat stats carregados do cache local.");
+                    return cachedCombatStats;
+                }
+            } catch(e) { console.warn("Cache stats inválido", e); }
+        }
+    
+        // Se não tiver cache ou expirou, não precisamos chamar o servidor explicitamente aqui
+        // pois a função 'start_afk_adventure' no SQL já lida com a geração do cache se faltar.
+        return null;
+    }
+
+    // --- DATA MANAGEMENT (Cache & Sync) ---
+    
     function renderPlayerData() {
         if (!playerAfkData) return;
         
-        // Debug Visual
-        console.log("📊 Renderizando dados:", playerAfkData);
-
         if (playerAfkData.last_afk_start_time) {
             afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
         } else {
@@ -137,44 +189,77 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
         playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
-        
-        // AQUI ESTÁ O SEGREDO: Se vier null do banco, usa 1. Mas deve vir o valor certo.
         afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
-        
         dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
         
         updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
         updateLocalSimulation();
     }
 
-    // --- CARREGAMENTO FORÇADO DO BANCO (FIX) ---
-    async function initializePlayerDataForceDB() {
-        console.log("🔄 Buscando dados frescos do Supabase (Ignorando Cache Local)...");
-        
-        // Limpa cache antigo que possa estar corrompido
-        localStorage.removeItem(`playerAfkData_${userId}`);
+    function saveToCache(data) {
+        if(!userId) return;
+        const cacheKey = `playerAfkData_${userId}`;
+        localStorage.setItem(cacheKey, JSON.stringify({ data: data, timestamp: Date.now() }));
+    }
 
-        const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
-        
-        if (error) {
-            console.error("❌ Erro CRÍTICO ao buscar dados no DB:", error);
-            alert("Erro de conexão com o banco de dados. Verifique sua internet.");
-            return;
+    async function initializePlayerData() {
+        if (!userId) return;
+
+        // 1. Tenta carregar/validar cache de combate (para estar pronto e consistente com mina)
+        await getOrUpdatePlayerStatsCache();
+
+        // 2. Lógica padrão de dados AFK
+        const cacheKey = `playerAfkData_${userId}`;
+        const cached = localStorage.getItem(cacheKey);
+        let shouldUseCache = false;
+
+        if (cached) {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
+                playerAfkData = data;
+                shouldUseCache = true;
+                
+                // OTIMIZAÇÃO DE RESET DIÁRIO
+                const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
+                const now = new Date();
+                const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
+                                    now.getUTCMonth() !== lastResetDate.getUTCMonth() || 
+                                    now.getUTCFullYear() !== lastResetDate.getUTCFullYear();
+
+                if (isNewDayUtc) {
+                    console.log("Virada de dia detectada (UTC). Verificando reset via RPC leve...");
+                    const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
+                    if (!resetError && resetData) {
+                        playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
+                        if (resetData.reset_performed) {
+                            playerAfkData.last_attempt_reset = new Date().toISOString(); 
+                        }
+                        saveToCache(playerAfkData);
+                    }
+                }
+            }
         }
 
-        if (!data) {
-            console.warn("⚠️ O banco retornou vazio! Isso é estranho.");
-        } else {
-            console.log("✅ Dados recebidos do DB com sucesso:", data);
+        if (!shouldUseCache) {
+            console.log("Cache inválido ou inexistente. Buscando dados completos...");
+            const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
+            if (error) {
+                console.error("Erro ao obter dados:", error);
+                return;
+            }
+            playerAfkData = data;
+            
+            // Sincroniza o cache local de combate com o que veio do banco, se houver
+            if (playerAfkData.cached_combat_stats) {
+                const statsKey = `player_combat_stats_${userId}`;
+                localStorage.setItem(statsKey, JSON.stringify({
+                    timestamp: Date.now(),
+                    data: playerAfkData.cached_combat_stats
+                }));
+            }
+            
+            saveToCache(playerAfkData);
         }
-
-        playerAfkData = data || {};
-        
-        // Salva o cache novo e limpo
-        localStorage.setItem(`playerAfkData_${userId}`, JSON.stringify({ 
-            data: playerAfkData, 
-            timestamp: Date.now() 
-        }));
 
         renderPlayerData();
         
@@ -194,35 +279,59 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // --- AÇÕES DO JOGO ---
+    // --- AÇÕES DO JOGADOR ---
+
+    collectBtn.addEventListener("click", async () => {
+        if (!userId || collectBtn.disabled) return;
+        collectBtn.disabled = true; 
+        
+        const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
+        
+        if (error) {
+            console.error("Erro ao coletar:", error);
+            collectBtn.disabled = false;
+            return;
+        }
+
+        playerAfkData.xp += data.xp_earned;
+        playerAfkData.gold += data.gold_earned;
+        playerAfkData.last_afk_start_time = new Date().toISOString();
+        
+        if (data.leveled_up) {
+            playerAfkData.level = data.new_level;
+            showLevelUpBalloon(data.new_level);
+        }
+
+        saveToCache(playerAfkData);
+        renderPlayerData();
+
+        resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned)} XP e ${formatNumberCompact(data.gold_earned)} Ouro!`;
+        resultModal.style.display = "block";
+    });
 
     async function triggerAdventure(isFarming) {
         if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
 
-        console.log("⚔️ Iniciando aventura. Farm:", isFarming);
         const { data, error } = await supabase.rpc('start_afk_adventure', { 
             p_player_id: userId,
             p_farm_mode: isFarming
         });
 
         if (error || !data?.success) {
-            console.error("Erro na aventura:", error);
             const msg = data?.message || error?.message || "Erro desconhecido.";
             resultText.textContent = msg;
             resultModal.style.display = "block";
-            // Recarrega dados em caso de erro
-            initializePlayerDataForceDB();
+            localStorage.removeItem(`playerAfkData_${userId}`);
+            initializePlayerData();
             return;
         }
 
-        // Atualiza estado local
         playerAfkData.daily_attempts_left = data.daily_attempts_left;
         
         if (data.venceu) {
             playerAfkData.xp += data.xp_ganho;
             playerAfkData.gold += data.gold_ganho;
             if (!isFarming) {
-                // Atualiza estágio localmente para refletir na hora
                 playerAfkData.current_afk_stage = (playerAfkData.current_afk_stage || 1) + 1;
             }
         }
@@ -231,16 +340,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             playerAfkData.level = data.new_level;
         }
 
-        // Atualiza cache
-        localStorage.setItem(`playerAfkData_${userId}`, JSON.stringify({ 
-            data: playerAfkData, 
-            timestamp: Date.now() 
-        }));
-        
+        saveToCache(playerAfkData);
         renderPlayerData();
 
         if (isFarming) {
-            const message = `FARM CONCLUÍDO! Ganhou ${formatNumberCompact(data.xp_ganho)} XP e ${formatNumberCompact(data.gold_ganho)} Ouro!`;
+            const message = `FARM CONCLUÍDO! Ganhou ${formatNumberCompact(data.xp_ganho)} XP e ${formatNumberCompact(data.gold_ganho)} Ouro! (Estágio mantido)`;
             resultText.textContent = message;
             resultModal.style.display = "block";
             if (data.leveled_up) showLevelUpBalloon(data.new_level);
@@ -311,13 +415,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                         currentAttackIndex++;
                         attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
                         
-                        setTimeout(animateAttack, 1000); // Velocidade do ataque
+                        setTimeout(animateAttack, 1000);
                     } else {
                         let message = "";
                         if (data.venceu) {
                             message = `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!`;
                         } else {
-                            message = `Derrota. Melhore seus equipamentos!`;
+                            message = `Você não derrotou o monstro. Tente melhorar seus equipamentos!`;
                         }
                         
                         resultText.textContent = message;
@@ -330,7 +434,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 1000);
     }
 
-    // --- VISUAL & HELPERS ---
+    // --- AUXILIARES VISUAIS ---
     function showIdleScreen() {
         idleScreen.style.display = "flex";
         combatScreen.style.display = "none";
@@ -350,10 +454,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const damageNum = document.createElement("div");
         damageNum.textContent = formatNumberCompact(damage);
         damageNum.className = isCrit ? "crit-damage-number" : "normal-damage-number";
+        
         damageNum.style.position = "absolute";
         damageNum.style.left = "50%";
         damageNum.style.top = "40%";
         damageNum.style.transform = "translate(-50%, -50%)";
+        
         damageNum.style.animation = "floatAndFade 1.5s forwards";
         combatScreen.appendChild(damageNum);
         damageNum.addEventListener("animationend", () => damageNum.remove());
@@ -361,90 +467,54 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function showLevelUpBalloon(newLevel) {
         const balloon = document.getElementById("levelUpBalloon");
-        if(balloon) {
-            const text = document.getElementById("levelUpBalloonText");
-            text.innerText = newLevel;
-            balloon.style.display = "block";
-            setTimeout(() => balloon.style.display = "none", 5000);
-        }
+        const text = document.getElementById("levelUpBalloonText");
+        text.innerText = newLevel;
+        balloon.style.display = "block";
+        setTimeout(() => balloon.style.display = "none", 5000);
     }
 
     // --- EVENT LISTENERS ---
-    function setupEventListeners() {
-        collectBtn.addEventListener("click", async () => {
-            if (!userId || collectBtn.disabled) return;
-            collectBtn.disabled = true; 
-            
-            const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
-            
-            if (error) {
-                console.error("Erro ao coletar:", error);
-                collectBtn.disabled = false;
-                return;
-            }
 
-            playerAfkData.xp += data.xp_earned;
-            playerAfkData.gold += data.gold_earned;
-            playerAfkData.last_afk_start_time = new Date().toISOString();
-            
-            if (data.leveled_up) {
-                playerAfkData.level = data.new_level;
-                showLevelUpBalloon(data.new_level);
-            }
-
-            // Atualiza cache
-            localStorage.setItem(`playerAfkData_${userId}`, JSON.stringify({ 
-                data: playerAfkData, 
-                timestamp: Date.now() 
-            }));
-            renderPlayerData();
-
-            resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned)} XP e ${formatNumberCompact(data.gold_earned)} Ouro!`;
-            resultModal.style.display = "block";
+    musicPermissionBtn.addEventListener("click", () => {
+        musicPermissionModal.style.display = "none";
+        [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
+            audio.play().then(() => {
+                audio.pause();
+                audio.currentTime = 0;
+            }).catch(()=>{});
         });
+        showIdleScreen();
+    });
 
-        musicPermissionBtn.addEventListener("click", () => {
-            musicPermissionModal.style.display = "none";
-            [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
-                audio.play().then(() => {
-                    audio.pause();
-                    audio.currentTime = 0;
-                }).catch(()=>{});
-            });
-            showIdleScreen();
-        });
+    startAfkBtn.addEventListener("click", () => {
+        if (startAfkBtn.disabled || !userId) return;
+        const currentStage = playerAfkData.current_afk_stage || 1;
+        if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
+        if (currentStage > 1) {
+            if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
+            if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
+        } else {
+            if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
+        }
+        if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
+    });
 
-        startAfkBtn.addEventListener("click", () => {
-            if (startAfkBtn.disabled || !userId) return;
-            const currentStage = playerAfkData.current_afk_stage || 1;
-            
-            if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
-            if (currentStage > 1) {
-                if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
-                if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
-            } else {
-                if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
-            }
-            if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
-        });
+    if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
+    if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
+    if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
 
-        if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
-        if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
-        if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
+    confirmBtn.addEventListener("click", () => {
+        resultModal.style.display = "none";
+        showIdleScreen(); 
+    });
+    
+    returnMainIdleBtn.addEventListener("click", () => {
+        window.location.href = "index.html?refresh=true";
+    });
 
-        confirmBtn.addEventListener("click", () => {
-            resultModal.style.display = "none";
-            showIdleScreen(); 
-        });
-        
-        returnMainIdleBtn.addEventListener("click", () => {
-            window.location.href = "index.html?refresh=true";
-        });
+    saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
+    closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
 
-        if(saibaMaisBtn) saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
-        if(closeTutorialBtn) closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
-    }
-
-    // --- START ---
-    initAfkPage();
+    // --- INICIALIZAÇÃO ---
+    initializePlayerData();
 });

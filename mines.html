@@ -281,90 +281,78 @@
     </div>
 </div>
 
-<script>
-// --- INÍCIO DO SCRIPT DE VERIFICAÇÃO DE BANIMENTO ---
+<script type="module">
+import { supabase } from './supabaseClient.js'
+
 document.addEventListener("DOMContentLoaded", async () => {
-    // Configurações do Supabase (A mesma utilizada em seus outros arquivos)
-    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-    
-    // Verifica se o SDK foi carregado (o que é esperado)
-    if (!window.supabase) {
-        console.error("Supabase SDK não está carregado. Não é possível verificar banimento.");
-        return;
-    }
-    
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    let userId = null;
 
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) userId = user.id;
-    } catch (e) {
-        // Ignora erros de autenticação (pode estar deslogado), o script principal da página cuidará disso.
-        return;
+  let session = null
+  let userId = null
+
+  // 🔐 Auth seguro (igual AFK)
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    session = sessionData?.session
+
+    if (!session?.user) {
+      const { data: refreshData } = await supabase.auth.refreshSession()
+      session = refreshData?.session
     }
 
-    if (!userId) {
-        // Usuário não logado.
-        return; 
+    if (!session?.user) {
+      // Usuário não logado → não verifica ban
+      return
     }
 
-    // --- VERIFICAÇÃO DE BANIMENTO NA TABELA 'players' ---
-    try {
-        const { data, error } = await supabase
-            .from('players') // USANDO A TABELA CORRETA 'players'
-            .select('is_banned, ban_reason')
-            .eq('id', userId)
-            .single();
+    userId = session.user.id
+  } catch (e) {
+    console.error("Erro ao obter sessão:", e)
+    return
+  }
 
-        if (error) {
-            console.error("Erro ao verificar status de banimento:", error);
-            // Se houver erro, o script não trava o jogo, apenas registra o erro.
-            return;
-        }
+  // 🔍 Verificação de banimento
+  try {
+    const { data, error } = await supabase
+      .from('players')
+      .select('is_banned, ban_reason')
+      .eq('id', userId)
+      .single()
 
-        if (data && data.is_banned === true) {
-            console.warn(`Usuário ${userId} está banido. Exibindo modal.`);
-            
-            // 1. Encontrar elementos do Modal
-            const banModal = document.getElementById('banModalOverlay');
-            const banReasonContent = document.getElementById('banReasonContent');
-            const logoutBanBtn = document.getElementById('logoutBanBtn');
-            
-            if (banModal && banReasonContent && logoutBanBtn) {
-                // 2. Preencher o motivo
-                banReasonContent.innerText = data.ban_reason || "Motivo não especificado. Entre em contato com o suporte.";
-                
-                // 3. Exibir o Modal (usando flex para centralizar)
-                banModal.style.display = 'flex';
-                
-                // 4. Adicionar o evento de Logout ao botão "Fechar"
-                logoutBanBtn.onclick = async () => {
-                    await supabase.auth.signOut();
-                    // Redireciona para o index para garantir que a sessão foi limpa
-                    window.location.href = "go:pghome?logout=true"; 
-                };
-
-                // Bloquear a rolagem da página por trás do modal
-                document.body.style.overflow = 'hidden';
-
-                // ** IMPORTANTE: Interromper a execução de todos os outros scripts da página **
-                // Não há uma maneira limpa de fazer isso com scripts síncronos, 
-                // mas garantimos que as principais ações não ocorram ao retornarmos aqui.
-                // Outros scripts que leem o DOM devem ser estruturados para depender do login/status.
-            } else {
-                // Fallback de segurança se o HTML do modal não foi incluído
-                console.error("Modal de banimento não encontrado. Redirecionando como fallback.");
-                window.location.href = "go:pghome?logout=true"; 
-            }
-        }
-    } catch (e) {
-        console.error("Erro geral no check de banimento:", e);
+    if (error) {
+      console.error("Erro ao verificar banimento:", error)
+      return
     }
-});
-// --- FIM DO SCRIPT DE VERIFICAÇÃO DE BANIMENTO ---
+
+    if (data?.is_banned === true) {
+      console.warn(`Usuário ${userId} está banido.`)
+
+      const banModal = document.getElementById('banModalOverlay')
+      const banReasonContent = document.getElementById('banReasonContent')
+      const logoutBanBtn = document.getElementById('logoutBanBtn')
+
+      if (!banModal || !banReasonContent || !logoutBanBtn) {
+        window.location.href = "go:pghome?logout=true"
+        return
+      }
+
+      banReasonContent.innerText =
+        data.ban_reason || "Motivo não especificado. Entre em contato com o suporte."
+
+      banModal.style.display = 'flex'
+      document.body.style.overflow = 'hidden'
+
+      logoutBanBtn.onclick = async () => {
+        await supabase.auth.signOut()
+        window.location.href = "go:pghome?logout=true"
+      }
+    }
+
+  } catch (e) {
+    console.error("Erro geral no check de banimento:", e)
+  }
+})
 </script>
+
 
 
 <div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">

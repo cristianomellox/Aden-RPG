@@ -1,8 +1,9 @@
-// pv.js - Lógica para o Sistema de Mensagens Privadas (Versão Final com Modal e Notificação Local)
+import { supabase } from './supabaseClient.js'
+
 
 document.addEventListener("DOMContentLoaded", () => {
     // --- SETUP INICIAL ---
-    const supabaseClient = window.supabaseClient || (window.supabase && window.supabase.createClient ? window.supabase.createClient('https://lqzlblvmkuwedcofmgfb.supabase.co', 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx') : null);
+    
     const showFloatingMessage = window.showFloatingMessage || console.log;
 
     // --- ELEMENTOS DA UI ---

@@ -8,14 +8,13 @@ let playerBaseStats = {};
 let allInventoryItems = [];
 let selectedItem = null;
 
-
 // ===============================
-// IndexedDB utilitário simples (Cache 24h)
+// IndexedDB utilitário (Cache 24h)
 // ===============================
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 29; // Incrementado para limpar caches antigos e evitar conflitos
+const DB_VERSION = 30; // Incrementado para limpar caches antigos/corrompidos
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -37,124 +36,128 @@ function openDB() {
     });
 }
 
-// Salva o cache completo (Items + Stats + Timestamp do Servidor)
+// Salva o cache completo
 async function saveCache(items, stats, timestamp) {
-    const db = await openDB();
-    const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const meta = tx.objectStore(META_STORE);
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
 
-    store.clear();
-    (items || []).forEach(item => store.put(item));
-    
-    // Salva metadados essenciais para o controle de versão
-    meta.put({ key: "last_updated", value: timestamp }); // Timestamp vindo do servidor
-    meta.put({ key: "player_stats", value: stats });     // Stats calculados pelo servidor
-    meta.put({ key: "cache_time", value: Date.now() });  // Controle local
+        store.clear();
+        (items || []).forEach(item => store.put(item));
+        
+        meta.put({ key: "last_updated", value: timestamp }); // Timestamp do servidor
+        meta.put({ key: "player_stats", value: stats });     // Stats calculados
+        meta.put({ key: "cache_time", value: Date.now() });  // Controle local
 
-    return new Promise((resolve) => {
-        tx.oncomplete = () => resolve();
-    });
+        return new Promise((resolve) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); 
+        });
+    } catch (e) {
+        console.warn("Erro ao salvar cache IndexedDB:", e);
+    }
 }
 
 async function loadCache() {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readonly");
-    return new Promise((resolve, reject) => {
-        const req = tx.objectStore(STORE_NAME).getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, "readonly");
+        return new Promise((resolve, reject) => {
+            const req = tx.objectStore(STORE_NAME).getAll();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { return null; }
 }
 
 async function loadPlayerStatsFromCache() {
-    const db = await openDB();
-    const tx = db.transaction(META_STORE, "readonly");
-    return new Promise((resolve) => {
-        const req = tx.objectStore(META_STORE).get("player_stats");
-        req.onsuccess = () => resolve(req.result ? req.result.value : null);
-        req.onerror = () => resolve(null);
-    });
+    try {
+        const db = await openDB();
+        const tx = db.transaction(META_STORE, "readonly");
+        return new Promise((resolve) => {
+            const req = tx.objectStore(META_STORE).get("player_stats");
+            req.onsuccess = () => resolve(req.result ? req.result.value : null);
+            req.onerror = () => resolve(null);
+        });
+    } catch(e) { return null; }
 }
 
 async function getLastUpdated() {
-    const db = await openDB();
-    const tx = db.transaction(META_STORE, "readonly");
-    return new Promise((resolve) => {
-        const req = tx.objectStore(META_STORE).get("last_updated");
-        req.onsuccess = () => resolve(req.result ? req.result.value : null);
-        req.onerror = () => resolve(null);
-    });
-}
-
-async function updateCacheItem(item) {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(item);
-    return tx.complete;
-}
-
-async function removeCacheItem(itemId) {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(itemId);
-    return tx.complete;
-}
-
-// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
-function getLocalUserId() {
     try {
-        const cached = localStorage.getItem('player_data_cache');
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            // Verifica ID no formato novo e antigo para garantir
-            if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
-            if (parsed && parsed.id) return parsed.id;
-        }
-    } catch (e) {}
-
-    try {
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                const sessionStr = localStorage.getItem(k);
-                const session = JSON.parse(sessionStr);
-                if (session && session.user && session.user.id) {
-                    return session.user.id;
-                }
-            }
-        }
-    } catch (e) {}
-    return null;
+        const db = await openDB();
+        const tx = db.transaction(META_STORE, "readonly");
+        return new Promise((resolve) => {
+            const req = tx.objectStore(META_STORE).get("last_updated");
+            req.onsuccess = () => resolve(req.result ? req.result.value : null);
+            req.onerror = () => resolve(null);
+        });
+    } catch(e) { return null; }
 }
 
+// ===============================
+// BLINDAGEM DE AUTENTICAÇÃO (CORREÇÃO DE TOKEN)
+// ===============================
+async function ensureAuthenticated() {
+    // 1. Verifica sessão atual (pode estar stale no localStorage)
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (session) {
+        globalUser = session.user;
+        // Teste rápido para ver se o token realmente funciona
+        // Se o token for de 7 dias e expirou no servidor, isso aqui falharia em chamadas futuras
+        return true;
+    }
+
+    console.warn("Sessão inicial inválida. Tentando refresh explícito...");
+
+    // 2. Tenta refresh forçado
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    
+    if (!refreshError && refreshData.session) {
+        console.log("Sessão renovada com sucesso.");
+        globalUser = refreshData.session.user;
+        return true;
+    }
+
+    console.error("Falha fatal de autenticação:", refreshError || error);
+    return false;
+}
+
+// ===============================
+// INICIALIZAÇÃO E EVENTOS
+// ===============================
+
+// Aplica shimmer IMEDIATAMENTE (antes do DOMContentLoaded completo)
+(function applyInitialShimmer(){
+    const ids = ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion'];
+    const add = () => ids.forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('shimmer'); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add);
+    else add();
+})();
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM carregado. Iniciando script inventory.js com SEGURANÇA DE AUTH...');
+    console.log('DOM carregado. Iniciando inventory.js com Auth Shield...');
     
-    // Auth Otimista
-    const localId = getLocalUserId();
-    if (localId) {
-        console.log("⚡ Auth Otimista: ID recuperado localmente.");
-        globalUser = { id: localId };
-    } else {
-        console.warn("Auth Cache Miss: Buscando sessão no servidor...");
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error || !session) {
-            console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
-            window.location.href = "index.html?refresh=true";
-            return;
-        }
-        globalUser = session.user;
+    // 1. Garante autenticação antes de qualquer chamada RPC
+    const isAuthenticated = await ensureAuthenticated();
+    if (!isAuthenticated) {
+        window.location.href = `index.html?error=auth_fail&t=${Date.now()}`;
+        return;
     }
     
-    // Inicia carregamento
+    // 2. Carrega dados
     await loadPlayerAndItems();
 
+    // 3. Event Listeners
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
-        console.log('Botão de refresh clicado. Forçando a recarga.');
+        const btn = document.getElementById('refreshBtn');
+        btn.style.opacity = '0.5';
+        console.log('Refresh manual solicitado.');
         await loadPlayerAndItems(true); 
+        btn.style.opacity = '1';
     });
 
     document.querySelectorAll('.tab-button').forEach(button => {
@@ -233,9 +236,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const fragmentRarity = selections[0]?.rarity || item.items.rarity;
         const maxNecessario = calcularFragmentosNecessariosParaCap(item, fragmentRarity);
 
+        // Aviso amigável se exceder, mas permite o envio (o backend valida)
         if (totalSelecionado > maxNecessario) {
-            showCustomAlert(`Você só precisa de ${maxNecessario} fragmentos para atingir o limite. Ajuste a quantidade.`);
-            return;
+           // Opcional: showCustomAlert(...)
         }
 
         handleLevelUpMulti(item, selections);
@@ -248,8 +251,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function showCustomAlert(message) {
     const modal = document.getElementById('customAlertModal');
-    document.getElementById('customAlertMessage').textContent = message;
-    modal.style.display = 'flex';
+    if (modal) {
+        document.getElementById('customAlertMessage').textContent = message;
+        modal.style.display = 'flex';
+    } else {
+        alert(message);
+    }
 }
 
 function showCustomConfirm(message, onConfirm) {
@@ -271,123 +278,108 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 // ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX + AUTH RETRY)
+// CARREGAMENTO OTIMIZADO COM RETRY
 // ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
-    if (!globalUser || !globalUser.id) {
-        console.error("Usuário global inválido. Tentando obter sessão...");
-        const { data } = await supabase.auth.getSession();
-        if (data.session) globalUser = data.session.user;
-        else {
-             window.location.href = "index.html"; 
-             return;
-        }
+    if (!globalUser) {
+        if (!(await ensureAuthenticated())) return;
     }
 
-    // 1. Check de Timestamp (Leitura Leve)
-    // Se o token estiver expirado, isso pode falhar. Vamos blindar aqui também.
-    let { data: serverMeta, error: metaError } = await supabase
-        .from('players')
-        .select('last_inventory_update')
-        .eq('id', globalUser.id)
-        .single();
-
-    if (metaError) {
-        console.warn('Erro ao verificar versão do cache (possível token expirado):', metaError);
-        // Se deu erro de permissão (token), tentamos renovar antes de prosseguir
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (!refreshError && refreshData.session) {
-             console.log("Sessão renovada com sucesso (Meta Check).");
-             globalUser = refreshData.session.user;
-             // Retenta a query leve
-             const retryMeta = await supabase.from('players').select('last_inventory_update').eq('id', globalUser.id).single();
-             serverMeta = retryMeta.data;
-        }
-    }
-
-    const localTimestamp = await getLastUpdated();
-    
-    // Verifica se podemos usar o cache local (Zero Egress)
-    const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
-
-    console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
-
-    if (canUseCache) {
+    // 1. Check de Cache (Zero Egress)
+    // Só usa cache se não for refresh forçado
+    if (!forceRefresh) {
         try {
-            const [itemsFromCache, statsFromCache] = await Promise.all([
-                loadCache(),
-                loadPlayerStatsFromCache()
-            ]);
+            const localTimestamp = await getLastUpdated();
+            
+            // Verifica metadata no servidor de forma leve
+            // Se o token estiver expirado aqui, a query falha e o catch pega
+            const { data: serverMeta, error: metaError } = await supabase
+                .from('players')
+                .select('last_inventory_update')
+                .eq('id', globalUser.id)
+                .single();
 
-            // Se o cache local estiver saudável, usamos ele
-            if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
-                console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                allInventoryItems = itemsFromCache;
-                playerBaseStats = statsFromCache;
-                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                
-                renderUI();
-                return; // Encerra aqui, nenhuma chamada pesada ao banco
+            const canUseCache = !metaError && serverMeta && localTimestamp && (localTimestamp === serverMeta.last_inventory_update);
+
+            if (canUseCache) {
+                const [itemsFromCache, statsFromCache] = await Promise.all([
+                    loadCache(),
+                    loadPlayerStatsFromCache()
+                ]);
+
+                if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
+                    console.log('✅ Zero Egress: Usando IndexedDB.');
+                    allInventoryItems = itemsFromCache;
+                    playerBaseStats = statsFromCache;
+                    equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+                    renderUI();
+                    return;
+                }
             }
         } catch (e) {
-            console.warn('Erro ao ler cache local. Baixando do servidor...', e);
+            console.warn("Falha na verificação de cache, indo para RPC.", e);
         }
     }
 
-    // 2. Fetch via RPC Seguro (Correção do "Bolsa Vazia" + AUTH RETRY)
-    console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
+    // 2. Fetch via RPC Seguro (Com Retry Automático)
+    console.log('⬇️ Baixando dados via RPC...');
     
-    let { data: playerData, error: rpcError } = await supabase
-        .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
+    let playerData = await fetchPlayerDataWithRetry();
 
-    // --- CORREÇÃO DE AUTH (Token Expirado) ---
-    if (rpcError) {
-        console.warn("RPC Error (Inventory). Tentando refresh de sessão...", rpcError);
-        
-        // Tenta renovar o token
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (!refreshError && refreshData.session) {
-            console.log("Sessão renovada. Retentando RPC...");
-            globalUser = refreshData.session.user; // Atualiza usuário global com novo token
-            
-            // Retenta a chamada RPC
-            const retry = await supabase.rpc('get_player_data_lazy', { p_player_id: globalUser.id });
-            playerData = retry.data;
-            rpcError = retry.error;
-        } else {
-            console.error("Falha fatal de autenticação no Inventário. Redirecionando.", refreshError);
-            window.location.href = "index.html?error=session_expired";
-            return;
-        }
-    }
-
-    if (rpcError || !playerData) {
-        console.error('❌ Erro persistente na RPC get_player_data_lazy:', rpcError?.message);
-        showCustomAlert('Erro crítico ao carregar inventário. Faça login novamente.');
+    if (!playerData) {
+        console.error('❌ Erro persistente ao carregar inventário.');
+        showCustomAlert('Erro ao carregar dados. Verifique sua conexão e recarregue.');
+        // Renderiza vazio para destravar a UI
+        renderUI();
         return;
     }
 
-    // Atualiza variáveis globais com o retorno da RPC
+    // Atualiza globais
     playerBaseStats = playerData.cached_combat_stats || {};
     allInventoryItems = playerData.cached_inventory || [];
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // 3. Salva no IndexedDB para a próxima vez
+    // 3. Salva no Cache
     await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-    console.log('💾 Cache local atualizado.');
+    console.log('💾 Cache atualizado.');
 
     renderUI();
+}
+
+// Função auxiliar para retry em caso de Token Expirado
+async function fetchPlayerDataWithRetry(attempts = 1) {
+    const { data, error } = await supabase.rpc('get_player_data_lazy', { p_player_id: globalUser.id });
+
+    if (!error) return data;
+
+    // Se o erro indicar problema de sessão (JWT expired, 401, PGRST301)
+    if (attempts > 0 && (error.code === 'PGRST301' || error.message.includes('JWT') || error.message.includes('401'))) {
+        console.warn("Token expirado na RPC. Renovando sessão...");
+        
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr) {
+            const { data: sess } = await supabase.auth.getSession();
+            if (sess.session) globalUser = sess.session.user;
+            
+            // Tenta de novo
+            return fetchPlayerDataWithRetry(attempts - 1);
+        }
+    }
+
+    console.error("Erro final na RPC:", error);
+    return null;
 }
 
 function renderUI() {
     updateStatsUI(playerBaseStats);
     renderEquippedItems();
-    loadItems('all', allInventoryItems);
+    // Renderiza a aba ativa ou 'all'
+    const activeBtn = document.querySelector('.tab-button.active');
+    const tab = activeBtn ? activeBtn.id.replace('tab-', '') : 'all';
+    loadItems(tab, allInventoryItems);
 }
 
-// Atualiza a UI usando os stats já calculados pelo servidor
 function updateStatsUI(stats) {
     if (!stats) return;
 
@@ -399,26 +391,19 @@ function updateStatsUI(stats) {
     const avatarEl = document.getElementById('playerAvatarEquip');
     if (avatarEl && stats.avatar_url) avatarEl.src = stats.avatar_url;
 
-    // Valores
-    const atkSpan = document.getElementById('playerAttack');
-    const defSpan = document.getElementById('playerDefense');
-    const hpSpan  = document.getElementById('playerHealth');
-    const ccSpan  = document.getElementById('playerCritChance');
-    const cdSpan  = document.getElementById('playerCritDamage');
-    const evSpan  = document.getElementById('playerEvasion');
+    // Valores (usando Math.floor para inteiros)
+    const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
 
-    if (atkSpan) atkSpan.textContent = `${Math.floor(stats.min_attack || 0)} - ${Math.floor(stats.attack || 0)}`;
-    if (defSpan) defSpan.textContent = `${Math.floor(stats.defense || 0)}`;
-    if (hpSpan)  hpSpan.textContent  = `${Math.floor(stats.health || 0)}`;
-    // CÓDIGO NOVO (Inteiros, sem .0)
-    if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
-    if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
-    if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
+    set('playerAttack', `${Math.floor(stats.min_attack || 0)} - ${Math.floor(stats.attack || 0)}`);
+    set('playerDefense', `${Math.floor(stats.defense || 0)}`);
+    set('playerHealth', `${Math.floor(stats.health || 0)}`);
+    set('playerCritChance', `${Math.floor(stats.crit_chance || 0)}%`);
+    set('playerCritDamage', `${Math.floor(stats.crit_damage || 0)}%`);
+    set('playerEvasion', `${Math.floor(stats.evasion || 0)}%`);
 }
 
-// Mantido apenas como compatibilidade, pois o cálculo real agora vem do servidor
 function calculatePlayerStats() {
-    // console.log("Stats sincronizados.");
+    // Mantido por compatibilidade, mas o cálculo agora é server-side
 }
 
 function renderEquippedItems() {
@@ -489,7 +474,7 @@ async function loadItems(tab = 'all', itemsList = null) {
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
         }
 
-        itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}">`;
+        itemDiv.innerHTML = `<img src="${imgSrc}" loading="lazy" alt="${item.items.name}">`;
         if ((item.items.item_type === 'fragmento' || item.items.item_type === 'outros') && item.quantity > 1) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
@@ -741,7 +726,6 @@ function renderFragmentList(itemToLevelUp) {
     fragments.forEach(fragment => {
         const fragmentLi = document.createElement('li');
         
-        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         fragmentLi.innerHTML = `
             <div class="fragment-info" style="display:flex; align-items:center; gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp"
@@ -852,7 +836,6 @@ async function showCraftingModal(fragment) {
         `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
     document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
 
-    // Ajuste aqui para carregar a imagem do item criado corretamente, incluindo as estrelas
     document.getElementById('craftingTargetImage').src =
         `https://aden-rpg.pages.dev/assets/itens/${itemToCraft.name}_${itemToCraft.stars}estrelas.webp`;
 
@@ -959,7 +942,6 @@ function openRefineFragmentModal(item) {
         li.className = 'inventory-item';
         li.setAttribute('data-inventory-item-id', fragmentInv.id);
         
-        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         li.innerHTML = `
             <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
@@ -1093,21 +1075,3 @@ async function handleCraft(itemId, fragmentId) {
         showCustomAlert('Ocorreu um erro ao tentar construir o item.');
     }
 }
-
-
-// ===============================
-// >>> Cache & Shimmer FIX PATCH (appended) <<<
-// ===============================
-
-// Aplica shimmer cedo (antes de qualquer preenchimento) e remove depois
-(function applyInitialShimmer(){
-  function addShimmer(){
-    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
-      .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('shimmer'); });
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addShimmer, { once: true });
-  } else {
-    addShimmer();
-  }
-})();

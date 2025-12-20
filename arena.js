@@ -1,12 +1,10 @@
+import { supabase } from './supabaseClient.js'
+
 document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     // 1. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
     // =======================================================================
-    const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-    const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    let userId = null;
+    
 
     // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
     function getLocalUserId() {

@@ -107,9 +107,9 @@ function getLocalUserId() {
         const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
-            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
-                return parsed.data.id;
-            }
+            // Verifica ID no formato novo e antigo para garantir
+            if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
+            if (parsed && parsed.id) return parsed.id;
         }
     } catch (e) {}
 
@@ -130,7 +130,7 @@ function getLocalUserId() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM carregado. Iniciando script inventory.js...');
+    console.log('DOM carregado. Iniciando script inventory.js com SEGURANÇA DE AUTH...');
     
     // Auth Otimista
     const localId = getLocalUserId();
@@ -139,8 +139,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         globalUser = { id: localId };
     } else {
         console.warn("Auth Cache Miss: Buscando sessão no servidor...");
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session) {
             console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
             window.location.href = "index.html?refresh=true";
             return;
@@ -271,27 +271,44 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 // ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX)
+// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX + AUTH RETRY)
 // ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
-    if (!globalUser) return;
+    if (!globalUser || !globalUser.id) {
+        console.error("Usuário global inválido. Tentando obter sessão...");
+        const { data } = await supabase.auth.getSession();
+        if (data.session) globalUser = data.session.user;
+        else {
+             window.location.href = "index.html"; 
+             return;
+        }
+    }
 
     // 1. Check de Timestamp (Leitura Leve)
-    const { data: serverMeta, error: metaError } = await supabase
+    // Se o token estiver expirado, isso pode falhar. Vamos blindar aqui também.
+    let { data: serverMeta, error: metaError } = await supabase
         .from('players')
         .select('last_inventory_update')
         .eq('id', globalUser.id)
         .single();
 
     if (metaError) {
-        console.error('Erro ao verificar versão do cache:', metaError);
+        console.warn('Erro ao verificar versão do cache (possível token expirado):', metaError);
+        // Se deu erro de permissão (token), tentamos renovar antes de prosseguir
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshData.session) {
+             console.log("Sessão renovada com sucesso (Meta Check).");
+             globalUser = refreshData.session.user;
+             // Retenta a query leve
+             const retryMeta = await supabase.from('players').select('last_inventory_update').eq('id', globalUser.id).single();
+             serverMeta = retryMeta.data;
+        }
     }
 
     const localTimestamp = await getLastUpdated();
     
     // Verifica se podemos usar o cache local (Zero Egress)
-    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
     const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
 
     console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
@@ -318,16 +335,37 @@ async function loadPlayerAndItems(forceRefresh = false) {
         }
     }
 
-    // 2. Fetch via RPC Seguro (Correção do "Bolsa Vazia")
-    // Em vez de select direto, chamamos uma RPC que garante que os dados existem.
+    // 2. Fetch via RPC Seguro (Correção do "Bolsa Vazia" + AUTH RETRY)
     console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
     
-    const { data: playerData, error: rpcError } = await supabase
+    let { data: playerData, error: rpcError } = await supabase
         .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
 
+    // --- CORREÇÃO DE AUTH (Token Expirado) ---
     if (rpcError) {
-        console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
-        showCustomAlert('Erro ao carregar inventário. Tente atualizar a página.');
+        console.warn("RPC Error (Inventory). Tentando refresh de sessão...", rpcError);
+        
+        // Tenta renovar o token
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (!refreshError && refreshData.session) {
+            console.log("Sessão renovada. Retentando RPC...");
+            globalUser = refreshData.session.user; // Atualiza usuário global com novo token
+            
+            // Retenta a chamada RPC
+            const retry = await supabase.rpc('get_player_data_lazy', { p_player_id: globalUser.id });
+            playerData = retry.data;
+            rpcError = retry.error;
+        } else {
+            console.error("Falha fatal de autenticação no Inventário. Redirecionando.", refreshError);
+            window.location.href = "index.html?error=session_expired";
+            return;
+        }
+    }
+
+    if (rpcError || !playerData) {
+        console.error('❌ Erro persistente na RPC get_player_data_lazy:', rpcError?.message);
+        showCustomAlert('Erro crítico ao carregar inventário. Faça login novamente.');
         return;
     }
 
@@ -373,9 +411,9 @@ function updateStatsUI(stats) {
     if (defSpan) defSpan.textContent = `${Math.floor(stats.defense || 0)}`;
     if (hpSpan)  hpSpan.textContent  = `${Math.floor(stats.health || 0)}`;
     // CÓDIGO NOVO (Inteiros, sem .0)
-if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
-if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
-if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
+    if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
+    if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
+    if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
 }
 
 // Mantido apenas como compatibilidade, pois o cálculo real agora vem do servidor

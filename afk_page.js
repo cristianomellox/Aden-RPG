@@ -1,21 +1,7 @@
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO...");
 
-    // =====================================================
-    // 🔐 AUTH CENTRALIZADO (BOOTSTRAP)
-    // =====================================================
-    const auth = window.__AUTH__;
-    if (!auth || !auth.ready) {
-        console.warn("[AFK] Auth não inicializado.");
-        return;
-    }
-
-    const userId = auth.userId;
-    const supabase = auth.supabase;
-
-    // =====================================================
     // 🎵 Sons e músicas
-    // =====================================================
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
     const criticalHitSound = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
     const idleMusic = new Audio("https://aden-rpg.pages.dev/assets/idlesong.mp3");
@@ -28,13 +14,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     idleMusic.loop = true;
     combatMusic.loop = true;
 
+    // Supabase
+    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     // --- CONFIGURAÇÕES DE CÁLCULO (Sincronizado com SQL) ---
-    const XP_RATE_PER_SEC = 1.0 / 1800;
-    const GOLD_RATE_PER_SEC = 0;
-    const MAX_AFK_SECONDS = 4 * 60 * 60;
-    const MIN_COLLECT_SECONDS = 3600;
+    const XP_RATE_PER_SEC = 1.0 / 1800; // Conforme SQL
+    const GOLD_RATE_PER_SEC = 0;        // Conforme SQL
+    const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
+    const MIN_COLLECT_SECONDS = 3600;    // 1 hora
     const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000;
-    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000;
+    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas para stats de combate
 
     // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");
@@ -49,7 +40,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const saibaMaisBtn = document.getElementById("saiba-mais");
     const playerTotalXpSpan = document.getElementById("player-total-xp");
     const playerTotalGoldSpan = document.getElementById("player-total-gold");
-
+    
     // Combat UI
     const combatScreen = document.getElementById("combat-screen");
     const monsterNameSpan = document.getElementById("monster-name");
@@ -77,12 +68,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
 
     // --- STATE MANAGEMENT ---
-    let playerAfkData = {};
+    let playerAfkData = {}; // Cache em memória
     let afkStartTime = null;
     let timerInterval;
     let localSimulationInterval;
-    let cachedCombatStats = null;
-
+    let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
 
     // --- HELPER DE AUTH ---
     function getLocalUserId() {

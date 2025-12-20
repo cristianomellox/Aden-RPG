@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient.js'
+
 // =======================================================================
 // INÍCIO: LÓGICA DE MÚSICA (MOVIDA PARA O TOPO PARA CORRIGIR RACE CONDITION)
 // =======================================================================
@@ -496,21 +498,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
-// =======================================================================
-// FIM DO SCRIPT DO INTRO
-// =======================================================================
 
-// =======================================================================
-// INÍCIO: RESTANTE DO SCRIPT (SUPABASE, CACHE, JOGADOR, ETC.)
-// =======================================================================
-
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// =======================================================================
-// CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
-// =======================================================================
 const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão (24h)
 
 /**

@@ -1056,6 +1056,22 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 
+    // =================================================================
+    // LÓGICA DE REDIRECIONAMENTO (RECUPERAÇÃO DE CACHE)
+    // Se a URL tiver ?return_to=..., significa que outra página pediu socorro.
+    // Já salvamos o cache acima, agora mandamos o usuário de volta.
+    // =================================================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const returnTo = urlParams.get('return_to');
+    if (returnTo) {
+        console.log(`Cache recuperado. Redirecionando para: ${returnTo}`);
+        setTimeout(() => {
+            window.location.href = returnTo;
+        }, 100);
+        return;
+    }
+    // =================================================================
+
     // Verifica nome padrão para abrir modal de edição
     if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
         if (typeof window.updateProfileEditModal === 'function') {

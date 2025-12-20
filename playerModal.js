@@ -1,7 +1,28 @@
-import { supabase } from './supabaseClient.js'
-
+// playerModal.js
 document.addEventListener("DOMContentLoaded", () => {
-    
+    const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+
+    // Inicializa o client do Supabase de forma robusta (compatível com versões antigas e novas)
+    let supabase = null;
+    try {
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+            // cria client e expõe em window.supabaseClient para outros scripts (ex: guild_pv.js)
+            window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabase = window.supabaseClient;
+            console.log("[playerModal.js] Supabase client inicializado com sucesso.");
+        } else {
+            console.error("[playerModal.js] SDK Supabase não detectado no window.supabase.");
+        }
+    } catch (e) {
+        console.error("[playerModal.js] Erro ao inicializar Supabase:", e);
+    }
+
+    if (!supabase) {
+        // Se não conseguir inicializar, aborta (os outros scripts dependem do supabase)
+        console.error("Supabase não iniciado — player modal ficará limitado.");
+        // Mas continuamos declarando variáveis DOM para evitar erros em tempo de execução
+    }
 
     // --- INÍCIO: FUNÇÕES DE CACHE ---
     /**

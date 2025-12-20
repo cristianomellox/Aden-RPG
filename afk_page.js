@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient.js'
+
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO E SEGURANÇA DE AUTH...");
 
@@ -14,10 +16,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     idleMusic.loop = true;
     combatMusic.loop = true;
 
-    // Supabase
-    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // --- CONFIGURAÇÕES DE CÁLCULO (Sincronizado com SQL) ---
     const XP_RATE_PER_SEC = 1.0 / 1800; // Conforme SQL

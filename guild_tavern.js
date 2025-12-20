@@ -1,18 +1,8 @@
-// guild_tavern.js - Versão híbrida com BroadcastChannel + Polling Condicional (Focus Polling)
+import { supabase } from './supabaseClient.js'
+
 
 document.addEventListener('DOMContentLoaded', async () => {
-    let supabase;
-    try {
-        const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-        const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-        supabase = (window.supabase && window.supabase.createClient)
-            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-            : null;
-        if (!supabase) throw new Error('Cliente Supabase não pôde ser inicializado.');
-    } catch (error) {
-        console.error("Erro fatal na inicialização:", error);
-        return;
-    }
+    
 
     const tTitle = document.getElementById('tavernTitle');
     const tControls = document.getElementById('tavernControls');

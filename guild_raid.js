@@ -1,8 +1,8 @@
+import { supabase } from './supabaseClient.js'
+
 console.log("guild_raid.js (v13.1) - Fix: 0/3 Stuck & Death Banner Sync");
 
-const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;

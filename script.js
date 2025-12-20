@@ -1207,9 +1207,16 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
 signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
+// homeBtn.addEventListener('click', () => { // REMOVIDO
+//     updateUIVisibility(true, 'welcomeContainer');
+//     fetchAndDisplayPlayerInfo(true, true);
+//     showFloatingMessage("Você está na página inicial!");
+// });
+
+// Sessão e inicialização
 
 // =======================================================================
-// OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO (CORRIGIDA)
+// OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO
 // =======================================================================
 window.authCheckComplete = false;
 
@@ -1222,21 +1229,14 @@ async function checkAuthStatus() {
         currentPlayerId = session.user.id;
         window.authCheckComplete = true;
 
-        // Se NÃO tínhamos cache ou se ele é muito antigo, buscamos do banco
+        // Se NÃO tínhamos cache ou se ele é muito antigo, aí sim buscamos do banco
         if (!currentPlayerData) {
-            console.log("🔄 Cache vazio. Buscando dados atualizados e validando token...");
-            
-            // Tenta buscar os dados. Se falhar (token podre), o próprio fetch fará logout
-            const success = await fetchAndDisplayPlayerInfo(true); 
-            
-            if (!success) {
-                // Se falhou mas não fez logout automático, forçamos UI de login
-                // Isso previne o estado "Fantasma" onde parece logado mas não tem dados
-                console.warn("Falha ao regenerar cache. Sessão pode estar instável.");
-                // Opcional: updateUIVisibility(false); 
-            }
+            console.log("🔄 Cache vazio. Buscando dados atualizados...");
+            fetchAndDisplayPlayerInfo(true); 
         } else {
             console.log("✅ Sessão válida. Mantendo dados do cache para economizar banda.");
+            // Opcional: Atualizar silenciosamente em background se o cache for > 10 min
+            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
         }
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
@@ -1247,10 +1247,6 @@ async function checkAuthStatus() {
         // Sem sessão, mostra tela de login
         updateUIVisibility(false);
         window.authCheckComplete = true;
-        
-        // Limpa qualquer lixo de cache que possa ter sobrado sem sessão
-        localStorage.removeItem('player_data_cache');
-        
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
     }
 }

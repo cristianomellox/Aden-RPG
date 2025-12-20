@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js (MODO AUTÔNOMO)...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -19,13 +19,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- CONFIGURAÇÕES DE CÁLCULO (Sincronizado com SQL) ---
-    const XP_RATE_PER_SEC = 1.0 / 1800; // Conforme SQL
-    const GOLD_RATE_PER_SEC = 0;        // Conforme SQL
+    // --- CONFIGURAÇÕES DE CÁLCULO ---
+    const XP_RATE_PER_SEC = 1.0 / 1800; 
+    const GOLD_RATE_PER_SEC = 0;        
     const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
     const MIN_COLLECT_SECONDS = 3600;    // 1 hora
     const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000;
-    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas para stats de combate
+    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; 
 
     // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");
@@ -68,41 +68,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
 
     // --- STATE MANAGEMENT ---
-    let playerAfkData = {}; // Cache em memória
+    let playerAfkData = {}; 
     let afkStartTime = null;
     let timerInterval;
     let localSimulationInterval;
-    let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
+    let cachedCombatStats = null;
+    let userId = null;
 
-    // --- HELPER DE AUTH ---
-    function getLocalUserId() {
-        try {
-            const cached = localStorage.getItem('player_data_cache');
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
-            }
-        } catch (e) {}
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                    const session = JSON.parse(localStorage.getItem(k));
-                    if (session?.user?.id) return session.user.id;
-                }
-            }
-        } catch (e) {}
-        return null;
-    }
+    // --- 1. AUTENTICAÇÃO DIRETA (SEM CACHE EXTERNO) ---
+    async function checkAuthAndInit() {
+        // Verifica diretamente com o Supabase se existe sessão válida
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-    let userId = getLocalUserId();
+        if (error || !session) {
+            console.warn("Sem sessão válida no AFK. Redirecionando para login.");
+            window.location.href = "index.html"; // Redireciona para evitar estado zumbi
+            return;
+        }
 
-    // Fallback de Auth (Rede)
-    if (!userId) {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) userId = session.user.id;
-        } catch (e) { console.error(e); }
+        userId = session.user.id;
+        console.log("Usuário autenticado no AFK:", userId);
+        
+        // Só inicia a busca de dados se tivermos o ID
+        await initializePlayerData();
     }
 
     // --- VISUAL FORMATTING ---
@@ -110,7 +98,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return new Intl.NumberFormat('en-US').format(num);
     }
 
-    // --- CORE LOGIC: SIMULAÇÃO LOCAL (Zero Egress) ---
+    // --- CORE LOGIC: SIMULAÇÃO LOCAL ---
     function updateLocalSimulation() {
         if (!afkStartTime || !playerAfkData) return;
 
@@ -150,33 +138,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // --- NOVO: CACHE DE COMBAT STATS (Sincronizado com Mina) ---
+    // --- CACHE DE COMBAT STATS (Interno) ---
     async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
         if (!userId) return null;
         const now = Date.now();
-        // NOTA: Usa a MESMA chave da mina para compartilhar o cache
         const cacheKey = `player_combat_stats_${userId}`; 
         
-        // Tenta ler do LocalStorage
         let stored = localStorage.getItem(cacheKey);
         if (stored && !forceUpdate) {
             try {
                 const parsed = JSON.parse(stored);
-                // Verifica validade (12h)
                 if (now - parsed.timestamp < STATS_CACHE_DURATION) {
                     cachedCombatStats = parsed.data;
-                    console.log("[AFK] Combat stats carregados do cache local.");
                     return cachedCombatStats;
                 }
             } catch(e) { console.warn("Cache stats inválido", e); }
         }
-    
-        // Se não tiver cache ou expirou, não precisamos chamar o servidor explicitamente aqui
-        // pois a função 'start_afk_adventure' no SQL já lida com a geração do cache se faltar.
         return null;
     }
 
-    // --- DATA MANAGEMENT (Cache & Sync) ---
+    // --- DATA MANAGEMENT (SEM DEPENDENCIA EXTERNA) ---
     
     function renderPlayerData() {
         if (!playerAfkData) return;
@@ -196,7 +177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateLocalSimulation();
     }
 
-    function saveToCache(data) {
+    function saveToInternalCache(data) {
         if(!userId) return;
         const cacheKey = `playerAfkData_${userId}`;
         localStorage.setItem(cacheKey, JSON.stringify({ data: data, timestamp: Date.now() }));
@@ -205,21 +186,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function initializePlayerData() {
         if (!userId) return;
 
-        // 1. Tenta carregar/validar cache de combate (para estar pronto e consistente com mina)
+        // Tenta carregar stats de combate
         await getOrUpdatePlayerStatsCache();
 
-        // 2. Lógica padrão de dados AFK
         const cacheKey = `playerAfkData_${userId}`;
         const cached = localStorage.getItem(cacheKey);
         let shouldUseCache = false;
 
+        // Tenta usar cache INTERNO desta página
         if (cached) {
             const { data, timestamp } = JSON.parse(cached);
             if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
                 playerAfkData = data;
                 shouldUseCache = true;
                 
-                // OTIMIZAÇÃO DE RESET DIÁRIO
+                // Checagem leve de reset diário
                 const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
                 const now = new Date();
                 const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
@@ -227,29 +208,40 @@ document.addEventListener("DOMContentLoaded", async () => {
                                     now.getUTCFullYear() !== lastResetDate.getUTCFullYear();
 
                 if (isNewDayUtc) {
-                    console.log("Virada de dia detectada (UTC). Verificando reset via RPC leve...");
                     const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
                     if (!resetError && resetData) {
                         playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
                         if (resetData.reset_performed) {
                             playerAfkData.last_attempt_reset = new Date().toISOString(); 
                         }
-                        saveToCache(playerAfkData);
+                        saveToInternalCache(playerAfkData);
                     }
                 }
             }
         }
 
+        // Se não tem cache ou expirou, busca no servidor
         if (!shouldUseCache) {
-            console.log("Cache inválido ou inexistente. Buscando dados completos...");
+            console.log("Cache interno AFK ausente/expirado. Buscando no servidor...");
             const { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
+            
             if (error) {
-                console.error("Erro ao obter dados:", error);
-                return;
+                console.error("Erro ao obter dados AFK:", error);
+                
+                // --- PROTEÇÃO CONTRA ZUMBI (ESTÁGIO 1) ---
+                // Se der erro de autenticação ou falha de rede grave, não carregue a página com dados vazios.
+                if (error.code === 'PGRST301' || error.message.includes('JWT') || error.message.includes('token')) {
+                    alert("Sessão expirada. Por favor, faça login novamente.");
+                    await supabase.auth.signOut();
+                    window.location.href = "index.html";
+                    return;
+                }
+                return; // Para aqui e não renderiza dados padrão
             }
+            
             playerAfkData = data;
             
-            // Sincroniza o cache local de combate com o que veio do banco, se houver
+            // Sincroniza cache de combate se veio do RPC
             if (playerAfkData.cached_combat_stats) {
                 const statsKey = `player_combat_stats_${userId}`;
                 localStorage.setItem(statsKey, JSON.stringify({
@@ -258,7 +250,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }));
             }
             
-            saveToCache(playerAfkData);
+            saveToInternalCache(playerAfkData);
         }
 
         renderPlayerData();
@@ -302,7 +294,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             showLevelUpBalloon(data.new_level);
         }
 
-        saveToCache(playerAfkData);
+        saveToInternalCache(playerAfkData);
         renderPlayerData();
 
         resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned)} XP e ${formatNumberCompact(data.gold_earned)} Ouro!`;
@@ -321,8 +313,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const msg = data?.message || error?.message || "Erro desconhecido.";
             resultText.textContent = msg;
             resultModal.style.display = "block";
+            // Se der erro crítico, força reload dos dados na próxima vez
             localStorage.removeItem(`playerAfkData_${userId}`);
-            initializePlayerData();
             return;
         }
 
@@ -340,7 +332,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             playerAfkData.level = data.new_level;
         }
 
-        saveToCache(playerAfkData);
+        saveToInternalCache(playerAfkData);
         renderPlayerData();
 
         if (isFarming) {
@@ -516,5 +508,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
 
     // --- INICIALIZAÇÃO ---
-    initializePlayerData();
+    // Chama a função principal que valida sessão e carrega dados
+    checkAuthAndInit();
 });

@@ -1,5 +1,18 @@
-import { supabase } from './supabaseClient.js'
+// =======================================================================
+// INÍCIO: LÓGICA DE MÚSICA (MOVIDA PARA O TOPO PARA CORRIGIR RACE CONDITION)
+// =======================================================================
 
+if ('serviceWorker' in navigator) {
+  try {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (let reg of registrations) {
+        reg.unregister().then(success => {
+          if (success) console.log('Service Worker removido:', reg);
+        }).catch(()=>{});
+      }
+    }).catch(()=>{});
+  } catch(e) {}
+}
 
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
@@ -491,6 +504,9 @@ document.addEventListener("DOMContentLoaded", () => {
 // INÍCIO: RESTANTE DO SCRIPT (SUPABASE, CACHE, JOGADOR, ETC.)
 // =======================================================================
 
+const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =======================================================================
 // CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
@@ -557,7 +573,7 @@ function updateLocalPlayerData(changes) {
     });
 
     // Atualiza o Cache no LocalStorage
-    setCache('player_data_cache', currentPlayerData, 4320);
+    setCache('player_data_cache', currentPlayerData, 1440);
 
     // Redesenha a UI
     renderPlayerUI(currentPlayerData, true);

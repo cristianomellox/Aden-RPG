@@ -6,6 +6,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     
 
+    let userId = null;
+
     // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
     function getLocalUserId() {
         try {

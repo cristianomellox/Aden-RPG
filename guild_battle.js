@@ -497,84 +497,91 @@ function renderRankingModal(registeredGuilds, playerDamageRanking) {
 }
 
 function renderAllObjectives(objectives) {
-    const container = document.getElementById('battleMapObjectives');
-    container.innerHTML = '';
+    if (!objectives || !currentBattleState || !currentBattleState.instance) return;
 
-    const sortedObjs = [...objectives].sort((a, b) => a.objective_index - b.objective_index);
-
-    sortedObjs.forEach(obj => {
-        const el = document.createElement('div');
-        el.className = 'objective-tower'; // Nova classe CSS para formato 9:16
-        el.id = `obj-${obj.id}`;
-        
-        const ownerColor = getGuildColor(obj.owner_guild_id);
-        
-        // Aplica filtro de cor na "aura" da torre ou borda
-        el.style.boxShadow = `0 0 15px ${ownerColor}66`;
-        el.style.borderColor = ownerColor;
-        const currentTotalHp = obj.current_hp + obj.garrison_hp;
-        const hpPercent = Math.max(0, Math.min(100, (currentTotalHp / obj.base_hp) * 100));
-
-        const garrisonIcon = obj.garrison_hp > 0 ? '<span class="garrison-badge">🛡️</span>' : '';
-
-        el.innerHTML = `
-            <div class="tower-image"></div>
-            <div class="tower-overlay">
-                <div class="obj-id">${obj.objective_index}</div>
-                ${garrisonIcon}
-                <div class="hp-bar-tower"><div style="width: ${hpPercent}%; background: ${ownerColor}"></div></div>
-            </div>
-        `;
-
-        el.onclick = () => selectObjective(obj);
-        container.appendChild(el);
-    });
-    if (selectedObjective) {
-        const updatedSelected = objectives.find(o => o.id === selectedObjective.id);
-        if (updatedSelected) renderObjectiveDetails(updatedSelected);
+    if (!currentBattleState.guildColorMap) {
+        const guildColorMap = new Map();
+        (currentBattleState.instance.registered_guilds || []).forEach((g, index) => {
+            guildColorMap.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
+        });
+        currentBattleState.guildColorMap = guildColorMap;
     }
-}
+    
+    const registeredGuilds = currentBattleState.instance.registered_guilds || [];
 
-function selectObjective(obj) {
-    selectedObjective = obj;
-    document.querySelectorAll('.objective-tower').forEach(el => el.classList.remove('selected'));
-    const el = document.getElementById(`obj-${obj.id}`);
-    if (el) el.classList.add('selected');
-    renderObjectiveDetails(obj);
-}
+    objectives.forEach(obj => {
+        const el = $(`obj-cp-${obj.objective_index}`) || $('obj-nexus');
+        if (!el) return;
 
-function renderObjectiveDetails(obj) {
-    const panel = document.getElementById('objectiveDetailsPanel');
-    panel.style.display = 'block';
-    const ownerColor = getGuildColor(obj.owner_guild_id);
-    const isMyGuildOwner = obj.owner_guild_id === userGuildId;
-    let statusText = isMyGuildOwner ? "Dominado" : "Inimigo";
-    if (!obj.owner_guild_id) statusText = "Neutro";
+        const fullObj = currentBattleState.objectives.find(o => o.id === obj.id);
+        if (!fullObj) return; 
+        
+        const totalHp = (fullObj.base_hp || 0) + (obj.garrison_hp || 0);
+        const currentTotalHp = (obj.current_hp || 0) + (obj.garrison_hp || 0);
+        const percent = totalHp > 0 ? (currentTotalHp / totalHp) * 100 : 0;
 
-    let actionBtn = '';
-    const myGarrison = currentBattleState.player_garrison;
-    const playerInThisGarrison = myGarrison && myGarrison.objective_id === obj.id;
+        const fillEl = $(`obj-hp-fill-${fullObj.objective_index}`);
+        const textEl = $(`obj-hp-text-${fullObj.objective_index}`);
+        if (fillEl) fillEl.style.width = `${percent}%`;
+        if (textEl) textEl.textContent = `${kFormatter(currentTotalHp)} / ${kFormatter(totalHp)}`;
 
-    if (isMyGuildOwner) {
-        if (playerInThisGarrison) {
-             actionBtn = `<button class="btn btn-warning" onclick="handleLeaveGarrison('${obj.id}')">Sair da Guarnição</button>`;
-        } else if (!myGarrison) {
-             actionBtn = `<button class="btn btn-primary" onclick="handleGarrison('${obj.id}')">Defender</button>`;
+        const garrisonEl = $(`obj-garrison-${fullObj.objective_index}`);
+        if (garrisonEl) {
+           garrisonEl.textContent = (obj.garrison_hp > 0) ? `+${kFormatter(obj.garrison_hp)} HP Guarnição` : '';
         }
-    } else {
-        actionBtn = `<button class="btn btn-danger" onclick="handleAttack('${obj.id}')">ATACAR</button>`;
+
+        const ownerEl = $(`obj-owner-${fullObj.objective_index}`);
+        if (ownerEl) {
+            if (obj.owner_guild_id && currentBattleState.guildColorMap) {
+                const guild = registeredGuilds.find(g => g.guild_id === obj.owner_guild_id);
+                const color = currentBattleState.guildColorMap.get(obj.owner_guild_id) || 'var(--guild-color-neutral)';
+                
+                ownerEl.textContent = guild ? guild.guild_name : 'Dominado';
+                ownerEl.style.color = color;
+                el.style.borderColor = color;
+                
+            } else {
+                ownerEl.textContent = 'Não Dominado';
+                ownerEl.style.color = 'var(--guild-color-neutral)';
+                el.style.borderColor = 'var(--guild-color-neutral)';
+            }
+        }
+    });
+}
+
+// REQ 2/3: Adicionada função auxiliar para checagem de ataques
+function computeShownAttacksAndRemaining() {
+    const playerState = (currentBattleState && currentBattleState.player_state) ? currentBattleState.player_state : null;
+    const now = new Date();
+    
+    if (!playerState) {
+        return { shownAttacks: 0, secondsToNext: 0 };
     }
-    panel.innerHTML = `
-        <div class="panel-header" style="background: ${ownerColor}">
-            <h3>Torre ${obj.objective_index}</h3>
-            <span>${statusText}</span>
-        </div>
-        <div class="panel-body">
-            <div class="stat-row"><span>Estrutura:</span><span>${formatNumber(obj.current_hp)}</span></div>
-            <div class="stat-row"><span>Guarnição:</span><span>${formatNumber(obj.garrison_hp)}</span></div>
-            <div class="action-area">${actionBtn}</div>
-        </div>
-    `;
+
+    const naturalCap = 3;
+    const attacksLeft = playerState.attacks_left || 0;
+    const lastAttackAt = playerState.last_attack_at;
+
+    if (attacksLeft >= naturalCap) {
+        return { shownAttacks: attacksLeft, secondsToNext: 0 };
+    }
+    
+    if (!lastAttackAt) {
+        return { shownAttacks: attacksLeft, secondsToNext: 0 };
+    }
+
+    const elapsed = Math.floor((now - new Date(lastAttackAt)) / 1000);
+    const recovered = Math.floor(elapsed / 60);
+    
+    let shown = Math.min(naturalCap, attacksLeft + recovered);
+    let secondsToNext = 0;
+    
+    if (shown < naturalCap) {
+        const sinceLast = elapsed % 60;
+        secondsToNext = 60 - sinceLast;
+    }
+    
+    return { shownAttacks: shown, secondsToNext };
 }
 
 function renderPlayerFooter(playerState, playerGarrison) {

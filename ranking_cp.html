@@ -197,16 +197,16 @@
   </div>
 
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="playerModal.js"></script> 
+  <script type="module" src="playerModal.js"></script> 
   <script src="number_format.js"></script>
-  <script src="guild_pv.js"></script>
+  <script type="module" src="guild_pv.js"></script>
 
-  <script>
+  <script type="module">
+    import { supabase } from './supabaseClient.js'
+
   (function(){
     // CONFIG DO SUPABASE
-    const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-    const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-    const supabase = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+    
 
     function esc(s){ return String(s||''); }
     function safeNum(n){ return typeof n === 'number' ? n : (n?Number(n):0); }

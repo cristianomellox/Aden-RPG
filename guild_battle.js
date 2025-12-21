@@ -951,14 +951,36 @@ function openBattleShop() {
         modals.battleShopMessage.textContent = "";
     }
     
-    // Reabilita os botões caso tenham ficado travados em loading
+    // Verifica o estado atual de compras no objeto local
+    const pState = currentBattleState && currentBattleState.player_state ? currentBattleState.player_state : {};
+    
+    const boughtPack1 = !!pState.bought_action_pack_1; // Booleano
+    const boughtPack2Count = pState.bought_action_pack_2 || 0; // Inteiro (0, 1 ou 2)
+
+    // Configura Botão Pack 1 (Max 1)
     if (modals.shopBtnPack1) {
-        modals.shopBtnPack1.disabled = false;
-        modals.shopBtnPack1.textContent = "Comprar";
+        if (boughtPack1) {
+            modals.shopBtnPack1.disabled = true;
+            modals.shopBtnPack1.textContent = "Esgotado (1/1)";
+            modals.shopBtnPack1.style.backgroundColor = "#555";
+        } else {
+            modals.shopBtnPack1.disabled = false;
+            modals.shopBtnPack1.textContent = "Comprar (30 Ouro)";
+            modals.shopBtnPack1.style.backgroundColor = ""; // Restaura cor original
+        }
     }
+
+    // Configura Botão Pack 2 (Max 2)
     if (modals.shopBtnPack2) {
-        modals.shopBtnPack2.disabled = false;
-        modals.shopBtnPack2.textContent = "Comprar";
+        if (boughtPack2Count >= 2) {
+            modals.shopBtnPack2.disabled = true;
+            modals.shopBtnPack2.textContent = "Esgotado (2/2)";
+            modals.shopBtnPack2.style.backgroundColor = "#555";
+        } else {
+            modals.shopBtnPack2.disabled = false;
+            modals.shopBtnPack2.textContent = `Comprar (75 Ouro) [${boughtPack2Count}/2]`;
+            modals.shopBtnPack2.style.backgroundColor = "";
+        }
     }
 
     // Exibe o modal
@@ -974,18 +996,42 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     if (error || !data.success) {
         modals.battleShopMessage.textContent = `Erro: ${error ? error.message : data.message}`;
         modals.battleShopMessage.style.color = '#dc3545';
-        if (!data.message.includes("já comprou")) {
+        
+        // Só reabilita se o erro NÃO for limite atingido
+        if (!data.message.includes("já comprou") && !data.message.includes("Limite")) {
              btnEl.disabled = false;
         }
         return;
     }
 
+    // Sucesso
     modals.battleShopMessage.textContent = data.message;
     modals.battleShopMessage.style.color = '#28a745';
-    btnEl.textContent = "Comprado";
-    pollBattleState();
+    btnEl.textContent = "Comprado!";
+    
+    // *** ATUALIZAÇÃO DO ESTADO LOCAL ***
+    if (currentBattleState && currentBattleState.player_state) {
+        // Atualiza ações
+        currentBattleState.player_state.attacks_left = data.new_attacks_left;
+        
+        // Atualiza flags de compra para a UI da loja
+        if (packId === 1) {
+            currentBattleState.player_state.bought_action_pack_1 = true;
+        } else if (packId === 2) {
+            const currentCount = currentBattleState.player_state.bought_action_pack_2 || 0;
+            currentBattleState.player_state.bought_action_pack_2 = currentCount + 1;
+        }
+        
+        // Atualiza a UI principal
+        renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+    }
+    
+    // Fecha a loja após breve delay
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
+        // Reabre a loja "virtualmente" para atualizar os textos dos botões caso o usuário abra de novo
+        openBattleShop(); 
+        modals.battleShop.style.display = 'none'; // Garante que fecha
     }, 1500);
 }
 
@@ -1167,22 +1213,25 @@ function processHeartbeat(data) {
 
             if (data.recent_captures && data.recent_captures.length > 0) {
                 const newCaptures = data.recent_captures; 
-                
                 newCaptures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
                 lastCaptureTimestamp = newCaptures[newCaptures.length - 1].timestamp;
-
                 handleNewCaptures(newCaptures);
             }
 
-            data.objectives.forEach(heartbeatObj => {
-                const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
-                if (fullObj) {
-                    fullObj.current_hp = heartbeatObj.current_hp;
-                    fullObj.garrison_hp = heartbeatObj.garrison_hp;
-                    fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
-                }
-            });
+            // Atualiza objetivos (sempre vêm)
+            if (data.objectives) {
+                data.objectives.forEach(heartbeatObj => {
+                    const fullObj = currentBattleState.objectives.find(o => o.id === heartbeatObj.id);
+                    if (fullObj) {
+                        fullObj.current_hp = heartbeatObj.current_hp;
+                        fullObj.garrison_hp = heartbeatObj.garrison_hp;
+                        fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
+                    }
+                });
+            }
 
+            // *** OTIMIZAÇÃO DE EGRESS ***
+            // Só atualiza se o servidor mandou dados (senão mantém o antigo)
             if (data.guild_honor) {
                 data.guild_honor.forEach(heartbeatGuild => {
                     const fullGuild = currentBattleState.instance.registered_guilds.find(g => g.guild_id === heartbeatGuild.guild_id);

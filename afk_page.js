@@ -22,8 +22,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const GOLD_RATE_PER_SEC = 0;        // Conforme SQL
     const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
     const MIN_COLLECT_SECONDS = 3600;    // 1 hora
-    const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000;
-    const STATS_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 Horas para stats de combate
+    const CACHE_EXPIRATION_MS = 48 * 60 * 60 * 1000;
+    const STATS_CACHE_DURATION = 48 * 60 * 60 * 1000; // 12 Horas para stats de combate
 
     // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");

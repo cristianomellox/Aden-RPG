@@ -115,7 +115,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // CONFIGURAÇÃO DE BATCH E DEBOUNCE
   const BATCH_THRESHOLD = 5;         // Envia a cada 5 ataques
   const DEBOUNCE_TIME_MS = 60000;     // Tempo de espera
-  const STATS_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 Horas
+  const STATS_CACHE_DURATION = 48 * 60 * 60 * 1000; // 24 Horas
   
   // Controle do primeiro ataque
   let isFirstAttackSequence = true; 

@@ -1,5 +1,4 @@
-import { supabase } from './supabaseClient.js'
-
+// reward.js - VERSÃO FINAL COM REDIRECIONAMENTO AUTOMÁTICO
 
 document.addEventListener('DOMContentLoaded', async () => {
     const messageDiv = document.getElementById('reward-message');
@@ -7,7 +6,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const returnBtn = document.getElementById('return-btn'); 
     returnBtn.style.display = 'none'; // Esconde por padrão
 
-    
+    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let claimToken = localStorage.getItem('pending_reward_token');
 

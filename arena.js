@@ -505,7 +505,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         confirmModal.style.display = 'flex';
     }
 
-    const CACHE_TTL_24H = 1440;
+    const CACHE_TTL_24H = 2880;
     function setCache(key, data, ttlMinutes = CACHE_TTL_24H) {
         try { localStorage.setItem(key, JSON.stringify({ expires: Date.now() + ttlMinutes * 60000, data })); } catch {}
     }

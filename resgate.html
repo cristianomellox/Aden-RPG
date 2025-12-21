@@ -132,11 +132,11 @@ font > font {
 }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module">
-    import { supabase } from './supabaseClient.js'
-
+  <script>
     document.addEventListener("DOMContentLoaded", () => {
-  
+  const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const codigoInput = document.getElementById('codigoInput');
   const btnConfirmar = document.getElementById('btnConfirmar');

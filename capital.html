@@ -636,7 +636,8 @@ document.addEventListener('DOMContentLoaded', () => {
     enableMapInteraction();
 });
 </script>
-<script>
+<script type="module">
+  import { supabase } from './supabaseClient.js'
 // ... (Scripts de música e modal de história permanecem intactos) ...
 
 // =======================================================================
@@ -646,9 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // =======================================================================
 
 // Configuração do Supabase
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 // Adicionado para evitar chamadas auth.getSession() em arquivos secundários

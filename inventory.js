@@ -1090,3 +1090,4 @@ window.removeCacheItem = removeCacheItem;
 
 // Função de Alerta (caso queira usar a original do inventory)
 window.showCustomAlert = showCustomAlert;
+window.handleDeconstruct = handleDeconstruct;

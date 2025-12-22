@@ -16,7 +16,7 @@ window.selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 39; 
+const DB_VERSION = 39; // Incrementado para limpar caches antigos e evitar conflitos
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -48,9 +48,10 @@ async function saveCache(items, stats, timestamp) {
     store.clear();
     (items || []).forEach(item => store.put(item));
     
-    meta.put({ key: "last_updated", value: timestamp }); 
-    meta.put({ key: "player_stats", value: stats });     
-    meta.put({ key: "cache_time", value: Date.now() });  
+    // Salva metadados essenciais para o controle de versão
+    meta.put({ key: "last_updated", value: timestamp }); // Timestamp vindo do servidor
+    meta.put({ key: "player_stats", value: stats });     // Stats calculados pelo servidor
+    meta.put({ key: "cache_time", value: Date.now() });  // Controle local
 
     return new Promise((resolve) => {
         tx.oncomplete = () => resolve();
@@ -128,103 +129,6 @@ function getLocalUserId() {
     return null;
 }
 
-// ==========================================================
-// ⚡ NOVAS FUNÇÕES PARA ATUALIZAÇÃO CIRÚRGICA (ZERO EGRESS)
-// ==========================================================
-
-/**
- * Atualiza APENAS um item na memória e no cache, sem recarregar tudo.
- * Se o item foi equipado, garante que o slot antigo seja limpo.
- */
-async function patchLocalItem(updatedItem) {
-    if (!updatedItem || !updatedItem.id) return;
-
-    // 1. Atualiza na lista global
-    const index = window.allInventoryItems.findIndex(i => i.id === updatedItem.id);
-    if (index !== -1) {
-        // Mantém a estrutura correta, garantindo que 'items' (join) exista
-        window.allInventoryItems[index] = updatedItem;
-    } else {
-        // Se for novo (crafting raro), adiciona
-        window.allInventoryItems.push(updatedItem);
-    }
-
-    // 2. Tratamento Especial de Equipamento (Swap)
-    // Se o item atual foi equipado num slot (ex: 'weapon'), precisamos "desequipar" visualmente
-    // qualquer outro item que estava nesse slot na memória local.
-    if (updatedItem.equipped_slot) {
-        window.allInventoryItems.forEach(item => {
-            if (item.id !== updatedItem.id && item.equipped_slot === updatedItem.equipped_slot) {
-                item.equipped_slot = null; // Remove do slot visualmente
-                updateCacheItem(item);     // Atualiza no cache
-            }
-        });
-    }
-
-    // 3. Atualiza lista de equipados global
-    window.equippedItems = window.allInventoryItems.filter(i => i.equipped_slot !== null);
-
-    // 4. Salva o item alterado no IndexedDB
-    await updateCacheItem(updatedItem);
-
-    // 5. Atualiza a UI
-    renderEquippedItems();
-    // Re-renderiza a aba ativa para refletir mudanças (nível, estrelas, etc)
-    const currentTabId = document.querySelector('.tab-button.active')?.id || 'tab-all';
-    loadItems(currentTabId.replace('tab-', ''), window.allInventoryItems);
-}
-
-/**
- * Busca e atualiza APENAS os stats de combate do player (Json minúsculo).
- * Use isso após equipar/desequipar/upar itens.
- */
-async function refreshPlayerStatsOnly() {
-    if (!globalUser) return;
-    try {
-        const { data, error } = await supabase
-            .from('players')
-            .select('cached_combat_stats, crystals') // Pega cristais também
-            .eq('id', globalUser.id)
-            .single();
-        
-        if (data && data.cached_combat_stats) {
-            // Mescla cristais nos stats se necessário para a UI
-            window.playerBaseStats = { ...data.cached_combat_stats, crystals: data.crystals };
-            
-            updateStatsUI(window.playerBaseStats);
-            
-            // Salva stats novos no cache
-            const db = await openDB();
-            const tx = db.transaction(META_STORE, "readwrite");
-            tx.objectStore(META_STORE).put({ key: "player_stats", value: window.playerBaseStats });
-        }
-    } catch (e) {
-        console.error("Erro ao atualizar stats:", e);
-    }
-}
-
-/**
- * Helper para buscar um item único atualizado do servidor e aplicar o patch.
- */
-async function fetchAndPatchItem(itemId) {
-    try {
-        const { data: freshItem, error } = await supabase
-            .from('inventory_items')
-            .select(`*, items (*)`) // Join essencial para o frontend
-            .eq('id', itemId)
-            .single();
-
-        if (freshItem && !error) {
-            await patchLocalItem(freshItem);
-            return freshItem;
-        }
-    } catch (e) {
-        console.error("Erro no fetchAndPatchItem:", e);
-    }
-    return null;
-}
-
-// ==========================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
@@ -388,6 +292,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
     const localTimestamp = await getLastUpdated();
     
     // Verifica se podemos usar o cache local (Zero Egress)
+    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
     const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
 
     console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
@@ -414,7 +319,8 @@ async function loadPlayerAndItems(forceRefresh = false) {
         }
     }
 
-    // 2. Fetch via RPC Seguro
+    // 2. Fetch via RPC Seguro (Correção do "Bolsa Vazia")
+    // Em vez de select direto, chamamos uma RPC que garante que os dados existem.
     console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
     
     const { data: playerData, error: rpcError } = await supabase
@@ -467,13 +373,13 @@ function updateStatsUI(stats) {
     if (atkSpan) atkSpan.textContent = `${Math.floor(stats.min_attack || 0)} - ${Math.floor(stats.attack || 0)}`;
     if (defSpan) defSpan.textContent = `${Math.floor(stats.defense || 0)}`;
     if (hpSpan)  hpSpan.textContent  = `${Math.floor(stats.health || 0)}`;
-    
-    if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
-    if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
-    if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
+    // CÓDIGO NOVO (Inteiros, sem .0)
+if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
+if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
+if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
 }
 
-// Mantido apenas como compatibilidade
+// Mantido apenas como compatibilidade, pois o cálculo real agora vem do servidor
 function calculatePlayerStats() {
     // console.log("Stats sincronizados.");
 }
@@ -773,10 +679,8 @@ async function handleEquipUnequip(item, isEquipped) {
         showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
         document.getElementById('itemDetailsModal').style.display = 'none';
         
-        // --- OTIMIZAÇÃO: ATUALIZA APENAS O ITEM E OS STATS ---
-        await fetchAndPatchItem(item.id);
-        await refreshPlayerStatsOnly();
-        
+        // Força recarga para atualizar o cache
+        await loadPlayerAndItems(true); 
     } catch (err) {
         console.error('Erro geral ao equipar/desequipar:', err);
         showCustomAlert('Ocorreu um erro inesperado.');
@@ -800,6 +704,7 @@ function renderFragmentList(itemToLevelUp) {
     fragments.forEach(fragment => {
         const fragmentLi = document.createElement('li');
         
+        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         fragmentLi.innerHTML = `
             <div class="fragment-info" style="display:flex; align-items:center; gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp"
@@ -910,6 +815,7 @@ async function showCraftingModal(fragment) {
         `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
     document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
 
+    // Ajuste aqui para carregar a imagem do item criado corretamente, incluindo as estrelas
     document.getElementById('craftingTargetImage').src =
         `https://aden-rpg.pages.dev/assets/itens/${itemToCraft.name}_${itemToCraft.stars}estrelas.webp`;
 
@@ -1016,6 +922,7 @@ function openRefineFragmentModal(item) {
         li.className = 'inventory-item';
         li.setAttribute('data-inventory-item-id', fragmentInv.id);
         
+        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         li.innerHTML = `
             <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
@@ -1081,11 +988,7 @@ async function handleRefineMulti(item, selections) {
         } else if (data && data.success) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
             showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
-            
-            // --- OTIMIZAÇÃO: ATUALIZA APENAS O ITEM E OS STATS ---
-            await fetchAndPatchItem(item.id);
-            await refreshPlayerStatsOnly();
-            
+            await loadPlayerAndItems(true);
             document.getElementById('itemDetailsModal').style.display = 'none';
         } else {
             showCustomAlert('Não foi possível refinar o item. Tente novamente.');
@@ -1115,11 +1018,7 @@ async function handleLevelUpMulti(item, selections) {
             showCustomAlert(`Erro ao subir de nível: ${data.error}`);
         } else if (data && data.success) {
             showCustomAlert(`Item evoluído para Nível ${data.new_level}! XP atual: ${data.new_xp}.`);
-            
-            // --- OTIMIZAÇÃO: ATUALIZA APENAS O ITEM E OS STATS ---
-            await fetchAndPatchItem(item.id);
-            await refreshPlayerStatsOnly();
-            
+            await loadPlayerAndItems(true);
             document.getElementById('itemDetailsModal').style.display = 'none';
         } else {
             showCustomAlert('Não foi possível evoluir o item. Tente novamente.');
@@ -1147,8 +1046,7 @@ async function handleCraft(itemId, fragmentId) {
             showCustomAlert(`Erro ao construir: ${data.error}`);
         } else if (data && data.success) {
             showCustomAlert(`Item construído com sucesso!`);
-            // Construção cria ID novo que a RPC não retorna, então aqui mantemos o reload
-            await loadPlayerAndItems(true); 
+            await loadPlayerAndItems(true);
             document.getElementById('craftingModal').style.display = 'none';
         } else {
             showCustomAlert('Não foi possível construir o item. Tente novamente.');
@@ -1180,16 +1078,16 @@ async function handleCraft(itemId, fragmentId) {
 // ========================================================
 // >>> EXPORTAÇÃO GLOBAL (PONTE PARA OUTROS SCRIPTS) <<<
 // ========================================================
+// Isso permite que refundir.js e desconstruir.js enxerguem essas funções
 window.loadItems = loadItems;
 window.calculatePlayerStats = calculatePlayerStats;
 window.renderEquippedItems = renderEquippedItems;
 window.showItemDetails = showItemDetails;
+
+// Funções de Cache (IndexedDB)
 window.updateCacheItem = updateCacheItem;
 window.removeCacheItem = removeCacheItem;
+
+// Função de Alerta (caso queira usar a original do inventory)
 window.showCustomAlert = showCustomAlert;
 window.handleDeconstruct = handleDeconstruct;
-
-// NOVOS EXPORTS PARA OUTROS SCRIPTS USAREM
-window.fetchAndPatchItem = fetchAndPatchItem;
-window.refreshPlayerStatsOnly = refreshPlayerStatsOnly;
-window.patchLocalItem = patchLocalItem;

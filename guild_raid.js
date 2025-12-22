@@ -766,25 +766,59 @@ async function handleRaidCountdown(raidData) {
     countdownInterval = setInterval(updateTimer, 1000);
 }
 
+// Substitua a função loadRaid existente por esta:
 async function loadRaid() {
     if (!userGuildId) return;
     stopAllFloorMusic();
     isSwitchingFloors = false; 
+
     try {
-        const { data, error } = await supabase.from("guild_raids").select("*").eq("guild_id", userGuildId).eq("active", true).order("started_at", { ascending: false }).limit(1).single();
+        const { data, error } = await supabase
+            .from("guild_raids")
+            .select("*")
+            .eq("guild_id", userGuildId)
+            .eq("active", true)
+            .order("started_at", { ascending: false })
+            .limit(1)
+            .single();
+
         if (error || !data) {
             currentRaidId = null;
             closeCombatModal();
             return;
         }
+
         const now = new Date();
+        const endsAt = new Date(data.ends_at);
         const startTime = new Date(data.starts_at);
+
+        // --- CORREÇÃO DO BUG "PRESO NO FINAL" ---
+        // Se a Raid está marcada como ativa no banco, mas o tempo já acabou:
+        if (now >= endsAt) {
+            console.log("Detectada Raid expirada durante o load. Finalizando no servidor...");
+            
+            // Chama a função SQL para marcar active = false oficialmente
+            await supabase.rpc('end_expired_raid', { p_raid_id: data.id });
+            
+            // Exibe o alerta e encerra o load. 
+            // Na próxima vez que o jogador clicar, ela não virá mais como ativa.
+            showRaidAlert("A Raid anterior chegou ao fim.");
+            closeCombatModal();
+            
+            // Opcional: Recarregar a página ou reabrir o modal para cair no "lastRaidResultModal"
+            // Mas apenas fechar já resolve o loop.
+            return; 
+        }
+        // ----------------------------------------
+
         if (now < startTime) {
             await handleRaidCountdown(data);
         } else {
             const isNewFloor = data.current_floor !== currentFloor;
             const isEnteringBossFloor = isNewFloor && (data.current_floor % 5 === 0);
+            
             await continueLoadingRaid(data);
+            
             if (isEnteringBossFloor) {
                 queueAction(() => playVideo(BOSS_INTRO_VIDEO_URL));
             }

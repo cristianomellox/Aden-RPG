@@ -2,19 +2,12 @@
 const SUPABASE_URL = "https://lqzlblvmkuwedcofmgfb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-// =================================================================
-// 0. CONSTANTES E VARIÁVEIS GLOBAIS
-// =================================================================
-
-// Cache de Stats (24 Horas - igual ao Mines)
-const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; 
 
 // --- Variáveis de Estado Global ---
 let userId = null;
 let userGuildId = null;
 let userRank = null;
 let userPlayerStats = null;
-let cachedCombatStats = null; // Variável para armazenar stats em memória
 
 let currentBattleState = null; 
 let heartbeatInterval = null;
@@ -171,43 +164,6 @@ function displayFloatingDamage(targetEl, val, isCrit) {
 }
 
 // =================================================================
-// 1. SISTEMA DE CACHE DE STATS (OTIMIZAÇÃO)
-// =================================================================
-async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
-    if (!userId) return null;
-    const now = Date.now();
-    const cacheKey = `player_combat_stats_${userId}`;
-    
-    // Tenta ler do LocalStorage
-    let stored = localStorage.getItem(cacheKey);
-    if (stored && !forceUpdate) {
-        try {
-            const parsed = JSON.parse(stored);
-            // Verifica validade (12h/24h conforme config)
-            if (now - parsed.timestamp < STATS_CACHE_DURATION) {
-                cachedCombatStats = parsed.data;
-                return cachedCombatStats;
-            }
-        } catch(e) { console.warn("Cache stats inválido", e); }
-    }
-
-    // Busca do Backend (usa a RPC otimizada que salva na tabela players)
-    // Nota: Usamos get_player_combat_stats que é a versão otimizada usada na mina
-    const { data, error } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
-    
-    if (error || !data) {
-        console.error("Erro ao buscar stats via cache", error);
-        return null;
-    }
-
-    // Salva no Cache Local
-    const cacheObj = { timestamp: now, data: data };
-    localStorage.setItem(cacheKey, JSON.stringify(cacheObj));
-    cachedCombatStats = data;
-    return cachedCombatStats;
-}
-
-// =================================================================
 // NOVA FUNÇÃO DE CORREÇÃO
 // =================================================================
 /**
@@ -348,8 +304,7 @@ function playCaptureSound(type, index, isAlly) {
 
 const updatePlayerResourcesUI = (playerStats) => {
     if (!playerStats) return;
-    // Aqui usamos o objeto userPlayerStats que já deve conter a fusão do cache + dados dinâmicos
-    // Porém, para garantir, verificamos se crystals existe
+    userPlayerStats = playerStats; 
     if (playerStats.crystals !== undefined) {
         const crystalsElement = document.getElementById('playerCrystalsAmount'); 
         if(crystalsElement) {
@@ -440,7 +395,7 @@ function renderWaitingScreen(instance) {
 
 function renderBattleScreen(state) {
     currentBattleState = state;
-    // Otimização: userPlayerStats já foi definido no pollBattleState com a fusão do cache
+    userPlayerStats = state.player_stats; 
 
     const city = CITIES.find(c => c.id === state.instance.city_id);
     if (city) {
@@ -457,7 +412,7 @@ function renderBattleScreen(state) {
     renderAllObjectives(state.objectives);
     renderPlayerFooter(state.player_state, state.player_garrison);
     renderRankingModal(state.instance.registered_guilds, state.player_damage_ranking);
-    updatePlayerResourcesUI(userPlayerStats);
+    updatePlayerResourcesUI(state.player_stats);
     showScreen('battle');
 }
 
@@ -817,50 +772,19 @@ async function handleCityRegistrationPre(cityId, cityName) {
     }
 
     const guilds = data.registered_guilds || [];
-    
-    // --- LÓGICA DE MASCARAR NOMES (Alteração Solicitada) ---
-    const maxGuilds = 4;
-    const isFull = guilds.length >= maxGuilds;
-    // userGuildId é uma variável global do seu arquivo
-    const amIRegistered = guilds.some(g => g.guild_id === userGuildId); 
-    
-    // Revela se estiver cheio OU se minha guilda já estiver na lista
-    const showNames = isFull || amIRegistered; 
-
     if (guilds.length === 0) {
-        modals.cityRegisterGuildList.innerHTML = '<li>1. (Vazio)</li>';
+        modals.cityRegisterGuildList.innerHTML = '<li>Nenhuma guilda registrada.</li>';
     } else {
-        guilds.forEach((g, index) => {
+        guilds.forEach(g => {
             const li = document.createElement('li');
-            
-            if (showNames) {
-                // Se pode revelar, mostra o nome
-                li.textContent = `${index + 1}. ${g.guild_name}`;
-                
-                // Destaque visual para sua própria guilda
-                if (g.guild_id === userGuildId) {
-                    li.style.color = 'gold';
-                    li.style.fontWeight = 'bold';
-                    li.textContent += ' (Sua Guilda)';
-                }
-            } else {
-                // Se não pode revelar, mostra ???
-                li.textContent = `${index + 1}. ???`;
-            }
-            
+            li.textContent = g.guild_name || 'Guilda Desconhecida';
             modals.cityRegisterGuildList.appendChild(li);
         });
     }
-    // -------------------------------------------------------
 
     if (guilds.length >= 4) {
         modals.cityRegisterMessage.textContent = "Esta cidade já atingiu o limite de 4 guildas.";
         modals.cityRegisterMessage.style.color = '#ffc107';
-        modals.cityRegisterConfirmBtn.disabled = true;
-    } else if (amIRegistered) {
-         // Se eu já estou registrado, aviso e desabilito o botão de registrar de novo
-        modals.cityRegisterMessage.textContent = "Sua guilda já está registrada aqui.";
-        modals.cityRegisterMessage.style.color = '#28a745';
         modals.cityRegisterConfirmBtn.disabled = true;
     } else {
         modals.cityRegisterMessage.textContent = "";
@@ -924,7 +848,6 @@ function checkGarrisonLeaveAndExecute(actionCallback) {
     
     const oldObjectiveId = currentBattleState.player_garrison.objective_id;
     const oldObjective = currentBattleState.objectives.find(o => o.id === oldObjectiveId);
-    // Usa HP do player (agora vindo do cache)
     const playerHealth = userPlayerStats.health ? parseInt(userPlayerStats.health, 10) : 0;
     
     if (!oldObjective || playerHealth === 0) {
@@ -1010,32 +933,15 @@ async function pollBattleState() {
         return;
     }
 
-    // --- INTEGRAÇÃO DO CACHE DE STATS ---
-    // Busca stats pesados (Attack, Def, HP) do cache local (ou DB se expirado)
-    const cachedStats = await getOrUpdatePlayerStatsCache();
-
     currentBattleState = data;
-    
     if (data.player_stats) {
         userGuildId = data.player_stats.guild_id;
-        
-        // FUSÃO: Dados dinâmicos do servidor (Crystals, etc.) + Dados estáticos do Cache (HP, Atk)
-        userPlayerStats = {
-            ...data.player_stats, // Preserva crystals, guild_id, etc. vindos do server
-            ...(cachedStats || {}) // Sobrescreve health, attack, defense com o cache otimizado
-        };
-
-        // Garante que recursos voláteis como crystals venham sempre do servidor
-        if (data.player_stats.crystals !== undefined) {
-            userPlayerStats.crystals = data.player_stats.crystals;
-        }
+        userPlayerStats = data.player_stats;
     }
-    
     userRank = data.player_rank;
-    if (userPlayerStats) {
-        updatePlayerResourcesUI(userPlayerStats);
+    if (data.player_stats) {
+        updatePlayerResourcesUI(data.player_stats);
     }
-    // -------------------------------------
 
     captureNotificationQueue = [];
     isDisplayingCaptureNotification = false;
@@ -1420,11 +1326,6 @@ async function init() {
         return;
     }
     userId = session.user.id; 
-
-    // Pré-carrega os stats do cache assim que loga
-    getOrUpdatePlayerStatsCache().then(() => {
-        // console.log("Stats de batalha pré-carregados.");
-    });
 
     createCaptureNotificationUI();
     // REQ 1 (Bug Áudio): Listener genérico

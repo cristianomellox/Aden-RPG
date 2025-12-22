@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js'
 
-
+window.supabase = supabase;
+window.supabaseClient = supabase;
 // 🟢 COMO DEVE FICAR (Visível para desconstruir.js e refundir.js):
 window.globalUser = null;
 window.equippedItems = [];

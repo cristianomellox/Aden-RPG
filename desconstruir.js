@@ -1,4 +1,4 @@
-// desconstruir.js — versão com cache incremental (preview + execução)
+// desconstruir.js — versão corrigida para exibir Modal
 (() => {
   const CRYSTAL_COST = 400;
 
@@ -9,10 +9,31 @@
     SSR: "https://raw.githubusercontent.com/cristianomellox/Aden-RPG/refs/heads/main/assets/itens/fragmento_ssr.webp",
   };
 
+  // --- CORREÇÃO AQUI ---
+  // Esta função agora manipula diretamente o modal do HTML em vez de usar alert()
   function showAlert(msg) {
-    if (typeof window.showCustomAlert === "function") return window.showCustomAlert(msg);
-    alert(msg);
+    // Tenta pegar os elementos do modal que já existem no inventory.html
+    const modal = document.getElementById('customAlertModal');
+    const msgEl = document.getElementById('customAlertMessage');
+    const okBtn = document.getElementById('customAlertOkBtn');
+
+    if (modal && msgEl) {
+      msgEl.textContent = msg;
+      modal.style.display = 'flex'; // Mostra o modal
+      modal.style.zIndex = '10001'; // Garante que fique acima de outros modais
+
+      if (okBtn) {
+        // Usa onclick para fechar, garantindo que não duplique eventos
+        okBtn.onclick = () => {
+          modal.style.display = 'none';
+        };
+      }
+    } else {
+      // Caso algo dê errado com o HTML, usa o alert nativo como último recurso
+      alert(msg);
+    }
   }
+  // ---------------------
 
   function ensureDeconstructModal() {
     let modal = document.getElementById("deconstructConfirmModal");
@@ -112,8 +133,12 @@
 
       try {
         // 1) Remove o item destruído
-        allInventoryItems = allInventoryItems.filter(inv => inv.id !== itemId);
-        await removeCacheItem(itemId);
+        if (typeof allInventoryItems !== 'undefined') {
+            allInventoryItems = allInventoryItems.filter(inv => inv.id !== itemId);
+        }
+        if (typeof removeCacheItem === 'function') {
+            await removeCacheItem(itemId);
+        }
 
         // 2) Atualiza fragmentos retornados
         const fragMap = { R: 19, SR: 21, SSR: 22 };
@@ -127,14 +152,14 @@
               .eq("item_id", fragId)
               .single();
 
-            if (fragData) {
+            if (fragData && typeof allInventoryItems !== 'undefined') {
               const idx = allInventoryItems.findIndex(it => it.item_id === fragId);
               if (idx !== -1) {
                 allInventoryItems[idx].quantity = fragData.quantity;
               } else {
                 allInventoryItems.push(fragData);
               }
-              await updateCacheItem(fragData);
+              if (typeof updateCacheItem === 'function') await updateCacheItem(fragData);
             }
           }
         }
@@ -146,20 +171,19 @@
           .eq("id", globalUser.id)
           .single();
 
-        if (updatedPlayer) {
+        if (updatedPlayer && typeof playerBaseStats !== 'undefined') {
           playerBaseStats.crystals = updatedPlayer.crystals;
         }
 
         // 4) Render UI
-        equippedItems = allInventoryItems.filter(it => it.equipped_slot !== null);
-        calculatePlayerStats();
-        renderEquippedItems();
-        loadItems("all", allInventoryItems);
+        if (typeof calculatePlayerStats === 'function') calculatePlayerStats();
+        if (typeof renderEquippedItems === 'function') renderEquippedItems();
+        if (typeof loadItems === 'function') loadItems("all", allInventoryItems);
 
         showAlert(`Item desconstruído!\n\nRetorno:\nR: ${execData.fragments_returned.R}\nSR: ${execData.fragments_returned.SR}\nSSR: ${execData.fragments_returned.SSR}\nCristais gastos: ${execData.crystals_spent}`);
       } catch (err) {
         console.error("Erro pós-desconstrução:", err);
-        showAlert("Item desconstruído, mas houve falha ao atualizar a bolsa.");
+        showAlert("Item desconstruído, mas houve falha ao atualizar a bolsa visualmente.");
       }
     };
   }
@@ -169,7 +193,13 @@
     if (btn && !btn.dataset.boundDeconstruct) {
       btn.addEventListener("click", () => {
         const sel = (typeof selectedItem !== "undefined" && selectedItem) ? selectedItem : (window.selectedItem || null);
-        if (!sel || !sel.id) { showAlert("Selecione um item antes de desconstruir."); return; }
+        
+        // --- AQUI ESTÁ A LÓGICA MANTIDA, MAS AGORA USA O SHOWALERT NOVO ---
+        if (!sel || !sel.id) { 
+            showAlert("Retire o equipamento antes de desconstruir."); 
+            return; 
+        }
+        
         handleDeconstruct(sel.id);
       });
       btn.dataset.boundDeconstruct = "1";

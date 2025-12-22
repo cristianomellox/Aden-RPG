@@ -1,12 +1,11 @@
 import { supabase } from './supabaseClient.js'
 
 
-// 🟢 COMO DEVE FICAR (Visível para desconstruir.js e refundir.js):
-window.globalUser = null;
-window.equippedItems = [];
-window.playerBaseStats = {};
-window.allInventoryItems = [];
-window.selectedItem = null;
+let globalUser = null;
+let equippedItems = [];
+let playerBaseStats = {};
+let allInventoryItems = [];
+let selectedItem = null;
 
 
 // ===============================
@@ -1073,19 +1072,3 @@ async function handleCraft(itemId, fragmentId) {
     addShimmer();
   }
 })();
-
-// ========================================================
-// >>> EXPORTAÇÃO GLOBAL (PONTE PARA OUTROS SCRIPTS) <<<
-// ========================================================
-// Isso permite que refundir.js e desconstruir.js enxerguem essas funções
-window.loadItems = loadItems;
-window.calculatePlayerStats = calculatePlayerStats;
-window.renderEquippedItems = renderEquippedItems;
-window.showItemDetails = showItemDetails;
-
-// Funções de Cache (IndexedDB)
-window.updateCacheItem = updateCacheItem;
-window.removeCacheItem = removeCacheItem;
-
-// Função de Alerta (caso queira usar a original do inventory)
-window.showCustomAlert = showCustomAlert;

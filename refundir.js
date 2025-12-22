@@ -1,5 +1,30 @@
 // refundir.js
 document.addEventListener('DOMContentLoaded', () => {
+    // --- IMPLEMENTAÇÃO LOCAL DO MODAL DE ALERTA (Scope Fix) ---
+    const showCustomAlert = (msg) => {
+        const modal = document.getElementById('customAlertModal');
+        const msgEl = document.getElementById('customAlertMessage');
+        const okBtn = document.getElementById('customAlertOkBtn');
+
+        if (modal && msgEl) {
+            msgEl.textContent = msg;
+            modal.style.display = 'flex';
+            modal.style.zIndex = '10005'; // Garante que fique acima do modal de refund
+            
+            if (okBtn) {
+                // Clona para remover listeners antigos
+                const newBtn = okBtn.cloneNode(true);
+                okBtn.parentNode.replaceChild(newBtn, okBtn);
+                newBtn.onclick = () => {
+                    modal.style.display = 'none';
+                };
+            }
+        } else {
+            alert(msg); // Fallback
+        }
+    };
+    // -----------------------------------------------------------
+
     const reforgeBtn = document.getElementById('reforgeItemBtn');
     const closeReforgeModal = document.getElementById('closeReforgeModal');
     const reforgeModal = document.getElementById('reforgeModal');
@@ -16,7 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
     costDisplay.style.alignItems = "center";
     costDisplay.style.justifyContent = "center";
     costDisplay.style.marginTop = "8px";
-    reforgeModal.querySelector(".modal-content").insertBefore(costDisplay, reforgeMessage);
+    if (reforgeModal) {
+       reforgeModal.querySelector(".modal-content").insertBefore(costDisplay, reforgeMessage);
+    }
 
     let currentItem = null;
     let pendingRolls = [];

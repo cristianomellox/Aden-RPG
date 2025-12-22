@@ -1,4 +1,6 @@
-import { supabase } from './supabaseClient.js'
+const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let globalUser = null;
 let equippedItems = [];
@@ -13,7 +15,7 @@ let selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 37;
+const DB_VERSION = 38;
 
 function openDB() {
     return new Promise((resolve, reject) => {

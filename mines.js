@@ -1,6 +1,38 @@
 import { supabase } from './supabaseClient.js'
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Ultra Otimizada (Batching + Minified JSON + Cache 12h + Sessão Persistente)");
+  console.log("[mines] DOM ready - Versão Ultra Otimizada (Batching + Metadata Cache + Debounce)");
+
+  // =================================================================
+  // 0. CACHE DE METADADOS DE JOGADORES (SOLUÇÃO 2 - NOVO)
+  // =================================================================
+  // Armazena ID -> {Nome, Avatar} para evitar tráfego repetido no ranking
+  const playerMetadataCache = {};
+
+  function registerPlayerMetadata(playerObj) {
+    if (!playerObj || !playerObj.id) return;
+    // Só atualiza se não existir
+    if (!playerMetadataCache[playerObj.id]) {
+        playerMetadataCache[playerObj.id] = {
+            n: playerObj.name || "Desconhecido",
+            a: playerObj.avatar_url || "https://aden-rpg.pages.dev/assets/default_avatar.png"
+        };
+    }
+  }
+
+  function getPlayerMetadata(uuid) {
+    return playerMetadataCache[uuid] || { n: "Carregando...", a: "https://aden-rpg.pages.dev/assets/default_avatar.png" };
+  }
+
+  async function fetchMissingPlayers(uuids) {
+    const missing = uuids.filter(id => !playerMetadataCache[id]);
+    if (missing.length === 0) return;
+    
+    // Busca apenas os IDs que faltam
+    const { data } = await supabase.from('players').select('id, name, avatar_url').in('id', missing);
+    if (data) {
+        data.forEach(registerPlayerMetadata);
+    }
+  }
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -422,7 +454,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // =================================================================
-  // 7. RANKING E UI
+  // 7. RANKING E UI (MODIFICADO - SOLUÇÃO 2)
   // =================================================================
   function renderRanking(rankingData) {
       if (!damageRankingList) return;
@@ -433,18 +465,25 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
       }
 
+      // ALTERAÇÃO: Identifica IDs que não estão no cache e busca em background
+      const pids = rankingData.map(r => r.pid || r.player_id);
+      fetchMissingPlayers(pids); // Chama sem await para não travar a renderização
+
       for (const row of rankingData) {
-        // Suporte para chaves minificadas (n: name, a: avatar, d: damage) OU originais
-        const rName = row.n || row.player_name;
-        const rAvatar = row.a || row.avatar_url;
-        const rDamage = row.d || row.total_damage_dealt;
+        // Agora o SQL só retorna 'pid' e 'd'. Buscamos o resto no cache local.
         const rId = row.pid || row.player_id;
+        const rDamage = row.d || row.total_damage_dealt;
+
+        // Recupera do cache (ou usa placeholder se ainda não carregou)
+        const metadata = getPlayerMetadata(rId);
+        const rName = metadata.n;
+        const rAvatar = metadata.a;
 
         const isMe = rId === userId;
         const li = document.createElement("li");
         li.innerHTML = `
           <div class="ranking-entry">
-            <img src="${esc(rAvatar || '/assets/default_avatar.png')}" alt="Av" class="ranking-avatar">
+            <img src="${esc(rAvatar)}" alt="Av" class="ranking-avatar">
             <span class="player-name">${esc(rName)} ${isMe ? '(Você)' : ''}</span>
             <span class="player-damage">${Number(rDamage||0).toLocaleString()}</span>
           </div>`;
@@ -780,6 +819,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else { guilddomSpan.textContent = 'Nenhuma.'; }
   }
 
+  // ALTERAÇÃO (Solução 2): Integra o Cache de Metadados ao loadMines
   async function loadMines() {
     showLoading();
     try {
@@ -793,7 +833,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       const ownersMap = {};
       if (ownerIds.length) {
         const { data: ownersData } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
-        (ownersData || []).forEach(p => ownersMap[p.id] = p);
+        (ownersData || []).forEach(p => {
+            ownersMap[p.id] = p;
+            // REGISTRA NO CACHE PARA USAR EM OUTRAS PARTES
+            registerPlayerMetadata(p);
+        });
       }
 
       // ALTERAÇÃO: Identifica se eu já sou dono de alguma mina
@@ -1120,7 +1164,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
     displayDamageNumber(damage, isCrit, false, monsterArea);
     if (!hasAttackedOnce) hasAttackedOnce = true;
-const mImg = document.getElementById("monsterImage");
+    const mImg = document.getElementById("monsterImage");
     if (mImg) {
         mImg.classList.remove('shake-animation');
         void mImg.offsetWidth; // Força reflow (reinicia animação)
@@ -1318,7 +1362,7 @@ const mImg = document.getElementById("monsterImage");
   }
 
   // =================================================================
-  // 15. INICIALIZAÇÃO
+  // 15. INICIALIZAÇÃO E LISTENERS (MODIFICADO - SOLUÇÃO 3)
   // =================================================================
   async function boot() {
     try {
@@ -1349,6 +1393,9 @@ const mImg = document.getElementById("monsterImage");
     }
   }
 
+  // ALTERAÇÃO (Solução 3): Adiciona variável para controle de Debounce
+  let lastLoadTime = 0;
+
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === 'hidden') {
       if (ambientMusic && !ambientMusic.paused) { 
@@ -1362,19 +1409,22 @@ const mImg = document.getElementById("monsterImage");
           
           // Força envio do que tiver pendente antes de sair (Best Effort)
           processAttackQueue();
-          
-          // NÃO resetamos mais a UI aqui, confiamos na persistência se ele voltar
-          // resetCombatUI();
       }
     } else {
+        // Se a aba voltou a ficar visível
+        if (ambientMusic._wasPlaying) ambientMusic.play().catch(()=>{});
+
         if (currentMineId && document.visibilityState === 'visible') {
-           // Se voltou e estamos em combate, tenta restaurar se algo falhou
-           // A função restoreOptimisticState é chamada no start, mas aqui podemos apenas
-           // verificar se o flush timer precisa ser reativado
+           // Se estamos em combate, sync normal
+           syncAndCheckLogs();
         } else if (!currentMineId) {
-           loadMines();
+           // ALTERAÇÃO (Solução 3): Verifica tempo antes de recarregar a lista
+           const now = Date.now();
+           if (now - lastLoadTime > 30000) { // 30 segundos
+               lastLoadTime = now;
+               loadMines();
+           }
         }
-        syncAndCheckLogs();
     }
   });
 

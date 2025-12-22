@@ -1384,7 +1384,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       if (key === "bolsaModal") {
-        window.location.href = "go:bag";
+        window.location.href = "/inventory.html";
         return;
       }
       if (key === "pvModal") {

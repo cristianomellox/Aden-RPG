@@ -1,4 +1,6 @@
-import { supabase } from './supabaseClient.js'
+const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 
 let globalUser = null;

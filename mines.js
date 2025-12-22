@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient.js'
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Otimizada (Batching + Cache 12h + Sessão Persistente)");
+  console.log("[mines] DOM ready - Versão Ultra Otimizada (Batching + Minified JSON + Cache 12h + Sessão Persistente)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -434,13 +434,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       for (const row of rankingData) {
-        const isMe = row.player_id === userId;
+        // Suporte para chaves minificadas (n: name, a: avatar, d: damage) OU originais
+        const rName = row.n || row.player_name;
+        const rAvatar = row.a || row.avatar_url;
+        const rDamage = row.d || row.total_damage_dealt;
+        const rId = row.pid || row.player_id;
+
+        const isMe = rId === userId;
         const li = document.createElement("li");
         li.innerHTML = `
           <div class="ranking-entry">
-            <img src="${esc(row.avatar_url || '/assets/default_avatar.png')}" alt="Av" class="ranking-avatar">
-            <span class="player-name">${esc(row.player_name)} ${isMe ? '(Você)' : ''}</span>
-            <span class="player-damage">${Number(row.total_damage_dealt||0).toLocaleString()}</span>
+            <img src="${esc(rAvatar || '/assets/default_avatar.png')}" alt="Av" class="ranking-avatar">
+            <span class="player-name">${esc(rName)} ${isMe ? '(Você)' : ''}</span>
+            <span class="player-damage">${Number(rDamage||0).toLocaleString()}</span>
           </div>`;
         damageRankingList.appendChild(li);
       }
@@ -1043,23 +1049,31 @@ document.addEventListener("DOMContentLoaded", async () => {
               return;
           }
 
-          // Atualiza com a verdade do servidor
-          currentMonsterHealthGlobal = data.current_monster_health;
-          updateHpBar(data.current_monster_health, data.max_monster_health);
+          // Atualiza com a verdade do servidor (Mapeamento JSON Minificado)
+          // data.hp = current_monster_health
+          // data.al = attacks_left
+          // data.r  = ranking
+          // data.win = owner_set
+          // data.end = competition_end_time
           
-          if (data.ranking && data.ranking.length > 0) {
-              renderRanking(data.ranking);
+          currentMonsterHealthGlobal = data.hp;
+          updateHpBar(data.hp, maxMonsterHealth);
+          
+          if (data.r && data.r.length > 0) {
+              renderRanking(data.r);
           }
 
-          localAttacksLeft = data.attacks_left;
+          localAttacksLeft = data.al;
           updateAttacksDisplay();
           
-          if (data.competition_end_time && !combatTimerInterval) {
-             const remaining = Math.max(0, Math.floor((new Date(data.competition_end_time).getTime() - Date.now()) / 1000));
+          // data.end = competition_end_time
+          if (data.end && !combatTimerInterval) {
+             const remaining = Math.max(0, Math.floor((new Date(data.end).getTime() - Date.now()) / 1000));
              startCombatTimer(remaining);
           }
 
-          if (data.owner_set) {
+          // data.win = owner_set
+          if (data.win) {
               showModalAlert("Mina conquistada/resetada!");
               resetCombatUI();
               await loadMines();

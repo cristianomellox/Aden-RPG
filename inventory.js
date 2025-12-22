@@ -1,7 +1,3 @@
-const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-  const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-  const supabase = window.supabase && window.supabase.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-  if (!supabase) { console.error("Supabase não iniciado"); return; }
 
 
 let globalUser = null;
@@ -17,7 +13,7 @@ let selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 33; // Incrementado para limpar caches antigos e evitar conflitos
+const DB_VERSION = 34; // Incrementado para limpar caches antigos e evitar conflitos
 
 function openDB() {
     return new Promise((resolve, reject) => {

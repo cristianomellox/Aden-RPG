@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient.js'
 
 window.supabase = supabase;
 window.supabaseClient = supabase;
-// 🟢 COMO DEVE FICAR (Visível para desconstruir.js e refundir.js):
+
 window.globalUser = null;
 window.equippedItems = [];
 window.playerBaseStats = {};
@@ -16,7 +16,7 @@ window.selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 39; // Incrementado para limpar caches antigos e evitar conflitos
+const DB_VERSION = 39; 
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -38,7 +38,7 @@ function openDB() {
     });
 }
 
-// Salva o cache completo (Items + Stats + Timestamp do Servidor)
+// Salva o cache completo
 async function saveCache(items, stats, timestamp) {
     const db = await openDB();
     const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
@@ -48,10 +48,9 @@ async function saveCache(items, stats, timestamp) {
     store.clear();
     (items || []).forEach(item => store.put(item));
     
-    // Salva metadados essenciais para o controle de versão
-    meta.put({ key: "last_updated", value: timestamp }); // Timestamp vindo do servidor
-    meta.put({ key: "player_stats", value: stats });     // Stats calculados pelo servidor
-    meta.put({ key: "cache_time", value: Date.now() });  // Controle local
+    meta.put({ key: "last_updated", value: timestamp }); 
+    meta.put({ key: "player_stats", value: stats });     
+    meta.put({ key: "cache_time", value: Date.now() });  
 
     return new Promise((resolve) => {
         tx.oncomplete = () => resolve();
@@ -319,8 +318,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
         }
     }
 
-    // 2. Fetch via RPC Seguro (Correção do "Bolsa Vazia")
-    // Em vez de select direto, chamamos uma RPC que garante que os dados existem.
+    // 2. Fetch via RPC Seguro
     console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
     
     const { data: playerData, error: rpcError } = await supabase
@@ -373,10 +371,10 @@ function updateStatsUI(stats) {
     if (atkSpan) atkSpan.textContent = `${Math.floor(stats.min_attack || 0)} - ${Math.floor(stats.attack || 0)}`;
     if (defSpan) defSpan.textContent = `${Math.floor(stats.defense || 0)}`;
     if (hpSpan)  hpSpan.textContent  = `${Math.floor(stats.health || 0)}`;
-    // CÓDIGO NOVO (Inteiros, sem .0)
-if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
-if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
-if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
+    
+    if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
+    if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
+    if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
 }
 
 // Mantido apenas como compatibilidade, pois o cálculo real agora vem do servidor
@@ -679,7 +677,7 @@ async function handleEquipUnequip(item, isEquipped) {
         showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
         document.getElementById('itemDetailsModal').style.display = 'none';
         
-        // Força recarga para atualizar o cache
+        // Força recarga completa pois equipamento afeta stats globais
         await loadPlayerAndItems(true); 
     } catch (err) {
         console.error('Erro geral ao equipar/desequipar:', err);
@@ -704,7 +702,6 @@ function renderFragmentList(itemToLevelUp) {
     fragments.forEach(fragment => {
         const fragmentLi = document.createElement('li');
         
-        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         fragmentLi.innerHTML = `
             <div class="fragment-info" style="display:flex; align-items:center; gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp"
@@ -815,7 +812,6 @@ async function showCraftingModal(fragment) {
         `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
     document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
 
-    // Ajuste aqui para carregar a imagem do item criado corretamente, incluindo as estrelas
     document.getElementById('craftingTargetImage').src =
         `https://aden-rpg.pages.dev/assets/itens/${itemToCraft.name}_${itemToCraft.stars}estrelas.webp`;
 
@@ -913,7 +909,7 @@ function openRefineFragmentModal(item) {
         }
 
         modal.style.display = 'none';
-        handleRefineMulti(item, selections);
+        handleRefineMulti(item, selections, requiredCrystals); // Passamos o custo de cristais
     };
 
     sameRarityFragments.forEach(fragmentInv => {
@@ -922,7 +918,6 @@ function openRefineFragmentModal(item) {
         li.className = 'inventory-item';
         li.setAttribute('data-inventory-item-id', fragmentInv.id);
         
-        // --- ALTERAÇÃO AQUI: Ordem dos elementos e style width no input ---
         li.innerHTML = `
             <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
                 <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
@@ -970,7 +965,89 @@ function openRefineFragmentModal(item) {
     modal.style.display = 'flex';
 }
 
-async function handleRefineMulti(item, selections) {
+// -------------------------------------------------------------
+// FUNÇÃO MÁGICA DE ATUALIZAÇÃO LOCAL (Sem baixar tudo de novo)
+// -------------------------------------------------------------
+async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystals, newItem = null) {
+    // 1. Atualiza o item principal (se houver)
+    if (updatedItem) {
+        // Busca do banco para garantir consistência ou usa o objeto retornado se for completo
+        // Se o RPC retornou dados parciais, teríamos que mesclar. 
+        // No SQL refizemos para garantir que a atualização funcione.
+        // Mas o mais seguro e rápido aqui é buscar SÓ ESSE item se faltar dado, 
+        // ou confiar na resposta do RPC se tivermos certeza.
+        
+        // Vamos buscar APENAS esse item no banco para garantir que temos todos os dados (joins, stats calculados)
+        // Isso é 1KB de download, muito melhor que 300KB.
+        const { data: fetchItem, error } = await supabase
+            .from('inventory_items')
+            .select('*, items(*)')
+            .eq('id', updatedItem.id || updatedItem)
+            .single();
+
+        if (fetchItem) {
+             const idx = allInventoryItems.findIndex(i => i.id === fetchItem.id);
+             if (idx !== -1) {
+                 allInventoryItems[idx] = fetchItem;
+             } else {
+                 allInventoryItems.push(fetchItem); // Caso raro de item novo
+             }
+             selectedItem = fetchItem; // Atualiza a seleção atual
+        }
+    }
+
+    // 2. Remove ou decrementa fragmentos usados
+    if (usedFragments && Array.isArray(usedFragments)) {
+        usedFragments.forEach(usage => {
+            // O RPC retorna 'fragment_inventory_id' e 'used_qty'
+            // O nome do campo pode variar dependendo do RPC, ajustamos aqui.
+            const fragId = usage.fragment_inventory_id || usage.id; 
+            const qtyUsed = usage.used_qty || usage.qty;
+
+            const idx = allInventoryItems.findIndex(i => i.id === fragId);
+            if (idx !== -1) {
+                allInventoryItems[idx].quantity -= qtyUsed;
+                // Se zerou, remove do array
+                if (allInventoryItems[idx].quantity <= 0) {
+                    allInventoryItems.splice(idx, 1);
+                }
+            }
+        });
+    }
+
+    // 3. Adiciona item novo (ex: craft)
+    if (newItem) {
+        // Busca o item novo completo
+        const { data: newFetchItem } = await supabase
+            .from('inventory_items')
+            .select('*, items(*)')
+            .eq('id', newItem.id || newItem)
+            .single();
+        
+        if (newFetchItem) {
+            allInventoryItems.push(newFetchItem);
+        }
+    }
+
+    // 4. Atualiza Cristais do Jogador (se gasto)
+    if (usedCrystals && playerBaseStats) {
+        playerBaseStats.crystals = (playerBaseStats.crystals || 0) - usedCrystals;
+    }
+
+    // 5. Atualiza Globais
+    equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null);
+
+    // 6. Salva no Cache Local e Re-renderiza
+    await saveCache(allInventoryItems, playerBaseStats, new Date().toISOString()); // Timestamp fake só para salvar
+    renderUI();
+    if (selectedItem) showItemDetails(selectedItem);
+}
+
+// -------------------------------------------------------------
+// HANDLERS MODIFICADOS (ZERO EGRESS)
+// -------------------------------------------------------------
+
+async function handleRefineMulti(item, selections, crystalCost) {
     try {
         const { data, error } = await supabase.rpc('refine_item', {
             _inventory_item_id: item.id,
@@ -988,7 +1065,10 @@ async function handleRefineMulti(item, selections) {
         } else if (data && data.success) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
             showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
-            await loadPlayerAndItems(true);
+            
+            // ATUALIZAÇÃO LOCAL
+            await updateLocalInventoryState(item.id, data.used_fragments, data.used_crystals);
+            
             document.getElementById('itemDetailsModal').style.display = 'none';
         } else {
             showCustomAlert('Não foi possível refinar o item. Tente novamente.');
@@ -1018,7 +1098,10 @@ async function handleLevelUpMulti(item, selections) {
             showCustomAlert(`Erro ao subir de nível: ${data.error}`);
         } else if (data && data.success) {
             showCustomAlert(`Item evoluído para Nível ${data.new_level}! XP atual: ${data.new_xp}.`);
-            await loadPlayerAndItems(true);
+            
+            // ATUALIZAÇÃO LOCAL
+            await updateLocalInventoryState(item.id, data.used_fragments, 0);
+
             document.getElementById('itemDetailsModal').style.display = 'none';
         } else {
             showCustomAlert('Não foi possível evoluir o item. Tente novamente.');
@@ -1046,7 +1129,17 @@ async function handleCraft(itemId, fragmentId) {
             showCustomAlert(`Erro ao construir: ${data.error}`);
         } else if (data && data.success) {
             showCustomAlert(`Item construído com sucesso!`);
-            await loadPlayerAndItems(true);
+            
+            // ATUALIZAÇÃO LOCAL
+            // data.used_fragments é um array simples que criamos aqui: [{id: fragmentId, qty: 30}]
+            // data.new_item_id é o ID do novo item
+            await updateLocalInventoryState(
+                null, 
+                [{fragment_inventory_id: fragmentId, used_qty: 30}], 
+                data.crystals_spent, 
+                data.new_item_id
+            );
+
             document.getElementById('craftingModal').style.display = 'none';
         } else {
             showCustomAlert('Não foi possível construir o item. Tente novamente.');
@@ -1062,7 +1155,6 @@ async function handleCraft(itemId, fragmentId) {
 // >>> Cache & Shimmer FIX PATCH (appended) <<<
 // ===============================
 
-// Aplica shimmer cedo (antes de qualquer preenchimento) e remove depois
 (function applyInitialShimmer(){
   function addShimmer(){
     ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
@@ -1078,16 +1170,16 @@ async function handleCraft(itemId, fragmentId) {
 // ========================================================
 // >>> EXPORTAÇÃO GLOBAL (PONTE PARA OUTROS SCRIPTS) <<<
 // ========================================================
-// Isso permite que refundir.js e desconstruir.js enxerguem essas funções
 window.loadItems = loadItems;
 window.calculatePlayerStats = calculatePlayerStats;
 window.renderEquippedItems = renderEquippedItems;
 window.showItemDetails = showItemDetails;
 
-// Funções de Cache (IndexedDB)
 window.updateCacheItem = updateCacheItem;
 window.removeCacheItem = removeCacheItem;
+window.updateLocalInventoryState = updateLocalInventoryState; // EXPORTADO
 
-// Função de Alerta (caso queira usar a original do inventory)
 window.showCustomAlert = showCustomAlert;
-window.handleDeconstruct = handleDeconstruct;
+// handleDeconstruct agora é global para o HTML chamar, mas a implementação real está em desconstruir.js
+// Aqui definimos apenas se não existir.
+if (!window.handleDeconstruct) window.handleDeconstruct = () => {};

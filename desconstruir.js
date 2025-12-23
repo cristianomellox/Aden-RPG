@@ -1,4 +1,4 @@
-// desconstruir.js — versão corrigida para exibir Modal
+// desconstruir.js — versão corrigida para exibir Modal e Atualização Local
 (() => {
   const CRYSTAL_COST = 400;
 
@@ -8,32 +8,6 @@
     SR: "https://raw.githubusercontent.com/cristianomellox/Aden-RPG/refs/heads/main/assets/itens/fragmento_sr.webp",
     SSR: "https://raw.githubusercontent.com/cristianomellox/Aden-RPG/refs/heads/main/assets/itens/fragmento_ssr.webp",
   };
-
-  // --- CORREÇÃO AQUI ---
-  // Esta função agora manipula diretamente o modal do HTML em vez de usar alert()
-  function showAlert(msg) {
-    // Tenta pegar os elementos do modal que já existem no inventory.html
-    const modal = document.getElementById('customAlertModal');
-    const msgEl = document.getElementById('customAlertMessage');
-    const okBtn = document.getElementById('customAlertOkBtn');
-
-    if (modal && msgEl) {
-      msgEl.textContent = msg;
-      modal.style.display = 'flex'; // Mostra o modal
-      modal.style.zIndex = '10001'; // Garante que fique acima de outros modais
-
-      if (okBtn) {
-        // Usa onclick para fechar, garantindo que não duplique eventos
-        okBtn.onclick = () => {
-          modal.style.display = 'none';
-        };
-      }
-    } else {
-      // Caso algo dê errado com o HTML, usa o alert nativo como último recurso
-      alert(msg);
-    }
-  }
-  // ---------------------
 
   function ensureDeconstructModal() {
     let modal = document.getElementById("deconstructConfirmModal");
@@ -88,8 +62,8 @@
   // 🔑 Chamado pelo botão "Desconstruir"
   async function handleDeconstruct(itemId) {
     const __client = (typeof supabase !== "undefined" ? supabase : (window.supabaseClient || null));
-    if (!__client) { showAlert("Erro: Supabase não inicializado."); return; }
-    if (!itemId) { showAlert("Item inválido."); return; }
+    if (!__client) { showCustomAlert("Erro: Supabase não inicializado."); return; }
+    if (!itemId) { showCustomAlert("Item inválido."); return; }
 
     const { modal, preview, btnCancel, btnConfirm } = ensureDeconstructModal();
     preview.innerHTML = "<p>Calculando retorno...</p>";
@@ -124,66 +98,71 @@
       const { data: execData, error: execErr } = await __client.rpc("deconstruct_item", { p_inventory_item_id: itemId });
       btnConfirm.disabled = false;
 
-      if (execErr) { showAlert("Erro: " + execErr.message); return; }
-      if (execData.error) { showAlert(execData.error); return; }
+      if (execErr) { showCustomAlert("Erro: " + execErr.message); return; }
+      if (execData.error) { showCustomAlert(execData.error); return; }
 
       hideModal(modal);
       const details = document.getElementById("itemDetailsModal");
       if (details) hideModal(details);
 
       try {
-        // 1) Remove o item destruído
+        // --- ATUALIZAÇÃO LOCAL (SEM DOWNLOAD) ---
+        // 1. Remove o item desconstruído da lista local
         if (typeof allInventoryItems !== 'undefined') {
-            allInventoryItems = allInventoryItems.filter(inv => inv.id !== itemId);
-        }
-        if (typeof removeCacheItem === 'function') {
-            await removeCacheItem(itemId);
-        }
-
-        // 2) Atualiza fragmentos retornados
-        const fragMap = { R: 19, SR: 21, SSR: 22 };
-        for (const [rarity, qty] of Object.entries(execData.fragments_returned || {})) {
-          if (qty > 0) {
-            const fragId = fragMap[rarity];
-            const { data: fragData } = await __client
-              .from("inventory_items")
-              .select("*, items(*)")
-              .eq("player_id", globalUser.id)
-              .eq("item_id", fragId)
-              .single();
-
-            if (fragData && typeof allInventoryItems !== 'undefined') {
-              const idx = allInventoryItems.findIndex(it => it.item_id === fragId);
-              if (idx !== -1) {
-                allInventoryItems[idx].quantity = fragData.quantity;
-              } else {
-                allInventoryItems.push(fragData);
-              }
-              if (typeof updateCacheItem === 'function') await updateCacheItem(fragData);
+            const idx = allInventoryItems.findIndex(i => i.id === itemId);
+            if (idx !== -1) {
+                allInventoryItems.splice(idx, 1);
+                // Também remove do cache IndexedDB
+                if (typeof removeCacheItem === 'function') await removeCacheItem(itemId);
             }
-          }
         }
 
-        // 3) Atualiza cristais do jogador
-        const { data: updatedPlayer } = await __client
-          .from("players")
-          .select("crystals")
-          .eq("id", globalUser.id)
-          .single();
+        // 2. Adiciona os fragmentos retornados à lista local (Busca no banco apenas os fragmentos para ter dados completos)
+        const fragMap = { R: 19, SR: 21, SSR: 22 };
+        
+        // Vamos buscar os 3 fragmentos possíveis de uma vez para atualizar o inventário local
+        const fragIdsToFetch = [];
+        if (execData.fragments_returned.R > 0) fragIdsToFetch.push(19);
+        if (execData.fragments_returned.SR > 0) fragIdsToFetch.push(21);
+        if (execData.fragments_returned.SSR > 0) fragIdsToFetch.push(22);
 
-        if (updatedPlayer && typeof playerBaseStats !== 'undefined') {
-          playerBaseStats.crystals = updatedPlayer.crystals;
+        if (fragIdsToFetch.length > 0) {
+            const { data: updatedFrags } = await __client
+                .from("inventory_items")
+                .select("*, items(*)")
+                .eq("player_id", globalUser.id)
+                .in("item_id", fragIdsToFetch);
+            
+            if (updatedFrags) {
+                updatedFrags.forEach(fragData => {
+                    const idx = allInventoryItems.findIndex(it => it.item_id === fragData.item_id);
+                    if (idx !== -1) {
+                        allInventoryItems[idx] = fragData; // Atualiza existente
+                    } else {
+                        allInventoryItems.push(fragData); // Adiciona novo
+                    }
+                });
+            }
         }
 
-        // 4) Render UI
-        if (typeof calculatePlayerStats === 'function') calculatePlayerStats();
-        if (typeof renderEquippedItems === 'function') renderEquippedItems();
-        if (typeof loadItems === 'function') loadItems("all", allInventoryItems);
+        // 3. Atualiza cristais
+        if (typeof playerBaseStats !== 'undefined') {
+            playerBaseStats.crystals = (playerBaseStats.crystals || 0) - spent;
+        }
 
-        showAlert(`Item desconstruído!\n\nRetorno:\nR: ${execData.fragments_returned.R}\nSR: ${execData.fragments_returned.SR}\nSSR: ${execData.fragments_returned.SSR}\nCristais gastos: ${execData.crystals_spent}`);
+        // 4. Salva Cache e Renderiza
+        if (typeof updateCacheItem === 'function' && typeof saveCache === 'function') {
+             // Re-salva tudo
+             await saveCache(allInventoryItems, playerBaseStats, new Date().toISOString());
+        }
+        
+        renderEquippedItems();
+        loadItems("all", allInventoryItems);
+
+        showCustomAlert(`Item desconstruído!\n\nRetorno:\nR: ${execData.fragments_returned.R}\nSR: ${execData.fragments_returned.SR}\nSSR: ${execData.fragments_returned.SSR}\nCristais gastos: ${execData.crystals_spent}`);
       } catch (err) {
         console.error("Erro pós-desconstrução:", err);
-        showAlert("Item desconstruído, mas houve falha ao atualizar a bolsa visualmente.");
+        showCustomAlert("Item desconstruído, mas houve falha ao atualizar a bolsa visualmente.");
       }
     };
   }
@@ -194,9 +173,8 @@
       btn.addEventListener("click", () => {
         const sel = (typeof selectedItem !== "undefined" && selectedItem) ? selectedItem : (window.selectedItem || null);
         
-        // --- AQUI ESTÁ A LÓGICA MANTIDA, MAS AGORA USA O SHOWALERT NOVO ---
         if (!sel || !sel.id) { 
-            showAlert("Retire o equipamento antes de desconstruir."); 
+            showCustomAlert("Retire o equipamento antes de desconstruir."); 
             return; 
         }
         

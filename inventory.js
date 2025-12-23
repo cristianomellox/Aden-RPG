@@ -971,14 +971,7 @@ function openRefineFragmentModal(item) {
 async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystals, newItem = null) {
     // 1. Atualiza o item principal (se houver)
     if (updatedItem) {
-        // Busca do banco para garantir consistência ou usa o objeto retornado se for completo
-        // Se o RPC retornou dados parciais, teríamos que mesclar. 
-        // No SQL refizemos para garantir que a atualização funcione.
-        // Mas o mais seguro e rápido aqui é buscar SÓ ESSE item se faltar dado, 
-        // ou confiar na resposta do RPC se tivermos certeza.
-        
-        // Vamos buscar APENAS esse item no banco para garantir que temos todos os dados (joins, stats calculados)
-        // Isso é 1KB de download, muito melhor que 300KB.
+        // Busca APENAS esse item no banco para garantir que temos todos os dados
         const { data: fetchItem, error } = await supabase
             .from('inventory_items')
             .select('*, items(*)')
@@ -999,8 +992,6 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
     // 2. Remove ou decrementa fragmentos usados
     if (usedFragments && Array.isArray(usedFragments)) {
         usedFragments.forEach(usage => {
-            // O RPC retorna 'fragment_inventory_id' e 'used_qty'
-            // O nome do campo pode variar dependendo do RPC, ajustamos aqui.
             const fragId = usage.fragment_inventory_id || usage.id; 
             const qtyUsed = usage.used_qty || usage.qty;
 
@@ -1017,7 +1008,6 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
 
     // 3. Adiciona item novo (ex: craft)
     if (newItem) {
-        // Busca o item novo completo
         const { data: newFetchItem } = await supabase
             .from('inventory_items')
             .select('*, items(*)')
@@ -1033,15 +1023,37 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
     if (usedCrystals && playerBaseStats) {
         playerBaseStats.crystals = (playerBaseStats.crystals || 0) - usedCrystals;
     }
+    
+    // 5. >>> CORREÇÃO: Atualiza os STATS de Combate <<<
+    // O backend já recalculou isso na tabela players. Vamos buscar só essa coluna (MUITO leve).
+    await refreshPlayerStatsOnly();
 
-    // 5. Atualiza Globais
+    // 6. Atualiza Globais
     equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null);
 
-    // 6. Salva no Cache Local e Re-renderiza
-    await saveCache(allInventoryItems, playerBaseStats, new Date().toISOString()); // Timestamp fake só para salvar
+    // 7. Salva no Cache Local e Re-renderiza
+    await saveCache(allInventoryItems, playerBaseStats, new Date().toISOString()); 
     renderUI();
     if (selectedItem) showItemDetails(selectedItem);
 }
+
+// Helper para buscar APENAS os stats do jogador (Egress mínimo)
+async function refreshPlayerStatsOnly() {
+    try {
+        const { data, error } = await supabase
+            .from('players')
+            .select('cached_combat_stats')
+            .eq('id', globalUser.id)
+            .single();
+        
+        if (data && data.cached_combat_stats) {
+            playerBaseStats = data.cached_combat_stats;
+        }
+    } catch (e) {
+        console.error("Erro ao atualizar stats do jogador:", e);
+    }
+}
+
 
 // -------------------------------------------------------------
 // HANDLERS MODIFICADOS (ZERO EGRESS)
@@ -1131,8 +1143,6 @@ async function handleCraft(itemId, fragmentId) {
             showCustomAlert(`Item construído com sucesso!`);
             
             // ATUALIZAÇÃO LOCAL
-            // data.used_fragments é um array simples que criamos aqui: [{id: fragmentId, qty: 30}]
-            // data.new_item_id é o ID do novo item
             await updateLocalInventoryState(
                 null, 
                 [{fragment_inventory_id: fragmentId, used_qty: 30}], 
@@ -1180,6 +1190,5 @@ window.removeCacheItem = removeCacheItem;
 window.updateLocalInventoryState = updateLocalInventoryState; // EXPORTADO
 
 window.showCustomAlert = showCustomAlert;
-// handleDeconstruct agora é global para o HTML chamar, mas a implementação real está em desconstruir.js
-// Aqui definimos apenas se não existir.
+
 if (!window.handleDeconstruct) window.handleDeconstruct = () => {};

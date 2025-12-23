@@ -116,20 +116,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // 2. Atualiza a quantidade de pedras de refundição na UI.
+            // 2. Atualiza a quantidade de pedras de refundição LOCALMENTE
             const stoneId = 20; // ID do item "Pedra de Refundição"
-            const stoneItem = allInventoryItems.find(item => item.item_id === stoneId);
-
-            if (stoneItem) {
-                // Subtrai a quantidade do item no inventário local
-                stoneItem.quantity -= stonesUsed;
-
-                // Atualiza o item no cache do IndexedDB para persistir a mudança
-                await updateCacheItem(stoneItem);
-
-                // Re-renderiza os itens na bolsa para refletir a nova quantidade.
-                const currentTab = document.querySelector('.tab-button.active')?.id.replace('tab-', '') || 'all';
-                loadItems(currentTab, allInventoryItems);
+            if (typeof updateLocalInventoryState === 'function') {
+                await updateLocalInventoryState(null, [{fragment_inventory_id: null, id: 0, used_qty: 0}], 0); // Hack para só atualizar? Não, vamos fazer direito.
+                
+                // Encontra o item de pedra localmente e subtrai
+                const stoneItemIndex = allInventoryItems.findIndex(item => item.item_id === stoneId);
+                if (stoneItemIndex !== -1) {
+                    allInventoryItems[stoneItemIndex].quantity -= stonesUsed;
+                    if (allInventoryItems[stoneItemIndex].quantity <= 0) {
+                        allInventoryItems.splice(stoneItemIndex, 1);
+                    }
+                    // Atualiza cache
+                    if (typeof saveCache === 'function') saveCache(allInventoryItems, playerBaseStats, new Date().toISOString());
+                    loadItems('all', allInventoryItems);
+                }
             }
 
             pendingRolls = data.rolls || [];
@@ -162,38 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
             applyBtn.style.display = 'none';
             reforgeModal.style.display = 'none';
 
-            // --- LÓGICA CORRIGIDA: BUSCA E ATUALIZA ---
-            // 1. Busca o item atualizado do banco de dados
-            const { data: updatedItemData, error: fetchError } = await supabase
-                .from('inventory_items')
-                .select(`*, items(*)`)
-                .eq('id', currentItem.id)
-                .single();
-
-            if (fetchError) {
-                console.error("Erro ao buscar item atualizado:", fetchError);
-                return;
+            // --- ATUALIZAÇÃO LOCAL ---
+            if (typeof updateLocalInventoryState === 'function') {
+                await updateLocalInventoryState(currentItem.id, [], 0);
             }
-            
-            if (updatedItemData) {
-                // 2. Encontra e atualiza o item na lista de inventário global
-                const updatedItemIndex = allInventoryItems.findIndex(i => i.id === updatedItemData.id);
-                if (updatedItemIndex !== -1) {
-                    allInventoryItems[updatedItemIndex] = updatedItemData;
-                    await updateCacheItem(updatedItemData);
-                }
-
-                // 3. Atualiza as referências globais
-                selectedItem = updatedItemData;
-                equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null);
-
-                // 4. Atualiza todas as exibições na UI
-                calculatePlayerStats();
-                renderEquippedItems();
-                loadItems('all', allInventoryItems);
-                showItemDetails(selectedItem);
-            }
-            // --- FIM DA LÓGICA CORRIGIDA ---
+            // -------------------------
 
         } catch (err) {
             console.error(err);

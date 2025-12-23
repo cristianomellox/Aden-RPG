@@ -995,29 +995,45 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       supabase.rpc('resolve_all_expired_mines').then(()=>{});
 
-      const sel = await supabase
+      // 1. Busca dados iniciais para verificar status
+      let { data: cavern, error: selError } = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
         .eq("id", mineId)
         .single();
       
-      if (sel.error || !sel.data) { showModalAlert("Caverna não encontrada."); return; }
-      const cavern = sel.data;
+      if (selError || !cavern) { showModalAlert("Caverna não encontrada."); return; }
       if (cavern.owner_player_id) { showModalAlert('Mina já tem dono.'); return; }
+
+      // =================================================================
+      // CORREÇÃO: SE A MINA ESTIVER "ABERTA", INICIA O COMBATE NO BACKEND
+      // =================================================================
+      if (cavern.status === 'aberta') {
+          const { data: startData, error: startError } = await supabase.rpc('start_mine_combat', { _mine_id: mineId });
+          
+          if (startError || !startData.success) {
+              showModalAlert(startData?.message || startError?.message || "Erro ao iniciar combate.");
+              return;
+          }
+          
+          // Atualiza o objeto local para refletir a mudança
+          cavern.status = 'disputando';
+          // Precisamos re-buscar o competition_end_time ou estimar, mas o ideal é um fetch rápido ou assumir o retorno
+          // Se o start_mine_combat não retorna o tempo, fazemos um reload rápido ou estimamos
+          const { data: refreshed } = await supabase.from("mining_caverns").select("competition_end_time").eq("id", mineId).single();
+          if (refreshed) cavern.competition_end_time = refreshed.competition_end_time;
+      }
+      // =================================================================
 
       currentMineId = mineId;
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
       
-      // Inicializa com dados do servidor
       currentMonsterHealthGlobal = cavern.monster_health;
       updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
       
-      // Garante que o cache de stats está pronto (12h)
       await getOrUpdatePlayerStatsCache();
       await syncAttacksState();
 
-      // Tenta Restaurar Sessão Otimista (Se existir e for recente)
-      // Se restaurar, pendingBatch e HP serão atualizados do localStorage
       restoreOptimisticState(cavern);
 
       if (combatTitle) combatTitle.textContent = `Disputa pela ${esc(cavern.name)}`;
@@ -1026,13 +1042,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const remaining = Math.max(0, Math.floor((new Date(cavern.competition_end_time).getTime() - Date.now()) / 1000));
         startCombatTimer(remaining);
       } else {
-        if (combatTimerSpan) combatTimerSpan.textContent = "Aguardando 1º golpe";
-        if (combatTimerInterval) clearInterval(combatTimerInterval);
+        if (combatTimerSpan) combatTimerSpan.textContent = "Iniciando...";
       }
 
       if (combatModal) combatModal.style.display = "flex";
       
       const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
+      // Lembre-se: get_mine_damage_ranking antiga ainda retorna nomes, se usar a nova otimizada, o renderRanking lida com cache.
       renderRanking(rankingData ? rankingData.slice(0, 3) : []);
 
       ambientMusic.play();

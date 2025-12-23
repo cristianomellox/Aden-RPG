@@ -1,38 +1,6 @@
 import { supabase } from './supabaseClient.js'
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Ultra Otimizada (Batching + Metadata Cache + Debounce)");
-
-  // =================================================================
-  // 0. CACHE DE METADADOS DE JOGADORES (SOLUÇÃO 2 - NOVO)
-  // =================================================================
-  // Armazena ID -> {Nome, Avatar} para evitar tráfego repetido no ranking
-  const playerMetadataCache = {};
-
-  function registerPlayerMetadata(playerObj) {
-    if (!playerObj || !playerObj.id) return;
-    // Só atualiza se não existir
-    if (!playerMetadataCache[playerObj.id]) {
-        playerMetadataCache[playerObj.id] = {
-            n: playerObj.name || "Desconhecido",
-            a: playerObj.avatar_url || "https://aden-rpg.pages.dev/assets/default_avatar.png"
-        };
-    }
-  }
-
-  function getPlayerMetadata(uuid) {
-    return playerMetadataCache[uuid] || { n: "Carregando...", a: "https://aden-rpg.pages.dev/assets/default_avatar.png" };
-  }
-
-  async function fetchMissingPlayers(uuids) {
-    const missing = uuids.filter(id => !playerMetadataCache[id]);
-    if (missing.length === 0) return;
-    
-    // Busca apenas os IDs que faltam
-    const { data } = await supabase.from('players').select('id, name, avatar_url').in('id', missing);
-    if (data) {
-        data.forEach(registerPlayerMetadata);
-    }
-  }
+  console.log("[mines] DOM ready - Versão Ultra Otimizada (Batching + Minified JSON + Cache 12h + Sessão Persistente)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -454,7 +422,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // =================================================================
-  // 7. RANKING E UI (MODIFICADO - SOLUÇÃO 2)
+  // 7. RANKING E UI
   // =================================================================
   function renderRanking(rankingData) {
       if (!damageRankingList) return;
@@ -465,25 +433,18 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
       }
 
-      // ALTERAÇÃO: Identifica IDs que não estão no cache e busca em background
-      const pids = rankingData.map(r => r.pid || r.player_id);
-      fetchMissingPlayers(pids); // Chama sem await para não travar a renderização
-
       for (const row of rankingData) {
-        // Agora o SQL só retorna 'pid' e 'd'. Buscamos o resto no cache local.
-        const rId = row.pid || row.player_id;
+        // Suporte para chaves minificadas (n: name, a: avatar, d: damage) OU originais
+        const rName = row.n || row.player_name;
+        const rAvatar = row.a || row.avatar_url;
         const rDamage = row.d || row.total_damage_dealt;
-
-        // Recupera do cache (ou usa placeholder se ainda não carregou)
-        const metadata = getPlayerMetadata(rId);
-        const rName = metadata.n;
-        const rAvatar = metadata.a;
+        const rId = row.pid || row.player_id;
 
         const isMe = rId === userId;
         const li = document.createElement("li");
         li.innerHTML = `
           <div class="ranking-entry">
-            <img src="${esc(rAvatar)}" alt="Av" class="ranking-avatar">
+            <img src="${esc(rAvatar || '/assets/default_avatar.png')}" alt="Av" class="ranking-avatar">
             <span class="player-name">${esc(rName)} ${isMe ? '(Você)' : ''}</span>
             <span class="player-damage">${Number(rDamage||0).toLocaleString()}</span>
           </div>`;
@@ -819,7 +780,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else { guilddomSpan.textContent = 'Nenhuma.'; }
   }
 
-  // ALTERAÇÃO (Solução 2): Integra o Cache de Metadados ao loadMines
   async function loadMines() {
     showLoading();
     try {
@@ -833,11 +793,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const ownersMap = {};
       if (ownerIds.length) {
         const { data: ownersData } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
-        (ownersData || []).forEach(p => {
-            ownersMap[p.id] = p;
-            // REGISTRA NO CACHE PARA USAR EM OUTRAS PARTES
-            registerPlayerMetadata(p);
-        });
+        (ownersData || []).forEach(p => ownersMap[p.id] = p);
       }
 
       // ALTERAÇÃO: Identifica se eu já sou dono de alguma mina
@@ -995,45 +951,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       supabase.rpc('resolve_all_expired_mines').then(()=>{});
 
-      // 1. Busca dados iniciais para verificar status
-      let { data: cavern, error: selError } = await supabase
+      const sel = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
         .eq("id", mineId)
         .single();
       
-      if (selError || !cavern) { showModalAlert("Caverna não encontrada."); return; }
+      if (sel.error || !sel.data) { showModalAlert("Caverna não encontrada."); return; }
+      const cavern = sel.data;
       if (cavern.owner_player_id) { showModalAlert('Mina já tem dono.'); return; }
-
-      // =================================================================
-      // CORREÇÃO: SE A MINA ESTIVER "ABERTA", INICIA O COMBATE NO BACKEND
-      // =================================================================
-      if (cavern.status === 'aberta') {
-          const { data: startData, error: startError } = await supabase.rpc('start_mine_combat', { _mine_id: mineId });
-          
-          if (startError || !startData.success) {
-              showModalAlert(startData?.message || startError?.message || "Erro ao iniciar combate.");
-              return;
-          }
-          
-          // Atualiza o objeto local para refletir a mudança
-          cavern.status = 'disputando';
-          // Precisamos re-buscar o competition_end_time ou estimar, mas o ideal é um fetch rápido ou assumir o retorno
-          // Se o start_mine_combat não retorna o tempo, fazemos um reload rápido ou estimamos
-          const { data: refreshed } = await supabase.from("mining_caverns").select("competition_end_time").eq("id", mineId).single();
-          if (refreshed) cavern.competition_end_time = refreshed.competition_end_time;
-      }
-      // =================================================================
 
       currentMineId = mineId;
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
       
+      // Inicializa com dados do servidor
       currentMonsterHealthGlobal = cavern.monster_health;
       updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
       
+      // Garante que o cache de stats está pronto (12h)
       await getOrUpdatePlayerStatsCache();
       await syncAttacksState();
 
+      // Tenta Restaurar Sessão Otimista (Se existir e for recente)
+      // Se restaurar, pendingBatch e HP serão atualizados do localStorage
       restoreOptimisticState(cavern);
 
       if (combatTitle) combatTitle.textContent = `Disputa pela ${esc(cavern.name)}`;
@@ -1042,13 +982,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         const remaining = Math.max(0, Math.floor((new Date(cavern.competition_end_time).getTime() - Date.now()) / 1000));
         startCombatTimer(remaining);
       } else {
-        if (combatTimerSpan) combatTimerSpan.textContent = "Iniciando...";
+        if (combatTimerSpan) combatTimerSpan.textContent = "Aguardando 1º golpe";
+        if (combatTimerInterval) clearInterval(combatTimerInterval);
       }
 
       if (combatModal) combatModal.style.display = "flex";
       
       const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      // Lembre-se: get_mine_damage_ranking antiga ainda retorna nomes, se usar a nova otimizada, o renderRanking lida com cache.
       renderRanking(rankingData ? rankingData.slice(0, 3) : []);
 
       ambientMusic.play();
@@ -1180,7 +1120,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
     displayDamageNumber(damage, isCrit, false, monsterArea);
     if (!hasAttackedOnce) hasAttackedOnce = true;
-    const mImg = document.getElementById("monsterImage");
+const mImg = document.getElementById("monsterImage");
     if (mImg) {
         mImg.classList.remove('shake-animation');
         void mImg.offsetWidth; // Força reflow (reinicia animação)
@@ -1378,7 +1318,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // =================================================================
-  // 15. INICIALIZAÇÃO E LISTENERS (MODIFICADO - SOLUÇÃO 3)
+  // 15. INICIALIZAÇÃO
   // =================================================================
   async function boot() {
     try {
@@ -1409,9 +1349,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // ALTERAÇÃO (Solução 3): Adiciona variável para controle de Debounce
-  let lastLoadTime = 0;
-
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === 'hidden') {
       if (ambientMusic && !ambientMusic.paused) { 
@@ -1425,22 +1362,19 @@ document.addEventListener("DOMContentLoaded", async () => {
           
           // Força envio do que tiver pendente antes de sair (Best Effort)
           processAttackQueue();
+          
+          // NÃO resetamos mais a UI aqui, confiamos na persistência se ele voltar
+          // resetCombatUI();
       }
     } else {
-        // Se a aba voltou a ficar visível
-        if (ambientMusic._wasPlaying) ambientMusic.play().catch(()=>{});
-
         if (currentMineId && document.visibilityState === 'visible') {
-           // Se estamos em combate, sync normal
-           syncAndCheckLogs();
+           // Se voltou e estamos em combate, tenta restaurar se algo falhou
+           // A função restoreOptimisticState é chamada no start, mas aqui podemos apenas
+           // verificar se o flush timer precisa ser reativado
         } else if (!currentMineId) {
-           // ALTERAÇÃO (Solução 3): Verifica tempo antes de recarregar a lista
-           const now = Date.now();
-           if (now - lastLoadTime > 30000) { // 30 segundos
-               lastLoadTime = now;
-               loadMines();
-           }
+           loadMines();
         }
+        syncAndCheckLogs();
     }
   });
 

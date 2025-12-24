@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient.js'
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Corrigida (Buy Fix + Flush Before Buy)");
+  console.log("[mines] DOM ready - Versão Otimizada (Surgical Update + Global Cache)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -91,12 +91,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 2. SUPABASE & ESTADO GLOBAL
   // =================================================================
   
-
   let userId = null;
   let currentMineId = null;
   let myOwnedMineId = null; 
   let maxMonsterHealth = 1;
   let hasAttackedOnce = false;
+
+  // --- NOVO: CACHE GLOBAL DE DONOS ---
+  let globalOwnersMap = {}; 
 
   // Estado Local de Ataques (Optimistic UI)
   let localAttacksLeft = 0;
@@ -829,6 +831,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function renderMines(mines, ownersMap) {
+    // Atualiza o cache global
+    globalOwnersMap = { ...globalOwnersMap, ...ownersMap };
+
     minesContainer.innerHTML = "";
     for (const mine of mines) {
       const owner = ownersMap[mine.owner_player_id];
@@ -857,6 +862,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       const card = document.createElement("div");
+      // ADIÇÃO: ID ÚNICO PARA ATUALIZAÇÃO CIRÚRGICA
+      card.id = `mine-card-${mine.id}`;
       card.className = `mine-card ${mine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
       card.innerHTML = `
         <h3 style="color: yellow;">${esc(mine.name)}</h3>
@@ -876,6 +883,95 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       minesContainer.appendChild(card);
     }
+  }
+
+  // =================================================================
+  // FUNÇÃO DE ATUALIZAÇÃO CIRÚRGICA (ECONOMIA DE DADOS)
+  // =================================================================
+  async function updateSingleMineCard(targetMineId) {
+      if (!targetMineId) return;
+      
+      const cardElement = document.getElementById(`mine-card-${targetMineId}`);
+      if (!cardElement) return; 
+
+      try {
+          // 1. Busca APENAS a mina específica
+          const { data: mine, error } = await supabase
+              .from("mining_caverns")
+              .select("id, name, status, monster_health, owner_player_id, open_time, initial_monster_health")
+              .eq("id", targetMineId)
+              .single();
+
+          if (error || !mine) throw error;
+
+          // 2. Resolve o Dono (Usa cache se possível)
+          let owner = null;
+          if (mine.owner_player_id) {
+              if (globalOwnersMap[mine.owner_player_id]) {
+                  owner = globalOwnersMap[mine.owner_player_id];
+              } else {
+                  // Só busca na tabela players se for um dono novo que não conhecemos
+                  const { data: p } = await supabase.from("players").select("id, name, avatar_url, guild_id").eq("id", mine.owner_player_id).single();
+                  if (p) {
+                      globalOwnersMap[p.id] = p;
+                      owner = p;
+                  }
+              }
+          }
+
+          // 3. Atualiza lógica de UI do Card
+          const ownerName = owner ? (owner.name || "Desconhecido") : null;
+          const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
+
+          let collectingHtml = "";
+          if (mine.owner_player_id) {
+              const start = new Date(mine.open_time || new Date());
+              const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
+              const crystals = Math.min(1500, Math.floor(seconds * (1500.0 / 6600)));
+              collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
+          }
+
+          let actionType = null;
+          let cardClass = "";
+          if (mine.status === "aberta" && !mine.owner_player_id) {
+              actionType = "startCombat";
+          } else if (mine.status === "disputando") {
+              actionType = "startCombat";
+          } else if (mine.owner_player_id && mine.owner_player_id !== userId) {
+              actionType = "challengeMine";
+          } else if (mine.owner_player_id === userId) {
+              cardClass = "disabled-card";
+          }
+          
+          cardElement.className = `mine-card ${mine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
+          cardElement.innerHTML = `
+            <h3 style="color: yellow;">${esc(mine.name)}</h3>
+            <p>${esc(mine.status || "Fechada")}</p>
+            ${ownerName ? `
+              <div class="mine-owner-container">
+                ${ownerAvatarHtml}
+                <span>${esc(ownerName)}</span>
+              </div>` : "<p><strong>Sem Dono</strong></p>"}
+            ${collectingHtml}`;
+
+          const newCard = cardElement.cloneNode(true);
+          cardElement.parentNode.replaceChild(newCard, cardElement);
+          
+          if (actionType) {
+              newCard.addEventListener("click", () => {
+                  if (actionType === "startCombat") startCombat(mine.id);
+                  // Passa array vazio em allMines para evitar fetch desnecessário na atualização cirúrgica
+                  else if (actionType === "challengeMine") challengeMine(mine, owner, []); 
+              });
+          }
+
+          if (mine.owner_player_id === userId) myOwnedMineId = mine.id;
+          else if (myOwnedMineId === mine.id) myOwnedMineId = null;
+
+      } catch (e) {
+          console.warn("[Mines] Surgical update failed, fallback to full load", e);
+          loadMines(); 
+      }
   }
 
   // =================================================================
@@ -1097,7 +1193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (data.win) {
               showModalAlert("Mina conquistada/resetada!");
               resetCombatUI();
-              await loadMines();
+              // Não precisa chamar loadMines() aqui pois resetCombatUI fará a atualização cirúrgica
           }
 
       } catch (e) {
@@ -1199,11 +1295,13 @@ const mImg = document.getElementById("monsterImage");
     } catch (e) {
     } finally {
       resetCombatUI();
-      await loadMines();
+      // await loadMines(); // Removido, resetCombatUI cuida disso
     }
   }
 
   function resetCombatUI() {
+    const mineToUpdate = currentMineId; // Guarda o ID antes de limpar
+
     if (combatModal) combatModal.style.display = "none";
     
     // Limpa cache otimista ao sair da sessão
@@ -1219,6 +1317,13 @@ const mImg = document.getElementById("monsterImage");
     
     ambientMusic.pause();
     ambientMusic.currentTime = 0;
+
+    // OTIMIZAÇÃO: Atualiza apenas a mina que acabou de ser jogada
+    if (mineToUpdate) {
+        updateSingleMineCard(mineToUpdate);
+    } else {
+        loadMines(); // Se por acaso perdeu o ID, carrega tudo
+    }
   }
 
   // =================================================================
@@ -1241,8 +1346,11 @@ const mImg = document.getElementById("monsterImage");
         if (attemptsLeft <= 0) { showModalAlert("Sem tentativas de PvP hoje."); return; }
 
         let warningMessage = "";
-        const currentOwnedMine = allMines.find(m => m.owner_player_id === userId);
-        if (currentOwnedMine) warningMessage = `<br><br><strong style="color: #ffcc00;">AVISO:</strong> Abandonará "${esc(currentOwnedMine.name)}".`;
+        // Se allMines estiver vazio (surgical update), ignoramos o aviso para economizar fetch
+        if (allMines && allMines.length > 0) {
+            const currentOwnedMine = allMines.find(m => m.owner_player_id === userId);
+            if (currentOwnedMine) warningMessage = `<br><br><strong style="color: #ffcc00;">AVISO:</strong> Abandonará "${esc(currentOwnedMine.name)}".`;
+        }
 
         confirmMessage.innerHTML = `Você possui <strong>${attemptsLeft}</strong> tentativas PvP.<br>Deseja desafiar <strong>${esc(ownerName)}</strong>?${warningMessage}`;
         confirmCancelBtn.style.display = 'inline-block';
@@ -1328,14 +1436,14 @@ const mImg = document.getElementById("monsterImage");
     } finally {
         if(pvpCombatModal) pvpCombatModal.style.display = 'none';
         hideLoading();
-        await loadMines();
+        await loadMines(); // No PvP, loadMines é aceitável pois é raro
     }
   }
 
   function endCombat() {
     resetCombatUI();
     hasAttackedOnce = false;
-    loadMines();
+    // loadMines(); // REMOVIDO: resetCombatUI já faz o updateSingleMineCard
   }
 
   // =================================================================

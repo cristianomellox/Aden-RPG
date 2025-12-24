@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient.js'
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Ultra Otimizada (Solo Mode + No Avatars + Boot Logs Only)");
+  console.log("[mines] DOM ready - Versão Corrigida (Buy Fix + Flush Before Buy)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -524,6 +524,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (buyConfirmBtn) buyConfirmBtn.addEventListener("click", async () => {
     closeBuyModal();
     showLoading();
+    
+    // CORREÇÃO CRÍTICA: Envia o que tiver pendente ANTES de comprar para evitar conflito de saldo
+    await processAttackQueue();
+    
     let purchased = 0;
     let spent = 0;
     try {
@@ -955,6 +959,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     showLoading();
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
+    
+    // CORREÇÃO: Habilita o botão de comprar (que pode ter ficado disabled do reset anterior)
+    if (buyAttackBtn) buyAttackBtn.disabled = false;
     
     // Reset de variaveis de batch
     pendingBatch = 0;

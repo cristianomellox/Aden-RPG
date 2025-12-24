@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         let goldEarned = Math.floor(cappedSeconds * GOLD_RATE_PER_SEC);
 
         // Nível 100 cap
-        if ((playerAfkData.level || 1) >= 100) xpEarned = 0;
+       // if ((playerAfkData.level || 1) >= 100) xpEarned = 0;
 
         afkXpSpan.textContent = formatNumberCompact(xpEarned);
         afkGoldSpan.textContent = formatNumberCompact(goldEarned);

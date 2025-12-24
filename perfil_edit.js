@@ -84,12 +84,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (editProfileIcon) {
         editProfileIcon.onclick = async () => {
-            const { data: { user } } = await supabaseClient.auth.getUser();
-            if (user) {
+            // ALTERADO: De getUser() para getSession()
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.user) {
                 const { data: playerData, error } = await supabaseClient
                     .from('players')
                     .select('name, faction, avatar_url')
-                    .eq('id', user.id)
+                    .eq('id', session.user.id)
                     .single();
                 
                 if (playerData) {

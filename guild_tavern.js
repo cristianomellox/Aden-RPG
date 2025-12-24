@@ -38,9 +38,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (myPlayerData) return true;
         
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return false;
-            userId = user.id;
+            // ALTERADO: De getUser() para getSession()
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session || !session.user) return false;
+            userId = session.user.id;
 
             const { data: playerData, error: playerError } = await supabase
                 .from('players')

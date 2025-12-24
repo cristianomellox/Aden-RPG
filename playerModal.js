@@ -269,10 +269,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // --- Obtém o ID do jogador logado (quem está usando o app) ---
             let currentUserId = null;
             try {
-                const { data: userData } = await supabase.auth.getUser();
-                currentUserId = userData?.user?.id || null;
+                // ALTERADO: De getUser() para getSession()
+                const { data: sessionData } = await supabase.auth.getSession();
+                currentUserId = sessionData?.session?.user?.id || null;
             } catch (e) {
-                console.warn("[playerModal.js] Não foi possível obter usuário atual via supabase.auth.getUser():", e);
+                console.warn("[playerModal.js] Não foi possível obter usuário atual via supabase.auth.getSession():", e);
             }
 
             clearModalContent(); // Limpa e esconde o botão de MP antes da busca

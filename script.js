@@ -950,14 +950,17 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
 function applyItemBonuses(player, equippedItems) {
     let combinedStats = { ...player };
     equippedItems.forEach(invItem => {
-        if (invItem.items) {
-            combinedStats.min_attack += invItem.items.min_attack || 0;
-            combinedStats.attack += invItem.items.attack || 0;
-            combinedStats.defense += invItem.items.defense || 0;
-            combinedStats.health += invItem.items.health || 0;
-            combinedStats.crit_chance += invItem.items.crit_chance || 0;
-            combinedStats.crit_damage += invItem.items.crit_damage || 0;
-            combinedStats.evasion += invItem.items.evasion || 0;
+        // Tenta pegar os stats base, seja de um objeto 'items' aninhado (join) ou do próprio objeto (flat cache)
+        const baseItem = invItem.items || invItem;
+
+        if (baseItem) {
+            combinedStats.min_attack += baseItem.min_attack || 0;
+            combinedStats.attack += baseItem.attack || 0;
+            combinedStats.defense += baseItem.defense || 0;
+            combinedStats.health += baseItem.health || 0;
+            combinedStats.crit_chance += baseItem.crit_chance || 0;
+            combinedStats.crit_damage += baseItem.crit_damage || 0;
+            combinedStats.evasion += baseItem.evasion || 0;
         }
         combinedStats.min_attack += invItem.min_attack_bonus || 0;
         combinedStats.attack += invItem.attack_bonus || 0;
@@ -1006,38 +1009,26 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // Busca os itens equipados (para calcular o CP corretamente)
+    // --- OTIMIZAÇÃO: REMOVIDO JOIN. USA CACHED_INVENTORY ---
+    // Em vez de fazer uma segunda query pesada em 'inventory_items',
+    // usamos o JSONB 'cached_inventory' que já vem na query de 'players'.
+    
+    const rawInventory = player.cached_inventory || [];
+    // Filtra apenas itens que possuem equipped_slot definido
+    const equippedItems = Array.isArray(rawInventory) 
+        ? rawInventory.filter(i => i.equipped_slot) 
+        : [];
+
+    /* CODIGO ANTIGO REMOVIDO PARA ECONOMIA DE EGRESS
     const { data: equippedItems, error: itemsError } = await supabaseClient
         .from('inventory_items')
-        .select(`
-            equipped_slot,
-            min_attack_bonus,
-            attack_bonus,
-            defense_bonus,
-            health_bonus,
-            crit_chance_bonus,
-            crit_damage_bonus,
-            evasion_bonus,
-            items (
-                name,
-                min_attack,
-                attack,
-                defense,
-                health,
-                crit_chance,
-                crit_damage,
-                evasion
-            )
-        `)
+        .select(`...`)
         .eq('player_id', userId)
         .neq('equipped_slot', null);
-
-    if (itemsError) {
-        console.error('Erro ao buscar itens equipados:', itemsError.message);
-    }
+    */
 
     // Calcula os atributos totais
-    const playerWithEquips = applyItemBonuses(player, equippedItems || []);
+    const playerWithEquips = applyItemBonuses(player, equippedItems);
     
     // Cálculo do CP (Mantido)
     playerWithEquips.combat_power = Math.floor(

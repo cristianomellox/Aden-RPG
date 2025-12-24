@@ -124,10 +124,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         systemMessagesListDiv.innerHTML = '<p>Carregando mensagens do sistema...</p>';
 
-        // Busca title, content e created_at
+        // Busca title, preview (LEVE) e created_at. Content (PESADO) é baixado apenas no clique.
         const { data: dbMessages, error: msgError } = await supabaseClient
             .from('system_messages')
-            .select('id, title, content, created_at') 
+            .select('id, title, preview, created_at') 
             .or(`target_player_id.is.null,target_player_id.eq.${currentPlayer.id}`)
             .order('created_at', { ascending: false }); 
         
@@ -171,20 +171,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const sentDate = new Date(msg.created_at);
             const formattedDate = `${sentDate.toLocaleDateString()} ${sentDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
             
-            // Renderiza o TÍTULO e a prévia do CONTEÚDO
+            // Renderiza o TÍTULO e a PRÉVIA
             msgDiv.innerHTML = `
                 <p class="conversation-name">${msg.title || 'Mensagem do Sistema'}</p>
-                <p class="conversation-preview">${msg.content.substring(0, 100)}...</p> 
+                <p class="conversation-preview">${msg.preview || 'Clique para ler.'}</p> 
                 <small class="system-message-date">${formattedDate}</small>
             `;
             
-            // 4. Implementação da visualização completa da mensagem no MODAL
-            msgDiv.addEventListener('click', () => {
-                 showSystemMessageModal(
-                    msg.title || 'Mensagem do Sistema',
-                    msg.content,
-                    formattedDate
-                 );
+            // 4. Implementação da visualização completa da mensagem no MODAL com Fetch Lazy
+            msgDiv.addEventListener('click', async () => {
+                 // Busca o conteúdo completo apenas agora
+                 const { data: fullMsg } = await supabaseClient
+                    .from('system_messages')
+                    .select('content')
+                    .eq('id', msg.id)
+                    .single();
+
+                 if (fullMsg) {
+                     showSystemMessageModal(
+                        msg.title || 'Mensagem do Sistema',
+                        fullMsg.content,
+                        formattedDate
+                     );
+                 }
                  
                  // Remove o visual de 'unread' localmente ao clicar
                  if (isUnread) {
@@ -235,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ----------------------------------------------------
-    // FUNÇÕES DE MENSAGEM PRIVADA (EXISTENTES)
+    // FUNÇÕES DE MENSAGEM PRIVADA (OTIMIZADA)
     // ----------------------------------------------------
 
     async function fetchAndSyncMessages() {
@@ -246,7 +255,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         await supabaseClient.rpc('cleanup_old_private_messages');
-        const { data: dbConversations, error: convoError } = await supabaseClient.from('private_messages').select('*').or(`player_one_id.eq.${currentPlayer.id},player_two_id.eq.${currentPlayer.id}`);
+        
+        // OTIMIZAÇÃO: Busca apenas metadados, SEM a coluna 'messages'
+        const { data: dbConversations, error: convoError } = await supabaseClient
+            .from('private_messages')
+            .select('id, player_one_id, player_two_id, last_message, last_sender_id, updated_at, unread_by_player_one, unread_by_player_two')
+            .or(`player_one_id.eq.${currentPlayer.id},player_two_id.eq.${currentPlayer.id}`);
         
         if (convoError) { 
             console.error("Erro ao buscar conversas:", convoError); 
@@ -262,12 +276,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const convoId = String(dbConvo.id);
             activeConvoIds.add(convoId);
 
+            // Mantém mensagens antigas do cache local, pois não vieram do servidor
             const localConvo = localConversations.get(convoId) || { messages: [] };
             
-            const existingMessageTimestamps = new Set(localConvo.messages.map(m => m.timestamp));
-            (dbConvo.messages || []).forEach(dbMsg => { 
-                if (!existingMessageTimestamps.has(dbMsg.timestamp)) { localConvo.messages.push(dbMsg); } 
-            });
+            // Nota: Não fazemos merge de messages aqui para economizar banda. 
+            // O merge é feito apenas no openChatView.
 
             localConvo.id = convoId;
             localConvo.player_one_id = dbConvo.player_one_id;
@@ -385,18 +398,36 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         chatWithName.textContent = finalPlayerName;
+
+        // OTIMIZAÇÃO: Busca o histórico pesado (messages) SOMENTE AQUI
+        if (!convo.is_server_deleted) {
+            const { data: msgData } = await supabaseClient
+                .from('private_messages')
+                .select('messages')
+                .eq('id', currentOpenConversationId)
+                .single();
+
+            if (msgData && msgData.messages) {
+                // Mescla mensagens novas com locais
+                const existingMessageTimestamps = new Set(convo.messages.map(m => m.timestamp));
+                msgData.messages.forEach(dbMsg => { 
+                    if (!existingMessageTimestamps.has(dbMsg.timestamp)) { convo.messages.push(dbMsg); } 
+                });
+                
+                // Salva o histórico atualizado no cache local
+                localConversations.set(currentOpenConversationId, convo);
+                saveToLocalStorage();
+            }
+        }
         
         // CORREÇÃO: Mantém o ícone, altera apenas o atributo title (tooltip)
         if (deleteConvoBtn) {
             deleteConvoBtn.style.display = 'block';
             if (convo.is_server_deleted) {
-                // Configura o tooltip para "Apagar Histórico Local"
                 deleteConvoBtn.title = 'Apagar Histórico Local';
             } else {
-                // Configura o tooltip para "Apagar Conversa"
                 deleteConvoBtn.title = 'Apagar Conversa';
             }
-            // O conteúdo (ícone) do botão permanece intacto.
         }
         
         if (convo.is_server_deleted) {
@@ -459,15 +490,16 @@ document.addEventListener("DOMContentLoaded", () => {
         
         loadFromLocalStorage();
 
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (user) {
-            const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', user.id).single();
+        // OTIMIZAÇÃO: Substituição de getUser por getSession
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session && session.user) {
+            const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
             if (player) currentPlayer = player;
         }
         
-        // 1. Sincroniza mensagens privadas
+        // 1. Sincroniza mensagens privadas (apenas metadata)
         await fetchAndSyncMessages();
-        // 2. Sincroniza mensagens de sistema (sem marcar como lida)
+        // 2. Sincroniza mensagens de sistema (sem marcar como lida e sem content pesado)
         await fetchAndRenderSystemMessages({ markAsRead: false }); 
 
         setupEventListeners();
@@ -525,14 +557,22 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 chatInput.value = '';
                 await fetchAndSyncMessages();
+                
+                // Após enviar, precisamos atualizar o chat view manualmente pois o fetchAndSync não traz 'messages'
                 const currentConvo = localConversations.get(currentOpenConversationId);
+                
+                // Força refresh das mensagens no chat aberto
                 if (currentConvo) {
-                   renderChatMessages(currentConvo);
-                   chatInput.placeholder = 'Aguardando resposta...';
-                   sendMessageBtn.style.filter = 'grayscale(1)';
+                    // Simula abertura para puxar novas mensagens
+                    await openChatView(currentOpenConversationId);
+                    
+                    chatInput.placeholder = 'Aguardando resposta...';
+                    sendMessageBtn.style.filter = 'grayscale(1)';
                 } else {
                    backToListBtn.click();
                 }
+                
+                sendMessageBtn.style.pointerEvents = 'auto'; // Restaura
             }
         };
         

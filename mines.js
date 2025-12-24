@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js'
+
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Ultra Otimizada (Batching + Minified JSON + Cache 12h + Sessão Persistente)");
+  console.log("[mines] DOM ready - Versão Ultra Otimizada (Solo Mode + No Avatars + Boot Logs Only)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -364,6 +365,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function syncAndCheckLogs() {
+      // 3) a busca pelo log de ataques (histórico) deve ocorrer apenas no boot.
       if (!userId) return;
       const lastSync = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || '1970-01-01T00:00:00Z';
       
@@ -424,28 +426,36 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =================================================================
   // 7. RANKING E UI
   // =================================================================
-  function renderRanking(rankingData) {
+  function renderRanking(rankingData, isSolo = false) {
       if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
       
+      // 1) "No lugar do ranking, mostre 'Apenas você disputando'"
+      if (isSolo) {
+          damageRankingList.innerHTML = "<li style='text-align:center;color:#4caf50;font-style:italic;'>Apenas você disputando...</li>";
+          return;
+      }
+
       if (!rankingData || rankingData.length === 0) {
           damageRankingList.innerHTML = "<li style='text-align:center;color:#888'>Nenhum dano ainda</li>";
           return;
       }
 
       for (const row of rankingData) {
-        // Suporte para chaves minificadas (n: name, a: avatar, d: damage) OU originais
+        // Suporte para chaves minificadas (n: name, d: damage) OU originais
         const rName = row.n || row.player_name;
-        const rAvatar = row.a || row.avatar_url;
+        // 2) "remova a busca e exibição do avatar no ranking"
+        // const rAvatar = row.a || row.avatar_url; // REMOVIDO
         const rDamage = row.d || row.total_damage_dealt;
         const rId = row.pid || row.player_id;
 
         const isMe = rId === userId;
         const li = document.createElement("li");
+        
+        // Layout simplificado sem Avatar
         li.innerHTML = `
-          <div class="ranking-entry">
-            <img src="${esc(rAvatar || '/assets/default_avatar.png')}" alt="Av" class="ranking-avatar">
-            <span class="player-name">${esc(rName)} ${isMe ? '(Você)' : ''}</span>
+          <div class="ranking-entry" style="padding: 4px 0;">
+            <span class="player-name" style="margin-left: 0;">${esc(rName)} ${isMe ? '(Você)' : ''}</span>
             <span class="player-damage">${Number(rDamage||0).toLocaleString()}</span>
           </div>`;
         damageRankingList.appendChild(li);
@@ -802,7 +812,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       renderMines(mines || [], ownersMap);
       await updateDominantGuild(mines || [], ownersMap);
-      await syncAndCheckLogs();
+      
+      // 3) REMOVIDO: await syncAndCheckLogs(); (Agora apenas no boot)
+      
       await updatePVPAttemptsUI();
       await updatePlayerMineUI();
     } catch (err) {
@@ -989,7 +1001,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (combatModal) combatModal.style.display = "flex";
       
       const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      renderRanking(rankingData ? rankingData.slice(0, 3) : []);
+      
+      // 1) Lógica de Ranking no Load Inicial
+      const isSolo = (!rankingData || rankingData.length === 0 || (rankingData.length === 1 && rankingData[0].player_id === userId));
+      renderRanking(rankingData ? rankingData.slice(0, 3) : [], isSolo);
 
       ambientMusic.play();
     } catch (e) {
@@ -1050,17 +1065,16 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
 
           // Atualiza com a verdade do servidor (Mapeamento JSON Minificado)
-          // data.hp = current_monster_health
-          // data.al = attacks_left
-          // data.r  = ranking
-          // data.win = owner_set
-          // data.end = competition_end_time
           
           currentMonsterHealthGlobal = data.hp;
           updateHpBar(data.hp, maxMonsterHealth);
           
-          if (data.r && data.r.length > 0) {
-              renderRanking(data.r);
+          // 1) Logica de Solo vs Ranking
+          // data.solo vem do backend
+          if (data.solo) {
+              renderRanking([], true);
+          } else {
+              renderRanking(data.r || [], false);
           }
 
           localAttacksLeft = data.al;
@@ -1336,7 +1350,7 @@ const mImg = document.getElementById("monsterImage");
 
       await Promise.all([
           loadMines(),
-          syncAndCheckLogs()
+          syncAndCheckLogs() // 3) Apenas no boot
       ]);
       
       syncAttacksState();
@@ -1362,19 +1376,15 @@ const mImg = document.getElementById("monsterImage");
           
           // Força envio do que tiver pendente antes de sair (Best Effort)
           processAttackQueue();
-          
-          // NÃO resetamos mais a UI aqui, confiamos na persistência se ele voltar
-          // resetCombatUI();
       }
     } else {
         if (currentMineId && document.visibilityState === 'visible') {
-           // Se voltou e estamos em combate, tenta restaurar se algo falhou
-           // A função restoreOptimisticState é chamada no start, mas aqui podemos apenas
-           // verificar se o flush timer precisa ser reativado
+           // Se voltou e estamos em combate, a lógica de restoreState cuida se necessário
         } else if (!currentMineId) {
-           loadMines();
+           // 4) REMOVIDO: loadMines(); 
+           // "não quero que tenha loadmines para todas as minas em mudança de visibility"
         }
-        syncAndCheckLogs();
+        // 3) REMOVIDO: syncAndCheckLogs();
     }
   });
 

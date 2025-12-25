@@ -11,59 +11,81 @@ window.selectedItem = null;
 
 
 // ===============================
-// IndexedDB utilitário simples (Cache 24h)
+// IndexedDB utilitário OTIMIZADO (Separando Itens de Definições)
 // ===============================
 const DB_NAME = "aden_inventory_db";
-const STORE_NAME = "inventory_store";
+const STORE_INVENTORY = "inventory_store"; // Instâncias do jogador
+const STORE_ITEMS = "items_def_store";     // Definições estáticas (Nome, Imagem, etc)
 const META_STORE = "meta_store";
-const DB_VERSION = 39; 
+const DB_VERSION = 40; 
 
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (e) => {
-            console.log('IndexedDB: Upgrade necessário. Limpando caches antigos.');
+            console.log('IndexedDB: Upgrade necessário.');
             const db = e.target.result;
-            if (db.objectStoreNames.contains(STORE_NAME)) {
-                db.deleteObjectStore(STORE_NAME);
-            }
-            if (db.objectStoreNames.contains(META_STORE)) {
-                db.deleteObjectStore(META_STORE);
-            }
-            db.createObjectStore(STORE_NAME, { keyPath: "id" });
-            db.createObjectStore(META_STORE, { keyPath: "key" });
+            // Cria stores se não existirem
+            if (!db.objectStoreNames.contains(STORE_INVENTORY)) db.createObjectStore(STORE_INVENTORY, { keyPath: "id" });
+            if (!db.objectStoreNames.contains(STORE_ITEMS)) db.createObjectStore(STORE_ITEMS, { keyPath: "item_id" });
+            if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: "key" });
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
 }
 
-// Salva o cache completo
-async function saveCache(items, stats, timestamp) {
+// Garante que temos as definições de itens (baixa apenas 1 vez)
+async function ensureItemDefinitions() {
     const db = await openDB();
-    const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
-    const store = tx.objectStore(STORE_NAME);
+    
+    // Verifica se já temos itens cacheados
+    const count = await new Promise(resolve => {
+        const req = db.transaction(STORE_ITEMS, "readonly").objectStore(STORE_ITEMS).count();
+        req.onsuccess = () => resolve(req.result);
+    });
+
+    if (count > 0) return; // Já temos cache, não baixa nada!
+
+    console.log("⬇️ Baixando definições de itens (Primeira vez)...");
+    const { data, error } = await supabase.rpc('get_all_item_definitions');
+    
+    if (!error && data) {
+        const tx = db.transaction(STORE_ITEMS, "readwrite");
+        data.forEach(item => tx.objectStore(STORE_ITEMS).put(item));
+        await new Promise(r => tx.oncomplete = r);
+        console.log("✅ Definições salvas.");
+    }
+}
+
+// Salva o cache completo (Mantido para compatibilidade, mas agora atualiza as stores separadas)
+async function saveCache(inventoryList, stats, timestamp) {
+    const db = await openDB();
+    const tx = db.transaction([STORE_INVENTORY, META_STORE], "readwrite");
+    const invStore = tx.objectStore(STORE_INVENTORY);
     const meta = tx.objectStore(META_STORE);
 
-    store.clear();
-    (items || []).forEach(item => store.put(item));
+    // Nota: inventoryList aqui já vem combinado no código antigo, 
+    // mas vamos salvar apenas a parte 'instance' se quisermos ser puristas.
+    // Por segurança na migração, vamos salvar como está, mas o loadPlayer fará o Delta.
     
-    meta.put({ key: "last_updated", value: timestamp }); 
+    // Para simplificar: UpdateCacheItem e SyncDelta cuidam da store agora.
+    // Apenas salvamos stats e timestamp aqui.
     meta.put({ key: "player_stats", value: stats });     
-    meta.put({ key: "cache_time", value: Date.now() });  
+    meta.put({ key: "last_sync_time", value: timestamp });  
 
     return new Promise((resolve) => {
         tx.oncomplete = () => resolve();
     });
 }
 
-async function loadCache() {
+async function getLastSyncTime() {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readonly");
-    return new Promise((resolve, reject) => {
-        const req = tx.objectStore(STORE_NAME).getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+    const tx = db.transaction(META_STORE, "readonly");
+    return new Promise((resolve) => {
+        const req = tx.objectStore(META_STORE).get("last_sync_time");
+        req.onsuccess = () => resolve(req.result ? req.result.value : null);
+        req.onerror = () => resolve(null);
     });
 }
 
@@ -77,27 +99,23 @@ async function loadPlayerStatsFromCache() {
     });
 }
 
-async function getLastUpdated() {
-    const db = await openDB();
-    const tx = db.transaction(META_STORE, "readonly");
-    return new Promise((resolve) => {
-        const req = tx.objectStore(META_STORE).get("last_updated");
-        req.onsuccess = () => resolve(req.result ? req.result.value : null);
-        req.onerror = () => resolve(null);
-    });
-}
-
+// Atualiza um item específico no IndexedDB
 async function updateCacheItem(item) {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(item);
+    const tx = db.transaction(STORE_INVENTORY, "readwrite");
+    // Remove a parte aninhada 'items' antes de salvar para economizar espaço, se possível,
+    // mas para manter compatibilidade total, salvamos o objeto. 
+    // Na verdade, o ideal é salvar apenas os dados da tabela inventory_items.
+    const itemToSave = { ...item };
+    delete itemToSave.items; // Remove a definição duplicada
+    tx.objectStore(STORE_INVENTORY).put(itemToSave);
     return tx.complete;
 }
 
 async function removeCacheItem(itemId) {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(itemId);
+    const tx = db.transaction(STORE_INVENTORY, "readwrite");
+    tx.objectStore(STORE_INVENTORY).delete(itemId);
     return tx.complete;
 }
 
@@ -271,75 +289,111 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 // ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX)
+// CARREGAMENTO OTIMIZADO (DELTA SYNC - LAZY LOADING)
 // ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
     if (!globalUser) return;
 
-    // 1. Check de Timestamp (Leitura Leve)
-    const { data: serverMeta, error: metaError } = await supabase
-        .from('players')
-        .select('last_inventory_update')
-        .eq('id', globalUser.id)
-        .single();
+    await ensureItemDefinitions(); // Passo 1: Garante que temos as definições
 
-    if (metaError) {
-        console.error('Erro ao verificar versão do cache:', metaError);
-    }
+    const db = await openDB();
+    const lastSyncTime = await getLastSyncTime();
+    const requestTime = (forceRefresh) ? null : lastSyncTime;
 
-    const localTimestamp = await getLastUpdated();
-    
-    // Verifica se podemos usar o cache local (Zero Egress)
-    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
-    const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
+    console.log(`🔄 Sync Inventário. Delta desde: ${requestTime || 'INÍCIO'}`);
 
-    console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
+    // 2. Chama RPC Delta (Lazy Load)
+    const { data, error } = await supabase.rpc('sync_inventory_delta', { 
+        p_last_sync: requestTime 
+    });
 
-    if (canUseCache) {
-        try {
-            const [itemsFromCache, statsFromCache] = await Promise.all([
-                loadCache(),
-                loadPlayerStatsFromCache()
-            ]);
-
-            // Se o cache local estiver saudável, usamos ele
-            if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
-                console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                allInventoryItems = itemsFromCache;
-                playerBaseStats = statsFromCache;
-                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                
-                renderUI();
-                return; // Encerra aqui, nenhuma chamada pesada ao banco
-            }
-        } catch (e) {
-            console.warn('Erro ao ler cache local. Baixando do servidor...', e);
+    if (error) {
+        console.error("Erro no sync delta:", error.message);
+        // Fallback: tentar carregar local se der erro de rede
+        if (!forceRefresh) {
+            console.log("Tentando carregar dados offline...");
+            await reconstructInventoryFromDB();
+            renderUI();
         }
-    }
-
-    // 2. Fetch via RPC Seguro
-    console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
-    
-    const { data: playerData, error: rpcError } = await supabase
-        .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
-
-    if (rpcError) {
-        console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
-        showCustomAlert('Erro ao carregar inventário. Tente atualizar a página.');
         return;
     }
 
-    // Atualiza variáveis globais com o retorno da RPC
-    playerBaseStats = playerData.cached_combat_stats || {};
-    allInventoryItems = playerData.cached_inventory || [];
-    equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
+    // 3. Processa Mudanças (Merge Local)
+    const tx = db.transaction([STORE_INVENTORY, META_STORE], "readwrite");
+    const invStore = tx.objectStore(STORE_INVENTORY);
 
-    // 3. Salva no IndexedDB para a próxima vez
-    await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-    console.log('💾 Cache local atualizado.');
+    // A. Atualiza/Insere itens modificados
+    if (data.changes && data.changes.length > 0) {
+        console.log(`📥 Recebidos ${data.changes.length} itens modificados.`);
+        data.changes.forEach(invItem => {
+            // Removemos 'items' (definição) se vier anexado, queremos apenas a instância limpa
+            // Mas o RPC retorna a row pura do inventory_items, então está ok.
+            invStore.put(invItem);
+        });
+    }
 
+    // B. Remove itens deletados
+    // O servidor manda TODOS os IDs ativos. Se não está na lista, deleta local.
+    // Mas só rodamos essa lógica pesada se houve refresh ou se vieram mudanças, 
+    // ou podemos confiar que o active_ids vem sempre.
+    const activeIds = new Set(data.active_ids || []);
+    if (activeIds.size > 0) {
+        const allLocalKeys = await new Promise(r => {
+            const req = invStore.getAllKeys();
+            req.onsuccess = () => r(req.result);
+        });
+
+        let deletedCount = 0;
+        allLocalKeys.forEach(localId => {
+            if (!activeIds.has(localId)) {
+                invStore.delete(localId);
+                deletedCount++;
+            }
+        });
+        if (deletedCount > 0) console.log(`🗑️ Removidos ${deletedCount} itens obsoletos.`);
+    }
+
+    // C. Atualiza Timestamp
+    if (data.server_time) {
+        tx.objectStore(META_STORE).put({ key: "last_sync_time", value: data.server_time });
+    }
+
+    // D. Atualiza Stats do Player (Busca leve separada se necessário, ou confia no cache)
+    // Vamos buscar os stats atualizados pois inventory delta não traz stats do player
+    await refreshPlayerStatsOnly();
+
+    // Aguarda transação terminar
+    await new Promise(r => tx.oncomplete = r);
+
+    // E. Reconstrói array global em memória (JOIN manual)
+    await reconstructInventoryFromDB();
+    
     renderUI();
+}
+
+// Reconstrói allInventoryItems unindo Instância + Definição
+async function reconstructInventoryFromDB() {
+    const db = await openDB();
+    const invStore = db.transaction(STORE_INVENTORY, "readonly").objectStore(STORE_INVENTORY);
+    const itemDefStore = db.transaction(STORE_ITEMS, "readonly").objectStore(STORE_ITEMS);
+
+    const allInv = await new Promise(r => { const req = invStore.getAll(); req.onsuccess = () => r(req.result); });
+    const allDefs = await new Promise(r => { const req = itemDefStore.getAll(); req.onsuccess = () => r(req.result); });
+
+    const defMap = new Map();
+    allDefs.forEach(d => defMap.set(d.item_id, d));
+
+    window.allInventoryItems = allInv.map(inv => {
+        const def = defMap.get(inv.item_id) || {};
+        // Recria estrutura aninhada para compatibilidade com o resto do código
+        return {
+            ...inv,
+            items: def 
+        };
+    });
+
+    window.equippedItems = window.allInventoryItems.filter(i => i.equipped_slot !== null);
 }
 
 function renderUI() {
@@ -974,23 +1028,35 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
         // Busca APENAS esse item no banco para garantir que temos todos os dados
         const { data: fetchItem, error } = await supabase
             .from('inventory_items')
-            .select('*, items(*)')
+            .select('*') // NÃO usamos mais items(*) no join, buscamos definição local depois
             .eq('id', updatedItem.id || updatedItem)
             .single();
 
         if (fetchItem) {
              const idx = allInventoryItems.findIndex(i => i.id === fetchItem.id);
+             
+             // Recria objeto completo com definições locais
+             const db = await openDB();
+             const tx = db.transaction([STORE_ITEMS, STORE_INVENTORY], "readwrite");
+             const itemDef = await new Promise(r => tx.objectStore(STORE_ITEMS).get(fetchItem.item_id).onsuccess = (e) => r(e.target.result));
+             tx.objectStore(STORE_INVENTORY).put(fetchItem);
+
+             const completeItem = { ...fetchItem, items: itemDef || {} };
+
              if (idx !== -1) {
-                 allInventoryItems[idx] = fetchItem;
+                 allInventoryItems[idx] = completeItem;
              } else {
-                 allInventoryItems.push(fetchItem); // Caso raro de item novo
+                 allInventoryItems.push(completeItem); // Caso raro de item novo
              }
-             selectedItem = fetchItem; // Atualiza a seleção atual
+             selectedItem = completeItem; // Atualiza a seleção atual
         }
     }
 
     // 2. Remove ou decrementa fragmentos usados
     if (usedFragments && Array.isArray(usedFragments)) {
+        const db = await openDB();
+        const tx = db.transaction(STORE_INVENTORY, "readwrite");
+        
         usedFragments.forEach(usage => {
             const fragId = usage.fragment_inventory_id || usage.id; 
             const qtyUsed = usage.used_qty || usage.qty;
@@ -998,9 +1064,16 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
             const idx = allInventoryItems.findIndex(i => i.id === fragId);
             if (idx !== -1) {
                 allInventoryItems[idx].quantity -= qtyUsed;
-                // Se zerou, remove do array
+                
+                // Atualiza IndexedDB
                 if (allInventoryItems[idx].quantity <= 0) {
+                    tx.objectStore(STORE_INVENTORY).delete(fragId);
                     allInventoryItems.splice(idx, 1);
+                } else {
+                    // Atualiza quantidade no banco local, removendo 'items' antes de salvar
+                    const itemToSave = { ...allInventoryItems[idx] };
+                    delete itemToSave.items;
+                    tx.objectStore(STORE_INVENTORY).put(itemToSave);
                 }
             }
         });
@@ -1010,12 +1083,18 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
     if (newItem) {
         const { data: newFetchItem } = await supabase
             .from('inventory_items')
-            .select('*, items(*)')
+            .select('*')
             .eq('id', newItem.id || newItem)
             .single();
         
         if (newFetchItem) {
-            allInventoryItems.push(newFetchItem);
+             const db = await openDB();
+             const tx = db.transaction([STORE_ITEMS, STORE_INVENTORY], "readwrite");
+             const itemDef = await new Promise(r => tx.objectStore(STORE_ITEMS).get(newFetchItem.item_id).onsuccess = (e) => r(e.target.result));
+             tx.objectStore(STORE_INVENTORY).put(newFetchItem);
+             
+             const completeNewItem = { ...newFetchItem, items: itemDef || {} };
+             allInventoryItems.push(completeNewItem);
         }
     }
 
@@ -1031,8 +1110,7 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
     // 6. Atualiza Globais
     equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null);
 
-    // 7. Salva no Cache Local e Re-renderiza
-    await saveCache(allInventoryItems, playerBaseStats, new Date().toISOString()); 
+    // 7. Renderiza UI
     renderUI();
     if (selectedItem) showItemDetails(selectedItem);
 }
@@ -1048,6 +1126,10 @@ async function refreshPlayerStatsOnly() {
         
         if (data && data.cached_combat_stats) {
             playerBaseStats = data.cached_combat_stats;
+            // Salva stats no cache
+            const db = await openDB();
+            const tx = db.transaction(META_STORE, "readwrite");
+            tx.objectStore(META_STORE).put({ key: "player_stats", value: playerBaseStats });
         }
     } catch (e) {
         console.error("Erro ao atualizar stats do jogador:", e);

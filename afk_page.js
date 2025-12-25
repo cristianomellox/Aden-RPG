@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient.js'
 
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js FIXED...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js FINAL FIX...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -15,7 +15,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     combatMusic.volume = 0.4;
     idleMusic.loop = true;
     combatMusic.loop = true;
-
 
     // --- CONFIGURAÇÕES ---
     const XP_RATE_PER_SEC = 1.0 / 1800;
@@ -45,8 +44,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const monsterHpValueSpan = document.getElementById("monster-hp-value");
     const battleCountdownDisplay = document.getElementById("battle-countdown");
     const attacksLeftSpan = document.getElementById("time-left");
-
-    // Modals
     const resultModal = document.getElementById("result-modal");
     const resultText = document.getElementById("result-text");
     const confirmBtn = document.getElementById("confirm-btn");
@@ -63,7 +60,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
 
     // --- STATE ---
-    let playerAfkData = null; // null explicitamente
+    let playerAfkData = null;
     let afkStartTime = null;
     let localSimulationInterval;
     let userId = null;
@@ -74,11 +71,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
-                if (parsed && parsed.id) return parsed.id;
+                if (parsed?.data?.id) return parsed.data.id;
+                if (parsed?.id) return parsed.id;
             }
         } catch (e) {}
-        
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -115,14 +111,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Reward Calculation
         const cappedSeconds = Math.min(secondsElapsed, MAX_AFK_SECONDS);
         const stage = playerAfkData.current_afk_stage || 1;
-        
         let xpEarned = Math.floor(cappedSeconds * XP_RATE_PER_SEC * stage);
         let goldEarned = Math.floor(cappedSeconds * GOLD_RATE_PER_SEC);
 
         if (afkXpSpan) afkXpSpan.textContent = formatNumberCompact(xpEarned);
         if (afkGoldSpan) afkGoldSpan.textContent = formatNumberCompact(goldEarned);
 
-        // Botão Coletar
         const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
         if (collectBtn) {
             collectBtn.disabled = !isCollectable;
@@ -132,11 +126,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- DATA MANAGEMENT ---
-    
     function renderPlayerData() {
         if (!playerAfkData) return;
         
-        // Garante que usamos a data vinda do banco, ou agora se for nula
         if (playerAfkData.last_afk_start_time) {
             afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
         } else {
@@ -162,7 +154,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         userId = getLocalUserId();
         if (!userId) {
             const { data: sessionData } = await supabase.auth.getSession();
-            if (sessionData && sessionData.session) {
+            if (sessionData?.session) {
                 userId = sessionData.session.user.id;
             } else {
                 window.location.href = "index.html";
@@ -171,24 +163,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const cacheKey = `playerAfkData_${userId}`;
+        
+        // --- LIMPEZA DE CACHE FORÇADA ---
+        // Se houver dados corrompidos (ex: stage 1 quando deveria ser maior, ou erro de parse), limpamos.
+        try {
+            const raw = localStorage.getItem(cacheKey);
+            if(raw) {
+                const p = JSON.parse(raw);
+                if(!p.data || !p.data.id) localStorage.removeItem(cacheKey);
+            }
+        } catch(e) { localStorage.removeItem(cacheKey); }
+
         const cached = localStorage.getItem(cacheKey);
         let shouldUseCache = false;
 
-        // Tenta usar cache
         if (cached) {
             try {
                 const { data, timestamp } = JSON.parse(cached);
-                // Verifica se data é válido e tem id
                 if (data && data.id && (Date.now() - timestamp < CACHE_EXPIRATION_MS)) {
                     playerAfkData = data;
                     shouldUseCache = true;
-                    
-                    // Validação rápida de dia (UTC)
+                    // Reset diário (visual)
                     const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
                     const now = new Date();
-                    const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
-                                        now.getUTCMonth() !== lastResetDate.getUTCMonth();
-
+                    const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate();
                     if (isNewDayUtc) {
                         const { data: resetData } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
                         if (resetData) {
@@ -198,39 +196,27 @@ document.addEventListener("DOMContentLoaded", async () => {
                         }
                     }
                 }
-            } catch (e) { 
-                console.warn("Cache inválido", e);
-                shouldUseCache = false; 
-            }
+            } catch (e) { shouldUseCache = false; }
         }
 
         if (!shouldUseCache) {
-            console.log("Buscando dados frescos do servidor...");
             let { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
 
-            // Se der erro, tenta refresh
             if (error || (data && data.error)) {
-                console.warn("Erro ao buscar dados. Tentando refresh de sessão...", error);
+                // Tenta refresh
                 const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
                 if (!refreshError && refreshData.session) {
                     userId = refreshData.session.user.id;
                     const retry = await supabase.rpc('get_player_afk_data', { uid: userId });
                     data = retry.data;
-                    error = retry.error;
                 } else {
-                    console.error("Falha fatal de auth.");
-                    // Não redireciona imediatamente para não loopar, apenas loga
-                    return;
+                    return; // Erro fatal
                 }
             }
 
-            // Checa integridade antes de setar
             if (data && !data.error && data.id) {
                 playerAfkData = data;
                 saveToCache(playerAfkData);
-            } else {
-                console.error("Dados retornados inválidos:", data);
-                // Mantém o que estava no cache (se houver) ou não renderiza zero para evitar susto
             }
         }
 
@@ -255,7 +241,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- ACTIONS ---
-
     if (collectBtn) collectBtn.addEventListener("click", async () => {
         if (!userId || collectBtn.disabled) return;
         collectBtn.disabled = true; 
@@ -264,7 +249,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         if (error) {
             collectBtn.disabled = false;
-            console.error(error);
             return;
         }
 
@@ -272,7 +256,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             playerAfkData.xp += data.xp_earned;
             playerAfkData.gold += data.gold_earned;
             playerAfkData.last_afk_start_time = new Date().toISOString();
-            
             if (data.leveled_up) {
                 playerAfkData.level = data.new_level;
                 showLevelUpBalloon(data.new_level);
@@ -296,34 +279,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error || !data?.success) {
             resultText.textContent = data?.message || "Erro ao iniciar aventura.";
             if(resultModal) resultModal.style.display = "block";
-            // Limpa cache se der erro grave de sincronia
+            // Limpa cache se der erro para resincronizar
             localStorage.removeItem(`playerAfkData_${userId}`);
             initializePlayerData();
             return;
         }
 
-        // Atualiza estado local
         if(playerAfkData) {
             playerAfkData.daily_attempts_left = data.daily_attempts_left;
-            
             if (data.venceu) {
                 playerAfkData.xp += data.xp_ganho;
                 playerAfkData.gold += data.gold_ganho;
                 if (!isFarming) {
-                    // Se venceu no desafio, incrementa estágio
                     playerAfkData.current_afk_stage = (playerAfkData.current_afk_stage || 1) + 1;
                 }
             }
-            
-            if (data.leveled_up) {
-                playerAfkData.level = data.new_level;
-            }
-
+            if (data.leveled_up) playerAfkData.level = data.new_level;
             saveToCache(playerAfkData);
             renderPlayerData();
         }
 
-        // Se NÃO tem logs de ataque, é Farm Instantâneo
+        // Se ataques vier null ou vazio, é farm instantâneo
         if (!data.attacks || data.attacks.length === 0) {
             const message = `⚡ FARM RÁPIDO! \n+${formatNumberCompact(data.xp_ganho)} XP \n+${formatNumberCompact(data.gold_ganho)} Ouro`;
             resultText.innerText = message; 
@@ -336,11 +312,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function runCombatAnimation(data) {
         showCombatScreen();
-        // Fallback seguro para imagens
         const validImages = window.monsterStageImages || [];
         const randomImg = validImages.length > 0 ? validImages[Math.floor(Math.random() * validImages.length)] : '';
-        
-        // Garante stage correto
         const targetStage = data.target_stage || (playerAfkData?.current_afk_stage || 1);
         
         if(monsterNameSpan) monsterNameSpan.textContent = `Monstro do Estágio ${targetStage}`;
@@ -377,7 +350,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (currentAttackIndex < attackLog.length) {
                         const attack = attackLog[currentAttackIndex];
                         displayDamageNumber(attack.damage, attack.is_crit);
-
                         if (attack.is_crit) {
                             criticalHitSound.currentTime = 0;
                             criticalHitSound.play().catch(()=>{});
@@ -390,27 +362,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                             mImg.classList.remove('shake-animation');
                             void mImg.offsetWidth;
                             mImg.classList.add('shake-animation');
-                            setTimeout(() => {
-                                mImg.classList.remove('shake-animation');
-                            }, 300);
+                            setTimeout(() => mImg.classList.remove('shake-animation'), 300);
                         }
                         currentMonsterHp = Math.max(0, currentMonsterHp - attack.damage);
                         const pct = (currentMonsterHp / monsterMaxHp) * 100;
                         if(monsterHpFill) monsterHpFill.style.width = `${pct}%`;
                         if(monsterHpValueSpan) monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
-
                         currentAttackIndex++;
                         if(attacksLeftSpan) attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
-                        
                         setTimeout(animateAttack, 1000);
                     } else {
-                        let message = "";
-                        if (data.venceu) {
-                            message = `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!`;
-                        } else {
-                            message = `Derrota! Melhore seus equipamentos e tente novamente.`;
-                        }
-                        
+                        let message = data.venceu ? `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!` : `Derrota! Tente novamente.`;
                         resultText.textContent = message;
                         if(resultModal) resultModal.style.display = "block";
                         if (data.leveled_up) showLevelUpBalloon(data.new_level);
@@ -440,12 +402,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const damageNum = document.createElement("div");
         damageNum.textContent = formatNumberCompact(damage);
         damageNum.className = isCrit ? "crit-damage-number" : "normal-damage-number";
-        
         damageNum.style.position = "absolute";
         damageNum.style.left = "50%";
         damageNum.style.top = "40%";
         damageNum.style.transform = "translate(-50%, -50%)";
-        
         damageNum.style.animation = "floatAndFade 1.5s forwards";
         combatScreen.appendChild(damageNum);
         damageNum.addEventListener("animationend", () => damageNum.remove());
@@ -460,8 +420,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             setTimeout(() => balloon.style.display = "none", 5000);
         }
     }
-
-    // --- EVENTS ---
 
     if(musicPermissionBtn) musicPermissionBtn.addEventListener("click", () => {
         musicPermissionModal.style.display = "none";
@@ -490,16 +448,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
     if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
     if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
-
-    if(confirmBtn) confirmBtn.addEventListener("click", () => {
-        resultModal.style.display = "none";
-        showIdleScreen(); 
-    });
-    
-    if(returnMainIdleBtn) returnMainIdleBtn.addEventListener("click", () => {
-        window.location.href = "index.html?refresh=true";
-    });
-
+    if(confirmBtn) confirmBtn.addEventListener("click", () => { resultModal.style.display = "none"; showIdleScreen(); });
+    if(returnMainIdleBtn) returnMainIdleBtn.addEventListener("click", () => { window.location.href = "index.html?refresh=true"; });
     if(saibaMaisBtn) saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
     if(closeTutorialBtn) closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
 

@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient.js'
 
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js FINAL FIX...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM CACHE COMPARTILHADO E SEGURANÇA DE AUTH...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -16,12 +16,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     idleMusic.loop = true;
     combatMusic.loop = true;
 
-    // --- CONFIGURAÇÕES ---
-    const XP_RATE_PER_SEC = 1.0 / 1800;
-    const GOLD_RATE_PER_SEC = 0;
+
+    // --- CONFIGURAÇÕES DE CÁLCULO (Sincronizado com SQL) ---
+    const XP_RATE_PER_SEC = 1.0 / 1800; // Conforme SQL
+    const GOLD_RATE_PER_SEC = 0;        // Conforme SQL
     const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
     const MIN_COLLECT_SECONDS = 3600;    // 1 hora
     const CACHE_EXPIRATION_MS = 48 * 60 * 60 * 1000;
+    const STATS_CACHE_DURATION = 48 * 60 * 60 * 1000; // 12 Horas para stats de combate
 
     // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");
@@ -32,6 +34,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const startAfkBtn = document.getElementById("start-afk");
     const idleScreen = document.getElementById("idle-screen");
     const dailyAttemptsLeftSpan = document.getElementById("daily-attempts-left");
+    const startAfkCooldownDisplay = document.getElementById("start-afk-cooldown-display");
+    const saibaMaisBtn = document.getElementById("saiba-mais");
     const playerTotalXpSpan = document.getElementById("player-total-xp");
     const playerTotalGoldSpan = document.getElementById("player-total-gold");
     
@@ -44,6 +48,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const monsterHpValueSpan = document.getElementById("monster-hp-value");
     const battleCountdownDisplay = document.getElementById("battle-countdown");
     const attacksLeftSpan = document.getElementById("time-left");
+
+    // Modals
     const resultModal = document.getElementById("result-modal");
     const resultText = document.getElementById("result-text");
     const confirmBtn = document.getElementById("confirm-btn");
@@ -59,11 +65,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const farmStageNumberSpan = document.getElementById("farm-stage-number");
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
 
-    // --- STATE ---
-    let playerAfkData = null;
+    // --- STATE MANAGEMENT ---
+    let playerAfkData = {}; // Cache em memória
     let afkStartTime = null;
+    let timerInterval;
     let localSimulationInterval;
-    let userId = null;
+    let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
+    let userId = null; // Inicializa nulo para validação posterior
 
     // --- HELPER DE AUTH ---
     function getLocalUserId() {
@@ -71,10 +79,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed?.data?.id) return parsed.data.id;
-                if (parsed?.id) return parsed.id;
+                // Verifica estrutura do script.js e também estrutura direta se houver
+                if (parsed && parsed.data && parsed.data.id) return parsed.data.id;
+                if (parsed && parsed.id) return parsed.id;
             }
         } catch (e) {}
+        
+        // Tenta buscar tokens de sessão do supabase no localstorage
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -87,14 +98,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         return null;
     }
 
+    // --- VISUAL FORMATTING ---
     function formatNumberCompact(num) {
-        if (num === undefined || num === null || isNaN(num)) return "0";
         return new Intl.NumberFormat('en-US').format(num);
     }
 
-    // --- SIMULAÇÃO LOCAL ---
+    // --- CORE LOGIC: SIMULAÇÃO LOCAL (Zero Egress) ---
     function updateLocalSimulation() {
-        if (!playerAfkData || !afkStartTime) return;
+        if (!afkStartTime || !playerAfkData) return;
 
         const now = Date.now();
         let secondsElapsed = Math.floor((now - afkStartTime) / 1000);
@@ -105,27 +116,58 @@ document.addEventListener("DOMContentLoaded", async () => {
         const hours = Math.floor(remainingSeconds / 3600);
         const minutes = Math.floor((remainingSeconds % 3600) / 60);
         const seconds = remainingSeconds % 60;
-        
-        if (afkTimerSpan) afkTimerSpan.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        afkTimerSpan.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
         // Reward Calculation
         const cappedSeconds = Math.min(secondsElapsed, MAX_AFK_SECONDS);
         const stage = playerAfkData.current_afk_stage || 1;
+        
         let xpEarned = Math.floor(cappedSeconds * XP_RATE_PER_SEC * stage);
         let goldEarned = Math.floor(cappedSeconds * GOLD_RATE_PER_SEC);
 
-        if (afkXpSpan) afkXpSpan.textContent = formatNumberCompact(xpEarned);
-        if (afkGoldSpan) afkGoldSpan.textContent = formatNumberCompact(goldEarned);
+        // Nível 100 cap
+       // if ((playerAfkData.level || 1) >= 100) xpEarned = 0;
 
+        afkXpSpan.textContent = formatNumberCompact(xpEarned);
+        afkGoldSpan.textContent = formatNumberCompact(goldEarned);
+
+        // Botão Coletar
         const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
-        if (collectBtn) {
-            collectBtn.disabled = !isCollectable;
-            collectBtn.style.opacity = isCollectable ? "1" : "0.5";
-            collectBtn.style.cursor = isCollectable ? "pointer" : "not-allowed";
+        collectBtn.disabled = !isCollectable;
+        if(collectBtn.disabled) {
+            collectBtn.style.opacity = "0.5";
+            collectBtn.style.cursor = "not-allowed";
+        } else {
+             collectBtn.style.opacity = "1";
+             collectBtn.style.cursor = "pointer";
         }
     }
 
-    // --- DATA MANAGEMENT ---
+    // --- NOVO: CACHE DE COMBAT STATS (Sincronizado com Mina) ---
+    async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
+        if (!userId) return null;
+        const now = Date.now();
+        // NOTA: Usa a MESMA chave da mina para compartilhar o cache
+        const cacheKey = `player_combat_stats_${userId}`; 
+        
+        // Tenta ler do LocalStorage
+        let stored = localStorage.getItem(cacheKey);
+        if (stored && !forceUpdate) {
+            try {
+                const parsed = JSON.parse(stored);
+                // Verifica validade (12h)
+                if (now - parsed.timestamp < STATS_CACHE_DURATION) {
+                    cachedCombatStats = parsed.data;
+                    console.log("[AFK] Combat stats carregados do cache local.");
+                    return cachedCombatStats;
+                }
+            } catch(e) { console.warn("Cache stats inválido", e); }
+        }
+        return null;
+    }
+
+    // --- DATA MANAGEMENT (Cache & Sync) ---
+    
     function renderPlayerData() {
         if (!playerAfkData) return;
         
@@ -135,10 +177,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             afkStartTime = Date.now();
         }
 
-        if (playerTotalXpSpan) playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
-        if (playerTotalGoldSpan) playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
-        if (afkStageSpan) afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
-        if (dailyAttemptsLeftSpan) dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
+        playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
+        playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
+        afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
+        dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
         
         updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
         updateLocalSimulation();
@@ -151,84 +193,118 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function initializePlayerData() {
+        // 1. Tenta recuperar ID localmente primeiro
         userId = getLocalUserId();
+
+        // 2. Se não encontrar, tenta obter da sessão do Supabase (Robustez contra F5/Limpeza de cache)
         if (!userId) {
-            const { data: sessionData } = await supabase.auth.getSession();
-            if (sessionData?.session) {
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            if (sessionData && sessionData.session) {
                 userId = sessionData.session.user.id;
             } else {
+                console.warn("Nenhum usuário autenticado encontrado. Redirecionando para login.");
                 window.location.href = "index.html";
                 return;
             }
         }
 
-        const cacheKey = `playerAfkData_${userId}`;
-        
-        // --- LIMPEZA DE CACHE FORÇADA ---
-        // Se houver dados corrompidos (ex: stage 1 quando deveria ser maior, ou erro de parse), limpamos.
-        try {
-            const raw = localStorage.getItem(cacheKey);
-            if(raw) {
-                const p = JSON.parse(raw);
-                if(!p.data || !p.data.id) localStorage.removeItem(cacheKey);
-            }
-        } catch(e) { localStorage.removeItem(cacheKey); }
+        // --- BLINDAGEM DE SESSÃO E CACHE ---
 
+        // 3. Tenta carregar/validar cache de combate
+        await getOrUpdatePlayerStatsCache();
+
+        // 4. Lógica padrão de dados AFK
+        const cacheKey = `playerAfkData_${userId}`;
         const cached = localStorage.getItem(cacheKey);
         let shouldUseCache = false;
 
         if (cached) {
             try {
                 const { data, timestamp } = JSON.parse(cached);
-                if (data && data.id && (Date.now() - timestamp < CACHE_EXPIRATION_MS)) {
+                if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
                     playerAfkData = data;
                     shouldUseCache = true;
-                    // Reset diário (visual)
+                    
+                    // OTIMIZAÇÃO DE RESET DIÁRIO
                     const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
                     const now = new Date();
-                    const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate();
+                    const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
+                                        now.getUTCMonth() !== lastResetDate.getUTCMonth() || 
+                                        now.getUTCFullYear() !== lastResetDate.getUTCFullYear();
+
                     if (isNewDayUtc) {
-                        const { data: resetData } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
-                        if (resetData) {
+                        console.log("Virada de dia detectada (UTC). Verificando reset via RPC leve...");
+                        const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
+                        if (!resetError && resetData) {
                             playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
-                            if (resetData.reset_performed) playerAfkData.last_attempt_reset = new Date().toISOString(); 
+                            if (resetData.reset_performed) {
+                                playerAfkData.last_attempt_reset = new Date().toISOString(); 
+                            }
                             saveToCache(playerAfkData);
                         }
                     }
                 }
-            } catch (e) { shouldUseCache = false; }
+            } catch (e) {
+                console.warn("Cache corrompido, forçando recarga.");
+                shouldUseCache = false;
+            }
         }
 
         if (!shouldUseCache) {
+            console.log("Cache inválido ou inexistente. Buscando dados completos...");
+            
+            // Tenta buscar dados. Se falhar (ex: Token Expirado), tenta refresh.
             let { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
 
             if (error || (data && data.error)) {
-                // Tenta refresh
+                console.warn("Erro ao buscar dados ou Token Expirado. Tentando refresh...", error || data?.error);
+                
+                // Tenta refresh da sessão
                 const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+                
                 if (!refreshError && refreshData.session) {
-                    userId = refreshData.session.user.id;
+                    console.log("Sessão renovada. Tentando buscar dados novamente...");
+                    userId = refreshData.session.user.id; // Atualiza ID garantido
+                    
+                    // Retenta a chamada RPC
                     const retry = await supabase.rpc('get_player_afk_data', { uid: userId });
                     data = retry.data;
+                    error = retry.error;
                 } else {
-                    return; // Erro fatal
+                    console.error("Falha fatal de autenticação. Redirecionando.");
+                    window.location.href = "index.html"; // Manda de volta pro login para limpar estado
+                    return;
                 }
             }
 
-            if (data && !data.error && data.id) {
+            // Verifica se os dados retornados são válidos e não um "fantasma" nulo
+            if (data && !error && !data.error) {
                 playerAfkData = data;
+                
+                // Sincroniza o cache local de combate com o que veio do banco
+                if (playerAfkData.cached_combat_stats) {
+                    const statsKey = `player_combat_stats_${userId}`;
+                    localStorage.setItem(statsKey, JSON.stringify({
+                        timestamp: Date.now(),
+                        data: playerAfkData.cached_combat_stats
+                    }));
+                }
+                
                 saveToCache(playerAfkData);
+            } else {
+                console.error("Erro persistente ao obter dados do jogador.");
+                // Opcional: Mostrar modal de erro
+                return;
             }
         }
 
-        if (playerAfkData) {
-            renderPlayerData();
-            if (localSimulationInterval) clearInterval(localSimulationInterval);
-            localSimulationInterval = setInterval(updateLocalSimulation, 1000);
-        }
+        renderPlayerData();
+        
+        if (localSimulationInterval) clearInterval(localSimulationInterval);
+        localSimulationInterval = setInterval(updateLocalSimulation, 1000);
     }
 
     function updateStartAfkButtonState(attemptsLeft) {
-        if(!startAfkBtn) return;
         if (attemptsLeft <= 0) {
             startAfkBtn.disabled = true;
             startAfkBtn.style.opacity = "0.5";
@@ -240,32 +316,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // --- ACTIONS ---
-    if (collectBtn) collectBtn.addEventListener("click", async () => {
+    // --- AÇÕES DO JOGADOR ---
+
+    collectBtn.addEventListener("click", async () => {
         if (!userId || collectBtn.disabled) return;
         collectBtn.disabled = true; 
         
         const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
         
         if (error) {
+            console.error("Erro ao coletar:", error);
             collectBtn.disabled = false;
             return;
         }
 
-        if(playerAfkData) {
-            playerAfkData.xp += data.xp_earned;
-            playerAfkData.gold += data.gold_earned;
-            playerAfkData.last_afk_start_time = new Date().toISOString();
-            if (data.leveled_up) {
-                playerAfkData.level = data.new_level;
-                showLevelUpBalloon(data.new_level);
-            }
-            saveToCache(playerAfkData);
-            renderPlayerData();
+        playerAfkData.xp += data.xp_earned;
+        playerAfkData.gold += data.gold_earned;
+        playerAfkData.last_afk_start_time = new Date().toISOString();
+        
+        if (data.leveled_up) {
+            playerAfkData.level = data.new_level;
+            showLevelUpBalloon(data.new_level);
         }
 
+        saveToCache(playerAfkData);
+        renderPlayerData();
+
         resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned)} XP e ${formatNumberCompact(data.gold_earned)} Ouro!`;
-        if(resultModal) resultModal.style.display = "block";
+        resultModal.style.display = "block";
     });
 
     async function triggerAdventure(isFarming) {
@@ -277,33 +355,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         if (error || !data?.success) {
-            resultText.textContent = data?.message || "Erro ao iniciar aventura.";
-            if(resultModal) resultModal.style.display = "block";
-            // Limpa cache se der erro para resincronizar
+            const msg = data?.message || error?.message || "Erro desconhecido.";
+            resultText.textContent = msg;
+            resultModal.style.display = "block";
             localStorage.removeItem(`playerAfkData_${userId}`);
             initializePlayerData();
             return;
         }
 
-        if(playerAfkData) {
-            playerAfkData.daily_attempts_left = data.daily_attempts_left;
-            if (data.venceu) {
-                playerAfkData.xp += data.xp_ganho;
-                playerAfkData.gold += data.gold_ganho;
-                if (!isFarming) {
-                    playerAfkData.current_afk_stage = (playerAfkData.current_afk_stage || 1) + 1;
-                }
+        playerAfkData.daily_attempts_left = data.daily_attempts_left;
+        
+        if (data.venceu) {
+            playerAfkData.xp += data.xp_ganho;
+            playerAfkData.gold += data.gold_ganho;
+            if (!isFarming) {
+                playerAfkData.current_afk_stage = (playerAfkData.current_afk_stage || 1) + 1;
             }
-            if (data.leveled_up) playerAfkData.level = data.new_level;
-            saveToCache(playerAfkData);
-            renderPlayerData();
+        }
+        
+        if (data.leveled_up) {
+            playerAfkData.level = data.new_level;
         }
 
-        // Se ataques vier null ou vazio, é farm instantâneo
-        if (!data.attacks || data.attacks.length === 0) {
-            const message = `⚡ FARM RÁPIDO! \n+${formatNumberCompact(data.xp_ganho)} XP \n+${formatNumberCompact(data.gold_ganho)} Ouro`;
-            resultText.innerText = message; 
-            if(resultModal) resultModal.style.display = "block";
+        saveToCache(playerAfkData);
+        renderPlayerData();
+
+        if (isFarming) {
+            const message = `FARM CONCLUÍDO! Ganhou ${formatNumberCompact(data.xp_ganho)} XP e ${formatNumberCompact(data.gold_ganho)} Ouro! (Estágio mantido)`;
+            resultText.textContent = message;
+            resultModal.style.display = "block";
             if (data.leveled_up) showLevelUpBalloon(data.new_level);
         } else {
             runCombatAnimation(data);
@@ -312,45 +392,56 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function runCombatAnimation(data) {
         showCombatScreen();
-        const validImages = window.monsterStageImages || [];
-        const randomImg = validImages.length > 0 ? validImages[Math.floor(Math.random() * validImages.length)] : '';
-        const targetStage = data.target_stage || (playerAfkData?.current_afk_stage || 1);
-        
-        if(monsterNameSpan) monsterNameSpan.textContent = `Monstro do Estágio ${targetStage}`;
-        if(monsterImage) monsterImage.src = randomImg;
+        const targetStage = data.target_stage; 
+        monsterNameSpan.textContent = `Monstro do Estágio ${targetStage}`;
+        monsterImage.src = window.monsterStageImages?.[Math.floor(Math.random() * window.monsterStageImages.length)] || '';
 
-        if(monsterHpBar) monsterHpBar.style.display = 'none';
-        if(attacksLeftSpan) attacksLeftSpan.style.display = 'none';
-        if(battleCountdownDisplay) battleCountdownDisplay.style.display = 'block';
+        monsterHpBar.style.display = 'none';
+        attacksLeftSpan.style.display = 'none';
+        battleCountdownDisplay.style.display = 'block';
         
         let countdown = 3;
-        if(battleCountdownDisplay) battleCountdownDisplay.textContent = `Batalha em: ${countdown}`;
+        battleCountdownDisplay.textContent = `Batalha em: ${countdown}`;
 
         const countdownIntervalId = setInterval(() => {
             countdown--;
             if (countdown > 0) {
-                if(battleCountdownDisplay) battleCountdownDisplay.textContent = `Batalha em: ${countdown}`;
+                battleCountdownDisplay.textContent = `Batalha em: ${countdown}`;
             } else {
                 clearInterval(countdownIntervalId);
-                if(battleCountdownDisplay) battleCountdownDisplay.style.display = 'none';
-                if(monsterHpBar) monsterHpBar.style.display = 'flex';
-                if(attacksLeftSpan) attacksLeftSpan.style.display = 'block';
+                battleCountdownDisplay.style.display = 'none';
+                monsterHpBar.style.display = 'flex';
+                attacksLeftSpan.style.display = 'block';
 
-                const monsterMaxHp = data.monster_hp_inicial || 1000; 
+                const monsterMaxHp = data.monster_hp_inicial; 
                 let currentMonsterHp = monsterMaxHp; 
                 
-                if(monsterHpValueSpan) monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
-                if(monsterHpFill) monsterHpFill.style.width = '100%'; 
+                monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
+                monsterHpFill.style.width = '100%'; 
 
                 const attackLog = data.attacks || [];
-                if(attacksLeftSpan) attacksLeftSpan.textContent = attackLog.length;
+                attacksLeftSpan.textContent = attackLog.length;
 
                 let currentAttackIndex = 0;
+                
+                // --- INICIO DA OTIMIZAÇÃO: Animação com suporte a log compactado ---
                 const animateAttack = () => {
                     if (currentAttackIndex < attackLog.length) {
-                        const attack = attackLog[currentAttackIndex];
-                        displayDamageNumber(attack.damage, attack.is_crit);
-                        if (attack.is_crit) {
+                        const attackData = attackLog[currentAttackIndex];
+                        let damage, isCrit;
+
+                        // Verifica se é o formato novo (Array) ou antigo (Objeto)
+                        if (Array.isArray(attackData)) {
+                            damage = attackData[0];
+                            isCrit = attackData[1] === 1; // 1 é true
+                        } else {
+                            damage = attackData.damage;
+                            isCrit = attackData.is_crit;
+                        }
+
+                        displayDamageNumber(damage, isCrit);
+
+                        if (isCrit) {
                             criticalHitSound.currentTime = 0;
                             criticalHitSound.play().catch(()=>{});
                         } else {
@@ -362,38 +453,51 @@ document.addEventListener("DOMContentLoaded", async () => {
                             mImg.classList.remove('shake-animation');
                             void mImg.offsetWidth;
                             mImg.classList.add('shake-animation');
-                            setTimeout(() => mImg.classList.remove('shake-animation'), 300);
+                            setTimeout(() => {
+                                mImg.classList.remove('shake-animation');
+                            }, 300);
                         }
-                        currentMonsterHp = Math.max(0, currentMonsterHp - attack.damage);
+                        currentMonsterHp = Math.max(0, currentMonsterHp - damage);
                         const pct = (currentMonsterHp / monsterMaxHp) * 100;
-                        if(monsterHpFill) monsterHpFill.style.width = `${pct}%`;
-                        if(monsterHpValueSpan) monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
+                        monsterHpFill.style.width = `${pct}%`;
+                        monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
+
                         currentAttackIndex++;
-                        if(attacksLeftSpan) attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
+                        attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
+                        
                         setTimeout(animateAttack, 1000);
                     } else {
-                        let message = data.venceu ? `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!` : `Derrota! Tente novamente.`;
+                        let message = "";
+                        if (data.venceu) {
+                            message = `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!`;
+                        } else {
+                            message = `Você não derrotou o monstro. Tente melhorar seus equipamentos!`;
+                        }
+                        
                         resultText.textContent = message;
-                        if(resultModal) resultModal.style.display = "block";
+                        resultModal.style.display = "block";
                         if (data.leveled_up) showLevelUpBalloon(data.new_level);
                     }
                 };
+                // --- FIM DA OTIMIZAÇÃO ---
+                
                 animateAttack();
             }
         }, 1000);
     }
 
+    // --- AUXILIARES VISUAIS ---
     function showIdleScreen() {
-        if(idleScreen) idleScreen.style.display = "flex";
-        if(combatScreen) combatScreen.style.display = "none";
+        idleScreen.style.display = "flex";
+        combatScreen.style.display = "none";
         combatMusic.pause();
         idleMusic.play().catch(() => {});
         renderPlayerData(); 
     }
 
     function showCombatScreen() {
-        if(idleScreen) idleScreen.style.display = "none";
-        if(combatScreen) combatScreen.style.display = "flex";
+        idleScreen.style.display = "none";
+        combatScreen.style.display = "flex";
         idleMusic.pause();
         combatMusic.play().catch(() => {});
     }
@@ -402,10 +506,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const damageNum = document.createElement("div");
         damageNum.textContent = formatNumberCompact(damage);
         damageNum.className = isCrit ? "crit-damage-number" : "normal-damage-number";
+        
         damageNum.style.position = "absolute";
         damageNum.style.left = "50%";
         damageNum.style.top = "40%";
         damageNum.style.transform = "translate(-50%, -50%)";
+        
         damageNum.style.animation = "floatAndFade 1.5s forwards";
         combatScreen.appendChild(damageNum);
         damageNum.addEventListener("animationend", () => damageNum.remove());
@@ -413,15 +519,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function showLevelUpBalloon(newLevel) {
         const balloon = document.getElementById("levelUpBalloon");
-        if(balloon) {
-            const text = document.getElementById("levelUpBalloonText");
-            if(text) text.innerText = newLevel;
-            balloon.style.display = "block";
-            setTimeout(() => balloon.style.display = "none", 5000);
-        }
+        const text = document.getElementById("levelUpBalloonText");
+        text.innerText = newLevel;
+        balloon.style.display = "block";
+        setTimeout(() => balloon.style.display = "none", 5000);
     }
 
-    if(musicPermissionBtn) musicPermissionBtn.addEventListener("click", () => {
+    // --- EVENT LISTENERS ---
+
+    musicPermissionBtn.addEventListener("click", () => {
         musicPermissionModal.style.display = "none";
         [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
             audio.play().then(() => {
@@ -432,9 +538,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         showIdleScreen();
     });
 
-    if(startAfkBtn) startAfkBtn.addEventListener("click", () => {
+    startAfkBtn.addEventListener("click", () => {
         if (startAfkBtn.disabled || !userId) return;
-        const currentStage = playerAfkData?.current_afk_stage || 1;
+        const currentStage = playerAfkData.current_afk_stage || 1;
         if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
         if (currentStage > 1) {
             if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
@@ -448,10 +554,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
     if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
     if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
-    if(confirmBtn) confirmBtn.addEventListener("click", () => { resultModal.style.display = "none"; showIdleScreen(); });
-    if(returnMainIdleBtn) returnMainIdleBtn.addEventListener("click", () => { window.location.href = "index.html?refresh=true"; });
-    if(saibaMaisBtn) saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
-    if(closeTutorialBtn) closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
 
+    confirmBtn.addEventListener("click", () => {
+        resultModal.style.display = "none";
+        showIdleScreen(); 
+    });
+    
+    returnMainIdleBtn.addEventListener("click", () => {
+        window.location.href = "index.html?refresh=true";
+    });
+
+    saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
+    closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
+
+    // --- INICIALIZAÇÃO ---
     initializePlayerData();
 });

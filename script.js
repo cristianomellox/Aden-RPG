@@ -580,6 +580,72 @@ function updateLocalPlayerData(changes) {
 }
 // =======================================================================
 
+// ============================================================
+// HELPER INDEXEDDB PARA SCRIPT.JS (COMPARTILHADO COM INVENTORY)
+// ============================================================
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 41; // Mantenha a mesma versão do inventory.js
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+/**
+ * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
+ * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
+ * @param {String} newTimestamp - O novo timestamp vindo do servidor
+ * @param {Object} updatedStats - (Opcional) Novos stats do player (ouro/cristais)
+ */
+async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
+
+        // 1. Atualiza ou insere os itens modificados
+        if (Array.isArray(newItems)) {
+            newItems.forEach(item => store.put(item));
+        }
+
+        // 2. Atualiza o Timestamp para "enganar" o inventory.js
+        // Dizendo: "Ei, eu já tenho a versão desse horário!"
+        if (newTimestamp) {
+            meta.put({ key: "last_updated", value: newTimestamp });
+            // Atualiza também o cache_time para não expirar por idade
+            meta.put({ key: "cache_time", value: Date.now() }); 
+        }
+
+        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
+        if (updatedStats) {
+            // Primeiro lemos o stats atual
+            const req = meta.get("player_stats");
+            req.onsuccess = () => {
+                const currentStats = req.result ? req.result.value : {};
+                // Mescla os novos valores (ex: crystals, gold)
+                const finalStats = { ...currentStats, ...updatedStats };
+                meta.put({ key: "player_stats", value: finalStats });
+            };
+        }
+
+        return new Promise(resolve => {
+            tx.oncomplete = () => {
+                console.log("✅ [Surgical Update] Cache local atualizado com sucesso via Script.js");
+                resolve();
+            }
+        });
+    } catch (e) {
+        console.warn("⚠️ Falha ao atualizar IndexedDB via script.js:", e);
+    }
+}
+// =======================================================================
+
 
 // =======================================================================
 // DADOS DO JOGADOR E DEFINIÇÕES DE MISSÃO
@@ -1872,7 +1938,7 @@ decreaseCardQtyBtn.addEventListener('click', () => {
     }
 });
 
-// MODIFICADO PARA ATUALIZAR O CACHE
+// MODIFICADO PARA ATUALIZAR O CACHE E SUPORTAR RESPOSTA JSON COMPLEXA
 confirmPurchaseBtn.addEventListener('click', async () => {
     const quantity = parseInt(cardQtyToBuySpan.textContent);
     confirmPurchaseBtn.disabled = true;
@@ -1882,20 +1948,27 @@ confirmPurchaseBtn.addEventListener('click', async () => {
 
     if (error) {
         buyCardsMessage.textContent = `Erro: ${error.message}`;
-    } else {
-        buyCardsMessage.textContent = data;
-        
-        // Atualiza SALDO localmente sem refresh completo
-        const cost = quantity * 250;
-        updateLocalPlayerData({ crystals: (currentPlayerData.crystals - cost) });
-        
-        await updateCardCounts();
-        
-        setTimeout(() => {
-            buyCardsModal.style.display = 'none';
-        }, 2000);
+        confirmPurchaseBtn.disabled = false;
+        return;
     }
-    confirmPurchaseBtn.disabled = false;
+
+    // O retorno agora é um JSON com { message, new_crystals, timestamp, updated_item }
+    buyCardsMessage.textContent = data.message;
+    
+    // Atualiza SALDO localmente sem refresh completo
+    updateLocalPlayerData({ crystals: data.new_crystals });
+    
+    await updateCardCounts();
+
+    // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
+    if (data.updated_item && data.timestamp) {
+        await surgicalCacheUpdate([data.updated_item], data.timestamp, { crystals: data.new_crystals });
+    }
+    
+    setTimeout(() => {
+        buyCardsModal.style.display = 'none';
+        confirmPurchaseBtn.disabled = false;
+    }, 1500);
 });
 
 function openDrawConfirmModal(type) {
@@ -1908,6 +1981,7 @@ function openDrawConfirmModal(type) {
 drawCommonBtn.addEventListener('click', () => openDrawConfirmModal('common'));
 drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced'));
 
+// MODIFICADO PARA ATUALIZAR O CACHE E SUPORTAR RESPOSTA JSON COMPLEXA
 confirmDrawBtn.addEventListener('click', async () => {
     const quantity = parseInt(drawQuantityInput.value);
     if (isNaN(quantity) || quantity <= 0) {
@@ -1918,20 +1992,30 @@ confirmDrawBtn.addEventListener('click', async () => {
     confirmDrawBtn.disabled = true;
     drawConfirmMessage.textContent = 'Sorteando...';
 
-    const { data: wonItems, error } = await supabaseClient.rpc('perform_spiral_draw', {
+    // O retorno agora é um JSON complexo
+    const { data, error } = await supabaseClient.rpc('perform_spiral_draw', {
         draw_type: currentDrawType,
         p_quantity: quantity
     });
 
     if (error) {
         drawConfirmMessage.textContent = `Erro: ${error.message}`;
-    } else {
-        drawConfirmModal.style.display = 'none';
-        displayDrawResults(wonItems);
-        await updateCardCounts();
-        // Sorteio não gasta ouro/cristais, apenas itens. 
-        // Não é necessário refresh completo aqui.
+        confirmDrawBtn.disabled = false;
+        return;
+    } 
+
+    drawConfirmModal.style.display = 'none';
+    
+    // displayDrawResults espera um mapa de ID -> Quantidade
+    displayDrawResults(data.won_items_map);
+    await updateCardCounts();
+
+    // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
+    // inventory_updates contém os fragmentos ganhos E o cartão gasto (atualizado)
+    if (data.inventory_updates && data.timestamp) {
+        await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
     }
+
     confirmDrawBtn.disabled = false;
 });
 

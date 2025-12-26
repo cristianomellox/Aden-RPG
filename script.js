@@ -1796,7 +1796,7 @@ async function checkMiscRequirement(missionIndex, player) {
 }
 
 /**
- * Lida com o clique no botão "Resgatar" (MODIFICADO PARA ATUALIZAR O CACHE)
+ * Lida com o clique no botão "Resgatar" (MODIFICADO PARA ATUALIZAR O CACHE E EVITAR EGRESS)
  */
 async function handleProgressionClaim(event) {
     const button = event.target;
@@ -1807,8 +1807,6 @@ async function handleProgressionClaim(event) {
     button.textContent = "Aguarde...";
 
     try {
-        // *** CORREÇÃO APLICADA AQUI ***
-        // Removido o underscore "_" extra
         const { data, error } = await supabaseClient.rpc('claim_progression_reward', {
             p_category: category
         });
@@ -1817,15 +1815,27 @@ async function handleProgressionClaim(event) {
 
         showFloatingMessage(data.message || 'Recompensa resgatada com sucesso!');
 
-        // MODIFICADO: Em vez de atualizar manualmente, força um refresh
-        // que atualizará a UI, o cache e a variável global 'currentPlayerData'.
-        // O segundo 'true' (preserveActiveContainer) é vital para não fechar o modal.
-        await fetchAndDisplayPlayerInfo(true, true); 
-
-        // A checagem de notificação agora usará o 'currentPlayerData' atualizado pela função acima
-        checkProgressionNotifications(currentPlayerData);
+        // 1. Atualiza Status Locais (Ouro/Cristais)
+        const updates = {};
+        if (data.crystals_added) updates.crystals = (currentPlayerData.crystals || 0) + data.crystals_added;
+        if (data.gold_added) updates.gold = (currentPlayerData.gold || 0) + data.gold_added;
         
-        // Re-renderiza o modal de progressão
+        // 2. Atualiza o Estado da Progressão Local
+        if (data.new_index !== undefined) {
+             const newState = { ...(currentPlayerData.progression_state || { level: 0, afk: 0, misc: 0 }) };
+             newState[category] = data.new_index;
+             updates.progression_state = newState;
+        }
+
+        updateLocalPlayerData(updates);
+
+        // 3. Atualiza Cirurgicamente o Inventário (Se ganhou item)
+        if (data.inventory_updates && data.new_timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+
+        // 4. Re-renderiza o modal e checa notificações (Sem baixar nada do server)
+        checkProgressionNotifications(currentPlayerData);
         await renderProgressionModal();
 
     } catch (error) {
@@ -2096,24 +2106,29 @@ buyButtons.forEach(button => {
         // Prepara a mensagem do modal
         confirmModalMessage.innerHTML = `Tem certeza que deseja comprar <strong>${itemName}</strong> por <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:16px; height:16px; vertical-align: -2px;"> ${itemCost} de ouro?`;
         
-        // Define o que o botão "Confirmar" fará (MODIFICADO PARA ATUALIZAR O CACHE)
+        // Define o que o botão "Confirmar" fará (MODIFICADO PARA ATUALIZAR O CACHE E EVITAR EGRESS)
         purchaseHandler = async () => {
             purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
             button.disabled = true;
             shopMessage.textContent = 'Processando sua compra...';
 
             try {
+                // A RPC agora retorna JSONB com os dados
                 const { data, error } = await supabaseClient.rpc('buy_shop_item', {
                     package_id: packageId
                 });
                 if (error) throw error;
 
-                shopMessage.textContent = data;
+                shopMessage.textContent = data.message;
                 
-                // Atualiza SALDO localmente sem refresh completo
-                const cost = parseInt(itemCost);
-                if (!isNaN(cost)) {
-                    updateLocalPlayerData({ gold: (currentPlayerData.gold - cost) });
+                // 1. Atualiza SALDO localmente sem refresh completo
+                if (data.new_gold !== undefined) {
+                    updateLocalPlayerData({ gold: data.new_gold });
+                }
+
+                // 2. Atualiza Cirurgicamente o Inventário
+                if (data.inventory_updates && data.new_timestamp) {
+                    await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
                 }
 
             } catch (error) {

@@ -1,7 +1,61 @@
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v13.1) - Fix: 0/3 Stuck & Death Banner Sync");
+console.log("guild_raid.js (v13.3) - Independent IndexedDB Update Logic");
 
+// =========================================================
+// >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
+// =========================================================
+// Isso permite que a Raid atualize o cache de inventário
+// sem depender que o script.js esteja carregado na página.
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 41; // Mantenha a mesma versão do inventory.js
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+/**
+ * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
+ * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
+ * @param {String} newTimestamp - O novo timestamp vindo do servidor
+ */
+async function localSurgicalCacheUpdate(newItems, newTimestamp) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
+
+        // 1. Atualiza ou insere os itens modificados
+        if (Array.isArray(newItems)) {
+            newItems.forEach(item => store.put(item));
+        }
+
+        // 2. Atualiza o Timestamp para "enganar" o inventory.js
+        // Dizendo: "Ei, eu já tenho a versão desse horário!"
+        if (newTimestamp) {
+            meta.put({ key: "last_updated", value: newTimestamp });
+            // Atualiza também o cache_time para não expirar por idade
+            meta.put({ key: "cache_time", value: Date.now() }); 
+        }
+
+        return new Promise(resolve => {
+            tx.oncomplete = () => {
+                console.log("✅ [Raid Local] Cache de inventário atualizado com sucesso via IndexedDB.");
+                resolve();
+            }
+        });
+    } catch (e) {
+        console.warn("⚠️ Falha ao atualizar IndexedDB localmente na Raid:", e);
+    }
+}
+// =========================================================
 
 
 const MAX_ATTACKS = 3;
@@ -1163,6 +1217,12 @@ async function triggerBatchSync() {
 
         saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
+
+        // === [NOVO] ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (LOCALMENTE) ===
+        if (data.inventory_updates && data.new_timestamp) {
+             await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+        // ================================================================
 
         if (data.monster_health <= 0) {
              const floorDefeated = currentFloor; 

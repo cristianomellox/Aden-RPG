@@ -41,9 +41,9 @@
       color: white;
       text-decoration: none;
     }
-body, html {
-  text-shadow: 1px 1px 2px #000;
-}
+    body, html {
+      text-shadow: 1px 1px 2px #000;
+    }
     .lucide-chevron-left {
       width: 28px;
       height: 28px;
@@ -54,10 +54,10 @@ body, html {
     #resgateContainer {
       flex-grow: 1;
       background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/redeem.webp');
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-size: cover;
-    background-color: none;
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-size: cover;
+      background-color: none;
       color: white;
       display: flex;
       flex-direction: column;
@@ -100,78 +100,152 @@ body, html {
       font-size: 1.2em;
       color: #ffcc66;
       background-color: rgba(0, 0, 0, 0.8);
+      padding: 5px 10px;
+      border-radius: 4px;
+      display: none; /* Oculto por padrão */
     }
+
     /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
-.goog-te-banner-frame.skiptranslate, 
-.skiptranslate {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-}
+    .goog-te-banner-frame.skiptranslate, 
+    .skiptranslate {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+    }
 
-body {
-    top: 0px !important; 
-    margin-top: 0px !important;
-    position: static !important; 
-}
-.goog-te-balloon-frame {
-    display: none !important;
-    visibility: hidden !important;
-}
+    body {
+        top: 0px !important; 
+        margin-top: 0px !important;
+        position: static !important; 
+    }
+    .goog-te-balloon-frame {
+        display: none !important;
+        visibility: hidden !important;
+    }
 
-.goog-te-gadget {
-    display: none !important;
-    height: 0 !important;
-    overflow: hidden !important;
-}
+    .goog-te-gadget {
+        display: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
 
-font > font {
-    background-color: transparent !important;
-    box-shadow: none !important;
-    position: static !important;
-}
+    font > font {
+        background-color: transparent !important;
+        box-shadow: none !important;
+        position: static !important;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-  const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+      const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const codigoInput = document.getElementById('codigoInput');
-  const btnConfirmar = document.getElementById('btnConfirmar');
-  const mensagem = document.getElementById('resgateMensagem');
+      const codigoInput = document.getElementById('codigoInput');
+      const btnConfirmar = document.getElementById('btnConfirmar');
+      const mensagem = document.getElementById('resgateMensagem');
 
-  if (!btnConfirmar) {
-    console.error("Elemento #btnConfirmar não encontrado no DOM!");
-    return;
-  }
+      // ========================================================
+      // LOGICA DE INDEXEDDB (Atualização Cirúrgica Local)
+      // ========================================================
+      const DB_NAME = "aden_inventory_db";
+      const STORE_NAME = "inventory_store";
+      const META_STORE = "meta_store";
+      const DB_VERSION = 41; 
 
-  btnConfirmar.addEventListener('click', async () => {
-    const codigo = codigoInput.value.trim();
-    if (!codigo) {
-      mensagem.textContent = 'Digite um código válido.';
-      return;
-    }
+      function openDB() {
+          return new Promise((resolve, reject) => {
+              const req = indexedDB.open(DB_NAME, DB_VERSION);
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error);
+          });
+      }
 
-    try {
-      mensagem.textContent = 'Verificando...';
-      const { data, error } = await supabaseClient.rpc('redeem_reward_code', { code_id: codigo });
+      async function surgicalCacheUpdate(newItems, newTimestamp) {
+          try {
+              const db = await openDB();
+              const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+              const store = tx.objectStore(STORE_NAME);
+              const meta = tx.objectStore(META_STORE);
 
-      if (error) {
-        mensagem.textContent = 'Erro: ' + error.message;
-        console.error(error);
+              // 1. Atualiza ou insere os itens modificados
+              if (Array.isArray(newItems) && newItems.length > 0) {
+                  newItems.forEach(item => store.put(item));
+              }
+
+              // 2. Atualiza o Timestamp para evitar redownload no inventário
+              if (newTimestamp) {
+                  meta.put({ key: "last_updated", value: newTimestamp });
+                  meta.put({ key: "cache_time", value: Date.now() }); 
+              }
+
+              return new Promise(resolve => {
+                  tx.oncomplete = () => {
+                      console.log("✅ [Resgate] Cache local atualizado com sucesso.");
+                      resolve();
+                  }
+              });
+          } catch (e) {
+              console.warn("⚠️ Falha ao atualizar IndexedDB via resgate:", e);
+          }
+      }
+      // ========================================================
+
+
+      if (!btnConfirmar) {
+        console.error("Elemento #btnConfirmar não encontrado no DOM!");
         return;
       }
 
-      mensagem.textContent = data || 'Código processado.';
-    } catch (err) {
-      console.error(err);
-      mensagem.textContent = 'Erro ao tentar resgatar o código.';
-    }
-  });
-});
+      btnConfirmar.addEventListener('click', async () => {
+        const codigo = codigoInput.value.trim();
+        mensagem.style.display = 'block';
+        if (!codigo) {
+          mensagem.textContent = 'Digite um código válido.';
+          return;
+        }
 
+        try {
+          btnConfirmar.disabled = true;
+          btnConfirmar.textContent = "Processando...";
+          mensagem.textContent = 'Verificando...';
+          
+          const { data, error } = await supabaseClient.rpc('redeem_reward_code', { code_id: codigo });
+
+          if (error) {
+            mensagem.textContent = 'Erro: ' + error.message;
+            console.error(error);
+            btnConfirmar.disabled = false;
+            btnConfirmar.textContent = "Confirmar";
+            return;
+          }
+
+          // Verifica se houve sucesso lógico na RPC
+          if (data && data.success) {
+              mensagem.textContent = data.message;
+              mensagem.style.color = '#76ff03'; // Verde claro para sucesso
+
+              // Se vierem updates de inventário, atualiza o cache localmente
+              if (data.inventory_updates && data.new_timestamp) {
+                  await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+              }
+          } else {
+              // Erro de validação retornado pela RPC (código inválido, já usado, etc)
+              mensagem.textContent = (data && data.message) ? data.message : 'Falha ao resgatar.';
+              mensagem.style.color = '#ff6b6b';
+          }
+
+        } catch (err) {
+          console.error(err);
+          mensagem.textContent = 'Erro de conexão ao tentar resgatar o código.';
+          mensagem.style.color = '#ff6b6b';
+        } finally {
+            btnConfirmar.disabled = false;
+            btnConfirmar.textContent = "Confirmar";
+        }
+      });
+    });
   </script>
 </head>
 <body>
@@ -187,43 +261,42 @@ font > font {
   </div>
 
   <div id="resgateContainer">
-    
     <p style="font-size: 1.2em;">Digite um código promocional para resgatar prêmios.</p>
     <input id="codigoInput" type="text" placeholder="Digite o código">
     <button id="btnConfirmar">Confirmar</button>
     <p id="resgateMensagem"></p>
   </div>
+  
   <script>
-document.addEventListener("DOMContentLoaded", () => {
-  // cria um elemento para medir o tamanho real de 1rem
-  const testEl = document.createElement("div");
-  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
-  testEl.textContent = "M";
-  document.body.appendChild(testEl);
+    document.addEventListener("DOMContentLoaded", () => {
+      // cria um elemento para medir o tamanho real de 1rem
+      const testEl = document.createElement("div");
+      testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+      testEl.textContent = "M";
+      document.body.appendChild(testEl);
 
-  const actualRem = testEl.getBoundingClientRect().height;
-  document.body.removeChild(testEl);
+      const actualRem = testEl.getBoundingClientRect().height;
+      document.body.removeChild(testEl);
 
-  console.log("[scale-lock] 1rem real:", actualRem, "px");
+      console.log("[scale-lock] 1rem real:", actualRem, "px");
 
-  // queremos sempre 16px como base (modo padrão)
-  const targetRem = 16;
-  const correction = targetRem / actualRem;
+      // queremos sempre 16px como base (modo padrão)
+      const targetRem = 16;
+      const correction = targetRem / actualRem;
 
-  const style = document.createElement("style");
-  style.textContent = `
-    html { font-size: ${16 * correction}px !important; }
-    body { font-size: 1.3rem !important; }
-  `;
-  document.head.appendChild(style);
+      const style = document.createElement("style");
+      style.textContent = `
+        html { font-size: ${16 * correction}px !important; }
+        body { font-size: 1.3rem !important; }
+      `;
+      document.head.appendChild(style);
 
-  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
-});
-</script>
-<div id="google_translate_element"></div>
+      console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+    });
+  </script>
+  <div id="google_translate_element"></div>
 
-<script src="auto_translate.js"></script>
-
-<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+  <script src="auto_translate.js"></script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>

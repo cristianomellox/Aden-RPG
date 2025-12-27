@@ -1,5 +1,72 @@
 import { supabase } from './supabaseClient.js'
 
+// =======================================================================
+// HELPER INDEXEDDB (COPIADO DO INVENTORY.JS/SCRIPT.JS)
+// Para atualização cirúrgica do cache e economia de Egress
+// =======================================================================
+const DB_NAME = "aden_inventory_db";
+const STORE_NAME = "inventory_store";
+const META_STORE = "meta_store";
+const DB_VERSION = 41; // Mesma versão do inventory.js
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+/**
+ * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
+ * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
+ * @param {String} newTimestamp - O novo timestamp vindo do servidor
+ * @param {Object} updatedStats - (Opcional) Novos stats do player (ouro/cristais)
+ */
+async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const meta = tx.objectStore(META_STORE);
+
+        // 1. Atualiza ou insere os itens modificados
+        if (Array.isArray(newItems)) {
+            newItems.forEach(item => store.put(item));
+        }
+
+        // 2. Atualiza o Timestamp para "enganar" o inventory.js
+        // Dizendo: "Ei, eu já tenho a versão desse horário!"
+        if (newTimestamp) {
+            meta.put({ key: "last_updated", value: newTimestamp });
+            // Atualiza também o cache_time para não expirar por idade
+            meta.put({ key: "cache_time", value: Date.now() }); 
+        }
+
+        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
+        if (updatedStats) {
+            // Primeiro lemos o stats atual
+            const req = meta.get("player_stats");
+            req.onsuccess = () => {
+                const currentStats = req.result ? req.result.value : {};
+                // Mescla os novos valores (ex: crystals, gold)
+                const finalStats = { ...currentStats, ...updatedStats };
+                meta.put({ key: "player_stats", value: finalStats });
+            };
+        }
+
+        return new Promise(resolve => {
+            tx.oncomplete = () => {
+                console.log("✅ [Arena Surgical Update] Cache local atualizado com sucesso.");
+                resolve();
+            }
+        });
+    } catch (e) {
+        console.warn("⚠️ Falha ao atualizar IndexedDB via arena.js:", e);
+    }
+}
+// =======================================================================
+
 document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     // 1. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
@@ -1064,6 +1131,33 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (error) throw error;
             const res = normalizeRpcResult(data);
+            
+            // =======================================================
+            // [NOVO] ATUALIZAÇÃO CIRÚRGICA DE CACHE (ZERO EGRESS)
+            // =======================================================
+            if (res.timestamp && res.inventory_updates) {
+                // 1. Atualiza Stats Globais no Cache (LocalStorage)
+                // Para refletir cristais ganhos/gastos sem recarregar
+                const cached = localStorage.getItem('player_data_cache');
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        if (parsed && parsed.data) {
+                            // Atualiza cristais
+                            if (typeof res.crystals === 'number') {
+                                parsed.data.crystals = (parsed.data.crystals || 0) + res.crystals;
+                            }
+                            // Atualiza ranking points se retornado (opcional, requer lógica no SQL)
+                            // Salva de volta
+                            localStorage.setItem('player_data_cache', JSON.stringify(parsed));
+                        }
+                    } catch(e) {}
+                }
+
+                // 2. Atualiza Inventário no IndexedDB
+                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, { crystals: res.crystals ? ((getCache('player_data_cache')?.crystals || 0)) : undefined });
+            }
+            // =======================================================
             
             // Limpa tudo
             localStorage.removeItem('arena_session_v1');

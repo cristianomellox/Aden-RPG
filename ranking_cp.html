@@ -139,7 +139,7 @@
   </div>
 
   <div id="rankingContent">
-    <h2>Top 100</h2>
+    <h2>Top 30</h2>
    <center> <div id="atualiza">(Atualiza Domingo 21h00)</div></center>
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
@@ -569,7 +569,7 @@
         });
 
         computed.sort((a,b) => b.cp - a.cp);
-        const top100 = computed.slice(0,100);
+        const top100 = computed.slice(0,30);
         
         // Cache configurado para expirar na próxima Segunda-feira (Weekly)
         setRankingCache(cacheKey, top100);

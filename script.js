@@ -509,19 +509,66 @@ const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =======================================================================
-// CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
+// CACHE PERSISTENTE (IndexedDB CORE) - ZERO EGRESS IMPLEMENTADO
 // =======================================================================
-const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão (24h)
+const CORE_DB_NAME = "aden_core_db"; // Novo DB para dados vitais (Status, Ouro, XP)
+const CORE_STORE_NAME = "player_store";
+const CORE_DB_VERSION = 1;
 
-/**
- * Salva dados no LocalStorage com um timestamp e TTL.
- * @param {string} key A chave para o cache.
- * @param {any} data Os dados a serem salvos (serão convertidos para JSON).
- * @param {number} [ttlMinutes=CACHE_TTL_MINUTES] Tempo de vida em minutos.
- */
+// --- Helper IndexedDB CoreDB ---
+const CoreDB = {
+    open: () => {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(CORE_DB_NAME, CORE_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(CORE_STORE_NAME)) {
+                    db.createObjectStore(CORE_STORE_NAME, { keyPath: "id" });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    savePlayer: async (playerData) => {
+        try {
+            const db = await CoreDB.open();
+            const tx = db.transaction(CORE_STORE_NAME, "readwrite");
+            const store = tx.objectStore(CORE_STORE_NAME);
+            // Salva dados e timestamp para controle
+            if (!playerData._cacheTimestamp) {
+                playerData._cacheTimestamp = Date.now();
+            }
+            store.put(playerData);
+            return new Promise(resolve => {
+                 tx.oncomplete = () => resolve();
+            });
+        } catch (e) {
+            console.warn("[CoreDB] Erro ao salvar jogador:", e);
+        }
+    },
+    getPlayer: async (id) => {
+        try {
+            const db = await CoreDB.open();
+            const tx = db.transaction(CORE_STORE_NAME, "readonly");
+            const store = tx.objectStore(CORE_STORE_NAME);
+            return new Promise((resolve) => {
+                const req = store.get(id);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+};
+
+const CACHE_TTL_MINUTES = 1440; // Cache de 24h como padrão
+
+// Mantendo setCache/getCache como fallback (Legacy LocalStorage)
 function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
     const cacheItem = {
-        expires: Date.now() + (ttlMinutes * 60 * 1000), // Salva o timestamp de expiração
+        expires: Date.now() + (ttlMinutes * 60 * 1000),
         data: data
     };
     try {
@@ -531,21 +578,13 @@ function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
     }
 }
 
-/**
- * Busca dados do LocalStorage e verifica se expiraram.
- * @param {string} key A chave do cache.
- * @param {number} [defaultTtlMinutes=CACHE_TTL_MINUTES] TTL padrão (não usado se o item já tem 'expires').
- * @returns {any|null} Os dados (se encontrados e não expirados) ou null.
- */
 function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
     try {
         const cachedItem = localStorage.getItem(key);
         if (!cachedItem) return null;
 
         const { expires, data } = JSON.parse(cachedItem);
-        
-        // Se não tiver 'expires' (formato antigo) ou se 'expires' não for um número, usa o TTL padrão
-        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1); // Força expiração se for formato antigo
+        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1);
 
         if (Date.now() > expirationTime) {
             localStorage.removeItem(key);
@@ -553,30 +592,37 @@ function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
         }
         return data;
     } catch (e) {
-        console.error("Falha ao ler cache:", e);
-        localStorage.removeItem(key); // Remove item corrompido
+        localStorage.removeItem(key);
         return null;
     }
 }
 
 /**
- * Atualiza o cache e a UI localmente sem ir ao servidor.
- * Útil para atualizar saldo de Ouro/Cristais imediatamente.
+ * Atualiza o cache e a UI localmente sem ir ao servidor (ZERO EGRESS).
+ * Atualiza tanto CoreDB quanto LocalStorage e memória.
  * @param {Object} changes - Objeto com as mudanças (ex: { gold: 500, crystals: 1000 })
  */
-function updateLocalPlayerData(changes) {
+async function updateLocalPlayerData(changes) {
     if (!currentPlayerData) return;
 
     // Aplica as mudanças no objeto em memória
     Object.keys(changes).forEach(key => {
-        currentPlayerData[key] = changes[key];
+         if (typeof changes[key] === 'object' && changes[key] !== null && !Array.isArray(changes[key])) {
+             currentPlayerData[key] = { ...currentPlayerData[key], ...changes[key] };
+        } else {
+             currentPlayerData[key] = changes[key];
+        }
     });
 
-    // Atualiza o Cache no LocalStorage
+    // Atualiza o Cache Legacy (LocalStorage)
     setCache('player_data_cache', currentPlayerData, 1440);
+
+    // Atualiza o novo CoreDB (IndexedDB)
+    await CoreDB.savePlayer(currentPlayerData);
 
     // Redesenha a UI
     renderPlayerUI(currentPlayerData, true);
+    console.log("💉 [Surgical Update] Dados atualizados localmente no CoreDB.");
 }
 // =======================================================================
 
@@ -598,37 +644,39 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
+ * TAMBÉM ATUALIZA O COREDB SE HOUVER STATS.
  * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
  * @param {String} newTimestamp - O novo timestamp vindo do servidor
  * @param {Object} updatedStats - (Opcional) Novos stats do player (ouro/cristais)
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
+    // 1. Atualiza CoreDB (Status do Jogador: Ouro, Cristais, etc)
+    if (updatedStats) {
+        await updateLocalPlayerData(updatedStats);
+    }
+
     try {
         const db = await openDB();
         const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualiza ou insere os itens modificados
+        // 2. Atualiza ou insere os itens modificados no DB de Inventário
         if (Array.isArray(newItems)) {
             newItems.forEach(item => store.put(item));
         }
 
-        // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
+        // 3. Atualiza o Timestamp para "enganar" o inventory.js
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
+        // 4. Atualiza os stats legacy no meta do inventário (backup)
         if (updatedStats) {
-            // Primeiro lemos o stats atual
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
-                // Mescla os novos valores (ex: crystals, gold)
                 const finalStats = { ...currentStats, ...updatedStats };
                 meta.put({ key: "player_stats", value: finalStats });
             };
@@ -636,7 +684,7 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 
         return new Promise(resolve => {
             tx.oncomplete = () => {
-                console.log("✅ [Surgical Update] Cache local atualizado com sucesso via Script.js");
+                console.log("✅ [Surgical Update] Cache Inventário atualizado.");
                 resolve();
             }
         });
@@ -913,6 +961,8 @@ async function signIn() {
     const email = emailInput.value;
     const password = passwordInput.value;
     authMessage.textContent = 'Tentando entrar...';
+    // Nota: O método nativo já lida com cache de sessão. 
+    // O listener onAuthStateChange cuidará do fluxo após sucesso.
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
         authMessage.textContent = `Erro ao entrar: ${error.message}`;
@@ -961,9 +1011,13 @@ async function verifyOtp() {
 async function signOut() {
     // --- CORREÇÃO DE CACHE APLICADA ---
     // Limpa explicitamente o cache do jogador antes de sair e recarregar
-    // Isso previne que o próximo usuário veja os dados do anterior
     localStorage.removeItem('player_data_cache');
-    
+    try {
+        const db = await CoreDB.open();
+        const tx = db.transaction(CORE_STORE_NAME, "readwrite");
+        tx.objectStore(CORE_STORE_NAME).clear();
+    } catch(e){}
+
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
         console.error('Erro ao sair:', error.message);
@@ -1039,19 +1093,13 @@ function applyItemBonuses(player, equippedItems) {
     return combinedStats;
 }
 
-// Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA ZERO EGRESS)
 // RESTAURADA: Busca itens e calcula CP, mas exibe UI limpa
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     const PLAYER_CACHE_KEY = 'player_data_cache';
-    
-    // Se não for forçado e já temos dados, retorna (Economia Máxima)
-    if (!forceRefresh && currentPlayerData) {
-        renderPlayerUI(currentPlayerData, preserveActiveContainer);
-        return;
-    }
+    const CACHE_EXPIRATION_MS = 14400000; // 4h
 
     // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
-    // NUNCA chamamos getUser() aqui para economizar Egress.
     let userId = currentPlayerId;
     if (!userId) {
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1063,7 +1111,25 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         currentPlayerId = userId;
     }
 
-    // Busca apenas dados do jogo
+    // --- ZERO EGRESS: Tenta CoreDB Primeiro ---
+    if (!forceRefresh) {
+        let localPlayer = await CoreDB.getPlayer(userId);
+        if (localPlayer) {
+             const now = Date.now();
+             const cacheTime = localPlayer._cacheTimestamp || 0;
+             // Usa cache se for recente (< 4h)
+             if (now - cacheTime < CACHE_EXPIRATION_MS) {
+                 console.log("⚡ [CoreDB] Dados carregados do Cache (0ms)");
+                 currentPlayerData = localPlayer;
+                 renderPlayerUI(localPlayer, preserveActiveContainer);
+                 checkProgressionNotifications(localPlayer);
+                 return;
+             }
+        }
+    }
+
+    // Se falhar o cache, busca do Supabase
+    console.log('☁️ Buscando dados atualizados do Supabase...');
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
         .select('*')
@@ -1076,22 +1142,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     }
 
     // --- OTIMIZAÇÃO: REMOVIDO JOIN. USA CACHED_INVENTORY ---
-    // Em vez de fazer uma segunda query pesada em 'inventory_items',
-    // usamos o JSONB 'cached_inventory' que já vem na query de 'players'.
-    
     const rawInventory = player.cached_inventory || [];
     // Filtra apenas itens que possuem equipped_slot definido
     const equippedItems = Array.isArray(rawInventory) 
         ? rawInventory.filter(i => i.equipped_slot) 
         : [];
-
-    /* CODIGO ANTIGO REMOVIDO PARA ECONOMIA DE EGRESS
-    const { data: equippedItems, error: itemsError } = await supabaseClient
-        .from('inventory_items')
-        .select(`...`)
-        .eq('player_id', userId)
-        .neq('equipped_slot', null);
-    */
 
     // Calcula os atributos totais
     const playerWithEquips = applyItemBonuses(player, equippedItems);
@@ -1107,9 +1162,12 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         (playerWithEquips.evasion * 1)
     );
 
-    // Armazena e Renderiza
+    // Armazena no CoreDB e Renderiza
+    playerWithEquips._cacheTimestamp = Date.now();
+    await CoreDB.savePlayer(playerWithEquips);
+    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440);
+
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 24 horas (1440 min)
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 
@@ -1286,14 +1344,18 @@ async function checkAuthStatus() {
         currentPlayerId = session.user.id;
         window.authCheckComplete = true;
 
-        // Se NÃO tínhamos cache ou se ele é muito antigo, aí sim buscamos do banco
-        if (!currentPlayerData) {
-            console.log("🔄 Cache vazio. Buscando dados atualizados...");
-            fetchAndDisplayPlayerInfo(true); 
+        // --- TENTA COREDB PRIMEIRO ---
+        const localPlayer = await CoreDB.getPlayer(currentPlayerId);
+        
+        if (localPlayer) {
+            console.log("✅ [CheckAuth] Sessão válida + Cache CoreDB encontrado.");
+            currentPlayerData = localPlayer;
+            renderPlayerUI(localPlayer); // Renderiza imediatamente
+            
+            // Só faz fetch se o cache for muito antigo (opcional)
         } else {
-            console.log("✅ Sessão válida. Mantendo dados do cache para economizar banda.");
-            // Opcional: Atualizar silenciosamente em background se o cache for > 10 min
-            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
+            console.log("🔄 [CheckAuth] Sessão válida, mas sem cache CoreDB. Buscando...");
+            fetchAndDisplayPlayerInfo(false); 
         }
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
@@ -1310,13 +1372,12 @@ async function checkAuthStatus() {
 
 // 1. Tenta renderizar IMEDIATAMENTE usando o cache (Zero Network)
 document.addEventListener("DOMContentLoaded", async () => {
-    const cachedPlayer = getCache('player_data_cache', 60 * 24); // Tenta ler cache (até 24h se existir)
-    
+    // Tenta cache legacy primeiro
+    const cachedPlayer = getCache('player_data_cache', 60 * 24); 
     if (cachedPlayer) {
-        console.log("⚡ Interface carregada via Cache (Sem consumo de Auth)");
         currentPlayerData = cachedPlayer;
         currentPlayerId = cachedPlayer.id;
-        renderPlayerUI(cachedPlayer); // Desenha a UI instantaneamente
+        renderPlayerUI(cachedPlayer); 
         checkProgressionNotifications(cachedPlayer);
     }
 
@@ -1328,7 +1389,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Escuta mudanças APENAS para Login/Logout explícitos (não disparar em recargas de aba)
 supabaseClient.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN' && !currentPlayerData) {
-        fetchAndDisplayPlayerInfo(true);
+        fetchAndDisplayPlayerInfo(false);
     } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('player_data_cache');
         window.location.reload();

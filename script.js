@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient.js'
+// IMPORTANTE: Importamos a lógica de banco centralizada para evitar travamentos
+import { getPlayerState, savePlayerState, surgicalCacheUpdate } from './globalState.js'
 
 // =======================================================================
 // INÍCIO: LÓGICA DE MÚSICA (MOVIDA PARA O TOPO PARA CORRIGIR RACE CONDITION)
@@ -509,146 +511,6 @@ document.addEventListener("DOMContentLoaded", () => {
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ============================================================
-// GLOBAL INDEXEDDB & CACHE SYSTEM (ZERO EGRESS)
-// ============================================================
-const DB_NAME = "aden_inventory_db";
-const DB_VERSION = 42; // Versão atualizada para suportar novas stores
-const STORES = {
-    INVENTORY: "inventory_store",
-    META: "meta_store",
-    PLAYER: "player_store",      // NOVO: Perfil do jogador (stats, gold, crystals)
-    MINES: "mines_store",        // NOVO: Cache de minas
-    GUILD: "guild_store",        // NOVO: Cache de guilda
-    ARENA: "arena_store"         // NOVO: Cache de arena
-};
-
-let dbInstance = null;
-
-// Abre conexão (Singleton)
-function openDB() {
-    if (dbInstance) return Promise.resolve(dbInstance);
-
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-
-        req.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            
-            // Cria stores se não existirem
-            if (!db.objectStoreNames.contains(STORES.INVENTORY)) db.createObjectStore(STORES.INVENTORY, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(STORES.META)) db.createObjectStore(STORES.META, { keyPath: "key" });
-            
-            // Novas Stores Globais
-            if (!db.objectStoreNames.contains(STORES.PLAYER)) db.createObjectStore(STORES.PLAYER, { keyPath: "id" }); 
-            if (!db.objectStoreNames.contains(STORES.MINES)) db.createObjectStore(STORES.MINES, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(STORES.GUILD)) db.createObjectStore(STORES.GUILD, { keyPath: "id" });
-            if (!db.objectStoreNames.contains(STORES.ARENA)) db.createObjectStore(STORES.ARENA, { keyPath: "session_date" });
-        };
-
-        req.onsuccess = (event) => {
-            dbInstance = event.target.result;
-            resolve(dbInstance);
-        };
-
-        req.onerror = (event) => reject("Erro ao abrir GlobalDB: " + event.target.error);
-    });
-}
-
-/**
- * Busca dados do jogador no IndexedDB
- */
-async function getPlayerState(userId) {
-    const db = await openDB();
-    return new Promise((resolve) => {
-        const tx = db.transaction(STORES.PLAYER, "readonly");
-        const req = tx.objectStore(STORES.PLAYER).get(userId);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => resolve(null);
-    });
-}
-
-/**
- * Salva dados do jogador no IndexedDB
- */
-async function savePlayerState(playerData) {
-    if (!playerData || !playerData.id) return;
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORES.PLAYER, "readwrite");
-        const store = tx.objectStore(STORES.PLAYER);
-        // Adiciona timestamp local para saber se o dado é velho
-        playerData._last_updated = Date.now();
-        store.put(playerData);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
-}
-
-/**
- * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário e stats.
- */
-async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
-    try {
-        const db = await openDB();
-        const tx = db.transaction([STORES.INVENTORY, STORES.META, STORES.PLAYER], "readwrite");
-        const store = tx.objectStore(STORES.INVENTORY);
-        const meta = tx.objectStore(STORES.META);
-
-        // 1. Atualiza ou insere os itens modificados
-        if (Array.isArray(newItems)) {
-            newItems.forEach(item => store.put(item));
-        }
-
-        // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        if (newTimestamp) {
-            meta.put({ key: "last_updated", value: newTimestamp });
-            meta.put({ key: "cache_time", value: Date.now() }); 
-        }
-
-        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache META e PLAYER
-        if (updatedStats) {
-            // Atualiza META (usado por inventory.js)
-            const req = meta.get("player_stats");
-            req.onsuccess = () => {
-                const currentStats = req.result ? req.result.value : {};
-                const finalStats = { ...currentStats, ...updatedStats };
-                meta.put({ key: "player_stats", value: finalStats });
-            };
-
-            // Atualiza PLAYER (usado por script.js) se tiver ID
-            if (currentPlayerId) {
-                const playerReq = tx.objectStore(STORES.PLAYER).get(currentPlayerId);
-                playerReq.onsuccess = () => {
-                    const player = playerReq.result;
-                    if (player) {
-                        if (updatedStats.gold !== undefined) player.gold = updatedStats.gold;
-                        if (updatedStats.crystals !== undefined) player.crystals = updatedStats.crystals;
-                        // Atualiza outros campos que podem vir de 'updates'
-                        Object.keys(updatedStats).forEach(k => {
-                            if(k !== 'gold' && k !== 'crystals') player[k] = updatedStats[k];
-                        });
-                        
-                        player._last_updated = Date.now();
-                        tx.objectStore(STORES.PLAYER).put(player);
-                    }
-                };
-            }
-        }
-
-        return new Promise(resolve => {
-            tx.oncomplete = () => {
-                // console.log("✅ [Surgical Update] Cache local atualizado com sucesso.");
-                resolve();
-            }
-        });
-    } catch (e) {
-        console.warn("⚠️ Falha ao atualizar IndexedDB via script.js:", e);
-    }
-}
-// ============================================================
-
 
 // =======================================================================
 // CACHE PERSISTENTE (LocalStorage com TTL) - MANTIDO PARA COMPATIBILIDADE
@@ -1351,6 +1213,14 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 // =======================================================================
 window.authCheckComplete = false;
 
+// Adiciona verificação de segurança para o Loading Screen
+if (typeof window.tryHideLoadingScreen !== 'function') {
+    window.tryHideLoadingScreen = function() {
+        const loading = document.getElementById('loading-overlay') || document.getElementById('loading-screen');
+        if (loading) loading.style.display = 'none';
+    };
+}
+
 async function checkAuthStatus() {
     // getSession() lê do LocalStorage e NÃO gera Egress de rede se o token for válido
     const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -1370,7 +1240,7 @@ async function checkAuthStatus() {
             const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
         }
         
-        if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        window.tryHideLoadingScreen();
         
         // Após confirmar sessão, lidar com URLs
         handleUrlActions();
@@ -1378,18 +1248,20 @@ async function checkAuthStatus() {
         // Sem sessão, mostra tela de login
         updateUIVisibility(false);
         window.authCheckComplete = true;
-        if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        window.tryHideLoadingScreen();
     }
 }
 
 // 1. Tenta renderizar IMEDIATAMENTE usando o cache (Zero Network)
 document.addEventListener("DOMContentLoaded", async () => {
-    // Tenta ler do IDB primeiro (mais rápido que localstorage para grandes objetos)
-    // Se não funcionar, o checkAuthStatus vai cuidar.
-    const cachedPlayer = await getPlayerState('temp_check'); // Placeholder, a lógica real está em fetchAndDisplayPlayerInfo
+    try {
+        // Tenta aquecer o cache, mas não bloqueia se falhar
+        await getPlayerState('init_warmup'); 
+    } catch(e) {
+        console.warn("DB Warmup ignored:", e);
+    }
     
-    // 2. Inicia verificação de Auth silenciosa
-    // Isso roda em segundo plano sem bloquear a UI
+    // Inicia verificação de Auth
     checkAuthStatus();
 });
 

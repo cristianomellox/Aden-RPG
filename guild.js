@@ -1,74 +1,67 @@
-import { supabase } from './supabaseClient.js'
-import { getDB, STORES } from './globalState.js'
-
 document.addEventListener("DOMContentLoaded", async () => {
+const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+  const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+  const supabase = window.supabase && window.supabase.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+  if (!supabase) { console.error("Supabase não iniciado"); return; }
+  // --- INÍCIO: NOVAS FUNÇÕES DE CACHE ---
+  /**
+   * Armazena dados no localStorage com um tempo de expiração.
+   * @param {string} key - A chave para o cache.
+   * @param {any} data - Os dados a serem armazenados.
+   * @param {number} ttl - Time-to-live em milissegundos.
+   */
+  function setCache(key, data, ttl) {
+    const now = new Date();
+    const item = {
+      data: data,
+      expiry: now.getTime() + ttl,
+    };
+    localStorage.setItem(key, JSON.stringify(item));
+  }
+
+  /**
+   * Recupera dados do localStorage se não estiverem expirados.
+   * @param {string} key - A chave do cache.
+   * @returns {any|null} - Os dados ou nulo se não existir ou estiver expirado.
+   */
+  function getCache(key) {
+    const itemStr = localStorage.getItem(key);
+    if (!itemStr) {
+      return null;
+    }
+    const item = JSON.parse(itemStr);
+    const now = new Date();
+    if (now.getTime() > item.expiry) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return item.data;
+  }
+
+  /**
+   * Calcula o tempo em milissegundos até a próxima segunda-feira às 00:00 UTC.
+   * Usado para caches de Ranking e Busca de Guilda.
+   */
+  function getTtlUntilNextMonday() {
+    const now = new Date();
+    const day = now.getUTCDay(); // 0 (Dom) a 6 (Sáb)
+    // Calcula dias até a próxima segunda (1). Se hoje for segunda, considera a próxima semana (7 dias)
+    let daysToAdd = (8 - day) % 7;
+    if (daysToAdd === 0 && now.getUTCHours() >= 0) {
+       // Se for segunda-feira, garante que pega a próxima, a menos que seja exatamente meia noite (edge case),
+       // mas na prática +7 dias garante renovação semanal
+       daysToAdd = 7;
+    }
     
-    // --- HELPER FUNCTIONS DO GLOBAL STATE (IDB) PARA GUILDA ---
+    const nextMonday = new Date(now);
+    nextMonday.setUTCDate(now.getUTCDate() + daysToAdd);
+    nextMonday.setUTCHours(0, 0, 0, 0);
     
-    // Recupera dados de uma guilda específica do IDB
-    async function getGuildState(guildId) {
-        try {
-            const db = await getDB();
-            return new Promise((resolve) => {
-                const tx = db.transaction(STORES.GUILD, "readonly");
-                const req = tx.objectStore(STORES.GUILD).get(guildId);
-                req.onsuccess = () => resolve(req.result || null);
-                req.onerror = () => resolve(null);
-            });
-        } catch (e) { console.error("Erro ao ler IDB Guild:", e); return null; }
-    }
-
-    // Salva dados de uma guilda no IDB
-    async function saveGuildState(guildData) {
-        if (!guildData || !guildData.id) return;
-        try {
-            const db = await getDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORES.GUILD, "readwrite");
-                const store = tx.objectStore(STORES.GUILD);
-                guildData._last_updated = Date.now(); // Timestamp para controle de cache
-                store.put(guildData);
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        } catch (e) { console.error("Erro ao salvar IDB Guild:", e); }
-    }
-
-    // Remove uma guilda do cache (para forçar atualização após ações)
-    async function invalidateGuildCache(guildId) {
-        if(!guildId) return;
-        try {
-            const db = await getDB();
-            const tx = db.transaction(STORES.GUILD, "readwrite");
-            tx.objectStore(STORES.GUILD).delete(guildId);
-            console.log(`Cache da guilda ${guildId} invalidado.`);
-        } catch (e) { console.error("Erro ao invalidar cache:", e); }
-    }
-
-    // Recupera Ranking do Store META
-    async function getRankingFromMeta() {
-        try {
-            const db = await getDB();
-            return new Promise((resolve) => {
-                const tx = db.transaction(STORES.META, "readonly");
-                const req = tx.objectStore(STORES.META).get("guild_ranking_weekly");
-                req.onsuccess = () => resolve(req.result ? req.result.value : null);
-                req.onerror = () => resolve(null);
-            });
-        } catch (e) { return null; }
-    }
-
-    // Salva Ranking no Store META com expiração
-    async function saveRankingToMeta(data, expirationTime) {
-        try {
-            const db = await getDB();
-            const tx = db.transaction(STORES.META, "readwrite");
-            const store = tx.objectStore(STORES.META);
-            store.put({ key: "guild_ranking_weekly", value: data, expires: expirationTime });
-        } catch (e) { console.error("Erro ao salvar Ranking Meta:", e); }
-    }
-
-    // --- FIM DOS HELPERS IDB ---
+    const ttl = nextMonday.getTime() - now.getTime();
+    // Garante que o TTL seja positivo (fallback de segurança)
+    return ttl > 0 ? ttl : 24 * 60 * 60 * 1000;
+  }
+  // --- FIM: NOVAS FUNÇÕES DE CACHE ---
 
   // --- INÍCIO: LÓGICA DO MODAL DE INFORMAÇÕES (SUBSTITUTO DO ALERT) ---
   document.body.insertAdjacentHTML('beforeend', `
@@ -214,21 +207,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   promptModalCloseBtn.addEventListener('click', closePromptModal);
   promptModal.addEventListener('click', (event) => { if (event.target === promptModal) { closePromptModal(); } });
   // --- FIM: LÓGICA DO MODAL DE PROMPT ---
-  
-  // Função auxiliar de TTL (Mantida)
-  function getTtlUntilNextMonday() {
-    const now = new Date();
-    const day = now.getUTCDay();
-    let daysToAdd = (8 - day) % 7;
-    if (daysToAdd === 0 && now.getUTCHours() >= 0) {
-       daysToAdd = 7;
-    }
-    const nextMonday = new Date(now);
-    nextMonday.setUTCDate(now.getUTCDate() + daysToAdd);
-    nextMonday.setUTCHours(0, 0, 0, 0);
-    const ttl = nextMonday.getTime() - now.getTime();
-    return ttl > 0 ? ttl : 24 * 60 * 60 * 1000;
-  }
 
   let userId = null;
   let userGuildId = null;
@@ -324,7 +302,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     markTabNotification(tabId, false);
     if (tabId === 'tab-requests' || tabId === 'tab-notice'){
       updateGuildNotifications(false);
-      // Mantendo localStorage para flags simples de UI (leituras)
       if (userGuildId) localStorage.setItem(`guild_${userGuildId}_${tabId}_read`, Date.now());
     }
   }
@@ -419,17 +396,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
   function getLocalUserId() {
+    // 1. Tenta pegar do cache personalizado (criado no script.js)
     try {
         const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
+            // Verifica se não expirou (ex: 24h)
             if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
                 return parsed.data.id;
             }
         }
     } catch (e) {}
 
+    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
     try {
+        // Loop simples para achar a chave do supabase no localStorage se o nome variar
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -446,12 +427,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function getUserSession(){
+    // 1. Otimização: Tenta obter ID localmente antes de perguntar ao servidor
     const localId = getLocalUserId();
     if (localId) {
         userId = localId;
         return true;
     }
     
+    // 2. Fallback: Se não achar local, pergunta ao Supabase (gera egress)
+    // Lê o token JWT diretamente do LocalStorage (Cache)
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session){ 
@@ -474,24 +458,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }
       
+      // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
       const allPlayersInGuild = guildData.players || [];
       const me = allPlayersInGuild.find(p => p.id === userId);
       userRank = me ? me.rank : 'member';
       
+      // Filtra admins APENAS para exibição e cálculos
       const visiblePlayers = allPlayersInGuild.filter(p => p.rank !== 'admin');
+      // --- FIM DA LÓGICA ---
 
       const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
       if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:155px;margin-right:8px;border-radius:6px; margin-top: 14px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
       if (guildDescriptionEl) guildDescriptionEl.textContent = guildData.description || '';
 
-      // OTIMIZAÇÃO: Cálculo Local de CP (Sem RPC)
-      let guildPowerValue = 0;
-      if (visiblePlayers && visiblePlayers.length > 0) {
-          guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+      let guildPowerValue = null;
+      try {
+        const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: userGuildId });
+        if (!powerError && powerData) {
+          if (Array.isArray(powerData) && powerData.length > 0 && powerData[0].total_power !== undefined) {
+            guildPowerValue = Number(powerData[0].total_power);
+          } else if (powerData.total_power !== undefined) {
+            guildPowerValue = Number(powerData.total_power);
+          } else if (typeof powerData === 'number' || typeof powerData === 'string') {
+            guildPowerValue = Number(powerData);
+          }
+        }
+      } catch(e){
+        console.error('Erro ao chamar get_guild_power RPC', e);
       }
-      // Se por acaso a lista de players estiver vazia mas houver um valor cacheado, usa ele
-      if (guildPowerValue === 0 && guildData.cached_power) {
-          guildPowerValue = guildData.cached_power;
+
+      if (guildPowerValue === null) {
+        try {
+          // Usa a lista de jogadores visíveis para o cálculo de fallback
+          guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+        } catch(e){ guildPowerValue = 0; }
       }
 
       const compactPower = formatNumberCompact(guildPowerValue);
@@ -500,8 +500,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (guildMemberListElement){
         guildMemberListElement.innerHTML = '';
         const roles = ['leader','co-leader','member'];
+        // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
         
+        // --- ÍCONE DE OLHO (SVG BRANCO) - TAMANHO AUMENTADO PARA 22px ---
         const eyeIcon = `
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="25" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -531,9 +533,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       try{
         const lvlEl = document.getElementById('guildLevelValue');
         const memberCountHeader = document.getElementById('guildMemberCountHeader');
+        // Usa a contagem de jogadores visíveis
         const membersFromPlayers = visiblePlayers.length;
         if (lvlEl) lvlEl.textContent = guildData.level || '1';
         if (memberCountHeader) {
+            // Usa guildData.members_count (do DB) se disponível, senão usa a contagem visível
             const currentMembers = guildData.members_count ?? membersFromPlayers;
             const maxMembers = guildData.max_members || getMaxMembers(guildData.level || 1);
             memberCountHeader.textContent = `${currentMembers} / ${maxMembers}`;
@@ -542,6 +546,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (editGuildBtn){
         editGuildBtn.style.display = 'inline-block';
+        // Passa o guildData original (não modificado) para o modal
         editGuildBtn.onclick = () => openEditGuildModal(currentGuildData);
       }
 
@@ -553,7 +558,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     try {
       if (!userGuildId){
-        // Tenta pegar o guild_id do cache do jogador se disponível (via globalState seria ideal, mas aqui usamos Supabase fallback leve)
         const { data: playerData } = await supabase.from('players').select('guild_id').eq('id', userId).single();
         if (!playerData || !playerData.guild_id){
           if (guildInfoContainer) guildInfoContainer.style.display='none';
@@ -563,18 +567,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         userGuildId = playerData.guild_id;
       }
       
-      // OTIMIZAÇÃO: IndexedDB
-      // Tenta carregar do IDB Global primeiro (Cache de 1 hora)
-      const cachedData = await getGuildState(userGuildId);
-      const CACHE_DURATION = 60 * 60 * 1000; // 1 Hora
-
-      if (cachedData && (Date.now() - (cachedData._last_updated || 0) < CACHE_DURATION)) {
-          console.log("⚡ [Guild] Dados carregados via IndexedDB (Zero Egress).");
+      // Tenta carregar do cache primeiro (duração de 1 hora)
+      const cacheKey = `guild_info_${userGuildId}`;
+      const cachedData = getCache(cacheKey);
+      if (cachedData) {
+          console.log("Membros da guilda carregados do cache.");
           await renderGuildUI(cachedData);
           return;
       }
 
-      console.log("🌐 [Guild] Buscando dados atualizados do servidor...");
+      console.log("Buscando dados frescos da guilda (sem cache).");
       const { data: guildData, error: guildError } = await supabase.from('guilds').select('*, players!players_guild_id_fkey(*)').eq('id', userGuildId).single();
       if (guildError || !guildData){
         console.error('Erro guildData', guildError);
@@ -583,8 +585,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
       
-      // Salva no IndexedDB
-      await saveGuildState(guildData);
+      // Salva os novos dados no cache por 1 hora
+      setCache(cacheKey, guildData, 24 * 60 * 60 * 1000);
       await renderGuildUI(guildData);
 
     } catch(e){
@@ -595,14 +597,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function fetchAndDisplayGuildInfo(guildId) {
     if (!viewGuildModal) return;
     try {
-        // OTIMIZAÇÃO: IndexedDB para visualização pública
-        let guildData = await getGuildState(guildId);
-        // Cache público pode ser um pouco mais tolerante (ex: 24h ou até next monday se quiser)
-        // Vamos usar 1 hora para consistência
-        const CACHE_DURATION = 60 * 60 * 1000;
+        // --- LÓGICA DE CACHE PARA BUSCA/RANKING (7 DIAS, EXPIRA SEGUNDA-FEIRA) ---
+        const cacheKey = `guild_view_public_${guildId}`;
+        let guildData = getCache(cacheKey);
 
-        if (!guildData || (Date.now() - (guildData._last_updated || 0) > CACHE_DURATION)) {
-            console.log(`🌐 [GuildView] Buscando dados públicos da guilda ${guildId}`);
+        if (!guildData) {
+            console.log(`Buscando dados públicos da guilda ${guildId} (sem cache ou expirado)`);
             const { data, error: guildError } = await supabase
                 .from('guilds')
                 .select('*, players!players_guild_id_fkey(*)')
@@ -615,29 +615,43 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             guildData = data;
             
-            // Salva no cache
-            await saveGuildState(guildData);
+            // Salva no cache com expiração na próxima segunda-feira meia-noite UTC
+            setCache(cacheKey, guildData, getTtlUntilNextMonday());
         } else {
-             console.log(`⚡ [GuildView] Dados da guilda ${guildId} carregados do cache.`);
+             console.log(`Dados públicos da guilda ${guildId} carregados do cache (7 dias).`);
         }
 
+        // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
         const allPlayersInGuild = guildData.players || [];
         const visiblePlayers = allPlayersInGuild.filter(p => p.rank !== 'admin');
+        // --- FIM DA LÓGICA ---
 
         const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
         guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:150px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
         guildViewDescription.textContent = guildData.description || '';
         guildViewLevelValue.textContent = guildData.level || 1;
+        // Usa a contagem de jogadores visíveis
         guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
-        // Cálculo de CP Local
-        let guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+        // Cálculo de CP baseado no cache (ou dado fresco)
+        let guildPowerValue = null;
+        // Para visualização pública cacheada, geralmente recalculamos baseados nos players que vieram no select,
+        // pois a RPC 'get_guild_power' não está sendo cacheada junto aqui.
+        // Fallback robusto usando soma dos players visíveis:
+        try {
+           guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+        } catch(e){ guildPowerValue = 0; }
+        
         const compactPower = formatNumberCompact(guildPowerValue);
         guildViewPower.textContent = compactPower;
 
         guildViewMemberList.innerHTML = '';
         const roles = ['leader', 'co-leader', 'member'];
+        // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
+        
+        // --- ÍCONE DE AVIÃOZINHO DE PAPEL (SVG DOURADO) ---
+        // Ação alterada para 'go:pv?id='
         
         sorted.forEach(m => {
           const navUrl = `index.html?action=open_pv&target_id=${m.id}&target_name=${encodeURIComponent(m.name)}`;
@@ -651,6 +665,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             `;
 
             const li = document.createElement('li');
+            // Removemos a classe 'player-link' e o atributo 'data-player-id' para evitar abrir o modal padrão
+            // Ícone movido para dentro do span do nome
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
@@ -674,24 +690,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function loadGuildRanking(){
     try {
-      // OTIMIZAÇÃO: Ranking via META store do IDB
-      const cachedRanking = await getRankingFromMeta();
-      
-      if (cachedRanking && cachedRanking.expires > Date.now()) {
-          console.log("⚡ [Ranking] Carregado do IndexedDB META (Sem Egress).");
-          renderGuildRanking(cachedRanking.value);
+      // Chave de cache fixa para o ranking semanal
+      const cacheKey = `guild_ranking_weekly`;
+
+      const cachedData = getCache(cacheKey);
+      if (cachedData) {
+          console.log("Ranking de guildas carregado do cache semanal.");
+          renderGuildRanking(cachedData); // Função para renderizar a UI
           return;
       }
       
-      console.log("🌐 [Ranking] Buscando do servidor (Cache expirado ou inexistente).");
+      console.log("Buscando dados frescos do ranking (sem cache ou expirado).");
       const { data, error } = await supabase.rpc('get_guilds_ranking', { limit_count: 100 });
       if (error) throw error;
       
-      // Salva no META com validade até próxima segunda
-      const expiry = Date.now() + getTtlUntilNextMonday();
-      // Estrutura salva: { value: data, expires: expiry } é tratado dentro de saveRankingToMeta mas aqui passamos os params separados
-      await saveRankingToMeta({ value: data, expires: expiry }.value, expiry);
-      
+      // Armazena no cache até a próxima segunda-feira meia-noite UTC
+      setCache(cacheKey, data, getTtlUntilNextMonday());
       renderGuildRanking(data);
 
     } catch(e){
@@ -759,9 +773,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function openEditGuildModal(guildData){
     if (!editGuildModal) return;
 
+    // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
+    // Usa a lista de jogadores completa (não filtrada) para checar permissões
     const allPlayersInGuild = guildData.players || [];
     const isLeader = (guildData.leader_id === userId);
+    // Checa o rank na lista completa, permitindo que um admin-co-leader mantenha a permissão
     const isCoLeader = (allPlayersInGuild.find(p => p.id === userId) || {}).rank === 'co-leader';
+    // --- FIM DA LÓGICA ---
 
     $$('#editTabMenu .edit-tab-btn, #editTabs .edit-tab-btn').forEach(btn => {
       const tab = btn.dataset.tab;
@@ -830,6 +848,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (manageMembersList) manageMembersList.innerHTML = '';
+    // Filtra admins APENAS para a lista de "Gerenciar Membros"
     const members = allPlayersInGuild.filter(p => p.rank !== 'admin').slice().sort((a,b)=> a.rank === b.rank ? a.name.localeCompare(b.name) : (a.rank === 'leader' ? -1 : (b.rank === 'leader' ? 1 : (a.rank === 'co-leader' ? -1 : 1))));
     members.forEach(m => {
       if (!manageMembersList) return;
@@ -917,10 +936,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action', { p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action: 'promote', p_message: null });
         showInfoModal('Promovido com sucesso!', 'success');
-        
-        // INVALIDA CACHE
-        await invalidateGuildCache(userGuildId);
-        
+        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao promover: ' + (e.message || e), 'error'); console.error(e); }
@@ -934,10 +950,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'demote', p_message:null });
         showInfoModal('Cargo de Co-Líder revogado.', 'success');
-        
-        // INVALIDA CACHE
-        await invalidateGuildCache(userGuildId);
-        
+        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao revogar: ' + (e.message || e), 'error'); console.error(e); }
@@ -951,10 +964,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
         showInfoModal('Liderança transferida com sucesso!', 'success');
-        
-        // INVALIDA CACHE
-        await invalidateGuildCache(userGuildId);
-        
+        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
       } catch(e){ showInfoModal('Erro ao transferir liderança: ' + (e.message || e), 'error'); console.error(e); }
@@ -968,10 +978,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'expel', p_message:null });
         showInfoModal('Membro expulso.', 'success');
-        
-        // INVALIDA CACHE
-        await invalidateGuildCache(userGuildId);
-        
+        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao expulsar: ' + (e.message || e), 'error'); console.error(e); }
@@ -994,8 +1001,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         showInfoModal('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
       
-      // INVALIDA CACHE
-      await invalidateGuildCache(userGuildId);
+      // GARANTIA: Limpa o cache ao aceitar para atualizar a lista imediatamente
+      if (userGuildId) localStorage.removeItem(`guild_info_${userGuildId}`);
       
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
@@ -1012,9 +1019,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const { error } = await supabase.rpc('reject_guild_join_request', { p_request_id: requestId, p_requester_id: userId });
       if (error) throw error;
       showInfoModal('Solicitação rejeitada.', 'success');
-      
-      // Não precisa invalidar cache da guilda inteira, mas para garantir consistência de requests:
-      // Como requests não ficam no objeto da guilda, apenas recarrega
       await loadGuildInfo();
       openEditGuildModal(currentGuildData);
     } catch(e){ showInfoModal('Erro ao rejeitar: ' + (e.message || e), 'error'); console.error(e); }
@@ -1029,10 +1033,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { error } = await supabase.rpc('update_guild_info', { p_guild_id: userGuildId, p_player_id: userId, p_name: newName, p_description: newDesc, p_flag_url: newFlag });
         if (error) throw error;
         showInfoModal('Guilda atualizada com sucesso!', 'success');
-        
-        // INVALIDA CACHE
-        await invalidateGuildCache(userGuildId);
-        
+        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
       } catch(e){ showInfoModal('Erro ao atualizar a guilda: ' + (e.message || e), 'error'); console.error(e); }
@@ -1046,10 +1047,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const { error } = await supabase.rpc('update_guild_notice', { p_guild_id: userGuildId, p_player_id: userId, p_notice: notice });
         if (error) throw error;
         showInfoModal('Aviso da guilda atualizado!', 'success');
-        
-        // INVALIDA CACHE
-        await invalidateGuildCache(userGuildId);
-        
+        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao atualizar aviso: ' + (e.message || e), 'error'); console.error(e); }
@@ -1147,16 +1145,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (refreshBtn) refreshBtn.addEventListener('click', ()=> {
     if (userGuildId) {
-        // INVALIDA CACHE MANUALMENTE
-        invalidateGuildCache(userGuildId);
+        localStorage.removeItem(`guild_info_${userGuildId}`);
+        // Remove a chave antiga baseada na data para evitar confusão, embora a nova chave seja diferente.
+        const today = new Date().toISOString().split('T')[0];
+        localStorage.removeItem(`guild_ranking_${today}`);
+        // Remove a chave nova também para forçar refresh
+        localStorage.removeItem(`guild_ranking_weekly`);
     }
-    // Remove cache de ranking do META para forçar atualização
-    (async () => {
-        const db = await getDB();
-        const tx = db.transaction(STORES.META, "readwrite");
-        tx.objectStore(STORES.META).delete("guild_ranking_weekly");
-        tx.oncomplete = () => loadGuildInfo();
-    })();
+    loadGuildInfo();
   });
 
   const deleteGuildBtn = document.getElementById('deleteguild');
@@ -1174,8 +1170,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const { error } = await supabase.rpc('delete_guild', { p_guild_id: userGuildId, p_player_id: userId });
           if (error) throw error;
           showInfoModal('Guilda deletada com sucesso.', 'success');
-          
-          await invalidateGuildCache(userGuildId);
+          localStorage.removeItem(`guild_info_${userGuildId}`); // Limpa o cache
           userGuildId = null;
           currentGuildData = null;
           await loadGuildInfo();
@@ -1195,8 +1190,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const { error } = await supabase.rpc('leave_guild', { p_player_id: userId });
           if (error) throw error;
           showInfoModal('Você saiu da guilda.', 'success');
-          
-          await invalidateGuildCache(userGuildId);
+          localStorage.removeItem(`guild_info_${userGuildId}`); // Limpa o cache
           userGuildId = null;
           currentGuildData = null;
           await loadGuildInfo();

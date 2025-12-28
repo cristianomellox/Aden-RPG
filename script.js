@@ -1097,7 +1097,7 @@ function applyItemBonuses(player, equippedItems) {
 // RESTAURADA: Busca itens e calcula CP, mas exibe UI limpa
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     const PLAYER_CACHE_KEY = 'player_data_cache';
-    const CACHE_EXPIRATION_MS = 14400000; // 4h
+    const CACHE_EXPIRATION_MS = 86400000; // 4h
 
     // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
     let userId = currentPlayerId;

@@ -1,34 +1,24 @@
 import { supabase } from './supabaseClient.js'
+import { getDB, getPlayerState, savePlayerState, STORES } from './globalState.js'
 
 // =======================================================================
-// HELPER INDEXEDDB (COPIADO DO INVENTORY.JS/SCRIPT.JS)
+// HELPER GLOBAL STATE (INDEXEDDB OTIMIZADO)
 // Para atualização cirúrgica do cache e economia de Egress
 // =======================================================================
-const DB_NAME = "aden_inventory_db";
-const STORE_NAME = "inventory_store";
-const META_STORE = "meta_store";
-const DB_VERSION = 41; // Mesma versão do inventory.js
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
 
 /**
- * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
+ * Atualiza o cache local "cirurgicamente" usando o banco global.
  * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
  * @param {String} newTimestamp - O novo timestamp vindo do servidor
  * @param {Object} updatedStats - (Opcional) Novos stats do player (ouro/cristais)
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
-        const db = await openDB();
-        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        const meta = tx.objectStore(META_STORE);
+        const db = await getDB(); // Usa a conexão Singleton do globalState
+        const tx = db.transaction([STORES.INVENTORY, STORES.META, STORES.PLAYER], "readwrite");
+        const store = tx.objectStore(STORES.INVENTORY);
+        const meta = tx.objectStore(STORES.META);
+        const playerStore = tx.objectStore(STORES.PLAYER);
 
         // 1. Atualiza ou insere os itens modificados
         if (Array.isArray(newItems)) {
@@ -36,34 +26,76 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         }
 
         // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
+        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache META e PLAYER
         if (updatedStats) {
-            // Primeiro lemos o stats atual
+            // Atualiza META (usado por inventory.js)
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
-                // Mescla os novos valores (ex: crystals, gold)
                 const finalStats = { ...currentStats, ...updatedStats };
                 meta.put({ key: "player_stats", value: finalStats });
             };
+
+            // Atualiza PLAYER (Store Global usada por afk_page e script)
+            // Precisamos do ID do usuário. Tenta pegar do updatedStats ou da sessão global
+            const userId = getLocalUserId();
+            if (userId) {
+                const playerReq = playerStore.get(userId);
+                playerReq.onsuccess = () => {
+                    const player = playerReq.result;
+                    if (player) {
+                        if (updatedStats.gold !== undefined) player.gold = updatedStats.gold;
+                        if (updatedStats.crystals !== undefined) player.crystals = updatedStats.crystals;
+                        // Se houver ranking points no futuro, atualizar aqui também
+                        player._last_updated = Date.now();
+                        playerStore.put(player);
+                    }
+                };
+            }
         }
 
         return new Promise(resolve => {
             tx.oncomplete = () => {
-                console.log("✅ [Arena Surgical Update] Cache local atualizado com sucesso.");
+                console.log("✅ [Arena Global Update] Cache local atualizado com sucesso.");
                 resolve();
             }
         });
     } catch (e) {
         console.warn("⚠️ Falha ao atualizar IndexedDB via arena.js:", e);
     }
+}
+
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+// Atualizado para checar o Cache Global se o LocalStorage falhar
+function getLocalUserId() {
+    try {
+        // 1. Tenta cache do LocalStorage (script.js legado)
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id) {
+                return parsed.data.id;
+            }
+        }
+        
+        // 2. Tenta token do Supabase
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+    return null;
 }
 // =======================================================================
 
@@ -72,34 +104,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 1. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
     // =======================================================================
     
-
     let userId = null;
-
-    // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
-    function getLocalUserId() {
-        try {
-            const cached = localStorage.getItem('player_data_cache');
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
-                    return parsed.data.id;
-                }
-            }
-        } catch (e) {}
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                    const sessionStr = localStorage.getItem(k);
-                    const session = JSON.parse(sessionStr);
-                    if (session && session.user && session.user.id) {
-                        return session.user.id;
-                    }
-                }
-            }
-        } catch (e) {}
-        return null;
-    }
 
     // Mapa de IDs para Nomes de Arquivo
     const POTION_MAP = {
@@ -1139,6 +1144,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // 1. Atualiza Stats Globais no Cache (LocalStorage)
                 // Para refletir cristais ganhos/gastos sem recarregar
                 const cached = localStorage.getItem('player_data_cache');
+                let currentCrystals = 0;
+
                 if (cached) {
                     try {
                         const parsed = JSON.parse(cached);
@@ -1146,6 +1153,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             // Atualiza cristais
                             if (typeof res.crystals === 'number') {
                                 parsed.data.crystals = (parsed.data.crystals || 0) + res.crystals;
+                                currentCrystals = parsed.data.crystals;
                             }
                             // Atualiza ranking points se retornado (opcional, requer lógica no SQL)
                             // Salva de volta
@@ -1154,8 +1162,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     } catch(e) {}
                 }
 
-                // 2. Atualiza Inventário no IndexedDB
-                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, { crystals: res.crystals ? ((getCache('player_data_cache')?.crystals || 0)) : undefined });
+                // 2. Atualiza Inventário e Stats Globais no IndexedDB (Shared)
+                // Passamos crystals/gold explicitamente para o surgicalCacheUpdate atualizar a store PLAYER
+                await surgicalCacheUpdate(
+                    res.inventory_updates, 
+                    res.timestamp, 
+                    { crystals: res.crystals ? currentCrystals : undefined }
+                );
             }
             // =======================================================
             
@@ -1514,12 +1527,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function boot() {
         showLoading();
         try {
-            userId = getLocalUserId();
+            userId = getLocalUserId(); // Tenta pegar do Cache ou LocalStorage
+            
+            // Fallback para getPlayerState se getLocalUserId falhou mas temos dados no IDB
             if (!userId) {
-                const { data: { session } } = await supabase.auth.getSession();
+               // Não conseguimos pegar o ID de forma síncrona. 
+               // Se não tiver ID, a única chance é o Supabase ou redirecionar.
+               const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { window.location.href = "index.html"; return; }
                 userId = session.user.id;
+            } else {
+                // Opcional: Validar se o IDB tem dados para este usuário para "aquecer" a conexão
+                await getPlayerState(userId);
             }
+
             if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
             
             // Checks de Reset

@@ -1,20 +1,82 @@
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v13.3) - Independent IndexedDB Update Logic");
+console.log("guild_raid.js (v13.4) - GlobalDB Integration & Zero Egress");
 
 // =========================================================
-// >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
+// >>> ADEN GLOBAL DB (CÓPIA LOCAL PARA RAID/ARENA) <<<
+// =========================================================
+// Garante acesso aos dados compartilhados (Auth, Player, Stats)
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    // Atualiza apenas campos específicos no cache global (XP, Gold, Level)
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+            }
+        } catch(e) { console.warn("Erro update parcial GlobalDB", e); }
+    }
+};
+
+// =========================================================
+// >>> HELPER INDEXEDDB LOCAL (INVENTORY UPDATE) <<<
 // =========================================================
 // Isso permite que a Raid atualize o cache de inventário
-// sem depender que o script.js esteja carregado na página.
-const DB_NAME = "aden_inventory_db";
-const STORE_NAME = "inventory_store";
-const META_STORE = "meta_store";
-const DB_VERSION = 41; // Mantenha a mesma versão do inventory.js
+const INVENTORY_DB_NAME = "aden_inventory_db";
+const INVENTORY_STORE_NAME = "inventory_store";
+const INVENTORY_META_STORE = "meta_store";
+const INVENTORY_DB_VERSION = 41; 
 
-function openDB() {
+function openInventoryDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        const req = indexedDB.open(INVENTORY_DB_NAME, INVENTORY_DB_VERSION);
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
@@ -22,15 +84,13 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
- * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
- * @param {String} newTimestamp - O novo timestamp vindo do servidor
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
-        const db = await openDB();
-        const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        const meta = tx.objectStore(META_STORE);
+        const db = await openInventoryDB();
+        const tx = db.transaction([INVENTORY_STORE_NAME, INVENTORY_META_STORE], "readwrite");
+        const store = tx.objectStore(INVENTORY_STORE_NAME);
+        const meta = tx.objectStore(INVENTORY_META_STORE);
 
         // 1. Atualiza ou insere os itens modificados
         if (Array.isArray(newItems)) {
@@ -38,10 +98,8 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         }
 
         // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
@@ -188,10 +246,33 @@ function loadBatchState() {
     } catch(e) {}
 }
 
+// === OTIMIZAÇÃO: LER STATS DO GLOBAL DB ===
 async function cachePlayerStats() {
     if (playerStatsCache) return; 
     if (!userId) return;
+    
+    // 1. Tenta pegar do GlobalDB (Calculado pelo Script.js)
     try {
+        const p = await GlobalDB.getPlayer();
+        if (p) {
+            console.log("⚡ [Raid] Stats carregados do GlobalDB (Zero Egress).");
+            playerStatsCache = {
+                min_attack: Number(p.min_attack || 0),
+                attack: Number(p.attack || 0),
+                crit_chance: Number(p.crit_chance || 0),
+                crit_damage: Number(p.crit_damage || 0),
+                defense: Number(p.defense || 0),
+                evasion: Number(p.evasion || 0),
+                health: Number(p.health || 0)
+            };
+            playerMaxHealth = Math.max(1, playerStatsCache.health);
+            return;
+        }
+    } catch(e) { console.warn("Erro ao ler GlobalDB:", e); }
+
+    // 2. Fallback: RPC (Gera Egress)
+    try {
+        console.warn("⚠️ [Raid] Fallback para RPC de stats (GlobalDB vazio).");
         const { data, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
         if (data && !error) {
             playerStatsCache = {
@@ -726,34 +807,28 @@ function getLocalUserId() {
     return null;
 }
 
-function getLocalPlayerData() {
-    try {
-        const cached = localStorage.getItem('player_data_cache');
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
-                return parsed.data;
-            }
-        }
-    } catch (e) {}
-    return null;
-}
-
+// === OTIMIZAÇÃO: INITSESSION VIA GLOBALDB ===
 async function initSession() {
   try {
-    const cachedPlayer = getLocalPlayerData();
-    if (cachedPlayer) {
-        userId = cachedPlayer.id;
-        userName = cachedPlayer.name;
-        userGuildId = cachedPlayer.guild_id;
-        userRank = cachedPlayer.rank || "member";
-        if (cachedPlayer.avatar_url) {
-            const av = $id("raidPlayerAvatar");
-            if (av) av.src = cachedPlayer.avatar_url;
+    // 1. Tenta recuperar sessão do GlobalDB
+    const auth = await GlobalDB.getAuth();
+    if (auth && auth.user) {
+        userId = auth.user.id;
+        
+        // Recupera dados do jogador (Nome, Guilda, Avatar) do GlobalDB
+        const player = await GlobalDB.getPlayer();
+        if (player) {
+             userName = player.name;
+             userGuildId = player.guild_id;
+             userRank = player.rank || "member";
+             if (player.avatar_url && $id("raidPlayerAvatar")) {
+                 $id("raidPlayerAvatar").src = player.avatar_url;
+             }
+             return; // Sucesso com Zero Egress
         }
-        return; 
     }
 
+    // Fallback original (se GlobalDB estiver vazio)
     let localId = getLocalUserId();
     
     if (!localId) {
@@ -1057,11 +1132,14 @@ function isPlayerDeadLocal() {
 async function loadInitialPlayerState() {
   if (!userId) return;
   try {
-    const { data: playerDetails, error } = await supabase.rpc("get_player_details_for_raid", { p_player_id: userId });
-    if (error || !playerDetails) {
-        return;
+    // Tenta carregar stats locais primeiro
+    await cachePlayerStats();
+    
+    // playerStatsCache deve ter sido preenchido por GlobalDB ou RPC
+    if (playerStatsCache) {
+         playerMaxHealth = playerStatsCache.health || 1;
     }
-    playerMaxHealth = playerDetails.health || 1;
+    
     const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until, avatar_url").eq("id", userId).single();
     if(pData) {
         localPlayerHp = pData.raid_player_health !== null ? pData.raid_player_health : playerMaxHealth;
@@ -1221,6 +1299,22 @@ async function triggerBatchSync() {
         // === [NOVO] ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (LOCALMENTE) ===
         if (data.inventory_updates && data.new_timestamp) {
              await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+        
+        // === [NOVO] ATUALIZAÇÃO CIRÚRGICA DE RECURSOS NO GLOBAL DB ===
+        // Se a Raid retornar XP e Cristais novos, atualizamos o GlobalDB para a tela principal
+        if (data.xp_reward || data.crystals_reward) {
+             const updates = {};
+             // Nota: O backend precisa retornar o total atualizado, ou o script principal precisa saber somar.
+             // Se o backend retorna apenas o reward, teremos que ler o atual e somar.
+             // Vamos ler o player atual para garantir
+             const currentPlayer = await GlobalDB.getPlayer();
+             if (currentPlayer) {
+                 if (data.xp_reward) updates.xp = (currentPlayer.xp || 0) + data.xp_reward;
+                 if (data.crystals_reward) updates.crystals = (currentPlayer.crystals || 0) + data.crystals_reward;
+                 await GlobalDB.updatePlayerPartial(updates);
+                 console.log("⚡ [Raid] XP/Cristais atualizados no GlobalDB localmente.");
+             }
         }
         // ================================================================
 
@@ -1687,20 +1781,31 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         for (let i = 0; i < raidBuyQty; i++) {
           const { data, error } = await supabase.rpc("buy_raid_attack", { p_player_id: userId });
+          
           if (error || !(data && (data.success === true || data.success === 't'))) {
             if (purchased === 0) showRaidAlert(error?.message || (data && data.message) || "Compra não pôde ser concluída.");
             break;
           }
+          
           const payload = Array.isArray(data) ? data[0] : data;
           purchased++;
           spent += (payload.cost || 0);
+          
+          // Atualiza a variável local do modal
           raidBuyPlayerGold = Math.max(0, (raidBuyPlayerGold || 0) - (payload.cost || 0));
         }
+
         if (purchased > 0) {
           showRaidAlert(`Comprado(s) ${purchased} ataque(s) por ${spent} Ouro.`);
+          
+          // 1. Atualiza UI local
           attacksLeft += purchased; 
           saveAttemptsCache(attacksLeft, lastAttackAt);
           updateAttackUI();
+
+          // 2. CORREÇÃO: Atualiza o Ouro no GlobalDB (Zero Egress no Menu)
+          // Assim o menu principal reflete o gasto imediatamente
+          await GlobalDB.updatePlayerPartial({ gold: raidBuyPlayerGold });
         }
       } catch (e) {
         console.error("[raid] buyConfirm erro:", e);

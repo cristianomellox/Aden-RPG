@@ -1,5 +1,49 @@
 import { supabase } from './supabaseClient.js'
 
+// =======================================================================
+// NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    }
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     
@@ -37,7 +81,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function getSession() {
         if (myPlayerData) return true;
         
+        // 1. TENTA DADOS LOCAIS VIA GLOBALDB (ZERO EGRESS)
+        const globalAuth = await GlobalDB.getAuth();
+        const globalPlayer = await GlobalDB.getPlayer();
+
+        if (globalAuth && globalAuth.value && globalAuth.value.user && globalPlayer) {
+            console.log("[Tavern] Dados carregados do GlobalDB (Zero Egress).");
+            userId = globalAuth.value.user.id;
+            
+            // Verifica se o jogador tem guilda
+            if (!globalPlayer.guild_id) {
+                tControls.innerHTML = '<p>Você precisa estar em uma guilda para usar a Taverna.</p>';
+                return false;
+            }
+
+            myPlayerData = globalPlayer;
+            guildId = globalPlayer.guild_id;
+            return true;
+        }
+
+        // 2. FALLBACK: BUSCA DO SERVIDOR SE NÃO TIVER CACHE
         try {
+            console.log("[Tavern] Cache local ausente. Buscando do servidor...");
             // ALTERADO: De getUser() para getSession()
             const { data: { session } } = await supabase.auth.getSession();
             if (!session || !session.user) return false;

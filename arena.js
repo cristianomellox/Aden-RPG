@@ -1,13 +1,78 @@
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
-// HELPER INDEXEDDB (COPIADO DO INVENTORY.JS/SCRIPT.JS)
-// Para atualização cirúrgica do cache e economia de Egress
+// 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC)
+// Copiado de script.js / afk_page.js para manter consistência
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    // Atualiza apenas campos específicos no cache global (ex: crystals, gold)
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+                console.log("⚡ [Arena] GlobalDB atualizado parcialmente:", changes);
+            }
+        } catch(e) { console.warn("Erro update parcial GlobalDB", e); }
+    }
+};
+
+// =======================================================================
+// 2. HELPER INDEXEDDB INVENTORY (Manter para Surgical Update de Itens)
 // =======================================================================
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 41; // Mesma versão do inventory.js
+const DB_VERSION = 41;
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -19,9 +84,7 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
- * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
- * @param {String} newTimestamp - O novo timestamp vindo do servidor
- * @param {Object} updatedStats - (Opcional) Novos stats do player (ouro/cristais)
+ * Agora sincroniza também com o GlobalDB se houver stats.
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
@@ -35,29 +98,29 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
             newItems.forEach(item => store.put(item));
         }
 
-        // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
+        // 2. Atualiza Timestamp
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
+        // 3. Atualiza stats no InventoryDB (Legacy) E no GlobalDB (Novo)
         if (updatedStats) {
-            // Primeiro lemos o stats atual
+            // Atualiza InventoryDB Meta
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
-                // Mescla os novos valores (ex: crystals, gold)
                 const finalStats = { ...currentStats, ...updatedStats };
                 meta.put({ key: "player_stats", value: finalStats });
             };
+            
+            // Atualiza GlobalDB (para o Menu/Index ver a mudança)
+            await GlobalDB.updatePlayerPartial(updatedStats);
         }
 
         return new Promise(resolve => {
             tx.oncomplete = () => {
-                console.log("✅ [Arena Surgical Update] Cache local atualizado com sucesso.");
+                console.log("✅ [Arena Surgical Update] Caches locais atualizados.");
                 resolve();
             }
         });
@@ -65,18 +128,23 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         console.warn("⚠️ Falha ao atualizar IndexedDB via arena.js:", e);
     }
 }
-// =======================================================================
 
 document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
-    // 1. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
+    // 3. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
     // =======================================================================
-    
-
     let userId = null;
 
-    // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
-    function getLocalUserId() {
+    // --- HELPER DE AUTH OTIMISTA (MODIFICADO PARA GLOBALDB) ---
+    async function getLocalUserId() {
+        // 1. Tenta GlobalDB (Zero Egress)
+        const globalAuth = await GlobalDB.getAuth();
+        if (globalAuth && globalAuth.value && globalAuth.value.user) {
+            console.log("⚡ [Arena] Auth recuperado do GlobalDB.");
+            return globalAuth.value.user.id;
+        }
+
+        // 2. Fallback: LocalStorage (Legacy Cache de Player)
         try {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
@@ -86,6 +154,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
         } catch (e) {}
+
+        // 3. Fallback: LocalStorage (Supabase Token)
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -110,11 +180,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
     // --- RASTREADOR DE CONSUMO DE POÇÕES ---
-    // Armazena quanto foi gasto na sessão para enviar ao banco no final
     let sessionConsumedPotions = {}; 
-    
-    // [NOVO] Rastreador de consumo dos oponentes
-    // Estrutura: { "opponent_uuid": { "item_id": quantidade } }
     let sessionOpponentsConsumed = {};
 
     function trackConsumedPotion(itemId) {
@@ -123,7 +189,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         sessionConsumedPotions[id]++;
     }
 
-    // [NOVO] Função para rastrear consumo do oponente
     function trackOpponentConsumption(opponentId, itemId) {
         const id = parseInt(itemId);
         if (!sessionOpponentsConsumed[opponentId]) {
@@ -135,26 +200,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         sessionOpponentsConsumed[opponentId][id]++;
     }
 
-    // [CORREÇÃO 1] Função para atualizar o 'currentSession' globalmente e no LocalStorage
-    // Isso garante que a próxima luta (ou um refresh) pegue a quantidade atualizada.
     function syncSessionLoadout(itemId, newQuantity) {
         if (!currentSession || !currentSession.loadout) return;
-        
-        // Atualiza a memória
         currentSession.loadout.forEach(p => {
             if (parseInt(p.item_id) === parseInt(itemId)) {
                 p.quantity = newQuantity;
             }
         });
-
-        // Atualiza o cache persistente
         localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
     }
 
-    // --- ENGINE DE BATALHA LOCAL (SIMULAÇÃO CLIENT-SIDE) ---
+    // --- ENGINE DE BATALHA LOCAL ---
     class ArenaEngine {
         constructor(playerStats, opponentData, playerLoadout) {
-            // Configura Jogador
             this.player = {
                 id: userId,
                 name: playerStats.name || 'Você',
@@ -165,28 +223,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 potions: []
             };
 
-            // [CORREÇÃO 2] Deduplicação de Poções do Jogador
-            // Se houver erros no banco (ex: item igual em slots diferentes),
-            // isso consolida em uma única entrada baseada no ID para evitar duplicidade visual e lógica.
             const uniquePotions = {};
             if (Array.isArray(playerLoadout)) {
                 playerLoadout.forEach(p => {
                     const pId = parseInt(p.item_id);
-                    // Só adiciona se ainda não processou esse ID
                     if (!uniquePotions[pId]) {
-                        uniquePotions[pId] = { 
-                            ...p, 
-                            cd: 0, 
-                            quantity: parseInt(p.quantity) 
-                        };
+                        uniquePotions[pId] = { ...p, cd: 0, quantity: parseInt(p.quantity) };
                     }
                 });
             }
             this.player.potions = Object.values(uniquePotions);
             
-            // Configura Oponente
             const oppStats = opponentData.combat_stats || {};
-            // Deduplicação também para o oponente, por segurança
             const uniqueOppPotions = {};
             (opponentData.potions || []).forEach(p => {
                 const pId = parseInt(p.item_id);
@@ -211,28 +259,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             this.turnLimit = 100;
         }
 
-        random(min, max) {
-            return Math.floor(Math.random() * (max - min + 1)) + min;
-        }
+        random(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+        hasBuff(entity, type) { return entity.buffs[type] && entity.buffs[type].ends_at >= this.turn; }
+        getBuffId(entity, type) { return entity.buffs[type] ? entity.buffs[type].item_id : 0; }
 
-        hasBuff(entity, type) {
-            return entity.buffs[type] && entity.buffs[type].ends_at >= this.turn;
-        }
-        
-        getBuffId(entity, type) {
-            return entity.buffs[type] ? entity.buffs[type].item_id : 0;
-        }
-
-        // Processa um turno completo
         processTurn(actionType, itemId = null) {
             if (this.finished) return this.getState();
 
-            // Resetar cooldowns do jogador no início do ataque
             if (actionType === 'ATTACK') {
                 this.player.potions.forEach(p => { if(p.cd > 0) p.cd--; });
             }
 
-            // 1. AÇÃO DO JOGADOR
             let actionResult = { type: actionType, dmg: 0, crit: false, heal: 0 };
             let enemyActions = [];
 
@@ -240,16 +277,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const targetId = parseInt(itemId);
                 const pot = this.player.potions.find(p => parseInt(p.item_id) === targetId);
                 
-                // [CORREÇÃO] Consumo com sincronização global
                 if (pot && pot.quantity > 0 && (!pot.cd || pot.cd <= 0)) {
                     this.applyEffect(this.player, pot.item_id);
-                    
-                    pot.quantity--; // Deduz localmente na engine
-                    trackConsumedPotion(pot.item_id); // Marca para o banco
-                    
-                    // [IMPORTANTE] Atualiza o objeto de sessão global para persistir entre lutas
+                    pot.quantity--; 
+                    trackConsumedPotion(pot.item_id); 
                     syncSessionLoadout(pot.item_id, pot.quantity);
-                    
                     pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
                     actionResult.heal = 1; 
                 } else {
@@ -259,7 +291,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             if (actionType === 'ATTACK') {
-                // Cálculo de Dano Player
                 let dmgResult = this.calculateDamage(this.player, this.opponent);
                 actionResult.dmg = dmgResult.value;
                 actionResult.crit = dmgResult.isCrit;
@@ -272,11 +303,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return { ...this.getState(), actionResult, enemyActions };
                 }
                 
-                // 2. AÇÃO DO INIMIGO
                 enemyActions = this.processEnemyAI();
                 this.turn++;
 
-                // Checa Derrota ou Limite
                 if (this.player.hp <= 0) {
                     this.finished = true;
                     this.playerWon = false;
@@ -287,68 +316,42 @@ document.addEventListener("DOMContentLoaded", async () => {
                     this.playerWon = pHp > oHp;
                 }
             }
-
             return { ...this.getState(), actionResult, enemyActions };
         }
 
         processEnemyAI() {
             let actions = [];
-
-            // 1. Reduz CDs do inimigo
             this.opponent.potions.forEach(p => { if(p.cd > 0) p.cd--; });
 
-            // 2. Tenta usar poções
             for (let pot of this.opponent.potions) {
                 if (pot.quantity > 0 && pot.cd <= 0) {
                     const pId = parseInt(pot.item_id);
-                    
-                    // Lógica de Cura
                     if ([43,44].includes(pId)) {
                         if (this.opponent.hp < (this.opponent.maxHp * 0.65)) {
                             let oldHp = this.opponent.hp;
                             this.applyEffect(this.opponent, pId);
                             let healedAmount = this.opponent.hp - oldHp;
-                            
-                            pot.quantity--; 
-                            pot.cd = 7; 
-                            
-                            // [NOVO] Rastreia consumo do oponente para salvar no banco
+                            pot.quantity--; pot.cd = 7; 
                             trackOpponentConsumption(this.opponent.id, pId);
-
                             actions.push({ type: 'POTION', itemId: pId, healed: healedAmount });
                         }
-                    } 
-                    // Lógica de Buffs
-                    else {
+                    } else {
                         let type = 'ATK';
                         if ([45,46].includes(pId)) type = 'FURY';
                         if ([47,48].includes(pId)) type = 'DEX';
                         if ([49,50].includes(pId)) type = 'ATK';
-                        
                         if (!this.hasBuff(this.opponent, type)) {
                              this.applyEffect(this.opponent, pId);
-                             pot.quantity--; 
-                             pot.cd = 15;
-                             
-                             // [NOVO] Rastreia consumo do oponente para salvar no banco
+                             pot.quantity--; pot.cd = 15;
                              trackOpponentConsumption(this.opponent.id, pId);
-                             
                              actions.push({ type: 'POTION', itemId: pId });
                         }
                     }
                 }
             }
-            
-            // 3. Ataque
             let dmgResult = this.calculateDamage(this.opponent, this.player);
             this.player.hp = Math.max(0, this.player.hp - dmgResult.value);
-            
-            actions.push({
-                type: 'ATTACK',
-                dmg: dmgResult.value,
-                crit: dmgResult.isCrit
-            });
-
+            actions.push({ type: 'ATTACK', dmg: dmgResult.value, crit: dmgResult.isCrit });
             return actions;
         }
 
@@ -387,10 +390,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         skipBattle() {
             let safety = 0;
-            while (!this.finished && safety < 200) {
-                this.processTurn('ATTACK');
-                safety++;
-            }
+            while (!this.finished && safety < 200) { this.processTurn('ATTACK'); safety++; }
             return this.getState();
         }
 
@@ -412,7 +412,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Variáveis de Sessão em Lote
+    // Variáveis de Sessão
     let currentSession = null;
     let currentOpponentIndex = 0;
     let sessionResults = [];
@@ -462,7 +462,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const potionSlots = document.querySelectorAll(".potion-slot");
 
     // =======================================================================
-    // 2. SISTEMA DE ÁUDIO
+    // 4. SISTEMA DE ÁUDIO
     // =======================================================================
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffers = {};
@@ -494,9 +494,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             audioBuffers[name] = await new Promise((resolve, reject) => {
                 audioContext.decodeAudioData(ab, resolve, reject);
             });
-        } catch (e) {
-            audioBuffers[name] = null;
-        }
+        } catch (e) { audioBuffers[name] = null; }
     }
     Object.keys(audioFiles).forEach(key => preload(key));
 
@@ -525,9 +523,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function unlockSfx() {
         if (sfxUnlocked) return;
         sfxUnlocked = true;
-        if (audioContext.state === 'suspended') {
-            try { await audioContext.resume(); } catch(e){}
-        }
+        if (audioContext.state === 'suspended') { try { await audioContext.resume(); } catch(e){} }
     }
 
     function startBackgroundMusic() {
@@ -554,7 +550,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // =======================================================================
-    // 3. UTILITÁRIOS E UI
+    // 5. UTILITÁRIOS E UI
     // =======================================================================
     function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
     function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
@@ -586,15 +582,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch { return null; }
     }
 
-    // Calcula minutos restantes até a meia-noite UTC (para Ranking Atual e Histórico)
     function getMinutesToMidnightUTC() {
         const now = new Date();
         const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
         const diffMs = midnight - now;
         return Math.max(1, Math.floor(diffMs / 60000));
     }
-
-    // Calcula minutos restantes até o dia 1 do próximo mês UTC (para Ranking Passado)
     function getMinutesToNextMonthUTC() {
         const now = new Date();
         const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
@@ -682,7 +675,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ensureStreakDate();
 
     // =======================================================================
-    // 4. LOADOUT E POÇÕES
+    // 6. LOADOUT E POÇÕES
     // =======================================================================
     async function loadArenaLoadout() {
         if (!userId) return;
@@ -721,7 +714,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 .gt('quantity', 0);
 
             potionListGrid.innerHTML = "";
-            
             const unequipBtn = document.createElement('div');
             unequipBtn.className = "inventory-item"; 
             unequipBtn.style.border = "1px solid red";
@@ -775,7 +767,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
-    // 5. LÓGICA DE COMBATE E UI
+    // 7. LÓGICA DE COMBATE E UI
     // =======================================================================
     const style = document.createElement('style');
     style.innerHTML = `
@@ -836,7 +828,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         challengeBtn.disabled = true;
         showLoading();
-        
         try {
             const savedSession = localStorage.getItem('arena_session_v1');
             if (savedSession) {
@@ -876,12 +867,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const loadout = currentSession.loadout; 
 
         currentBattleEngine = new ArenaEngine(playerStats, opponent, loadout);
-        
         const myInfo = { name: playerStats.name, avatar_url: playerStats.avatar_url };
         const oppInfo = { name: opponent.name, avatar_url: opponent.avatar_url };
         
         setupBattleUI(currentBattleEngine.getState(), myInfo, oppInfo);
-        
         if (pvpCountdown) {
             pvpCountdown.style.display = 'block';
             pvpCountdown.textContent = `Luta ${currentOpponentIndex + 1} de ${currentSession.opponents.length}`;
@@ -923,7 +912,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const timerContainer = document.getElementById("turnTimerContainer");
         const attackBtn = document.getElementById("attackBtnContainer");
-        
         if (timerContainer) timerContainer.style.opacity = "1";
         if (attackBtn) {
             attackBtn.style.filter = "none";
@@ -955,7 +943,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         else if ([45,46].includes(id)) playSound('fury');
         else if ([47,48].includes(id)) playSound('dex');
         else if ([49,50].includes(id)) playSound('atk');
-        else playSound('heal'); // fallback
+        else playSound('heal');
     }
 
     async function performAction(type, itemId = null) {
@@ -964,7 +952,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (type === 'ATTACK') {
             clearInterval(turnTimerInterval);
             isMyTurn = false;
-            
             const attackBtn = document.getElementById("attackBtnContainer");
             if (attackBtn) {
                 attackBtn.classList.add("attack-anim");
@@ -975,19 +962,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             if(skipBtn) skipBtn.disabled = true; 
             document.getElementById("turnTimerContainer").style.opacity = "0.3";
             togglePlayerPotions(false);
-            
             animateActorMove(challengerSide);
         }
 
         try {
             const preState = currentBattleEngine.getState();
-            // PROCESSAMENTO LOCAL
             const resultData = currentBattleEngine.processTurn(type, itemId);
             const newState = resultData; 
             const playerResult = resultData.actionResult;
-            const enemyActions = resultData.enemyActions; // Agora é um Array
+            const enemyActions = resultData.enemyActions; 
 
-            // CASO 1: JOGADOR USOU POÇÃO
             if (type === 'POTION') {
                 updateBattleStateUI(newState);
                 flashPotionIcon(itemId, challengerSide); 
@@ -996,7 +980,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return; 
             }
 
-            // CASO 2: JOGADOR ATACOU
             if (type === 'ATTACK') {
                 const dmgDealt = playerResult.dmg || 0;
                 await new Promise(r => setTimeout(r, 400));
@@ -1011,29 +994,21 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
-                // --- TURNO INIMIGO (COM EFEITOS SEQUENCIAIS) ---
                 if (enemyActions && enemyActions.length > 0) {
-                    await new Promise(r => setTimeout(r, 800)); // Pequena pausa após o ataque do player
-
+                    await new Promise(r => setTimeout(r, 800)); 
                     for (const action of enemyActions) {
-                        
-                        // Inimigo Usou Poção
                         if (action.type === 'POTION') {
                             flashPotionIcon(action.itemId, defenderSide);
                             playPotionSound(action.itemId);
-                            updateBattleStateUI(currentBattleEngine.getState()); // Atualiza visual intermediário
-                            
+                            updateBattleStateUI(currentBattleEngine.getState());
                             if (action.healed) {
                                 displayDamageNumber(`+${action.healed}`, false, false, defenderSide);
                             }
-                            await new Promise(r => setTimeout(r, 1000)); // Espera animação da poção
+                            await new Promise(r => setTimeout(r, 1000));
                         }
-
-                        // Inimigo Atacou
                         else if (action.type === 'ATTACK') {
                             animateActorMove(defenderSide);
                             await new Promise(r => setTimeout(r, 300));
-                            
                             const dmgReceived = action.dmg || 0;
                             displayDamageNumber(dmgReceived, action.crit, false, challengerSide);
                             updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
@@ -1104,13 +1079,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         pvpCombatModal.style.display = "none";
         showLoading();
         try {
-            // Converte consumo do JOGADOR para array e envia
             const consumedArray = Object.keys(sessionConsumedPotions).map(k => ({
                 item_id: parseInt(k),
                 qty: sessionConsumedPotions[k]
             }));
 
-            // [NOVO] Converte consumo dos OPONENTES para array
             let opponentsConsumedArray = [];
             Object.keys(sessionOpponentsConsumed).forEach(oppId => {
                 const itemsMap = sessionOpponentsConsumed[oppId];
@@ -1125,47 +1098,60 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const { data, error } = await supabase.rpc('commit_arena_session_results', { 
                 p_results: sessionResults,
-                p_consumed_items: consumedArray, // Parâmetro novo no SQL
-                p_opponents_consumed: opponentsConsumedArray // [NOVO] Parâmetro para inimigos
+                p_consumed_items: consumedArray,
+                p_opponents_consumed: opponentsConsumedArray
             });
 
             if (error) throw error;
             const res = normalizeRpcResult(data);
             
             // =======================================================
-            // [NOVO] ATUALIZAÇÃO CIRÚRGICA DE CACHE (ZERO EGRESS)
+            // ATUALIZAÇÃO CIRÚRGICA DE CACHE (ZERO EGRESS)
             // =======================================================
             if (res.timestamp && res.inventory_updates) {
-                // 1. Atualiza Stats Globais no Cache (LocalStorage)
-                // Para refletir cristais ganhos/gastos sem recarregar
+                let currentCrystals = 0;
+
+                // 1. Atualiza Stats Globais no Cache (LocalStorage - Legacy)
                 const cached = localStorage.getItem('player_data_cache');
                 if (cached) {
                     try {
                         const parsed = JSON.parse(cached);
                         if (parsed && parsed.data) {
-                            // Atualiza cristais
                             if (typeof res.crystals === 'number') {
+                                // Soma os cristais ganhos ao atual
                                 parsed.data.crystals = (parsed.data.crystals || 0) + res.crystals;
+                                currentCrystals = parsed.data.crystals; // Salva para o GlobalDB
                             }
-                            // Atualiza ranking points se retornado (opcional, requer lógica no SQL)
-                            // Salva de volta
                             localStorage.setItem('player_data_cache', JSON.stringify(parsed));
                         }
                     } catch(e) {}
                 }
 
-                // 2. Atualiza Inventário no IndexedDB
-                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, { crystals: res.crystals ? ((getCache('player_data_cache')?.crystals || 0)) : undefined });
+                // 2. Atualiza Inventário no IndexedDB e o GlobalDB com o novo saldo
+                // Se não conseguimos ler do localStorage, pegamos do res.crystals como delta, 
+                // mas updatePlayerPartial precisa do total absoluto ou mescla.
+                // Se GlobalDB já existe, pegamos de lá.
+                let updateData = {};
+                if (currentCrystals > 0) {
+                     updateData.crystals = currentCrystals;
+                } else {
+                     // Tenta ler do GlobalDB para somar
+                     const gPlayer = await GlobalDB.getPlayer();
+                     if (gPlayer) {
+                         updateData.crystals = (gPlayer.crystals || 0) + (res.crystals || 0);
+                     }
+                }
+
+                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, updateData);
             }
             // =======================================================
             
-            // Limpa tudo
             localStorage.removeItem('arena_session_v1');
             currentSession = null;
             sessionResults = [];
             currentBattleEngine = null;
             sessionConsumedPotions = {}; 
-            sessionOpponentsConsumed = {}; // [NOVO] Limpa consumo oponente
+            sessionOpponentsConsumed = {};
 
             let msg = `Sessão Finalizada!<br>Vitórias: <strong>${res.total_wins}</strong><br>Pontos Líquidos: ${res.points_gained}`;
             let itemsHTML = [];
@@ -1221,22 +1207,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const old = container.querySelector('.battle-potions-container');
         if (old) old.remove();
         if (!potions || !potions.length) return;
-        
         const ct = document.createElement('div');
         ct.className = 'battle-potions-container';
         ct.style.cssText = "position:absolute; top:60px; display:flex; flex-direction:column; gap:8px; z-index:20; background:rgba(0,0,0,0.5); padding:4px; border-radius:6px;";
         if(side === 'left') ct.style.left = "-25px"; else ct.style.right = "-25px";
-
         potions.forEach(p => {
             const qty = parseInt(p.quantity || 0);
-            
-            // Se quantidade for 0, não renderiza o slot visualmente
             if (qty <= 0) return; 
-
             const slot = document.createElement('div');
             slot.className = 'battle-potion-slot';
             const cd = parseInt(p.cd || 0);
-            
             if (interactive && cd <= 0) {
                 slot.classList.add('potion-clickable');
                 slot.onclick = (e) => { e.stopPropagation(); performAction('POTION', p.item_id); };
@@ -1299,7 +1279,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // =======================================================================
-    // 6. RANKING E SISTEMA
+    // 8. RANKING E SISTEMA
     // =======================================================================
     async function fetchAndRenderRanking() {
         showLoading();
@@ -1313,7 +1293,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const result = normalizeRpcResult(rpcData);
                     if (result?.success && Array.isArray(result.ranking)) {
                         rankingData = result.ranking;
-                        // Cache até a meia-noite UTC
                         if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, getMinutesToMidnightUTC());
                     } else rankingData = await fallbackFetchTopPlayers();
                 }
@@ -1379,7 +1358,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     else if (r?.result?.ranking) candidate = r.result.ranking;
                     if (Array.isArray(candidate) && candidate.length) {
                         d = candidate;
-                        // Cache dura até o dia 1 do próximo mês UTC
                         setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC());
                     }
                 } catch {}
@@ -1392,7 +1370,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                         if (typeof rv === 'string') try { rv = JSON.parse(rv); } catch {}
                         if (Array.isArray(rv)) { 
                             d = rv; 
-                            // Cache dura até o dia 1 do próximo mês UTC
                             setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC()); 
                         }
                     }
@@ -1425,30 +1402,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
-            
-            // Só executa a limpeza se não tiver cache
             const cacheKey = 'arena_attack_history';
             let h = getCache(cacheKey);
-            
             if (!h) {
                 supabase.rpc('cleanup_old_arena_logs').then(()=>{});
-                
                 const { data } = await supabase.rpc('get_arena_attack_logs');
                 const r = normalizeRpcResult(data);
                 if (r?.success && Array.isArray(r.logs) && r.logs.length) {
                     h = r.logs; 
-                    // Cache dura até meia-noite UTC
                     setCache(cacheKey, h, getMinutesToMidnightUTC());
                 } else if (userId) {
                     const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(200);
                     if (logsDirect) { 
                         h = logsDirect; 
-                        // Cache dura até meia-noite UTC
                         setCache(cacheKey, h, getMinutesToMidnightUTC()); 
                     }
                 }
             }
-            
             if (!h || !h.length) rankingHistoryList.innerHTML = "<li style='padding:12px;text-align:center;color:#aaa;'>Sem registros.</li>";
             else {
                 rankingHistoryList.innerHTML = "";
@@ -1482,7 +1452,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function checkAndResetArenaSeason() {
         try {
             const now = new Date();
-            // Verifica se é dia 1 para a Season
             if (now.getUTCDate() !== 1) return;
             const lastResetRaw = localStorage.getItem('arena_last_season_reset');
             const keyData = lastResetRaw ? JSON.parse(lastResetRaw) : null;
@@ -1495,37 +1464,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch {}
     }
 
-    // --- NOVO: Verifica e Reseta tentativas diárias ---
     async function checkAndResetDailyAttempts() {
         const todayKey = getTodayUTCDateString();
         const lastCheck = localStorage.getItem('arena_last_daily_check');
-        
         if (lastCheck !== todayKey) {
             try {
-                // Chama a procedure SQL que reseta se for um novo dia no servidor
                 await supabase.rpc('reset_arena_daily_attempts');
                 localStorage.setItem('arena_last_daily_check', todayKey);
-            } catch(e) {
-                console.error("Falha ao resetar tentativas diárias", e);
-            }
+            } catch(e) { console.error("Falha ao resetar tentativas diárias", e); }
         }
     }
 
     async function boot() {
         showLoading();
         try {
-            userId = getLocalUserId();
+            // AUTH OTIMIZADO VIA GLOBAL DB
+            userId = await getLocalUserId();
             if (!userId) {
+                // Se não achou em nenhum lugar, tenta sessão de rede
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) { window.location.href = "index.html"; return; }
                 userId = session.user.id;
             }
+
             if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
-            
-            // Checks de Reset
             await checkAndResetArenaSeason();
             await checkAndResetDailyAttempts();
-
             await updateAttemptsUI();
             ensureStreakDate();
             await loadArenaLoadout();

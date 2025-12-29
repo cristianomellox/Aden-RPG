@@ -509,19 +509,124 @@ const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =======================================================================
-// CACHE PERSISTENTE (LocalStorage com TTL) - ADICIONADO
+// NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) {
+                    db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) {
+                    db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+
+    setAuth: async function(sessionData) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(AUTH_STORE, 'readwrite');
+            // Salva com expiração para invalidar periodicamente se necessário
+            const authObj = { 
+                key: 'current_session', 
+                value: sessionData, 
+                updated_at: Date.now() 
+            };
+            tx.objectStore(AUTH_STORE).put(authObj);
+        } catch(e) { console.warn("Erro ao salvar Auth no DB Global", e); }
+    },
+
+    clearAuth: async function() {
+        try {
+            const db = await this.open();
+            const tx = db.transaction([AUTH_STORE, PLAYER_STORE], 'readwrite');
+            tx.objectStore(AUTH_STORE).clear();
+            tx.objectStore(PLAYER_STORE).clear();
+        } catch(e) {}
+    },
+
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+
+    setPlayer: async function(playerData) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            tx.objectStore(PLAYER_STORE).put({ key: 'player_data', value: playerData });
+        } catch(e) { console.warn("Erro ao salvar Player no DB Global", e); }
+    },
+
+    // Atualização cirúrgica: Lê, mescla e salva
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            
+            // Promise wrapper para get
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+                // Atualiza também a variável global em memória se existir
+                if (window.currentPlayerData) {
+                    Object.assign(window.currentPlayerData, changes);
+                    renderPlayerUI(window.currentPlayerData, true); // Re-renderiza UI
+                }
+            }
+        } catch(e) { console.warn("Erro update parcial", e); }
+    }
+};
+
+// Expor Globalmente para outros scripts (Mines, Arena, etc.)
+window.GlobalState = GlobalDB;
+
+// =======================================================================
+// CACHE PERSISTENTE (Legacy - Mantido para compatibilidade)
 // =======================================================================
 const CACHE_TTL_MINUTES = 1440; // Cache de 1 hora como padrão (24h)
 
-/**
- * Salva dados no LocalStorage com um timestamp e TTL.
- * @param {string} key A chave para o cache.
- * @param {any} data Os dados a serem salvos (serão convertidos para JSON).
- * @param {number} [ttlMinutes=CACHE_TTL_MINUTES] Tempo de vida em minutos.
- */
 function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
     const cacheItem = {
-        expires: Date.now() + (ttlMinutes * 60 * 1000), // Salva o timestamp de expiração
+        expires: Date.now() + (ttlMinutes * 60 * 1000), 
         data: data
     };
     try {
@@ -531,51 +636,42 @@ function setCache(key, data, ttlMinutes = CACHE_TTL_MINUTES) {
     }
 }
 
-/**
- * Busca dados do LocalStorage e verifica se expiraram.
- * @param {string} key A chave do cache.
- * @param {number} [defaultTtlMinutes=CACHE_TTL_MINUTES] TTL padrão (não usado se o item já tem 'expires').
- * @returns {any|null} Os dados (se encontrados e não expirados) ou null.
- */
 function getCache(key, defaultTtlMinutes = CACHE_TTL_MINUTES) {
     try {
         const cachedItem = localStorage.getItem(key);
         if (!cachedItem) return null;
-
         const { expires, data } = JSON.parse(cachedItem);
-        
-        // Se não tiver 'expires' (formato antigo) ou se 'expires' não for um número, usa o TTL padrão
-        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1); // Força expiração se for formato antigo
-
+        const expirationTime = (typeof expires === 'number') ? expires : (Date.now() - (defaultTtlMinutes * 60 * 1000) - 1); 
         if (Date.now() > expirationTime) {
             localStorage.removeItem(key);
             return null;
         }
         return data;
     } catch (e) {
-        console.error("Falha ao ler cache:", e);
-        localStorage.removeItem(key); // Remove item corrompido
+        localStorage.removeItem(key); 
         return null;
     }
 }
 
 /**
  * Atualiza o cache e a UI localmente sem ir ao servidor.
- * Útil para atualizar saldo de Ouro/Cristais imediatamente.
- * @param {Object} changes - Objeto com as mudanças (ex: { gold: 500, crystals: 1000 })
+ * Agora integrado ao GlobalDB.
  */
 function updateLocalPlayerData(changes) {
     if (!currentPlayerData) return;
 
-    // Aplica as mudanças no objeto em memória
+    // 1. Atualiza memória RAM
     Object.keys(changes).forEach(key => {
         currentPlayerData[key] = changes[key];
     });
 
-    // Atualiza o Cache no LocalStorage
+    // 2. Atualiza Cache Legacy (LocalStorage)
     setCache('player_data_cache', currentPlayerData, 1440);
 
-    // Redesenha a UI
+    // 3. Atualiza Novo Global DB (IndexedDB)
+    GlobalDB.updatePlayerPartial(changes);
+
+    // 4. Redesenha a UI
     renderPlayerUI(currentPlayerData, true);
 }
 // =======================================================================
@@ -615,20 +711,19 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         }
 
         // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
         // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
         if (updatedStats) {
-            // Primeiro lemos o stats atual
+            // Atualiza também o GlobalDB
+            GlobalDB.updatePlayerPartial(updatedStats);
+
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
-                // Mescla os novos valores (ex: crystals, gold)
                 const finalStats = { ...currentStats, ...updatedStats };
                 meta.put({ key: "player_stats", value: finalStats });
             };
@@ -667,57 +762,34 @@ const mission_definitions = {
         { req: 30, item_id: 26, qty: 5, desc: "Alcance nível 30.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp" }
     ],
     afk: [
-        // --- Itens Iniciais (Ajuste o nome das imagens) ---
         { req: 2, item_id: 13, qty: 1, desc: "Alcance o estágio 2 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/asa_guardia.webp" }, 
         { req: 3, item_id: 10, qty: 10, desc: "Alcance o estágio 3 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_anel_runico.webp" },
-        
-        // --- Estágio 4 e 5 (Existentes) ---
         { req: 4, crystals: 1500, qty: 1500, desc: "Alcance o estágio 4 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 5, crystals: 100, qty: 100, desc: "Alcance o estágio 5 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágios 6 a 9 (500 Cristais) ---
         { req: 6, crystals: 500, qty: 500, desc: "Alcance o estágio 6 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 7, crystals: 500, qty: 500, desc: "Alcance o estágio 7 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 8, crystals: 500, qty: 500, desc: "Alcance o estágio 8 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 9, crystals: 500, qty: 500, desc: "Alcance o estágio 9 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágio 10 (Existente) ---
         { req: 10, crystals: 500, qty: 500, desc: "Alcance o estágio 10 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágios 11 a 14 (1000 Cristais) ---
         { req: 11, crystals: 1000, qty: 1000, desc: "Alcance o estágio 11 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 12, crystals: 1000, qty: 1000, desc: "Alcance o estágio 12 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 13, crystals: 1000, qty: 1000, desc: "Alcance o estágio 13 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 14, crystals: 1000, qty: 1000, desc: "Alcance o estágio 14 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágio 15 (Existente) ---
         { req: 15, crystals: 1500, qty: 1500, desc: "Alcance o estágio 15 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágios 16 a 19 (1000 Cristais) ---
         { req: 16, crystals: 1000, qty: 1000, desc: "Alcance o estágio 16 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 17, crystals: 1000, qty: 1000, desc: "Alcance o estágio 17 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 18, crystals: 1000, qty: 1000, desc: "Alcance o estágio 18 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 19, crystals: 1000, qty: 1000, desc: "Alcance o estágio 19 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágio 20 (Existente) ---
         { req: 20, crystals: 2500, qty: 2500, desc: "Alcance o estágio 20 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágios 21 a 24 (1000 Cristais) ---
         { req: 21, crystals: 1000, qty: 1000, desc: "Alcance o estágio 21 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 22, crystals: 1000, qty: 1000, desc: "Alcance o estágio 22 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 23, crystals: 1000, qty: 1000, desc: "Alcance o estágio 23 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 24, crystals: 1000, qty: 1000, desc: "Alcance o estágio 24 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágio 25 (Existente) ---
         { req: 25, crystals: 3000, qty: 3000, desc: "Alcance o estágio 25 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágios 26 a 29 (1000 Cristais) ---
         { req: 26, crystals: 1000, qty: 1000, desc: "Alcance o estágio 26 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 27, crystals: 1000, qty: 1000, desc: "Alcance o estágio 27 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 28, crystals: 1000, qty: 1000, desc: "Alcance o estágio 28 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 29, crystals: 1000, qty: 1000, desc: "Alcance o estágio 29 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
-
-        // --- Estágios 30+ (Existentes) ---
         { req: 30, crystals: 3000, qty: 3000, desc: "Alcance o estágio 30 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 35, crystals: 3000, qty: 3000, desc: "Alcance o estágio 35 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
         { req: 40, crystals: 3000, qty: 3000, desc: "Alcance o estágio 40 da Aventura AFK.", img: "https://aden-rpg.pages.dev/assets/cristais.webp" },
@@ -913,7 +985,10 @@ async function signIn() {
     const email = emailInput.value;
     const password = passwordInput.value;
     authMessage.textContent = 'Tentando entrar...';
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    
+    // Ao logar com sucesso, o listener onAuthStateChange será disparado e
+    // atualizará o GlobalDB
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
         authMessage.textContent = `Erro ao entrar: ${error.message}`;
     }
@@ -961,8 +1036,8 @@ async function verifyOtp() {
 async function signOut() {
     // --- CORREÇÃO DE CACHE APLICADA ---
     // Limpa explicitamente o cache do jogador antes de sair e recarregar
-    // Isso previne que o próximo usuário veja os dados do anterior
     localStorage.removeItem('player_data_cache');
+    await GlobalDB.clearAuth(); // Limpa DB Global
     
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
@@ -1040,18 +1115,21 @@ function applyItemBonuses(player, equippedItems) {
 }
 
 // Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
-// RESTAURADA: Busca itens e calcula CP, mas exibe UI limpa
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
-    const PLAYER_CACHE_KEY = 'player_data_cache';
-    
-    // Se não for forçado e já temos dados, retorna (Economia Máxima)
-    if (!forceRefresh && currentPlayerData) {
-        renderPlayerUI(currentPlayerData, preserveActiveContainer);
-        return;
+    // 1. OTIMIZAÇÃO: Tenta carregar do GlobalDB primeiro
+    if (!forceRefresh) {
+        const cachedPlayer = await GlobalDB.getPlayer();
+        if (cachedPlayer) {
+            console.log("⚡ [PlayerInfo] Usando dados do IndexedDB Global.");
+            currentPlayerData = cachedPlayer;
+            currentPlayerId = cachedPlayer.id;
+            renderPlayerUI(cachedPlayer, preserveActiveContainer);
+            checkProgressionNotifications(cachedPlayer);
+            return;
+        }
     }
 
-    // Se já temos o ID global, usamos ele. Se não, pegamos da sessão LOCAL.
-    // NUNCA chamamos getUser() aqui para economizar Egress.
+    // 2. Se não tiver no DB, busca do Supabase
     let userId = currentPlayerId;
     if (!userId) {
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1063,7 +1141,6 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         currentPlayerId = userId;
     }
 
-    // Busca apenas dados do jogo
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
         .select('*')
@@ -1076,24 +1153,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     }
 
     // --- OTIMIZAÇÃO: REMOVIDO JOIN. USA CACHED_INVENTORY ---
-    // Em vez de fazer uma segunda query pesada em 'inventory_items',
-    // usamos o JSONB 'cached_inventory' que já vem na query de 'players'.
-    
     const rawInventory = player.cached_inventory || [];
-    // Filtra apenas itens que possuem equipped_slot definido
     const equippedItems = Array.isArray(rawInventory) 
         ? rawInventory.filter(i => i.equipped_slot) 
         : [];
 
-    /* CODIGO ANTIGO REMOVIDO PARA ECONOMIA DE EGRESS
-    const { data: equippedItems, error: itemsError } = await supabaseClient
-        .from('inventory_items')
-        .select(`...`)
-        .eq('player_id', userId)
-        .neq('equipped_slot', null);
-    */
-
-    // Calcula os atributos totais
     const playerWithEquips = applyItemBonuses(player, equippedItems);
     
     // Cálculo do CP (Mantido)
@@ -1109,11 +1173,14 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // Armazena e Renderiza
     currentPlayerData = playerWithEquips;
-    setCache(PLAYER_CACHE_KEY, playerWithEquips, 1440); // Cache de 24 horas (1440 min)
+    
+    // Salva no DB Global e Cache Legacy
+    await GlobalDB.setPlayer(playerWithEquips);
+    setCache('player_data_cache', playerWithEquips, 1440);
+
     renderPlayerUI(playerWithEquips, preserveActiveContainer);
     checkProgressionNotifications(playerWithEquips);
 
-    // Verifica nome padrão para abrir modal de edição
     if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
         if (typeof window.updateProfileEditModal === 'function') {
             window.updateProfileEditModal(playerWithEquips);
@@ -1123,6 +1190,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         profileEditModal.style.display = 'flex';
     }
 }
+
 // === Botão de copiar ID do jogador ===
 document.addEventListener('DOMContentLoaded', () => {
   const copiarIdDiv = document.getElementById('copiarid');
@@ -1264,13 +1332,6 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
 signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
-// homeBtn.addEventListener('click', () => { // REMOVIDO
-//     updateUIVisibility(true, 'welcomeContainer');
-//     fetchAndDisplayPlayerInfo(true, true);
-//     showFloatingMessage("Você está na página inicial!");
-// });
-
-// Sessão e inicialização
 
 // =======================================================================
 // OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO
@@ -1278,27 +1339,35 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 window.authCheckComplete = false;
 
 async function checkAuthStatus() {
-    // getSession() lê do LocalStorage e NÃO gera Egress de rede se o token for válido
+    // 1. TENTA AUTH VIA GLOBAL DB (ZERO EGRESS)
+    const cachedAuth = await GlobalDB.getAuth();
+    if (cachedAuth && cachedAuth.value && cachedAuth.value.user) {
+         console.log("⚡ [Auth] Sessão válida recuperada do IndexedDB Global.");
+         currentPlayerId = cachedAuth.value.user.id;
+         window.authCheckComplete = true;
+
+         // Carrega jogador via DB ou rede se necessário
+         await fetchAndDisplayPlayerInfo();
+         
+         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+         handleUrlActions();
+         return;
+    }
+
+    // 2. Fallback: getSession() do Supabase (lê do LocalStorage ou Rede)
     const { data: { session }, error } = await supabaseClient.auth.getSession();
 
     if (session) {
-        // Usuário tem uma sessão válida localmente.
         currentPlayerId = session.user.id;
         window.authCheckComplete = true;
-
-        // Se NÃO tínhamos cache ou se ele é muito antigo, aí sim buscamos do banco
-        if (!currentPlayerData) {
-            console.log("🔄 Cache vazio. Buscando dados atualizados...");
-            fetchAndDisplayPlayerInfo(true); 
-        } else {
-            console.log("✅ Sessão válida. Mantendo dados do cache para economizar banda.");
-            // Opcional: Atualizar silenciosamente em background se o cache for > 10 min
-            const lastCacheTime = JSON.parse(localStorage.getItem('player_data_cache') || '{}').expires;
-        }
+        
+        // Salva no Global DB para a próxima vez ser Zero Egress
+        await GlobalDB.setAuth(session);
+        
+        // Busca dados
+        fetchAndDisplayPlayerInfo(true); 
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
-        
-        // Após confirmar sessão, lidar com URLs
         handleUrlActions();
     } else {
         // Sem sessão, mostra tela de login
@@ -1308,29 +1377,32 @@ async function checkAuthStatus() {
     }
 }
 
-// 1. Tenta renderizar IMEDIATAMENTE usando o cache (Zero Network)
+// 1. Tenta renderizar IMEDIATAMENTE usando o GlobalDB (Zero Network)
 document.addEventListener("DOMContentLoaded", async () => {
-    const cachedPlayer = getCache('player_data_cache', 60 * 24); // Tenta ler cache (até 24h se existir)
+    // Tenta renderizar algo na tela antes mesmo de checar auth
+    const cachedPlayer = await GlobalDB.getPlayer();
     
     if (cachedPlayer) {
-        console.log("⚡ Interface carregada via Cache (Sem consumo de Auth)");
+        console.log("⚡ [Init] Interface carregada via GlobalDB (Sem consumo de Auth)");
         currentPlayerData = cachedPlayer;
         currentPlayerId = cachedPlayer.id;
-        renderPlayerUI(cachedPlayer); // Desenha a UI instantaneamente
+        renderPlayerUI(cachedPlayer);
         checkProgressionNotifications(cachedPlayer);
     }
 
-    // 2. Inicia verificação de Auth silenciosa
-    // Isso roda em segundo plano sem bloquear a UI
+    // 2. Inicia verificação de Auth
     checkAuthStatus();
 });
 
-// Escuta mudanças APENAS para Login/Logout explícitos (não disparar em recargas de aba)
-supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && !currentPlayerData) {
-        fetchAndDisplayPlayerInfo(true);
+// Escuta mudanças APENAS para Login/Logout explícitos
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+        // Atualiza Global DB no login
+        await GlobalDB.setAuth(session);
+        if(!currentPlayerData) fetchAndDisplayPlayerInfo(true);
     } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('player_data_cache');
+        await GlobalDB.clearAuth();
         window.location.reload();
     }
 });
@@ -1881,6 +1953,39 @@ const drawResultsModal = document.getElementById('drawResultsModal');
 const drawResultsGrid = document.getElementById('drawResultsGrid');
 
 async function updateCardCounts() {
+    // Tenta ler do cache local primeiro
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+
+        // ID 41 = Comum, ID 42 = Avançado
+        const req41 = store.get(41);
+        const req42 = store.get(42);
+
+        // Promise para aguardar ambas as leituras
+        const [card41, card42] = await new Promise(resolve => {
+            let c41 = null, c42 = null;
+            let completed = 0;
+            const check = () => { if (++completed === 2) resolve([c41, c42]); };
+
+            req41.onsuccess = () => { c41 = req41.result; check(); };
+            req41.onerror = () => check();
+            req42.onsuccess = () => { c42 = req42.result; check(); };
+            req42.onerror = () => check();
+        });
+
+        // Atualiza UI
+        commonCardCountSpan.textContent = `x ${card41 ? card41.quantity : 0}`;
+        advancedCardCountSpan.textContent = `x ${card42 ? card42.quantity : 0}`;
+        
+        // Se encontrou dados locais, retorna e evita chamada de rede
+        if (card41 || card42) return;
+
+    } catch (e) {
+        console.warn("Erro ao ler cartões do cache local:", e);
+    }
+
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) return;
 
@@ -2018,13 +2123,49 @@ confirmDrawBtn.addEventListener('click', async () => {
     
     // displayDrawResults espera um mapa de ID -> Quantidade
     displayDrawResults(data.won_items_map);
-    await updateCardCounts();
+
+    // === CORREÇÃO: ATUALIZAÇÃO MANUAL DO CARTÃO GASTO NO CACHE ===
+    // Define qual ID foi usado
+    const usedCardId = currentDrawType === 'common' ? 41 : 42;
+    
+    // Prepara a lista de itens para atualizar (começa com os prêmios vindos do server)
+    let itemsToUpdate = data.inventory_updates || [];
+
+    // Verifica se o servidor já mandou a atualização do cartão gasto. 
+    // Se NÃO mandou, nós manipulamos localmente para garantir o decremento.
+    const serverSentCardUpdate = itemsToUpdate.find(i => i.item_id === usedCardId);
+
+    if (!serverSentCardUpdate) {
+        try {
+            const db = await openDB();
+            // Busca o item atual no DB para pegar a estrutura completa (nome, tipo, etc)
+            const cardItem = await new Promise(resolve => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get(usedCardId);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+
+            if (cardItem) {
+                // Subtrai a quantidade gasta localmente
+                cardItem.quantity = Math.max(0, cardItem.quantity - quantity);
+                // Adiciona à lista de updates para ser salvo
+                itemsToUpdate.push(cardItem);
+                console.log(`[Gacha] Cartão ${usedCardId} decrementado localmente para: ${cardItem.quantity}`);
+            }
+        } catch (e) {
+            console.warn("Erro ao decrementar cartão localmente:", e);
+        }
+    }
 
     // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
-    // inventory_updates contém os fragmentos ganhos E o cartão gasto (atualizado)
-    if (data.inventory_updates && data.timestamp) {
-        await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
+    // Agora passamos a lista completa (Prêmios + Cartão Gasto)
+    if (itemsToUpdate.length > 0 && data.timestamp) {
+        await surgicalCacheUpdate(itemsToUpdate, data.timestamp);
     }
+    
+    // Atualiza a UI visualmente com os novos valores (lendo do cache atualizado)
+    await updateCardCounts();
 
     confirmDrawBtn.disabled = false;
 });
@@ -2266,9 +2407,6 @@ setTimeout(() => {
     checkRewardLimit();
 }, 600);
 
-// fim do arquivo
-/* === MAP INTERACTION INSERTED BY CHATGPT === */
-
 
 /* === MAP INTERACTION INSERTED BY CHATGPT === */
 // Cria a interação do mapa (arrastar com mouse/touch) com inércia. Não altera nenhuma outra lógica.
@@ -2290,7 +2428,7 @@ function enableMapInteraction() {
     let animationFrameId = null;
     const FRICTION = 0.98; // Fator de desaceleração (ajuste se quiser mais ou menos inércia)
 
-    // calcula limites para evitar que o mapa seja arrastado completamente pra fora da viewport
+    // calcula limites para evitar o mapa ser arrastado completamente pra fora da viewport
     function recalcLimits() {
         const container = document.getElementById('mapContainer');
         if (!container) return;

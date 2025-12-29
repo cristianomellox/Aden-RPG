@@ -1,5 +1,45 @@
 import { supabase } from './supabaseClient.js'
 
+// =========================================================
+// >>> ADEN GLOBAL DB (Zero Egress Auth & Player) <<<
+// =========================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    }
+};
+// =========================================================
 
 document.addEventListener("DOMContentLoaded", () => {
     // --- SETUP INICIAL ---
@@ -490,12 +530,30 @@ document.addEventListener("DOMContentLoaded", () => {
         
         loadFromLocalStorage();
 
-        // OTIMIZAÇÃO: Substituição de getUser por getSession
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session && session.user) {
-            const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
-            if (player) currentPlayer = player;
+        // 🔐 OTIMIZAÇÃO AUTH ZERO EGRESS
+        // Tenta pegar do GlobalDB primeiro
+        const globalAuth = await GlobalDB.getAuth();
+        if (globalAuth && globalAuth.user) {
+            // Tenta pegar dados do player também do GlobalDB
+            const globalPlayer = await GlobalDB.getPlayer();
+            if (globalPlayer && globalPlayer.id === globalAuth.user.id) {
+                 currentPlayer = { id: globalPlayer.id, name: globalPlayer.name };
+                 console.log("⚡ [PV] Player carregado via GlobalDB.");
+            } else {
+                // Se não tem player, cria o objeto básico
+                currentPlayer = { id: globalAuth.user.id, name: 'Você' };
+            }
+        } else {
+            // Fallback para getSession (Rede)
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.user) {
+                // Aqui podemos fazer a query normal ou pegar do DB, vamos manter a query original como fallback robusto
+                const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
+                if (player) currentPlayer = player;
+            }
         }
+
+        if (!currentPlayer) return; // Se não autenticou, para aqui.
         
         // 1. Sincroniza mensagens privadas (apenas metadata)
         await fetchAndSyncMessages();

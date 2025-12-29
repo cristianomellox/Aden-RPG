@@ -156,8 +156,7 @@
         <div class="player-level-guild">
           <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width: 50px; height: 55px;">
           <div id="playerGuildName" class="shimmer">Nome da Guilda</div></div>
-          <!-- troquei display flex para none -->
-        </div>
+          </div>
         <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
        <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
       </div>
@@ -210,6 +209,54 @@
 
     function esc(s){ return String(s||''); }
     function safeNum(n){ return typeof n === 'number' ? n : (n?Number(n):0); }
+
+    // =======================================================================
+    // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+    // =======================================================================
+    const GLOBAL_DB_NAME = 'aden_global_db';
+    const GLOBAL_DB_VERSION = 1;
+    const AUTH_STORE = 'auth_store';
+    
+    const GlobalDB = {
+        open: function() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        },
+        getAuth: async function() {
+            try {
+                const db = await this.open();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(AUTH_STORE, 'readonly');
+                    const req = tx.objectStore(AUTH_STORE).get('current_session');
+                    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                    req.onerror = () => resolve(null);
+                });
+            } catch(e) { return null; }
+        }
+    };
+
+    // Helper Otimista de Auth (Zero Egress)
+    async function getLocalUserId() {
+        // 1. GlobalDB
+        const globalAuth = await GlobalDB.getAuth();
+        if (globalAuth && globalAuth.value && globalAuth.value.user) {
+            return globalAuth.value.user.id;
+        }
+        // 2. LocalStorage
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                    const session = JSON.parse(localStorage.getItem(k));
+                    if (session?.user?.id) return session.user.id;
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
 
     // ====================================================================================
     // CACHE #1: RANKING SEMANAL (SEGUNDA-FEIRA 00:00 UTC)
@@ -510,6 +557,9 @@
     // FETCH RANKING PRINCIPAL
     // ====================================================================================
     async function fetchTop100ByCombatPower(){
+      // 0. (Opcional) Inicializa Auth Local
+      await getLocalUserId();
+
       const cacheKey = 'ranking_cp_weekly_v2';
       const cached = getRankingCache(cacheKey);
       

@@ -1,5 +1,51 @@
 import { supabase } from './supabaseClient.js'
 
+// =======================================================================
+// NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAuth: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(AUTH_STORE, 'readonly');
+                const req = tx.objectStore(AUTH_STORE).get('current_session');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    // Usado para verificar dados do próprio usuário se necessário
+    getPlayer: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(PLAYER_STORE, 'readonly');
+                const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
     
 
@@ -267,13 +313,18 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             // --- Obtém o ID do jogador logado (quem está usando o app) ---
+            // OTIMIZAÇÃO: Usa GlobalDB para evitar egress se possível
             let currentUserId = null;
-            try {
-                // ALTERADO: De getUser() para getSession()
-                const { data: sessionData } = await supabase.auth.getSession();
-                currentUserId = sessionData?.session?.user?.id || null;
-            } catch (e) {
-                console.warn("[playerModal.js] Não foi possível obter usuário atual via supabase.auth.getSession():", e);
+            const globalAuth = await GlobalDB.getAuth();
+            if (globalAuth && globalAuth.value && globalAuth.value.user) {
+                currentUserId = globalAuth.value.user.id;
+            } else {
+                try {
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    currentUserId = sessionData?.session?.user?.id || null;
+                } catch (e) {
+                    console.warn("[playerModal.js] Não foi possível obter usuário atual:", e);
+                }
             }
 
             clearModalContent(); // Limpa e esconde o botão de MP antes da busca

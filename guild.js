@@ -1,15 +1,71 @@
 document.addEventListener("DOMContentLoaded", async () => {
-const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+  const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
   const supabase = window.supabase && window.supabase.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
   if (!supabase) { console.error("Supabase não iniciado"); return; }
+  
+  // =======================================================================
+  // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+  // =======================================================================
+  const GLOBAL_DB_NAME = 'aden_global_db';
+  const GLOBAL_DB_VERSION = 1;
+  const AUTH_STORE = 'auth_store';
+  const PLAYER_STORE = 'player_store';
+  
+  const GlobalDB = {
+      open: function() {
+          return new Promise((resolve, reject) => {
+              const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+              req.onupgradeneeded = (e) => {
+                  const db = e.target.result;
+                  if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                  if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+              };
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error);
+          });
+      },
+      getAuth: async function() {
+          try {
+              const db = await this.open();
+              return new Promise((resolve) => {
+                  const tx = db.transaction(AUTH_STORE, 'readonly');
+                  const req = tx.objectStore(AUTH_STORE).get('current_session');
+                  req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                  req.onerror = () => resolve(null);
+              });
+          } catch(e) { return null; }
+      },
+      getPlayer: async function() {
+          try {
+              const db = await this.open();
+              return new Promise((resolve) => {
+                  const tx = db.transaction(PLAYER_STORE, 'readonly');
+                  const req = tx.objectStore(PLAYER_STORE).get('player_data');
+                  req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                  req.onerror = () => resolve(null);
+              });
+          } catch(e) { return null; }
+      },
+      updatePlayerPartial: async function(changes) {
+          try {
+              const db = await this.open();
+              const tx = db.transaction(PLAYER_STORE, 'readwrite');
+              const store = tx.objectStore(PLAYER_STORE);
+              const currentData = await new Promise(resolve => {
+                  const req = store.get('player_data');
+                  req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                  req.onerror = () => resolve(null);
+              });
+              if (currentData) {
+                  const newData = { ...currentData, ...changes };
+                  store.put({ key: 'player_data', value: newData });
+              }
+          } catch(e) { console.warn("Erro update parcial", e); }
+      }
+  };
+
   // --- INÍCIO: NOVAS FUNÇÕES DE CACHE ---
-  /**
-   * Armazena dados no localStorage com um tempo de expiração.
-   * @param {string} key - A chave para o cache.
-   * @param {any} data - Os dados a serem armazenados.
-   * @param {number} ttl - Time-to-live em milissegundos.
-   */
   function setCache(key, data, ttl) {
     const now = new Date();
     const item = {
@@ -19,11 +75,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     localStorage.setItem(key, JSON.stringify(item));
   }
 
-  /**
-   * Recupera dados do localStorage se não estiverem expirados.
-   * @param {string} key - A chave do cache.
-   * @returns {any|null} - Os dados ou nulo se não existir ou estiver expirado.
-   */
   function getCache(key) {
     const itemStr = localStorage.getItem(key);
     if (!itemStr) {
@@ -38,27 +89,17 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     return item.data;
   }
 
-  /**
-   * Calcula o tempo em milissegundos até a próxima segunda-feira às 00:00 UTC.
-   * Usado para caches de Ranking e Busca de Guilda.
-   */
   function getTtlUntilNextMonday() {
     const now = new Date();
     const day = now.getUTCDay(); // 0 (Dom) a 6 (Sáb)
-    // Calcula dias até a próxima segunda (1). Se hoje for segunda, considera a próxima semana (7 dias)
     let daysToAdd = (8 - day) % 7;
     if (daysToAdd === 0 && now.getUTCHours() >= 0) {
-       // Se for segunda-feira, garante que pega a próxima, a menos que seja exatamente meia noite (edge case),
-       // mas na prática +7 dias garante renovação semanal
        daysToAdd = 7;
     }
-    
     const nextMonday = new Date(now);
     nextMonday.setUTCDate(now.getUTCDate() + daysToAdd);
     nextMonday.setUTCHours(0, 0, 0, 0);
-    
     const ttl = nextMonday.getTime() - now.getTime();
-    // Garante que o TTL seja positivo (fallback de segurança)
     return ttl > 0 ? ttl : 24 * 60 * 60 * 1000;
   }
   // --- FIM: NOVAS FUNÇÕES DE CACHE ---
@@ -89,7 +130,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   infoModalOkBtn.addEventListener('click', closeInfoModal);
   infoModalCloseBtn.addEventListener('click', closeInfoModal);
   infoModal.addEventListener('click', (event) => { if (event.target === infoModal) { closeInfoModal(); } });
-  // --- FIM: LÓGICA DO MODAL DE INFORMAÇÕES ---
 
   // --- INÍCIO: LÓGICA DO MODAL DE CONFIRMAÇÃO (SUBSTITUTO DO CONFIRM) ---
   document.body.insertAdjacentHTML('beforeend', `
@@ -166,7 +206,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
   confirmModalCloseBtn.addEventListener('click', closeConfirmModal);
   confirmModal.addEventListener('click', (event) => { if (event.target === infoModal) { closeConfirmModal(); } });
-  // --- FIM: LÓGICA DO MODAL DE CONFIRMAÇÃO ---
 
   // --- INÍCIO: LÓGICA DO MODAL DE PROMPT (SUBSTITUTO DO PROMPT) ---
     document.body.insertAdjacentHTML('beforeend', `
@@ -206,18 +245,16 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   promptModalCancelBtn.addEventListener('click', closePromptModal);
   promptModalCloseBtn.addEventListener('click', closePromptModal);
   promptModal.addEventListener('click', (event) => { if (event.target === promptModal) { closePromptModal(); } });
-  // --- FIM: LÓGICA DO MODAL DE PROMPT ---
 
   let userId = null;
   let userGuildId = null;
   let currentGuildData = null;
   let userRank = 'member'; // leader | co-leader | member
 
-  // DOM helpers
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  // DOM references (may be null if not on page)
+  // DOM references
   const guildNameElement = $('#guildName');
   const guildDescriptionEl = $('#guildDescription');
   const guildMemberListElement = $('#guildMemberList');
@@ -225,7 +262,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   const noGuildContainer = $('#noGuildContainer');
   const editGuildBtn = $('#editGuildBtn');
   const editGuildModal = $('#editGuildModal');
-  const editTabContent = $('#editTabContent');
   const editGuildName = $('#editGuildName');
   const editNameInfo = $('#editNameInfo');
   const editGuildDescription = $('#editGuildDescription');
@@ -255,7 +291,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   const guildPowerEl = $('#guildPower');
   const guildRankingList = $('#guildRankingList');
   
-  // Novas referências DOM para o modal de visualização de guilda
   const viewGuildModal = $('#viewGuildModal');
   const viewGuildCloseBtn = $('#viewGuildCloseBtn');
   const guildViewContainer = $('#guildViewContainer');
@@ -265,9 +300,8 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   const guildViewLevelValue = $('#guildViewLevelValue');
   const guildViewMemberCountHeader = $('#guildViewMemberCountHeader');
   const guildViewMemberList = $('#guildViewMemberList');
-  const viewJoinGuildBtn = $('#viewJoinGuildBtn');
 
-  // --- Main tabs (tela inicial) ---
+  // --- Main tabs ---
   function activateMainTab(tabId){
     $$(`#tabMenu .tab-btn`).forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
     $$('#tabContent .tab-pane').forEach(p => {
@@ -292,7 +326,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     });
   }
 
-  // --- Edit modal tabs (supports #editTabMenu or legacy #editTabs) ---
+  // --- Edit modal tabs ---
   function activateEditTab(tabId){
     $$('#editTabContent .edit-tab-pane').forEach(p => {
       p.style.display = (p.id === tabId) ? 'block' : 'none';
@@ -390,27 +424,27 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     }
   }
 
-  // =======================================================================
-  // OTIMIZAÇÃO DE AUTH: Zero Egress Check
-  // =======================================================================
-  
   // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
-  function getLocalUserId() {
-    // 1. Tenta pegar do cache personalizado (criado no script.js)
+  async function getLocalUserId() {
+    // 1. Tenta GlobalDB
+    const globalAuth = await GlobalDB.getAuth();
+    if (globalAuth && globalAuth.value && globalAuth.value.user) {
+        return globalAuth.value.user.id;
+    }
+
+    // 2. Tenta pegar do cache personalizado
     try {
         const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
-            // Verifica se não expirou (ex: 24h)
             if (parsed && parsed.data && parsed.data.id && parsed.expires > Date.now()) {
                 return parsed.data.id;
             }
         }
     } catch (e) {}
 
-    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
+    // 3. Tenta pegar do cache interno do Supabase
     try {
-        // Loop simples para achar a chave do supabase no localStorage se o nome variar
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -427,15 +461,14 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   }
 
   async function getUserSession(){
-    // 1. Otimização: Tenta obter ID localmente antes de perguntar ao servidor
-    const localId = getLocalUserId();
+    // 1. Otimização: Tenta obter ID localmente
+    const localId = await getLocalUserId();
     if (localId) {
         userId = localId;
         return true;
     }
     
-    // 2. Fallback: Se não achar local, pergunta ao Supabase (gera egress)
-    // Lê o token JWT diretamente do LocalStorage (Cache)
+    // 2. Fallback: Se não achar local, pergunta ao Supabase
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session){ 
@@ -448,7 +481,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     return false;
   }
 
-  // Função para renderizar a UI com os dados da guilda
   async function renderGuildUI(guildData) {
       currentGuildData = guildData;
       const deleteGuildBtn = document.getElementById('deleteguild');
@@ -458,14 +490,11 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
 
       try{ if (typeof updateGuildXpBar==='function') updateGuildXpBar(currentGuildData); }catch(e){ console.error('updateGuildXpBar call failed', e); }
       
-      // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
       const allPlayersInGuild = guildData.players || [];
       const me = allPlayersInGuild.find(p => p.id === userId);
       userRank = me ? me.rank : 'member';
       
-      // Filtra admins APENAS para exibição e cálculos
       const visiblePlayers = allPlayersInGuild.filter(p => p.rank !== 'admin');
-      // --- FIM DA LÓGICA ---
 
       const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
       if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:155px;margin-right:8px;border-radius:6px; margin-top: 14px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
@@ -489,7 +518,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
 
       if (guildPowerValue === null) {
         try {
-          // Usa a lista de jogadores visíveis para o cálculo de fallback
           guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
         } catch(e){ guildPowerValue = 0; }
       }
@@ -500,10 +528,8 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
       if (guildMemberListElement){
         guildMemberListElement.innerHTML = '';
         const roles = ['leader','co-leader','member'];
-        // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a,b)=> roles.indexOf(a.rank) - roles.indexOf(b.rank));
         
-        // --- ÍCONE DE OLHO (SVG BRANCO) - TAMANHO AUMENTADO PARA 22px ---
         const eyeIcon = `
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="25" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-left: 6px; cursor: pointer; opacity: 0.9;">
             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -533,11 +559,9 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
       try{
         const lvlEl = document.getElementById('guildLevelValue');
         const memberCountHeader = document.getElementById('guildMemberCountHeader');
-        // Usa a contagem de jogadores visíveis
         const membersFromPlayers = visiblePlayers.length;
         if (lvlEl) lvlEl.textContent = guildData.level || '1';
         if (memberCountHeader) {
-            // Usa guildData.members_count (do DB) se disponível, senão usa a contagem visível
             const currentMembers = guildData.members_count ?? membersFromPlayers;
             const maxMembers = guildData.max_members || getMaxMembers(guildData.level || 1);
             memberCountHeader.textContent = `${currentMembers} / ${maxMembers}`;
@@ -546,7 +570,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
 
       if (editGuildBtn){
         editGuildBtn.style.display = 'inline-block';
-        // Passa o guildData original (não modificado) para o modal
         editGuildBtn.onclick = () => openEditGuildModal(currentGuildData);
       }
 
@@ -558,16 +581,21 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
 
     try {
       if (!userGuildId){
-        const { data: playerData } = await supabase.from('players').select('guild_id').eq('id', userId).single();
-        if (!playerData || !playerData.guild_id){
-          if (guildInfoContainer) guildInfoContainer.style.display='none';
-          if (noGuildContainer) noGuildContainer.style.display='block';
-          return;
+        // Otimização: Tenta pegar guild_id do GlobalDB antes de fazer fetch
+        const cachedPlayer = await GlobalDB.getPlayer();
+        if (cachedPlayer && cachedPlayer.guild_id) {
+            userGuildId = cachedPlayer.guild_id;
+        } else {
+            const { data: playerData } = await supabase.from('players').select('guild_id').eq('id', userId).single();
+            if (!playerData || !playerData.guild_id){
+                if (guildInfoContainer) guildInfoContainer.style.display='none';
+                if (noGuildContainer) noGuildContainer.style.display='block';
+                return;
+            }
+            userGuildId = playerData.guild_id;
         }
-        userGuildId = playerData.guild_id;
       }
       
-      // Tenta carregar do cache primeiro (duração de 1 hora)
       const cacheKey = `guild_info_${userGuildId}`;
       const cachedData = getCache(cacheKey);
       if (cachedData) {
@@ -585,7 +613,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         return;
       }
       
-      // Salva os novos dados no cache por 1 hora
       setCache(cacheKey, guildData, 24 * 60 * 60 * 1000);
       await renderGuildUI(guildData);
 
@@ -597,7 +624,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   async function fetchAndDisplayGuildInfo(guildId) {
     if (!viewGuildModal) return;
     try {
-        // --- LÓGICA DE CACHE PARA BUSCA/RANKING (7 DIAS, EXPIRA SEGUNDA-FEIRA) ---
         const cacheKey = `guild_view_public_${guildId}`;
         let guildData = getCache(cacheKey);
 
@@ -614,30 +640,19 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
                 return;
             }
             guildData = data;
-            
-            // Salva no cache com expiração na próxima segunda-feira meia-noite UTC
             setCache(cacheKey, guildData, getTtlUntilNextMonday());
-        } else {
-             console.log(`Dados públicos da guilda ${guildId} carregados do cache (7 dias).`);
         }
 
-        // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
         const allPlayersInGuild = guildData.players || [];
         const visiblePlayers = allPlayersInGuild.filter(p => p.rank !== 'admin');
-        // --- FIM DA LÓGICA ---
 
         const flagUrl = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
         guildViewName.innerHTML = `<img src="${flagUrl}" style="width:140px;height:150px;margin-right:8px;border-radius:6px;border:vertical-align:4px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
         guildViewDescription.textContent = guildData.description || '';
         guildViewLevelValue.textContent = guildData.level || 1;
-        // Usa a contagem de jogadores visíveis
         guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
-        // Cálculo de CP baseado no cache (ou dado fresco)
         let guildPowerValue = null;
-        // Para visualização pública cacheada, geralmente recalculamos baseados nos players que vieram no select,
-        // pois a RPC 'get_guild_power' não está sendo cacheada junto aqui.
-        // Fallback robusto usando soma dos players visíveis:
         try {
            guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
         } catch(e){ guildPowerValue = 0; }
@@ -647,11 +662,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
 
         guildViewMemberList.innerHTML = '';
         const roles = ['leader', 'co-leader', 'member'];
-        // Usa a lista de jogadores visíveis para renderizar
         const sorted = visiblePlayers.slice().sort((a, b) => roles.indexOf(a.rank) - roles.indexOf(b.rank));
-        
-        // --- ÍCONE DE AVIÃOZINHO DE PAPEL (SVG DOURADO) ---
-        // Ação alterada para 'go:pv?id='
         
         sorted.forEach(m => {
           const navUrl = `index.html?action=open_pv&target_id=${m.id}&target_name=${encodeURIComponent(m.name)}`;
@@ -665,8 +676,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
             `;
 
             const li = document.createElement('li');
-            // Removemos a classe 'player-link' e o atributo 'data-player-id' para evitar abrir o modal padrão
-            // Ícone movido para dentro do span do nome
             li.innerHTML = `
                 <img src="${m.avatar_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'}" 
                      style="width:38px;height:38px;border-radius:6px;margin-right:8px;">
@@ -690,13 +699,11 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
 
   async function loadGuildRanking(){
     try {
-      // Chave de cache fixa para o ranking semanal
       const cacheKey = `guild_ranking_weekly`;
-
       const cachedData = getCache(cacheKey);
       if (cachedData) {
           console.log("Ranking de guildas carregado do cache semanal.");
-          renderGuildRanking(cachedData); // Função para renderizar a UI
+          renderGuildRanking(cachedData); 
           return;
       }
       
@@ -704,7 +711,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
       const { data, error } = await supabase.rpc('get_guilds_ranking', { limit_count: 100 });
       if (error) throw error;
       
-      // Armazena no cache até a próxima segunda-feira meia-noite UTC
       setCache(cacheKey, data, getTtlUntilNextMonday());
       renderGuildRanking(data);
 
@@ -714,7 +720,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     }
   }
 
-  // Função separada para renderizar o ranking
   function renderGuildRanking(data) {
       const listEl = document.getElementById('guildRankingList');
       if (!listEl) return;
@@ -745,10 +750,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
                               <img alt="poder" src="https://aden-rpg.pages.dev/assets/CPicon.webp" style="width:18px; height:24px; margin-top:-2px;">
                               <span style="color:orange; font-weight:bold; font-size:1.1em;">${compactPower}</span>
                           </div>
-                          <span class="member-level" 
-                                style="font-weight: bold; color: lightblue; padding-left:10px; border-left:2px solid #777; font-size: 0.8em;">
-                              
-                          </span>
                       </div>
                   </div>
               </div>
@@ -773,13 +774,9 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   async function openEditGuildModal(guildData){
     if (!editGuildModal) return;
 
-    // --- LÓGICA DE ADMIN INVISÍVEL (REFINADA) ---
-    // Usa a lista de jogadores completa (não filtrada) para checar permissões
     const allPlayersInGuild = guildData.players || [];
     const isLeader = (guildData.leader_id === userId);
-    // Checa o rank na lista completa, permitindo que um admin-co-leader mantenha a permissão
     const isCoLeader = (allPlayersInGuild.find(p => p.id === userId) || {}).rank === 'co-leader';
-    // --- FIM DA LÓGICA ---
 
     $$('#editTabMenu .edit-tab-btn, #editTabs .edit-tab-btn').forEach(btn => {
       const tab = btn.dataset.tab;
@@ -848,7 +845,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
     }
 
     if (manageMembersList) manageMembersList.innerHTML = '';
-    // Filtra admins APENAS para a lista de "Gerenciar Membros"
     const members = allPlayersInGuild.filter(p => p.rank !== 'admin').slice().sort((a,b)=> a.rank === b.rank ? a.name.localeCompare(b.name) : (a.rank === 'leader' ? -1 : (b.rank === 'leader' ? 1 : (a.rank === 'co-leader' ? -1 : 1))));
     members.forEach(m => {
       if (!manageMembersList) return;
@@ -936,7 +932,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         if (error) throw error;
         await supabase.rpc('log_guild_action', { p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action: 'promote', p_message: null });
         showInfoModal('Promovido com sucesso!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+        localStorage.removeItem(`guild_info_${userGuildId}`); 
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao promover: ' + (e.message || e), 'error'); console.error(e); }
@@ -950,7 +946,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'demote', p_message:null });
         showInfoModal('Cargo de Co-Líder revogado.', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao revogar: ' + (e.message || e), 'error'); console.error(e); }
@@ -964,7 +960,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'promote', p_message:'transferred_leadership' });
         showInfoModal('Liderança transferida com sucesso!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
       } catch(e){ showInfoModal('Erro ao transferir liderança: ' + (e.message || e), 'error'); console.error(e); }
@@ -978,7 +974,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         if (error) throw error;
         await supabase.rpc('log_guild_action',{ p_guild_id: userGuildId, p_actor_id: userId, p_target_id: targetId, p_action:'expel', p_message:null });
         showInfoModal('Membro expulso.', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao expulsar: ' + (e.message || e), 'error'); console.error(e); }
@@ -1001,7 +997,6 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         showInfoModal('Solicitação removida (jogador já está em outra guilda ou não existe).');
       }
       
-      // GARANTIA: Limpa o cache ao aceitar para atualizar a lista imediatamente
       if (userGuildId) localStorage.removeItem(`guild_info_${userGuildId}`);
       
       await loadGuildInfo();
@@ -1033,7 +1028,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         const { error } = await supabase.rpc('update_guild_info', { p_guild_id: userGuildId, p_player_id: userId, p_name: newName, p_description: newDesc, p_flag_url: newFlag });
         if (error) throw error;
         showInfoModal('Guilda atualizada com sucesso!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         editGuildModal.style.display = 'none';
       } catch(e){ showInfoModal('Erro ao atualizar a guilda: ' + (e.message || e), 'error'); console.error(e); }
@@ -1047,7 +1042,7 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
         const { error } = await supabase.rpc('update_guild_notice', { p_guild_id: userGuildId, p_player_id: userId, p_notice: notice });
         if (error) throw error;
         showInfoModal('Aviso da guilda atualizado!', 'success');
-        localStorage.removeItem(`guild_info_${userGuildId}`); // Invalida o cache
+        localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();
         openEditGuildModal(currentGuildData);
       } catch(e){ showInfoModal('Erro ao atualizar aviso: ' + (e.message || e), 'error'); console.error(e); }
@@ -1136,7 +1131,11 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
       try {
         const { data, error } = await supabase.rpc('create_guild_for_player', { p_guild_name: g, p_player_id: userId });
         if (error) throw error;
-        if (data && data.length > 0) userGuildId = data[0].created_guild_id;
+        if (data && data.length > 0) {
+            userGuildId = data[0].created_guild_id;
+            // Atualiza GlobalDB com o novo ID da guilda
+            await GlobalDB.updatePlayerPartial({ guild_id: userGuildId });
+        }
         if (createGuildMessage) createGuildMessage.textContent = 'Guilda criada';
         setTimeout(()=>{ createGuildModal.style.display = 'none'; loadGuildInfo(); }, 800);
       } catch(e){ if (createGuildMessage) createGuildMessage.textContent = 'Erro: ' + (e.message || e); console.error(e); }
@@ -1146,10 +1145,8 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
   if (refreshBtn) refreshBtn.addEventListener('click', ()=> {
     if (userGuildId) {
         localStorage.removeItem(`guild_info_${userGuildId}`);
-        // Remove a chave antiga baseada na data para evitar confusão, embora a nova chave seja diferente.
         const today = new Date().toISOString().split('T')[0];
         localStorage.removeItem(`guild_ranking_${today}`);
-        // Remove a chave nova também para forçar refresh
         localStorage.removeItem(`guild_ranking_weekly`);
     }
     loadGuildInfo();
@@ -1170,7 +1167,9 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
           const { error } = await supabase.rpc('delete_guild', { p_guild_id: userGuildId, p_player_id: userId });
           if (error) throw error;
           showInfoModal('Guilda deletada com sucesso.', 'success');
-          localStorage.removeItem(`guild_info_${userGuildId}`); // Limpa o cache
+          // Atualiza GlobalDB removendo o guild_id
+          await GlobalDB.updatePlayerPartial({ guild_id: null });
+          localStorage.removeItem(`guild_info_${userGuildId}`);
           userGuildId = null;
           currentGuildData = null;
           await loadGuildInfo();
@@ -1190,7 +1189,9 @@ const SUPABASE_URL = window.SUPABASE_URL || 'https://lqzlblvmkuwedcofmgfb.supaba
           const { error } = await supabase.rpc('leave_guild', { p_player_id: userId });
           if (error) throw error;
           showInfoModal('Você saiu da guilda.', 'success');
-          localStorage.removeItem(`guild_info_${userGuildId}`); // Limpa o cache
+          // Atualiza GlobalDB removendo o guild_id
+          await GlobalDB.updatePlayerPartial({ guild_id: null });
+          localStorage.removeItem(`guild_info_${userGuildId}`); 
           userGuildId = null;
           currentGuildData = null;
           await loadGuildInfo();

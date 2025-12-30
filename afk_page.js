@@ -1,6 +1,10 @@
 import { supabase } from './supabaseClient.js'
 
-const GLOBAL_DB_NAME = 'aden_global_db'; 
+// =======================================================================
+// NOVO: ADEN GLOBAL DB (CÓPIA LOCAL PARA STANDALONE)
+// Garante acesso aos dados compartilhados (Auth, Player, Stats)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
 const GLOBAL_DB_VERSION = 1;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
@@ -46,13 +50,29 @@ const GlobalDB = {
             const tx = db.transaction(PLAYER_STORE, 'readwrite');
             tx.objectStore(PLAYER_STORE).put({ key: 'player_data', value: playerData });
         } catch(e) { console.warn("Erro ao salvar Player no DB Global", e); }
+    },
+    // Atualiza apenas campos específicos no cache global (XP, Gold, Level)
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+            }
+        } catch(e) { console.warn("Erro update parcial", e); }
     }
 };
-
 // =======================================================================
 
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM totalmente carregado. Iniciando script afk_page.js CORREÇÃO DE TIMER...");
+    console.log("DOM totalmente carregado. Iniciando script afk_page.js OTIMIZADO COM GLOBAL DB...");
 
     // 🎵 Sons e músicas
     const normalHitSound = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -67,13 +87,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     idleMusic.loop = true;
     combatMusic.loop = true;
 
-    // --- CONFIGURAÇÕES DE CÁLCULO ---
-    const XP_RATE_PER_SEC = 1.0 / 1800; 
-    const GOLD_RATE_PER_SEC = 0;        
+
+    // --- CONFIGURAÇÕES DE CÁLCULO (Sincronizado com SQL) ---
+    const XP_RATE_PER_SEC = 1.0 / 1800; // Conforme SQL
+    const GOLD_RATE_PER_SEC = 0;        // Conforme SQL
     const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
     const MIN_COLLECT_SECONDS = 3600;    // 1 hora
-    const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; 
-    const STATS_CACHE_DURATION = 48 * 60 * 60 * 1000; 
+    const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; // Aumentado para 24h devido ao GlobalDB
+    const STATS_CACHE_DURATION = 48 * 60 * 60 * 1000; // 12 Horas para stats de combate
 
     // --- UI ELEMENTS ---
     const afkXpSpan = document.getElementById("afk-xp");
@@ -84,6 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const startAfkBtn = document.getElementById("start-afk");
     const idleScreen = document.getElementById("idle-screen");
     const dailyAttemptsLeftSpan = document.getElementById("daily-attempts-left");
+    const startAfkCooldownDisplay = document.getElementById("start-afk-cooldown-display");
     const saibaMaisBtn = document.getElementById("saiba-mais");
     const playerTotalXpSpan = document.getElementById("player-total-xp");
     const playerTotalGoldSpan = document.getElementById("player-total-gold");
@@ -115,18 +137,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
 
     // --- STATE MANAGEMENT ---
-    let playerAfkData = {}; 
+    let playerAfkData = {}; // Cache em memória
     let afkStartTime = null;
+    let timerInterval;
     let localSimulationInterval;
-    let cachedCombatStats = null; 
-    let userId = null; 
+    let cachedCombatStats = null; // Stats de combate (Dano, Crit) - Compartilhado com Mina
+    let userId = null; // Inicializa nulo para validação posterior
 
-    // --- HELPER DE AUTH ---
+    // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
     async function getLocalUserId() {
+        // 1. Tenta Auth GlobalDB
         const globalAuth = await GlobalDB.getAuth();
         if (globalAuth && globalAuth.value && globalAuth.value.user) {
             return globalAuth.value.user.id;
         }
+
+        // 2. Fallback LocalStorage (Legacy)
         try {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
@@ -135,6 +161,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (parsed && parsed.id) return parsed.id;
             }
         } catch (e) {}
+        
+        // 3. Fallback Supabase Key
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -147,11 +175,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         return null;
     }
 
+    // --- VISUAL FORMATTING ---
     function formatNumberCompact(num) {
         return new Intl.NumberFormat('en-US').format(num);
     }
 
-    // --- SIMULAÇÃO LOCAL ---
+    // --- CORE LOGIC: SIMULAÇÃO LOCAL (Zero Egress) ---
     function updateLocalSimulation() {
         if (!afkStartTime || !playerAfkData) return;
 
@@ -176,6 +205,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         afkXpSpan.textContent = formatNumberCompact(xpEarned);
         afkGoldSpan.textContent = formatNumberCompact(goldEarned);
 
+        // Botão Coletar
         const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
         collectBtn.disabled = !isCollectable;
         if(collectBtn.disabled) {
@@ -187,39 +217,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // --- NOVO: CACHE DE COMBAT STATS (Sincronizado com Mina) ---
     async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
         if (!userId) return null;
+        const now = Date.now();
+        // NOTA: Usa a MESMA chave da mina para compartilhar o cache
         const cacheKey = `player_combat_stats_${userId}`; 
+        
+        // Tenta ler do LocalStorage
         let stored = localStorage.getItem(cacheKey);
         if (stored && !forceUpdate) {
             try {
                 const parsed = JSON.parse(stored);
-                if (Date.now() - parsed.timestamp < STATS_CACHE_DURATION) {
+                // Verifica validade (12h)
+                if (now - parsed.timestamp < STATS_CACHE_DURATION) {
                     cachedCombatStats = parsed.data;
+                    console.log("[AFK] Combat stats carregados do cache local.");
                     return cachedCombatStats;
                 }
-            } catch(e) {}
+            } catch(e) { console.warn("Cache stats inválido", e); }
         }
         return null;
     }
 
-    // --- DATA MANAGEMENT ---
+    // --- DATA MANAGEMENT (Cache & Sync) ---
     
     function renderPlayerData() {
         if (!playerAfkData) return;
         
-        // Verifica o campo correto vindo do DB
-        const startTimeStr = playerAfkData.last_afk_start_time || playerAfkData.last_afk_start;
-        
-        if (startTimeStr) {
-            afkStartTime = new Date(startTimeStr).getTime();
-            // Segurança extra: data inválida ou no futuro
-            if (isNaN(afkStartTime) || afkStartTime > Date.now()) {
-                console.warn("Data de AFK inválida ou futura, resetando visualmente.");
-                afkStartTime = Date.now();
-            }
+        if (playerAfkData.last_afk_start_time) {
+            afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
         } else {
-            console.log("Nenhum tempo anterior encontrado, iniciando contagem visual agora.");
             afkStartTime = Date.now();
         }
 
@@ -232,58 +260,60 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateLocalSimulation();
     }
 
-    // Helper para salvar cache otimizado
+    // Helper para salvar cache otimizado (GlobalDB)
     async function saveToCache(data) {
         if (!userId) return;
-        if (!data.id) data.id = userId;
+        // 1. Salva no GlobalDB (IndexedDB)
         await GlobalDB.setPlayer(data);
+        
+        // 2. Mantém compatibilidade com LocalStorage (Legacy) para outras páginas que ainda não migraram
         const cacheKey = `playerAfkData_${userId}`;
         localStorage.setItem(cacheKey, JSON.stringify({ data: data, timestamp: Date.now() }));
     }
 
     async function initializePlayerData() {
+        // 1. Tenta recuperar ID localmente primeiro
         userId = await getLocalUserId();
 
+        // 2. Se não encontrar, tenta obter da sessão do Supabase
         if (!userId) {
-            const { data: sessionData } = await supabase.auth.getSession();
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
             if (sessionData && sessionData.session) {
                 userId = sessionData.session.user.id;
             } else {
+                console.warn("Nenhum usuário autenticado encontrado. Redirecionando para login.");
                 window.location.href = "index.html";
                 return;
             }
         }
 
+        // --- BLINDAGEM DE SESSÃO E CACHE ---
+
+        // 3. Tenta carregar/validar cache de combate
         await getOrUpdatePlayerStatsCache();
 
+        // 4. Lógica Otimizada: Tenta ler do GlobalDB primeiro
         let shouldUseCache = false;
         
         // Tenta GlobalDB
         const globalData = await GlobalDB.getPlayer();
         if (globalData) {
-            // FIX CRÍTICO: Só usa o cache se tiver o ID E a data de início válida
-            // Se não tiver data, o cache é inútil para o AFK e vai causar o reset
-            const hasValidTime = globalData.last_afk_start_time || globalData.last_afk_start;
-            
-            if (globalData.id === userId && hasValidTime) {
+            // Verifica validade simples (ex: se tem os campos necessários)
+            if (globalData.id === userId) {
                 playerAfkData = globalData;
                 shouldUseCache = true;
-                console.log("[AFK] Dados válidos carregados via GlobalDB.");
-            } else {
-                console.log("[AFK] Cache incompleto (sem data de início). Forçando busca no servidor.");
+                console.log("[AFK] Dados carregados via GlobalDB (Zero Egress).");
             }
         }
 
-        // Fallback LocalStorage (também com validação de tempo)
+        // Fallback: Tenta LocalStorage Legacy
         if (!shouldUseCache) {
             const cacheKey = `playerAfkData_${userId}`;
             const cached = localStorage.getItem(cacheKey);
             if (cached) {
                 try {
                     const { data, timestamp } = JSON.parse(cached);
-                    const hasValidTime = data.last_afk_start_time || data.last_afk_start;
-                    
-                    if ((Date.now() - timestamp < CACHE_EXPIRATION_MS) && hasValidTime) {
+                    if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
                         playerAfkData = data;
                         shouldUseCache = true;
                     }
@@ -291,50 +321,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
 
-        // Se o cache falhou ou estava incompleto, busca no servidor
-        if (!shouldUseCache) {
-            console.log("Buscando dados limpos no servidor...");
-            
-            let { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
-
-            if (error || (data && data.error)) {
-                const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-                if (!refreshError && refreshData.session) {
-                    userId = refreshData.session.user.id; 
-                    const retry = await supabase.rpc('get_player_afk_data', { uid: userId });
-                    data = retry.data;
-                    error = retry.error;
-                } else {
-                    return;
-                }
-            }
-
-            if (data && !error && !data.error) {
-                playerAfkData = data;
-                playerAfkData.id = userId;
-
-                // Garante que o objeto tenha o campo unificado para evitar confusão futura
-                if (!playerAfkData.last_afk_start_time && playerAfkData.last_afk_start) {
-                    playerAfkData.last_afk_start_time = playerAfkData.last_afk_start;
-                }
-
-                if (playerAfkData.cached_combat_stats) {
-                    const statsKey = `player_combat_stats_${userId}`;
-                    localStorage.setItem(statsKey, JSON.stringify({
-                        timestamp: Date.now(),
-                        data: playerAfkData.cached_combat_stats
-                    }));
-                }
-                saveToCache(playerAfkData);
-            }
-        } else {
-            // Se usou cache, faz verificação leve de reset diário
+        // Reset Diário Otimizado
+        if (shouldUseCache) {
             const lastResetDate = new Date(playerAfkData.last_attempt_reset || 0);
             const now = new Date();
             const isNewDayUtc = now.getUTCDate() !== lastResetDate.getUTCDate() || 
-                                now.getUTCMonth() !== lastResetDate.getUTCMonth();
+                                now.getUTCMonth() !== lastResetDate.getUTCMonth() || 
+                                now.getUTCFullYear() !== lastResetDate.getUTCFullYear();
 
             if (isNewDayUtc) {
+                console.log("Virada de dia detectada (UTC). Verificando reset via RPC leve...");
                 const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
                 if (!resetError && resetData) {
                     playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
@@ -343,6 +339,41 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                     saveToCache(playerAfkData);
                 }
+            }
+        }
+
+        if (!shouldUseCache) {
+            console.log("Cache inválido ou inexistente. Buscando dados completos no servidor...");
+            
+            let { data, error } = await supabase.rpc('get_player_afk_data', { uid: userId });
+
+            if (error || (data && data.error)) {
+                console.warn("Erro ao buscar dados ou Token Expirado. Tentando refresh...", error || data?.error);
+                const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+                
+                if (!refreshError && refreshData.session) {
+                    userId = refreshData.session.user.id; 
+                    const retry = await supabase.rpc('get_player_afk_data', { uid: userId });
+                    data = retry.data;
+                    error = retry.error;
+                } else {
+                    window.location.href = "index.html"; 
+                    return;
+                }
+            }
+
+            if (data && !error && !data.error) {
+                playerAfkData = data;
+                
+                // Sincroniza o cache local de combate
+                if (playerAfkData.cached_combat_stats) {
+                    const statsKey = `player_combat_stats_${userId}`;
+                    localStorage.setItem(statsKey, JSON.stringify({
+                        timestamp: Date.now(),
+                        data: playerAfkData.cached_combat_stats
+                    }));
+                }
+                saveToCache(playerAfkData);
             }
         }
 
@@ -370,6 +401,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!userId || collectBtn.disabled) return;
         collectBtn.disabled = true; 
         
+        // Chama a procedure que calcula e aplica XP/Ouro e Level Up
         const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
         
         if (error) {
@@ -378,16 +410,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        // Otimização: A procedure 'collect_afk_rewards' já retorna o novo estado (XP, Nível, etc)
+        // ou o delta. Vamos assumir que ela retorna os dados para atualizar o cliente.
+        // Baseado no script SQL fornecido (check_and_level_up_player), o update já ocorre no banco.
+        
+        // Atualiza objeto local com o retorno da RPC
         if (data) {
+            // Atualiza XP acumulado e Ouro
             if (data.xp_earned) playerAfkData.xp = (playerAfkData.xp || 0) + data.xp_earned;
             if (data.gold_earned) playerAfkData.gold = (playerAfkData.gold || 0) + data.gold_earned;
             
-            // Atualiza data de início para agora
+            // Reseta timer
             playerAfkData.last_afk_start_time = new Date().toISOString();
-            playerAfkData.last_afk_start = playerAfkData.last_afk_start_time; // Compatibilidade
 
+            // Se houve Level Up, a RPC deve retornar os novos stats e nível
             if (data.leveled_up) {
                 playerAfkData.level = data.new_level;
+                
+                // Se a RPC retornar os novos stats (attack, def, health), atualizamos também
+                // Isso garante que o cache global tenha os stats corretos para Arena/Mina
                 if (data.new_attack) playerAfkData.attack = data.new_attack;
                 if (data.new_defense) playerAfkData.defense = data.new_defense;
                 if (data.new_health) playerAfkData.health = data.new_health;
@@ -396,11 +437,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 showLevelUpBalloon(data.new_level);
             } else if (data.new_xp_needed) {
+                // Mesmo sem upar, o requisito pode mudar (ex: visualização)
                 playerAfkData.xp_needed_for_level = data.new_xp_needed;
             }
         }
 
+        // Atualiza o GlobalDB imediatamente para que o Index.js leia o novo nível/XP sem fetch
         await saveToCache(playerAfkData);
+        
+        // Se houve mudança de stats (level up), atualiza também a tabela parcial de stats se estivermos usando uma store separada,
+        // mas o saveToCache acima já atualiza o objeto player completo no PLAYER_STORE.
+        
         renderPlayerData();
 
         resultText.textContent = `Você coletou ${formatNumberCompact(data.xp_earned || 0)} XP e ${formatNumberCompact(data.gold_earned || 0)} Ouro!`;
@@ -416,14 +463,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         if (error || !data?.success) {
-            resultText.textContent = data?.message || "Erro desconhecido.";
+            const msg = data?.message || error?.message || "Erro desconhecido.";
+            resultText.textContent = msg;
             resultModal.style.display = "block";
-            // Limpa cache para forçar reload na próxima
+            // Força recarga do cache se der erro crítico de sincronia
             localStorage.removeItem(`playerAfkData_${userId}`);
             initializePlayerData();
             return;
         }
 
+        // Atualiza estado local com resultado da aventura
         playerAfkData.daily_attempts_left = data.daily_attempts_left;
         
         if (data.venceu) {
@@ -436,9 +485,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         if (data.leveled_up) {
             playerAfkData.level = data.new_level;
-            if (data.new_stats) Object.assign(playerAfkData, data.new_stats);
+            // Se houver dados de stats retornados na aventura, atualizar aqui também
+            // (Assumindo que start_afk_adventure também pode retornar stats atualizados se upou)
+            if (data.new_stats) {
+                Object.assign(playerAfkData, data.new_stats);
+            }
         }
 
+        // Salva estado atualizado no GlobalDB
         await saveToCache(playerAfkData);
         renderPlayerData();
 
@@ -486,14 +540,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 let currentAttackIndex = 0;
                 
+                // --- INICIO DA OTIMIZAÇÃO: Animação com suporte a log compactado ---
                 const animateAttack = () => {
                     if (currentAttackIndex < attackLog.length) {
                         const attackData = attackLog[currentAttackIndex];
                         let damage, isCrit;
 
+                        // Verifica se é o formato novo (Array) ou antigo (Objeto)
                         if (Array.isArray(attackData)) {
                             damage = attackData[0];
-                            isCrit = attackData[1] === 1; 
+                            isCrit = attackData[1] === 1; // 1 é true
                         } else {
                             damage = attackData.damage;
                             isCrit = attackData.is_crit;
@@ -539,6 +595,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         if (data.leveled_up) showLevelUpBalloon(data.new_level);
                     }
                 };
+                // --- FIM DA OTIMIZAÇÃO ---
+                
                 animateAttack();
             }
         }, 1000);

@@ -46,7 +46,9 @@ async function saveCache(items, stats, timestamp) {
     const meta = tx.objectStore(META_STORE);
 
     store.clear();
-    (items || []).forEach(item => store.put(item));
+    // Filtro de segurança extra: nunca salva item com qtd 0 no banco
+    const validItems = (items || []).filter(item => item.quantity > 0);
+    validItems.forEach(item => store.put(item));
     
     meta.put({ key: "last_updated", value: timestamp }); 
     meta.put({ key: "player_stats", value: stats });     
@@ -88,6 +90,10 @@ async function getLastUpdated() {
 }
 
 async function updateCacheItem(item) {
+    // Se tentar atualizar um item para qtd 0, removemos ele
+    if (item.quantity <= 0) {
+        return removeCacheItem(item.id);
+    }
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
     tx.objectStore(STORE_NAME).put(item);
@@ -306,7 +312,10 @@ async function loadPlayerAndItems(forceRefresh = false) {
             // Se o cache local estiver saudável, usamos ele
             if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
                 console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                allInventoryItems = itemsFromCache;
+                
+                // Filtro Imediato: Remove itens com quantidade 0 que podem ter ficado no cache
+                allInventoryItems = itemsFromCache.filter(i => i.quantity > 0);
+                
                 playerBaseStats = statsFromCache;
                 equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
                 
@@ -332,10 +341,14 @@ async function loadPlayerAndItems(forceRefresh = false) {
 
     // Atualiza variáveis globais com o retorno da RPC
     playerBaseStats = playerData.cached_combat_stats || {};
-    allInventoryItems = playerData.cached_inventory || [];
+    
+    // Filtro Imediato: Garante que o que veio do servidor também seja limpo
+    const rawItems = playerData.cached_inventory || [];
+    allInventoryItems = rawItems.filter(item => item.quantity > 0);
+    
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // 3. Salva no IndexedDB para a próxima vez
+    // 3. Salva no IndexedDB para a próxima vez (saveCache já filtra > 0 internamente também)
     await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
     console.log('💾 Cache local atualizado.');
 
@@ -421,7 +434,9 @@ async function loadItems(tab = 'all', itemsList = null) {
     bagItemsGrid.innerHTML = '';
 
     const filteredItems = items.filter(item => {
+        // SEGURANÇA VISUAL: Não renderiza se for equipado OU se quantidade <= 0
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
+        
         if (tab === 'all') return true;
         if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
         if (tab === 'fragments' && item.items.item_type === 'fragmento') return true;
@@ -980,10 +995,18 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
 
         if (fetchItem) {
              const idx = allInventoryItems.findIndex(i => i.id === fetchItem.id);
-             if (idx !== -1) {
-                 allInventoryItems[idx] = fetchItem;
+             
+             // SEGURANÇA: Se a quantidade retornada for 0 ou menos, removemos do array
+             if (fetchItem.quantity > 0) {
+                 if (idx !== -1) {
+                     allInventoryItems[idx] = fetchItem;
+                 } else {
+                     allInventoryItems.push(fetchItem); // Caso raro de item novo
+                 }
              } else {
-                 allInventoryItems.push(fetchItem); // Caso raro de item novo
+                 if (idx !== -1) {
+                     allInventoryItems.splice(idx, 1);
+                 }
              }
              selectedItem = fetchItem; // Atualiza a seleção atual
         }
@@ -1014,7 +1037,7 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
             .eq('id', newItem.id || newItem)
             .single();
         
-        if (newFetchItem) {
+        if (newFetchItem && newFetchItem.quantity > 0) {
             allInventoryItems.push(newFetchItem);
         }
     }
@@ -1028,7 +1051,9 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
     // O backend já recalculou isso na tabela players. Vamos buscar só essa coluna (MUITO leve).
     await refreshPlayerStatsOnly();
 
-    // 6. Atualiza Globais
+    // 6. Atualiza Globais e Limpa Fantasmas antes de salvar
+    // Filtro de segurança final para garantir que o array na memória esteja limpo
+    allInventoryItems = allInventoryItems.filter(i => i.quantity > 0);
     equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null);
 
     // 7. Salva no Cache Local e Re-renderiza

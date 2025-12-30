@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             console.log("[Tavern] Cache local ausente. Buscando do servidor...");
             // ALTERADO: De getUser() para getSession()
-            const { data: { session } } = await supabase.auth.getSession();
+            
             if (!session || !session.user) return false;
             userId = session.user.id;
 

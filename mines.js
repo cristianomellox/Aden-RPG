@@ -908,28 +908,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadMines() {
     showLoading();
     try {
+      // 1. Baixa as minas (leve)
       const { data: mines, error } = await supabase
         .from("mining_caverns")
         .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
         .order("name", { ascending: true });
       if (error) throw error;
 
-      const ownerIds = Array.from(new Set((mines || []).map(m => m.owner_player_id).filter(Boolean)));
-      const ownersMap = {};
-      if (ownerIds.length) {
-        const { data: ownersData } = await supabase.from("players").select("id, name, avatar_url, guild_id").in("id", ownerIds);
-        (ownersData || []).forEach(p => ownersMap[p.id] = p);
+      // 2. Filtra IDs de donos que NÃO estão no cache global
+      const allOwnerIds = (mines || []).map(m => m.owner_player_id).filter(Boolean);
+      const uniqueOwnerIds = [...new Set(allOwnerIds)];
+      
+      const idsToFetch = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
+
+      // 3. Só busca no banco os donos novos/desconhecidos
+      if (idsToFetch.length > 0) {
+        const { data: ownersData } = await supabase
+            .from("players")
+            .select("id, name, avatar_url, guild_id")
+            .in("id", idsToFetch);
+            
+        (ownersData || []).forEach(p => globalOwnersMap[p.id] = p);
       }
 
-      // ALTERAÇÃO: Identifica se eu já sou dono de alguma mina
+      // Agora globalOwnersMap tem todo mundo necessário
+      const ownersMap = globalOwnersMap;
+
       const myMine = (mines || []).find(m => m.owner_player_id === userId);
       myOwnedMineId = myMine ? myMine.id : null;
 
       renderMines(mines || [], ownersMap);
       await updateDominantGuild(mines || [], ownersMap);
-      
-      // 3) REMOVIDO: await syncAndCheckLogs(); (Agora apenas no boot)
-      
       await updatePVPAttemptsUI();
       await updatePlayerMineUI();
     } catch (err) {

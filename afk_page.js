@@ -206,7 +206,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         afkGoldSpan.textContent = formatNumberCompact(goldEarned);
 
         // Botão Coletar
-        const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
+        const isCollectable =
+    afkStartTime &&
+    secondsElapsed >= MIN_COLLECT_SECONDS &&
+    (xpEarned > 0 || goldEarned > 0);
+
         collectBtn.disabled = !isCollectable;
         if(collectBtn.disabled) {
             collectBtn.style.opacity = "0.5";
@@ -247,10 +251,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         if (playerAfkData.last_afk_start_time) {
     afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
+    updateLocalSimulation(); // 🔥 força cálculo imediato
 } else {
-    // NÃO recria AFK automaticamente
     afkStartTime = null;
+    collectBtn.disabled = true;
 }
+
 
 
         playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
@@ -424,6 +430,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Reseta timer
             playerAfkData.last_afk_start_time = new Date().toISOString();
+            
+            afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
+updateLocalSimulation();
+
 
             // Se houve Level Up, a RPC deve retornar os novos stats e nível
             if (data.leveled_up) {

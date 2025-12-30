@@ -1,4 +1,3 @@
-import { supabase } from './supabaseClient.js'
 
 // =======================================================================
 // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
@@ -115,6 +114,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const messageDiv = document.getElementById('reward-message');
     const returnBtn = document.getElementById('return-btn'); 
     returnBtn.style.display = 'none'; 
+
+const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let claimToken = localStorage.getItem('pending_reward_token');
 

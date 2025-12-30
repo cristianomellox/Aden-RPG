@@ -246,10 +246,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!playerAfkData) return;
         
         if (playerAfkData.last_afk_start_time) {
-            afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
-        } else {
-            afkStartTime = Date.now();
-        }
+    afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
+} else {
+    // NÃO recria AFK automaticamente
+    afkStartTime = null;
+}
+
 
         playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
         playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
@@ -474,6 +476,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Atualiza estado local com resultado da aventura
         playerAfkData.daily_attempts_left = data.daily_attempts_left;
+        
+      // ✅ REGISTRA O INÍCIO DO AFK (IMPORTANTE)
+if (!playerAfkData.last_afk_start_time) {
+    playerAfkData.last_afk_start_time = new Date().toISOString();
+}
+  
         
         if (data.venceu) {
             playerAfkData.xp = (playerAfkData.xp || 0) + (data.xp_ganho || 0);

@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         globalUser = { id: localId };
     } else {
         console.warn("Auth Cache Miss: Buscando sessão no servidor...");
-        const { data: { session } } = await supabase.auth.getSession();
+        
         if (!session) {
             console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
             window.location.href = "index.html?refresh=true";

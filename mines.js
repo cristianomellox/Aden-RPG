@@ -1560,7 +1560,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (window.currentPlayerId) userId = window.currentPlayerId;
 
       if (!userId) {
-          const { data: { session } } = await supabase.auth.getSession();
+          
           if (!session) { window.location.href = "index.html"; return; }
           userId = session.user.id;
       }

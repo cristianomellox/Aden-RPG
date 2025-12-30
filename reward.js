@@ -1,14 +1,57 @@
 import { supabase } from './supabaseClient.js'
 
+// =======================================================================
+// NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+// =======================================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 1;
+const AUTH_STORE = 'auth_store';
+const PLAYER_STORE = 'player_store';
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    // Atualiza apenas campos específicos no cache global (ex: Cristais)
+    updatePlayerPartial: async function(changes) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            const store = tx.objectStore(PLAYER_STORE);
+            
+            const currentData = await new Promise(resolve => {
+                const req = store.get('player_data');
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+
+            if (currentData) {
+                const newData = { ...currentData, ...changes };
+                store.put({ key: 'player_data', value: newData });
+                console.log("[Reward] GlobalDB atualizado com novos dados:", changes);
+            }
+        } catch(e) { console.warn("Erro update parcial GlobalDB", e); }
+    }
+};
+
 // ============================================================
-// HELPER INDEXEDDB (Duplicado para funcionar isolado no reward.js)
+// HELPER INDEXEDDB (INVENTÁRIO)
 // ============================================================
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 41; // Mesma versão dos outros arquivos
+const DB_VERSION = 41;
 
-function openDB() {
+function openInventoryDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onsuccess = () => resolve(req.result);
@@ -18,7 +61,7 @@ function openDB() {
 
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
-        const db = await openDB();
+        const db = await openInventoryDB();
         const tx = db.transaction([STORE_NAME, META_STORE], "readwrite");
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
@@ -34,9 +77,8 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza Stats (Cristais)
+        // 3. Atualiza Stats (Cristais) no Meta Store
         if (updatedStats) {
-            // Precisamos ler primeiro porque não queremos sobrescrever outros stats
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
@@ -101,17 +143,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Atualiza a mensagem na tela
         messageDiv.innerHTML = `<h2>Recompensa Recebida!</h2><p>${rpcData.message}</p><p>Sincronizando dados...</p>`;
         
-        // === ATUALIZAÇÃO DE CACHE (ZERO EGRESS) ===
+        // === ATUALIZAÇÃO DE CACHE (ZERO EGRESS & GLOBAL DB) ===
         
-        // 1. Atualiza LocalStorage (Cristais)
+        const updates = {};
+        
+        // 1. Atualiza LocalStorage (Cristais) e prepara objeto de updates
         if (typeof rpcData.new_crystals === 'number') {
             updateLocalPlayerCache(rpcData.new_crystals);
+            updates.crystals = rpcData.new_crystals;
         }
 
-        // 2. Atualiza IndexedDB (Itens e Timestamp)
+        // 2. Atualiza IndexedDB de Inventário (Itens e Timestamp)
         if (rpcData.new_timestamp) {
             const statsUpdate = (typeof rpcData.new_crystals === 'number') ? { crystals: rpcData.new_crystals } : null;
             await surgicalCacheUpdate(rpcData.inventory_updates || [], rpcData.new_timestamp, statsUpdate);
+        }
+
+        // 3. Atualiza GlobalDB (Player Store) para que a Home/Loja leia o saldo correto imediatamente
+        if (Object.keys(updates).length > 0) {
+            await GlobalDB.updatePlayerPartial(updates);
         }
 
         messageDiv.innerHTML += `<p>Retornando à loja...</p>`;

@@ -1482,7 +1482,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             userId = await getLocalUserId();
             if (!userId) {
                 // Se não achou em nenhum lugar, tenta sessão de rede
-                const { data: { session } } = await supabase.auth.getSession();
+                
                 if (!session) { window.location.href = "index.html"; return; }
                 userId = session.user.id;
             }

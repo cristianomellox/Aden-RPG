@@ -1953,39 +1953,35 @@ const drawResultsModal = document.getElementById('drawResultsModal');
 const drawResultsGrid = document.getElementById('drawResultsGrid');
 
 async function updateCardCounts() {
-    // Tenta ler do cache local primeiro
+    // Tenta ler do cache local primeiro usando getAll e filter (pois chave é UUID)
     try {
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
 
-        // ID 41 = Comum, ID 42 = Avançado
-        const req41 = store.get(41);
-        const req42 = store.get(42);
-
-        // Promise para aguardar ambas as leituras
-        const [card41, card42] = await new Promise(resolve => {
-            let c41 = null, c42 = null;
-            let completed = 0;
-            const check = () => { if (++completed === 2) resolve([c41, c42]); };
-
-            req41.onsuccess = () => { c41 = req41.result; check(); };
-            req41.onerror = () => check();
-            req42.onsuccess = () => { c42 = req42.result; check(); };
-            req42.onerror = () => check();
+        const allItems = await new Promise((resolve) => {
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
         });
 
+        // Filtra pelos IDs 41 e 42
+        // Verifica tanto em propriedade plana quanto em join aninhado
+        const commonCards = allItems.find(i => (i.item_id === 41) || (i.items && i.items.item_id === 41));
+        const advancedCards = allItems.find(i => (i.item_id === 42) || (i.items && i.items.item_id === 42));
+
         // Atualiza UI
-        commonCardCountSpan.textContent = `x ${card41 ? card41.quantity : 0}`;
-        advancedCardCountSpan.textContent = `x ${card42 ? card42.quantity : 0}`;
+        commonCardCountSpan.textContent = `x ${commonCards ? commonCards.quantity : 0}`;
+        advancedCardCountSpan.textContent = `x ${advancedCards ? advancedCards.quantity : 0}`;
         
-        // Se encontrou dados locais, retorna e evita chamada de rede
-        if (card41 || card42) return;
+        // Se encontrou dados locais (ou confirmou que é zero), retorna.
+        return;
 
     } catch (e) {
         console.warn("Erro ao ler cartões do cache local:", e);
     }
 
+    // Fallback: Rede (apenas se DB local falhar totalmente)
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) return;
 
@@ -2073,12 +2069,12 @@ confirmPurchaseBtn.addEventListener('click', async () => {
     // Atualiza SALDO localmente sem refresh completo
     updateLocalPlayerData({ crystals: data.new_crystals });
     
-    await updateCardCounts();
-
     // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
     if (data.updated_item && data.timestamp) {
         await surgicalCacheUpdate([data.updated_item], data.timestamp, { crystals: data.new_crystals });
     }
+    
+    await updateCardCounts();
     
     setTimeout(() => {
         buyCardsModal.style.display = 'none';
@@ -2132,26 +2128,34 @@ confirmDrawBtn.addEventListener('click', async () => {
     let itemsToUpdate = data.inventory_updates || [];
 
     // Verifica se o servidor já mandou a atualização do cartão gasto. 
-    // Se NÃO mandou, nós manipulamos localmente para garantir o decremento.
+    // Se NÃO mandou, nós manipulamos localmente para garantir o decremento no slot CORRETO.
     const serverSentCardUpdate = itemsToUpdate.find(i => i.item_id === usedCardId);
 
     if (!serverSentCardUpdate) {
         try {
             const db = await openDB();
-            // Busca o item atual no DB para pegar a estrutura completa (nome, tipo, etc)
-            const cardItem = await new Promise(resolve => {
-                const tx = db.transaction(STORE_NAME, 'readonly');
-                const req = tx.objectStore(STORE_NAME).get(usedCardId);
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => resolve(null);
+            const tx = db.transaction(STORE_NAME, 'readonly'); // Apenas leitura para busca
+            const store = tx.objectStore(STORE_NAME);
+
+            // Pega todos os itens para encontrar o slot correto (UUID)
+            const allItems = await new Promise((resolve) => {
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
             });
 
-            if (cardItem) {
-                // Subtrai a quantidade gasta localmente
-                cardItem.quantity = Math.max(0, cardItem.quantity - quantity);
+            // Encontra a linha específica do inventário que tem esse item_id
+            const cardSlot = allItems.find(i => (i.item_id === usedCardId) || (i.items && i.items.item_id === usedCardId));
+
+            if (cardSlot) {
+                // Clona para modificar sem afetar referências
+                const updatedSlot = JSON.parse(JSON.stringify(cardSlot));
+                // Subtrai a quantidade gasta
+                updatedSlot.quantity = Math.max(0, updatedSlot.quantity - quantity);
+                
                 // Adiciona à lista de updates para ser salvo
-                itemsToUpdate.push(cardItem);
-                console.log(`[Gacha] Cartão ${usedCardId} decrementado localmente para: ${cardItem.quantity}`);
+                itemsToUpdate.push(updatedSlot);
+                console.log(`[Gacha Fix] Cartão ${usedCardId} decrementado localmente (Slot ID: ${updatedSlot.id || 'N/A'}) para: ${updatedSlot.quantity}`);
             }
         } catch (e) {
             console.warn("Erro ao decrementar cartão localmente:", e);
@@ -2159,7 +2163,7 @@ confirmDrawBtn.addEventListener('click', async () => {
     }
 
     // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
-    // Agora passamos a lista completa (Prêmios + Cartão Gasto)
+    // Agora passamos a lista completa (Prêmios + Cartão Gasto Corrigido)
     if (itemsToUpdate.length > 0 && data.timestamp) {
         await surgicalCacheUpdate(itemsToUpdate, data.timestamp);
     }

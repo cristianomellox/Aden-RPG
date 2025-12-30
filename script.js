@@ -1086,35 +1086,10 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
     }
 }
 
-// Nova função auxiliar para aplicar os bônus dos itens aos atributos
-// RESTAURADA: Usada para o cálculo de CP
-function applyItemBonuses(player, equippedItems) {
-    let combinedStats = { ...player };
-    equippedItems.forEach(invItem => {
-        // Tenta pegar os stats base, seja de um objeto 'items' aninhado (join) ou do próprio objeto (flat cache)
-        const baseItem = invItem.items || invItem;
+// OTIMIZAÇÃO: Função applyItemBonuses removida. 
+// O cálculo agora é feito via RPC no servidor para atualizar a coluna combat_power.
 
-        if (baseItem) {
-            combinedStats.min_attack += baseItem.min_attack || 0;
-            combinedStats.attack += baseItem.attack || 0;
-            combinedStats.defense += baseItem.defense || 0;
-            combinedStats.health += baseItem.health || 0;
-            combinedStats.crit_chance += baseItem.crit_chance || 0;
-            combinedStats.crit_damage += baseItem.crit_damage || 0;
-            combinedStats.evasion += baseItem.evasion || 0;
-        }
-        combinedStats.min_attack += invItem.min_attack_bonus || 0;
-        combinedStats.attack += invItem.attack_bonus || 0;
-        combinedStats.defense += invItem.defense_bonus || 0;
-        combinedStats.health += invItem.health_bonus || 0;
-        combinedStats.crit_chance += invItem.crit_chance_bonus || 0;
-        combinedStats.crit_damage += invItem.crit_damage_bonus || 0;
-        combinedStats.evasion += invItem.evasion_bonus || 0;
-    });
-    return combinedStats;
-}
-
-// Função principal para buscar e exibir as informações do jogador (OTIMIZADA)
+// Função principal para buscar e exibir as informações do jogador (OTIMIZADA ZERO EGRESS + SERVER-SIDE CP)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
     // 1. OTIMIZAÇÃO: Tenta carregar do GlobalDB primeiro
     if (!forceRefresh) {
@@ -1141,9 +1116,28 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         currentPlayerId = userId;
     }
 
+    // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
+    // Adicionei colunas usadas na UI e no 'checkProgressionNotifications'
+    const columnsToSelect = `
+        id, 
+        name, 
+        faction, 
+        avatar_url, 
+        level, 
+        xp, 
+        xp_needed_for_level, 
+        gold, 
+        crystals, 
+        combat_power, 
+        progression_state,
+        current_afk_stage,
+        last_attack_time,
+        raid_attacks_bought_count
+    `;
+
     const { data: player, error: playerError } = await supabaseClient
         .from('players')
-        .select('*')
+        .select(columnsToSelect)
         .eq('id', userId)
         .single();
         
@@ -1152,38 +1146,38 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // --- OTIMIZAÇÃO: REMOVIDO JOIN. USA CACHED_INVENTORY ---
-    const rawInventory = player.cached_inventory || [];
-    const equippedItems = Array.isArray(rawInventory) 
-        ? rawInventory.filter(i => i.equipped_slot) 
-        : [];
-
-    const playerWithEquips = applyItemBonuses(player, equippedItems);
-    
-    // Cálculo do CP (Mantido)
-    playerWithEquips.combat_power = Math.floor(
-        (playerWithEquips.attack * 12.5) +
-        (playerWithEquips.min_attack * 1.5) +
-        (playerWithEquips.crit_chance * 5.35) +
-        (playerWithEquips.crit_damage * 6.5) +
-        (playerWithEquips.defense * 2) +
-        (playerWithEquips.health * 3.2625) +
-        (playerWithEquips.evasion * 1)
-    );
+    // --- LÓGICA DE CP NO SERVIDOR (GARANTIA DE ATUALIZAÇÃO) ---
+    // Chamamos a RPC para garantir que o CP no banco esteja sempre atualizado com o inventário.
+    // Isso roda em background e atualiza a UI se o valor mudar.
+    supabaseClient.rpc('update_and_get_combat_power', { target_player_id: player.id })
+        .then(({ data: newCp, error }) => {
+            if (!error && newCp !== null) {
+                // Atualiza a UI se houver mudança
+                if (player.combat_power !== newCp) {
+                    player.combat_power = newCp;
+                    document.getElementById('playerPower').textContent = formatNumberCompact(newCp);
+                    
+                    // Atualiza cache local com o novo valor
+                    if (currentPlayerData) currentPlayerData.combat_power = newCp;
+                    GlobalDB.updatePlayerPartial({ combat_power: newCp });
+                    setCache('player_data_cache', currentPlayerData, 1440);
+                }
+            }
+        });
 
     // Armazena e Renderiza
-    currentPlayerData = playerWithEquips;
+    currentPlayerData = player;
     
     // Salva no DB Global e Cache Legacy
-    await GlobalDB.setPlayer(playerWithEquips);
-    setCache('player_data_cache', playerWithEquips, 1440);
+    await GlobalDB.setPlayer(player);
+    setCache('player_data_cache', player, 1440);
 
-    renderPlayerUI(playerWithEquips, preserveActiveContainer);
-    checkProgressionNotifications(playerWithEquips);
+    renderPlayerUI(player, preserveActiveContainer);
+    checkProgressionNotifications(player);
 
-    if (/^Nome_[0-9a-fA-F]{6}$/.test(playerWithEquips.name)) {
+    if (/^Nome_[0-9a-fA-F]{6}$/.test(player.name)) {
         if (typeof window.updateProfileEditModal === 'function') {
-            window.updateProfileEditModal(playerWithEquips);
+            window.updateProfileEditModal(player);
         }
         const nameInput = document.getElementById('editPlayerName');
         if (nameInput) nameInput.value = '';

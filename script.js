@@ -705,12 +705,10 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         // 1. Atualiza, insere OU DELETA os itens modificados
         if (Array.isArray(newItems)) {
             newItems.forEach(item => {
-                // >>> CORREÇÃO CRÍTICA AQUI <<<
                 if (item.quantity > 0) {
                     store.put(item); // Salva/Atualiza se tiver quantidade
                 } else {
                     // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
-                    // Isso evita slots fantasmas e duplicatas futuras
                     if (item.id) {
                         store.delete(item.id);
                         console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
@@ -737,10 +735,7 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         }
 
         return new Promise(resolve => {
-            tx.oncomplete = () => {
-                // console.log("✅ [Surgical Update] Cache limpo e atualizado.");
-                resolve();
-            }
+            tx.oncomplete = () => resolve();
         });
     } catch (e) {
         console.warn("⚠️ Falha ao atualizar IndexedDB via script.js:", e);
@@ -1956,84 +1951,77 @@ let currentDrawType = 'common';
 const drawResultsModal = document.getElementById('drawResultsModal');
 const drawResultsGrid = document.getElementById('drawResultsGrid');
 
-async function updateCardCounts() {
-    let commonCount = 0;
-    let advancedCount = 0;
-    let foundInCache = false;
+/**
+ * === CORREÇÃO "EXORCISTA" ===
+ * Esta função força a sincronização APENAS dos cartões com o servidor.
+ * Ela apaga TODOS os cartões locais (para eliminar fantasmas) e insere
+ * os que vieram do servidor.
+ */
+async function syncSpiralCardsWithServer() {
+    // 1. Busca estado real no servidor
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
 
-    // 1. Tenta ler do cache local primeiro (IndexedDB)
+    // Busca apenas os cartões (item_id 41 e 42)
+    const { data: serverItems, error } = await supabaseClient
+        .from('inventory_items')
+        .select('*, items!inner(item_id)')
+        .eq('player_id', user.id)
+        .in('items.item_id', [41, 42]);
+
+    if (error) {
+        console.warn("⚠️ [Gacha] Erro ao sincronizar cartões:", error);
+        return; // Se der erro de rede, não mexe no cache para não piorar
+    }
+
     try {
         const db = await openDB();
-        // Mudamos para readwrite para poder limpar lixo se encontrar
-        const tx = db.transaction(STORE_NAME, 'readwrite'); 
+        const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
-        const allItems = await new Promise((resolve) => {
+        // 2. Busca TUDO localmente para identificar os fantasmas
+        const allLocal = await new Promise((resolve) => {
             const req = store.getAll();
             req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => resolve([]);
         });
 
-        // Filtra e conta
-        allItems.forEach(i => {
-            // Se encontrar item fantasma (qtd 0 ou menor), deleta agora
-            if (i.quantity <= 0) {
-                store.delete(i.id);
-                return; // Não conta este item
-            }
+        // Identifica IDs locais que são cartões (mesmo os fantasmas)
+        const localCardIds = allLocal
+            .filter(i => (i.item_id === 41 || i.items?.item_id === 41 || i.item_id === 42 || i.items?.item_id === 42))
+            .map(i => i.id);
 
-            if ((i.item_id === 41) || (i.items && i.items.item_id === 41)) {
-                commonCount += i.quantity;
-            }
-            if ((i.item_id === 42) || (i.items && i.items.item_id === 42)) {
-                advancedCount += i.quantity;
-            }
-        });
+        // 3. APAGA TODOS os cartões locais (Exorcismo)
+        if (localCardIds.length > 0) {
+            // console.log(`🗑️ [Gacha] Removendo ${localCardIds.length} slots de cartões locais para limpeza.`);
+            localCardIds.forEach(id => store.delete(id));
+        }
 
-        foundInCache = true;
-        // console.log(`📦 [Gacha Cache] Cards recuperados: Comum=${commonCount}, Avançado=${advancedCount}`);
+        // 4. INSERE a verdade do servidor
+        let common = 0, advanced = 0;
+        if (serverItems && serverItems.length > 0) {
+            serverItems.forEach(item => {
+                if(item.quantity > 0) {
+                    store.put(item); // Salva o item correto
+                }
+                // Conta para a UI
+                if (item.items.item_id === 41) common += item.quantity;
+                if (item.items.item_id === 42) advanced += item.quantity;
+            });
+        }
+
+        // 5. Atualiza a UI imediatamente
+        if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
+        if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
 
     } catch (e) {
-        console.warn("⚠️ Erro ao ler cartões do cache local, tentando rede:", e);
+        console.warn("Erro ao limpar cache de cartões:", e);
     }
-
-    // Se conseguiu ler do cache (mesmo que seja 0), atualiza a UI e encerra
-    if (foundInCache) {
-        if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${commonCount}`;
-        if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advancedCount}`;
-        return;
-    }
-
-    // 2. Fallback: Rede (apenas se DB local falhar totalmente em abrir)
-    console.log("🌐 [Gacha] Buscando cartões via Supabase (Fallback)...");
-    
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
-
-    const { data, error } = await supabaseClient
-        .from('inventory_items')
-        .select('item_id, quantity, items!inner(item_id)') // Join explícito para garantir ID
-        .eq('player_id', user.id)
-        .in('items.item_id', [41, 42]); // IDs dos cartões
-
-    if (error) {
-        console.error("Erro ao buscar cartões:", error);
-        return;
-    }
-
-    // Recalcula baseado no retorno da rede
-    const commonNet = data.filter(i => i.item_id === 41 || i.items?.item_id === 41)
-                          .reduce((acc, cur) => acc + cur.quantity, 0);
-                          
-    const advancedNet = data.filter(i => i.item_id === 42 || i.items?.item_id === 42)
-                            .reduce((acc, cur) => acc + cur.quantity, 0);
-
-    if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${commonNet}`;
-    if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advancedNet}`;
 }
 
 function openSpiralModal() {
-    updateCardCounts();
+    // CHAMA A NOVA FUNÇÃO DE SINCRONIZAÇÃO FORÇADA
+    syncSpiralCardsWithServer();
     spiralModal.style.display = 'flex';
 }
 
@@ -2078,7 +2066,7 @@ decreaseCardQtyBtn.addEventListener('click', () => {
     }
 });
 
-// MODIFICADO PARA ATUALIZAR O CACHE E SUPORTAR RESPOSTA JSON COMPLEXA
+// MODIFICADO PARA ATUALIZAR O CACHE VIA SYNC
 confirmPurchaseBtn.addEventListener('click', async () => {
     const quantity = parseInt(cardQtyToBuySpan.textContent);
     confirmPurchaseBtn.disabled = true;
@@ -2092,18 +2080,13 @@ confirmPurchaseBtn.addEventListener('click', async () => {
         return;
     }
 
-    // O retorno agora é um JSON com { message, new_crystals, timestamp, updated_item }
     buyCardsMessage.textContent = data.message;
     
-    // Atualiza SALDO localmente sem refresh completo
+    // Atualiza SALDO localmente
     updateLocalPlayerData({ crystals: data.new_crystals });
     
-    // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
-    if (data.updated_item && data.timestamp) {
-        await surgicalCacheUpdate([data.updated_item], data.timestamp, { crystals: data.new_crystals });
-    }
-    
-    await updateCardCounts();
+    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA
+    await syncSpiralCardsWithServer();
     
     setTimeout(() => {
         buyCardsModal.style.display = 'none';
@@ -2121,7 +2104,7 @@ function openDrawConfirmModal(type) {
 drawCommonBtn.addEventListener('click', () => openDrawConfirmModal('common'));
 drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced'));
 
-// MODIFICADO PARA GARANTIR REMOÇÃO DE CARTÕES USADOS
+// MODIFICADO PARA GARANTIR SYNC APÓS SORTEIO
 confirmDrawBtn.addEventListener('click', async () => {
     const quantity = parseInt(drawQuantityInput.value);
     if (isNaN(quantity) || quantity <= 0) {
@@ -2149,53 +2132,13 @@ confirmDrawBtn.addEventListener('click', async () => {
     // Mostra resultados
     displayDrawResults(data.won_items_map);
 
-    // === LÓGICA DE CORREÇÃO LOCAL (ZERO EGRESS) ===
-    const usedCardId = currentDrawType === 'common' ? 41 : 42;
-    let itemsToUpdate = data.inventory_updates || [];
-
-    // Verifica se o servidor mandou a atualização do cartão. Se não, forçamos localmente.
-    const serverSentCardUpdate = itemsToUpdate.find(i => i.item_id === usedCardId);
-
-    if (!serverSentCardUpdate) {
-        try {
-            const db = await openDB();
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-
-            // Busca todos para achar o slot correto
-            const allItems = await new Promise((resolve) => {
-                const req = store.getAll();
-                req.onsuccess = () => resolve(req.result || []);
-                req.onerror = () => resolve([]);
-            });
-
-            // Encontra o slot que contém o cartão usado
-            const cardSlot = allItems.find(i => (i.item_id === usedCardId) || (i.items && i.items.item_id === usedCardId));
-
-            if (cardSlot) {
-                // Cria uma cópia profunda para não alterar a referência readonly
-                const updatedSlot = JSON.parse(JSON.stringify(cardSlot));
-                
-                // Decrementa
-                updatedSlot.quantity = Math.max(0, updatedSlot.quantity - quantity);
-                
-                // Adiciona à lista. 
-                // IMPORTANTE: Como updatedSlot.quantity pode ser 0, 
-                // a nova função surgicalCacheUpdate vai DELETÁ-LO do banco.
-                itemsToUpdate.push(updatedSlot);
-            }
-        } catch (e) {
-            console.warn("Erro ao calcular decremento local:", e);
-        }
+    // Salva os prêmios no cache (itens ganhos)
+    if (data.inventory_updates && data.timestamp) {
+        await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
     }
 
-    // Aplica a atualização (Insert/Update/Delete)
-    if (itemsToUpdate.length > 0 && data.timestamp) {
-        await surgicalCacheUpdate(itemsToUpdate, data.timestamp);
-    }
-    
-    // Atualiza a contagem visual
-    await updateCardCounts();
+    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA DO GASTO
+    await syncSpiralCardsWithServer();
 
     confirmDrawBtn.disabled = false;
 });

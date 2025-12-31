@@ -1947,7 +1947,11 @@ const drawResultsModal = document.getElementById('drawResultsModal');
 const drawResultsGrid = document.getElementById('drawResultsGrid');
 
 async function updateCardCounts() {
-    // Tenta ler do cache local primeiro usando getAll e filter (pois chave é UUID)
+    let commonCount = 0;
+    let advancedCount = 0;
+    let foundInCache = false;
+
+    // 1. Tenta ler do cache local primeiro (IndexedDB)
     try {
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readonly');
@@ -1959,42 +1963,55 @@ async function updateCardCounts() {
             req.onerror = () => resolve([]);
         });
 
-        // Filtra pelos IDs 41 e 42
-        // Verifica tanto em propriedade plana quanto em join aninhado
-        const commonCards = allItems.find(i => (i.item_id === 41) || (i.items && i.items.item_id === 41));
-        const advancedCards = allItems.find(i => (i.item_id === 42) || (i.items && i.items.item_id === 42));
+        // LÓGICA CORRIGIDA: Filter + Reduce
+        commonCount = allItems
+            .filter(i => ((i.item_id === 41) || (i.items && i.items.item_id === 41)) && i.quantity > 0)
+            .reduce((sum, item) => sum + item.quantity, 0);
 
-        // Atualiza UI
-        commonCardCountSpan.textContent = `x ${commonCards ? commonCards.quantity : 0}`;
-        advancedCardCountSpan.textContent = `x ${advancedCards ? advancedCards.quantity : 0}`;
-        
-        // Se encontrou dados locais (ou confirmou que é zero), retorna.
-        return;
+        advancedCount = allItems
+            .filter(i => ((i.item_id === 42) || (i.items && i.items.item_id === 42)) && i.quantity > 0)
+            .reduce((sum, item) => sum + item.quantity, 0);
+
+        foundInCache = true;
+        // console.log(`📦 [Gacha Cache] Cards recuperados: Comum=${commonCount}, Avançado=${advancedCount}`);
 
     } catch (e) {
-        console.warn("Erro ao ler cartões do cache local:", e);
+        console.warn("⚠️ Erro ao ler cartões do cache local, tentando rede:", e);
     }
 
-    // Fallback: Rede (apenas se DB local falhar totalmente)
+    // Se conseguiu ler do cache (mesmo que seja 0), atualiza a UI e encerra
+    if (foundInCache) {
+        if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${commonCount}`;
+        if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advancedCount}`;
+        return;
+    }
+
+    // 2. Fallback: Rede (apenas se DB local falhar totalmente em abrir)
+    console.log("🌐 [Gacha] Buscando cartões via Supabase (Fallback)...");
+    
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) return;
 
     const { data, error } = await supabaseClient
         .from('inventory_items')
-        .select('item_id, quantity')
+        .select('item_id, quantity, items!inner(item_id)') // Join explícito para garantir ID
         .eq('player_id', user.id)
-        .in('item_id', [41, 42]); //
+        .in('items.item_id', [41, 42]); // IDs dos cartões
 
     if (error) {
         console.error("Erro ao buscar cartões:", error);
         return;
     }
 
-    const commonCards = data.find(item => item.item_id === 41); //
-    const advancedCards = data.find(item => item.item_id === 42); //
+    // Recalcula baseado no retorno da rede
+    const commonNet = data.filter(i => i.item_id === 41 || i.items?.item_id === 41)
+                          .reduce((acc, cur) => acc + cur.quantity, 0);
+                          
+    const advancedNet = data.filter(i => i.item_id === 42 || i.items?.item_id === 42)
+                            .reduce((acc, cur) => acc + cur.quantity, 0);
 
-    commonCardCountSpan.textContent = `x ${commonCards ? commonCards.quantity : 0}`;
-    advancedCardCountSpan.textContent = `x ${advancedCards ? advancedCards.quantity : 0}`;
+    if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${commonNet}`;
+    if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advancedNet}`;
 }
 
 function openSpiralModal() {

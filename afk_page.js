@@ -206,11 +206,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         afkGoldSpan.textContent = formatNumberCompact(goldEarned);
 
         // Botão Coletar
-        const isCollectable =
-    afkStartTime &&
-    secondsElapsed >= MIN_COLLECT_SECONDS &&
-    (xpEarned > 0 || goldEarned > 0);
-
+        const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
         collectBtn.disabled = !isCollectable;
         if(collectBtn.disabled) {
             collectBtn.style.opacity = "0.5";
@@ -250,14 +246,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!playerAfkData) return;
         
         if (playerAfkData.last_afk_start_time) {
-    afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
-    updateLocalSimulation(); // 🔥 força cálculo imediato
-} else {
-    afkStartTime = null;
-    collectBtn.disabled = true;
-}
-
-
+            afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
+        } else {
+            afkStartTime = Date.now();
+        }
 
         playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
         playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
@@ -304,13 +296,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         let shouldUseCache = false;
         
         // Tenta GlobalDB
+        // Tenta GlobalDB
         const globalData = await GlobalDB.getPlayer();
         if (globalData) {
-            // Verifica validade simples (ex: se tem os campos necessários)
-            if (globalData.id === userId) {
+            // Verifica se é o usuário correto E se tem o dado vital 'last_afk_start_time'
+            // Se não tiver o start_time, o cache é considerado "incompleto" para esta página
+            if (globalData.id === userId && globalData.last_afk_start_time) {
                 playerAfkData = globalData;
                 shouldUseCache = true;
                 console.log("[AFK] Dados carregados via GlobalDB (Zero Egress).");
+            } else {
+                console.warn("[AFK] Cache GlobalDB encontrado, mas incompleto (falta timestamp). Forçando fetch no servidor.");
             }
         }
 
@@ -430,10 +426,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Reseta timer
             playerAfkData.last_afk_start_time = new Date().toISOString();
-            
-            afkStartTime = new Date(playerAfkData.last_afk_start_time).getTime();
-updateLocalSimulation();
-
 
             // Se houve Level Up, a RPC deve retornar os novos stats e nível
             if (data.leveled_up) {
@@ -486,12 +478,6 @@ updateLocalSimulation();
 
         // Atualiza estado local com resultado da aventura
         playerAfkData.daily_attempts_left = data.daily_attempts_left;
-        
-      // ✅ REGISTRA O INÍCIO DO AFK (IMPORTANTE)
-if (!playerAfkData.last_afk_start_time) {
-    playerAfkData.last_afk_start_time = new Date().toISOString();
-}
-  
         
         if (data.venceu) {
             playerAfkData.xp = (playerAfkData.xp || 0) + (data.xp_ganho || 0);

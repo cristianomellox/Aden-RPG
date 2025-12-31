@@ -1132,7 +1132,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         progression_state,
         current_afk_stage,
         last_attack_time,
-        raid_attacks_bought_count
+        raid_attacks_bought_count,
+        last_afk_start_time
     `;
 
     const { data: player, error: playerError } = await supabaseClient

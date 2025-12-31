@@ -1134,7 +1134,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         last_attack_time,
         raid_attacks_bought_count,
         last_afk_start_time,
-        guild_id
+        guild_id,
+        rank
     `;
 
     const { data: player, error: playerError } = await supabaseClient

@@ -469,7 +469,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     // 2. Fallback: Se não achar local, pergunta ao Supabase
-    const { data: { session } } = await supabase.auth.getSession();
+    
     
     if (session){ 
         userId = session.user.id; 
@@ -500,28 +500,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (guildNameElement) guildNameElement.innerHTML = `<img src="${flagUrl}" style="width:140px;height:155px;margin-right:8px;border-radius:6px; margin-top: 14px; margin-left: 18px;"><br> <strong><span style="color: white;">${guildData.name}</span></strong>`;
       if (guildDescriptionEl) guildDescriptionEl.textContent = guildData.description || '';
 
-      let guildPowerValue = null;
-      try {
-        const { data: powerData, error: powerError } = await supabase.rpc('get_guild_power', { p_guild_id: userGuildId });
-        if (!powerError && powerData) {
-          if (Array.isArray(powerData) && powerData.length > 0 && powerData[0].total_power !== undefined) {
-            guildPowerValue = Number(powerData[0].total_power);
-          } else if (powerData.total_power !== undefined) {
-            guildPowerValue = Number(powerData.total_power);
-          } else if (typeof powerData === 'number' || typeof powerData === 'string') {
-            guildPowerValue = Number(powerData);
-          }
-        }
-      } catch(e){
-        console.error('Erro ao chamar get_guild_power RPC', e);
-      }
-
-      if (guildPowerValue === null) {
-        try {
-          guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
-        } catch(e){ guildPowerValue = 0; }
-      }
-
+      // OTIMIZAÇÃO: Cálculo de CP da Guilda via soma local (Zero Egress adicional)
+      // Removemos a chamada RPC 'get_guild_power' e usamos a coluna combat_power carregada.
+      const guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
+      
       const compactPower = formatNumberCompact(guildPowerValue);
       if (guildPowerEl) guildPowerEl.textContent = ` ${compactPower}`;
 
@@ -652,10 +634,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         guildViewLevelValue.textContent = guildData.level || 1;
         guildViewMemberCountHeader.textContent = `${visiblePlayers.length} / ${guildData.max_members || getMaxMembers(guildData.level || 1)}`;
         
-        let guildPowerValue = null;
-        try {
-           guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
-        } catch(e){ guildPowerValue = 0; }
+        // OTIMIZAÇÃO: Soma direta da coluna combat_power (evitando RPC ou iteração de itens)
+        const guildPowerValue = visiblePlayers.reduce((sum, p) => sum + (Number(p.combat_power) || 0), 0);
         
         const compactPower = formatNumberCompact(guildPowerValue);
         guildViewPower.textContent = compactPower;
@@ -708,6 +688,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       
       console.log("Buscando dados frescos do ranking (sem cache ou expirado).");
+      // Mantém a RPC, assumindo que o backend agora usa a coluna otimizada para agregar.
       const { data, error } = await supabase.rpc('get_guilds_ranking', { limit_count: 100 });
       if (error) throw error;
       

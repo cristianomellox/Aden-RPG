@@ -140,7 +140,7 @@
 
   <div id="rankingContent">
     <h2>Top 30</h2>
-   <center> <div id="atualiza">(Atualiza Domingo 21h00)</div></center>
+   <center> <div id="atualiza">(Atualiza Diariamente 00:00 UTC)</div></center>
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
 
@@ -259,21 +259,18 @@
     }
 
     // ====================================================================================
-    // CACHE #1: RANKING SEMANAL (SEGUNDA-FEIRA 00:00 UTC)
+    // CACHE #1: RANKING DIÁRIO (MEIA-NOITE UTC)
     // ====================================================================================
-    function calculateNextMondayUTC(){
+    function calculateNextMidnightUTC(){
         const now = new Date();
-        const day = now.getUTCDay();
-        let daysUntilNextMonday = (8 - day) % 7;
-        if(daysUntilNextMonday === 0) daysUntilNextMonday = 7; 
-        const nextMon = new Date(now);
-        nextMon.setUTCDate(now.getUTCDate() + daysUntilNextMonday);
-        nextMon.setUTCHours(0,0,0,0);
-        return nextMon.getTime();
+        const nextMidnight = new Date(now);
+        nextMidnight.setUTCDate(now.getUTCDate() + 1);
+        nextMidnight.setUTCHours(0,0,0,0);
+        return nextMidnight.getTime();
     }
 
     function setRankingCache(key, value){
-        const expirationTime = calculateNextMondayUTC();
+        const expirationTime = calculateNextMidnightUTC();
         try { localStorage.setItem(key, JSON.stringify({ v:value, e: expirationTime })); } catch(e){}
     }
 
@@ -310,7 +307,7 @@
     }
 
     // ====================================================================================
-    // LÓGICA DE CP
+    // LÓGICA DE CP (MANTIDO PARA CÁLCULO VISUAL NO MODAL)
     // ====================================================================================
     function applyItemBonuses(player, equippedItems){
         let combinedStats = Object.assign({}, player); 
@@ -337,7 +334,7 @@
         return combinedStats;
     }
 
-    // Mantido APENAS para o Ranking (lista principal)
+    // Helper antigo mantido para compatibilidade, caso algum módulo precise, mas não usado no ranking
     function calculateCombatPowerFromCombined(stats){
         return Math.floor(
             (safeNum(stats.attack) * 12.5) +
@@ -413,7 +410,7 @@
         if (!supabase) return;
 
         try {
-            // A) Buscar Jogador
+            // A) Buscar Jogador (inclui combat_power pré-calculado)
             const { data: player, error: pErr } = await supabase
                 .from('players')
                 .select('*')
@@ -444,11 +441,9 @@
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            // D) Calcular e Montar Objeto
+            // D) Calcular Status para exibição visual (O CP vem do DB)
             const combinedStats = applyItemBonuses(player, equippedItems || []);
-            // IMPORTANTE: Aqui definimos CP como 0 para não recalcular no modal
-            const finalCP = 0; 
-
+            
             const fullPlayerData = {
                 basic: {
                     name: player.name,
@@ -456,7 +451,7 @@
                     avatar_url: player.avatar_url,
                     guild_name: guildInfo.name,
                     guild_flag: guildInfo.flag,
-                    cp: finalCP
+                    cp: player.combat_power || 0 // Usa valor do DB direto
                 },
                 stats: combinedStats,
                 items: equippedItems || []
@@ -554,13 +549,13 @@
     window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
 
     // ====================================================================================
-    // FETCH RANKING PRINCIPAL
+    // FETCH RANKING PRINCIPAL (OTIMIZADO - DB SIDE)
     // ====================================================================================
     async function fetchTop100ByCombatPower(){
       // 0. (Opcional) Inicializa Auth Local
       await getLocalUserId();
 
-      const cacheKey = 'ranking_cp_weekly_v2';
+      const cacheKey = 'ranking_cp_daily_v3'; // Chave atualizada
       const cached = getRankingCache(cacheKey);
       
       if(cached){ 
@@ -573,32 +568,19 @@
       try {
         document.getElementById('loading').textContent = 'Buscando ranking...';
         
-        // 1. Players
+        // 1. Players - Busca simplificada já ordenada pelo Banco de Dados
+        // Selecionamos APENAS o necessário e usamos a coluna combat_power já calculada
         const { data: players, error: pErr } = await supabase
           .from('players')
-          .select('id,name,avatar_url,guild_id,attack,defense,health,min_attack,crit_chance,crit_damage,evasion')
+          .select('id,name,avatar_url,guild_id,combat_power')
           .neq('is_banned', true)
-          .limit(500); 
+          .order('combat_power', { ascending: false })
+          .limit(30); 
 
         if(pErr) throw pErr;
         if(!players || players.length===0){ renderRanking([]); return; }
-        const ids = players.map(x=>x.id);
 
-        // 2. Items
-        const { data: items, error: iErr } = await supabase
-          .from('inventory_items')
-          .select(`player_id, equipped_slot, min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
-             crit_chance_bonus, crit_damage_bonus, evasion_bonus, items ( min_attack, attack, defense, health, crit_chance, crit_damage, evasion )`)
-          .in('player_id', ids)
-          .not('equipped_slot','is',null);
-
-        const itemsByPlayer = {};
-        (items || []).forEach(it => {
-          if(!itemsByPlayer[it.player_id]) itemsByPlayer[it.player_id] = [];
-          itemsByPlayer[it.player_id].push(it);
-        });
-
-        // 3. Guilds
+        // 2. Guilds - Apenas resolver nomes
         const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
         const guildsById = {};
         if(uniqueGuilds.length){
@@ -606,24 +588,20 @@
           (guilds||[]).forEach(g => guildsById[g.id] = g.name);
         }
 
-        const computed = players.map(p => {
-          const equipped = itemsByPlayer[p.id] || [];
-          const combined = applyItemBonuses(p, equipped);
-          // O ranking continua usando o cálculo de CP
-          const cp = calculateCombatPowerFromCombined(combined);
+        // 3. Montar Objeto Final
+        const rankingList = players.map(p => {
           return {
-            id: p.id, name: p.name, avatar_url: p.avatar_url,
+            id: p.id,
+            name: p.name,
+            avatar_url: p.avatar_url,
             guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
-            cp
+            cp: p.combat_power // Usa diretamente do DB
           };
         });
-
-        computed.sort((a,b) => b.cp - a.cp);
-        const top100 = computed.slice(0,30);
         
-        // Cache configurado para expirar na próxima Segunda-feira (Weekly)
-        setRankingCache(cacheKey, top100);
-        renderRanking(top100);
+        // Cache configurado para expirar na próxima Meia-Noite UTC (Daily)
+        setRankingCache(cacheKey, rankingList);
+        renderRanking(rankingList);
 
       } catch(err){
         document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;

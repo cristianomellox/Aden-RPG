@@ -808,6 +808,7 @@ function getLocalUserId() {
 }
 
 // === OTIMIZAÇÃO: INITSESSION VIA GLOBALDB ===
+// === OTIMIZAÇÃO: INITSESSION VIA GLOBALDB (COM VALIDACAO DE GUILDA) ===
 async function initSession() {
   try {
     // 1. Tenta recuperar sessão do GlobalDB
@@ -815,20 +816,26 @@ async function initSession() {
     if (auth && auth.user) {
         userId = auth.user.id;
         
-        // Recupera dados do jogador (Nome, Guilda, Avatar) do GlobalDB
+        // Recupera dados do jogador
         const player = await GlobalDB.getPlayer();
-        if (player) {
+        
+        // FIX: Só usa o cache se tivermos certeza que carregamos o dado da guilda
+        // (player.guild_id pode ser null se ele não tiver guilda, mas não deve ser undefined)
+        if (player && player.guild_id !== undefined) {
              userName = player.name;
              userGuildId = player.guild_id;
              userRank = player.rank || "member";
              if (player.avatar_url && $id("raidPlayerAvatar")) {
                  $id("raidPlayerAvatar").src = player.avatar_url;
              }
+             console.log("⚡ [Raid] Dados carregados via GlobalDB.");
              return; // Sucesso com Zero Egress
+        } else {
+             console.warn("⚠️ [Raid] Cache GlobalDB incompleto (sem guild_id). Buscando no servidor...");
         }
     }
 
-    // Fallback original (se GlobalDB estiver vazio)
+    // 2. Fallback original (se GlobalDB estiver vazio ou incompleto)
     let localId = getLocalUserId();
     
     if (!localId) {
@@ -842,6 +849,7 @@ async function initSession() {
 
     userId = localId;
 
+    // Busca forçada no servidor para garantir o guild_id
     const { data: player, error } = await supabase.from("players").select("name, guild_id, rank, avatar_url").eq("id", userId).single();
     if (!error && player) {
       userName = player.name;
@@ -851,6 +859,9 @@ async function initSession() {
         const av = $id("raidPlayerAvatar");
         if (av) av.src = player.avatar_url;
       }
+      
+      // Opcional: Atualizar o GlobalDB com o que acabamos de buscar para consertar o cache
+      GlobalDB.updatePlayerPartial({ guild_id: player.guild_id });
     }
   } catch (e) { console.error("initSession", e); }
 }

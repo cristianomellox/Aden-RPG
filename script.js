@@ -693,10 +693,7 @@ function openDB() {
 }
 
 /**
- * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
- * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
- * @param {String} newTimestamp - O novo timestamp vindo do servidor
- * @param {Object} updatedStats - (Opcional) Novos stats do player (ouro/cristais)
+ * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
@@ -705,22 +702,32 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualiza ou insere os itens modificados
+        // 1. Atualiza, insere OU DELETA os itens modificados
         if (Array.isArray(newItems)) {
-            newItems.forEach(item => store.put(item));
+            newItems.forEach(item => {
+                // >>> CORREÇÃO CRÍTICA AQUI <<<
+                if (item.quantity > 0) {
+                    store.put(item); // Salva/Atualiza se tiver quantidade
+                } else {
+                    // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
+                    // Isso evita slots fantasmas e duplicatas futuras
+                    if (item.id) {
+                        store.delete(item.id);
+                        console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
+                    }
+                }
+            });
         }
 
-        // 2. Atualiza o Timestamp para "enganar" o inventory.js
+        // 2. Atualiza o Timestamp para manter sync com inventory.js
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza os stats do jogador (Ouro/Cristais) no cache
+        // 3. Atualiza os stats do jogador (Ouro/Cristais)
         if (updatedStats) {
-            // Atualiza também o GlobalDB
             GlobalDB.updatePlayerPartial(updatedStats);
-
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
@@ -731,7 +738,7 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 
         return new Promise(resolve => {
             tx.oncomplete = () => {
-                console.log("✅ [Surgical Update] Cache local atualizado com sucesso via Script.js");
+                // console.log("✅ [Surgical Update] Cache limpo e atualizado.");
                 resolve();
             }
         });
@@ -1957,7 +1964,8 @@ async function updateCardCounts() {
     // 1. Tenta ler do cache local primeiro (IndexedDB)
     try {
         const db = await openDB();
-        const tx = db.transaction(STORE_NAME, 'readonly');
+        // Mudamos para readwrite para poder limpar lixo se encontrar
+        const tx = db.transaction(STORE_NAME, 'readwrite'); 
         const store = tx.objectStore(STORE_NAME);
 
         const allItems = await new Promise((resolve) => {
@@ -1966,14 +1974,21 @@ async function updateCardCounts() {
             req.onerror = () => resolve([]);
         });
 
-        // LÓGICA CORRIGIDA: Filter + Reduce
-        commonCount = allItems
-            .filter(i => ((i.item_id === 41) || (i.items && i.items.item_id === 41)) && i.quantity > 0)
-            .reduce((sum, item) => sum + item.quantity, 0);
+        // Filtra e conta
+        allItems.forEach(i => {
+            // Se encontrar item fantasma (qtd 0 ou menor), deleta agora
+            if (i.quantity <= 0) {
+                store.delete(i.id);
+                return; // Não conta este item
+            }
 
-        advancedCount = allItems
-            .filter(i => ((i.item_id === 42) || (i.items && i.items.item_id === 42)) && i.quantity > 0)
-            .reduce((sum, item) => sum + item.quantity, 0);
+            if ((i.item_id === 41) || (i.items && i.items.item_id === 41)) {
+                commonCount += i.quantity;
+            }
+            if ((i.item_id === 42) || (i.items && i.items.item_id === 42)) {
+                advancedCount += i.quantity;
+            }
+        });
 
         foundInCache = true;
         // console.log(`📦 [Gacha Cache] Cards recuperados: Comum=${commonCount}, Avançado=${advancedCount}`);
@@ -2106,7 +2121,7 @@ function openDrawConfirmModal(type) {
 drawCommonBtn.addEventListener('click', () => openDrawConfirmModal('common'));
 drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced'));
 
-// MODIFICADO PARA ATUALIZAR O CACHE E SUPORTAR RESPOSTA JSON COMPLEXA
+// MODIFICADO PARA GARANTIR REMOÇÃO DE CARTÕES USADOS
 confirmDrawBtn.addEventListener('click', async () => {
     const quantity = parseInt(drawQuantityInput.value);
     if (isNaN(quantity) || quantity <= 0) {
@@ -2131,58 +2146,55 @@ confirmDrawBtn.addEventListener('click', async () => {
 
     drawConfirmModal.style.display = 'none';
     
-    // displayDrawResults espera um mapa de ID -> Quantidade
+    // Mostra resultados
     displayDrawResults(data.won_items_map);
 
-    // === CORREÇÃO: ATUALIZAÇÃO MANUAL DO CARTÃO GASTO NO CACHE ===
-    // Define qual ID foi usado
+    // === LÓGICA DE CORREÇÃO LOCAL (ZERO EGRESS) ===
     const usedCardId = currentDrawType === 'common' ? 41 : 42;
-    
-    // Prepara a lista de itens para atualizar (começa com os prêmios vindos do server)
     let itemsToUpdate = data.inventory_updates || [];
 
-    // Verifica se o servidor já mandou a atualização do cartão gasto. 
-    // Se NÃO mandou, nós manipulamos localmente para garantir o decremento no slot CORRETO.
+    // Verifica se o servidor mandou a atualização do cartão. Se não, forçamos localmente.
     const serverSentCardUpdate = itemsToUpdate.find(i => i.item_id === usedCardId);
 
     if (!serverSentCardUpdate) {
         try {
             const db = await openDB();
-            const tx = db.transaction(STORE_NAME, 'readonly'); // Apenas leitura para busca
+            const tx = db.transaction(STORE_NAME, 'readonly');
             const store = tx.objectStore(STORE_NAME);
 
-            // Pega todos os itens para encontrar o slot correto (UUID)
+            // Busca todos para achar o slot correto
             const allItems = await new Promise((resolve) => {
                 const req = store.getAll();
                 req.onsuccess = () => resolve(req.result || []);
                 req.onerror = () => resolve([]);
             });
 
-            // Encontra a linha específica do inventário que tem esse item_id
+            // Encontra o slot que contém o cartão usado
             const cardSlot = allItems.find(i => (i.item_id === usedCardId) || (i.items && i.items.item_id === usedCardId));
 
             if (cardSlot) {
-                // Clona para modificar sem afetar referências
+                // Cria uma cópia profunda para não alterar a referência readonly
                 const updatedSlot = JSON.parse(JSON.stringify(cardSlot));
-                // Subtrai a quantidade gasta
+                
+                // Decrementa
                 updatedSlot.quantity = Math.max(0, updatedSlot.quantity - quantity);
                 
-                // Adiciona à lista de updates para ser salvo
+                // Adiciona à lista. 
+                // IMPORTANTE: Como updatedSlot.quantity pode ser 0, 
+                // a nova função surgicalCacheUpdate vai DELETÁ-LO do banco.
                 itemsToUpdate.push(updatedSlot);
-                console.log(`[Gacha Fix] Cartão ${usedCardId} decrementado localmente (Slot ID: ${updatedSlot.id || 'N/A'}) para: ${updatedSlot.quantity}`);
             }
         } catch (e) {
-            console.warn("Erro ao decrementar cartão localmente:", e);
+            console.warn("Erro ao calcular decremento local:", e);
         }
     }
 
-    // === ATUALIZAÇÃO CIRÚRGICA DO INDEXEDDB ===
-    // Agora passamos a lista completa (Prêmios + Cartão Gasto Corrigido)
+    // Aplica a atualização (Insert/Update/Delete)
     if (itemsToUpdate.length > 0 && data.timestamp) {
         await surgicalCacheUpdate(itemsToUpdate, data.timestamp);
     }
     
-    // Atualiza a UI visualmente com os novos valores (lendo do cache atualizado)
+    // Atualiza a contagem visual
     await updateCardCounts();
 
     confirmDrawBtn.disabled = false;

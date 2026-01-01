@@ -183,9 +183,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   let batchFlushTimer = null;        // Timer para enviar se parar de clicar
   let currentMonsterHealthGlobal = 0; // HP Otimista Global
   
-  // CONFIGURAÇÃO DE BATCH E DEBOUNCE
-  const BATCH_THRESHOLD = 5;         // Envia a cada 5 ataques
-  const DEBOUNCE_TIME_MS = 60000;     // Tempo de espera
+  // CONFIGURAÇÃO DE BATCH E DEBOUNCE (ATUALIZADO)
+  const BATCH_THRESHOLD = 5;         // Aumentado para 5
+  const DEBOUNCE_TIME_MS = 10000;     // Aumentado de 5s (ou 60s) para 10s
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; // 24 Horas
   
   // Controle do primeiro ataque
@@ -573,6 +573,63 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   }
 
+  // NOVA FUNÇÃO: Renderiza o ranking "cego" (Smoke Signal)
+  function updateBlindRanking(count, myDmg, topDmg, isLeader) {
+      if (!damageRankingList) return;
+      damageRankingList.innerHTML = "";
+
+      const myDmgFmt = Number(myDmg||0).toLocaleString();
+      const topDmgFmt = Number(topDmg||0).toLocaleString();
+
+      // 1. Caso Solo ou Vazio
+      if (!count || count <= 1) {
+          damageRankingList.innerHTML = `
+            <li style='text-align:center;color:#4caf50;padding:10px;font-style:italic;'>
+                Apenas você disputando...<br>
+                <span style="font-size:0.9em;color:#fff">Dano: ${myDmgFmt}</span>
+            </li>`;
+          return;
+      }
+
+      // 2. Caso Disputa (Smoke Signal)
+      const leaderText = isLeader ? "Você" : "Líder";
+      const leaderColor = isLeader ? "#4caf50" : "#ff5555";
+      
+      const html = `
+        <li style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #333;">
+            <span style="color:#aaa">Disputando:</span>
+            <strong>${count} Jogadores</strong>
+        </li>
+        <li style="display:flex; justify-content:space-between; padding:5px; background: rgba(0,0,0,0.2);">
+            <span style="color:${leaderColor}">${leaderText}:</span>
+            <span>${topDmgFmt}</span>
+        </li>
+        ${!isLeader ? `
+        <li style="display:flex; justify-content:space-between; padding:5px;">
+            <span style="color:#4caf50">Você:</span>
+            <span>${myDmgFmt}</span>
+        </li>` : ''}
+        <li style="text-align:center; margin-top:5px;">
+            <button id="btnFetchDetails" style="background:none; border:none; color:#aaa; text-decoration:underline; cursor:pointer; font-size:0.8em;">
+                Ver Ranking Detalhado
+            </button>
+        </li>
+      `;
+      
+      damageRankingList.innerHTML = html;
+      
+      // Bind do botão de detalhes
+      const btn = document.getElementById('btnFetchDetails');
+      if(btn) {
+          btn.onclick = async (e) => {
+              e.target.textContent = "Carregando...";
+              // Chama a função RPC antiga on-demand
+              const { data } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
+              renderRanking(data || [], false); 
+          };
+      }
+  }
+
   // =================================================================
   // 8. COMPRA DE ATAQUES (PVE)
   // =================================================================
@@ -908,10 +965,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadMines() {
     showLoading();
     try {
-      // 1. Baixa as minas (leve)
+      // 1. Baixa as minas (Otimizado: Removeu initial_monster_health e monster_health para lista principal)
+      // Mantém competition_end_time pois é necessário para lazy loading e status
       const { data: mines, error } = await supabase
         .from("mining_caverns")
-        .select("id, name, status, monster_health, owner_player_id, open_time, competition_end_time, initial_monster_health")
+        .select("id, name, status, owner_player_id, open_time, competition_end_time") // monster_health removido
         .order("name", { ascending: true });
       if (error) throw error;
 
@@ -1251,7 +1309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return { damage: finalDamage, isCrit: isCrit };
   }
 
-  // Processar Fila
+  // Processar Fila (Batch com Smoke Signal)
   async function processAttackQueue() {
       if (pendingBatch === 0) return;
 
@@ -1280,33 +1338,31 @@ document.addEventListener("DOMContentLoaded", async () => {
               return;
           }
 
-          // Atualiza com a verdade do servidor (Mapeamento JSON Minificado)
-          
+          // Atualiza com a verdade do servidor
           currentMonsterHealthGlobal = data.hp;
           updateHpBar(data.hp, maxMonsterHealth);
-          
-          // 1) Logica de Solo vs Ranking
-          // data.solo vem do backend
-          if (data.solo) {
-              renderRanking([], true);
-          } else {
-              renderRanking(data.r || [], false);
-          }
-
           localAttacksLeft = data.al;
           updateAttacksDisplay();
-          
-          // data.end = competition_end_time
+
+          // Sincroniza Timer
           if (data.end && !combatTimerInterval) {
              const remaining = Math.max(0, Math.floor((new Date(data.end).getTime() - Date.now()) / 1000));
              startCombatTimer(remaining);
           }
 
-          // data.win = owner_set
+          // Lógica de Ranking (Blind vs Full) e Vitória
           if (data.win) {
+              // Vitória: O backend manda o ranking completo em 'r'
               showModalAlert("Mina conquistada/resetada!");
+              renderRanking(data.r || [], false); // Mostra o resultado final
               resetCombatUI();
-              // Não precisa chamar loadMines() aqui pois resetCombatUI fará a atualização cirúrgica
+          } else {
+              // Combate em andamento: Atualiza apenas os números (Smoke Signal)
+              // data.pc = participant count
+              // data.md = my damage
+              // data.td = top damage
+              // data.il = is leader (bool)
+              updateBlindRanking(data.pc, data.md, data.td, data.il);
           }
 
       } catch (e) {
@@ -1360,7 +1416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 5. Adiciona à Fila (Batch)
     pendingBatch++;
 
-    // --- NOVA LÓGICA: PRIMEIRO ATAQUE vs BATCH ---
+    // --- NOVA LÓGICA: PRIMEIRO ATAQUE vs BATCH (10s / 10 hits) ---
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
     // Se for o primeiro ataque da sequência, envia imediatamente
@@ -1376,7 +1432,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (pendingBatch >= BATCH_THRESHOLD || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
         await processAttackQueue();
     } else {
-        // Debounce de 5 segundos + Salvamento Otimista
+        // Debounce Aumentado para 10 segundos + Salvamento Otimista
         const flushTime = Date.now() + DEBOUNCE_TIME_MS;
         batchFlushTimer = setTimeout(processAttackQueue, DEBOUNCE_TIME_MS);
         saveOptimisticState(flushTime);

@@ -701,7 +701,7 @@ p {
 
 .crit-damage-number {
   font-family: Georgia, serif;
-  font-size: 1.5em;
+  font-size: 1.9em;
   color: red;
   /* Contorno amarelo */
   text-shadow:
@@ -740,7 +740,7 @@ p {
         transform: translate(-50%, -50%) scale(1.0);
     }
     50% {
-        transform: translate(-50%, -75%) scale(1.2);
+        transform: translate(-50%, -75%) scale(1.4);
     }
     100% {
         opacity: 0;
@@ -857,7 +857,7 @@ p {
 }
 
 .attack-anim {
-    animation: attack-pulse 0.2s ease-in-out;
+    animation: attack-pulse 0.4s ease-in-out;
 }
 
 

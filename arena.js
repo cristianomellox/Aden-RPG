@@ -1412,7 +1412,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     h = r.logs; 
                     setCache(cacheKey, h, getMinutesToMidnightUTC());
                 } else if (userId) {
-                    const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(200);
+                    const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(5);
                     if (logsDirect) { 
                         h = logsDirect; 
                         setCache(cacheKey, h, getMinutesToMidnightUTC()); 

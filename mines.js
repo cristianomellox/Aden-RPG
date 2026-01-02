@@ -1594,6 +1594,22 @@ document.addEventListener("DOMContentLoaded", async () => {
           updateAttacksDisplay();
       }
 
+if (data.pvp) {
+          // data.pvp.l = tentativas restantes
+          // data.pvp.b = contagem de compradas
+          if (playerAttemptsSpan) {
+              playerAttemptsSpan.textContent = data.pvp.l; 
+          }
+          
+          // Opcional: Atualizar cache global se você usar buyPvpBaseBoughtCount na UI de compra
+          // Mas só atualizar a UI já resolve o bug visual do "0".
+          if (window.currentPlayerData) {
+               window.currentPlayerData.mine_pvp_attempts_left = data.pvp.l;
+               window.currentPlayerData.mine_pvp_attempts_bought_count = data.pvp.b;
+          }
+      }
+
+
       // C) Owners (Cache Global)
       if (data.owners && data.owners.length > 0) {
           data.owners.forEach(o => {

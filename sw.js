@@ -1,49 +1,49 @@
 // AUMENTE ESTE NÚMERO SEMPRE QUE FIZER UMA ATUALIZAÇÃO NO JOGO (V1 -> V2 -> V3...)
 // Se você não mudar isso, os jogadores continuarão vendo a versão antiga!
-const CACHE_NAME = "aden-static-v2";
+const CACHE_NAME = "aden-static-v3";
 
 // Arquivos vitais para o jogo abrir (App Shell)
 const STATIC_FILES = [
-  "/",
-  "/index.html",
-  "/afk.html",
-  "/arena.html",
-  "/guild.html",
-  "/guild_battle.html",
-  "/inventory.html",
-  "/mines.html",
-  "/politica_de_privacidade.html",
-  "/termos_de_uso.html",
-  "/tutorial.html",
-  "/sobre.html",
-  "/suporte.html",
+  "https://aden-rpg.pages.dev/",
+  "https://aden-rpg.pages.dev/index.html",
+  "https://aden-rpg.pages.dev/afk.html",
+  "https://aden-rpg.pages.dev/arena.html",
+  "https://aden-rpg.pages.dev/guild.html",
+  "https://aden-rpg.pages.dev/guild_battle.html",
+  "https://aden-rpg.pages.dev/inventory.html",
+  "https://aden-rpg.pages.dev/mines.html",
+  "https://aden-rpg.pages.dev/politica_de_privacidade.html",
+  "https://aden-rpg.pages.dev/termos_de_uso.html",
+  "https://aden-rpg.pages.dev/tutorial.html",
+  "https://aden-rpg.pages.dev/sobre.html",
+  "https://aden-rpg.pages.dev/suporte.html",
 
   // Scripts
-  "/script.js",
-  "/arena.js",
-  "/mines.js",
-  "/guild.js",
-  "/guild_battle.js",
-  "/inventory.js",
-  "/loading.js",
-  "/loading2.js",
-  "/auto_translate.js",
-  "/number_format.js",
-  "/perfil_edit.js",
-  "/playerModal.js",
-  "/map_hotspots.js",
-  "/monster_stages.js",
-  "/reward.js",
-  "/visibility.js",
-  "/supabaseClient.js",
+  "https://aden-rpg.pages.dev/script.js",
+  "https://aden-rpg.pages.dev/arena.js",
+  "https://aden-rpg.pages.dev/mines.js",
+  "https://aden-rpg.pages.dev/guild.js",
+  "https://aden-rpg.pages.dev/guild_battle.js",
+  "https://aden-rpg.pages.dev/inventory.js",
+  "https://aden-rpg.pages.dev/loading.js",
+  "https://aden-rpg.pages.dev/loading2.js",
+  "https://aden-rpg.pages.dev/auto_translate.js",
+  "https://aden-rpg.pages.dev/number_format.js",
+  "https://aden-rpg.pages.dev/perfil_edit.js",
+  "https://aden-rpg.pages.dev/playerModal.js",
+  "https://aden-rpg.pages.dev/map_hotspots.js",
+  "https://aden-rpg.pages.dev/monster_stages.js",
+  "https://aden-rpg.pages.dev/reward.js",
+  "https://aden-rpg.pages.dev/visibility.js",
+  "https://aden-rpg.pages.dev/supabaseClient.js",
 
   // Estilos
-  "/style.css",
-  "/arena.css",
-  "/guild.css",
-  "/inventory.css",
-  "/mines.css",
-  "/guild_battle.css"
+  "https://aden-rpg.pages.dev/style.css",
+  "https://aden-rpg.pages.dev/arena.css",
+  "https://aden-rpg.pages.dev/guild.css",
+  "https://aden-rpg.pages.dev/inventory.css",
+  "https://aden-rpg.pages.dev/mines.css",
+  "https://aden-rpg.pages.dev/guild_battle.css"
 ];
 
 // Instalação: Baixa os arquivos essenciais imediatamente
@@ -111,6 +111,6 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // 3. Todo o resto (chamadas externas desconhecidas, analytics, etc): Rede primeiro
+  // 3. o resto (chamadas externas desconhecidas, analytics, etc): Rede primeiro
   event.respondWith(fetch(request));
 });

@@ -1,4 +1,3 @@
-
 // =======================================================================
 // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
 // =======================================================================
@@ -58,6 +57,10 @@ function openInventoryDB() {
     });
 }
 
+/**
+ * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
+ * IMPORTANTE: Realiza hidratação dos dados (preenche detalhes visuais) se eles vierem incompletos do servidor.
+ */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
         const db = await openInventoryDB();
@@ -65,9 +68,42 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
+        // --- HIDRATAÇÃO: Carrega itemDefinitions se necessário ---
+        if (!window.itemDefinitions) {
+            // Em reward.js, talvez o script.js não esteja totalmente carregado ou a página seja independente.
+            // Para garantir, tentamos buscar do LocalStorage.
+            const CACHE_KEY = 'item_definitions_cache';
+            try {
+                const cachedData = localStorage.getItem(CACHE_KEY);
+                if (cachedData) {
+                    const parsed = JSON.parse(cachedData);
+                    window.itemDefinitions = new Map(parsed.data || parsed); // Suporta formatos diferentes
+                }
+            } catch(e) {}
+        }
+        
+        // Se ainda assim não tiver, os itens podem ficar sem imagem até o próximo reload completo.
+        // Mas a estrutura do objeto 'items' existirá se fizermos o fallback abaixo.
+        // ------------------------------------------------------------
+
         // 1. Atualiza itens
         if (Array.isArray(newItems) && newItems.length > 0) {
-            newItems.forEach(item => store.put(item));
+            newItems.forEach(item => {
+                // HIDRATAÇÃO
+                if ((!item.items || Object.keys(item.items).length === 0)) {
+                    // Tenta pegar do cache global
+                    if (window.itemDefinitions && window.itemDefinitions.get) {
+                        const def = window.itemDefinitions.get(item.item_id);
+                        if (def) item.items = def;
+                    }
+                    
+                    // Fallback de emergência: Se ainda não tem 'items', cria um placeholder para não quebrar UI
+                    if (!item.items) {
+                        item.items = { item_id: item.item_id, name: "Item Carregando...", item_type: "unknown" };
+                    }
+                }
+                store.put(item);
+            });
         }
 
         // 2. Atualiza Timestamp
@@ -159,6 +195,7 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
         // 2. Atualiza IndexedDB de Inventário (Itens e Timestamp)
         if (rpcData.new_timestamp) {
             const statsUpdate = (typeof rpcData.new_crystals === 'number') ? { crystals: rpcData.new_crystals } : null;
+            // inventory_updates agora virá como [{item_id:..., quantity:...}] (lean)
             await surgicalCacheUpdate(rpcData.inventory_updates || [], rpcData.new_timestamp, statsUpdate);
         }
 

@@ -757,7 +757,7 @@ async function initSession() {
     let localId = getLocalUserId();
     
     if (!localId) {
-        const { data } = await supabase.auth.getSession();
+        const { data } = await supabase.auth.getSession({ cache: 'memory-only' });
         if (data?.session) {
             localId = data.session.user.id;
         }

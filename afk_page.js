@@ -277,7 +277,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // 2. Se não encontrar, tenta obter da sessão do Supabase
         if (!userId) {
-            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession({ cache: 'memory-only' });
             if (sessionData && sessionData.session) {
                 userId = sessionData.session.user.id;
             } else {

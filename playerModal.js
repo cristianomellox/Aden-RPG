@@ -320,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentUserId = globalAuth.value.user.id;
             } else {
                 try {
-                    const { data: sessionData } = await supabase.auth.getSession();
+                    const { data: sessionData } = await supabase.auth.getSession({ cache: 'memory-only' });
                     currentUserId = sessionData?.session?.user?.id || null;
                 } catch (e) {
                     console.warn("[playerModal.js] Não foi possível obter usuário atual:", e);

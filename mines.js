@@ -1568,22 +1568,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       // 3. PROCESSA DADOS DO MONOLITH
       
-      // A) Stats (Cache)
-      if (data.stats && data.stats.success) {
-          cachedCombatStats = data.stats; 
-          localStorage.setItem(`player_combat_stats_${userId}`, JSON.stringify({ timestamp: Date.now(), data: data.stats }));
+      // A) Stats (Cache) - key: 's'
+      if (data.s && data.s.success) {
+          cachedCombatStats = data.s; 
+          localStorage.setItem(`player_combat_stats_${userId}`, JSON.stringify({ timestamp: Date.now(), data: data.s }));
           
-          // Importante: Atualiza o DB Global com o gold e stats que vieram
-          // Isso garante que se o inventário mudou, o GlobalDB saiba
-          if (data.stats.crystals !== undefined) {
-             // Exemplo de update parcial se necessário, mas o principal é o cache local de combate
+          if (data.s.crystals !== undefined) {
+             // Exemplo de update parcial se necessário
           }
       }
 
-      // B) Attacks (Stamina)
-      if (data.attacks) {
-          localAttacksLeft = data.attacks.attacks_left;
-          const timeToNext = data.attacks.time_to_next_attack;
+      // B) Attacks (Stamina) - key: 'a' -> 'al' (left), 't' (time)
+      if (data.a) {
+          localAttacksLeft = data.a.al;
+          const timeToNext = data.a.t;
           if (localAttacksLeft < 5 && timeToNext > 0) {
               nextAttackTime = Date.now() + (timeToNext * 1000);
               startLocalCooldownTimer();
@@ -1594,41 +1592,39 @@ document.addEventListener("DOMContentLoaded", async () => {
           updateAttacksDisplay();
       }
 
-if (data.pvp) {
-          // data.pvp.l = tentativas restantes
-          // data.pvp.b = contagem de compradas
+      // C) PvP Info - key: 'p' -> 'l' (left), 'b' (bought)
+      if (data.p) {
           if (playerAttemptsSpan) {
-              playerAttemptsSpan.textContent = data.pvp.l; 
+              playerAttemptsSpan.textContent = data.p.l; 
           }
           
-          // Opcional: Atualizar cache global se você usar buyPvpBaseBoughtCount na UI de compra
-          // Mas só atualizar a UI já resolve o bug visual do "0".
           if (window.currentPlayerData) {
-               window.currentPlayerData.mine_pvp_attempts_left = data.pvp.l;
-               window.currentPlayerData.mine_pvp_attempts_bought_count = data.pvp.b;
+               window.currentPlayerData.mine_pvp_attempts_left = data.p.l;
+               window.currentPlayerData.mine_pvp_attempts_bought_count = data.p.b;
           }
       }
 
-
-      // C) Owners (Cache Global)
-      if (data.owners && data.owners.length > 0) {
-          data.owners.forEach(o => {
-              // Mapeia chaves curtas para o formato UI
-              globalOwnersMap[o.id] = { id: o.id, name: o.n, avatar_url: o.a, guild_id: o.g };
+      // D) Owners (Cache Global) - key: 'o'
+      if (data.o && data.o.length > 0) {
+          data.o.forEach(o => {
+              // Mapeia chaves curtas para o formato UI: i->id, n->name, a->avatar_url, g->guild_id
+              globalOwnersMap[o.i] = { id: o.i, name: o.n, avatar_url: o.a, guild_id: o.g };
           });
       }
 
-      // D) Minas (Render)
-      const mappedMines = data.mines.map(m => ({
+      // E) Minas (Render) - key: 'm'
+      // Mapeamento: i->id, n->name, s->status, o->owner, t->open_time, e->end_time, m->hp, h->max_hp
+      const mappedMines = data.m.map(m => ({
           id: m.i, 
           name: m.n, 
-          status: m.s, 
+          status: m.s === 'A' ? 'aberta' : (m.s === 'D' ? 'disputando' : (m.s === 'O' ? 'ocupada' : m.s)), 
           owner_player_id: m.o, 
-          open_time: m.ot, 
-          competition_end_time: m.cet,
-          monster_health: m.mh,
-          initial_monster_health: m.imh
+          open_time: m.t, 
+          competition_end_time: m.e,
+          monster_health: m.m,
+          initial_monster_health: m.h
       }));
+      
       renderMines(mappedMines, globalOwnersMap);
       await updateDominantGuild(mappedMines, globalOwnersMap);
       
@@ -1636,10 +1632,10 @@ if (data.pvp) {
       myOwnedMineId = myMine ? myMine.id : null;
       updatePlayerMineUI();
 
-      // E) Logs (Histórico)
-      const newLogs = data.logs || [];
+      // F) Logs (Histórico) - key: 'l'
+      // Mapeamento: an->attacker, at->time, da->dmg atk, dd->dmg def
+      const newLogs = data.l || [];
       if (newLogs.length > 0) {
-          // Mapeia chaves curtas para formato UI
           const mappedLogs = newLogs.map(l => ({
               attacker_name: l.an, 
               attack_time: l.at, 

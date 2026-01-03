@@ -1,4 +1,3 @@
-
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
 let backgroundMusic;
@@ -679,6 +678,7 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
+ * IMPORTANTE: Realiza hidratação dos dados (preenche detalhes visuais) se eles vierem incompletos do servidor.
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
@@ -691,12 +691,35 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         if (Array.isArray(newItems)) {
             newItems.forEach(item => {
                 if (item.quantity > 0) {
+                    
+                    // --- HIDRATAÇÃO CLIENT-SIDE (Crucial para o Otimização de Egress) ---
+                    // Se o servidor mandou apenas {id, quantity}, precisamos preencher 'items' (nome, img...)
+                    // usando o cache de definições local.
+                    if ((!item.items || Object.keys(item.items).length === 0) && window.itemDefinitions) {
+                        const def = window.itemDefinitions.get(item.item_id);
+                        if (def) {
+                            item.items = def; // Anexa os dados estáticos ao objeto antes de salvar
+                        }
+                    }
+                    // ---------------------------------------------------------------------
+
                     store.put(item); // Salva/Atualiza se tiver quantidade
                 } else {
                     // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
                     if (item.id) {
                         store.delete(item.id);
                         console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
+                    } else if (item.item_id) {
+                         // Fallback para tentar remover por key se o ID do banco não veio
+                         // (Note que a keyPath do store geralmente é 'id' (row id) e não 'item_id',
+                         // mas em alguns updates o 'id' pode vir).
+                         // Se não tiver 'id', não conseguimos deletar facilmente sem scan,
+                         // mas a otimização de Egress geralmente manda o 'item_id'.
+                         // O ideal é o SQL mandar o 'id' da linha ou o JS fazer scan.
+                         // Para simplificar e evitar scans pesados:
+                         // O update 'buy_spiral_cards' manda {item_id, quantity}.
+                         // Se quantity=0, precisamos saber qual linha apagar.
+                         // Se não tivermos o ID da linha, deixamos como está (0 qtd) ou fazemos scan futuro.
                     }
                 }
             });
@@ -856,7 +879,8 @@ async function handleUrlActions() {
 
 
 // Cache de definições de itens para uso no Espiral e outras funcionalidades
-let itemDefinitions = new Map();
+// (Este mapa será usado para hidratar os dados recebidos do servidor)
+window.itemDefinitions = new Map(); 
 
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
@@ -911,39 +935,40 @@ const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
 
 
 // Função para carregar definições de itens no cache local (MODIFICADA COM CACHE PERSISTENTE)
+// ATENÇÃO: Carrega itemDefinitions GLOBALMENTE para ser usado na Hidratação
 async function loadItemDefinitions() {
     const CACHE_KEY = 'item_definitions_cache';
     const CACHE_TTL_24H = 1440; // 24 horas * 60 minutos
 
-    // 1. Tenta carregar do cache em memória (RAM) - lógica original
-    if (itemDefinitions.size > 0) return;
+    // 1. Tenta carregar do cache em memória (RAM)
+    if (window.itemDefinitions && window.itemDefinitions.size > 0) return;
+    window.itemDefinitions = new Map();
 
     // 2. Tenta carregar do cache persistente (LocalStorage)
     const cachedData = getCache(CACHE_KEY, CACHE_TTL_24H);
     if (cachedData) {
-        // Recria o Map a partir dos dados [key, value] salvos no cache
         try {
-             itemDefinitions = new Map(cachedData);
+             window.itemDefinitions = new Map(cachedData);
              console.log('Definições de itens carregadas do LocalStorage.');
              return;
         } catch(e) {
             console.warn("Falha ao parsear cache de itens, buscando novamente.", e);
-            localStorage.removeItem(CACHE_KEY); // Limpa cache corrompido
+            localStorage.removeItem(CACHE_KEY); 
         }
     }
 
     // 3. Se não houver cache, busca no Supabase
     console.log('Buscando definições de itens do Supabase...');
-    const { data, error } = await supabaseClient.from('items').select('item_id, name');
+    const { data, error } = await supabaseClient.from('items').select('item_id, name, item_type, description'); // Inclua description se precisar
     if (error) {
         console.error('Erro ao carregar definições de itens:', error);
         return;
     }
     
-    const dataForCache = []; // Array [key, value] para salvar no localStorage
+    const dataForCache = []; 
     for (const item of data) {
-        itemDefinitions.set(item.item_id, item);
-        dataForCache.push([item.item_id, item]); // Salva como [key, value]
+        window.itemDefinitions.set(item.item_id, item);
+        dataForCache.push([item.item_id, item]);
     }
     
     // 4. Salva no cache persistente para a próxima vez com TTL de 24h
@@ -1449,7 +1474,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
     if (!isVisible) {
       submenu.style.display = "flex";
-      const btnRect = btn.getBoundingClientRect();
+      const btnRect = button.getBoundingClientRect();
       submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
     }
   }
@@ -2070,7 +2095,13 @@ confirmPurchaseBtn.addEventListener('click', async () => {
     // Atualiza SALDO localmente
     updateLocalPlayerData({ crystals: data.new_crystals });
     
-    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA
+    // ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (COM HIDRATAÇÃO AUTOMÁTICA)
+    if (data.updated_item && data.timestamp) {
+         // updated_item virá como um array [{item_id:..., quantity:...}]
+         await surgicalCacheUpdate(data.updated_item, data.timestamp);
+    }
+    
+    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA (Redundante mas seguro)
     await syncSpiralCardsWithServer();
     
     setTimeout(() => {
@@ -2136,7 +2167,7 @@ function displayDrawResults(items) {
         for (const itemIdStr in items) {
             const itemId = parseInt(itemIdStr, 10);
             const quantity = items[itemId];
-            const itemDef = itemDefinitions.get(itemId);
+            const itemDef = window.itemDefinitions.get(itemId); // Usa o cache carregado
 
             if (!itemDef) {
                 console.warn(`Definição não encontrada para o item ID: ${itemId}`);

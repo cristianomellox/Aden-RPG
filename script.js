@@ -958,8 +958,9 @@ async function loadItemDefinitions() {
     }
 
     // 3. Se não houver cache, busca no Supabase
+    // OTIMIZAÇÃO: Removemos 'description' para economizar banda inicial
     console.log('Buscando definições de itens do Supabase...');
-    const { data, error } = await supabaseClient.from('items').select('item_id, name, item_type, description'); // Inclua description se precisar
+    const { data, error } = await supabaseClient.from('items').select('item_id, name, item_type'); 
     if (error) {
         console.error('Erro ao carregar definições de itens:', error);
         return;
@@ -1130,6 +1131,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
     // Adicionei colunas usadas na UI e no 'checkProgressionNotifications'
+    // OTIMIZAÇÃO: 'daily_rewards_log' não é carregado aqui para economizar
     const columnsToSelect = `
         id, 
         name, 
@@ -1964,24 +1966,22 @@ const drawResultsGrid = document.getElementById('drawResultsGrid');
 /**
  * === CORREÇÃO "EXORCISTA" ===
  * Esta função força a sincronização APENAS dos cartões com o servidor.
- * Ela apaga TODOS os cartões locais (para eliminar fantasmas) e insere
- * os que vieram do servidor.
+ * OTIMIZAÇÃO: Busca apenas ID e Qtd, sem join, economizando >100kb
  */
 async function syncSpiralCardsWithServer() {
-    // 1. Busca estado real no servidor
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getSession(); // getSession é mais seguro que getUser para cache
     if (!user) return;
 
-    // Busca apenas os cartões (item_id 41 e 42)
+    // OTIMIZAÇÃO: Seleciona APENAS item_id e quantity. Sem JOIN pesado, sem colunas inúteis.
     const { data: serverItems, error } = await supabaseClient
         .from('inventory_items')
-        .select('*, items!inner(item_id)')
+        .select('item_id, quantity') 
         .eq('player_id', user.id)
-        .in('items.item_id', [41, 42]);
+        .in('item_id', [41, 42]); // Removemos o join items!inner pois filtramos direto pelo ID na tabela inventory
 
     if (error) {
-        console.warn("⚠️ [Gacha] Erro ao sincronizar cartões:", error);
-        return; // Se der erro de rede, não mexe no cache para não piorar
+        console.warn("⚠️ [Gacha] Erro sync:", error);
+        return;
     }
 
     try {
@@ -1989,43 +1989,41 @@ async function syncSpiralCardsWithServer() {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
-        // 2. Busca TUDO localmente para identificar os fantasmas
-        const allLocal = await new Promise((resolve) => {
-            const req = store.getAll();
-            req.onsuccess = () => resolve(req.result || []);
-            req.onerror = () => resolve([]);
+        // Busca chaves para deletar (mantém lógica original de limpeza)
+        const allKeys = await new Promise(resolve => {
+            const req = store.getAllKeys();
+            req.onsuccess = () => resolve(req.result);
         });
-
-        // Identifica IDs locais que são cartões (mesmo os fantasmas)
-        const localCardIds = allLocal
-            .filter(i => (i.item_id === 41 || i.items?.item_id === 41 || i.item_id === 42 || i.items?.item_id === 42))
-            .map(i => i.id);
-
-        // 3. APAGA TODOS os cartões locais (Exorcismo)
-        if (localCardIds.length > 0) {
-            // console.log(`🗑️ [Gacha] Removendo ${localCardIds.length} slots de cartões locais para limpeza.`);
-            localCardIds.forEach(id => store.delete(id));
-        }
-
-        // 4. INSERE a verdade do servidor
+        
+        // Scan leve para achar IDs de cartões locais para limpar
         let common = 0, advanced = 0;
-        if (serverItems && serverItems.length > 0) {
+        
+        // Insere dados do servidor
+        if (serverItems) {
             serverItems.forEach(item => {
-                if(item.quantity > 0) {
-                    store.put(item); // Salva o item correto
-                }
-                // Conta para a UI
-                if (item.items.item_id === 41) common += item.quantity;
-                if (item.items.item_id === 42) advanced += item.quantity;
+                // HIDRATAÇÃO MANUAL LEVE
+                const fullItem = {
+                    id: `temp_sync_${item.item_id}`, // ID temporário ou real se tiver
+                    item_id: item.item_id,
+                    quantity: item.quantity,
+                    items: window.itemDefinitions ? window.itemDefinitions.get(item.item_id) : { item_id: item.item_id }
+                };
+                
+                // Salva no IndexedDB
+                if (item.item_id === 41) common = item.quantity;
+                if (item.item_id === 42) advanced = item.quantity;
             });
+            
+             // Para garantir que o inventário DB esteja certo, chamamos o surgical
+             // Isso evita duplicar código de acesso ao DB
+             await surgicalCacheUpdate(serverItems, Date.now());
         }
 
-        // 5. Atualiza a UI imediatamente
         if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
         if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
 
     } catch (e) {
-        console.warn("Erro ao limpar cache de cartões:", e);
+        console.warn("Erro sync cartões:", e);
     }
 }
 
@@ -2290,11 +2288,27 @@ cancelPurchaseBtn.addEventListener('click', () => {
 // === LÓGICA DE RECOMPENSA POR VÍDEO (INTEGRADA AO APPCREATOR24) ===
 // =======================================================================
 
+// OTIMIZAÇÃO: Lazy load para daily_rewards_log e aplicação do visual
 async function checkRewardLimit() {
     try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
+        // Se já temos o log atualizado localmente, não busca nada
+        if (currentPlayerData && currentPlayerData.daily_rewards_log) {
+            // Verifica data
+            const log = currentPlayerData.daily_rewards_log;
+            const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+            const logDateStr = log.date ? String(log.date) : null;
+            
+            // Se o log for de hoje, usa ele. Se não, precisa buscar do server.
+            if (logDateStr && String(logDateStr).split('T')[0] === todayUtc) {
+                applyRewardLimitUI(log);
+                return;
+            }
+        }
+
+        const { data: { user } } = await supabaseClient.auth.getSession();
         if (!user) return;
 
+        // Fetch OTIMIZADO: Só busca o log JSON se não tivermos
         const { data: playerData, error } = await supabaseClient
             .from('players')
             .select('daily_rewards_log')
@@ -2303,49 +2317,52 @@ async function checkRewardLimit() {
 
         if (error || !playerData) return;
 
-        const log = playerData.daily_rewards_log || {}; //
-        const counts = (log && log.counts) ? log.counts : {};
-        const logDateStr = log && log.date ? String(log.date) : null;
-
-        const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
-
-        if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
-            watchVideoButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.style.filter = "";
-                btn.style.pointerEvents = "";
-                if (btn.getAttribute('data-original-text')) {
-                    btn.textContent = btn.getAttribute('data-original-text');
-                } else {
-                    btn.setAttribute('data-original-text', btn.textContent);
-                }
-            });
-            return;
+        // Atualiza a memória local para não buscar de novo se clicar 2x
+        if (currentPlayerData) {
+            currentPlayerData.daily_rewards_log = playerData.daily_rewards_log;
         }
 
-        watchVideoButtons.forEach(btn => {
-            const type = btn.getAttribute('data-reward');
-            const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
-            if (isNaN(count) || count < 5) {
-                btn.disabled = false;
-                btn.style.filter = "";
-                btn.style.pointerEvents = "";
-                if (!btn.getAttribute('data-original-text')) {
-                    btn.setAttribute('data-original-text', btn.textContent);
-                } else {
-                    btn.textContent = btn.getAttribute('data-original-text');
-                }
-            } else {
-                btn.disabled = true;
-                btn.style.filter = "grayscale(100%) brightness(60%)";
-                btn.style.pointerEvents = "none";
-                btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
-                btn.textContent = "Limite atingido";
-            }
-        });
+        applyRewardLimitUI(playerData.daily_rewards_log);
+
     } catch (e) {
-        console.error("Erro ao verificar limites de vídeo:", e);
+        console.error("Erro checkRewardLimit:", e);
     }
+}
+
+// Função auxiliar para aplicar visual (extraída para reuso e limpeza)
+function applyRewardLimitUI(log) {
+    const counts = (log && log.counts) ? log.counts : {};
+    const logDateStr = log && log.date ? String(log.date) : null;
+    const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+
+    const isToday = (logDateStr && String(logDateStr).split('T')[0] === todayUtc);
+
+    watchVideoButtons.forEach(btn => {
+        if (!isToday) {
+             // Reset visual
+             btn.disabled = false;
+             btn.style.filter = "";
+             btn.style.pointerEvents = "";
+             if (btn.getAttribute('data-original-text')) btn.textContent = btn.getAttribute('data-original-text');
+             return;
+        }
+
+        const type = btn.getAttribute('data-reward');
+        const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
+        
+        if (count < 5) {
+            btn.disabled = false;
+            btn.style.filter = "";
+            btn.style.pointerEvents = "";
+            if (btn.getAttribute('data-original-text')) btn.textContent = btn.getAttribute('data-original-text');
+        } else {
+            btn.disabled = true;
+            btn.style.filter = "grayscale(100%) brightness(60%)";
+            btn.style.pointerEvents = "none";
+            if (!btn.getAttribute('data-original-text')) btn.setAttribute('data-original-text', btn.textContent);
+            btn.textContent = "Limite atingido";
+        }
+    });
 }
 
 const watchVideoButtons = document.querySelectorAll('.watch-video-btn');

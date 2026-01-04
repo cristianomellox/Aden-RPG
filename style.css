@@ -945,19 +945,18 @@ margin-right: 15px;
 #sideMenu .submenu {
   display: none;
   position: absolute;
-  right: 75px; /* Ajuste a distância lateral */
-  top: 50%; /* Centraliza verticalmente em relação ao botão pai */
-  transform: translateY(-50%); /* Corrige o ponto de ancoragem para o centro exato */
-  flex-direction: row;
+  right: 70px; /* distância lateral entre o menu principal e o submenu */
+  margin-top: -7px;
+  transform: translateY(-50%);
+  flex-direction: row; /* agora ficam lado a lado */
   align-items: center;
-  gap: 15px; /* Espaço entre os ícones do submenu */
+  gap: 40px;
   background: rgba(20, 20, 20, 0.95);
-  padding: 8px 12px;
+  padding: 8px 9px;
   border: 1px solid #555;
   border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  box-shadow: 0 0 10px rgba(0,0,0,0.4);
   z-index: 1000;
-  margin-top: 0; /* Remove margens antigas que atrapalham */
 }
 #sideMenu .menu-item.expandable {
   position: relative;

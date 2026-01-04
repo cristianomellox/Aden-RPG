@@ -677,9 +677,8 @@ function openDB() {
 }
 
 /**
- * ATUALIZAÇÃO CIRÚRGICA DE CACHE (CORRIGIDA)
- * Resolve o problema de "Ghost Items" fazendo merge dos dados novos com os existentes.
- * Otimiza egress permitindo que o servidor envie apenas {id, quantity}.
+ * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
+ * IMPORTANTE: Realiza hidratação dos dados (preenche detalhes visuais) se eles vierem incompletos do servidor.
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
@@ -688,98 +687,56 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualização dos Itens com MERGE
-        if (Array.isArray(newItems) && newItems.length > 0) {
-            const promises = newItems.map(item => {
-                return new Promise((resolveItem) => {
-                    // Verificação de segurança: precisa de ID (row id) ou item_id (reference)
-                    if (!item.id && !item.item_id) {
-                        resolveItem();
-                        return;
+        // 1. Atualiza, insere OU DELETA os itens modificados
+        if (Array.isArray(newItems)) {
+            newItems.forEach(item => {
+                if (item.quantity > 0) {
+                    
+                    // --- HIDRATAÇÃO CLIENT-SIDE (Crucial para o Otimização de Egress) ---
+                    // Se o servidor mandou apenas {id, quantity}, precisamos preencher 'items' (nome, img...)
+                    // usando o cache de definições local.
+                    if ((!item.items || Object.keys(item.items).length === 0) && window.itemDefinitions) {
+                        const def = window.itemDefinitions.get(item.item_id);
+                        if (def) {
+                            item.items = def; // Anexa os dados estáticos ao objeto antes de salvar
+                        }
                     }
-                    
-                    // Preferência: Buscar pelo ID da linha (Primary Key)
-                    // Caso o server mande só item_id e quantity, e não tenhamos o ID da linha,
-                    // assumimos que é um INSERT/UPDATE baseado em dados disponíveis.
-                    // Porém, a store é chaveada por 'id'. Se não tiver 'id', é um problema para UPDATE.
-                    // Vamos assumir que o SQL retorna 'id' sempre que possível.
-                    
+                    // ---------------------------------------------------------------------
+
+                    store.put(item); // Salva/Atualiza se tiver quantidade
+                } else {
+                    // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
                     if (item.id) {
-                        const getReq = store.get(item.id);
-                        
-                        getReq.onsuccess = () => {
-                            const existingItem = getReq.result;
-
-                            if (item.quantity <= 0) {
-                                // Se quantidade zero ou menor, remove do inventário
-                                store.delete(item.id);
-                                resolveItem();
-                            } else {
-                                // Prepara o objeto final
-                                let finalItem;
-
-                                if (existingItem) {
-                                    // MERGE: Mantém o objeto existente (com imagem/nome) e atualiza a quantidade
-                                    finalItem = { ...existingItem, ...item }; // new item overwrites existing props like quantity
-                                    
-                                    // Garantia: Se o novo item veio sem 'items' (metadata), mantém o antigo
-                                    if (!item.items && existingItem.items) {
-                                        finalItem.items = existingItem.items;
-                                    }
-                                } else {
-                                    // NOVO ITEM: O server mandou dados.
-                                    finalItem = { ...item };
-                                    
-                                    // HIDRATAÇÃO: Se faltar metadata visual ('items'), busca no cache global
-                                    if ((!finalItem.items || !finalItem.items.name) && window.itemDefinitions) {
-                                        const def = window.itemDefinitions.get(finalItem.item_id);
-                                        if (def) {
-                                            finalItem.items = def; 
-                                        }
-                                    }
-                                }
-                                
-                                // Salva no IndexedDB
-                                store.put(finalItem);
-                                resolveItem();
-                            }
-                        };
-                        
-                        getReq.onerror = () => {
-                            console.warn("Erro ao ler item para update:", item.id);
-                            resolveItem(); 
-                        };
-                    } else {
-                        // Caso extremo: item sem ID da linha (pode acontecer se o SQL for otimizado demais e for um insert puro)
-                        // Apenas salvamos se tiver quantidade
-                         if (item.quantity > 0) {
-                             store.put(item);
-                         }
-                         resolveItem();
+                        store.delete(item.id);
+                        console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
+                    } else if (item.item_id) {
+                         // Fallback para tentar remover por key se o ID do banco não veio
+                         // (Note que a keyPath do store geralmente é 'id' (row id) e não 'item_id',
+                         // mas em alguns updates o 'id' pode vir).
+                         // Se não tiver 'id', não conseguimos deletar facilmente sem scan,
+                         // mas a otimização de Egress geralmente manda o 'item_id'.
+                         // O ideal é o SQL mandar o 'id' da linha ou o JS fazer scan.
+                         // Para simplificar e evitar scans pesados:
+                         // O update 'buy_spiral_cards' manda {item_id, quantity}.
+                         // Se quantity=0, precisamos saber qual linha apagar.
+                         // Se não tivermos o ID da linha, deixamos como está (0 qtd) ou fazemos scan futuro.
                     }
-                });
+                }
             });
-            
-            await Promise.all(promises);
         }
 
-        // 2. Atualiza Timestamp
+        // 2. Atualiza o Timestamp para manter sync com inventory.js
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            meta.put({ key: "cache_time", value: Date.now() });
+            meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza Stats do Jogador (Ouro, Cristais, etc)
+        // 3. Atualiza os stats do jogador (Ouro/Cristais)
         if (updatedStats) {
-            // Atualiza na memória global se existir
-            if (window.GlobalDB && typeof window.GlobalDB.updatePlayerPartial === 'function') {
-                window.GlobalDB.updatePlayerPartial(updatedStats);
-            }
-            
-            // Atualiza no IndexedDB de Inventário (Meta Store)
-            const statsGet = meta.get("player_stats");
-            statsGet.onsuccess = (e) => {
-                const currentStats = e.target.result ? e.target.result.value : {};
+            GlobalDB.updatePlayerPartial(updatedStats);
+            const req = meta.get("player_stats");
+            req.onsuccess = () => {
+                const currentStats = req.result ? req.result.value : {};
                 const finalStats = { ...currentStats, ...updatedStats };
                 meta.put({ key: "player_stats", value: finalStats });
             };
@@ -787,9 +744,7 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 
         return new Promise(resolve => {
             tx.oncomplete = () => resolve();
-            tx.onerror = () => resolve(); // Resolve mesmo com erro para não travar UI
         });
-
     } catch (e) {
         console.warn("⚠️ Falha ao atualizar IndexedDB via script.js:", e);
     }
@@ -1521,8 +1476,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
     if (!isVisible) {
       submenu.style.display = "flex";
-      // REMOVIDO O CÁLCULO MANUAL DE POSIÇÃO QUE ESTAVA CAUSANDO BUGS
-      // O posicionamento agora é tratado exclusivamente pelo CSS (top: 50% no .submenu)
+      const btnRect = button.getBoundingClientRect();
+      submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
     }
   }
 
@@ -1958,7 +1913,6 @@ async function handleProgressionClaim(event) {
         updateLocalPlayerData(updates);
 
         // 3. Atualiza Cirurgicamente o Inventário (Se ganhou item)
-        // Agora usamos a função atualizada que faz MERGE dos dados
         if (data.inventory_updates && data.new_timestamp) {
             await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }

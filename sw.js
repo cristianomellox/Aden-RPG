@@ -1,6 +1,6 @@
 // AUMENTE ESTE NÚMERO SEMPRE QUE FIZER UMA ATUALIZAÇÃO NO JOGO (V1 -> V2 -> V3...)
 // Se você não mudar isso, os jogadores continuarão vendo a versão antiga!
-const CACHE_NAME = "aden-static-v7";
+const CACHE_NAME = "aden-static-v8";
 
 // Arquivos vitais para o jogo abrir (App Shell)
 const STATIC_FILES = [

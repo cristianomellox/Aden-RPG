@@ -1225,10 +1225,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                  slot.style.filter = "grayscale(1)"; slot.style.opacity = "0.7";
             }
+            
+            // MODIFICAÇÃO: Prioriza POTION_MAP pois o SQL não envia mais item_name
             const itemId = parseInt(p.item_id);
-            const name = p.item_name || POTION_MAP[itemId] || `item_${itemId}`;
+            let fileName = POTION_MAP[itemId];
+            if (!fileName) fileName = p.item_name || `item_${itemId}`;
+            
             const cdHeight = (cd > 0) ? "100%" : "0%";
-            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
+            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${fileName}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
             ct.appendChild(slot);
         });
         container.appendChild(ct);

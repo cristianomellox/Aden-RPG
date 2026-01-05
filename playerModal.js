@@ -48,13 +48,9 @@ const GlobalDB = {
 
 document.addEventListener("DOMContentLoaded", () => {
     
-
     // --- INÍCIO: FUNÇÕES DE CACHE ---
     /**
      * Armazena dados no localStorage com um tempo de expiração.
-     * @param {string} key - A chave para o cache.
-     * @param {any} data - Os dados a serem armazenados.
-     * @param {number} ttl - Time-to-live em milissegundos.
      */
     function setCache(key, data, ttl) {
         const now = new Date();
@@ -71,14 +67,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /**
      * Recupera dados do localStorage se não estiverem expirados.
-     * @param {string} key - A chave do cache.
-     * @returns {any|null} - Os dados ou nulo se não existir ou estiver expirado.
      */
     function getCache(key) {
         const itemStr = localStorage.getItem(key);
-        if (!itemStr) {
-            return null;
-        }
+        if (!itemStr) return null;
         try {
             const item = JSON.parse(itemStr);
             const now = new Date();
@@ -89,14 +81,14 @@ document.addEventListener("DOMContentLoaded", () => {
             return item.data;
         } catch (e) {
             console.error("[playerModal.js] Erro ao ler cache:", e);
-            localStorage.removeItem(key); // Remove cache corrompido
+            localStorage.removeItem(key); 
             return null;
         }
     }
     // --- FIM: FUNÇÕES DE CACHE ---
 
     // Tempo de vida do cache (24 horas) - usado como fallback
-    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 86400000
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; 
 
     // Referências DOM
     const playerModal = document.getElementById('playerModal');
@@ -140,8 +132,6 @@ document.addEventListener("DOMContentLoaded", () => {
         armadura: 'armor'
     };
 
-    const safeNum = v => Number(v) || 0;
-
     // fallback para formatNumberCompact se não existir em outro script
     const formatNumberCompact = window.formatNumberCompact || ((n) => {
         try {
@@ -184,7 +174,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Esconde o botão de enviar MP até os dados serem carregados
         if (sendMpButton) {
             sendMpButton.style.display = 'none';
             sendMpButton.removeAttribute('data-player-id');
@@ -192,54 +181,30 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Soma atributos do player + itens
-    function calcularAtributosTotais(baseStats = {}, items = []) {
-        let totalStats = {
-            attack: safeNum(baseStats.attack),
-            min_attack: safeNum(baseStats.min_attack),
-            health: safeNum(baseStats.health),
-            defense: safeNum(baseStats.defense),
-            crit_chance: safeNum(baseStats.crit_chance),
-            crit_damage: safeNum(baseStats.crit_damage),
-            evasion: safeNum(baseStats.evasion),
-        };
-
-        (items || []).forEach(invItem => {
-            // stats embutidos no objeto items (tabela items)
-            if (invItem.items) {
-                totalStats.min_attack += safeNum(invItem.items.min_attack);
-                totalStats.attack += safeNum(invItem.items.attack);
-                totalStats.defense += safeNum(invItem.items.defense);
-                totalStats.health += safeNum(invItem.items.health);
-                totalStats.crit_chance += safeNum(invItem.items.crit_chance);
-                totalStats.crit_damage += safeNum(invItem.items.crit_damage);
-                totalStats.evasion += safeNum(invItem.items.evasion);
-            }
-
-            // bônus diretos do inventory_items
-            totalStats.min_attack += safeNum(invItem.min_attack_bonus);
-            totalStats.attack += safeNum(invItem.attack_bonus);
-            totalStats.defense += safeNum(invItem.defense_bonus);
-            totalStats.health += safeNum(invItem.health_bonus);
-            totalStats.crit_chance += safeNum(invItem.crit_chance_bonus);
-            totalStats.crit_damage += safeNum(invItem.crit_damage_bonus);
-            totalStats.evasion += safeNum(invItem.evasion_bonus);
-        });
-
-        return totalStats;
-    }
-
-    // --- CÁLCULO DE CP REMOVIDO DO MODAL ---
-
-
+    // --- POPULATE MODAL OTIMIZADO ---
+    // Agora usa cached_combat_stats em vez de calcular manualmente
     async function populateModal(player, equippedItems = [], guildData = null) {
         try {
             if (!player) return;
 
-            // calcula atributos somando itens
-            const stats = calcularAtributosTotais(player, equippedItems);
+            // 1. Obtém Stats diretamente do JSON cacheado do banco
+            // Se o JSON for nulo (conta nova/bug), usa fallback seguro
+            const cachedStats = player.cached_combat_stats || {};
+            
+            // Fallback para atributos base se o JSON estiver vazio
+            const stats = {
+                min_attack: cachedStats.min_attack || player.min_attack || 0,
+                attack: cachedStats.attack || player.attack || 0,
+                defense: cachedStats.defense || player.defense || 0,
+                health: cachedStats.health || player.health || 0,
+                crit_chance: cachedStats.crit_chance || player.crit_chance || 0,
+                crit_damage: cachedStats.crit_damage || player.crit_damage || 0,
+                evasion: cachedStats.evasion || player.evasion || 0,
+                // O avatar também pode vir do cache ou da coluna direta
+                avatar_url: cachedStats.avatar_url || player.avatar_url
+            };
 
-            // Preenche UI
+            // Preenche UI - Identidade
             if (playerNameEl) playerNameEl.textContent = player.name || 'Jogador';
             if (playerLevelEl) playerLevelEl.textContent = `Nv. ${player.level || 1}`;
 
@@ -252,25 +217,25 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (playerGuildNameEl) playerGuildNameEl.textContent = guildData?.name || '';
+            if (playerAvatarEl) playerAvatarEl.src = stats.avatar_url || 'https://via.placeholder.com/100';
 
-            if (playerAvatarEl) playerAvatarEl.src = player.avatar_url || 'https://via.placeholder.com/100';
+            // Preenche UI - Atributos Totais (Sem cálculo local)
+            if (playerAttackEl) playerAttackEl.textContent = `${formatNumberCompact(stats.min_attack)} - ${formatNumberCompact(stats.attack)}`;
+            if (playerDefenseEl) playerDefenseEl.textContent = `${formatNumberCompact(stats.defense)}`;
+            if (playerHealthEl) playerHealthEl.textContent = `${formatNumberCompact(stats.health)}`;
+            if (playerCritChanceEl) playerCritChanceEl.textContent = `${stats.crit_chance}%`;
+            if (playerCritDamageEl) playerCritDamageEl.textContent = `${stats.crit_damage}%`;
+            if (playerEvasionEl) playerEvasionEl.textContent = `${stats.evasion}%`;
 
-            if (playerAttackEl) playerAttackEl.textContent = `${Math.floor(stats.min_attack)} - ${Math.floor(stats.attack)}`;
-            if (playerDefenseEl) playerDefenseEl.textContent = `${Math.floor(stats.defense)}`;
-            if (playerHealthEl) playerHealthEl.textContent = `${Math.floor(stats.health)}`;
-            if (playerCritChanceEl) playerCritChanceEl.textContent = `${Math.floor(stats.crit_chance)}%`;
-            if (playerCritDamageEl) playerCritDamageEl.textContent = `${Math.floor(stats.crit_damage)}%`;
-            if (playerEvasionEl) playerEvasionEl.textContent = `${Math.floor(stats.evasion)}%`;
-
-            // CP (Removido cálculo, definindo como vazio ou 0)
-            const cp = 0; 
-            if (combatPowerEl) combatPowerEl.textContent = `${formatNumberCompact(Number(cp) || 0)}`;
+            // CP (Se estiver disponível no objeto player ou calculado previamente)
+            const cp = player.combat_power || 0; 
+            if (combatPowerEl) combatPowerEl.textContent = `${formatNumberCompact(Number(cp))}`;
 
             // Remove shimmer
             const allShimmer = document.querySelectorAll('.shimmer');
             allShimmer.forEach(el => el.classList.remove('shimmer'));
 
-            // Limpa slots e monta equipamentos (Esta lógica está correta e funcional)
+            // Limpa slots e monta equipamentos (Visual Only)
             Object.values(equipmentSlots).forEach(slot => {
                 if (slot) slot.innerHTML = '';
             });
@@ -302,18 +267,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ----------------------------------------
-    // fetchPlayerData: busca dados do jogador e atualiza modal
-    // (USANDO APENAS VALIDAÇÃO LEVE DE PERFIL/GUILDA + IMPRESSÃO DIGITAL DE LEVEL)
+    // fetchPlayerData: OTIMIZADO
     // ----------------------------------------
     async function fetchPlayerData(playerId) {
         try {
             if (!supabase) {
-                console.error("Supabase não inicializado — não é possível buscar dados do jogador.");
+                console.error("Supabase não inicializado.");
                 return;
             }
 
-            // --- Obtém o ID do jogador logado (quem está usando o app) ---
-            // OTIMIZAÇÃO: Usa GlobalDB para evitar egress se possível
+            // --- ID do usuário atual (para lógica do botão MP) ---
             let currentUserId = null;
             const globalAuth = await GlobalDB.getAuth();
             if (globalAuth && globalAuth.value && globalAuth.value.user) {
@@ -322,39 +285,36 @@ document.addEventListener("DOMContentLoaded", () => {
                 try {
                     const { data: sessionData } = await supabase.auth.getSession({ cache: 'memory-only' });
                     currentUserId = sessionData?.session?.user?.id || null;
-                } catch (e) {
-                    console.warn("[playerModal.js] Não foi possível obter usuário atual:", e);
-                }
+                } catch (e) {}
             }
 
-            clearModalContent(); // Limpa e esconde o botão de MP antes da busca
+            clearModalContent();
 
             const cacheKey = `player_modal_data_${playerId}`;
             const cachedData = getCache(cacheKey);
 
-            // --- Validação de Cache (Egress-light - Profile/Guild + Impressão Digital) ---
+            // --- Validação de Cache ---
             if (cachedData) {
                 let validationFailed = false;
                 let newProfileUpdate = null;
                 let newGuildId = null;
-                // Usa total_item_level e equipped_count para detectar mudanças no equipamento
                 let newEquipmentFingerprint = { total_item_level: 0, equipped_count: 0 }; 
 
                 try {
-                    // 2. Faz as duas checagens leves em paralelo (Profile/Guild e Itens Leves)
+                    // Checagem Leve 1: Perfil
                     const profilePromise = supabase
                         .from('players')
                         .select('last_profile_update, guild_id')
                         .eq('id', playerId)
                         .single();
 
-                    // Query de Impressão Digital: Apenas level e id, sem JOINs pesados.
+                    // Checagem Leve 2: Impressão digital dos itens (apenas id e level)
+                    // Necessário para saber se mudou o visual dos itens
                     const itemsPromise = supabase
                         .from('inventory_items')
                         .select('level, id')
                         .eq('player_id', playerId)
                         .not('equipped_slot', 'is', null);
-
 
                     const [profileResult, itemsResult] = await Promise.all([profilePromise, itemsPromise]);
 
@@ -363,59 +323,49 @@ document.addEventListener("DOMContentLoaded", () => {
                     newProfileUpdate = profileResult.data.last_profile_update;
                     newGuildId = profileResult.data.guild_id;
 
-                    // Processa o resultado leve dos itens para criar a Impressão Digital
-                    if (!itemsResult.error && itemsResult.data && itemsResult.data.length > 0) {
+                    if (!itemsResult.error && itemsResult.data) {
                         newEquipmentFingerprint.equipped_count = itemsResult.data.length;
                         newEquipmentFingerprint.total_item_level = itemsResult.data.reduce(
                             (sum, item) => sum + (Number(item.level) || 0), 0
                         );
-                    } else if (itemsResult.error) {
-                         // Trata erro na busca leve dos itens como falha de validação
-                         throw itemsResult.error;
                     }
 
                 } catch (e) {
-                    console.warn("[playerModal.js] Falha na verificação de staleness do cache (busca leve). Forçando refresh.", e);
+                    console.warn("[playerModal.js] Falha na validação cache. Forçando refresh.", e);
                     validationFailed = true;
                 }
 
-                // 3. Compara as checagens
                 const profileMatches = (newProfileUpdate === cachedData.player.last_profile_update);
                 const guildMatches = (newGuildId === cachedData.player.guild_id);
-                
                 const cachedFingerprint = cachedData.equipmentFingerprint || { total_item_level: 0, equipped_count: 0 }; 
-
                 const levelMatches = newEquipmentFingerprint.total_item_level === cachedFingerprint.total_item_level;
                 const countMatches = newEquipmentFingerprint.equipped_count === cachedFingerprint.equipped_count;
 
-                // Usa o cache apenas se TUDO bater (Egress-Light)
                 if (!validationFailed && profileMatches && guildMatches && levelMatches && countMatches) {
-                    console.log(`[playerModal.js] Usando dados do cache (validados por Profile/Guild/Equipamento) para ${playerId}`);
-                    
-                    // Lógica do botão de MP (do cache)
+                    // Configura botão MP
                     if (sendMpButton) {
                         sendMpButton.setAttribute('data-player-id', cachedData.player.id);
                         sendMpButton.setAttribute('data-player-name', cachedData.player.name);
                         sendMpButton.style.display = (currentUserId && cachedData.player.id === currentUserId) ? 'none' : 'flex';
                     }
                     
-                    // cachedData.items tem os dados completos e necessários para o populateModal
                     await populateModal(cachedData.player, cachedData.items || [], cachedData.guildData);
-                    return; // Cache hit, termina a função
-                } else {
-                     console.log(`[playerModal.js] Cache stale para ${playerId}. Buscando dados frescos.`);
-                     console.log(`[playerModal.js] Falhas: Profile: ${!profileMatches}, Guild: ${!guildMatches}, Count: ${!countMatches}, Level: ${!levelMatches}`);
+                    return; // Cache hit
                 }
             }
-            // --- Fim da Validação de Cache ---
+            // --- Fim Validação Cache ---
 
 
-            // --- Cache Miss, Expirado ou Stale: Busca Completa (Pesada) ---
-            console.log(`[playerModal.js] Buscando dados frescos (sem cache ou stale) para ${playerId}`);
+            // --- BUSCA FRESCA OTIMIZADA ---
+            console.log(`[playerModal.js] Buscando dados frescos para ${playerId}`);
 
+            // 1. Busca Player + Cached Stats (Substitui busca de colunas individuais)
             const { data: player, error: playerError } = await supabase
                 .from('players')
-                .select(`id, name, level, avatar_url, attack, min_attack, defense, health, crit_chance, crit_damage, evasion, guild_id, last_profile_update`)
+                .select(`
+                    id, name, level, avatar_url, guild_id, last_profile_update, combat_power,
+                    cached_combat_stats
+                `)
                 .eq('id', playerId)
                 .single();
 
@@ -424,7 +374,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // BUSCA PESADA COMPLETA (inclui atributos do item e JOINs)
+            // 2. BUSCA DE ITENS OTIMIZADA (Apenas visual)
+            // Removemos attack, defense, crit, etc. da query.
             const { data: items, error: itemsError } = await supabase
                 .from('inventory_items')
                 .select(`
@@ -432,18 +383,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     equipped_slot,
                     level,
                     refine_level,
-                    attack, min_attack, defense, health, crit_chance, crit_damage, evasion,
-                    attack_bonus, min_attack_bonus, defense_bonus, health_bonus, crit_chance_bonus, crit_damage_bonus, evasion_bonus,
-                    items (name, display_name, stars, attack, min_attack, defense, health, crit_chance, crit_damage, evasion)
+                    items (name, display_name, stars)
                 `)
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            if (itemsError) {
-                console.error('Erro ao buscar itens equipados', itemsError);
-                // continuamos sem itens
-            }
+            if (itemsError) console.error('Erro ao buscar itens', itemsError);
 
+            // 3. Busca Guilda (se houver)
             let guildData = null;
             if (player.guild_id) {
                 try {
@@ -453,41 +400,35 @@ document.addEventListener("DOMContentLoaded", () => {
                         .eq('id', player.guild_id)
                         .single();
                     guildData = guild;
-                } catch (e) {
-                    console.warn("Erro ao buscar guilda:", e);
-                }
+                } catch (e) { console.warn("Erro ao buscar guilda:", e); }
             }
 
-            // -----------------------------------------------------
-            // --- Lógica do Botão de Mensagem Privada (PV) ---
-            // -----------------------------------------------------
+            // Configura botão MP
             if (sendMpButton) {
                 sendMpButton.setAttribute('data-player-id', player.id);
                 sendMpButton.setAttribute('data-player-name', player.name);
                 sendMpButton.style.display = (currentUserId && player.id === currentUserId) ? 'none' : 'flex';
             }
-            // -----------------------------------------------------
 
-            // Popula o modal com os dados frescos
+            // Popula Modal
             await populateModal(player, items || [], guildData);
 
-            // --- Salva os novos dados e a IMPRESSÃO DIGITAL no cache ---
+            // --- Salva Cache ---
             try {
-                // Cálculo de CP local para salvar no cache REMOVIDO
                 const allItems = items || [];
-                const cp = 0; // Removido
-                
-                // Cria a nova Impressão Digital para salvar
                 const newFingerprint = {
                     total_item_level: allItems.reduce((sum, item) => sum + (Number(item.level) || 0), 0),
                     equipped_count: allItems.length
                 };
                 
-                // Salva o conjunto completo de dados + o CP (0) + a Impressão Digital
-                setCache(cacheKey, { player, items: allItems, guildData, combatPower: cp, equipmentFingerprint: newFingerprint }, CACHE_TTL_MS);
-                console.log(`[playerModal.js] Novos dados, CP (${cp}) e Fingerprint salvos no cache para ${playerId}`);
+                setCache(cacheKey, { 
+                    player, 
+                    items: allItems, 
+                    guildData, 
+                    equipmentFingerprint: newFingerprint 
+                }, CACHE_TTL_MS);
             } catch (e) {
-                console.error("[playerModal.js] Erro ao salvar dados no cache:", e);
+                console.error("[playerModal.js] Erro ao salvar cache:", e);
             }
 
         } catch (e) {
@@ -495,56 +436,32 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Evento para fechar o modal
+    // Event listeners
     closeBtn?.addEventListener('click', () => {
         if (playerModal) playerModal.style.display = 'none';
     });
 
-    // Evento: clique no nome do jogador dentro da própria guilda
-    const guildMemberList = document.getElementById('guildMemberList');
-    if (guildMemberList) {
-        guildMemberList.addEventListener('click', (e) => {
-            const link = e.target.closest('.player-link');
-            if (!link) return;
-            const playerId = link.dataset.playerId;
-            if (!playerId) return;
+    const setupClickListener = (listId) => {
+        const list = document.getElementById(listId);
+        if (list) {
+            list.addEventListener('click', (e) => {
+                const link = e.target.closest('.player-link');
+                if (!link) return;
+                const playerId = link.dataset.playerId;
+                if (!playerId) return;
 
-            if (playerModal) playerModal.style.display = 'flex';
-            fetchPlayerData(playerId);
-        });
-    }
+                if (playerModal) playerModal.style.display = 'flex';
+                fetchPlayerData(playerId);
+            });
+        }
+    };
 
-    // clique no nome do jogador dentro do modal de informações de guilda (view)
-    const guildViewMemberList = document.getElementById('guildViewMemberList');
-    if (guildViewMemberList) {
-        guildViewMemberList.addEventListener('click', (e) => {
-            const link = e.target.closest('.player-link');
-            if (!link) return;
-            const playerId = link.dataset.playerId;
-            if (!playerId) return;
+    setupClickListener('guildMemberList');
+    setupClickListener('guildViewMemberList');
+    setupClickListener('guildRequestsList');
 
-            if (playerModal) playerModal.style.display = 'flex';
-            fetchPlayerData(playerId);
-        });
-    }
-
-    // clique na lista de solicitações (aba de edição)
-    const guildRequestsList = document.getElementById('guildRequestsList');
-    if (guildRequestsList) {
-        guildRequestsList.addEventListener('click', (e) => {
-            const link = e.target.closest('.player-link');
-            if (!link) return;
-            const playerId = link.dataset.playerId;
-            if (!playerId) return;
-            if (playerModal) playerModal.style.display = 'flex';
-            fetchPlayerData(playerId);
-        });
-    }
-
-    // --- Expor funções globalmente (para uso externo / debugging) ---
     window.clearModalContent = clearModalContent;
     window.fetchPlayerData = fetchPlayerData;
 
-    // Log para confirmar carregamento do script
-    console.log("[playerModal.js] carregado.");
+    console.log("[playerModal.js] carregado (versão otimizada cached_stats).");
 });

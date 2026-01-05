@@ -2011,3 +2011,29 @@ button, .btn {
 #playerCombatPower {
   margin-top: -3px!important;
 }
+
+.map-hotspot {
+    /* Opcional: borda para debug (remova depois) */
+    /* border: 5px dashed rgba(255,255,255,0.9)!important; */
+    transition: background 0.3s;
+}
+
+.map-hotspot:hover {
+    background: rgba(255, 255, 255, 0.1); /* Brilho leve ao passar o mouse */
+}
+
+.hotspot-label {
+    font-weight: bold;
+    text-shadow:
+        1px 1px 4px black,
+        -1px -1px 4px black,
+        1px -1px 4px black,
+        -1px 1px 4px black, 
+        0 0 4px black,
+        0 0 4px black;
+    font-family: 'Cinzel', cursive, sans-serif; /* Ou outra fonte do seu jogo */
+    text-align: center;
+    pointer-events: none; /* Garante que o clique passe para o link <a> */
+    font-size: 1.6em!important;
+    text-transform: uppercase;
+}

@@ -107,6 +107,27 @@ async function removeCacheItem(itemId) {
     return tx.complete;
 }
 
+// --- HELPER DE HIDRATAÇÃO (CRUCIAL PARA ITENS COM DADOS FALTANDO) ---
+function hydrateInventoryItem(item) {
+    // Se o item já tem dados completos, retorna
+    if (item.items && item.items.name && item.items.item_type) return item;
+
+    // Tenta buscar do cache global (definido no script.js)
+    if (window.itemDefinitions && window.itemDefinitions.has(item.item_id)) {
+        const def = window.itemDefinitions.get(item.item_id);
+        // Mescla os dados do servidor (ex: stats variáveis) com os dados estáticos (nome, img)
+        item.items = { ...def, ...(item.items || {}) };
+    } else {
+        // Fallback de segurança para não quebrar a UI
+        if (!item.items) item.items = {};
+        if (!item.items.name) item.items.name = 'default';
+        if (!item.items.display_name) item.items.display_name = 'Item Desconhecido';
+        if (!item.items.item_type) item.items.item_type = 'outros'; // Garante que apareça em "Outros"
+        if (!item.items.rarity) item.items.rarity = 'R';
+    }
+    return item;
+}
+
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 function getLocalUserId() {
     try {
@@ -277,7 +298,7 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 // ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX)
+// CARREGAMENTO OTIMIZADO (ZERO EGRESS + HIDRATAÇÃO)
 // ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
@@ -297,7 +318,6 @@ async function loadPlayerAndItems(forceRefresh = false) {
     const localTimestamp = await getLastUpdated();
     
     // Verifica se podemos usar o cache local (Zero Egress)
-    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
     const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
 
     console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
@@ -309,18 +329,19 @@ async function loadPlayerAndItems(forceRefresh = false) {
                 loadPlayerStatsFromCache()
             ]);
 
-            // Se o cache local estiver saudável, usamos ele
             if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
                 console.log('✅ Zero Egress: Usando dados do IndexedDB.');
                 
-                // Filtro Imediato: Remove itens com quantidade 0 que podem ter ficado no cache
-                allInventoryItems = itemsFromCache.filter(i => i.quantity > 0);
+                // HIDRATAÇÃO IMEDIATA DO CACHE LOCAL (Garante que definições globais se apliquem)
+                allInventoryItems = itemsFromCache
+                    .filter(i => i.quantity > 0)
+                    .map(hydrateInventoryItem); // Aplica a hidratação
                 
                 playerBaseStats = statsFromCache;
                 equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
                 
                 renderUI();
-                return; // Encerra aqui, nenhuma chamada pesada ao banco
+                return; 
             }
         } catch (e) {
             console.warn('Erro ao ler cache local. Baixando do servidor...', e);
@@ -339,16 +360,18 @@ async function loadPlayerAndItems(forceRefresh = false) {
         return;
     }
 
-    // Atualiza variáveis globais com o retorno da RPC
     playerBaseStats = playerData.cached_combat_stats || {};
     
-    // Filtro Imediato: Garante que o que veio do servidor também seja limpo
     const rawItems = playerData.cached_inventory || [];
-    allInventoryItems = rawItems.filter(item => item.quantity > 0);
+    
+    // 3. HIDRATAÇÃO CRÍTICA (Preenche nome/imagem antes de salvar/renderizar)
+    allInventoryItems = rawItems
+        .filter(item => item.quantity > 0)
+        .map(hydrateInventoryItem);
     
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // 3. Salva no IndexedDB para a próxima vez (saveCache já filtra > 0 internamente também)
+    // 4. Salva no IndexedDB
     await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
     console.log('💾 Cache local atualizado.');
 
@@ -390,7 +413,7 @@ function updateStatsUI(stats) {
     if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
 }
 
-// Mantido apenas como compatibilidade, pois o cálculo real agora vem do servidor
+// Mantido apenas como compatibilidade
 function calculatePlayerStats() {
     // console.log("Stats sincronizados.");
 }
@@ -409,9 +432,9 @@ function renderEquippedItems() {
             if (slotDiv) {
                 const totalStars = (invItem.items?.stars || 0) + (invItem.refine_level || 0);
                 const imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.name}_${totalStars}estrelas.webp`;
-                slotDiv.innerHTML = `<img src="${imgSrc}" alt="${item.display_name}">`;
+                slotDiv.innerHTML = `<img src="${imgSrc}" alt="${item.display_name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/default.webp'">`;
         
-                if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && invItem.level && invItem.level >= 1) {
+                if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && item.item_type !== 'consumivel' && invItem.level && invItem.level >= 1) {
                     const levelElement = document.createElement('div');
                     levelElement.className = 'item-level';
                     levelElement.textContent = `Nv. ${invItem.level}`;
@@ -434,13 +457,27 @@ async function loadItems(tab = 'all', itemsList = null) {
     bagItemsGrid.innerHTML = '';
 
     const filteredItems = items.filter(item => {
-        // SEGURANÇA VISUAL: Não renderiza se for equipado OU se quantidade <= 0
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
         
+        // Garante hidratação mesmo na filtragem
+        if (!item.items || !item.items.name) {
+            hydrateInventoryItem(item);
+        }
+        
+        // Se ainda não tiver nome/tipo após hidratação, permite se for aba 'others' ou 'all' para debug
+        if (!item.items.name) return true; 
+
         if (tab === 'all') return true;
-        if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
-        if (tab === 'fragments' && item.items.item_type === 'fragmento') return true;
-        if (tab === 'others' && item.items.item_type === 'outros') return true;
+        
+        const type = (item.items.item_type || 'outros').toLowerCase();
+        
+        // Equipamentos excluem fragmento, outros e consumível
+        if (tab === 'equipment' && type !== 'fragmento' && type !== 'outros' && type !== 'consumivel') return true;
+        // Fragmentos
+        if (tab === 'fragments' && type === 'fragmento') return true;
+        // Outros: inclui 'outros', 'consumivel' e qualquer coisa desconhecida (como cartões)
+        if (tab === 'others' && (type === 'outros' || type === 'consumivel' || type === 'material')) return true;
+        
         return false;
     });
 
@@ -457,20 +494,30 @@ async function loadItems(tab = 'all', itemsList = null) {
             itemDiv.classList.add('zoom-border');
         }
 
+        // --- LÓGICA DE URL DE IMAGEM ROBUSTA ---
         let imgSrc;
-        if (item.items.item_type === 'fragmento') {
+        const type = (item.items.item_type || 'outros').toLowerCase();
+        
+        // Se for fragmento, consumível (cartões) ou outros, usa nome direto sem estrelas
+        if (['fragmento', 'consumivel', 'outros', 'material'].includes(type)) {
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
         } else {
+            // Equipamentos: tenta lógica de estrelas
             const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
         }
+        // -------------------------------------------
 
-        itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}">`;
-        if ((item.items.item_type === 'fragmento' || item.items.item_type === 'outros') && item.quantity > 1) {
+        // Adiciona um fallback onerror para caso a imagem não exista
+        itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/default.webp'">`;
+        
+        // Exibe quantidade para itens empilháveis (incluindo cartões)
+        if (['fragmento', 'outros', 'consumivel', 'material'].includes(type) && item.quantity > 1) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level && item.level >= 1) {
+        // Exibe nível para equipamentos
+        if (!['fragmento', 'outros', 'consumivel', 'material'].includes(type) && item.level && item.level >= 1) {
             const levelElement = document.createElement('div');
             levelElement.className = 'item-level';
             levelElement.textContent = `Lv. ${item.level}`;
@@ -495,27 +542,36 @@ function showItemDetails(item) {
     const itemDetails = document.getElementById('itemDetailsModal');
     if (!itemDetails) return;
 
+    // Garante hidratação antes de exibir detalhes
+    hydrateInventoryItem(item);
+
     document.getElementById('itemDetailsContent').dataset.currentItem = JSON.stringify(item);
 
+    // --- LÓGICA DE URL DE IMAGEM NO MODAL ---
     let imgSrc;
-    if (item.items.item_type === 'fragmento') {
+    const type = (item.items.item_type || 'outros').toLowerCase();
+
+    if (['fragmento', 'consumivel', 'outros', 'material'].includes(type)) {
         imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
     } else {
         const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
         imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
     }
-    document.getElementById('detailItemImage').src = imgSrc;
+    
+    const imgEl = document.getElementById('detailItemImage');
+    imgEl.src = imgSrc;
+    imgEl.onerror = function() { this.src = 'https://aden-rpg.pages.dev/assets/itens/default.webp'; };
 
     const itemDescriptionDiv = document.getElementById('itemDescription');
     if (itemDescriptionDiv) {
         itemDescriptionDiv.textContent = item.items.description || 'Nenhuma descrição disponível.';
     }
 
-    document.getElementById('detailItemRarity').textContent = item.items.rarity;
-    document.getElementById('detailItemName').textContent = item.items.display_name;
+    document.getElementById('detailItemRarity').textContent = item.items.rarity || 'Comum';
+    document.getElementById('detailItemName').textContent = item.items.display_name || item.items.name;
   
-    const isEquipment = !['consumivel', 'fragmento', 'outros'].includes(item.items.item_type);
-    const isEquipable = ['arma', 'Arma', 'Escudo', 'Anel', 'anel', 'Elmo', 'elmo', 'Asa', 'asa', 'Armadura', 'armadura', 'Colar', 'colar'].includes(item.items.item_type);
+    const isEquipment = !['consumivel', 'fragmento', 'outros', 'material'].includes(type);
+    const isEquipable = ['arma', 'escudo', 'anel', 'elmo', 'asa', 'armadura', 'colar'].includes(type);
 
     if (isEquipment) {
         const level = item.level || 0;
@@ -998,6 +1054,7 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
              
              // SEGURANÇA: Se a quantidade retornada for 0 ou menos, removemos do array
              if (fetchItem.quantity > 0) {
+                 hydrateInventoryItem(fetchItem); // HIDRATAÇÃO IMEDIATA
                  if (idx !== -1) {
                      allInventoryItems[idx] = fetchItem;
                  } else {
@@ -1038,6 +1095,7 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
             .single();
         
         if (newFetchItem && newFetchItem.quantity > 0) {
+            hydrateInventoryItem(newFetchItem); // HIDRATAÇÃO
             allInventoryItems.push(newFetchItem);
         }
     }

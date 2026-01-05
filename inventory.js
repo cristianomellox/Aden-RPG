@@ -411,7 +411,7 @@ function renderEquippedItems() {
                 const imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.name}_${totalStars}estrelas.webp`;
                 slotDiv.innerHTML = `<img src="${imgSrc}" alt="${item.display_name}">`;
         
-                if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && item.item_type !== 'consumivel' && invItem.level && invItem.level >= 1) {
+                if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && invItem.level && invItem.level >= 1) {
                     const levelElement = document.createElement('div');
                     levelElement.className = 'item-level';
                     levelElement.textContent = `Nv. ${invItem.level}`;
@@ -434,31 +434,13 @@ async function loadItems(tab = 'all', itemsList = null) {
     bagItemsGrid.innerHTML = '';
 
     const filteredItems = items.filter(item => {
+        // SEGURANÇA VISUAL: Não renderiza se for equipado OU se quantidade <= 0
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
         
-        // --- HIDRATAÇÃO DE EMERGÊNCIA (CORREÇÃO DE IMAGENS QUEBRADAS) ---
-        // Se o update cirúrgico mandou o item incompleto, preenchemos com o cache global
-        if ((!item.items || !item.items.name) && window.itemDefinitions) {
-            const def = window.itemDefinitions.get(item.item_id);
-            if (def) {
-                // Mescla o que já tem com a definição global
-                item.items = { ...def, ...(item.items || {}) };
-            }
-        }
-        // Se ainda assim não tiver nome, não renderiza para evitar quebras visuais
-        if (!item.items || !item.items.name) return false;
-        // -----------------------------------------------------------------
-
         if (tab === 'all') return true;
-        
-        const type = item.items.item_type;
-        // Equipamentos excluem fragmento, outros e consumível
-        if (tab === 'equipment' && type !== 'fragmento' && type !== 'outros' && type !== 'consumivel') return true;
-        // Fragmentos
-        if (tab === 'fragments' && type === 'fragmento') return true;
-        // Outros inclui 'outros' e 'consumivel' (ex: cartões)
-        if (tab === 'others' && (type === 'outros' || type === 'consumivel')) return true;
-        
+        if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
+        if (tab === 'fragments' && item.items.item_type === 'fragmento') return true;
+        if (tab === 'others' && item.items.item_type === 'outros') return true;
         return false;
     });
 
@@ -475,28 +457,20 @@ async function loadItems(tab = 'all', itemsList = null) {
             itemDiv.classList.add('zoom-border');
         }
 
-        // --- CORREÇÃO DA LÓGICA DE URL DE IMAGEM ---
         let imgSrc;
-        const type = item.items.item_type;
-        
-        // Se for fragmento, consumível (cartões) ou outros, usa nome direto sem estrelas
-        if (['fragmento', 'consumivel', 'outros'].includes(type)) {
+        if (item.items.item_type === 'fragmento') {
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
         } else {
-            // Apenas equipamentos usam a lógica de estrelas
             const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
         }
-        // -------------------------------------------
 
-        // Adiciona um fallback onerror para caso a imagem não exista
-        itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/default.webp'">`;
-        
-        if ((['fragmento', 'outros', 'consumivel'].includes(type)) && item.quantity > 1) {
+        itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}">`;
+        if ((item.items.item_type === 'fragmento' || item.items.item_type === 'outros') && item.quantity > 1) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-        if (type !== 'fragmento' && type !== 'outros' && type !== 'consumivel' && item.level && item.level >= 1) {
+        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level && item.level >= 1) {
             const levelElement = document.createElement('div');
             levelElement.className = 'item-level';
             levelElement.textContent = `Lv. ${item.level}`;
@@ -523,18 +497,13 @@ function showItemDetails(item) {
 
     document.getElementById('itemDetailsContent').dataset.currentItem = JSON.stringify(item);
 
-    // --- CORREÇÃO DA LÓGICA DE URL DE IMAGEM NO MODAL ---
     let imgSrc;
-    const type = item.items.item_type;
-
-    if (['fragmento', 'consumivel', 'outros'].includes(type)) {
+    if (item.items.item_type === 'fragmento') {
         imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
     } else {
         const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
         imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
     }
-    // -----------------------------------------------------
-    
     document.getElementById('detailItemImage').src = imgSrc;
 
     const itemDescriptionDiv = document.getElementById('itemDescription');

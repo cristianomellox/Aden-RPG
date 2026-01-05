@@ -1488,7 +1488,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
     if (!isVisible) {
       submenu.style.display = "flex";
-      const btnRect = button.getBoundingClientRect();
+      // CORREÇÃO: 'btnRect' corrigido para usar 'btn' e cálculo original aplicado
+      const btnRect = btn.getBoundingClientRect();
       submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
     }
   }
@@ -1645,6 +1646,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===============================================
   // === FIM - LÓGICA DO NOVO FOOTER MENU ===
   // ===============================================
+
+  // --- CORREÇÃO: Sincronizar Cartões ao Iniciar ---
+  // Isso garante que os cartões (ID 41 e 42) sejam baixados para o cache
+  // imediatamente, aparecendo na Bolsa e no contador do Espiral.
+  setTimeout(() => {
+      if(typeof syncSpiralCardsWithServer === 'function') {
+          syncSpiralCardsWithServer();
+      }
+  }, 2500); // Delay para garantir Auth
 
 });
 

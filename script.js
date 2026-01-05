@@ -1,3 +1,15 @@
+if ('serviceWorker' in navigator) {
+  try {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (let reg of registrations) {
+        reg.unregister().then(success => {
+          if (success) console.log('Service Worker removido:', reg);
+        }).catch(()=>{});
+      }
+    }).catch(()=>{});
+  } catch(e) {}
+}
+
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
 let backgroundMusic;

@@ -690,7 +690,6 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
- * IMPORTANTE: Realiza hidratação dos dados (preenche detalhes visuais) se eles vierem incompletos do servidor.
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
@@ -703,35 +702,12 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         if (Array.isArray(newItems)) {
             newItems.forEach(item => {
                 if (item.quantity > 0) {
-                    
-                    // --- HIDRATAÇÃO CLIENT-SIDE (Crucial para o Otimização de Egress) ---
-                    // Se o servidor mandou apenas {id, quantity}, precisamos preencher 'items' (nome, img...)
-                    // usando o cache de definições local.
-                    if ((!item.items || Object.keys(item.items).length === 0) && window.itemDefinitions) {
-                        const def = window.itemDefinitions.get(item.item_id);
-                        if (def) {
-                            item.items = def; // Anexa os dados estáticos ao objeto antes de salvar
-                        }
-                    }
-                    // ---------------------------------------------------------------------
-
                     store.put(item); // Salva/Atualiza se tiver quantidade
                 } else {
                     // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
                     if (item.id) {
                         store.delete(item.id);
                         console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
-                    } else if (item.item_id) {
-                         // Fallback para tentar remover por key se o ID do banco não veio
-                         // (Note que a keyPath do store geralmente é 'id' (row id) e não 'item_id',
-                         // mas em alguns updates o 'id' pode vir).
-                         // Se não tiver 'id', não conseguimos deletar facilmente sem scan,
-                         // mas a otimização de Egress geralmente manda o 'item_id'.
-                         // O ideal é o SQL mandar o 'id' da linha ou o JS fazer scan.
-                         // Para simplificar e evitar scans pesados:
-                         // O update 'buy_spiral_cards' manda {item_id, quantity}.
-                         // Se quantity=0, precisamos saber qual linha apagar.
-                         // Se não tivermos o ID da linha, deixamos como está (0 qtd) ou fazemos scan futuro.
                     }
                 }
             });
@@ -891,8 +867,7 @@ async function handleUrlActions() {
 
 
 // Cache de definições de itens para uso no Espiral e outras funcionalidades
-// (Este mapa será usado para hidratar os dados recebidos do servidor)
-window.itemDefinitions = new Map(); 
+let itemDefinitions = new Map();
 
 // Elementos da UI
 const authContainer = document.getElementById('authContainer');
@@ -947,41 +922,39 @@ const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
 
 
 // Função para carregar definições de itens no cache local (MODIFICADA COM CACHE PERSISTENTE)
-// ATENÇÃO: Carrega itemDefinitions GLOBALMENTE para ser usado na Hidratação
 async function loadItemDefinitions() {
     const CACHE_KEY = 'item_definitions_cache';
     const CACHE_TTL_24H = 1440; // 24 horas * 60 minutos
 
-    // 1. Tenta carregar do cache em memória (RAM)
-    if (window.itemDefinitions && window.itemDefinitions.size > 0) return;
-    window.itemDefinitions = new Map();
+    // 1. Tenta carregar do cache em memória (RAM) - lógica original
+    if (itemDefinitions.size > 0) return;
 
     // 2. Tenta carregar do cache persistente (LocalStorage)
     const cachedData = getCache(CACHE_KEY, CACHE_TTL_24H);
     if (cachedData) {
+        // Recria o Map a partir dos dados [key, value] salvos no cache
         try {
-             window.itemDefinitions = new Map(cachedData);
+             itemDefinitions = new Map(cachedData);
              console.log('Definições de itens carregadas do LocalStorage.');
              return;
         } catch(e) {
             console.warn("Falha ao parsear cache de itens, buscando novamente.", e);
-            localStorage.removeItem(CACHE_KEY); 
+            localStorage.removeItem(CACHE_KEY); // Limpa cache corrompido
         }
     }
 
     // 3. Se não houver cache, busca no Supabase
-    // OTIMIZAÇÃO: Removemos 'description' para economizar banda inicial
     console.log('Buscando definições de itens do Supabase...');
-    const { data, error } = await supabaseClient.from('items').select('item_id, name, item_type'); 
+    const { data, error } = await supabaseClient.from('items').select('item_id, name');
     if (error) {
         console.error('Erro ao carregar definições de itens:', error);
         return;
     }
     
-    const dataForCache = []; 
+    const dataForCache = []; // Array [key, value] para salvar no localStorage
     for (const item of data) {
-        window.itemDefinitions.set(item.item_id, item);
-        dataForCache.push([item.item_id, item]);
+        itemDefinitions.set(item.item_id, item);
+        dataForCache.push([item.item_id, item]); // Salva como [key, value]
     }
     
     // 4. Salva no cache persistente para a próxima vez com TTL de 24h
@@ -1143,7 +1116,6 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
     // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
     // Adicionei colunas usadas na UI e no 'checkProgressionNotifications'
-    // OTIMIZAÇÃO: 'daily_rewards_log' não é carregado aqui para economizar
     const columnsToSelect = `
         id, 
         name, 
@@ -1488,7 +1460,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
     if (!isVisible) {
       submenu.style.display = "flex";
-      // CORREÇÃO: 'btnRect' corrigido para usar 'btn' e cálculo original aplicado
       const btnRect = btn.getBoundingClientRect();
       submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
     }
@@ -1646,15 +1617,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===============================================
   // === FIM - LÓGICA DO NOVO FOOTER MENU ===
   // ===============================================
-
-  // --- CORREÇÃO: Sincronizar Cartões ao Iniciar ---
-  // Isso garante que os cartões (ID 41 e 42) sejam baixados para o cache
-  // imediatamente, aparecendo na Bolsa e no contador do Espiral.
-  setTimeout(() => {
-      if(typeof syncSpiralCardsWithServer === 'function') {
-          syncSpiralCardsWithServer();
-      }
-  }, 2500); // Delay para garantir Auth
 
 });
 
@@ -1988,22 +1950,24 @@ const drawResultsGrid = document.getElementById('drawResultsGrid');
 /**
  * === CORREÇÃO "EXORCISTA" ===
  * Esta função força a sincronização APENAS dos cartões com o servidor.
- * OTIMIZAÇÃO: Busca apenas ID e Qtd, sem join, economizando >100kb
+ * Ela apaga TODOS os cartões locais (para eliminar fantasmas) e insere
+ * os que vieram do servidor.
  */
 async function syncSpiralCardsWithServer() {
-    const { data: { user } } = await supabaseClient.auth.getSession(); // getSession é mais seguro que getUser para cache
+    // 1. Busca estado real no servidor
+    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) return;
 
-    // OTIMIZAÇÃO: Seleciona APENAS item_id e quantity. Sem JOIN pesado, sem colunas inúteis.
+    // Busca apenas os cartões (item_id 41 e 42)
     const { data: serverItems, error } = await supabaseClient
         .from('inventory_items')
-        .select('item_id, quantity') 
+        .select('*, items!inner(item_id)')
         .eq('player_id', user.id)
-        .in('item_id', [41, 42]); // Removemos o join items!inner pois filtramos direto pelo ID na tabela inventory
+        .in('items.item_id', [41, 42]);
 
     if (error) {
-        console.warn("⚠️ [Gacha] Erro sync:", error);
-        return;
+        console.warn("⚠️ [Gacha] Erro ao sincronizar cartões:", error);
+        return; // Se der erro de rede, não mexe no cache para não piorar
     }
 
     try {
@@ -2011,41 +1975,43 @@ async function syncSpiralCardsWithServer() {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
-        // Busca chaves para deletar (mantém lógica original de limpeza)
-        const allKeys = await new Promise(resolve => {
-            const req = store.getAllKeys();
-            req.onsuccess = () => resolve(req.result);
+        // 2. Busca TUDO localmente para identificar os fantasmas
+        const allLocal = await new Promise((resolve) => {
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
         });
-        
-        // Scan leve para achar IDs de cartões locais para limpar
-        let common = 0, advanced = 0;
-        
-        // Insere dados do servidor
-        if (serverItems) {
-            serverItems.forEach(item => {
-                // HIDRATAÇÃO MANUAL LEVE
-                const fullItem = {
-                    id: `temp_sync_${item.item_id}`, // ID temporário ou real se tiver
-                    item_id: item.item_id,
-                    quantity: item.quantity,
-                    items: window.itemDefinitions ? window.itemDefinitions.get(item.item_id) : { item_id: item.item_id }
-                };
-                
-                // Salva no IndexedDB
-                if (item.item_id === 41) common = item.quantity;
-                if (item.item_id === 42) advanced = item.quantity;
-            });
-            
-             // Para garantir que o inventário DB esteja certo, chamamos o surgical
-             // Isso evita duplicar código de acesso ao DB
-             await surgicalCacheUpdate(serverItems, Date.now());
+
+        // Identifica IDs locais que são cartões (mesmo os fantasmas)
+        const localCardIds = allLocal
+            .filter(i => (i.item_id === 41 || i.items?.item_id === 41 || i.item_id === 42 || i.items?.item_id === 42))
+            .map(i => i.id);
+
+        // 3. APAGA TODOS os cartões locais (Exorcismo)
+        if (localCardIds.length > 0) {
+            // console.log(`🗑️ [Gacha] Removendo ${localCardIds.length} slots de cartões locais para limpeza.`);
+            localCardIds.forEach(id => store.delete(id));
         }
 
+        // 4. INSERE a verdade do servidor
+        let common = 0, advanced = 0;
+        if (serverItems && serverItems.length > 0) {
+            serverItems.forEach(item => {
+                if(item.quantity > 0) {
+                    store.put(item); // Salva o item correto
+                }
+                // Conta para a UI
+                if (item.items.item_id === 41) common += item.quantity;
+                if (item.items.item_id === 42) advanced += item.quantity;
+            });
+        }
+
+        // 5. Atualiza a UI imediatamente
         if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
         if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
 
     } catch (e) {
-        console.warn("Erro sync cartões:", e);
+        console.warn("Erro ao limpar cache de cartões:", e);
     }
 }
 
@@ -2115,13 +2081,7 @@ confirmPurchaseBtn.addEventListener('click', async () => {
     // Atualiza SALDO localmente
     updateLocalPlayerData({ crystals: data.new_crystals });
     
-    // ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (COM HIDRATAÇÃO AUTOMÁTICA)
-    if (data.updated_item && data.timestamp) {
-         // updated_item virá como um array [{item_id:..., quantity:...}]
-         await surgicalCacheUpdate(data.updated_item, data.timestamp);
-    }
-    
-    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA (Redundante mas seguro)
+    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA
     await syncSpiralCardsWithServer();
     
     setTimeout(() => {
@@ -2187,7 +2147,7 @@ function displayDrawResults(items) {
         for (const itemIdStr in items) {
             const itemId = parseInt(itemIdStr, 10);
             const quantity = items[itemId];
-            const itemDef = window.itemDefinitions.get(itemId); // Usa o cache carregado
+            const itemDef = itemDefinitions.get(itemId);
 
             if (!itemDef) {
                 console.warn(`Definição não encontrada para o item ID: ${itemId}`);
@@ -2310,27 +2270,11 @@ cancelPurchaseBtn.addEventListener('click', () => {
 // === LÓGICA DE RECOMPENSA POR VÍDEO (INTEGRADA AO APPCREATOR24) ===
 // =======================================================================
 
-// OTIMIZAÇÃO: Lazy load para daily_rewards_log e aplicação do visual
 async function checkRewardLimit() {
     try {
-        // Se já temos o log atualizado localmente, não busca nada
-        if (currentPlayerData && currentPlayerData.daily_rewards_log) {
-            // Verifica data
-            const log = currentPlayerData.daily_rewards_log;
-            const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
-            const logDateStr = log.date ? String(log.date) : null;
-            
-            // Se o log for de hoje, usa ele. Se não, precisa buscar do server.
-            if (logDateStr && String(logDateStr).split('T')[0] === todayUtc) {
-                applyRewardLimitUI(log);
-                return;
-            }
-        }
-
-        const { data: { user } } = await supabaseClient.auth.getSession();
+        const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return;
 
-        // Fetch OTIMIZADO: Só busca o log JSON se não tivermos
         const { data: playerData, error } = await supabaseClient
             .from('players')
             .select('daily_rewards_log')
@@ -2339,52 +2283,49 @@ async function checkRewardLimit() {
 
         if (error || !playerData) return;
 
-        // Atualiza a memória local para não buscar de novo se clicar 2x
-        if (currentPlayerData) {
-            currentPlayerData.daily_rewards_log = playerData.daily_rewards_log;
+        const log = playerData.daily_rewards_log || {}; //
+        const counts = (log && log.counts) ? log.counts : {};
+        const logDateStr = log && log.date ? String(log.date) : null;
+
+        const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
+
+        if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
+            watchVideoButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.filter = "";
+                btn.style.pointerEvents = "";
+                if (btn.getAttribute('data-original-text')) {
+                    btn.textContent = btn.getAttribute('data-original-text');
+                } else {
+                    btn.setAttribute('data-original-text', btn.textContent);
+                }
+            });
+            return;
         }
 
-        applyRewardLimitUI(playerData.daily_rewards_log);
-
+        watchVideoButtons.forEach(btn => {
+            const type = btn.getAttribute('data-reward');
+            const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
+            if (isNaN(count) || count < 5) {
+                btn.disabled = false;
+                btn.style.filter = "";
+                btn.style.pointerEvents = "";
+                if (!btn.getAttribute('data-original-text')) {
+                    btn.setAttribute('data-original-text', btn.textContent);
+                } else {
+                    btn.textContent = btn.getAttribute('data-original-text');
+                }
+            } else {
+                btn.disabled = true;
+                btn.style.filter = "grayscale(100%) brightness(60%)";
+                btn.style.pointerEvents = "none";
+                btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
+                btn.textContent = "Limite atingido";
+            }
+        });
     } catch (e) {
-        console.error("Erro checkRewardLimit:", e);
+        console.error("Erro ao verificar limites de vídeo:", e);
     }
-}
-
-// Função auxiliar para aplicar visual (extraída para reuso e limpeza)
-function applyRewardLimitUI(log) {
-    const counts = (log && log.counts) ? log.counts : {};
-    const logDateStr = log && log.date ? String(log.date) : null;
-    const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
-
-    const isToday = (logDateStr && String(logDateStr).split('T')[0] === todayUtc);
-
-    watchVideoButtons.forEach(btn => {
-        if (!isToday) {
-             // Reset visual
-             btn.disabled = false;
-             btn.style.filter = "";
-             btn.style.pointerEvents = "";
-             if (btn.getAttribute('data-original-text')) btn.textContent = btn.getAttribute('data-original-text');
-             return;
-        }
-
-        const type = btn.getAttribute('data-reward');
-        const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
-        
-        if (count < 5) {
-            btn.disabled = false;
-            btn.style.filter = "";
-            btn.style.pointerEvents = "";
-            if (btn.getAttribute('data-original-text')) btn.textContent = btn.getAttribute('data-original-text');
-        } else {
-            btn.disabled = true;
-            btn.style.filter = "grayscale(100%) brightness(60%)";
-            btn.style.pointerEvents = "none";
-            if (!btn.getAttribute('data-original-text')) btn.setAttribute('data-original-text', btn.textContent);
-            btn.textContent = "Limite atingido";
-        }
-    });
 }
 
 const watchVideoButtons = document.querySelectorAll('.watch-video-btn');

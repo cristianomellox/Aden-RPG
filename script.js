@@ -1473,11 +1473,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function toggleSubmenu(btn, submenu) {
     const isVisible = submenu.style.display === "flex";
+    
+    // Fecha todos primeiro
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
+    
     if (!isVisible) {
       submenu.style.display = "flex";
-      const btnRect = button.getBoundingClientRect();
-      submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
+      
+      // CORREÇÃO DE POSICIONAMENTO
+      // Pega a posição exata do botão (losango) na tela
+      const btnRect = btn.getBoundingClientRect();
+      
+      // Pega a altura do submenu (ele precisa estar display flex antes para calcular)
+      const submenuHeight = submenu.offsetHeight;
+
+      // Calcula o TOPO para centralizar verticalmente com o botão
+      // Topo do Botão + Metade do Botão - Metade do Submenu
+      const topPos = btnRect.top + (btnRect.height / 2) - (submenuHeight / 2);
+      
+      submenu.style.top = topPos + "px";
+      submenu.style.position = "fixed"; // Garante que flutue sobre tudo
+      
+      // Ajuste lateral (logo à direita do menu lateral)
+      // Assume que o menu lateral tem uns 70-80px de largura
+      submenu.style.left = "80px"; 
     }
   }
 

@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- CONFIGURAÇÕES DE CÁLCULO ---
     const XP_RATE_PER_SEC = 1.0 / 1800; 
-    const GOLD_RATE_PER_SEC = 1.0 / 3600;        
+    const GOLD_RATE_PER_SEC = 0 / 3600;        
     const MAX_AFK_SECONDS = 4 * 60 * 60; // 4 horas
     const MIN_COLLECT_SECONDS = 3600;    // 1 hora
     const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; 

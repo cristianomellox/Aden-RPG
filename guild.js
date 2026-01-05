@@ -587,7 +587,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       console.log("Buscando dados frescos da guilda (sem cache).");
-      const { data: guildData, error: guildError } = await supabase.from('guilds').select('*, players!players_guild_id_fkey(*)').eq('id', userGuildId).single();
+      const { data: guildData, error: guildError } = await supabase.from('guilds').select(`*, 
+        players:players_guild_id_fkey (
+            id, 
+            name, 
+            avatar_url, 
+            rank, 
+            level, 
+            combat_power,
+            last_active
+        )
+    `)
+    .eq('id', userGuildId)
+    .single();
       if (guildError || !guildData){
         console.error('Erro guildData', guildError);
         if (guildInfoContainer) guildInfoContainer.style.display='none';
@@ -613,9 +625,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.log(`Buscando dados públicos da guilda ${guildId} (sem cache ou expirado)`);
             const { data, error: guildError } = await supabase
                 .from('guilds')
-                .select('*, players!players_guild_id_fkey(*)')
-                .eq('id', guildId)
-                .single();
+                .select(`*, 
+        players:players_guild_id_fkey (
+            id, 
+            name, 
+            avatar_url, 
+            rank, 
+            level, 
+            combat_power,
+            last_active
+        )
+    `)
+    .eq('id', userGuildId)
+    .single();
 
             if (guildError || !data) {
                 console.error('Erro ao buscar dados da guilda', guildError);

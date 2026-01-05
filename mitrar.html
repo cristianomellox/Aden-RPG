@@ -304,7 +304,7 @@ body {
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <h2>História de Mitrar</h2> <div id="historyText">
-                <p>Mitrar é a joia escondida e inexpugnável dos Anões do Gelo. Erguida séculos atrás dentro do coração das Montanhas Gélidas de Bazar, ela representa a resiliência e a maestria em forja da raça. Enquanto o exterior da montanha é dominado por nevascas e frio extremo, as profundezas de Mitrar são aquecidas pelo calor das forjas rúnicas, alimentadas por um veio vulcânico subterrâneo.</p>
+                <p>Mitrar é a joia escondida e inexpugnável dos Anões do Gelo. Erguida séculos atrás dentro do coração das Montanhas Gélidas de Razar, ela representa a resiliência e a maestria em forja da raça. Enquanto o exterior da montanha é dominado por nevascas e frio extremo, as profundezas de Mitrar são aquecidas pelo calor das forjas rúnicas, alimentadas por um veio vulcânico subterrâneo.</p>
                 <p>A cidade foi fundada pelo clã &quot;Mão de Gelo&quot; (ou Glácia Forja), um grupo de anões que priorizou o isolamento e o domínio sobre os metais mais raros e frios, como o &quot;Ferro Estelar&quot;. O objetivo original era criar uma fortaleza auto-suficiente e impenetrável, onde a honra do clã e o respeito aos ancestrais fossem a única lei.</p>
                 <p>A economia de Mitrar gira em torno de sua inigualável metalurgia de precisão e dos raros cristais de gelo mágico encontrados nas veias da montanha. Eles não comercializam matéria-prima, mas sim artefatos finais: armas, armaduras e engenhocas rúnicas de qualidade lendária, que vendem por preços exorbitantes aos reinos da superfície, mantendo sempre o fluxo de mercadorias estritamente controlado para preservar seu isolamento.</p>
                 <p>O governo é um Grande Conselho de Anciões da Forja, composto pelos &quot;Mestres do Zinco&quot;, os anões mais velhos e experientes, que julgam questões de honra e habilidade artesanal. Eles mantêm uma guarda de elite, os Defensores de Cristal, dedicados a patrulhar as passagens geladas e garantir que a reclusão da cidade nunca seja quebrada por curiosos ou invasores.</p>
@@ -634,19 +634,9 @@ document.addEventListener('DOMContentLoaded', () => {
     enableMapInteraction();
 });
 </script>
-<script>
-// ... (Scripts de música e modal de história permanecem intactos) ...
 
-// =======================================================================
-// Lógica para Exibir Dono da Cidade
-// MODIFICADO: Agora usa dois elementos (IMG e SPAN) separados para Bandeira e Nome.
-// Tamanho da bandeira: 40px (largura) x 42px (altura)
-// =======================================================================
-
-// Configuração do Supabase
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="module">
+  import { supabase } from './supabaseClient.js'
 
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 // Adicionado para evitar chamadas auth.getSession() em arquivos secundários

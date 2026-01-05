@@ -139,7 +139,7 @@
   </div>
 
   <div id="rankingContent">
-    <h2>Top 30</h2>
+    <h2>Top 10</h2>
    <center> <div id="atualiza">(Atualiza Diariamente às 21h00)</div></center>
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
@@ -575,7 +575,7 @@
           .select('id,name,avatar_url,guild_id,combat_power')
           .neq('is_banned', true)
           .order('combat_power', { ascending: false })
-          .limit(30); 
+          .limit(10); 
 
         if(pErr) throw pErr;
         if(!players || players.length===0){ renderRanking([]); return; }

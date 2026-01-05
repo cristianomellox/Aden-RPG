@@ -1225,14 +1225,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             } else {
                  slot.style.filter = "grayscale(1)"; slot.style.opacity = "0.7";
             }
-            
-            // MODIFICAÇÃO: Prioriza POTION_MAP pois o SQL não envia mais item_name
             const itemId = parseInt(p.item_id);
-            let fileName = POTION_MAP[itemId];
-            if (!fileName) fileName = p.item_name || `item_${itemId}`;
-            
+            const name = p.item_name || POTION_MAP[itemId] || `item_${itemId}`;
             const cdHeight = (cd > 0) ? "100%" : "0%";
-            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${fileName}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
+            slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
             ct.appendChild(slot);
         });
         container.appendChild(ct);
@@ -1308,7 +1304,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function fallbackFetchTopPlayers() {
         try {
-            const { data: players } = await supabase.from('players').select('id, name, avatar_url, avatar, ranking_points, guild_id').neq('is_banned', true).order('ranking_points', { ascending: false }).limit(100);
+            const { data: players } = await supabase.from('players').select('id, name, avatar_url, avatar, ranking_points, guild_id').neq('is_banned', true).order('ranking_points', { ascending: false }).limit(10);
             if (!players || players.length === 0) return [];
             const guildIds = [...new Set(players.map(p => p.guild_id).filter(Boolean))];
             let guildsMap = {};

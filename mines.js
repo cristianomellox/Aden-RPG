@@ -401,15 +401,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
   const esc = (s) => (s === 0 || s) ? String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;") : "";
 
-  function formatTime(totalSeconds) {
-    const s = Math.max(0, Math.floor(totalSeconds));
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const ss = String(s % 60).padStart(2, "0");
-    if (h > 0) return `${h}h ${m}m ${ss}s`;
-    if (m > 0) return `${m}m ${ss}s`;
-    return `${ss}s`; 
-  }
+  // Formato para Tela Inicial (00:00:00)
+function formatTimeHHMMSS(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = String(Math.floor(s / 3600)).padStart(2, "0");
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${h}:${m}:${ss}`;
+}
+
+// Formato para Combate (M:SS ou MM:SS)
+function formatTimeCombat(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return `${m}:${ss}`;
+}
 
   function updateHpBar(cur, max) {
     const c = Math.max(0, Number(cur || 0));
@@ -1371,11 +1378,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   function startCombatTimer(seconds) {
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     combatTimeLeft = Math.max(0, Number(seconds || 0));
-    if (combatTimerSpan) combatTimerSpan.textContent = formatTime(combatTimeLeft);
+    if (combatTimerSpan) combatTimerSpan.textContent = formatTimeCombat(combatTimeLeft);
     if (combatTimeLeft <= 0) { onCombatTimerEnd(); return; }
     combatTimerInterval = setInterval(() => {
       combatTimeLeft = Math.max(0, combatTimeLeft - 1);
-      if (combatTimerSpan) combatTimerSpan.textContent = formatTime(combatTimeLeft);
+      if (combatTimerSpan) combatTimerSpan.textContent = formatTimeCombat(combatTimeLeft);
       if (combatTimeLeft === 0) {
         clearInterval(combatTimerInterval);
         combatTimerInterval = null;
@@ -1694,8 +1701,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     nextSessionDate.setHours(nextSessionHour, 0, 0, 0);
     const diffInMs = nextSessionDate.getTime() - now.getTime();
     const diffInSeconds = Math.floor(diffInMs / 1000);
-    if (cycleInfoElement) cycleInfoElement.innerHTML = ` <strong>${formatTime(diffInSeconds)}</strong>`;
+    if (cycleInfoElement) {
+    cycleInfoElement.innerHTML = ` <strong>${formatTimeHHMMSS(diffInSeconds)}</strong>`;
   }
+}
   setInterval(updateCountdown, 1000);
   updateCountdown();
 

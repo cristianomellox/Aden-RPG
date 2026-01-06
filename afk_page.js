@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient.js'
 // Garante acesso aos dados compartilhados (Auth, Player, Stats)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 1;
+const GLOBAL_DB_VERSION = 2;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 

@@ -469,7 +469,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     // 2. Fallback: Se não achar local, pergunta ao Supabase
-    
+    const { data: { session } } = await supabase.auth.getSession();
     
     if (session){ 
         userId = session.user.id; 

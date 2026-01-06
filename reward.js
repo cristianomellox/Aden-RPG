@@ -2,7 +2,7 @@
 // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 1;
+const GLOBAL_DB_VERSION = 2;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 
@@ -47,7 +47,7 @@ const GlobalDB = {
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 41;
+const DB_VERSION = 42;
 
 function openInventoryDB() {
     return new Promise((resolve, reject) => {

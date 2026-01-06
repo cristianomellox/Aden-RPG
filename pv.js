@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js'
 // >>> ADEN GLOBAL DB (Zero Egress Auth & Player) <<<
 // =========================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 1;
+const GLOBAL_DB_VERSION = 2;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 

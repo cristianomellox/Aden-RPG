@@ -42,6 +42,21 @@ const GlobalDB = {
                 req.onerror = () => resolve(null);
             });
         } catch(e) { return null; }
+    },
+    // Adicionado para permitir salvar dados no fallback
+    setAuth: async function(sessionData) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(AUTH_STORE, 'readwrite');
+            tx.objectStore(AUTH_STORE).put({ key: 'current_session', value: sessionData });
+        } catch(e) { console.warn("Erro ao salvar Auth", e); }
+    },
+    setPlayer: async function(playerData) {
+        try {
+            const db = await this.open();
+            const tx = db.transaction(PLAYER_STORE, 'readwrite');
+            tx.objectStore(PLAYER_STORE).put({ key: 'player_data', value: playerData });
+        } catch(e) { console.warn("Erro ao salvar Player", e); }
     }
 };
 
@@ -81,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function getSession() {
         if (myPlayerData) return true;
         
-        // 1. TENTA DADOS LOCAIS VIA GLOBALDB (ZERO EGRESS)
+        // 1. TENTA DADOS LOCAIS VIA GLOBALDB (ZERO EGRESS - PREFERENCIAL)
         const globalAuth = await GlobalDB.getAuth();
         const globalPlayer = await GlobalDB.getPlayer();
 
@@ -100,12 +115,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             return true;
         }
 
+        // 1.5. TENTA DADOS DO LOCALSTORAGE (LEGACY CACHE DO SCRIPT.JS)
+        // Isso ajuda caso o IndexedDB ainda não tenha sido populado mas o script.js já rodou
+        try {
+            const legacyCache = localStorage.getItem('player_data_cache');
+            if (legacyCache) {
+                const parsed = JSON.parse(legacyCache);
+                const pData = parsed.data;
+                // Valida se o cache é válido e tem guilda
+                if (pData && pData.id && pData.guild_id) {
+                    console.log("[Tavern] Dados carregados do LocalStorage (Legacy).");
+                    userId = pData.id;
+                    myPlayerData = pData;
+                    guildId = pData.guild_id;
+                    return true;
+                }
+            }
+        } catch(e) { console.warn("[Tavern] Erro ao ler cache legacy", e); }
+
         // 2. FALLBACK: BUSCA DO SERVIDOR SE NÃO TIVER CACHE
         try {
             console.log("[Tavern] Cache local ausente. Buscando do servidor...");
-            // ALTERADO: De getUser() para getSession()
             
-            if (!session || !session.user) return false;
+            // CORREÇÃO: Busca a sessão explicitamente antes de verificar
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            
+            if (sessionError || !session || !session.user) {
+                console.warn("[Tavern] Sessão não encontrada no servidor.");
+                return false;
+            }
+
             userId = session.user.id;
 
             const { data: playerData, error: playerError } = await supabase
@@ -121,6 +160,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             myPlayerData = playerData;
             guildId = playerData.guild_id;
+
+            // Salva no GlobalDB agora para a próxima vez ser rápida (Zero Egress)
+            GlobalDB.setAuth(session);
+            GlobalDB.setPlayer(playerData);
+
             return true;
         } catch (e) {
             console.error('Erro ao obter sessão ou dados do jogador:', e);

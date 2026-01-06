@@ -855,7 +855,7 @@ function formatTimeCombat(totalSeconds) {
           } else {
               const sec = Math.ceil(diff / 1000);
               if (sec > 0 && attackCooldownSpan) {
-                   attackCooldownSpan.innerHTML = `(+ 1 ${sec})`;
+                   attackCooldownSpan.innerHTML = `(+ 1 em ${sec})`;
               }
           }
       };

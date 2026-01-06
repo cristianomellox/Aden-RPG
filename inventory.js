@@ -135,34 +135,63 @@ function getLocalUserId() {
 }
 
 
+// ... (Mantenha os imports e funções do IndexedDB/Helpers acima iguais) ...
+
+// ===============================
+// INICIALIZAÇÃO E CARREGAMENTO
+// ===============================
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
     
-    // Auth Otimista
+    // 1. Tenta recuperar ID Local (Auth Otimista)
     const localId = getLocalUserId();
+    
     if (localId) {
         console.log("⚡ Auth Otimista: ID recuperado localmente.");
         globalUser = { id: localId };
     } else {
+        // 2. Se não houver cache (Limpeza de Dados), busca sessão oficial do Supabase
         console.warn("Auth Cache Miss: Buscando sessão no servidor...");
         
-        if (!session) {
-            console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
-            window.location.href = "index.html?refresh=true";
+        try {
+            const { data, error } = await supabase.auth.getSession();
+            
+            if (error || !data.session) {
+                console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
+                // Se estiver dentro do AppCreator24, as vezes o redirect precisa ser agressivo
+                window.location.href = "index.html?refresh=true";
+                return;
+            }
+            globalUser = data.session.user;
+            
+            // Salva cache simples para próxima vez
+            localStorage.setItem('player_data_cache', JSON.stringify({
+                data: { id: globalUser.id },
+                expires: Date.now() + 3600000 // 1 hora
+            }));
+            
+        } catch (e) {
+            console.error("Erro fatal de auth:", e);
             return;
         }
-        globalUser = session.user;
     }
     
     // Inicia carregamento
     await loadPlayerAndItems();
 
+    // ... (Mantenha seus Event Listeners de botões aqui: refreshBtn, tabs, etc) ...
+    setupEventListeners(); // Sugestão: Mova os listeners para uma função separada para organizar
+});
+
+// Função auxiliar para organizar os listeners (copie seus listeners antigos para cá)
+function setupEventListeners() {
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
         console.log('Botão de refresh clicado. Forçando a recarga.');
         await loadPlayerAndItems(true); 
     });
-
+    // ... adicione os outros listeners (tabs, modals, crafting) aqui ...
     document.querySelectorAll('.tab-button').forEach(button => {
         button.addEventListener('click', () => {
             document.querySelector('.tab-button.active')?.classList.remove('active');
@@ -170,221 +199,79 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadItems(button.id.replace('tab-', ''));
         });
     });
-
-    document.getElementById('closeDetailsModal')?.addEventListener('click', () => {
-        document.getElementById('itemDetailsModal').style.display = 'none';
-    });
-
-    document.getElementById('closeCraftingModal')?.addEventListener('click', () => {
-        document.getElementById('craftingModal').style.display = 'none';
-    });
-
-    document.getElementById('levelUpBtn')?.addEventListener('click', () => {
-        if (!selectedItem) {
-            showCustomAlert('Nenhum item selecionado para evoluir.');
-            return;
-        }
-        document.getElementById('fragmentSelectModal').style.display = 'flex';
-        renderFragmentList(selectedItem);
-    });
-
-    document.getElementById('refineBtn')?.addEventListener('click', () => {
-        if (selectedItem) {
-            openRefineFragmentModal(selectedItem);
-        } else {
-            showCustomAlert('Nenhum item selecionado para refinar.');
-        }
-    });
-
-    document.getElementById('craftBtn')?.addEventListener('click', () => {
-        if (selectedItem && selectedItem.items && selectedItem.items.crafts_item_id) {
-            const itemToCraftId = selectedItem.items.crafts_item_id;
-            handleCraft(itemToCraftId, selectedItem.id);
-        } else {
-            showCustomAlert('Informações de construção incompletas.');
-        }
-    });
-
-    document.getElementById('closeFragmentModal')?.addEventListener('click', () => {
-        document.getElementById('fragmentSelectModal').style.display = 'none';
-    });
-  
-    document.getElementById('closeRefineFragmentModal')?.addEventListener('click', () => {
-        document.getElementById('refineFragmentModal').style.display = 'none';
-    });
-
-    document.getElementById('confirmFragmentSelection')?.addEventListener('click', () => {
-        const item = selectedItem;
-        const selections = [];
-        let totalSelecionado = 0;
-
-        document.querySelectorAll('#fragmentList li.selected').forEach(li => {
-            const quantityInput = li.querySelector('.fragment-quantity-input');
-            const qty = parseInt(quantityInput.value, 10) || 0;
-            if (qty > 0) {
-                selections.push({
-                    fragment_id: li.dataset.inventoryItemId,
-                    qty,
-                    rarity: li.dataset.rarity
-                });
-                totalSelecionado += qty;
-            }
-        });
-
-        if (selections.length === 0) {
-            showCustomAlert('Selecione pelo menos um fragmento e uma quantidade válida.');
-            return;
-        }
-
-        const fragmentRarity = selections[0]?.rarity || item.items.rarity;
-        const maxNecessario = calcularFragmentosNecessariosParaCap(item, fragmentRarity);
-
-        if (totalSelecionado > maxNecessario) {
-            showCustomAlert(`Você só precisa de ${maxNecessario} fragmentos para atingir o limite. Ajuste a quantidade.`);
-            return;
-        }
-
-        handleLevelUpMulti(item, selections);
-    });
-
-    document.getElementById('customAlertOkBtn')?.addEventListener('click', () => {
-        document.getElementById('customAlertModal').style.display = 'none';
-    });
-});
-
-function showCustomAlert(message) {
-    const modal = document.getElementById('customAlertModal');
-    document.getElementById('customAlertMessage').textContent = message;
-    modal.style.display = 'flex';
+    // ... restante dos seus listeners ...
 }
 
-function showCustomConfirm(message, onConfirm) {
-    const modal = document.getElementById('customConfirmModal');
-    document.getElementById('customConfirmMessage').textContent = message;
-    modal.style.display = 'flex';
-
-    const confirmYesBtn = document.getElementById('customConfirmYesBtn');
-    const confirmNoBtn = document.getElementById('customConfirmNoBtn');
-
-    confirmYesBtn.onclick = () => {
-        modal.style.display = 'none';
-        onConfirm();
-    };
-
-    confirmNoBtn.onclick = () => {
-        modal.style.display = 'none';
-    };
-}
-
-// ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + HARD FALLBACK FIX)
-// ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
     if (!globalUser) return;
 
-    // 1. Check de Timestamp (Leitura Leve)
-    const { data: serverMeta, error: metaError } = await supabase
-        .from('players')
-        .select('last_inventory_update')
-        .eq('id', globalUser.id)
-        .single();
-
-    if (metaError) {
-        console.error('Erro ao verificar versão do cache:', metaError);
-    }
-
+    // 1. Check de Timestamp (Leitura Leve) para Zero Egress
     const localTimestamp = await getLastUpdated();
-    
-    // Verifica se podemos usar o cache local (Zero Egress)
-    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
-    const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
+    let canUseCache = false;
 
-    console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
+    if (!forceRefresh && localTimestamp) {
+        const { data: serverMeta } = await supabase
+            .from('players')
+            .select('last_inventory_update')
+            .eq('id', globalUser.id)
+            .single();
+
+        if (serverMeta && localTimestamp === serverMeta.last_inventory_update) {
+            canUseCache = true;
+        }
+    }
 
     if (canUseCache) {
         try {
-            const [itemsFromCache, statsFromCache] = await Promise.all([
-                loadCache(),
-                loadPlayerStatsFromCache()
-            ]);
-
-            // Se o cache local estiver saudável, usamos ele
-            if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
+            const [itemsFromCache, statsFromCache] = await Promise.all([loadCache(), loadPlayerStatsFromCache()]);
+            if (itemsFromCache && itemsFromCache.length > 0 && statsFromCache) {
                 console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                
-                // Filtro Imediato: Remove itens com quantidade 0 que podem ter ficado no cache
                 allInventoryItems = itemsFromCache.filter(i => i.quantity > 0);
-                
                 playerBaseStats = statsFromCache;
                 equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                
                 renderUI();
-                return; // Encerra aqui, nenhuma chamada pesada ao banco
+                return;
             }
-        } catch (e) {
-            console.warn('Erro ao ler cache local. Baixando do servidor...', e);
-        }
+        } catch (e) { console.warn('Cache local falhou/inválido.'); }
     }
 
-    // 2. Fetch via RPC Seguro
+    // 2. Fetch via RPC Seguro (Com Retry Strategy)
     console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
     
-    let playerData = null;
-    let rpcError = null;
+    // Chamada padrão
+    let { data: playerData, error: rpcError } = await supabase
+        .rpc('get_player_data_lazy', { p_player_id: globalUser.id, p_force_recalc: forceRefresh });
 
-    try {
-        const response = await supabase.rpc('get_player_data_lazy', { p_player_id: globalUser.id });
-        playerData = response.data;
-        rpcError = response.error;
-    } catch (e) { rpcError = e; }
-
-    if (rpcError) {
-        console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
-        // Não encerra imediatamente, tenta o fallback
-    }
-
-    // Atualiza variáveis globais com o retorno da RPC (ou vazio se falhou)
-    playerBaseStats = (playerData && playerData.cached_combat_stats) ? playerData.cached_combat_stats : {};
-    let rawItems = (playerData && playerData.cached_inventory) ? playerData.cached_inventory : [];
-
-    // =================================================================
-    // >>> CORREÇÃO DO PROBLEMA DE "LIMPAR DADOS" (HARD FALLBACK) <<<
-    // =================================================================
-    // Se a RPC falhou OU retornou 0 itens (o que pode acontecer após limpar dados se o cache json estiver vazio/velho),
-    // fazemos uma busca direta na tabela real.
-    if (!playerData || rawItems.length === 0) {
-        console.warn("⚠️ [Cache Miss] RPC retornou vazio ou falhou após limpeza de dados. Executando Hard Fetch na tabela...");
+    // FALLBACK DE SEGURANÇA:
+    // Se não deu erro, mas o inventário veio vazio (e não deveria, ex: Lv > 1), força um recálculo real.
+    // Isso corrige o problema pós-limpeza de dados se o cache do servidor estiver "vazio" por engano.
+    const rawItems = playerData?.cached_inventory || [];
+    if (!rpcError && rawItems.length === 0) {
+        console.warn("⚠️ Inventário veio vazio. Tentando forçar recálculo no servidor...");
+        const retry = await supabase
+            .rpc('get_player_data_lazy', { p_player_id: globalUser.id, p_force_recalc: true });
         
-        const { data: directItems, error: directError } = await supabase
-            .from('inventory_items')
-            .select('*, items(*)') // Garante que pegamos os detalhes do item
-            .eq('player_id', globalUser.id);
-
-        if (!directError && directItems && directItems.length > 0) {
-            console.log(`✅ [Recovery] Recuperados ${directItems.length} itens via Hard Fetch.`);
-            rawItems = directItems;
-            
-            // Opcional: Se recuperamos os stats vazios da RPC, tentamos pegar do player diretamente
-            if (Object.keys(playerBaseStats).length === 0) {
-                const { data: pStats } = await supabase.from('players').select('cached_combat_stats').eq('id', globalUser.id).single();
-                if (pStats && pStats.cached_combat_stats) playerBaseStats = pStats.cached_combat_stats;
-            }
-        } else {
-            console.log("ℹ️ Usuário realmente não possui itens ou erro fatal no Hard Fetch.");
+        if (retry.data) {
+            playerData = retry.data;
         }
     }
-    // =================================================================
 
-    // Filtro Imediato: Garante que o que veio do servidor também seja limpo
-    allInventoryItems = rawItems.filter(item => item.quantity > 0);
-    
+    if (rpcError || !playerData) {
+        console.error('❌ Erro na RPC get_player_data_lazy:', rpcError?.message);
+        showCustomAlert('Erro ao carregar inventário.');
+        return;
+    }
+
+    // Processa dados
+    playerBaseStats = playerData.cached_combat_stats || {};
+    const finalItems = playerData.cached_inventory || [];
+    allInventoryItems = finalItems.filter(item => item.quantity > 0);
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // 3. Salva no IndexedDB para a próxima vez (saveCache já filtra > 0 internamente também)
-    const newTimestamp = (serverMeta && serverMeta.last_inventory_update) ? serverMeta.last_inventory_update : new Date().toISOString();
-    await saveCache(allInventoryItems, playerBaseStats, newTimestamp);
-    console.log('💾 Cache local reconstruído e salvo.');
+    // 3. Salva no IndexedDB
+    await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
+    console.log('💾 Cache local reconstruído após limpeza/atualização.');
 
     renderUI();
 }

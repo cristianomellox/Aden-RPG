@@ -1,14 +1,3 @@
-if ('serviceWorker' in navigator) {
-  try {
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-      for (let reg of registrations) {
-        reg.unregister().then(success => {
-          if (success) console.log('Service Worker removido:', reg);
-        }).catch(()=>{});
-      }
-    }).catch(()=>{});
-  } catch(e) {}
-}
 
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
@@ -683,6 +672,15 @@ const DB_VERSION = 41; // Mantenha a mesma versão do inventory.js
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains(META_STORE)) {
+                db.createObjectStore(META_STORE, { keyPath: "key" });
+            }
+        };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });

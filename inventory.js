@@ -145,7 +145,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         globalUser = { id: localId };
     } else {
         console.warn("Auth Cache Miss: Buscando sessão no servidor...");
-        const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
             console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
@@ -298,7 +297,6 @@ async function loadPlayerAndItems(forceRefresh = false) {
     const localTimestamp = await getLastUpdated();
     
     // Verifica se podemos usar o cache local (Zero Egress)
-    // Condição: Não forçado E Timestamp local existe E é igual ao do servidor
     const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
 
     console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
@@ -310,18 +308,13 @@ async function loadPlayerAndItems(forceRefresh = false) {
                 loadPlayerStatsFromCache()
             ]);
 
-            // Se o cache local estiver saudável, usamos ele
             if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
                 console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                
-                // Filtro Imediato: Remove itens com quantidade 0 que podem ter ficado no cache
                 allInventoryItems = itemsFromCache.filter(i => i.quantity > 0);
-                
                 playerBaseStats = statsFromCache;
                 equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                
                 renderUI();
-                return; // Encerra aqui, nenhuma chamada pesada ao banco
+                return;
             }
         } catch (e) {
             console.warn('Erro ao ler cache local. Baixando do servidor...', e);
@@ -343,17 +336,23 @@ async function loadPlayerAndItems(forceRefresh = false) {
     // Atualiza variáveis globais com o retorno da RPC
     playerBaseStats = playerData.cached_combat_stats || {};
     
-    // Filtro Imediato: Garante que o que veio do servidor também seja limpo
     const rawItems = playerData.cached_inventory || [];
     allInventoryItems = rawItems.filter(item => item.quantity > 0);
-    
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // 3. Salva no IndexedDB para a próxima vez (saveCache já filtra > 0 internamente também)
-    await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-    console.log('💾 Cache local atualizado.');
-
+    // --- CORREÇÃO CRÍTICA AQUI ---
+    
+    // 1. RENDERIZA PRIMEIRO (Garante que o jogador veja os itens imediatamente)
     renderUI();
+
+    // 2. Tenta salvar no cache DEPOIS (Em background)
+    try {
+        await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
+        console.log('💾 Cache local atualizado.');
+    } catch (e) {
+        console.warn("⚠️ Falha não-crítica ao salvar cache (UI não afetada):", e);
+        // Se falhar aqui, o jogador ainda vê os itens, e o cache será tentado na próxima vez.
+    }
 }
 
 function renderUI() {

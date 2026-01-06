@@ -277,7 +277,7 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 // ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX)
+// CARREGAMENTO OTIMIZADO (ZERO EGRESS + HARD FALLBACK FIX)
 // ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
@@ -330,27 +330,61 @@ async function loadPlayerAndItems(forceRefresh = false) {
     // 2. Fetch via RPC Seguro
     console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
     
-    const { data: playerData, error: rpcError } = await supabase
-        .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
+    let playerData = null;
+    let rpcError = null;
+
+    try {
+        const response = await supabase.rpc('get_player_data_lazy', { p_player_id: globalUser.id });
+        playerData = response.data;
+        rpcError = response.error;
+    } catch (e) { rpcError = e; }
 
     if (rpcError) {
         console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
-        showCustomAlert('Erro ao carregar inventário. Tente atualizar a página.');
-        return;
+        // Não encerra imediatamente, tenta o fallback
     }
 
-    // Atualiza variáveis globais com o retorno da RPC
-    playerBaseStats = playerData.cached_combat_stats || {};
-    
+    // Atualiza variáveis globais com o retorno da RPC (ou vazio se falhou)
+    playerBaseStats = (playerData && playerData.cached_combat_stats) ? playerData.cached_combat_stats : {};
+    let rawItems = (playerData && playerData.cached_inventory) ? playerData.cached_inventory : [];
+
+    // =================================================================
+    // >>> CORREÇÃO DO PROBLEMA DE "LIMPAR DADOS" (HARD FALLBACK) <<<
+    // =================================================================
+    // Se a RPC falhou OU retornou 0 itens (o que pode acontecer após limpar dados se o cache json estiver vazio/velho),
+    // fazemos uma busca direta na tabela real.
+    if (!playerData || rawItems.length === 0) {
+        console.warn("⚠️ [Cache Miss] RPC retornou vazio ou falhou após limpeza de dados. Executando Hard Fetch na tabela...");
+        
+        const { data: directItems, error: directError } = await supabase
+            .from('inventory_items')
+            .select('*, items(*)') // Garante que pegamos os detalhes do item
+            .eq('player_id', globalUser.id);
+
+        if (!directError && directItems && directItems.length > 0) {
+            console.log(`✅ [Recovery] Recuperados ${directItems.length} itens via Hard Fetch.`);
+            rawItems = directItems;
+            
+            // Opcional: Se recuperamos os stats vazios da RPC, tentamos pegar do player diretamente
+            if (Object.keys(playerBaseStats).length === 0) {
+                const { data: pStats } = await supabase.from('players').select('cached_combat_stats').eq('id', globalUser.id).single();
+                if (pStats && pStats.cached_combat_stats) playerBaseStats = pStats.cached_combat_stats;
+            }
+        } else {
+            console.log("ℹ️ Usuário realmente não possui itens ou erro fatal no Hard Fetch.");
+        }
+    }
+    // =================================================================
+
     // Filtro Imediato: Garante que o que veio do servidor também seja limpo
-    const rawItems = playerData.cached_inventory || [];
     allInventoryItems = rawItems.filter(item => item.quantity > 0);
     
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
     // 3. Salva no IndexedDB para a próxima vez (saveCache já filtra > 0 internamente também)
-    await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-    console.log('💾 Cache local atualizado.');
+    const newTimestamp = (serverMeta && serverMeta.last_inventory_update) ? serverMeta.last_inventory_update : new Date().toISOString();
+    await saveCache(allInventoryItems, playerBaseStats, newTimestamp);
+    console.log('💾 Cache local reconstruído e salvo.');
 
     renderUI();
 }

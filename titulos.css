@@ -1,0 +1,234 @@
+/* Layout Principal */
+.main-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 25px;
+    padding-bottom: 100px;
+    color: #e0e0e0;
+}
+
+.intro-text {
+    color: #fff;
+    text-align: center;
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+/* Card da Cidade */
+.city-card {
+    background: linear-gradient(180deg, #1f1f1f 0%, #121212 100%);
+    border: 1px solid #444;
+    border-top: 3px solid #d4af37;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 650px;
+    padding: 20px;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+    position: relative;
+}
+
+.city-header {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.city-img {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #d4af37;
+    margin-right: 15px;
+    background: #000;
+}
+
+.city-info h2 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #d4af37;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.city-owner {
+    display: block;
+    font-size: 0.85em;
+    color: #fff;
+    margin-top: 5px;
+}
+
+/* Grid de Títulos */
+.titles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 15px;
+}
+
+/* Mini Card Individual */
+.title-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 15px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    min-height: 140px;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.title-card:hover {
+    border-color: #555;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.title-icon {
+    font-size: 2em;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.3));
+}
+
+.title-role {
+    font-weight: bold;
+    color: #d4af37;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.player-name {
+    font-size: 0.9em;
+    color: #fff;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.empty-slot {
+    color: lightgreen;
+    font-style: italic;
+    font-size: 0.8em;
+}
+
+/* Botão de Edição (Lápis) */
+.edit-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 5px;
+    opacity: 0.6;
+    transition: all 0.2s;
+    z-index: 2;
+}
+
+.edit-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.edit-svg {
+    width: 18px;
+    height: 18px;
+    fill: #d4af37;
+    filter: drop-shadow(1px 1px 1px black);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.85);
+    backdrop-filter: blur(3px);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: #1a1a1a;
+    border: 1px solid #d4af37;
+    border-radius: 8px;
+    padding: 25px;
+    width: 90%;
+    max-width: 380px;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(0,0,0,0.9);
+    position: relative;
+}
+
+.close-modal {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: #888;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close-modal:hover { color: #fff; }
+
+#modalTitle { color: #d4af37; margin-top: 0; }
+#modalDesc { color: #ccc; font-size: 0.9em; }
+
+#playerInput {
+    width: 100%;
+    padding: 12px;
+    margin: 20px 0;
+    background: #000;
+    border: 1px solid #444;
+    color: white;
+    border-radius: 4px;
+    font-family: 'Cinzel', serif;
+    text-align: center;
+    box-sizing: border-box;
+}
+#playerInput:focus { border-color: #d4af37; }
+
+.btn-confirm {
+    background: linear-gradient(to bottom, #444, #222);
+    border: 1px solid #666;
+    color: white;
+    padding: 10px 30px;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-size: 1em;
+    transition: all 0.2s;
+}
+.btn-confirm:hover {
+    border-color: #d4af37;
+    color: #d4af37;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+}
+
+#modalStatus {
+    margin-top: 15px;
+    font-size: 0.9em;
+    min-height: 1.2em;
+}
+.status-success { color: #4caf50; }
+.status-error { color: #f44336; }
+
+#pageTitle {
+  font-weight: bold;
+  font-size: 1.4em;
+}
+#playerTopBar {
+  display: flex!important;
+  align-items: center!important;
+  text-align: center!important;
+  justify-content: center!important;
+}

@@ -11,19 +11,19 @@
 
   <div id="playerTopBar">
     <a href="index.html" class="top-bar-link">
-      <a style="position: absolute; top: -3px; left: 2px; color: white; display: flex; align-items: center; justify-content: center;" href="index.html">
-            <svg xmlns="http://www.w3.org/2000/svg" width="54" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-        </a>
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
     </a>
+    
     <span id="pageTitle">Títulos Reais</span>
-    <div style="width: 60px;"></div> 
+    
+    <div></div> 
   </div>
 
   <div class="main-container">
-    <p class="intro-text">Líderes de guildas regentes podem nomear qualquer jogador aqui.</p>
+    <p class="intro-text">Líderes de guildas regentes podem nomear jogadores aqui.<br><small style="color:#888">(Limite: 1 alteração por dia na cidade)</small></p>
     
     <div id="citiesContainer">
-        <p style="text-align:center; color:#888;">Carregando decretos reais...</p>
+        <p style="text-align:center; color:#888;">Consultando decretos reais...</p>
     </div>
   </div>
 
@@ -32,8 +32,8 @@
       <span class="close-modal">&times;</span>
       <h2 id="modalTitle">Nomear Título</h2>
       <p id="modalDesc" style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;">
-        Digite o nome <b>EXATO</b> do jogador. <br>
-        <span style="font-size:0.8em; color:#d4af37;">(Não é possível sobrescrever se ele já tiver título)</span>
+        Digite o nome <b>EXATO</b> do jogador da sua guilda. <br>
+        <span style="font-size:0.8em; color:#d4af37;">(Substituirá o titular atual, se houver)</span>
       </p>
       <input type="text" id="playerInput" placeholder="Nome do Jogador">
       <div class="modal-actions">

@@ -24,8 +24,7 @@ let currentUser = null;
 let currentCityData = []; 
 let activeEdit = null; 
 
-// --- Função para ler Auth do IndexedDB (Lê o banco global 'aden_global_db') ---
-// Essa função continua necessária para evitar chamadas de rede desnecessárias ao verificar a sessão
+// --- Função Auth Local (Mantida) ---
 async function getLocalAuth() {
     return new Promise((resolve) => {
         const req = indexedDB.open('aden_global_db', 2); 
@@ -52,10 +51,8 @@ async function getLocalAuth() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // 1. Tenta recuperar usuário do IndexedDB (Zero Network)
+    // 1. Tenta recuperar usuário
     currentUser = await getLocalAuth();
-
-    // 2. Fallback: Se não achou no DB local, tenta via SDK
     if (!currentUser) {
         const { data } = await supabase.auth.getSession();
         if (data.session) currentUser = data.session.user;
@@ -66,7 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
     
-    // 3. Busca dados extras de permissão do usuário (Líder/Co-Líder)
+    // Busca dados de permissão (Líder/Co-Líder)
     const { data: userData } = await supabase
         .from('players')
         .select('guild_id, is_leader, is_co_leader')
@@ -77,27 +74,50 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentUser = { ...currentUser, ...userData };
     }
 
-    await loadData();
+    // 2. Carrega primeiro do CACHE LOCAL (Renderização Instantânea)
+    loadFromCache();
+
+    // 3. Busca dados atualizados da rede
+    await loadDataAndCache();
 });
 
-async function loadData() {
+// --- Sistema de Cache ---
+function loadFromCache() {
+    const cached = localStorage.getItem('aden_titles_cache');
+    if (cached) {
+        try {
+            const parsed = JSON.parse(cached);
+            // Ordena antes de renderizar (Capital primeiro)
+            const sorted = sortCities(parsed);
+            renderCities(sorted);
+        } catch (e) {
+            console.error("Erro ao ler cache", e);
+        }
+    }
+}
+
+// Ordena: ID 1 (Capital) primeiro, depois ordem numérica
+function sortCities(data) {
+    return data.sort((a, b) => {
+        if (a.id === 1) return -1;
+        if (b.id === 1) return 1;
+        return a.id - b.id;
+    });
+}
+
+async function loadDataAndCache() {
     // 1. Buscar Cidades
     const { data: citiesDb, error: errC } = await supabase
         .from('guild_battle_cities')
         .select('id, owner, last_title_update'); 
 
     if (errC) {
-        console.error("Erro ao carregar cidades:", errC);
-        container.innerHTML = '<p class="intro-text" style="color:#d44">Erro de conexão com o reino.</p>';
+        console.error("Erro rede:", errC);
         return;
     }
+    if (!citiesDb || citiesDb.length === 0) return;
 
-    if (!citiesDb || citiesDb.length === 0) {
-        container.innerHTML = '<p class="intro-text">Nenhuma cidade conquistada ainda.</p>';
-        return;
-    }
-
-    // 2. Buscar TODOS os Nobres (Economia: Trazemos apenas o necessário)
+    // 2. Buscar Nobres
     const { data: nobles } = await supabase
         .from('players')
         .select('id, name, gender, nobless')
@@ -129,12 +149,12 @@ async function loadData() {
         }
     }
 
-    // 4. Montar Dados Visuais
+    // 4. Montar Objeto Final
     const fullData = citiesDb.map(dbCity => {
         const staticCity = CITIES_DATA.find(c => c.id === dbCity.id) || { name: "Desconhecida", img: "" };
         const leader = leadersMap[dbCity.owner];
         
-        // Filtra quais nobres pertencem a ESTA cidade
+        // Filtra nobres desta cidade
         const cityNobles = nobles ? nobles.filter(n => {
             if (dbCity.id === 1) { 
                 return [101, 102, 103].includes(n.nobless);
@@ -153,8 +173,10 @@ async function loadData() {
         };
     });
 
-    currentCityData = fullData;
-    renderCities(fullData);
+    // 5. Salva no Cache e Renderiza Ordenado
+    localStorage.setItem('aden_titles_cache', JSON.stringify(fullData));
+    currentCityData = sortCities(fullData);
+    renderCities(currentCityData);
 }
 
 function renderCities(cities) {
@@ -164,12 +186,27 @@ function renderCities(cities) {
         const card = document.createElement('div');
         card.className = 'city-card';
         
-        // Permissões
+        // --- Verificação de Permissão Refinada ---
         const isOwnerGuild = currentUser.guild_id === city.ownerGuildId;
-        const hasPerms = currentUser.is_leader || currentUser.is_co_leader;
-        const canEdit = isOwnerGuild && hasPerms;
+        const hasRole = currentUser.is_leader || currentUser.is_co_leader;
+        
+        // Verifica se já atualizou hoje (UTC)
+        let isDailyLocked = false;
+        if (city.lastUpdate) {
+            const lastDate = new Date(city.lastUpdate);
+            const now = new Date();
+            // Compara dia, mês e ano em UTC
+            isDailyLocked = (
+                lastDate.getUTCFullYear() === now.getUTCFullYear() &&
+                lastDate.getUTCMonth() === now.getUTCMonth() &&
+                lastDate.getUTCDate() === now.getUTCDate()
+            );
+        }
 
-        // Header
+        // Pode editar se: É dono E tem cargo E NÃO está bloqueado pelo reset diário
+        const canEdit = isOwnerGuild && hasRole && !isDailyLocked;
+
+        // Header da Cidade
         let leaderTitle = "Líder";
         let leaderName = "Cidade Sem Dono";
         let leaderGender = "Masculino";
@@ -192,6 +229,7 @@ function renderCities(cities) {
                 <div class="city-info">
                     <h2>${city.name}</h2>
                     <span class="city-owner">${leaderTitle}: ${leaderName}</span>
+                    ${isDailyLocked && isOwnerGuild ? '<span style="font-size:0.7em; color:#d44; display:block; margin-top:5px;">(Títulos travados até o reset)</span>' : ''}
                 </div>
             </div>
         `;
@@ -220,17 +258,27 @@ function renderCities(cities) {
                 let currentRoleName = slot.defaultLabel;
                 if (p) currentRoleName = (p.gender === 'Masculino') ? slot.titles.m : slot.titles.f;
 
-                let editBtn = '';
-                if (canEdit && !p) {
-                    editBtn = `
-                    <button class="edit-btn" onclick="openEditModal(${city.id}, ${slot.id}, '${currentRoleName}')">
+                // Botão de Edição e Lógica de Clique
+                let editBtnHtml = '';
+                let cursorStyle = '';
+                let clickAttr = '';
+
+                // Se pode editar, habilita botão E clique no card
+                // Removemos o "!p", agora pode editar mesmo se tiver gente (trocar)
+                if (canEdit) {
+                    const action = `openEditModal(${city.id}, ${slot.id}, '${currentRoleName}')`;
+                    cursorStyle = 'cursor: pointer;';
+                    clickAttr = `onclick="${action}"`;
+                    
+                    editBtnHtml = `
+                    <div class="edit-btn">
                         <svg class="edit-svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                    </button>`;
+                    </div>`;
                 }
 
                 gridHtml += `
-                    <div class="title-card">
-                        ${editBtn}
+                    <div class="title-card" style="${cursorStyle}" ${clickAttr}>
+                        ${editBtnHtml}
                         <div class="title-icon">${slot.icon}</div>
                         <div class="title-role">${currentRoleName}</div>
                         <div class="player-name ${p ? '' : 'empty-slot'}">
@@ -249,10 +297,12 @@ function renderCities(cities) {
 
 // --- Funções do Modal ---
 
-// Necessário expor a função window.openEditModal pois 'module' isola o escopo
 window.openEditModal = (cityId, noblessId, roleName) => {
+    // Parar propagação se necessário, mas aqui o clique é no card pai, então ok.
     activeEdit = { cityId, noblessId };
     document.getElementById('modalTitle').innerText = `Nomear: ${roleName}`;
+    document.getElementById('modalDesc').innerHTML = `Digite o nome <b>EXATO</b> do jogador.<br><span style="font-size:0.8em;color:#d4af37">A alteração travará a cidade até o próximo reset (UTC).</span>`;
+    
     playerInput.value = '';
     modalStatus.innerText = '';
     modalStatus.className = '';
@@ -299,9 +349,10 @@ btnSave.onclick = async () => {
         modalStatus.innerText = data.message;
         modalStatus.className = 'status-success';
         
+        // Atualiza cache e UI após sucesso
         setTimeout(() => {
             modal.style.display = 'none';
-            loadData(); 
+            loadDataAndCache(); 
         }, 1500);
     }
 };

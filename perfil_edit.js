@@ -6,7 +6,7 @@
 const GLOBAL_DB_NAME = 'aden_global_db';
 const GLOBAL_DB_VERSION = 2;
 const PLAYER_STORE = 'player_store';
-const AUTH_STORE = 'auth_store'; // Necessário para getAuth
+const AUTH_STORE = 'auth_store'; 
 
 const GlobalDB = {
     open: function() {
@@ -16,7 +16,6 @@ const GlobalDB = {
             req.onerror = () => reject(req.error);
         });
     },
-    // Método getAuth adicionado para leitura de sessão otimizada
     getAuth: async function() {
         try {
             const db = await this.open();
@@ -53,9 +52,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Referências aos elementos do DOM
     const profileEditModal = document.getElementById("profileEditModal");
     const editPlayerNameInput = document.getElementById("editPlayerName");
-    const lockedTitleIcon = document.getElementById("lockedTitleIcon"); // NOVO: Referência ao ícone travado
+    const lockedTitleIcon = document.getElementById("lockedTitleIcon"); 
     const editPlayerFactionSelect = document.getElementById("editPlayerFaction");
-    const editPlayerGenderSelect = document.getElementById("editPlayerGender"); // NOVO: Referência ao select de gênero
+    const editPlayerGenderSelect = document.getElementById("editPlayerGender"); 
     const avatarGrid = document.getElementById("avatarSelection");
     const selectedAvatarUrlInput = document.getElementById("selectedAvatarUrl");
     const customAvatarUrlInput = document.getElementById("editPlayerCustomAvatarUrl");
@@ -65,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const profileEditMessage = document.getElementById('profileEditMessage');
 
     if (editPlayerNameInput) {
-        editPlayerNameInput.maxLength = 11;
+        editPlayerNameInput.maxLength = 13; // Ajustado para permitir nomes razoáveis
     }
 
     const avatarUrls = [
@@ -116,41 +115,41 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- FUNÇÃO DE UPDATE DO MODAL (ATUALIZADA) ---
+    // --- FUNÇÃO DE UPDATE DO MODAL (CORRIGIDA) ---
     window.updateProfileEditModal = (playerData) => {
         if (playerData) {
-            // 1. Lógica do Ícone Travado
             let currentName = playerData.name;
             let iconPrefix = "";
 
-            // Se o jogador tiver nobless > 0, verificamos se há um ícone no início do nome
-            if (playerData.nobless && playerData.nobless > 0) {
-                // Converte para array para tratar emojis corretamente (surrogate pairs)
-                const chars = Array.from(currentName);
-                if (chars.length > 0) {
-                    // Lista de ícones conhecidos usados no sistema de títulos
-                    const knownIcons = ['❤️', '⚜️', '🤡', '🛡️'];
-                    if (knownIcons.includes(chars[0])) {
-                        iconPrefix = chars[0];
-                        // Remove o ícone e o espaço subsequente (se houver) do nome editável
-                        currentName = chars.slice(1).join('').trim();
-                    }
+            // Lógica robusta para separar ícone do nome no Frontend
+            const icons = ['👑', '⚜️', '🤡', '🔰', '🛡️', '❤️'];
+            
+            // Verifica se o nome começa com algum dos ícones conhecidos
+            for (const icon of icons) {
+                if (currentName.startsWith(icon)) {
+                    iconPrefix = icon;
+                    // Remove o ícone e espaços vazios do início
+                    currentName = currentName.substring(icon.length).trim();
+                    break; 
                 }
             }
 
-            // Atualiza UI do ícone
+            // Atualiza UI do ícone travado
             if (lockedTitleIcon) {
                 if (iconPrefix) {
                     lockedTitleIcon.textContent = iconPrefix;
                     lockedTitleIcon.style.display = "block";
+                    // Adiciona padding visual se tiver ícone
+                    lockedTitleIcon.style.marginRight = "5px";
                 } else {
                     lockedTitleIcon.textContent = "";
                     lockedTitleIcon.style.display = "none";
                 }
             }
             
-            // Define os valores nos inputs
+            // Define o nome LIMPO no input (o usuário edita apenas o texto)
             if (editPlayerNameInput) editPlayerNameInput.value = currentName;
+            
             if (editPlayerFactionSelect) editPlayerFactionSelect.value = playerData.faction;
             if (editPlayerGenderSelect) editPlayerGenderSelect.value = playerData.gender || "Masculino";
 
@@ -158,7 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 name: playerData.name,
                 faction: playerData.faction,
                 avatar_url: playerData.avatar_url,
-                gender: playerData.gender // Salva gênero original para referência se necessário
+                gender: playerData.gender
             };
 
             renderAvatarOptions(playerData.avatar_url);
@@ -224,7 +223,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             // Verifica se o usuário tentou colar um emoji no input de texto
-            // Isso evita duplicação de ícones ou spoofing
             const regexEmoji = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
             if (regexEmoji.test(rawName)) {
                  if(profileEditMessage) profileEditMessage.textContent = "Por favor, remova os emojis do campo de texto. Seu título será adicionado automaticamente pelo sistema.";
@@ -235,8 +233,7 @@ document.addEventListener("DOMContentLoaded", () => {
             saveProfileBtn.textContent = 'Salvando...';
 
             try {
-                // A RPC 'update_player_profile' deve estar preparada para receber p_gender
-                // e retornar o nome final (concatenado com ícone se necessário)
+                // Envia APENAS o texto do nome. O SQL se encarrega de recolocar o ícone.
                 const { data, error } = await supabaseClient.rpc('update_player_profile', {
                     p_name: rawName,
                     p_faction: newFaction,
@@ -250,8 +247,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 showFloatingMessage('Perfil atualizado com sucesso!');
                 
-                // O retorno 'data' da RPC agora deve conter o nome final formatado pelo servidor
-                // Caso a RPC antiga não retorne nada (void), usamos rawName como fallback, mas o ideal é a RPC retornar o nome completo
+                // O servidor retorna o nome completo (Ícone + Texto)
                 const finalName = (typeof data === 'string' && data.length > 0) ? data : rawName;
 
                 // === ATUALIZAÇÃO DO CACHE LOCAL (GLOBAL DB) ===

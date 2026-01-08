@@ -9,6 +9,9 @@
 .main-container {
     padding: 20px 10px; /* Reduzi padding lateral para mobile */
     display: flex;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/redeem.webp');
+      background-repeat: no-repeat;
+      background-position: center center;
     flex-direction: column;
     align-items: center;
     gap: 25px;
@@ -237,7 +240,7 @@
     min-height: 1.2em;
 }
 .status-success { color: #4caf50; }
-.status-error { color: #f44336; }
+.status-error { color: #fff; }
 
 /* Top Bar Corrigida */
 #playerTopBar {

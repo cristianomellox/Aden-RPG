@@ -1,4 +1,11 @@
-
+// Registro do Service Worker focado em Assets
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW de Assets ativo em:', reg.scope))
+            .catch(err => console.error('Erro ao registrar SW:', err));
+    });
+}
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
 let backgroundMusic;

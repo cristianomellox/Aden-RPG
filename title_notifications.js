@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient.js';
 
 // --- Configuração e Estado ---
-const CHECK_INTERVAL = 30000; // Checa a cada 30 segundos (ajuste conforme necessário)
+const CHECK_INTERVAL = 60000; // Checa a cada 30 segundos (ajuste conforme necessário)
 const STORAGE_KEY = 'aden_titles_last_check';
 let notificationQueue = [];
 let isDisplaying = false;

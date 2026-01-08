@@ -24,6 +24,15 @@ let currentUser = null;
 let currentCityData = []; 
 let activeEdit = null; 
 
+// --- Função Auxiliar: Próxima Meia-Noite UTC ---
+function getNextMidnightUTC() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCDate(now.getUTCDate() + 1);
+    next.setUTCHours(0, 0, 0, 0);
+    return next.getTime();
+}
+
 // --- Função Auth Local (Mantida) ---
 async function getLocalAuth() {
     return new Promise((resolve) => {
@@ -63,10 +72,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
     
-    // Busca dados de permissão (Líder/Co-Líder)
+    // Busca 'rank' em vez de is_leader
     const { data: userData } = await supabase
         .from('players')
-        .select('guild_id, is_leader, is_co_leader')
+        .select('guild_id, rank') 
         .eq('id', currentUser.id)
         .single();
     
@@ -186,26 +195,10 @@ function renderCities(cities) {
         const card = document.createElement('div');
         card.className = 'city-card';
         
-        // --- Verificação de Permissão Refinada ---
+        // --- Verificação de Permissão ---
         const isOwnerGuild = currentUser.guild_id === city.ownerGuildId;
-        const hasRole = currentUser.is_leader || currentUser.is_co_leader;
+        const hasRole = currentUser.rank === 'leader'; 
         
-        // Verifica se já atualizou hoje (UTC)
-        let isDailyLocked = false;
-        if (city.lastUpdate) {
-            const lastDate = new Date(city.lastUpdate);
-            const now = new Date();
-            // Compara dia, mês e ano em UTC
-            isDailyLocked = (
-                lastDate.getUTCFullYear() === now.getUTCFullYear() &&
-                lastDate.getUTCMonth() === now.getUTCMonth() &&
-                lastDate.getUTCDate() === now.getUTCDate()
-            );
-        }
-
-        // Pode editar se: É dono E tem cargo E NÃO está bloqueado pelo reset diário
-        const canEdit = isOwnerGuild && hasRole && !isDailyLocked;
-
         // Header da Cidade
         let leaderTitle = "Líder";
         let leaderName = "Cidade Sem Dono";
@@ -228,8 +221,12 @@ function renderCities(cities) {
                 <img src="${city.img}" class="city-img" alt="${city.name}">
                 <div class="city-info">
                     <h2>${city.name}</h2>
-                    <span class="city-owner">${leaderTitle}: ${leaderName}</span>
-                    ${isDailyLocked && isOwnerGuild ? '<span style="font-size:0.7em; color:#d44; display:block; margin-top:5px;">(Títulos travados até o reset)</span>' : ''}
+                    
+                    <div class="city-owner-box">
+                        <span class="owner-title">${leaderTitle}:</span>
+                        <span class="owner-name">${leaderName}</span>
+                    </div>
+
                 </div>
             </div>
         `;
@@ -238,15 +235,30 @@ function renderCities(cities) {
         let gridHtml = '<div class="titles-grid">';
         let slots = [];
 
+        // Lógica de nomes dos cargos
         if (city.id === 1) { // Capital
             const isKing = (leaderGender === 'Masculino');
-            slots.push({ id: 101, icon: '❤️', titles: { m: 'Rei', f: 'Rainha' }, defaultLabel: isKing ? 'Rainha' : 'Rei', count: 1 });
-            slots.push({ id: 102, icon: '⚔️', titles: { m: 'Príncipe', f: 'Princesa' }, defaultLabel: 'Herdeiro(a)', count: 2 });
-            slots.push({ id: 103, icon: '🤡', titles: { m: 'Bobo da Corte', f: 'Boba da Corte' }, defaultLabel: 'Bobo(a)', count: 1 });
-        } else { // Outras
+            // ID 101 (Consorte): Se líder é Rei, padrão é Rainha. Se líder Rainha, padrão é Rei.
+            slots.push({ 
+                id: 101, 
+                icon: '❤️', 
+                titles: { m: 'Rei Consorte', f: 'Rainha' }, 
+                defaultLabel: isKing ? 'Rainha' : 'Rei Consorte', 
+                count: 1 
+            });
+            slots.push({ id: 102, icon: '⚜️', titles: { m: 'Príncipe', f: 'Princesa' }, defaultLabel: 'Herdeiro(a)', count: 2 });
+            slots.push({ id: 103, icon: '🤡', titles: { m: 'Bobo da Corte', f: 'Boba da Corte' }, defaultLabel: 'Bobo(a) da Corte', count: 1 });
+        } else { // Outras Cidades
             const baseId = city.id * 100;
             const isLord = (leaderGender === 'Masculino');
-            slots.push({ id: baseId + 1, icon: '❤️', titles: { m: 'Lord', f: 'Lady' }, defaultLabel: isLord ? 'Lady' : 'Lord', count: 1 });
+            // ID x01 (Consorte)
+            slots.push({ 
+                id: baseId + 1, 
+                icon: '❤️', 
+                titles: { m: 'Lord Consorte', f: 'Lady' }, 
+                defaultLabel: isLord ? 'Lady' : 'Lord Consorte', 
+                count: 1 
+            });
             slots.push({ id: baseId + 2, icon: '🛡️', titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre', count: 1 });
         }
 
@@ -256,23 +268,50 @@ function renderCities(cities) {
             for (let i = 0; i < slot.count; i++) {
                 const p = playersInSlot[i];
                 let currentRoleName = slot.defaultLabel;
-                if (p) currentRoleName = (p.gender === 'Masculino') ? slot.titles.m : slot.titles.f;
+                
+                // Se já tem jogador, ajusta o nome do cargo baseado no gênero dele
+                if (p) {
+                    currentRoleName = (p.gender === 'Masculino') ? slot.titles.m : slot.titles.f;
+                }
 
-                // Botão de Edição e Lógica de Clique
+                // --- Lógica de Trava Local no Frontend ---
+                const lockKey = `aden_title_lock_${city.id}_${slot.id}_idx${i}`; // idx garante unicidade para slots múltiplos (ex: herdeiros)
+                const lockExpiration = localStorage.getItem(lockKey);
+                let isSlotLocked = false;
+
+                if (lockExpiration) {
+                    const expiryTime = parseInt(lockExpiration, 10);
+                    if (Date.now() < expiryTime) {
+                        isSlotLocked = true;
+                    } else {
+                        // Remove trava expirada
+                        localStorage.removeItem(lockKey);
+                    }
+                }
+
+                // Pode editar se: É dono, é Líder, e o slot não está travado localmente
+                const canEdit = isOwnerGuild && hasRole && !isSlotLocked;
+
+                // Botão de Edição
                 let editBtnHtml = '';
                 let cursorStyle = '';
                 let clickAttr = '';
 
-                // Se pode editar, habilita botão E clique no card
-                // Removemos o "!p", agora pode editar mesmo se tiver gente (trocar)
                 if (canEdit) {
-                    const action = `openEditModal(${city.id}, ${slot.id}, '${currentRoleName}')`;
+                    // Passamos o índice (i) para saber qual trava aplicar depois
+                    const action = `openEditModal(${city.id}, ${slot.id}, '${currentRoleName}', ${i})`;
                     cursorStyle = 'cursor: pointer;';
                     clickAttr = `onclick="${action}"`;
                     
                     editBtnHtml = `
                     <div class="edit-btn">
                         <svg class="edit-svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    </div>`;
+                } else if (isSlotLocked && isOwnerGuild && hasRole) {
+                    // Feedback visual se estiver travado
+                    editBtnHtml = `
+                    <div class="edit-btn" style="opacity:0.3; cursor:not-allowed;" title="Aguarde o reset (UTC)">
+                       <svg class="edit-svg" viewBox="0 0 24 24" fill="#888"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 1 1 6 0v2H9V6z"/></svg>
                     </div>`;
                 }
 
@@ -297,11 +336,10 @@ function renderCities(cities) {
 
 // --- Funções do Modal ---
 
-window.openEditModal = (cityId, noblessId, roleName) => {
-    // Parar propagação se necessário, mas aqui o clique é no card pai, então ok.
-    activeEdit = { cityId, noblessId };
+window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0) => {
+    activeEdit = { cityId, noblessId, slotIndex };
     document.getElementById('modalTitle').innerText = `Nomear: ${roleName}`;
-    document.getElementById('modalDesc').innerHTML = `Digite o nome <b>EXATO</b> do jogador.<br><span style="font-size:0.8em;color:#d4af37">A alteração travará a cidade até o próximo reset (UTC).</span>`;
+    document.getElementById('modalDesc').innerHTML = `Digite o nome <b>EXATO</b> do jogador.<br><span style="font-size:0.8em;color:#d4af37">A alteração travará ESTE título até o reset (00:00 UTC).</span>`;
     
     playerInput.value = '';
     modalStatus.innerText = '';
@@ -349,6 +387,11 @@ btnSave.onclick = async () => {
         modalStatus.innerText = data.message;
         modalStatus.className = 'status-success';
         
+        // Aplica a trava local no frontend
+        const lockKey = `aden_title_lock_${activeEdit.cityId}_${activeEdit.noblessId}_idx${activeEdit.slotIndex}`;
+        const nextReset = getNextMidnightUTC();
+        localStorage.setItem(lockKey, nextReset);
+
         // Atualiza cache e UI após sucesso
         setTimeout(() => {
             modal.style.display = 'none';

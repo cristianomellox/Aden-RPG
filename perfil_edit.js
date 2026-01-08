@@ -53,7 +53,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Referências aos elementos do DOM
     const profileEditModal = document.getElementById("profileEditModal");
     const editPlayerNameInput = document.getElementById("editPlayerName");
+    const lockedTitleIcon = document.getElementById("lockedTitleIcon"); // NOVO: Referência ao ícone travado
     const editPlayerFactionSelect = document.getElementById("editPlayerFaction");
+    const editPlayerGenderSelect = document.getElementById("editPlayerGender"); // NOVO: Referência ao select de gênero
     const avatarGrid = document.getElementById("avatarSelection");
     const selectedAvatarUrlInput = document.getElementById("selectedAvatarUrl");
     const customAvatarUrlInput = document.getElementById("editPlayerCustomAvatarUrl");
@@ -63,7 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const profileEditMessage = document.getElementById('profileEditMessage');
 
     if (editPlayerNameInput) {
-        editPlayerNameInput.maxLength = 13;
+        editPlayerNameInput.maxLength = 11;
     }
 
     const avatarUrls = [
@@ -114,15 +116,49 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // --- FUNÇÃO DE UPDATE DO MODAL (ATUALIZADA) ---
     window.updateProfileEditModal = (playerData) => {
-        if (playerData && editPlayerNameInput && editPlayerFactionSelect) {
-            editPlayerNameInput.value = playerData.name;
-            editPlayerFactionSelect.value = playerData.faction;
+        if (playerData) {
+            // 1. Lógica do Ícone Travado
+            let currentName = playerData.name;
+            let iconPrefix = "";
+
+            // Se o jogador tiver nobless > 0, verificamos se há um ícone no início do nome
+            if (playerData.nobless && playerData.nobless > 0) {
+                // Converte para array para tratar emojis corretamente (surrogate pairs)
+                const chars = Array.from(currentName);
+                if (chars.length > 0) {
+                    // Lista de ícones conhecidos usados no sistema de títulos
+                    const knownIcons = ['❤️', '⚜️', '🤡', '🛡️'];
+                    if (knownIcons.includes(chars[0])) {
+                        iconPrefix = chars[0];
+                        // Remove o ícone e o espaço subsequente (se houver) do nome editável
+                        currentName = chars.slice(1).join('').trim();
+                    }
+                }
+            }
+
+            // Atualiza UI do ícone
+            if (lockedTitleIcon) {
+                if (iconPrefix) {
+                    lockedTitleIcon.textContent = iconPrefix;
+                    lockedTitleIcon.style.display = "block";
+                } else {
+                    lockedTitleIcon.textContent = "";
+                    lockedTitleIcon.style.display = "none";
+                }
+            }
             
+            // Define os valores nos inputs
+            if (editPlayerNameInput) editPlayerNameInput.value = currentName;
+            if (editPlayerFactionSelect) editPlayerFactionSelect.value = playerData.faction;
+            if (editPlayerGenderSelect) editPlayerGenderSelect.value = playerData.gender || "Masculino";
+
             originalProfileData = {
                 name: playerData.name,
                 faction: playerData.faction,
                 avatar_url: playerData.avatar_url,
+                gender: playerData.gender // Salva gênero original para referência se necessário
             };
 
             renderAvatarOptions(playerData.avatar_url);
@@ -146,11 +182,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (userId) {
-                // Tenta buscar dados do jogador direto do banco para garantir que estão atualizados
-                // Poderíamos usar o GlobalDB aqui também, mas para edição é seguro buscar a versão mais recente
+                // Busca dados atualizados (incluindo gender e nobless)
                 const { data: playerData, error } = await supabaseClient
                     .from('players')
-                    .select('name, faction, avatar_url')
+                    .select('name, faction, avatar_url, gender, nobless')
                     .eq('id', userId)
                     .single();
                 
@@ -173,12 +208,14 @@ document.addEventListener("DOMContentLoaded", () => {
         saveProfileBtn.onclick = async () => {
             if (profileEditMessage) profileEditMessage.textContent = ''; 
 
-            const newName = editPlayerNameInput.value.trim();
+            const rawName = editPlayerNameInput.value.trim();
             const newFaction = editPlayerFactionSelect.value;
+            const newGender = editPlayerGenderSelect ? editPlayerGenderSelect.value : "Masculino";
             const newAvatar = customAvatarUrlInput.value.trim() || selectedAvatarUrlInput.value;
 
-            if (!newName || newName.length < 3) {
-                 if(profileEditMessage) profileEditMessage.textContent = "O nome do jogador deve ter pelo menos 3 caracteres.";
+            // Validações
+            if (!rawName || rawName.length < 3) {
+                 if(profileEditMessage) profileEditMessage.textContent = "O nome do jogador deve ter pelo menos 3 caracteres (sem contar o título).";
                  return;
             }
             if (!newAvatar) {
@@ -186,14 +223,25 @@ document.addEventListener("DOMContentLoaded", () => {
                  return;
             }
 
+            // Verifica se o usuário tentou colar um emoji no input de texto
+            // Isso evita duplicação de ícones ou spoofing
+            const regexEmoji = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
+            if (regexEmoji.test(rawName)) {
+                 if(profileEditMessage) profileEditMessage.textContent = "Por favor, remova os emojis do campo de texto. Seu título será adicionado automaticamente pelo sistema.";
+                 return;
+            }
+
             saveProfileBtn.disabled = true;
             saveProfileBtn.textContent = 'Salvando...';
 
             try {
-                const { error } = await supabaseClient.rpc('update_player_profile', {
-                    p_name: newName,
+                // A RPC 'update_player_profile' deve estar preparada para receber p_gender
+                // e retornar o nome final (concatenado com ícone se necessário)
+                const { data, error } = await supabaseClient.rpc('update_player_profile', {
+                    p_name: rawName,
                     p_faction: newFaction,
-                    p_avatar_url: newAvatar
+                    p_avatar_url: newAvatar,
+                    p_gender: newGender
                 });
 
                 if (error) {
@@ -202,12 +250,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 showFloatingMessage('Perfil atualizado com sucesso!');
                 
+                // O retorno 'data' da RPC agora deve conter o nome final formatado pelo servidor
+                // Caso a RPC antiga não retorne nada (void), usamos rawName como fallback, mas o ideal é a RPC retornar o nome completo
+                const finalName = (typeof data === 'string' && data.length > 0) ? data : rawName;
+
                 // === ATUALIZAÇÃO DO CACHE LOCAL (GLOBAL DB) ===
-                // Atualiza o cache local para refletir as mudanças imediatamente no menu principal
                 await GlobalDB.updatePlayerPartial({
-                    name: newName,
+                    name: finalName,
                     faction: newFaction,
-                    avatar_url: newAvatar
+                    avatar_url: newAvatar,
+                    gender: newGender
                 });
                 console.log("⚡ [Perfil] Dados atualizados no GlobalDB.");
 
@@ -220,9 +272,8 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (error) {
                 console.error('Erro ao atualizar perfil:', error);
                 if (profileEditMessage) {
-                    let errorMessage = 'Ocorreu um erro ao atualizar o perfil.'; // Mensagem de erro padrão
+                    let errorMessage = 'Ocorreu um erro ao atualizar o perfil.'; 
                     
-                    // Verifica se o erro é de violação de restrição única (código '23505' do PostgreSQL)
                     if (error.code === '23505' && error.message.includes('players_name_key')) {
                          errorMessage = "Esse nome já está em uso.";
                     } else if (error.message) {

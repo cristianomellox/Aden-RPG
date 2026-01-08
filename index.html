@@ -127,7 +127,16 @@
 <div>
     <h2>Bem-vindo(a), Aventureiro(a)!</h2>
     <label for="editPlayerName">Nome do Jogador:</label><br/>
-    <input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text"/><br/>
+    <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 10px;">
+        <span id="lockedTitleIcon" style="font-size: 1.5em; display: none; cursor: help;" title="Este é seu título de nobreza e não pode ser removido aqui."></span>
+        <input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text" maxlength="11" style="flex-grow: 1;" />
+    </div>
+
+    <label for="editPlayerGender">Gênero:</label><br/>
+    <select id="editPlayerGender" style="width: 100%; padding: 10px; margin-bottom: 10px; background: #333; color: white; border: 1px solid #555; border-radius: 5px;">
+        <option value="Masculino">Masculino</option>
+        <option value="Feminino">Feminino</option>
+    </select><br/>
     <label for="editPlayerFaction">Escolha sua Facção:</label><br/>
     <select id="editPlayerFaction">
         <option value="Aliança da Floresta">Aliança da Floresta</option>
@@ -622,6 +631,7 @@
 
 <script src="script.js"></script>
 <script type="module" src="pv.js"></script>
+<script type="module" src="title_notifications.js"></script>
 <script src="number_format.js"></script>
 <script src="map_hotspots.js"></script>
 <div class="modal" id="playerInfoModal" style="display: none;">
@@ -791,7 +801,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const logoutBanBtn = document.getElementById('logoutBanBtn')
 
       if (!banModal || !banReasonContent || !logoutBanBtn) {
-        window.location.href = "go:pghome?logout=true"
+        window.location.href = "index.html?logout=true"
         return
       }
 
@@ -803,7 +813,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       logoutBanBtn.onclick = async () => {
         await supabase.auth.signOut()
-        window.location.href = "go:pghome?logout=true"
+        window.location.href = "index.html?logout=true"
       }
     }
 

@@ -267,7 +267,7 @@ body {
 <body>
 
     <div id="playerTopBar">
-        <a href="go:pghome" class="top-bar-link" title="Voltar">
+        <a href="index.html" class="top-bar-link" title="Voltar">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
        <div> <span id="pageTitle">Área Pacífica</span></div>
@@ -634,19 +634,9 @@ document.addEventListener('DOMContentLoaded', () => {
     enableMapInteraction();
 });
 </script>
-<script>
-// ... (Scripts de música e modal de história permanecem intactos) ...
 
-// =======================================================================
-// Lógica para Exibir Dono da Cidade
-// MODIFICADO: Agora usa dois elementos (IMG e SPAN) separados para Bandeira e Nome.
-// Tamanho da bandeira: 40px (largura) x 42px (altura)
-// =======================================================================
-
-// Configuração do Supabase
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="module">
+  import { supabase } from './supabaseClient.js'
 
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
 // Adicionado para evitar chamadas auth.getSession() em arquivos secundários

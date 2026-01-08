@@ -33,7 +33,7 @@
 <body>
 
     <div id="playerTopBar">
-        <a href="go:pghome" class="top-bar-link" title="Voltar">
+        <a href="index.html" class="top-bar-link" title="Voltar">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
         </a>
        <div> <span id="pageTitle">Minas de Cristal</span>
@@ -46,7 +46,7 @@
         <div id="mineHeader">
            <p><strong>Guilda Dominante:</strong><br>
            <span id="guilddom">Nenhuma.</span></p>
-            <p>Próxima sessão em: <div style="color: white;" id="cycleInfo"></div></p>
+            <p>Próxima sessão em: <span style="color: white;" id="cycleInfo"></span></p>
         </div>
 
         <div id="minesContainer">
@@ -331,7 +331,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const logoutBanBtn = document.getElementById('logoutBanBtn')
 
       if (!banModal || !banReasonContent || !logoutBanBtn) {
-        window.location.href = "go:pghome?logout=true"
+        window.location.href = "index.html?logout=true"
         return
       }
 
@@ -343,7 +343,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       logoutBanBtn.onclick = async () => {
         await supabase.auth.signOut()
-        window.location.href = "go:pghome?logout=true"
+        window.location.href = "index.html?logout=true"
       }
     }
 
@@ -471,7 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.Audio.__isPatched = true;
     
     // Opcional: Se o botão de toggle for clicado para desmutar, precisamos restaurar a função
-    // O script do go:pghome (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
+    // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
 
 })();
 </script>

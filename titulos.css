@@ -12,7 +12,7 @@
     flex-direction: column;
     align-items: center;
     gap: 25px;
-    padding-bottom: 100px;
+    padding-bottom: 40px;
     color: #e0e0e0;
     width: 100%;
     overflow-x: hidden; /* Evita scroll horizontal indesejado */
@@ -263,4 +263,58 @@
     justify-content: center;
     color: white;
     text-decoration: none;
+}
+
+#footerMenu, .footer-submenu {
+  display: none!important;
+}
+
+/* Adicione ao final de titulos.css */
+
+/* Força a ocultação de qualquer menu de rodapé global que esteja cobrindo o conteúdo */
+footer, #footerMenu, .bottom-nav, .tab-bar {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Ajuste fino do container para garantir margem segura no final */
+.main-container {
+    padding-bottom: 40px !important; /* Espaço seguro simples */
+    min-height: 100vh;
+}
+/* Adicione no final de titulos.css */
+
+.city-owner-box {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column; /* Faz ficar um em cima do outro */
+    align-items: flex-start; /* Alinha à esquerda junto com o título da cidade */
+}
+
+.owner-title {
+    font-size: 0.85em;
+    color: #ccc; /* Cor do rótulo "Rei:", um pouco mais apagado */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.owner-name {
+    font-size: 1.1em;
+    text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+    font-weight: bold;
+}
+
+/* Ajuste para centralizar se o layout for centralizado em mobile */
+@media (max-width: 480px) {
+    .city-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
 }

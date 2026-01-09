@@ -46,11 +46,24 @@
     </div>
   </div>
 
-  <script type="module" src="titulos.js"></script>
+  
 <div id="google_translate_element"></div>
 
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<div id="confirmModal" class="modal">
+    <div class="modal-content" style="border-color: #ff4444;">
+        <h2 style="margin-top:0; color: #ff6666;">Exonerar Jogador</h2>
+        <p id="confirmText" style="color: #ddd; margin: 20px 0; line-height: 1.5;">Tem certeza?</p>
+        
+        <div class="modal-actions" style="display: flex; justify-content: center; gap: 10px;">
+            <button id="btnConfirmRemove" class="btn-remove">Sim, Exonerar</button>
+            <button id="btnCancelRemove" class="btn-cancel">Cancelar</button>
+        </div>
+        <p id="confirmStatus" style="margin-top: 15px;"></p>
+    </div>
+  </div>
+  <script type="module" src="titulos.js"></script>
 </body>
 </html>

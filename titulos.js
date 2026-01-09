@@ -12,12 +12,19 @@ const CITIES_DATA = [
     { id: 7, name: "Duratar", img: "https://aden-rpg.pages.dev/assets/duratar.webp" }
 ];
 
-// Elementos DOM
+// Elementos DOM Principais
 const container = document.getElementById('citiesContainer');
 const modal = document.getElementById('editModal');
 const playerInput = document.getElementById('playerInput');
 const btnSave = document.getElementById('btnSaveTitle');
 const modalStatus = document.getElementById('modalStatus');
+
+// Elementos DOM do Modal de Confirmação
+const confirmModal = document.getElementById('confirmModal');
+const confirmText = document.getElementById('confirmText');
+const btnConfirmRemove = document.getElementById('btnConfirmRemove');
+const btnCancelRemove = document.getElementById('btnCancelRemove');
+const confirmStatus = document.getElementById('confirmStatus');
 
 // Estado
 let currentUser = null;
@@ -72,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
     
-    // Busca 'rank' em vez de is_leader
+    // Busca 'rank'
     const { data: userData } = await supabase
         .from('players')
         .select('guild_id, rank') 
@@ -83,7 +90,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentUser = { ...currentUser, ...userData };
     }
 
-    // 2. Carrega primeiro do CACHE LOCAL (Renderização Instantânea)
+    // 2. Carrega primeiro do CACHE LOCAL
     loadFromCache();
 
     // 3. Busca dados atualizados da rede
@@ -96,7 +103,6 @@ function loadFromCache() {
     if (cached) {
         try {
             const parsed = JSON.parse(cached);
-            // Ordena antes de renderizar (Capital primeiro)
             const sorted = sortCities(parsed);
             renderCities(sorted);
         } catch (e) {
@@ -105,7 +111,6 @@ function loadFromCache() {
     }
 }
 
-// Ordena: ID 1 (Capital) primeiro, depois ordem numérica
 function sortCities(data) {
     return data.sort((a, b) => {
         if (a.id === 1) return -1;
@@ -115,7 +120,6 @@ function sortCities(data) {
 }
 
 async function loadDataAndCache() {
-    // 1. Buscar Cidades
     const { data: citiesDb, error: errC } = await supabase
         .from('guild_battle_cities')
         .select('id, owner, last_title_update'); 
@@ -126,13 +130,13 @@ async function loadDataAndCache() {
     }
     if (!citiesDb || citiesDb.length === 0) return;
 
-    // 2. Buscar Nobres
+    // Buscar Nobres
     const { data: nobles } = await supabase
         .from('players')
         .select('id, name, gender, nobless')
         .not('nobless', 'is', null);
 
-    // 3. Buscar Líderes das Guildas Donas
+    // Buscar Líderes das Guildas
     const ownerGuildIds = citiesDb.map(c => c.owner).filter(Boolean);
     let leadersMap = {}; 
 
@@ -158,12 +162,10 @@ async function loadDataAndCache() {
         }
     }
 
-    // 4. Montar Objeto Final
     const fullData = citiesDb.map(dbCity => {
         const staticCity = CITIES_DATA.find(c => c.id === dbCity.id) || { name: "Desconhecida", img: "" };
         const leader = leadersMap[dbCity.owner];
         
-        // Filtra nobres desta cidade
         const cityNobles = nobles ? nobles.filter(n => {
             if (dbCity.id === 1) { 
                 return [101, 102, 103].includes(n.nobless);
@@ -182,10 +184,25 @@ async function loadDataAndCache() {
         };
     });
 
-    // 5. Salva no Cache e Renderiza Ordenado
     localStorage.setItem('aden_titles_cache', JSON.stringify(fullData));
     currentCityData = sortCities(fullData);
     renderCities(currentCityData);
+}
+
+// Verifica se um jogador específico está travado no localStorage
+function isPlayerLocked(playerId) {
+    if (!playerId) return false;
+    const lockKey = `aden_lock_player_${playerId}`;
+    const expiration = localStorage.getItem(lockKey);
+    if (expiration) {
+        const expiryTime = parseInt(expiration, 10);
+        if (Date.now() < expiryTime) {
+            return true;
+        } else {
+            localStorage.removeItem(lockKey); // Limpa trava expirada
+        }
+    }
+    return false;
 }
 
 function renderCities(cities) {
@@ -195,11 +212,9 @@ function renderCities(cities) {
         const card = document.createElement('div');
         card.className = 'city-card';
         
-        // --- Verificação de Permissão ---
         const isOwnerGuild = currentUser.guild_id === city.ownerGuildId;
         const hasRole = currentUser.rank === 'leader'; 
         
-        // Header da Cidade
         let leaderTitle = "Líder";
         let leaderName = "Cidade Sem Dono";
         let leaderGender = "Masculino";
@@ -221,24 +236,19 @@ function renderCities(cities) {
                 <img src="${city.img}" class="city-img" alt="${city.name}">
                 <div class="city-info">
                     <h2>${city.name}</h2>
-                    
                     <div class="city-owner-box">
                         <span class="owner-title">${leaderTitle}:</span>
                         <span class="owner-name">${leaderName}</span>
                     </div>
-
                 </div>
             </div>
         `;
 
-        // Grid de Títulos
         let gridHtml = '<div class="titles-grid">';
         let slots = [];
 
-        // Lógica de nomes dos cargos
         if (city.id === 1) { // Capital
             const isKing = (leaderGender === 'Masculino');
-            // ID 101 (Consorte): Se líder é Rei, padrão é Rainha. Se líder Rainha, padrão é Rei.
             slots.push({ 
                 id: 101, 
                 icon: '❤️', 
@@ -248,10 +258,9 @@ function renderCities(cities) {
             });
             slots.push({ id: 102, icon: '⚜️', titles: { m: 'Príncipe', f: 'Princesa' }, defaultLabel: 'Herdeiro(a)', count: 2 });
             slots.push({ id: 103, icon: '🤡', titles: { m: 'Bobo da Corte', f: 'Boba da Corte' }, defaultLabel: 'Bobo(a) da Corte', count: 1 });
-        } else { // Outras Cidades
+        } else { 
             const baseId = city.id * 100;
             const isLord = (leaderGender === 'Masculino');
-            // ID x01 (Consorte)
             slots.push({ 
                 id: baseId + 1, 
                 icon: '❤️', 
@@ -263,46 +272,33 @@ function renderCities(cities) {
         }
 
         slots.forEach(slot => {
-            const playersInSlot = city.nobles.filter(n => n.nobless === slot.id);
+            // Pega jogadores e ORDENA por ID para garantir estabilidade visual
+            let playersInSlot = city.nobles.filter(n => n.nobless === slot.id);
+            playersInSlot.sort((a, b) => a.id.localeCompare(b.id)); 
             
             for (let i = 0; i < slot.count; i++) {
-                const p = playersInSlot[i];
+                const p = playersInSlot[i]; // i=0 pega o ID 'menor', i=1 o 'maior'
                 let currentRoleName = slot.defaultLabel;
                 
-                // Se já tem jogador, ajusta o nome do cargo baseado no gênero dele
                 if (p) {
                     currentRoleName = (p.gender === 'Masculino') ? slot.titles.m : slot.titles.f;
                 }
 
-                // --- Lógica de Trava Local no Frontend ---
-                const lockKey = `aden_title_lock_${city.id}_${slot.id}_idx${i}`; // idx garante unicidade para slots múltiplos (ex: herdeiros)
-                const lockExpiration = localStorage.getItem(lockKey);
-                let isSlotLocked = false;
+                // TRAVA: Verifica pelo ID do JOGADOR, não pelo Slot visual
+                const isLocked = p ? isPlayerLocked(p.id) : false;
 
-                if (lockExpiration) {
-                    const expiryTime = parseInt(lockExpiration, 10);
-                    if (Date.now() < expiryTime) {
-                        isSlotLocked = true;
-                    } else {
-                        // Remove trava expirada
-                        localStorage.removeItem(lockKey);
-                    }
-                }
+                const canEdit = isOwnerGuild && hasRole && !isLocked;
 
-                // Pode editar se: É dono, é Líder, e o slot não está travado localmente
-                const canEdit = isOwnerGuild && hasRole && !isSlotLocked;
-
-                // Botão de Edição
                 let editBtnHtml = '';
                 let cursorStyle = '';
                 let clickAttr = '';
 
                 if (canEdit) {
-                    // Passamos o ID e Nome para a modal, tratando aspas simples
                     const pId = p ? p.id : ''; 
                     const pName = p ? p.name.replace(/'/g, "\\'") : ''; 
-
+                    // Passamos slotIndex apenas para referência se necessário, mas a trava será por PlayerID
                     const action = `openEditModal(${city.id}, ${slot.id}, '${currentRoleName}', ${i}, '${pId}', '${pName}')`;
+                    
                     cursorStyle = 'cursor: pointer;';
                     clickAttr = `onclick="${action}"`;
                     
@@ -310,8 +306,8 @@ function renderCities(cities) {
                     <div class="edit-btn">
                         <svg class="edit-svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                     </div>`;
-                } else if (isSlotLocked && isOwnerGuild && hasRole) {
-                    // Feedback visual se estiver travado
+                } else if (isLocked && isOwnerGuild && hasRole) {
+                    // Feedback visual de travado
                     editBtnHtml = `
                     <div class="edit-btn" style="opacity:0.3; cursor:not-allowed;" title="Aguarde o reset (UTC)">
                        <svg class="edit-svg" viewBox="0 0 24 24" fill="#888"><path d="M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9h-1V6a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 1 1 6 0v2H9V6z"/></svg>
@@ -337,7 +333,7 @@ function renderCities(cities) {
     });
 }
 
-// --- Funções do Modal ---
+// --- Funções do Modal de Edição ---
 
 window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0, currentHolderId = '', currentHolderName = '') => {
     activeEdit = { cityId, noblessId, slotIndex, currentHolderId, currentHolderName };
@@ -349,12 +345,11 @@ window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0, currentHolde
     modalStatus.className = '';
     modal.style.display = 'flex';
 
-    // Lógica do botão Exonerar
+    // Botão Exonerar
     const btnRemove = document.getElementById('btnRemoveTitle');
     if (currentHolderId && currentHolderId !== '') {
         btnRemove.style.display = 'inline-block';
-        // Opcional: mostrar quem será removido
-        // btnRemove.title = `Exonerar ${currentHolderName}`;
+        btnRemove.innerText = 'Exonerar';
     } else {
         btnRemove.style.display = 'none';
     }
@@ -362,12 +357,9 @@ window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0, currentHolde
     playerInput.focus();
 };
 
-document.querySelector('.close-modal').onclick = () => {
-    modal.style.display = 'none';
-};
-
 window.onclick = (e) => {
     if (e.target == modal) modal.style.display = 'none';
+    if (e.target == confirmModal) confirmModal.style.display = 'none';
 };
 
 // --- Botão Salvar (Nomear) ---
@@ -379,7 +371,6 @@ btnSave.onclick = async () => {
     modalStatus.className = '';
     btnSave.disabled = true;
 
-    // Busca exata via RPC
     const { data, error } = await supabase.rpc('set_city_title', {
         target_player_name: name,
         title_id: activeEdit.noblessId,
@@ -402,59 +393,70 @@ btnSave.onclick = async () => {
         modalStatus.innerText = data.message;
         modalStatus.className = 'status-success';
         
-        // Aplica a trava local no frontend
-        const lockKey = `aden_title_lock_${activeEdit.cityId}_${activeEdit.noblessId}_idx${activeEdit.slotIndex}`;
-        const nextReset = getNextMidnightUTC();
-        localStorage.setItem(lockKey, nextReset);
+        // --- Atualiza e Trava pelo ID do Jogador ---
+        // Agora usa diretamente o ID retornado pela RPC (exige atualização no SQL também)
+        if (data.target_id) {
+            const lockKey = `aden_lock_player_${data.target_id}`;
+            const nextReset = getNextMidnightUTC();
+            localStorage.setItem(lockKey, nextReset);
+        }
 
-        // Atualiza cache e UI após sucesso
-        setTimeout(() => {
+        // Fecha o modal e recarrega os dados com um leve delay
+        setTimeout(async () => {
             modal.style.display = 'none';
-            loadDataAndCache(); 
-        }, 1500);
+            await loadDataAndCache(); 
+        }, 1000);
     }
 };
 
-// --- Botão Remover (Exonerar) ---
-document.getElementById('btnRemoveTitle').onclick = async () => {
+// --- Lógica do Botão "Exonerar" (Abre o Modal de Confirmação) ---
+document.getElementById('btnRemoveTitle').onclick = () => {
     if (!activeEdit.currentHolderId) return;
 
-    // Modal nativo de confirmação
-    const confirmed = confirm(`Tem certeza que deseja remover o título de "${activeEdit.currentHolderName}"?\nEsta ação não pode ser desfeita.`);
+    // Fecha o modal de edição e abre o de confirmação
+    modal.style.display = 'none';
     
-    if (!confirmed) return;
+    confirmText.innerText = `Tem certeza que deseja remover o título de\n"${activeEdit.currentHolderName}"?\nEsta ação é imediata.`;
+    confirmStatus.innerText = '';
+    confirmStatus.className = '';
+    confirmModal.style.display = 'flex';
+};
 
-    const btnRemove = document.getElementById('btnRemoveTitle');
-    modalStatus.innerText = "Removendo...";
-    modalStatus.className = '';
-    btnRemove.disabled = true;
+// --- Botões do Modal de Confirmação ---
+btnCancelRemove.onclick = () => {
+    confirmModal.style.display = 'none';
+    // Reabre o modal anterior? Não, melhor só fechar.
+};
 
-    // Chama a RPC de remoção
+btnConfirmRemove.onclick = async () => {
+    confirmStatus.innerText = "Removendo...";
+    confirmStatus.className = '';
+    btnConfirmRemove.disabled = true;
+
     const { data, error } = await supabase.rpc('remove_city_title', {
         target_player_id: activeEdit.currentHolderId,
         city_id: activeEdit.cityId
     });
 
-    btnRemove.disabled = false;
+    btnConfirmRemove.disabled = false;
 
     if (error) {
-        modalStatus.innerText = "Erro ao remover.";
-        modalStatus.className = 'status-error';
+        confirmStatus.innerText = "Erro ao remover.";
+        confirmStatus.className = 'status-error';
         console.error(error);
         return;
     }
 
     if (!data.success) {
-        modalStatus.innerText = data.message;
-        modalStatus.className = 'status-error';
+        confirmStatus.innerText = data.message;
+        confirmStatus.className = 'status-error';
     } else {
-        modalStatus.innerText = data.message;
-        modalStatus.className = 'status-success';
+        confirmStatus.innerText = data.message;
+        confirmStatus.className = 'status-success';
 
-        // OBS: NÃO aplicamos trava (lock) na remoção. Apenas recarregamos.
-        
+        // Sucesso: Fecha modal após 1s e recarrega
         setTimeout(() => {
-            modal.style.display = 'none';
+            confirmModal.style.display = 'none';
             loadDataAndCache(); 
         }, 1000);
     }

@@ -322,63 +322,22 @@ footer, #footerMenu, .bottom-nav, .tab-bar {
     }
 }
 
-/* Container dos botões de ação no card */
-.card-actions {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    display: flex;
-    gap: 5px; /* Espaço entre lápis e lixeira */
-    z-index: 10;
-}
-
-/* Estilo base para os botões */
-.action-btn {
-    width: 28px;
-    height: 28px;
-    background: rgba(0,0,0,0.6);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
+/* Adicione isso ao seu titulos.css */
+.btn-remove {
+    background: linear-gradient(to bottom, #4a1a1a, #2a0a0a);
+    border: 1px solid #ff4444;
+    color: #ffcccc;
+    padding: 10px 20px;
     cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9em; /* Um pouco menor que o confirmar */
+    margin-left: 10px;
+    transition: all 0.2s;
+    border-radius: 4px;
 }
 
-.action-btn svg {
-    width: 16px;
-    height: 16px;
-    fill: #fff;
-}
-
-/* Botão Editar (Lápis) */
-.edit-btn:hover {
-    background: rgba(212, 175, 55, 0.3); /* Dourado fraco */
-}
-.edit-btn svg { fill: #d4af37; }
-
-/* Botão Remover (Lixeira) */
-.remove-btn:hover {
-    background: rgba(255, 68, 68, 0.3); /* Vermelho fraco */
-    transform: scale(1.1);
-}
-.remove-btn svg { fill: #ff4444; }
-
-/* Botão Travado */
-.locked-btn {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-.locked-btn svg { fill: #888; }
-
-/* Botão de Perigo no Modal */
-.btn-danger {
-    border-color: #ff4444;
-    color: #ff4444;
-    background: linear-gradient(to bottom, #331111, #000);
-}
-.btn-danger:hover {
-    background: #ff4444;
-    color: white;
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.4);
+.btn-remove:hover {
+    background: #600;
+    color: #fff;
+    box-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
 }

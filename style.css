@@ -265,20 +265,26 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
 }
 
+/* Estilo atualizado para combinar com o menu lateral */
 .footer-submenu-btn {
-    color: white;
+    color: #e0dccc; /* Cor do texto padrão do tema */
     text-decoration: none;
-    padding: 10px 15px;
+    padding: 12px 15px;
     border-radius: 5px;
     font-size: 0.9em;
     font-weight: bold;
     text-align: center;
-    background: linear-gradient(to bottom, red 20%, orange 100%);
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    /* Alterado de gradiente vermelho para cinza escuro/preto */
+    background: #1e1e1e; 
+    border: 1px solid #555;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
 }
 
 .footer-submenu-btn:hover {
-    background-color: #444;
+    background-color: #333;
+    border-color: gold; /* Destaque ao passar o mouse, como no menu lateral */
+    color: #fff;
 }
 
 #chatBubble {

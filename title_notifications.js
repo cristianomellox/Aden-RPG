@@ -1,22 +1,22 @@
 import { supabase } from './supabaseClient.js';
 
 // --- Configuração e Estado ---
-const CHECK_INTERVAL = 60000; // Checa a cada 30 segundos (ajuste conforme necessário)
+const CHECK_INTERVAL = 30000; // Checa a cada 30 segundos
 const STORAGE_KEY = 'aden_titles_last_check';
+const OWNERS_KEY = 'aden_city_owners'; // NOVO: Para rastrear mudança de dono
 let notificationQueue = [];
 let isDisplaying = false;
 
-// Mapeamento de Títulos (Baseado na lógica do titulos.js)
+// Mapeamento de Títulos
 const TITLE_MAP = {
     101: { m: 'Rei Consorte', f: 'Rainha', type: 'consort' },
     102: { m: 'Príncipe', f: 'Princesa', type: 'heir' },
     103: { m: 'Bobo da Corte', f: 'Boba da Corte', type: 'jester' },
-    // Genéricos para outras cidades (IDs gerados dinamicamente)
     x01: { m: 'Lord Consorte', f: 'Lady', type: 'consort' },
     x02: { m: 'Nobre', f: 'Nobre', type: 'noble' }
 };
 
-// --- 1. Injeção de Estilos (CSS da Batalha adaptado) ---
+// --- 1. Injeção de Estilos ---
 function injectStyles() {
     if (document.getElementById('title-notification-style')) return;
     const style = document.createElement('style');
@@ -24,8 +24,8 @@ function injectStyles() {
     style.textContent = `
         #titleNotificationBanner {
             position: fixed;
-            top: 13%; /* Um pouco abaixo do topo para não cobrir menus */
-            transform: translateX(120%); /* Começa fora da tela */
+            top: 13%; 
+            transform: translateX(120%);
             right: 0;
             background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(46,46,46,0.95) 100%);
             border-left: 4px solid #d4af37;
@@ -39,11 +39,15 @@ function injectStyles() {
             display: flex;
             align-items: center;
             gap: 10px;
-            pointer-events: none; /* Deixa clicar no que está atrás */
+            pointer-events: none;
             max-width: 90vw;
         }
         #titleNotificationBanner.show {
-            animation: slideTitleBanner 10s linear forwards; /* Duração do slide */
+            animation: slideTitleBanner 10s linear forwards;
+        }
+        #titleNotificationBanner.royal-announcement {
+            border-left: 4px solid #ff4444; /* Cor diferente para o Rei */
+            background: linear-gradient(90deg, rgba(20,0,0,0.95) 0%, rgba(60,0,0,0.95) 100%);
         }
         #titleNotificationBanner strong { color: #d4af37; }
         #titleNotificationBanner span.highlight { color: #00bcd4; font-weight:bold; }
@@ -51,13 +55,12 @@ function injectStyles() {
         @keyframes slideTitleBanner {
             0% { transform: translateX(120%); opacity: 0; }
             10% { transform: translateX(0); opacity: 1; }
-            80% { transform: translateX(0); opacity: 1; } /* Fica parado um tempo */
+            80% { transform: translateX(0); opacity: 1; }
             100% { transform: translateX(120%); opacity: 0; }
         }
     `;
     document.head.appendChild(style);
 
-    // Cria o elemento DOM se não existir
     if (!document.getElementById('titleNotificationBanner')) {
         const banner = document.createElement('div');
         banner.id = 'titleNotificationBanner';
@@ -68,7 +71,6 @@ function injectStyles() {
 // --- 2. Lógica Principal ---
 
 async function checkTitleUpdates() {
-    // 1. Busca leve: Apenas IDs e datas de atualização das cidades
     const { data: cities, error } = await supabase
         .from('guild_battle_cities')
         .select('id, name, owner, last_title_update')
@@ -76,36 +78,38 @@ async function checkTitleUpdates() {
 
     if (error || !cities) return;
 
-    // Recupera cache local
-    const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const localTimestamps = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     let hasUpdates = false;
-
-    // 2. Filtra cidades que foram atualizadas desde a última checagem
     const updatesToFetch = [];
 
     for (const city of cities) {
-        const lastSeen = localData[city.id];
-        // Se não tem registro ou a data do banco é mais nova que a local
-        if (!lastSeen || new Date(city.last_title_update) > new Date(lastSeen)) {
+        const lastSeenTime = localTimestamps[city.id];
+        
+        // Se a data de atualização mudou, precisamos processar
+        if (!lastSeenTime || new Date(city.last_title_update) > new Date(lastSeenTime)) {
             updatesToFetch.push(city);
-            localData[city.id] = city.last_title_update; // Atualiza o cache local imediatamente para evitar loop se der erro depois
+            localTimestamps[city.id] = city.last_title_update; 
             hasUpdates = true;
         }
     }
 
     if (hasUpdates) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(localTimestamps));
         await processUpdates(updatesToFetch);
     }
 }
 
-// --- 3. Processamento de Dados (Cirúrgico) ---
+// --- 3. Processamento de Dados ---
 
 async function processUpdates(cities) {
+    // Carrega cache de donos anteriores
+    const localOwners = JSON.parse(localStorage.getItem(OWNERS_KEY) || '{}');
+    let ownersUpdated = false;
+
     for (const city of cities) {
         if (!city.owner) continue;
 
-        // A. Busca o Líder (Quem nomeou)
+        // A. Busca o Líder da Guilda Regente
         const { data: guildData } = await supabase
             .from('guilds')
             .select('leader_id, players!guilds_leader_id_fkey(name, gender)')
@@ -117,14 +121,35 @@ async function processUpdates(cities) {
         const leaderName = guildData.players.name;
         const leaderGender = guildData.players.gender || 'Masculino';
         
-        // Determina título do líder (Rei/Rainha ou Lord/Lady)
         let leaderTitle = 'Líder';
         if (city.id === 1) leaderTitle = (leaderGender === 'Masculino') ? 'Rei' : 'Rainha';
         else leaderTitle = (leaderGender === 'Masculino') ? 'Lord' : 'Lady';
 
-        // B. Busca os Nobres daquela cidade (Quem foi nomeado)
-        // Filtro inteligente para pegar apenas nobres relevantes para o ID da cidade
-        // Capital (1): 101, 102, 103 | Outras (Ex: 2): 201, 202
+        // --- VERIFICAÇÃO DE NOVO REINADO (Coronation) ---
+        const previousOwner = localOwners[city.id];
+        
+        // Se o dono mudou e é a Capital (ID 1)
+        if (city.id === 1 && previousOwner !== city.owner) {
+            queueNotification({
+                type: 'coronation', // Tipo especial
+                leaderTitle,
+                leaderName,
+                cityName: city.name
+            });
+            // Atualiza o dono local
+            localOwners[city.id] = city.owner;
+            ownersUpdated = true;
+        } 
+        // Lógica para outras cidades (opcional, se quiser anunciar novo Lord)
+        else if (previousOwner !== city.owner) {
+             localOwners[city.id] = city.owner;
+             ownersUpdated = true;
+        }
+
+        // B. Busca Nobres (Títulos normais)
+        // Só busca se NÃO for uma troca de dono imediata (para evitar spam se o rei limpar a mesa)
+        // Ou busca sempre, mas geralmente na troca de dono os títulos são resetados.
+        
         let rangeStart, rangeEnd;
         if (city.id === 1) {
             rangeStart = 101; rangeEnd = 103;
@@ -141,21 +166,18 @@ async function processUpdates(cities) {
 
         if (nobles && nobles.length > 0) {
             nobles.forEach(noble => {
-                // Descobre o nome do cargo
                 let roleName = 'Nobre';
-                
                 if (city.id === 1 && TITLE_MAP[noble.nobless]) {
                     roleName = (noble.gender === 'Masculino') ? TITLE_MAP[noble.nobless].m : TITLE_MAP[noble.nobless].f;
                 } else {
-                    // Lógica genérica para cidades (terminação 01 ou 02)
-                    const suffix = noble.nobless % 100; // pega o 01 ou 02
+                    const suffix = noble.nobless % 100;
                     const mapKey = (suffix === 1) ? 'x01' : 'x02';
                     const roleMap = TITLE_MAP[mapKey];
                     roleName = (noble.gender === 'Masculino') ? roleMap.m : roleMap.f;
                 }
 
-                // Adiciona à fila
                 queueNotification({
+                    type: 'title_grant',
                     leaderTitle,
                     leaderName,
                     targetName: noble.name,
@@ -164,6 +186,10 @@ async function processUpdates(cities) {
                 });
             });
         }
+    }
+
+    if (ownersUpdated) {
+        localStorage.setItem(OWNERS_KEY, JSON.stringify(localOwners));
     }
 }
 
@@ -178,40 +204,54 @@ function processQueue() {
     if (isDisplaying || notificationQueue.length === 0) return;
 
     isDisplaying = true;
-    const data = notificationQueue.shift(); // Pega o primeiro
+    const data = notificationQueue.shift();
     const banner = document.getElementById('titleNotificationBanner');
 
-    // Monta o HTML da mensagem
-    // Ícone baseado no cargo (simples)
-    let icon = '📜'; 
-    if (data.roleName.includes('Rei') || data.roleName.includes('Rainha')) icon = '👑'
-    if (data.roleName.includes('Príncipe') || data.roleName.includes('Princesa')) icon = '⚜️';
-    if (data.roleName.includes('Bobo da Corte') || data.roleName.includes('Boba da Corte')) icon = '🤡';
-    if (data.roleName.includes('Lord') || data.roleName.includes('Lady')) icon = '🔰';
-    if (data.roleName.includes('Nobre')) icon = '🛡️';
+    // Reseta classes
+    banner.className = '';
 
-    banner.innerHTML = `
-        <div style="font-size: 1.8em;">${icon}</div>
-        <div style="font-size: 1.2em;">
-            <strong>${data.leaderTitle} ${data.leaderName}</strong> nomeou <br>
-            <span class="highlight">${data.targetName}</span> como 
-            <strong>${data.roleName}</strong> de Aden!
-        </div>
-    `;
+    if (data.type === 'coronation') {
+        // --- ANÚNCIO DO REI/RAINHA ---
+        banner.classList.add('royal-announcement'); // Classe CSS especial
+        const crownIcon = '👑';
+        
+        banner.innerHTML = `
+            <div style="font-size: 1.8em; filter: drop-shadow(0 0 5px gold);">${crownIcon}</div>
+            <div style="font-size: 1.2em; line-height: 1.4;">
+                Vida longa a <span style="color: #ffda44; font-weight: bold; text-transform: uppercase;">${data.leaderName}</span>,<br>
+                ${data.leaderTitle === 'Rei' ? 'novo' : 'nova'} <strong>${data.leaderTitle}</strong> de Aden!
+            </div>
+        `;
 
-    // Ativa animação
+    } else {
+        // --- ANÚNCIO DE TÍTULOS (PADRÃO) ---
+        let icon = '📜'; 
+        if (data.roleName.includes('Rei') || data.roleName.includes('Rainha')) icon = '👑'
+        if (data.roleName.includes('Príncipe') || data.roleName.includes('Princesa')) icon = '⚜️';
+        if (data.roleName.includes('Bobo') || data.roleName.includes('Boba')) icon = '🤡';
+        if (data.roleName.includes('Lord') || data.roleName.includes('Lady')) icon = '🔰';
+        if (data.roleName.includes('Nobre')) icon = '🛡️';
+
+        banner.innerHTML = `
+            <div style="font-size: 1.8em;">${icon}</div>
+            <div style="font-size: 1.2em;">
+                <strong>${data.leaderTitle} ${data.leaderName}</strong> nomeou <br>
+                <span class="highlight">${data.targetName}</span> como 
+                <strong>${data.roleName}</strong>!
+            </div>
+        `;
+    }
+
     banner.classList.add('show');
 
-    // Limpa após a animação (10s definido no CSS) + pequeno buffer
+    // Tempo de exibição
+    const displayTime = data.type === 'coronation' ? 14000 : 10000; // Rei fica um pouco mais
+
     const onAnimationEnd = () => {
         banner.classList.remove('show');
         banner.removeEventListener('animationend', onAnimationEnd);
         isDisplaying = false;
-        
-        // Pequena pausa entre notificações para não ficar colado
-        setTimeout(() => {
-            processQueue();
-        }, 500); 
+        setTimeout(() => { processQueue(); }, 500);
     };
 
     banner.addEventListener('animationend', onAnimationEnd);
@@ -220,10 +260,6 @@ function processQueue() {
 // --- Inicialização ---
 document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
-    
-    // Primeira verificação (Delay pequeno para não competir com load pesado da página)
     setTimeout(checkTitleUpdates, 2000);
-
-    // Loop de verificação periódica
     setInterval(checkTitleUpdates, CHECK_INTERVAL);
 });

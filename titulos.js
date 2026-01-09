@@ -298,8 +298,11 @@ function renderCities(cities) {
                 let clickAttr = '';
 
                 if (canEdit) {
-                    // Passamos o índice (i) para saber qual trava aplicar depois
-                    const action = `openEditModal(${city.id}, ${slot.id}, '${currentRoleName}', ${i})`;
+                    // Passamos o ID e Nome para a modal, tratando aspas simples
+                    const pId = p ? p.id : ''; 
+                    const pName = p ? p.name.replace(/'/g, "\\'") : ''; 
+
+                    const action = `openEditModal(${city.id}, ${slot.id}, '${currentRoleName}', ${i}, '${pId}', '${pName}')`;
                     cursorStyle = 'cursor: pointer;';
                     clickAttr = `onclick="${action}"`;
                     
@@ -336,8 +339,8 @@ function renderCities(cities) {
 
 // --- Funções do Modal ---
 
-window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0) => {
-    activeEdit = { cityId, noblessId, slotIndex };
+window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0, currentHolderId = '', currentHolderName = '') => {
+    activeEdit = { cityId, noblessId, slotIndex, currentHolderId, currentHolderName };
     document.getElementById('modalTitle').innerText = `Nomear: ${roleName}`;
     document.getElementById('modalDesc').innerHTML = `Digite o nome <b>EXATO</b> do jogador.<br><span style="font-size:0.8em;color:#d4af37">A alteração travará ESTE título até o reset (00:00 UTC).</span>`;
     
@@ -345,6 +348,17 @@ window.openEditModal = (cityId, noblessId, roleName, slotIndex = 0) => {
     modalStatus.innerText = '';
     modalStatus.className = '';
     modal.style.display = 'flex';
+
+    // Lógica do botão Exonerar
+    const btnRemove = document.getElementById('btnRemoveTitle');
+    if (currentHolderId && currentHolderId !== '') {
+        btnRemove.style.display = 'inline-block';
+        // Opcional: mostrar quem será removido
+        // btnRemove.title = `Exonerar ${currentHolderName}`;
+    } else {
+        btnRemove.style.display = 'none';
+    }
+
     playerInput.focus();
 };
 
@@ -356,6 +370,7 @@ window.onclick = (e) => {
     if (e.target == modal) modal.style.display = 'none';
 };
 
+// --- Botão Salvar (Nomear) ---
 btnSave.onclick = async () => {
     const name = playerInput.value.trim();
     if (!name) return;
@@ -397,5 +412,50 @@ btnSave.onclick = async () => {
             modal.style.display = 'none';
             loadDataAndCache(); 
         }, 1500);
+    }
+};
+
+// --- Botão Remover (Exonerar) ---
+document.getElementById('btnRemoveTitle').onclick = async () => {
+    if (!activeEdit.currentHolderId) return;
+
+    // Modal nativo de confirmação
+    const confirmed = confirm(`Tem certeza que deseja remover o título de "${activeEdit.currentHolderName}"?\nEsta ação não pode ser desfeita.`);
+    
+    if (!confirmed) return;
+
+    const btnRemove = document.getElementById('btnRemoveTitle');
+    modalStatus.innerText = "Removendo...";
+    modalStatus.className = '';
+    btnRemove.disabled = true;
+
+    // Chama a RPC de remoção
+    const { data, error } = await supabase.rpc('remove_city_title', {
+        target_player_id: activeEdit.currentHolderId,
+        city_id: activeEdit.cityId
+    });
+
+    btnRemove.disabled = false;
+
+    if (error) {
+        modalStatus.innerText = "Erro ao remover.";
+        modalStatus.className = 'status-error';
+        console.error(error);
+        return;
+    }
+
+    if (!data.success) {
+        modalStatus.innerText = data.message;
+        modalStatus.className = 'status-error';
+    } else {
+        modalStatus.innerText = data.message;
+        modalStatus.className = 'status-success';
+
+        // OBS: NÃO aplicamos trava (lock) na remoção. Apenas recarregamos.
+        
+        setTimeout(() => {
+            modal.style.display = 'none';
+            loadDataAndCache(); 
+        }, 1000);
     }
 };

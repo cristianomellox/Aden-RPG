@@ -14,7 +14,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
     </a>
     
-    <span id="pageTitle">Títulos Reais</span>
+    <span id="pageTitle">Títulos Reais</span><img id="openTutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; position: absolute; top: 2px; right: 4px;">
     
     <div></div> 
   </div>
@@ -23,7 +23,7 @@
     <p class="intro-text">Líderes de guildas regentes podem nomear jogadores aqui.</p>
     
     <div id="citiesContainer">
-        <p style="text-align:center; color:#888;">Consultando decretos reais...</p>
+        <p style="text-align:center; color:gold; font-weight: bold; font-size: 1em;">Consultando decretos reais...</p>
     </div>
   </div>
 
@@ -45,6 +45,65 @@
       <p id="modalStatus"></p>
     </div>
   </div>
+  
+  <div id="tutorialModal" class="modal-overlay2" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h1>Tutorial</h1>
+            
+        </div>
+        
+        <p>Bem-vindo, aventureiro(a)! Este tutorial irá guiá-lo por todas as mecânicas de jogo, do inventário à refundição, para que você possa se tornar um mestre em Aden RPG.</p>
+        
+        <hr>
+
+        <h2>1. Visão Geral do seu Inventário</h2>
+        <p>Seu inventário é o coração da sua jornada. É onde você gerencia todos os seus itens, incluindo equipamentos e fragmentos.</p>
+        <ul>
+            <li><strong>Itens Equipados</strong>: Ficam na parte superior da tela. Representam os itens que estão ativamente sendo usados pelo seu personagem.</li>
+            <li><strong>Seus Status</strong>: Seus atributos (Ataque, Defesa, HP, etc.) são calculados com base em seu equipamento e níveis.</li>
+            <li><strong>Lista de Itens</strong>: Abaixo dos status, você tem acesso a todo o seu arsenal e itens em geral, podendo filtrá-los por tipo.</li>
+        </ul>
+
+        <hr>
+        <button class="close-btn" id="closeTutorialBtn">Fechar</button>
+        <br><br><br>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('tutorialModal');
+        const openBtn = document.getElementById('openTutorialBtn');
+        const closeBtn = document.getElementById('closeTutorialBtn');
+
+        // Função para abrir o modal
+        function openModal() {
+            modal.style.display = 'flex';
+        }
+
+        // Função para fechar o modal
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Adiciona os eventos de clique
+        if (openBtn) {
+            openBtn.addEventListener('click', openModal);
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+
+        // Opcional: Fechar o modal clicando fora dele
+        window.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+    });
+</script>
 
   
 <div id="google_translate_element"></div>

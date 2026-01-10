@@ -487,6 +487,10 @@ function renderAllObjectives(objectives) {
         }
 
         const ownerEl = $(`obj-owner-${fullObj.objective_index}`);
+        
+        // MUDANÇA: Seleciona a imagem
+        const imgEl = obj.objective_type === 'nexus' ? $('img-nexus') : $(`img-cp-${obj.objective_index}`);
+
         if (ownerEl) {
             if (obj.owner_guild_id && currentBattleState.guildColorMap) {
                 const guild = registeredGuilds.find(g => g.guild_id === obj.owner_guild_id);
@@ -494,12 +498,20 @@ function renderAllObjectives(objectives) {
                 
                 ownerEl.textContent = guild ? guild.guild_name : 'Dominado';
                 ownerEl.style.color = color;
-                el.style.borderColor = color;
+                
+                // MUDANÇA: Aplica o brilho na imagem
+                if (imgEl) {
+                    imgEl.style.filter = `drop-shadow(0px 0px 8px ${color}) drop-shadow(0px 0px 15px ${color})`;
+                }
                 
             } else {
                 ownerEl.textContent = 'Não Dominado';
                 ownerEl.style.color = 'var(--guild-color-neutral)';
-                el.style.borderColor = 'var(--guild-color-neutral)';
+                
+                // MUDANÇA: Reseta o brilho
+                if (imgEl) {
+                    imgEl.style.filter = 'drop-shadow(0px 0px 5px var(--guild-color-neutral))';
+                }
             }
         }
     });

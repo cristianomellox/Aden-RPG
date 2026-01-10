@@ -719,3 +719,119 @@ textarea:focus, textarea:active {
     outline: none !important;
     -webkit-tap-highlight-color: transparent !important;
 }
+
+
+
+.battle-objective {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    /* Removemos borda e fundo escuro quadrado */
+    border: none;
+    background: transparent; 
+    padding: 0;
+    transition: all 0.3s ease;
+    width: 140px; /* Largura ajustada para caber o layout */
+}
+
+.battle-objective:hover {
+    transform: scale(1.1);
+}
+
+/* Título em cima */
+.obj-name {
+    font-weight: bold;
+    font-size: 1em;
+    margin-bottom: 2px;
+    text-shadow: 2px 2px 4px #000;
+    color: white;
+    z-index: 5;
+}
+
+#obj-nexus .obj-name {
+    font-size: 1.2em;
+    color: gold;
+    margin-bottom: 5px;
+}
+
+/* Container Visual (Imagem + Texto Guarnição) */
+.obj-visual {
+    position: relative;
+    width: 80px;  /* Tamanho da imagem */
+    height: 80px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* A Imagem em si */
+.obj-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    /* Sombra inicial neutra */
+    filter: drop-shadow(0px 0px 5px var(--guild-color-neutral));
+    transition: filter 0.3s ease;
+}
+
+/* Nexus maior */
+#obj-nexus .obj-visual {
+    width: 110px;
+    height: 110px;
+}
+
+/* Guarnição Sobreposta */
+.obj-garrison-count {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.9em;
+    color: #00bcd4; /* Ciano para destacar */
+    font-weight: 900;
+    text-shadow: 
+        1px 1px 0 #000,
+        -1px -1px 0 #000, 
+        1px -1px 0 #000, 
+        -1px 1px 0 #000,
+        0 0 5px black;
+    pointer-events: none; /* Permite clicar através do texto */
+    white-space: nowrap;
+    z-index: 10;
+}
+
+/* Informações em baixo (Dono e HP) */
+.obj-info-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    margin-top: -5px; /* Puxa um pouco pra perto da imagem */
+    z-index: 5;
+}
+
+.obj-owner-name {
+    font-size: 0.75em;
+    font-weight: bold;
+    margin-bottom: 2px;
+    text-shadow: 1px 1px 3px #000;
+    text-align: center;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.obj-hp-bar {
+    width: 100%;
+    height: 14px; /* Barra um pouco mais fina */
+    background: #222;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid #555; /* Borda da barra de HP discreta */
+    position: relative;
+    box-shadow: 0 0 3px black;
+}

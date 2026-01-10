@@ -11,7 +11,131 @@
     
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="guild.css">
-     <link rel="stylesheet" href="guild_battle.css">
+    <link rel="stylesheet" href="guild_battle.css">
+    
+    <style>
+        /* Ajustes para o novo layout visual (Imagem + Texto) */
+        .battle-objective {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none; /* Remove borda antiga */
+            background: transparent; /* Remove fundo quadrado */
+            padding: 0;
+            transition: all 0.3s ease;
+            width: 140px; 
+        }
+
+        .battle-objective:hover {
+            transform: scale(1.1);
+        }
+
+        /* Título em cima */
+        .obj-name {
+            font-weight: bold;
+            font-size: 1em;
+            margin-bottom: 2px;
+            text-shadow: 2px 2px 4px #000;
+            color: white;
+            z-index: 5;
+        }
+
+        #obj-nexus .obj-name {
+            font-size: 1.2em;
+            color: gold;
+            margin-bottom: 5px;
+        }
+
+        /* Container Visual (Imagem + Texto Guarnição) */
+        .obj-visual {
+            position: relative;
+            width: 80px;  
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* A Imagem em si */
+        .obj-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0px 0px 5px var(--guild-color-neutral));
+            transition: filter 0.3s ease;
+        }
+
+        /* Nexus maior */
+        #obj-nexus .obj-visual {
+            width: 110px;
+            height: 110px;
+        }
+
+        /* Guarnição Sobreposta */
+        .obj-garrison-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.9em;
+            color: #00bcd4;
+            font-weight: 900;
+            text-shadow: 
+                1px 1px 0 #000,
+                -1px -1px 0 #000, 
+                1px -1px 0 #000, 
+                -1px 1px 0 #000,
+                0 0 5px black;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 10;
+            margin-top: 0; /* Reset de margem antiga */
+        }
+
+        /* Informações em baixo (Dono e HP) */
+        .obj-info-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            margin-top: -5px;
+            z-index: 5;
+        }
+
+        .obj-owner-name {
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-shadow: 1px 1px 3px #000;
+            text-align: center;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--guild-color-neutral);
+        }
+
+        .obj-hp-bar {
+            width: 100%;
+            height: 14px;
+            background: #222;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid #555;
+            position: relative;
+            box-shadow: 0 0 3px black;
+        }
+        
+        /* Ajuste de posição para os novos elementos (caso precise sobrescrever o CSS antigo) */
+        #obj-nexus { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #obj-cp-1 { top: 20%; left: 25%; transform: translate(-50%, -50%); }
+        #obj-cp-2 { top: 20%; right: 25%; transform: translate(50%, -50%); }
+        #obj-cp-3 { bottom: 20%; left: 25%; transform: translate(-50%, 50%); }
+        #obj-cp-4 { bottom: 20%; right: 25%; transform: translate(50%, 50%); }
+    </style>
     
 </head>
 <body>
@@ -39,52 +163,92 @@
             </div>
 
             <div id="battleMap" style="background-image: url('https://aden-rpg.pages.dev/assets/guild_battle.webp');">
+                
                 <div class="battle-objective" id="obj-nexus" data-index="0">
                     <span class="obj-name">Nexus</span>
-                    <span class="obj-owner-name" id="obj-owner-0">Carreganfo...</span>
-                    <div class="obj-hp-bar">
-                        <div class="obj-hp-fill" id="obj-hp-fill-0"></div>
-                        <span class="obj-hp-text" id="obj-hp-text-0">5k / 5k</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/nexus.webp" class="obj-img" id="img-nexus" alt="Nexus">
+                        <span class="obj-garrison-count" id="obj-garrison-0"></span>
                     </div>
-                    <span class="obj-garrison-count" id="obj-garrison-0"></span>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-0">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-0"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-0">5k / 5k</span>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="battle-objective" id="obj-cp-1" data-index="1">
                     <span class="obj-name">Ponto 1</span>
-                    <span class="obj-owner-name" id="obj-owner-1">Carregando
-                    ..</span>
-                    <div class="obj-hp-bar">
-                        <div class="obj-hp-fill" id="obj-hp-fill-1"></div>
-                        <span class="obj-hp-text" id="obj-hp-text-1">4k / 4k</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.webp" class="obj-img" id="img-cp-1" alt="Ponto 1">
+                        <span class="obj-garrison-count" id="obj-garrison-1"></span>
                     </div>
-                    <span class="obj-garrison-count" id="obj-garrison-1"></span>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-1">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-1"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-1">4k / 4k</span>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="battle-objective" id="obj-cp-2" data-index="2">
                     <span class="obj-name">Ponto 2</span>
-                    <span class="obj-owner-name" id="obj-owner-2">Carregando...</span>
-                    <div class="obj-hp-bar">
-                        <div class="obj-hp-fill" id="obj-hp-fill-2"></div>
-                        <span class="obj-hp-text" id="obj-hp-text-2">4k / 4k</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.webp" class="obj-img" id="img-cp-2" alt="Ponto 2">
+                        <span class="obj-garrison-count" id="obj-garrison-2"></span>
                     </div>
-                    <span class="obj-garrison-count" id="obj-garrison-2"></span>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-2">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-2"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-2">4k / 4k</span>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="battle-objective" id="obj-cp-3" data-index="3">
                     <span class="obj-name">Ponto 3</span>
-                    <span class="obj-owner-name" id="obj-owner-3">Carregando...</span>
-                    <div class="obj-hp-bar">
-                        <div class="obj-hp-fill" id="obj-hp-fill-3"></div>
-                        <span class="obj-hp-text" id="obj-hp-text-3">4k / 4k</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.webp" class="obj-img" id="img-cp-3" alt="Ponto 3">
+                        <span class="obj-garrison-count" id="obj-garrison-3"></span>
                     </div>
-                    <span class="obj-garrison-count" id="obj-garrison-3"></span>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-3">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-3"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-3">4k / 4k</span>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="battle-objective" id="obj-cp-4" data-index="4">
                     <span class="obj-name">Ponto 4</span>
-                    <span class="obj-owner-name" id="obj-owner-4">Carregando...</span>
-                    <div class="obj-hp-bar">
-                        <div class="obj-hp-fill" id="obj-hp-fill-4"></div>
-                        <span class="obj-hp-text" id="obj-hp-text-4">4k / 4k</span>
+                    
+                    <div class="obj-visual">
+                        <img src="https://aden-rpg.pages.dev/assets/torre.webp" class="obj-img" id="img-cp-4" alt="Ponto 4">
+                        <span class="obj-garrison-count" id="obj-garrison-4"></span>
                     </div>
-                    <span class="obj-garrison-count" id="obj-garrison-4"></span>
+
+                    <div class="obj-info-bottom">
+                        <span class="obj-owner-name" id="obj-owner-4">Carregando...</span>
+                        <div class="obj-hp-bar">
+                            <div class="obj-hp-fill" id="obj-hp-fill-4"></div>
+                            <span class="obj-hp-text" id="obj-hp-text-4">4k / 4k</span>
+                        </div>
+                    </div>
                 </div>
+
             </div>
 
             <div id="battleFooter">

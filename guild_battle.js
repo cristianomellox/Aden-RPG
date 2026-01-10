@@ -773,7 +773,7 @@ async function handleCityRegistrationPre(cityId, cityName) {
     const guilds = data.registered_guilds || [];
     
     // --- LÓGICA DE MASCARAR NOMES (Alteração Solicitada) ---
-    const maxGuilds = 4;
+    const maxGuilds = 5; // AUMENTADO PARA 5
     const isFull = guilds.length >= maxGuilds;
     // userGuildId é uma variável global do seu arquivo
     const amIRegistered = guilds.some(g => g.guild_id === userGuildId); 
@@ -781,14 +781,14 @@ async function handleCityRegistrationPre(cityId, cityName) {
     // Revela se estiver cheio OU se minha guilda já estiver na lista
     const showNames = isFull || amIRegistered; 
 
-    if (guilds.length === 0) {
-        modals.cityRegisterGuildList.innerHTML = '<li>1. (Vazio)</li>';
-    } else {
-        guilds.forEach((g, index) => {
-            const li = document.createElement('li');
-            
-            if (showNames) {
-                // Se pode revelar, mostra o nome
+    modals.cityRegisterGuildList.innerHTML = '';
+
+    if (showNames) {
+         if (guilds.length === 0) {
+            modals.cityRegisterGuildList.innerHTML = '<li>1. (Vazio)</li>';
+        } else {
+            guilds.forEach((g, index) => {
+                const li = document.createElement('li');
                 li.textContent = `${index + 1}. ${g.guild_name}`;
                 
                 // Destaque visual para sua própria guilda
@@ -797,18 +797,27 @@ async function handleCityRegistrationPre(cityId, cityName) {
                     li.style.fontWeight = 'bold';
                     li.textContent += ' (Sua Guilda)';
                 }
-            } else {
-                // Se não pode revelar, mostra ???
-                li.textContent = `${index + 1}. ???`;
-            }
-            
-            modals.cityRegisterGuildList.appendChild(li);
-        });
+                modals.cityRegisterGuildList.appendChild(li);
+            });
+        }
+    } else {
+        // Se não pode revelar, mostra apenas a contagem geral
+        const li = document.createElement('li');
+        li.style.fontStyle = 'italic';
+        li.style.color = '#aaa';
+        li.style.textAlign = 'center';
+        
+        if (guilds.length === 0) {
+            li.textContent = "Nenhuma guilda registrada.";
+        } else {
+            li.textContent = `${guilds.length} guilda(s) registrada(s).`;
+        }
+        modals.cityRegisterGuildList.appendChild(li);
     }
     // -------------------------------------------------------
 
-    if (guilds.length >= 4) {
-        modals.cityRegisterMessage.textContent = "Esta cidade já atingiu o limite de 4 guildas.";
+    if (guilds.length >= maxGuilds) {
+        modals.cityRegisterMessage.textContent = `Esta cidade já atingiu o limite de ${maxGuilds} guildas.`;
         modals.cityRegisterMessage.style.color = '#ffc107';
         modals.cityRegisterConfirmBtn.disabled = true;
     } else if (amIRegistered) {

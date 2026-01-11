@@ -729,10 +729,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       listEl.innerHTML = '';
       data.forEach((g, idx)=>{
-        // Garante que pegamos o ID correto, seja guild_id (RPC) ou id (Tabela direta)
-        const gid = g.guild_id || g.id; 
-
-        if (!gid) {
+        if (!g.guild_id) {
           console.error('AVISO: Guilda com ID inválido no ranking.', g);
           return;
         }
@@ -742,8 +739,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const li = document.createElement('li');
         
         li.className = 'ranking-item-clickable';
-        // Atribui o ID garantido ao dataset
-        li.dataset.guildId = gid;
+        li.dataset.guildId = g.guild_id;
 
         li.innerHTML = `
           <div class="ranking-item-content">
@@ -767,6 +763,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         else if (idx === 2) li.style.background = "linear-gradient(180deg, rgba(205,127,50,0.4), rgba(210,180,40,0.1))";
         
         listEl.appendChild(li);
+      });
+
+      listEl.addEventListener('click', (ev) => {
+          const item = ev.target.closest('li');
+          if (item && item.dataset.guildId) {
+              fetchAndDisplayGuildInfo(item.dataset.guildId);
+          }
       });
   }
 
@@ -1201,19 +1204,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }, true);
     });
-  }
-
-  // --- CORREÇÃO: Ouvinte de clique do Ranking (Adicionado apenas uma vez) ---
-  const guildRankingListEl = document.getElementById('guildRankingList');
-  if (guildRankingListEl) {
-      guildRankingListEl.addEventListener('click', (ev) => {
-          // Busca o elemento LI mais próximo do clique
-          const item = ev.target.closest('li');
-          // Verifica se o item existe e se tem um ID de guilda válido
-          if (item && item.dataset.guildId) {
-              fetchAndDisplayGuildInfo(item.dataset.guildId);
-          }
-      });
   }
 
   const ok = await getUserSession();

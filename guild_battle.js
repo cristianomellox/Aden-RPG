@@ -766,7 +766,7 @@ function renderResultsScreen(instance, playerDamageRanking) {
 // --- Lógica de Interação ---
 
 async function handleCityRegistrationPre(cityId, cityName) {
-    unlockBattleAudio(); // Desbloqueia áudio
+    unlockBattleAudio(); 
     cityToRegister = { id: cityId, name: cityName };
     modals.cityRegisterCityName.textContent = cityName;
     modals.cityRegisterMessage.textContent = "Carregando guildas registradas...";
@@ -783,58 +783,61 @@ async function handleCityRegistrationPre(cityId, cityName) {
     }
 
     const guilds = data.registered_guilds || [];
+    const maxGuilds = 5; 
     
-    // --- LÓGICA DE MASCARAR NOMES (Alteração Solicitada) ---
-    const maxGuilds = 5; // AUMENTADO PARA 5
+    // IMPORTANTE: Certifique-se que userGuildId está preenchido globalmente
+    const amIRegistered = guilds.some(g => g.guild_id === userGuildId);
     const isFull = guilds.length >= maxGuilds;
-    // userGuildId é uma variável global do seu arquivo
-    const amIRegistered = guilds.some(g => g.guild_id === userGuildId); 
-    
-    // Revela se estiver cheio OU se minha guilda já estiver na lista
-    const showNames = isFull || amIRegistered; 
+
+    // Lógica de Revelação: Revela se a guilda do usuário já está lá OU se atingiu o limite
+    const showNames = amIRegistered || isFull;
 
     modals.cityRegisterGuildList.innerHTML = '';
 
-    if (showNames) {
-         if (guilds.length === 0) {
-            modals.cityRegisterGuildList.innerHTML = '<li>1. (Vazio)</li>';
-        } else {
-            guilds.forEach((g, index) => {
-                const li = document.createElement('li');
-                li.textContent = `${index + 1}. ${g.guild_name}`;
-                
-                // Destaque visual para sua própria guilda
-                if (g.guild_id === userGuildId) {
-                    li.style.color = 'gold';
-                    li.style.fontWeight = 'bold';
-                    li.textContent += ' (Sua Guilda)';
-                }
-                modals.cityRegisterGuildList.appendChild(li);
-            });
-        }
-    } else {
-        // Se não pode revelar, mostra apenas a contagem geral
+    if (guilds.length === 0) {
+        // Caso real de lista vazia
         const li = document.createElement('li');
         li.style.fontStyle = 'italic';
         li.style.color = '#aaa';
-        li.style.textAlign = 'center';
-        
-        if (guilds.length === 0) {
-            li.textContent = "Nenhuma guilda registrada.";
-        } else {
-            li.textContent = `${guilds.length} guilda(s) registrada(s).`;
-        }
+        li.textContent = "Nenhuma guilda registrada ainda.";
         modals.cityRegisterGuildList.appendChild(li);
+    } else if (showNames) {
+        // Revela a lista completa
+        guilds.forEach((g, index) => {
+            const li = document.createElement('li');
+            li.textContent = `${index + 1}. ${g.guild_name}`;
+            if (g.guild_id === userGuildId) {
+                li.style.color = 'gold';
+                li.style.fontWeight = 'bold';
+                li.textContent += ' (Sua Guilda)';
+            }
+            modals.cityRegisterGuildList.appendChild(li);
+        });
+    } else {
+        // Mostra apenas a contagem sem revelar nomes
+        const li = document.createElement('li');
+        li.style.fontWeight = 'bold';
+        li.style.color = '#00bcd4';
+        li.style.textAlign = 'center';
+        li.style.padding = '10px';
+        li.textContent = `${guilds.length} guilda(s) registrada(s)`;
+        modals.cityRegisterGuildList.appendChild(li);
+        
+        const info = document.createElement('li');
+        info.style.fontSize = '0.85em';
+        info.style.color = '#aaa';
+        info.style.textAlign = 'center';
+        info.textContent = "(Os nomes serão revelados após o registro)";
+        modals.cityRegisterGuildList.appendChild(info);
     }
-    // -------------------------------------------------------
 
-    if (guilds.length >= maxGuilds) {
-        modals.cityRegisterMessage.textContent = `Esta cidade já atingiu o limite de ${maxGuilds} guildas.`;
+    // Gerenciamento dos botões e mensagens de status
+    if (isFull) {
+        modals.cityRegisterMessage.textContent = `Limite de ${maxGuilds} guildas atingido.`;
         modals.cityRegisterMessage.style.color = '#ffc107';
         modals.cityRegisterConfirmBtn.disabled = true;
     } else if (amIRegistered) {
-         // Se eu já estou registrado, aviso e desabilito o botão de registrar de novo
-        modals.cityRegisterMessage.textContent = "Sua guilda já está registrada aqui.";
+        modals.cityRegisterMessage.textContent = "Sua guilda já está confirmada nesta cidade.";
         modals.cityRegisterMessage.style.color = '#28a745';
         modals.cityRegisterConfirmBtn.disabled = true;
     } else {

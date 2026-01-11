@@ -855,14 +855,14 @@ textarea:focus, textarea:active {
 
 .obj-visual {
     position: relative;
-    width: 95px;  
-    height: 95px;
+    width: 115px;  
+    height: 115px;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
 #obj-nexus .obj-visual {
-    width: 130px;
-    height: 130px;
+    width: 150px;
+    height: 150px;
 }

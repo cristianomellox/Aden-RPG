@@ -828,7 +828,7 @@ async function handleCityRegistrationPre(cityId, cityName) {
             li.style.fontStyle = 'italic';
         } else {
             // Mostra apenas a contagem
-            li.innerHTML = `<strong style="color: #00bcd4; font-size: 1.3em;">${count}</strong> guilda(s) registrada(s).`;
+            li.innerHTML = `<strong style="color: #00bcd4; font-size: 1.3em;">>> ${count}</strong> guilda(s) registrada(s).`;
         }
         modals.cityRegisterGuildList.appendChild(li);
     }

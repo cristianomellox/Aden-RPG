@@ -779,8 +779,8 @@ textarea:focus, textarea:active {
 
 /* Nexus maior */
 #obj-nexus .obj-visual {
-    width: 110px;
-    height: 110px;
+    width: 100%;
+    height: 100%;
 }
 
 /* Guarnição Sobreposta */
@@ -855,14 +855,14 @@ textarea:focus, textarea:active {
 
 .obj-visual {
     position: relative;
-    width: 115px;  
-    height: 115px;
+    width: 115px!important;  
+    height: 115px!important;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
 #obj-nexus .obj-visual {
-    width: 150px;
-    height: 150px;
+    width: 150px!important;
+    height: 150px!important;
 }

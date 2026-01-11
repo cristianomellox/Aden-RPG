@@ -636,7 +636,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             last_active
         )
     `)
-    .eq('id', userGuildId)
+    .eq('id', guildId)
     .single();
 
             if (guildError || !data) {

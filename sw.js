@@ -1,19 +1,57 @@
-const CACHE_NAME = 'aden-rpg-assets-v1';
-const ASSET_PATH = '/assets/';
-const ALLOWED_EXTENSIONS = ['.webp', '.webm', '.mp3', '.png'];
+const CACHE_NAME = 'aden-rpg-assets-v5'; // Atualizado para v5
+const ASSET_HOSTNAME = 'aden-rpg.pages.dev';
+const ASSET_PREFIX = '/assets/';
+const ALLOWED_EXTENSIONS = ['.webp', '.webm', '.mp3', '.mp4', '.png', '.jpg', '.jpeg'];
+
+const ASSETS_TO_PRECACHE = [
+    'https://aden-rpg.pages.dev/assets/aden.mp3',
+    'https://aden-rpg.pages.dev/assets/aden_intro.webm',
+    'https://aden-rpg.pages.dev/assets/solaris.mp4',
+    'https://aden-rpg.pages.dev/assets/karintro.mp4',
+    'https://aden-rpg.pages.dev/assets/karoutro.mp4',
+    'https://aden-rpg.pages.dev/assets/karatk01.mp4',
+    'https://aden-rpg.pages.dev/assets/karatk02.mp4',
+    'https://aden-rpg.pages.dev/assets/karatk03.mp4',
+    'https://aden-rpg.pages.dev/assets/goldcoin.webp',
+    'https://aden-rpg.pages.dev/assets/cristais.webp',
+
+    // Novos vídeos adicionados (TDD Boss)
+    'https://aden-rpg.pages.dev/assets/tddbossintro.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossoutro.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk01.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk02.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk03.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk04.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk05.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk06.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk07.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk08.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk09.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk10.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk11.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk12.webm',
+    'https://aden-rpg.pages.dev/assets/tddbossatk13.webm'
+];
 
 self.addEventListener('install', event => {
-    // Ativa o Service Worker imediatamente
     self.skipWaiting();
+    event.waitUntil(
+        caches.open(CACHE_NAME).then(cache => {
+            console.log('🔥 [SW] Iniciando pre-cache da v5...');
+            return Promise.allSettled(
+                ASSETS_TO_PRECACHE.map(url => 
+                    cache.add(url).catch(err => console.warn(`⚠️ Erro ao baixar: ${url}`, err))
+                )
+            );
+        })
+    );
 });
 
 self.addEventListener('activate', event => {
-    // Remove caches antigos e assume controle das abas
     event.waitUntil(
         caches.keys().then(keys =>
             Promise.all(
-                keys
-                    .filter(key => key !== CACHE_NAME)
+                keys.filter(key => key !== CACHE_NAME)
                     .map(key => caches.delete(key))
             )
         ).then(() => self.clients.claim())
@@ -21,52 +59,34 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    const request = event.request;
-
-    // Só intercepta GET
+    const { request } = event;
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
-
-    // Apenas assets dentro de /assets/
-    const isAssetPath = url.pathname.startsWith(ASSET_PATH);
-
-    // Apenas extensões permitidas
-    const hasValidExtension = ALLOWED_EXTENSIONS.some(ext =>
+    
+    // Verifica se é um asset do domínio correto e pasta correta
+    const isAssetHost = url.hostname === ASSET_HOSTNAME;
+    const isAssetPath = url.pathname.startsWith(ASSET_PREFIX);
+    const hasValidExtension = ALLOWED_EXTENSIONS.some(ext => 
         url.pathname.toLowerCase().endsWith(ext)
     );
 
-    if (!isAssetPath || !hasValidExtension) return;
+    if (isAssetHost && (isAssetPath || hasValidExtension)) {
+        event.respondWith(
+            caches.match(request).then(cachedResponse => {
+                if (cachedResponse) return cachedResponse;
 
-    event.respondWith(
-        caches.match(request).then(cachedResponse => {
-            // Cache First
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-
-            return fetch(request).then(networkResponse => {
-                // Aceita 200 (normal) e 206 (partial content para áudio/vídeo)
-                if (
-                    !networkResponse ||
-                    (networkResponse.status !== 200 && networkResponse.status !== 206)
-                ) {
+                return fetch(request).then(networkResponse => {
+                    // Salva no cache se for uma resposta válida (status 200)
+                    if (networkResponse.status === 200) {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(request, responseToCache).catch(() => {});
+                        });
+                    }
                     return networkResponse;
-                }
-
-                const responseToCache = networkResponse.clone();
-
-                caches.open(CACHE_NAME).then(cache => {
-                    cache.put(request, responseToCache).catch(() => {
-                        // Pode falhar em alguns casos de range request — ignora silenciosamente
-                    });
                 });
-
-                return networkResponse;
-            }).catch(() => {
-                // Se a rede falhar e não tiver cache, deixa falhar
-                return cachedResponse;
-            });
-        })
-    );
+            })
+        );
+    }
 });

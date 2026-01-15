@@ -1,7 +1,12 @@
-const CACHE_NAME = 'aden-rpg-assets-v5'; // Atualizado para v5
+const CACHE_NAME = 'aden-rpg-assets-v6';
 const ASSET_HOSTNAME = 'aden-rpg.pages.dev';
 const ASSET_PREFIX = '/assets/';
-const ALLOWED_EXTENSIONS = ['.webp', '.webm', '.mp3', '.mp4', '.png', '.jpg', '.jpeg'];
+const BLOCKED_PATHS = ['/assets/itens/'];
+
+const ALLOWED_EXTENSIONS = [
+    '.webp', '.webm', '.mp3', '.mp4',
+    '.png', '.jpg', '.jpeg'
+];
 
 const ASSETS_TO_PRECACHE = [
     'https://aden-rpg.pages.dev/assets/aden.mp3',
@@ -15,7 +20,7 @@ const ASSETS_TO_PRECACHE = [
     'https://aden-rpg.pages.dev/assets/goldcoin.webp',
     'https://aden-rpg.pages.dev/assets/cristais.webp',
 
-    // Novos vídeos adicionados (TDD Boss)
+    // TDD Boss
     'https://aden-rpg.pages.dev/assets/tddbossintro.webm',
     'https://aden-rpg.pages.dev/assets/tddbossoutro.webm',
     'https://aden-rpg.pages.dev/assets/tddbossatk01.webm',
@@ -37,10 +42,12 @@ self.addEventListener('install', event => {
     self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
-            console.log('🔥 [SW] Iniciando pre-cache da v5...');
+            console.log('🔥 [SW] Iniciando pre-cache...');
             return Promise.allSettled(
-                ASSETS_TO_PRECACHE.map(url => 
-                    cache.add(url).catch(err => console.warn(`⚠️ Erro ao baixar: ${url}`, err))
+                ASSETS_TO_PRECACHE.map(url =>
+                    cache.add(url).catch(err =>
+                        console.warn(`⚠️ Erro ao baixar: ${url}`, err)
+                    )
                 )
             );
         })
@@ -51,7 +58,8 @@ self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(keys =>
             Promise.all(
-                keys.filter(key => key !== CACHE_NAME)
+                keys
+                    .filter(key => key !== CACHE_NAME)
                     .map(key => caches.delete(key))
             )
         ).then(() => self.clients.claim())
@@ -63,21 +71,27 @@ self.addEventListener('fetch', event => {
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
-    
-    // Verifica se é um asset do domínio correto e pasta correta
+
     const isAssetHost = url.hostname === ASSET_HOSTNAME;
     const isAssetPath = url.pathname.startsWith(ASSET_PREFIX);
-    const hasValidExtension = ALLOWED_EXTENSIONS.some(ext => 
+    const isBlockedPath = BLOCKED_PATHS.some(path =>
+        url.pathname.startsWith(path)
+    );
+    const hasValidExtension = ALLOWED_EXTENSIONS.some(ext =>
         url.pathname.toLowerCase().endsWith(ext)
     );
 
-    if (isAssetHost && (isAssetPath || hasValidExtension)) {
+    if (
+        isAssetHost &&
+        isAssetPath &&
+        hasValidExtension &&
+        !isBlockedPath
+    ) {
         event.respondWith(
             caches.match(request).then(cachedResponse => {
                 if (cachedResponse) return cachedResponse;
 
                 return fetch(request).then(networkResponse => {
-                    // Salva no cache se for uma resposta válida (status 200)
                     if (networkResponse.status === 200) {
                         const responseToCache = networkResponse.clone();
                         caches.open(CACHE_NAME).then(cache => {

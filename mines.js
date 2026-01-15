@@ -69,7 +69,7 @@ const GlobalDB = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Otimizada (Surgical Update + Global Cache + Zero Egress + Monolith Boot)");
+  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Funcionalidades Completas");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -183,9 +183,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   let batchFlushTimer = null;        // Timer para enviar se parar de clicar
   let currentMonsterHealthGlobal = 0; // HP Otimista Global
   
-  // CONFIGURAÇÃO DE BATCH E DEBOUNCE
-  const BATCH_THRESHOLD = 5;         // MANTIDO EM 5 CONFORME SOLICITADO
-  const DEBOUNCE_TIME_MS = 40000;     // 10s
+  // CONFIGURAÇÃO DE BATCH, DEBOUNCE E MODO HÍBRIDO
+  let knownParticipantCount = 0;     // NOVO: Controla se estamos Solo ou Multi
+  
+  const BATCH_THRESHOLD_MULTI = 5;   // Padrão Multi
+  const BATCH_THRESHOLD_SOLO = 10;   // Padrão Solo (acumula mais)
+  
+  const DEBOUNCE_TIME_MULTI = 10000;  // 4s Multi
+  const DEBOUNCE_TIME_SOLO = 40000;  // 10s Solo
+  
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; // 24 Horas
   
   // Controle do primeiro ataque
@@ -546,6 +552,7 @@ function formatTimeCombat(totalSeconds) {
       if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
       
+      // Se for explicitamente solo, apenas uma linha de aviso
       if (isSolo) {
           damageRankingList.innerHTML = "<li style='text-align:center;color:#4caf50;font-style:italic;'>Apenas você disputando...</li>";
           return;
@@ -577,6 +584,9 @@ function formatTimeCombat(totalSeconds) {
   function updateBlindRanking(count, myDmg, topDmg, isLeader) {
       if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
+
+      // Atualiza variável global de participantes para ajustar debounce
+      knownParticipantCount = count || 0;
 
       const myDmgFmt = Number(myDmg||0).toLocaleString();
       const topDmgFmt = Number(topDmg||0).toLocaleString();
@@ -621,6 +631,7 @@ function formatTimeCombat(totalSeconds) {
           btn.onclick = async (e) => {
               e.target.textContent = "Carregando...";
               const { data } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
+              // Passa false para renderRanking para forçar a lista detalhada mesmo que só tenha 1
               renderRanking(data || [], false); 
           };
       }
@@ -1141,7 +1152,8 @@ function formatTimeCombat(totalSeconds) {
           pending: pendingBatch,
           flushTime: debounceFlushTime,
           isFirst: isFirstAttackSequence, // Flag crucial
-          hasAttacked: hasAttackedOnce
+          hasAttacked: hasAttackedOnce,
+          pc: knownParticipantCount // Persiste contagem de jogadores
       };
       localStorage.setItem(key, JSON.stringify(state));
   }
@@ -1165,8 +1177,9 @@ function formatTimeCombat(totalSeconds) {
               currentMonsterHealthGlobal = cached.hp;
               localAttacksLeft = cached.stamina;
               pendingBatch = cached.pending;
-              isFirstAttackSequence = cached.isFirst; // Recupera se é a primeira vez ou não
+              isFirstAttackSequence = cached.isFirst; 
               hasAttackedOnce = cached.hasAttacked;
+              knownParticipantCount = cached.pc || 1;
               
               updateHpBar(currentMonsterHealthGlobal, cavern.initial_monster_health);
               updateAttacksDisplay();
@@ -1195,6 +1208,9 @@ function formatTimeCombat(totalSeconds) {
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
     
+    // Reset para modo solo até o servidor dizer o contrário
+    knownParticipantCount = 1;
+
     if (buyAttackBtn) buyAttackBtn.disabled = false;
     
     pendingBatch = 0;
@@ -1236,7 +1252,11 @@ function formatTimeCombat(totalSeconds) {
       
       const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
       
-      const isSolo = (!rankingData || rankingData.length === 0 || (rankingData.length === 1 && rankingData[0].player_id === userId));
+      // Define se é solo baseado no ranking retornado
+      knownParticipantCount = rankingData ? rankingData.length : 0;
+      const isSolo = (knownParticipantCount <= 1);
+      
+      // Renderiza apenas os top 3, mas se for solo renderiza aviso especial
       renderRanking(rankingData ? rankingData.slice(0, 3) : [], isSolo);
 
       ambientMusic.play();
@@ -1295,9 +1315,22 @@ function formatTimeCombat(totalSeconds) {
               return;
           }
 
-          currentMonsterHealthGlobal = data.hp;
-          updateHpBar(data.hp, maxMonsterHealth);
-          localAttacksLeft = data.al;
+          // Atualiza contagem real de participantes vinda do server
+          knownParticipantCount = data.pc || 1;
+
+          // LÓGICA HÍBRIDA (SOLO vs MULTI)
+          if (knownParticipantCount <= 1 && !data.win) {
+              // Solo Mode: Mantém HP local calculado para fluidez (evita "pulos" de lag)
+              // Aceita apenas o update de Stamina do servidor (authoritative)
+              localAttacksLeft = data.al;
+              // NOTA: Ignoramos data.hp aqui intencionalmente se estiver em modo solo
+          } else {
+              // Multiplayer: Usa HP do servidor (verdade absoluta)
+              currentMonsterHealthGlobal = data.hp;
+              updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
+              localAttacksLeft = data.al;
+          }
+
           updateAttacksDisplay();
 
           if (data.end && !combatTimerInterval) {
@@ -1307,6 +1340,7 @@ function formatTimeCombat(totalSeconds) {
 
           if (data.win) {
               showModalAlert("Mina conquistada/resetada!");
+              // Força renderização completa do ranking ao vencer
               renderRanking(data.r || [], false); 
               resetCombatUI();
           } else {
@@ -1366,11 +1400,15 @@ function formatTimeCombat(totalSeconds) {
         return;
     }
 
-    if (pendingBatch >= BATCH_THRESHOLD || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
+    // AJUSTE DINÂMICO DE DEBOUNCE (SOLO vs MULTI)
+    const debounceTime = (knownParticipantCount <= 1) ? DEBOUNCE_TIME_SOLO : DEBOUNCE_TIME_MULTI;
+    const threshold = (knownParticipantCount <= 1) ? BATCH_THRESHOLD_SOLO : BATCH_THRESHOLD_MULTI;
+
+    if (pendingBatch >= threshold || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
         await processAttackQueue();
     } else {
-        const flushTime = Date.now() + DEBOUNCE_TIME_MS;
-        batchFlushTimer = setTimeout(processAttackQueue, DEBOUNCE_TIME_MS);
+        const flushTime = Date.now() + debounceTime;
+        batchFlushTimer = setTimeout(processAttackQueue, debounceTime);
         saveOptimisticState(flushTime);
     }
   }

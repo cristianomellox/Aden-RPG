@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chefe Mundial - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="guild.css" />
+    <style>
+    body {
+            background-color: black;
+            overflow: hidden;
+            /* Adicione estas duas linhas abaixo para sobrescrever o style.css global */
+            padding-bottom: 0 !important;
+            margin: 0 !important; 
+        }
+        
+
+        #sbContainer {
+            width: 100vw;
+    height: 100vh;
+    /* Removido o background-image aqui */
+    background-color: black; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    color: white;
+    position: relative;
+    overflow: hidden;
+        }
+        #sbBackgroundVideo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Faz o vídeo cobrir a área como o background-size: cover */
+    z-index: 0;        /* Garante que fique atrás de tudo */
+    opacity: 0;
+    transition: opacity 2s ease-in;
+}
+
+        /* HEADER: Apenas Nome e Timer agora */
+        #sbHeader {
+            position: relative;
+            margin-top: -3px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        #bossName {
+            font-weight: bold; 
+            font-size: 1.1em;
+            text-shadow: 2px 2px 4px #000;
+            margin-bottom: -5px;
+        }
+
+        #sbTimer {
+            font-weight: bold;
+            font-size: 1.8em;
+            background: linear-gradient(to bottom, gray 0%, cyan 50%, black 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: none;
+            margin-top: 0px;
+        }
+
+        /* ÁREA VISUAL DO MONSTRO (Ao fundo) */
+        #monsterVisualArea {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%); /* Centraliza visualmente */
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1; 
+            pointer-events: none;
+        }
+        
+        #bossImage {
+            min-width: 660px;
+            min-height: 770px;
+            object-fit: contain;
+            animation: floatY 5s ease-in-out infinite;
+            margin-top: 150px;
+        }
+
+        /* ÁREA DE UI (Frente) - Contém HP do Boss e Player */
+        #playerUiArea {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px; /* Espaço entre os elementos */
+        }
+
+        /* BARRA DE HP DO BOSS (Movida para cá) */
+        #bossHpBar {
+            width: 90%;
+            max-width: 400px;
+            background: #333;
+            border-radius: 12px;
+            height: 24px;
+            position: relative;
+            border: 1px solid #777;
+            overflow: hidden;
+            margin-bottom: 5px; /* Espaço até o avatar */
+            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        #bossHpFill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(to right, #ff4433, red);
+            border-right: 1px solid yellow;
+            transition: width 0.3s ease;
+        }
+        #bossHpText {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.75em; font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+            white-space: nowrap; z-index: 2;
+        }
+
+        /* Layout do Jogador */
+        #playerInfoRow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .player-avatar-wrapper {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            
+            z-index: 21;
+        }
+        #playerAvatar {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid yellow;
+        }
+        #reviveOverlay {
+            position: absolute; top:0; left:-6px; width:100%; height:100%;
+            background: rgba(0,0,0,0.7);
+            border-radius: 50%;
+            display: none;
+            align-items: center; justify-content: center;
+            color: white; font-weight: bold; font-size: 0.9em;
+        }
+
+        #playerHpBar {
+            width: 300px; max-width: 90%;
+            height: 20px;
+            background: #333;
+            border-radius: 12px;
+            border: 1px solid #777;
+            overflow: hidden;
+            position: relative;
+        }
+        #playerHpFill {
+            height: 100%;
+            background: linear-gradient(to right, orange, gold);
+            border-right: 1px solid yellow;
+            width: 100%;
+            transition: width 0.3s ease;
+        }
+        #playerHpText {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.8em; font-weight: bold; color: #fff;
+            text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 2px black,
+    0 0 2px black;
+        }
+
+        /* Controles */
+        .controls-area { text-align: center; margin-top: 2px; }
+        #sbAttackBtn { width: 65px; height: 65px; cursor: pointer; transition: transform 0.1s; }
+        #sbAttackBtn:active { transform: scale(0.95); }
+        .disabled-btn { filter: grayscale(100%) brightness(60%); pointer-events: none; }
+        .attacks-info { font-size: 0.9em; font-weight: bold; margin-top: -12px; text-shadow: 1px 1px 2px black; position: relative; z-index: 22;}
+        #cooldownTimer { font-size: 0.8em; color: yellow; height: 15px; 
+          margin-bottom: -1px;
+        }
+
+        /* Animações e Utilitários */
+        @keyframes floatY { 0% { transform: translateY(0px); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0px); } }
+        @keyframes shake-monster {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+            20%, 40%, 60%, 80% { transform: translateX(6px); }
+        }
+        .shake-animation { animation: shake-monster 0.5s ease-in-out !important; }
+        .floating-dmg { position: absolute; font-weight: bold; font-size: 1.8em; animation: floatDmg 0.8s forwards; pointer-events: none; text-shadow: 2px 2px 0 #000; z-index: 100; }
+        
+        /* Animação corrigida para manter centralização no eixo X */
+        @keyframes floatDmg { 
+            0% { opacity:1; transform: translate(-50%, -50%) scale(1); } 
+            100% { opacity:0; transform: translate(-50%, -100px) scale(1.2); } 
+        }
+
+        .floating-dmg { 
+            position: absolute; 
+            font-weight: bold; 
+            font-size: 1.8em; 
+            animation: floatDmg 0.8s forwards; 
+            pointer-events: none; 
+            z-index: 100;
+            white-space: nowrap; /* Garante que o número não quebre linha */
+            /* O posicionamento left/top é feito via JS, o transform ajusta o centro */
+        }
+
+        /* Padrão Branco com borda preta (Dano Normal) */
+        .normal { 
+            color: white; 
+            text-shadow: 
+                2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000,
+                1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+        }
+
+        /* Crítico e Dano no Jogador (Vermelho com borda Amarela grossa) */
+        .crit, .player-dmg { 
+            color: #ff0000; 
+            font-size: 2.2em; 
+            /* Simulação de borda 4px amarela via text-shadow */
+            text-shadow: 
+                3px 0 0 yellow, -3px 0 0 yellow, 0 3px 0 yellow, 0 -3px 0 yellow,
+                2px 2px 0 yellow, -2px -2px 0 yellow, 2px -2px 0 yellow, -2px 2px 0 yellow,
+                1px 1px 0 #000; /* Leve sombra interna para legibilidade */
+        }
+
+        /* Lobby e Modais */
+        #sbLobby { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .lobby-card { background: #222; padding: 20px; border-radius: 12px; border: 1px solid #555; text-align: center; width: 90%; max-width: 400px; }
+        #loadingModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 20000; flex-direction: column; align-items: center; justify-content: center; }
+        .loader { border: 5px solid #333; border-top: 5px solid gold; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #victoryModal { display: none; position: fixed; z-index: 20001; left:0; top:0; width:100%; height:100%; background-color: rgba(0,0,0,0.8); justify-content:center; align-items:center; }
+        .reward-item { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.05); padding: 8px; border-radius: 6px; margin-top: 6px; border: 1px solid #333; }
+        .reward-item img { width: 40px; height: 40px; object-fit: contain; }
+        #videoOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: black !important; z-index: 20000; display: none; align-items: center; justify-content: center; }
+        #gameVideo { width: 100%; height: 100%; object-fit: cover; background-color: black !important; opacity: 0; transition: opacity 0.3s ease-in; }
+    </style>
+</head>
+<body>
+    <div id="playerTopBar" style="z-index: 500;">
+        <a href="index.html" class="top-bar-link" style="color: white;"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg></a>
+        <div><span id="pageTitle" style="font-weight: bold;">Chefe Mundial</span></div>
+        <div style="width: 30px;"></div>
+    </div>
+
+    <div id="sbLobby">
+        <div class="lobby-card">
+            <img src="https://aden-rpg.pages.dev/assets/karbanner.webp" style="width: 100%; border: 6px solid gray; border-radius: 8px; margin-bottom: 15px;">
+            <h2 style="color: gold; margin-bottom: 5px;">Kar-Drakul</h2>
+            <p style="font-size: 0.9em; margin-bottom: 10px; color: #ddd;">Enfrente Kar-Drakul e ganhe boas recompensas.</p>
+            <p style="font-size: 0.8em; margin-bottom: 20px; color: lightgreen;">Dê o máximo de golpes possível para garantir mais drops.</p>
+            <button id="sbStartBtn" class="action-btn" style="width: 100%; font-size: 1.1em; padding: 12px;">Iniciar Batalha</button>
+        </div>
+    </div>
+
+    <div id="sbContainer" style="display: none;">
+      <video autoplay muted loop playsinline id="sbBackgroundVideo">
+        <source src="https://aden-rpg.pages.dev/assets/solaris.mp4" type="video/mp4">
+        Seu navegador não suporta vídeos.
+    </video>
+        <div id="sbHeader">
+            <div id="bossName">Kar-Drakul</div>
+            <div id="sbTimer">15:00</div>
+        </div>
+
+        <div id="monsterVisualArea">
+            <img id="bossImage" src="" alt="Boss">
+        </div>
+        <div id="playerUiArea">
+            <div id="bossHpBar">
+                <div id="bossHpFill"></div>
+                <div id="bossHpText">Loading...</div>
+            </div>
+
+            <div id="playerInfoRow">
+                <div class="player-avatar-wrapper">
+                    <img id="playerAvatar" src="">
+                    <div id="reviveOverlay"></div>
+                </div>
+                <div id="playerHpBar">
+                    <div id="playerHpFill"></div>
+                    <div id="playerHpText"></div>
+                </div>
+            </div>
+
+            <div class="controls-area">
+                <img id="sbAttackBtn" src="https://aden-rpg.pages.dev/assets/attackbtn.webp">
+                <div class="attacks-info">
+                    Ataques: <span id="attacksLeft" style="color: yellow;">3</span> / 3
+                </div>
+                <div id="cooldownTimer"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="videoOverlay"><video id="gameVideo" playsinline></video></div>
+    <div id="loadingModal"><div class="loader"></div><h3 style="color: white; font-weight: normal; margin-top: 10px;">Computando Batalha...</h3></div>
+
+    <div id="victoryModal" class="modal">
+        <div class="modal-content" style="background: #222; text-align: center; border: 1px solid gold; width: 85%;">
+            <h3 id="resultTitle" style="color: gold; font-size: 1.5em; margin-bottom: 10px;">Vitória!</h3>
+            <p id="resultMsg">Kar-Drakul foi derrotado.</p>
+            <div id="rewardsList" style="text-align: left; background: #111; padding: 15px; border-radius: 6px; margin: 15px 0; max-height: 250px; overflow-y: auto; border: 1px solid #444;"></div>
+            <button class="action-btn" onclick="window.location.reload()">Voltar</button>
+        </div>
+    </div>
+    <div id="msgModal" class="modal" style="display: none; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000;">
+    <div class="modal-content" style="background: #1a1a1a; text-align: center; border: 1px solid #444; width: 90%; max-width: 400px; padding: 20px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.8); position: relative;">
+        <h3 id="msgTitle" style="color: gold; font-family: 'Cinzel', serif; margin-top: 0; font-size: 1.4em;">Atenção</h3>
+        <p id="msgBody" style="color: #ddd; font-size: 1em; line-height: 1.5; margin: 15px 0;"></p>
+        
+        <button id="msgCloseBtn" style="
+            background: linear-gradient(180deg, #4a0000 0%, #290000 100%);
+            border: 1px solid #ff4444;
+            color: white;
+            padding: 10px 25px;
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            border-radius: 4px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        ">Entendido</button>
+    </div>
+</div>
+
+    <script type="module" src="solo_boss.js"></script>
+</body>
+</html>

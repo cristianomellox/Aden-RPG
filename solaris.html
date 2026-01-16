@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="googlebot" content="noindex, nofollow">
+    <title>Solaris - Aden RPG</title>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="zion.css" /> 
+
+</head>
+<style>
+ /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; 
+}
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
+} 
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+/* Estilos gerais */
+body, p, span, div, button {
+    font-family: 'Cinzel', serif;
+}
+h1, h2 {
+    font-family: 'Cinzel', serif;
+    color: #e0dccc;
+    text-shadow: 2px 2px 4px #000;
+    letter-spacing: 1.5px;
+}
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0; 
+    background-color: #121212;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* TopBar */
+#playerTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #333;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.top-bar-link {
+    color: white;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+.top-bar-link svg {
+    width: 30px;
+    height: 30px;
+}
+#pageTitle {
+    color: gray; /* Cor Avermelhada para indicar perigo/Boss */
+    font-size: 1.2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+}
+
+
+/* Mapa em Tela Cheia */
+#mapContainer {
+    position: fixed; 
+    top: 0;
+    left: 0;
+    width: 100vw; 
+    height: 100vh; 
+    overflow: hidden;
+    margin: 0;
+    z-index: 1; 
+    box-shadow: none;
+    background-color: #121212; 
+}
+
+#map {
+    /* Ajuste o nome do arquivo se necessário, assumi solaris.webp */
+    background-image: url('https://aden-rpg.pages.dev/assets/solaris.webp'); 
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: top left;
+    width: 1500px; 
+    height: 1700px; 
+    position: absolute;
+    cursor: grab;
+    transform-origin: top left;
+    transition: transform 0.05s linear;
+    transform: scale(1.1); 
+}
+
+/* Container do Conteúdo Flutuante */
+#contentOverlay {
+    position: absolute; 
+    top: 50px; 
+    left: 0;
+    width: 100%;
+    min-height: 95vh; 
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; 
+    align-items: center;
+    z-index: 10; 
+    pointer-events: none; 
+}
+
+#zionContent2 {
+    width: 95%;
+    max-width: 600px;
+    margin-top: 2px; 
+    padding: 10px;
+    box-sizing: border-box;
+    text-align: center;
+    background-color: rgba(18, 18, 18, 0.5); 
+    border-radius: 8px;
+    pointer-events: auto; 
+}
+
+#zionContent h2 {
+    margin-top: -5px; /* Ajuste leve pois não tem Guilda Regente */
+    margin-bottom: 5px;
+    color: #ff4444; /* Título em vermelho */
+    text-shadow: 2px 2px 6px black; 
+}
+
+/* Rodapé específico da página e botões */
+#zionFooter {
+    margin-top: auto; 
+    padding: 10px;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column; /* Empilha os botões em telas pequenas */
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Botões */
+.action-btn {
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    box-sizing: border-box;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color: #e0dccc;
+    font-weight: bold;
+    padding: 15px 20px; 
+    font-size: 14px;
+    text-shadow: 1px 1px 2px #000;
+    width: 100%; /* Botões ocupam a largura do container */
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+
+/* Estilo específico para o botão de Boss para destaque */
+.boss-btn {
+    color: gold;
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+/* Estilos do Modal */
+.modal-container {
+    display: none; 
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgba(0,0,0,0.8); /* Fundo escuro */
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border: 3px solid #c9a94a;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    max-height: 90vh; 
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: #e0dccc;
+    text-decoration: none;
+}
+
+#historyText {
+    overflow-y: auto;
+    max-height: 70vh;
+    padding-right: 10px; 
+    text-align: left;
+    color: #ccc;
+}
+</style>
+<body>
+
+    <div id="playerTopBar">
+        <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+       <div> <span id="pageTitle">Solaris</span></div>
+        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;" onclick="window.location.reload();">
+    </div>
+
+    <div id="mapContainer">
+        <div id="map">
+            </div>
+    </div>
+
+    <div id="contentOverlay">
+        
+        <div id="zionContent">
+            
+            </div>
+
+        <div id="zionFooter">
+            <button id="openHistoryModalBtn" class="action-btn">História</button>
+            <button onclick="window.location.href='solo_boss.html'" class="action-btn boss-btn">Enfrentar Kar-Drakul</button>
+        </div>
+
+    </div>
+    
+    <div id="historyModal" class="modal-container" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>História de Solaris</h2> 
+            <div id="historyText">
+                <p>Solaris é uma região inóspita onde os picos pedregosos e irregulares são coroados por um gelo eterno. Não há assentamentos permanentes aqui, apenas o silêncio cortante dos ventos e o perigo iminente. O local serve de refúgio forçado para <strong>Kar-Drakul</strong>, o dragão que outrora aterrorizou todo o continente de Aden com sua eletricidade fumegante.</p>
+                <p>Kar-Drakul era uma força da natureza, causando devastação e inúmeras mortes, até encontrar seu inimigo: <strong>O Grande Leão</strong>, também conhecido como <strong>Pantokrator</strong>. O campeão da justiça feriu gravemente a besta em uma batalha lendária, estraçalhando sua capacidade de voo. Hoje, o dragão não consegue se manter nos céus por mais de dois minutos sem sucumbir à dor excruciante de suas feridas antigas.</p>
+                <p>Obrigado a se esconder nas montanhas altas, Kar-Drakul vive acuado. A cidade de Zion, sendo o bastião civilizado mais próximo, assumiu a responsabilidade de conter a ameaça. O Conselho de Zion financia constantemente heróis corajosos para subir a Solaris e enfrentar a besta. A estratégia é cruel e pragmática: causar dano constante para manter o dragão fraco e ocupado, garantindo que ele nunca recupere forças suficientes para descer das montanhas e ameaçar o mundo novamente.</p>
+            </div>
+        </div>
+    </div>
+
+<script>
+  let musicStarted = false;
+  let backgroundMusic;
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Ajuste o nome do arquivo de áudio conforme sua biblioteca
+  backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/solaris.mp3"); 
+  backgroundMusic.volume = 0.4;
+  backgroundMusic.loop = true;
+
+  function startBackgroundMusic() {
+    if (musicStarted) return;
+    backgroundMusic.play().then(() => {
+      musicStarted = true;
+      console.log("🎵 Música de fundo iniciada!");
+    }).catch(err => console.warn("⚠️ Falha ao iniciar música:", err));
+  }
+
+  // Função utilitária para registrar listeners
+  function addCapturedListener(target, evt, handler, opts = {}) {
+    try {
+      target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts));
+    } catch (e) {}
+  }
+
+  // Gatilhos de Áudio
+  const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+  for (const ev of primaryEvents) {
+    addCapturedListener(window, ev, () => startBackgroundMusic());
+    addCapturedListener(document.body, ev, () => startBackgroundMusic());
+  }
+
+  let moveArmed = false; 
+  function armMove() { moveArmed = true; setTimeout(()=> moveArmed = false, 1200); }
+
+  addCapturedListener(window, "pointerdown", armMove);
+  addCapturedListener(window, "touchstart", armMove);
+
+  function handleMoveForMusic(e) {
+    if (musicStarted || !moveArmed) return;
+    const isTouchMove = (e.touches && e.touches.length > 0);
+    const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
+    if (isTouchMove || hasPressure || e.pointerType) {
+      startBackgroundMusic();
+      moveArmed = false;
+    }
+  }
+  addCapturedListener(window, "touchmove", handleMoveForMusic);
+  addCapturedListener(window, "pointermove", handleMoveForMusic);
+
+  const mapSelectors = ["#mapContainer", "#map"];
+  for (const sel of mapSelectors) {
+    document.querySelectorAll(sel).forEach(el => {
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchmove", handleMoveForMusic);
+      addCapturedListener(el, "pointermove", handleMoveForMusic);
+    });
+  }
+
+  function tryOnUp(e) { if (!musicStarted) startBackgroundMusic(); }
+  addCapturedListener(window, "pointerup", tryOnUp);
+  addCapturedListener(window, "touchend", tryOnUp);
+
+  setTimeout(() => {
+    if (!musicStarted) { try { startBackgroundMusic(); } catch(e) {} }
+  }, 6000);
+
+  window.startBackgroundMusic = startBackgroundMusic;
+});
+// FIM DA MÚSICA DE FUNDO
+  
+function enableMapInteraction() {
+    const mapContainer = document.getElementById('mapContainer');
+    const map = document.getElementById('map');
+    if (!map || !mapContainer) return;
+
+    let isDragging = false;
+    let startX, startY;
+    let currentX = 0;
+    let currentY = 0;
+    let velocityX = 0;
+    let velocityY = 0;
+    let lastMoveTime = 0;
+
+    function recalcLimits() {
+        const containerRect = mapContainer.getBoundingClientRect();
+        const style = window.getComputedStyle(map);
+        const transformMatrix = style.getPropertyValue('transform');
+        let scaleX = 1;
+
+        if (transformMatrix && transformMatrix !== 'none') {
+            const matrix = transformMatrix.match(/matrix.*\((.+)\)/);
+            if(matrix && matrix[1]) scaleX = parseFloat(matrix[1].split(', ')[0]);
+        } else {
+             const initialTransform = map.style.transform;
+             const scaleMatch = initialTransform.match(/scale\(([^)]+)\)/);
+             if (scaleMatch) scaleX = parseFloat(scaleMatch[1]);
+        }
+        
+        const mapNaturalWidth = 1500; 
+        const mapNaturalHeight = 1500; 
+        
+        const scaledMapWidth = mapNaturalWidth * scaleX;
+        const scaledMapHeight = mapNaturalHeight * scaleX;
+
+        const maxMoveX = 0;
+        const minMoveX = containerRect.width - scaledMapWidth;
+        const maxMoveY = 0;
+        const minMoveY = containerRect.height - scaledMapHeight;
+        
+        return {
+            minX: Math.min(maxMoveX, minMoveX),
+            maxX: Math.max(maxMoveX, minMoveX),
+            minY: Math.min(maxMoveY, minMoveY),
+            maxY: Math.max(maxMoveY, minMoveY)
+        };
+    }
+
+    function setMapPosition(x, y) {
+        const limits = recalcLimits();
+        currentX = Math.max(limits.minX, Math.min(x, limits.maxX));
+        currentY = Math.max(limits.minY, Math.min(y, limits.maxY));
+        
+        const style = window.getComputedStyle(map);
+        let scale = 'scale(1.1)';
+        
+        // Mantém a escala existente
+        if (map.style.transform.includes('scale')) {
+             const match = map.style.transform.match(/scale\(([^)]+)\)/);
+             if (match) scale = `scale(${match[1]})`;
+        }
+        
+        map.style.transform = `translate(${currentX}px, ${currentY}px) ${scale}`;
+    }
+
+    let animationFrameId = null;
+    function inertiaAnimation() {
+        cancelAnimationFrame(animationFrameId);
+        if (isDragging) { velocityX = 0; velocityY = 0; return; }
+
+        velocityX *= 0.95; 
+        velocityY *= 0.95;
+
+        setMapPosition(currentX + velocityX, currentY + velocityY);
+
+        if (Math.abs(velocityX) > 0.5 || Math.abs(velocityY) > 0.5) {
+            animationFrameId = requestAnimationFrame(inertiaAnimation);
+        } else {
+            velocityX = 0; velocityY = 0;
+        }
+    }
+
+    function startDrag(e) {
+        if (e.touches && e.touches.length > 1) return;
+        isDragging = true;
+        map.style.cursor = 'grabbing';
+        startX = e.clientX || e.touches[0].clientX;
+        startY = e.clientY || e.touches[0].clientY;
+        velocityX = 0; velocityY = 0;
+        lastMoveTime = performance.now();
+        cancelAnimationFrame(animationFrameId); 
+    }
+
+    function onDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault(); 
+        const newX = e.clientX || e.touches[0].clientX;
+        const newY = e.clientY || e.touches[0].clientY;
+        const dx = newX - startX;
+        const dy = newY - startY;
+
+        const currentTime = performance.now();
+        const deltaTime = currentTime - lastMoveTime;
+        if (deltaTime > 0) {
+            velocityX = dx / deltaTime;
+            velocityY = dy / deltaTime;
+        }
+        
+        setMapPosition(currentX + dx, currentY + dy);
+        startX = newX; startY = newY;
+        lastMoveTime = currentTime;
+    }
+
+    function endDrag() {
+        isDragging = false;
+        map.style.cursor = 'grab';
+        if (Math.abs(velocityX) > 0.2 || Math.abs(velocityY) > 0.2) {
+            velocityX *= 10; velocityY *= 10;
+            inertiaAnimation();
+        } else {
+            velocityX = 0; velocityY = 0;
+        }
+    }
+
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag, { passive: false });
+    window.addEventListener('mouseup', endDrag, { passive: true });
+    map.addEventListener('touchstart', startDrag, { passive: true });
+    window.addEventListener('touchmove', onDrag, { passive: false });
+    window.addEventListener('touchend', endDrag, { passive: true });
+
+    map.style.cursor = 'grab';
+
+    setTimeout(() => {
+        recalcLimits();
+    }, 100);
+}
+
+// Lógica do Modal de História
+document.addEventListener('DOMContentLoaded', () => {
+    const openBtn = document.getElementById('openHistoryModalBtn');
+    const modal = document.getElementById('historyModal');
+    const closeBtn = modal.querySelector('.close-btn');
+
+    if (openBtn && modal && closeBtn) {
+        openBtn.addEventListener('click', () => {
+            modal.style.display = 'flex'; 
+            document.body.style.overflow = 'hidden'; 
+        });
+
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+            document.body.style.overflow = ''; 
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
+    }
+
+    enableMapInteraction();
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1.3rem !important; }
+  `;
+  document.head.appendChild(style);
+});
+</script>
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</body>
+</html>

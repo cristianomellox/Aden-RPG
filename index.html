@@ -157,11 +157,13 @@
 </div>
 </div>
 <div id="recursosSubmenu" class="footer-submenu" style="display:none;">
-  <div onclick="window.location.href = 'afk.html'" class="footer-submenu-btn">Aventura AFK</div>
-  <div onclick="window.location.href = 'mines.html'" class="footer-submenu-btn">Mineração</div>
+  <div onclick="window.location.href = 'afk.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/expm.webp" class="submenu-icon">Aventura AFK</div>
+  <div onclick="window.location.href = 'mines.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/recursos.webp" class="submenu-icon">Mineração</div>
+  <div onclick="window.location.href = 'arena.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/pvp.webp" class="submenu-icon">Arena PvP</div>
+  <div onclick="window.location.href = 'solo_boss.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/bossm.webp" class="submenu-icon">Chefe Mundial</div>
 </div>
 <div id="pvpSubmenu" class="footer-submenu" style="display:none;">
-  <a href="arena.html" class="footer-submenu-btn">Arena PvP</a>
+  <a href="arena.html" class="footer-submenu-btn">Pets</a>
 </div>
 <div id="maisSubmenu" class="footer-submenu" style="display:none;">
   
@@ -175,15 +177,17 @@
 
 <div id="footerMenu" style="display:none;">
  
+ <button id="recursosBtn" class="footer-btn">
+    <img src="https://aden-rpg.pages.dev/assets/iniciar.webp" alt="Recursos" class="footer-btn-img">
+    <span class="footer-btn-span">Iniciar</span>
+  </button>
+  
   <button id="guildBtn" class="footer-btn" onclick="window.location.href='guild.html';">
     <img src="https://aden-rpg.pages.dev/assets/guilda.webp" alt="Guilda" class="footer-btn-img">
     <span class="footer-btn-span">Guilda</span>
   </button>
-  <button id="recursosBtn" class="footer-btn">
-    <img src="https://aden-rpg.pages.dev/assets/recursos.webp" alt="Recursos" class="footer-btn-img">
-    <span class="footer-btn-span">Recursos</span>
-  </button>
-  <button id="pvpBtnFooter" class="footer-btn">
+  
+  <button id="pvpBtnFooter" class="footer-btn" style="display: none;">
     <img src="https://aden-rpg.pages.dev/assets/pvp.webp" alt="PvP" class="footer-btn-img">
     <span class="footer-btn-span">Desafios</span>
   </button>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aden-rpg-assets-v6';
+const CACHE_NAME = 'aden-rpg-assets-v7';
 const ASSET_HOSTNAME = 'aden-rpg.pages.dev';
 const ASSET_PREFIX = '/assets/';
 const BLOCKED_PATHS = ['/assets/itens/'];
@@ -17,6 +17,9 @@ const ASSETS_TO_PRECACHE = [
     'https://aden-rpg.pages.dev/assets/karatk01.mp4',
     'https://aden-rpg.pages.dev/assets/karatk02.mp4',
     'https://aden-rpg.pages.dev/assets/karatk03.mp4',
+    'https://aden-rpg.pages.dev/assets/karatk04.mp4',
+    'https://aden-rpg.pages.dev/assets/karatk05.mp4',
+    'https://aden-rpg.pages.dev/assets/karatk06.mp4',
     'https://aden-rpg.pages.dev/assets/goldcoin.webp',
     'https://aden-rpg.pages.dev/assets/cristais.webp',
 

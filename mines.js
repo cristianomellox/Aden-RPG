@@ -1444,7 +1444,7 @@ function formatTimeCombat(totalSeconds) {
     }
   }
 
-  function resetCombatUI() {
+  async function resetCombatUI() { // Note: Adicionei async para garantir o await se necessário
     const mineToUpdate = currentMineId;
 
     if (combatModal) combatModal.style.display = "none";
@@ -1462,10 +1462,11 @@ function formatTimeCombat(totalSeconds) {
     ambientMusic.currentTime = 0;
 
     if (mineToUpdate) {
-        updateSingleMineCard(mineToUpdate);
-        // Chama loadMines para garantir que a lógica de "liberar próxima mina" rode
-        loadMines();
+        // CORREÇÃO: Atualiza SOMENTE o card da mina que estava sendo atacada.
+        // Removemos o loadMines() daqui para evitar recarregar a lista inteira.
+        await updateSingleMineCard(mineToUpdate);
     } else {
+        // Fallback: Apenas carrega tudo se não soubermos qual mina atualizar (ex: erro de estado)
         loadMines();
     }
   }

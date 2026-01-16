@@ -224,7 +224,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Botões Gerais
   const buyAttackBtn = document.getElementById("buyAttackBtn");
-  const refreshBtn = document.getElementById("refreshBtn");
+  // O botão de Refresh foi removido conforme solicitado
   const cycleInfoElement = document.getElementById("cycleInfo");
 
   // Footer & History
@@ -957,18 +957,20 @@ function formatTimeCombat(totalSeconds) {
       } else { guilddomSpan.textContent = 'Nenhuma.'; }
   }
 
-  // Função Legacy mantida para o botão de Refresh
+  // Função Legacy atualizada para usar a lógica de Janela Deslizante (RPC)
+  // Usada internamente para recarregar sem refresh da página
   async function loadMines() {
     showLoading();
     try {
-      const { data: mines, error } = await supabase
-        .from("mining_caverns")
-        .select("id, name, status, owner_player_id, open_time, competition_end_time") 
-        .order("name", { ascending: true });
+      // MUDANÇA: Usa RPC em vez de Select direto na tabela
+      const { data: mines, error } = await supabase.rpc("get_visible_mines");
+      
       if (error) throw error;
 
       const allOwnerIds = (mines || []).map(m => m.owner_player_id).filter(Boolean);
       const uniqueOwnerIds = [...new Set(allOwnerIds)];
+      
+      // Filtra apenas os donos que ainda não temos no cache global
       const idsToFetch = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
 
       if (idsToFetch.length > 0) {
@@ -989,7 +991,8 @@ function formatTimeCombat(totalSeconds) {
       await updatePVPAttemptsUI();
       await updatePlayerMineUI();
     } catch (err) {
-      minesContainer.innerHTML = `<p>Erro: ${esc(err.message)}</p>`;
+      console.error(err);
+      minesContainer.innerHTML = `<p>Erro ao carregar minas: ${esc(err.message)}</p>`;
     } finally {
       hideLoading();
     }
@@ -1460,6 +1463,8 @@ function formatTimeCombat(totalSeconds) {
 
     if (mineToUpdate) {
         updateSingleMineCard(mineToUpdate);
+        // Chama loadMines para garantir que a lógica de "liberar próxima mina" rode
+        loadMines();
     } else {
         loadMines();
     }
@@ -1756,7 +1761,7 @@ function formatTimeCombat(totalSeconds) {
   if (buyPVPAttemptsBtn) buyPVPAttemptsBtn.addEventListener("click", () => openBuyPvpModal());
   if (openHistoryBtn) openHistoryBtn.addEventListener("click", openHistory);
   if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", () => historyModal.style.display = 'none');
-  if (refreshBtn) refreshBtn.addEventListener("click", () => { loadMines(); });
+  // O Listener do refreshBtn foi removido conforme solicitado
 
   boot();
 });

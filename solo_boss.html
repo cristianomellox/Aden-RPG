@@ -7,6 +7,15 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="guild.css" />
+    <script>
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW ativo em:', reg.scope))
+            .catch(err => console.error('Erro ao registrar SW:', err));
+    });
+}
+  </script>
     <style>
     body {
             background-color: black;
@@ -262,8 +271,10 @@
         #victoryModal { display: none; position: fixed; z-index: 20001; left:0; top:0; width:100%; height:100%; background-color: rgba(0,0,0,0.8); justify-content:center; align-items:center; }
         .reward-item { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.05); padding: 8px; border-radius: 6px; margin-top: 6px; border: 1px solid #333; }
         .reward-item img { width: 40px; height: 40px; object-fit: contain; }
-        #videoOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: black !important; z-index: 20000; display: none; align-items: center; justify-content: center; }
-        #gameVideo { width: 100%; height: 100%; object-fit: cover; background-color: black !important; opacity: 0; transition: opacity 0.3s ease-in; }
+        #videoOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: black !important; z-index: 20000; display: none; align-items: center; justify-content: center;
+        transition: opacity 0.3s ease-in-out
+        }
+        #gameVideo { width: 100%; height: 100%; object-fit: cover; background-color: black !important; opacity: 0; transition: opacity 0.5s ease-in-out; }
     </style>
 </head>
 <body>
@@ -324,7 +335,15 @@
     </div>
 
     <div id="videoOverlay"><video id="gameVideo" playsinline></video></div>
-    <div id="loadingModal"><div class="loader"></div><h3 style="color: white; font-weight: normal; margin-top: 10px;">Computando Batalha...</h3></div>
+    <div id="loadingModal">
+    <div class="loader"></div>
+    <h3 id="loadingText" style="color: white; font-weight: normal; margin-top: 10px;">Carregando...</h3>
+    
+    <div id="loadingBarContainer" style="width: 200px; height: 10px; background: #333; border: 1px solid #555; border-radius: 5px; margin-top: 10px; overflow: hidden;">
+        <div id="loadingBarFill" style="width: 0%; height: 100%; background: linear-gradient(to right, gold, orange); transition: width 0.2s;"></div>
+    </div>
+    <div id="loadingPercent" style="color: #888; font-size: 0.8em; margin-top: 5px;">0%</div>
+</div>
 
     <div id="victoryModal" class="modal">
         <div class="modal-content" style="background: #222; text-align: center; border: 1px solid gold; width: 85%;">
@@ -356,5 +375,79 @@
 </div>
 
     <script type="module" src="solo_boss.js"></script>
+    
+    <script>
+(function() {
+    const MUSIC_MUTE_KEY = 'backgroundMusicMuted';
+    const isGloballyMuted = localStorage.getItem(MUSIC_MUTE_KEY) === 'true';
+
+    // Lista de URLs de MÚSICA DE FUNDO (BGM)
+    // Se o URL do áudio criado contiver qualquer uma dessas strings, ele será mutado.
+    const BGM_URL_FRAGMENTS = [
+        '/assets/music_loop_02.mp3', // Índice principal
+        '/assets/idlesong.mp3',      // afk_page.js
+        '/assets/combat_afk_bg.mp3', // afk_page.js
+        '/assets/mina.mp3',
+        '/assets/desolation_tower.mp3',
+        '/assets/kar-drakul.mp3',
+        // mines.js
+        // ADICIONE AQUI FRAGMENTOS DE URL DE QUALQUER OUTRA MÚSICA DE FUNDO
+        // Ex: '/assets/arena_bgm.mp3', '/assets/raid_bgm.mp3'
+    ];
+
+    // Guarda o construtor original
+    const OriginalAudio = window.Audio;
+
+    // Se o mute não estiver ativo, ou se já interceptamos, não faça nada.
+    if (!isGloballyMuted || OriginalAudio.__isPatched) {
+        return;
+    }
+
+    // Sobrescreve o construtor nativo
+    window.Audio = function(src) {
+        // 1. Cria o objeto de áudio usando o construtor original
+        const audioInstance = new OriginalAudio(src);
+
+        // 2. Verifica se o 'src' corresponde a um BGM
+        const isBGM = src && BGM_URL_FRAGMENTS.some(fragment => src.includes(fragment));
+
+        if (isBGM) {
+            // 3. Se for BGM e o mute estiver ativo, força o volume para 0.
+            audioInstance.volume = 0;
+            // console.log(`[MUTE PATCH] Muted BGM: ${src}`); // Opcional para debug
+
+            // 4. Adiciona um 'setter' falso para a propriedade 'volume' do objeto
+            // Isso previne que seus scripts de página (ex: combatMusic.volume = 0.4;)
+            // consigam desmutar o áudio posteriormente.
+            Object.defineProperty(audioInstance, 'volume', {
+                get() {
+                    return 0; // Sempre retorna 0
+                },
+                set(newValue) {
+                    // Se o valor for 0 (mutar) ou o valor antigo for 0, permite que o script original
+                    // defina o volume, mas mantemos o nosso em 0.
+                    // Isso é para o caso de o usuário querer restaurar o volume no futuro.
+                    if (newValue > 0 && isGloballyMuted) {
+                        // console.warn(`[MUTE PATCH] Tentativa de desmutar BGM bloqueada. Estado global: Mutado.`);
+                    }
+                    // O objeto de áudio real continua mutado (volume = 0)
+                },
+                configurable: true // Permite que seja redefinido se o estado mudar
+            });
+
+        }
+
+        // 5. Retorna a instância (mutada ou não)
+        return audioInstance;
+    };
+    
+    // Marca o construtor como modificado
+    window.Audio.__isPatched = true;
+    
+    // Opcional: Se o botão de toggle for clicado para desmutar, precisamos restaurar a função
+    // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
+
+})();
+</script>
 </body>
 </html>

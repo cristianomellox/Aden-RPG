@@ -11,7 +11,15 @@
   <script src="maintenance.js"></script>
   <script src="monster_stages.js"></script> 
   <script type="module" defer src="afk_page.js"></script>
-  
+  <script>
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW ativo em:', reg.scope))
+            .catch(err => console.error('Erro ao registrar SW:', err));
+    });
+}
+  </script>
   <style>
 
 /* Balão de Level Up */

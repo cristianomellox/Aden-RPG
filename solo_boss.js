@@ -69,6 +69,40 @@ const ATTACK_VIDEOS = [
     "https://aden-rpg.pages.dev/assets/karatk06.mp4"
 ];
 
+// Cache em memória para os vídeos (Blob URLs)
+const videoBlobCache = {};
+
+// Função para pré-carregar vídeos em memória (Buffer) com Progresso
+async function bufferBattleVideos(onProgress) {
+    const allVideos = [...ATTACK_VIDEOS, VIDEO_INTRO, VIDEO_DEATH];
+    let loadedCount = 0;
+    const total = allVideos.length;
+
+    // Função auxiliar para baixar um único vídeo
+    const fetchVideo = async (url) => {
+        if (videoBlobCache[url]) {
+            loadedCount++;
+            if (onProgress) onProgress(Math.floor((loadedCount / total) * 100));
+            return;
+        }
+
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            videoBlobCache[url] = URL.createObjectURL(blob);
+        } catch (e) {
+            console.warn("Falha ao criar buffer do vídeo:", url, e);
+        } finally {
+            loadedCount++;
+            if (onProgress) onProgress(Math.floor((loadedCount / total) * 100));
+        }
+    };
+
+    // Dispara todos os downloads em paralelo
+    const promises = allVideos.map(url => fetchVideo(url));
+    await Promise.allSettled(promises);
+}
+
 const AUDIO_HIT = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
 const AUDIO_CRIT = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
 
@@ -105,27 +139,19 @@ let loops = { timer: null, combat: null };
 
 // ================= INICIALIZAÇÃO =================
 document.addEventListener("DOMContentLoaded", async () => {
-    // 1. CORREÇÃO DO VÍDEO DE FUNDO (Lógica de canplaythrough para evitar flash)
+    // 1. CORREÇÃO DO VÍDEO DE FUNDO
     const bgVideo = document.getElementById('sbBackgroundVideo');
     if (bgVideo) {
-        // Força load caso o browser esteja preguiçoso
         bgVideo.load();
-        
-        const fadeInVideo = () => {
-            bgVideo.style.opacity = '1';
-        };
-
-        // Se já tiver dados suficientes, mostra. Se não, espera o evento.
+        const fadeInVideo = () => { bgVideo.style.opacity = '1'; };
         if (bgVideo.readyState >= 3) {
             fadeInVideo();
         } else {
             bgVideo.addEventListener('canplaythrough', fadeInVideo, { once: true });
-            // Fallback: se canplaythrough falhar, tenta canplay
             bgVideo.addEventListener('canplay', fadeInVideo, { once: true });
         }
     }
 
-    // Configura o botão do modal genérico
     document.getElementById('msgCloseBtn').addEventListener('click', () => {
         document.getElementById('msgModal').style.display = 'none';
     });
@@ -138,11 +164,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     state.playerId = userId;
     
+    // Verifica sessão (Reload logic)
     await checkSession(); 
     
     document.getElementById('sbStartBtn').addEventListener('click', startBattle);
     document.getElementById('sbAttackBtn').addEventListener('click', playerAttack);
 });
+
+// ================= UI HELPERS DE LOADING =================
+function showLoading(text) {
+    const modal = document.getElementById('loadingModal');
+    const txt = document.getElementById('loadingText');
+    const barFill = document.getElementById('loadingBarFill');
+    const pct = document.getElementById('loadingPercent');
+    
+    txt.textContent = text || "Carregando...";
+    barFill.style.width = "0%";
+    pct.textContent = "0%";
+    modal.style.display = 'flex';
+}
+
+function updateLoadingProgress(percent) {
+    const barFill = document.getElementById('loadingBarFill');
+    const pct = document.getElementById('loadingPercent');
+    if(barFill) barFill.style.width = `${percent}%`;
+    if(pct) pct.textContent = `${percent}%`;
+}
+
+function hideLoading() {
+    document.getElementById('loadingModal').style.display = 'none';
+}
 
 // ================= HELPER DE MENSAGEM (MODAL) =================
 let currentMsgCallback = null;
@@ -165,7 +216,6 @@ function showMsg(title, message, type = 'info', callback = null, btnText = "Ente
         btn.style.borderColor = 'gold';
     }
 
-    // Configura callback
     currentMsgCallback = callback;
     btn.onclick = () => {
         modal.style.display = 'none';
@@ -178,22 +228,22 @@ function showMsg(title, message, type = 'info', callback = null, btnText = "Ente
     modal.style.display = 'flex';
 }
 
-// ================= NOVO: INTERAÇÃO FORÇADA PARA ÁUDIO =================
-// Esta função é chamada ao RECUPERAR sessão (F5). Ela obriga o clique
-// para destravar o áudio do navegador.
+// ================= INTERAÇÃO FORÇADA E CHECK SESSION =================
+
+// Chamado apenas DEPOIS que o buffer de vídeo já carregou no checkSession
 function forceUserInteraction(onResume) {
     document.getElementById('sbLobby').style.display = 'none';
-    // Mostra modal impedindo o jogo até clicar
+    
     showMsg(
         "Batalha em Andamento",
-        "Sua sessão foi recuperada. Clique abaixo para retomar o combate e ativar o áudio.",
+        "Sua sessão foi recuperada e os recursos carregados. Clique abaixo para retomar.",
         "info",
         async () => {
-            // Este clique destrava o áudio
+            // Destrava áudio
             try {
                 await AUDIO_BGM.play();
             } catch(e) {
-                console.warn("Áudio ainda bloqueado, tentará novamente no próximo clique.");
+                console.warn("Áudio bloqueado, tentará novamente.");
             }
             onResume();
         },
@@ -208,6 +258,7 @@ async function checkSession() {
         try {
             const parsed = JSON.parse(localData);
             
+            // Se expirou
             if (new Date(parsed.expiresAt) <= new Date()) {
                 console.log("Sessão local expirada detectada. Finalizando...");
                 state = parsed;
@@ -215,21 +266,36 @@ async function checkSession() {
                 return;
             }
 
+            // Sessão válida encontrada
             state = parsed;
             if (typeof state.totalHits === 'undefined') state.totalHits = 0;
+
+            // 1. Mostra Loading com Barra para o usuário que deu F5
+            showLoading("Restaurando Memória...");
             
-            // CORREÇÃO ÁUDIO: Em vez de iniciar direto, pede interação
+            // 2. Aguarda baixar todos os vídeos para evitar tela preta
+            await bufferBattleVideos((pct) => {
+                updateLoadingProgress(pct);
+            });
+
+            // 3. Esconde loading
+            hideLoading();
+
+            // 4. Pede interação (agora com vídeos prontos na memória)
             forceUserInteraction(() => {
                 setupUI();
                 startLoops();
             });
             return; 
+
         } catch(e) {
             console.warn("Erro ao ler cache local", e);
             localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
+            hideLoading();
         }
     }
 
+    // Se não tem sessão, mostra Lobby
     document.getElementById('sbLobby').style.display = 'flex';
     document.getElementById('sbContainer').style.display = 'none';
 }
@@ -237,40 +303,51 @@ async function checkSession() {
 async function startBattle() {
     const btn = document.getElementById('sbStartBtn');
     
+    // Tenta iniciar áudio imediatamente no clique
+    AUDIO_BGM.play().catch(()=>{});
+
     localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
     const bossImg = document.getElementById('bossImage');
     if(bossImg) bossImg.src = "";
 
+    // 1. Inicia UI de Loading
+    showLoading("Baixando Recursos...");
     btn.disabled = true;
-    btn.textContent = "Carregando...";
 
-    // Tenta iniciar áudio já no clique do botão "Iniciar"
-    AUDIO_BGM.play().catch(()=>{});
+    // 2. Carrega Vídeos em Buffer e atualiza Barra
+    await bufferBattleVideos((pct) => {
+        updateLoadingProgress(pct);
+    });
 
+    // 3. Só agora chama o servidor (videos já estão em 100%)
     const { data, error } = await supabase.rpc('start_solo_boss', { p_player_id: state.playerId });
 
     if (error || !data.success) {
+        hideLoading();
         showMsg(
             "Não foi possível iniciar", 
             data?.message || "Ocorreu um erro ao conectar com o servidor.", 
             "error"
         );
         btn.disabled = false;
-        btn.textContent = "Iniciar Batalha";
         return;
     }
 
     if (data.recovered) {
         state.totalHits = 0; 
         await initCombatState(data);
+        hideLoading();
         
-        // Se for recovered vindo do servidor, mas o usuario clicou em iniciar agora,
-        // o áudio já está liberado pelo clique do botão.
-        AUDIO_BGM.play().catch(()=>{});
+        // Se recuperou via servidor (raro vir aqui se nao tinha localstorage, mas possivel em outro device)
+        // Como o usuário já clicou em iniciar, o áudio tá ok.
         setupUI();
         startLoops();
     } else {
         await initCombatState(data);
+        
+        // Mantem loading escondido, mas inicia video intro
+        hideLoading();
+        
         playVideo(VIDEO_INTRO, () => {
             AUDIO_BGM.play().catch(()=>{});
             setupUI();
@@ -472,7 +549,9 @@ async function finishBattle(victory) {
     localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
 
     const processFinish = async () => {
-        document.getElementById('loadingModal').style.display = 'flex';
+        // Reutiliza loading modal, mas sem barra (ou reinicia barra)
+        showLoading("Calculando resultados...");
+        updateLoadingProgress(100);
 
         const { data, error } = await supabase.rpc('finish_solo_boss', {
             p_player_id: state.playerId,
@@ -481,7 +560,7 @@ async function finishBattle(victory) {
             p_total_hits: state.totalHits 
         });
 
-        document.getElementById('loadingModal').style.display = 'none';
+        hideLoading();
 
         if (error || !data.success) {
             showMsg(
@@ -607,41 +686,65 @@ function playVideo(src, callback) {
     const vid = document.getElementById('gameVideo');
     if (!overlay || !vid) { if (callback) callback(); return; }
 
+    // Verifica se temos a versão em memória (Blob), senão usa a URL normal
+    const videoSrc = videoBlobCache[src] || src;
+
+    // Reset visual
     overlay.style.display = 'flex';
-    vid.style.opacity = '0'; 
-    vid.style.display = 'block';
-    vid.src = src;
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1'; 
+    });
     
-    // Força áudio
+    vid.style.opacity = '0'; // Começa invisível
+    vid.src = videoSrc;
+    
     vid.muted = false;
     vid.volume = 1.0;
-
     vid.load();
 
-    const onCanPlay = () => {
-        vid.style.opacity = '1';
-        vid.play().catch(e => {
-            // Se falhar autoplay, tenta mudo (infelizmente navegador bloqueia se não houve interação recente)
-            // Mas com o forceUserInteraction no reload, isso não deve acontecer.
-            console.warn("Autoplay falhou, tentando mudo", e);
-            vid.muted = true; 
-            vid.play();
-        });
-    };
-    vid.addEventListener('canplay', onCanPlay, { once: true });
-
-    vid.onended = () => {
-        overlay.style.display = 'none';
-        vid.style.display = 'none';
-        vid.pause();
-        vid.currentTime = 0;
-
-        // Retoma BGM se estava tocando
-        if (wasBgmPlaying && state.active) {
-            AUDIO_BGM.play().catch(()=>{});
+    // Lógica de Fade Out (Ease Out) 0.6s antes do fim
+    const timeUpdateHandler = () => {
+        if (vid.duration && vid.currentTime > vid.duration - 0.6) {
+            vid.style.opacity = '0'; // Inicia Fade Out
         }
+    };
+    vid.addEventListener('timeupdate', timeUpdateHandler);
 
-        if(callback) callback();
+    // Fade In quando o vídeo realmente começar a tocar
+    const onPlaying = () => {
+        vid.style.opacity = '1'; 
+    };
+    vid.addEventListener('playing', onPlaying, { once: true });
+
+    // Tenta reproduzir
+    const tryPlay = async () => {
+        try {
+            await vid.play();
+        } catch (e) {
+            console.warn("Autoplay falhou, tentando mudo", e);
+            vid.muted = true;
+            vid.play().catch(console.error);
+        }
+    };
+    tryPlay();
+
+    // Ao finalizar
+    vid.onended = () => {
+        vid.removeEventListener('timeupdate', timeUpdateHandler);
+        
+        overlay.style.opacity = '0';
+
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            vid.pause();
+            vid.currentTime = 0;
+            
+            // Retoma BGM se estava tocando
+            if (wasBgmPlaying && state.active) {
+                AUDIO_BGM.play().catch(()=>{});
+            }
+            if(callback) callback();
+        }, 300);
     };
 }
 

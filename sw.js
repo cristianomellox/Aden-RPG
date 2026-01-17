@@ -1,5 +1,5 @@
-const CACHE_NAME = 'aden-rpg-assets-v7';
-const ASSET_HOSTNAME = 'aden-rpg.pages.dev';
+const CACHE_NAME = 'aden-rpg-assets-v8';
+const ASSET_HOSTNAME = 'https://aden-rpg.pages.dev';
 const ASSET_PREFIX = '/assets/';
 const BLOCKED_PATHS = ['/assets/itens/'];
 

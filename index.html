@@ -157,22 +157,22 @@
 </div>
 </div>
 <div id="recursosSubmenu" class="footer-submenu" style="display:none;">
-  <div onclick="window.location.href = 'afk.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/expm.webp" class="submenu-icon">Aventura AFK</div>
+  <div id="btnAfk" onclick="window.location.href = 'afk.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/expm.webp" class="submenu-icon">Aventura AFK</div>
   <div onclick="window.location.href = 'mines.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/recursos.webp" class="submenu-icon">Mineração</div>
-  <div onclick="window.location.href = 'arena.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/pvp.webp" class="submenu-icon">Arena PvP</div>
-  <div onclick="window.location.href = 'solo_boss.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/bossm.webp" class="submenu-icon">Chefe Mundial</div>
+  <div id="btnArena" onclick="window.location.href = 'arena.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/pvp.webp" class="submenu-icon">Arena PvP</div>
+  <div id="btnBoss" onclick="window.location.href = 'solo_boss.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/bossm.webp" class="submenu-icon">Chefe Mundial</div>
 </div>
 <div id="pvpSubmenu" class="footer-submenu" style="display:none;">
   <a href="arena.html" class="footer-submenu-btn">Pets</a>
 </div>
 <div id="maisSubmenu" class="footer-submenu" style="display:none;">
   
-   <div onclick="window.location.href = 'tutorial.html'" class="footer-submenu-btn">Tutorial</div>
-  <div href="javascript:void(0)" id="musicToggleBtn" class="footer-submenu-btn">
+   <div onclick="window.location.href = 'tutorial.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/tutorial.webp" class="submenu-icon">Tutorial</div>
+  <div href="javascript:void(0)" id="musicToggleBtn" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/bmg.webp" class="submenu-icon">
     <p id="musicIcon">Músicas ON/OFF</p></div>
-  <div onclick="window.location.href = 'sobre.html'" class="footer-submenu-btn">Sobre</div>
-  <div onclick="window.location.href = 'suporte.html'" class="footer-submenu-btn">Suporte</div>
-  <div href="javascript:void(0)" id="changeLanguageBtn" class="footer-submenu-btn">Idioma</div>
+  <div onclick="window.location.href = 'sobre.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="submenu-icon">Sobre</div>
+  <div onclick="window.location.href = 'suporte.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/suporte.webp" class="submenu-icon">Suporte</div>
+  <div href="javascript:void(0)" id="changeLanguageBtn" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/idiomas.webp" class="submenu-icon">Idioma</div>
 </div>
 
 <div id="footerMenu" style="display:none;">
@@ -956,6 +956,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 500); 
     });
 </script>
-
+<script src="daily_reset.js"></script>
 </body>
 </html>

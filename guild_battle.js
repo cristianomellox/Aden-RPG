@@ -398,7 +398,7 @@ function renderBattleScreen(state) {
 
     const city = CITIES.find(c => c.id === state.instance.city_id);
     if (city) {
-        battle.map.style.backgroundImage = `url(${city.map_image_url || 'https://aden-rpg.pages.dev/assets/guild_battle.webp'})`;
+        battle.map.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.1)), url(${city.map_image_url || 'https://aden-rpg.pages.dev/assets/guild_battle.webp'})`;
     }
 
     playerDamageCache.clear();

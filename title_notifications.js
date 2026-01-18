@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient.js';
 
 // --- Configuração e Estado ---
-const CHECK_INTERVAL = 30000; // Checa a cada 30 segundos
+const CHECK_INTERVAL = 300000; // Checa a cada 30 segundos
 const STORAGE_KEY = 'aden_titles_last_check';
 const OWNERS_KEY = 'aden_city_owners'; // NOVO: Para rastrear mudança de dono
 let notificationQueue = [];

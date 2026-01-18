@@ -275,6 +275,54 @@
         transition: opacity 0.3s ease-in-out
         }
         #gameVideo { width: 100%; height: 100%; object-fit: cover; background-color: black !important; opacity: 0; transition: opacity 0.5s ease-in-out; }
+        
+        /* --- BALÃO DE LEVEL UP (Replicado do AFK) --- */
+.level-up-balloon {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    color: #000;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 20px;
+    font-weight: bold;
+    width: 80%;
+    z-index: 30000; /* Z-INDEX ALTO para ficar acima do modal de vitória */
+    
+    background-image: url('https://aden-rpg.pages.dev/assets/aventura.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: contain; 
+    
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    box-sizing: border-box; 
+    margin: 0; 
+    
+    animation: fadeInOut 6s ease-in-out forwards;
+    pointer-events: none; /* Permite clicar no botão "Voltar" atrás dele se necessário */
+}
+
+.level-up-balloon h1 {
+    margin: 0;
+    font-size: 1.5em;
+    color: black; /* Ajuste conforme contraste da imagem */
+    text-shadow: none;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, -20px); }
+    10% { opacity: 1; transform: translate(-50%, 0); }
+    90% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -20px); }
+}
     </style>
 </head>
 <body>
@@ -373,7 +421,12 @@
         ">Entendido</button>
     </div>
 </div>
-
+<div id="levelUpBalloon" class="level-up-balloon" style="display:none;">
+    <br>
+    <h1>Nível</h1>
+    <h1 id="levelUpBalloonText"></h1>
+    <span style="color: white!important; font-weight: bold;"></span>
+</div>
     <script type="module" src="solo_boss.js"></script>
     
     <script>

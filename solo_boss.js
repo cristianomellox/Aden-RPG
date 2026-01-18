@@ -571,6 +571,9 @@ async function finishBattle(victory) {
             );
             return;
         }
+        if (data.leveled_up) {
+        showLevelUpBalloon(data.new_level);
+    }
 
         showVictoryModal(data, victory);
     };
@@ -643,6 +646,24 @@ function showVictoryModal(data, isVictory) {
     }
     
     document.getElementById('victoryModal').style.display = 'flex';
+}
+
+function showLevelUpBalloon(newLevel) {
+    const balloon = document.getElementById("levelUpBalloon");
+    const text = document.getElementById("levelUpBalloonText");
+    
+    if (balloon && text) {
+        text.innerText = newLevel;
+        balloon.style.display = "block"; // O CSS já tem display flex, mas o style inline controla visibilidade
+        
+        // Garante que o display seja flex para alinhar corretamente, sobrescrevendo o block se necessário
+        balloon.style.display = "flex"; 
+
+        // Oculta após a animação (6s)
+        setTimeout(() => {
+            balloon.style.display = "none";
+        }, 6000);
+    }
 }
 
 function updateBars() {

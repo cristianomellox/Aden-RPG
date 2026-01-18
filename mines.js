@@ -1,12 +1,16 @@
+
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
-// NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+// NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS + CACHE DE DONOS V3)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 2;
+const GLOBAL_DB_VERSION = 3; // Atualizado para criar a owners_store
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
+const OWNERS_STORE = 'owners_store'; // Nova Store
+
+const OWNERS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 Horas em milissegundos
 
 const GlobalDB = {
     open: function() {
@@ -14,8 +18,13 @@ const GlobalDB = {
             const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
+                // Stores originais
                 if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
                 if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                // Nova Store de Donos (Chave primária: ID do jogador)
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) {
+                    db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
+                }
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
@@ -65,11 +74,81 @@ const GlobalDB = {
                 store.put({ key: 'player_data', value: newData });
             }
         } catch(e) { console.warn("Erro update parcial", e); }
+    },
+
+    // --- MÉTODOS DE CACHE DE DONOS (V3) ---
+
+    /**
+     * Retorna um Mapa (objeto) com donos válidos que ainda não expiraram (24h).
+     */
+    getAllOwners: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(OWNERS_STORE, 'readonly');
+                const store = tx.objectStore(OWNERS_STORE);
+                const req = store.getAll();
+                
+                req.onsuccess = () => {
+                    const result = req.result || [];
+                    const validOwners = {};
+                    const now = Date.now();
+                    
+                    result.forEach(owner => {
+                        // Verifica expiração
+                        if (owner.timestamp && (now - owner.timestamp < OWNERS_CACHE_TTL)) {
+                            validOwners[owner.id] = owner;
+                        }
+                    });
+                    resolve(validOwners);
+                };
+                req.onerror = () => resolve({});
+            });
+        } catch(e) { 
+            console.warn("Erro ao ler cache de donos:", e);
+            return {}; 
+        }
+    },
+
+    /**
+     * Salva ou atualiza a lista de donos no cache com timestamp atual.
+     * Normaliza as chaves curtas (do RPC) para longas se necessário.
+     */
+    saveOwners: async function(ownersList) {
+        if (!ownersList || ownersList.length === 0) return;
+        try {
+            const db = await this.open();
+            const tx = db.transaction(OWNERS_STORE, 'readwrite');
+            const store = tx.objectStore(OWNERS_STORE);
+            const now = Date.now();
+
+            ownersList.forEach(o => {
+                // Tenta mapear chaves curtas (do RPC) ou usa as normais
+                const cacheObj = {
+                    id: o.id || o.i,
+                    name: o.name || o.n,
+                    avatar_url: o.avatar_url || o.a,
+                    guild_id: o.guild_id || o.g,
+                    timestamp: now // Reinicia a contagem de 24h
+                };
+
+                if (cacheObj.id) {
+                    store.put(cacheObj);
+                }
+            });
+
+            return new Promise(resolve => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+            });
+        } catch(e) {
+            console.warn("Erro ao salvar donos no cache:", e);
+        }
     }
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Funcionalidades Completas");
+  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Cache de Donos (v3)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -166,6 +245,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let hasAttackedOnce = false;
 
   // --- NOVO: CACHE GLOBAL DE DONOS ---
+  // Inicia vazio, será preenchido do IndexedDB no boot()
   let globalOwnersMap = {}; 
 
   // Estado Local de Ataques (Optimistic UI)
@@ -192,7 +272,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const DEBOUNCE_TIME_MULTI = 10000;  // 4s Multi
   const DEBOUNCE_TIME_SOLO = 40000;  // 10s Solo
   
-  const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; // 24 Horas
+  const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; // 72 Horas
   
   // Controle do primeiro ataque
   let isFirstAttackSequence = true; 
@@ -978,8 +1058,13 @@ function formatTimeCombat(totalSeconds) {
             .from("players")
             .select("id, name, avatar_url, guild_id")
             .in("id", idsToFetch);
-            
-        (ownersData || []).forEach(p => globalOwnersMap[p.id] = p);
+        
+        if (ownersData && ownersData.length > 0) {
+            // Atualiza memória
+            ownersData.forEach(p => globalOwnersMap[p.id] = p);
+            // Salva no DB Global para a próxima vez (persistência 24h)
+            await GlobalDB.saveOwners(ownersData);
+        }
       }
 
       const ownersMap = globalOwnersMap;
@@ -1077,6 +1162,7 @@ function formatTimeCombat(totalSeconds) {
                   const { data: p } = await supabase.from("players").select("id, name, avatar_url, guild_id").eq("id", mine.owner_player_id).single();
                   if (p) {
                       globalOwnersMap[p.id] = p;
+                      await GlobalDB.saveOwners([p]); // Salva no cache também
                       owner = p;
                   }
               }
@@ -1605,8 +1691,14 @@ function formatTimeCombat(totalSeconds) {
       }
 
       showLoading();
+      
+      // === 2. Carrega donos válidos do Cache (24h) ===
+      const cachedOwners = await GlobalDB.getAllOwners();
+      // Preenche o mapa de memória
+      globalOwnersMap = { ...cachedOwners };
+      // ==============================================
 
-      // 2. MONOLITH FETCH (1 única requisição RPC)
+      // 3. MONOLITH FETCH (1 única requisição RPC)
       // Substitui 7 calls anteriores
       const lastSync = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || '1970-01-01T00:00:00Z';
       
@@ -1617,7 +1709,7 @@ function formatTimeCombat(totalSeconds) {
 
       if (error) throw error;
 
-      // 3. PROCESSA DADOS DO MONOLITH
+      // 4. PROCESSA DADOS DO MONOLITH
       
       // A) Stats (Cache) - key: 's'
       if (data.s && data.s.success) {
@@ -1655,8 +1747,12 @@ function formatTimeCombat(totalSeconds) {
           }
       }
 
-      // D) Owners (Cache Global) - key: 'o'
+      // D) Owners (Cache Global com Timestamp Atualizado) - key: 'o'
       if (data.o && data.o.length > 0) {
+          // Atualiza o GlobalDB e o Map de memória com os donos novos ou atualizados vindos do servidor
+          // data.o contém os donos atuais, portanto renovamos o "cache time" deles
+          await GlobalDB.saveOwners(data.o); 
+          
           data.o.forEach(o => {
               // Mapeia chaves curtas para o formato UI: i->id, n->name, a->avatar_url, g->guild_id
               globalOwnersMap[o.i] = { id: o.i, name: o.n, avatar_url: o.a, guild_id: o.g };

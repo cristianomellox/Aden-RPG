@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient.js'
 // Copiado de script.js / afk_page.js para manter consistência
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 2;
+const GLOBAL_DB_VERSION = 3;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 

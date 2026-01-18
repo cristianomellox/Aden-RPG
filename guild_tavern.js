@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (lastPolledMessageId > 0 && !forceReload) {
                 query = query.gt('id', lastPolledMessageId);
             } else if (lastPolledMessageId === 0 && !forceReload) {
-                query = query.limit(20);
+                query = query.limit(10);
             }
 
             const { data: newMessages, error } = await query;

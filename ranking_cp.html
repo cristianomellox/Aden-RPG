@@ -140,7 +140,7 @@
 
   <div id="rankingContent">
     <h2>Top 10</h2>
-   <center> <div id="atualiza">(Atualiza Diariamente às 21h00)</div></center>
+   <center> <div id="atualiza">(Atualiza Segunda, Quarta e Sexta-feira às 21h00)</div></center>
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
 
@@ -259,18 +259,28 @@
     }
 
     // ====================================================================================
-    // CACHE #1: RANKING DIÁRIO (MEIA-NOITE UTC)
+    // CACHE #1: RANKING DIÁRIO (AGORA: SEG, QUA, SEX)
     // ====================================================================================
-    function calculateNextMidnightUTC(){
+    function calculateNextUpdateDate(){
         const now = new Date();
-        const nextMidnight = new Date(now);
-        nextMidnight.setUTCDate(now.getUTCDate() + 1);
-        nextMidnight.setUTCHours(0,0,0,0);
-        return nextMidnight.getTime();
+        
+        // Loop a partir de amanhã para encontrar a próxima Seg(1), Qua(3) ou Sex(5)
+        for(let i = 1; i <= 7; i++){
+            const nextDate = new Date(now);
+            nextDate.setUTCDate(now.getUTCDate() + i);
+            nextDate.setUTCHours(0,0,0,0);
+            
+            const day = nextDate.getUTCDay(); // 0=Dom, 1=Seg ...
+            if (day === 1 || day === 3 || day === 5) {
+                return nextDate.getTime();
+            }
+        }
+        // Fallback seguro (+1 dia) caso o loop falhe
+        return now.getTime() + 86400000;
     }
 
     function setRankingCache(key, value){
-        const expirationTime = calculateNextMidnightUTC();
+        const expirationTime = calculateNextUpdateDate();
         try { localStorage.setItem(key, JSON.stringify({ v:value, e: expirationTime })); } catch(e){}
     }
 
@@ -350,12 +360,13 @@
     // ====================================================================================
     // RENDERIZAÇÃO
     // ====================================================================================
-    function renderRanking(list){
+    function renderRanking(list, myRankObj){
       const w = document.getElementById('rankingWrapper');
-      if(!list || list.length === 0){ w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>'; return; }
+      if((!list || list.length === 0) && !myRankObj){ w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>'; return; }
       
       let html = '<div id="rankingListContainerCP"><ol id="rankingListCP">';
       
+      // Renderiza Top 10
       for(let i=0;i<list.length && i<100;i++){
         const p = list[i]; 
         const pos = i+1;
@@ -377,6 +388,31 @@
           <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
         </li>`;
       }
+
+      // Renderiza Linha do Jogador (se ele não estiver no top 10 e estiver logado)
+      if (myRankObj) {
+          const p = myRankObj;
+          const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
+          const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
+          
+          // Espaçamento visual
+          html += `<div style="height:15px;"></div>`;
+          
+          // LI com estilo específico (#777)
+          html += `<li data-player-id="${esc(p.id)}" style="background: #777; border-top: 3px solid #c9a94a; border-bottom: none;">
+            <span class="rank-position-cp" style="color: #fff;">${p.rank}</span>
+            <img class="rank-avatar-cp" src="${avatar}" style="border-color: #fff;" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
+            <div class="rank-player-info-cp">
+                <div class="rank-player-name-wrapper">
+                    <span class="rank-player-name-cp" data-player-id="${esc(p.id)}" style="color: #fff;">${esc(p.name)}</span>
+                    ${eyeIcon}
+                </div>
+                <span class="rank-guild-name-cp" style="color: #ccc;">${esc(p.guild_name||'Sem Guilda')}</span>
+            </div>
+            <span class="rank-power-cp" style="color: #fff;">${formatNumberCompact(Number(p.cp||0))}</span>
+          </li>`;
+      }
+
       html += '</ol></div>';
       w.innerHTML = html;
       
@@ -552,56 +588,101 @@
     // FETCH RANKING PRINCIPAL (OTIMIZADO - DB SIDE)
     // ====================================================================================
     async function fetchTop100ByCombatPower(){
-      // 0. (Opcional) Inicializa Auth Local
-      await getLocalUserId();
+      // 0. Inicializa Auth Local
+      const myId = await getLocalUserId();
 
-      const cacheKey = 'ranking_cp_daily_v3'; // Chave atualizada
+      const cacheKey = 'ranking_cp_MWF_v4'; // Chave atualizada para nova lógica
       const cached = getRankingCache(cacheKey);
       
-      if(cached){ 
-          renderRanking(cached); 
-          return; 
-      }
+      // Se tiver cache do top 10, usamos ele, mas ainda precisamos checar o rank do usuário
+      // Para simplificar, vamos assumir que o "Cached" é apenas a lista do TOP 10.
       
       if(!supabase){ document.getElementById('loading').textContent = 'Supabase erro.'; return; }
+      
+      let rankingList = [];
 
       try {
-        document.getElementById('loading').textContent = 'Buscando ranking...';
-        
-        // 1. Players - Busca simplificada já ordenada pelo Banco de Dados
-        // Selecionamos APENAS o necessário e usamos a coluna combat_power já calculada
-        const { data: players, error: pErr } = await supabase
-          .from('players')
-          .select('id,name,avatar_url,guild_id,combat_power')
-          .neq('is_banned', true)
-          .order('combat_power', { ascending: false })
-          .limit(10); 
+        if(cached) {
+             rankingList = cached;
+        } else {
+            document.getElementById('loading').textContent = 'Buscando ranking...';
+            
+            // 1. Players - Busca top 10
+            const { data: players, error: pErr } = await supabase
+              .from('players')
+              .select('id,name,avatar_url,guild_id,combat_power')
+              .neq('is_banned', true)
+              .order('combat_power', { ascending: false })
+              .limit(10); 
 
-        if(pErr) throw pErr;
-        if(!players || players.length===0){ renderRanking([]); return; }
+            if(pErr) throw pErr;
+            if(!players) players = [];
 
-        // 2. Guilds - Apenas resolver nomes
-        const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
-        const guildsById = {};
-        if(uniqueGuilds.length){
-          const { data: guilds } = await supabase.from('guilds').select('id,name').in('id', uniqueGuilds);
-          (guilds||[]).forEach(g => guildsById[g.id] = g.name);
+            // 2. Guilds - Apenas resolver nomes
+            const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
+            const guildsById = {};
+            if(uniqueGuilds.length){
+              const { data: guilds } = await supabase.from('guilds').select('id,name').in('id', uniqueGuilds);
+              (guilds||[]).forEach(g => guildsById[g.id] = g.name);
+            }
+
+            // 3. Montar Objeto Final
+            rankingList = players.map(p => {
+              return {
+                id: p.id,
+                name: p.name,
+                avatar_url: p.avatar_url,
+                guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
+                cp: p.combat_power // Usa diretamente do DB
+              };
+            });
+            
+            // Salva apenas o Top 10 no cache
+            setRankingCache(cacheKey, rankingList);
         }
 
-        // 3. Montar Objeto Final
-        const rankingList = players.map(p => {
-          return {
-            id: p.id,
-            name: p.name,
-            avatar_url: p.avatar_url,
-            guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
-            cp: p.combat_power // Usa diretamente do DB
-          };
-        });
-        
-        // Cache configurado para expirar na próxima Meia-Noite UTC (Daily)
-        setRankingCache(cacheKey, rankingList);
-        renderRanking(rankingList);
+        // === LÓGICA DO JOGADOR ATUAL ===
+        let myRankObj = null;
+
+        if (myId) {
+            // Verifica se o usuário JÁ está no Top 10
+            const userInTop10 = rankingList.find(p => p.id === myId);
+            
+            if (!userInTop10) {
+                // Se não estiver, busca os dados dele para criar a linha extra
+                const { data: me } = await supabase
+                    .from('players')
+                    .select('id, name, avatar_url, guild_id, combat_power')
+                    .eq('id', myId)
+                    .single();
+                
+                if (me) {
+                     // Calcula o Rank: Quantos jogadores têm CP MAIOR que o meu?
+                     const { count, error: cErr } = await supabase
+                        .from('players')
+                        .select('*', { count: 'exact', head: true })
+                        .gt('combat_power', me.combat_power);
+                    
+                     let myGuildName = 'Sem Guilda';
+                     if (me.guild_id) {
+                         const { data: g } = await supabase.from('guilds').select('name').eq('id', me.guild_id).single();
+                         if (g) myGuildName = g.name;
+                     }
+
+                     myRankObj = {
+                        id: me.id,
+                        name: me.name,
+                        avatar_url: me.avatar_url,
+                        guild_name: myGuildName,
+                        cp: me.combat_power,
+                        rank: (count || 0) + 1 // Rank é a quantidade acima + 1
+                     };
+                }
+            }
+        }
+
+        // Renderiza lista + linha do jogador (se existir e não estiver no top 10)
+        renderRanking(rankingList, myRankObj);
 
       } catch(err){
         document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;

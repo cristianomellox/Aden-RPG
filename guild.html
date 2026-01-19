@@ -790,6 +790,33 @@ document.addEventListener("DOMContentLoaded", () => {
     <script src="guild.js"></script>
     <script type="module" src="playerModal.js"></script>
 <script src="guild_pv.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // 1. Verifica se hoje é Sábado (6 em UTC)
+    const today = new Date();
+    const isSaturday = today.getUTCDay() === 6;
+
+    if (isSaturday) {
+        // Seleciona a aba de Batalhas pelo atributo data-tab
+        const batalhasTab = document.querySelector('.tab-btn[data-tab="batalhas"]');
+        
+        if (batalhasTab) {
+            // Verifica se já não tem uma bolinha (para evitar duplicatas)
+            if (!batalhasTab.querySelector('.tab-notification-dot')) {
+                // Cria o elemento da bolinha
+                const dot = document.createElement('div');
+                dot.className = 'tab-notification-dot';
+                batalhasTab.appendChild(dot);
+
+                // Adiciona evento para remover a bolinha ao clicar na aba
+                batalhasTab.addEventListener('click', function() {
+                    dot.remove();
+                }, { once: true }); // Executa apenas uma vez
+            }
+        }
+    }
+});
+</script>
 </body>
 <script defer type="module" src="guild_tavern.js"></script>
 

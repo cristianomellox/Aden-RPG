@@ -1527,3 +1527,26 @@ font-size: 0.9em;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent; 
 }
+
+/* Adicione isso ao final do arquivo guild.css */
+
+.tab-notification-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    z-index: 10;
+    pointer-events: none; /* O clique passa através da bolinha */
+    box-shadow: 0 0 4px rgba(255, 0, 0, 0.8);
+    animation: pulseTabDot 2s infinite;
+}
+
+@keyframes pulseTabDot {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+    70% { transform: scale(1.2); box-shadow: 0 0 0 3px rgba(255, 0, 0, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}

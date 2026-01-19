@@ -14,13 +14,24 @@
     <link rel="stylesheet" href="mines.css" />
     <link rel="stylesheet" href="guild.css" />
 <script>
-    if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+   // Registro do Service Worker Otimizado
+if ('serviceWorker' in navigator) {
+    const registerSW = () => {
         navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW ativo em:', reg.scope))
-            .catch(err => console.error('Erro ao registrar SW:', err));
-    });
-}
+            .then(reg => {
+                // Verifica se há atualizações a cada 1 hora se o app ficar aberto
+                setInterval(() => reg.update(), 60 * 60 * 1000); 
+                
+                if (reg.installing) {
+                    console.log('⚙️ SW: Instalando...');
+                } else if (reg.waiting) {
+                    console.log('⚙️ SW: Aguardando ativação...');
+                } else if (reg.active) {
+                    console.log('✅ SW: Ativo e servindo cache!');
+                }
+            })
+            .catch(err => console.error('❌ Erro ao registrar SW:', err));
+    };
   </script>
 </head>
 <body>

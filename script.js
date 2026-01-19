@@ -243,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
         { code: 'hi', label: 'Indian (Hindi)', flag: '🇮🇳' },
         { code: 'ms', label: 'Melayu', flag: '🇲🇾' },
         { code: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
-        { code: 'ar', name: 'العربية', flag: '🇸🇦' }
+        { code: 'ar', name: 'Arabic', flag: '🇸🇦' }
     ];
 
     // Injeta o CSS do modal apenas uma vez

@@ -1,13 +1,17 @@
 document.addEventListener("DOMContentLoaded", () => {
-    // Configurações
+    // Configurações e Chaves de Armazenamento
     const STORAGE_KEY_DATE = 'aden_last_daily_reset_utc';
     const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
     
-    // Mapeamento dos botões que terão notificações
+    // Mapeamento dos botões
+    // type: 'daily' = reseta todo dia
+    // type: 'weekly' = reseta em dia específico (day: 6 = Sábado)
+    // isSubmenu: true = usa a bolinha pequena e ativa o botão pai "Iniciar"
     const targets = [
-        { id: 'btnAfk', key: 'afk' },
-        { id: 'btnArena', key: 'arena' },
-        { id: 'btnBoss', key: 'boss' }
+        { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true },
+        { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true },
+        { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true },
+        { id: 'guildBtn', key: 'guild', type: 'weekly', day: 6, isSubmenu: false } // 6 = Sábado (UTC)
     ];
 
     // Obtém a data UTC atual no formato YYYY-MM-DD
@@ -16,57 +20,76 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // Inicializa ou Reseta o estado
-    const checkDailyReset = () => {
-        const today = getTodayUTC();
+    const checkReset = () => {
+        const todayStr = getTodayUTC();
         const lastReset = localStorage.getItem(STORAGE_KEY_DATE);
         
         // Se a data mudou (virou o dia UTC) ou nunca foi definida
-        if (today !== lastReset) {
-            console.log("🔄 [Daily Reset] Novo dia detectado (UTC). Resetando notificações.");
+        if (todayStr !== lastReset) {
+            console.log("🔄 [Reset System] Novo dia detectado (UTC). Verificando regras.");
             
-            // Define todas as ações como "pendentes" (true)
-            const initialStatus = {};
-            targets.forEach(t => initialStatus[t.key] = true);
+            const currentStatus = {};
+            const todayDate = new Date();
+            const currentDayOfWeek = todayDate.getUTCDay(); // 0 (Dom) a 6 (Sab)
+
+            targets.forEach(t => {
+                if (t.type === 'daily') {
+                    // Diários sempre resetam para true na virada do dia
+                    currentStatus[t.key] = true;
+                } else if (t.type === 'weekly') {
+                    // Semanais só ficam true se for o dia correto (Ex: Sábado)
+                    // Caso contrário, ficam false (para limpar notificações antigas)
+                    currentStatus[t.key] = (currentDayOfWeek === t.day);
+                }
+            });
             
-            // Salva
-            localStorage.setItem(STORAGE_KEY_DATE, today);
-            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(initialStatus));
+            // Salva novo estado e nova data
+            localStorage.setItem(STORAGE_KEY_DATE, todayStr);
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(currentStatus));
             
-            return initialStatus;
+            return currentStatus;
         } 
         
-        // Se ainda é o mesmo dia, carrega o estado atual
+        // Se ainda é o mesmo dia, carrega o estado atual do storage
         return JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
     };
 
     // Renderiza as bolinhas na tela
     const renderDots = (status) => {
-        let hasAnyPending = false;
+        let hasPendingSubmenu = false;
 
-        // 1. Renderiza bolinhas nos submenus
         targets.forEach(t => {
             const btn = document.getElementById(t.id);
             if (!btn) return;
 
+            // Define qual classe CSS usar baseada se é submenu ou botão principal
+            const dotClass = t.isSubmenu ? 'submenu-notification-dot' : 'footer-notification-dot';
+
             // Remove bolinha existente para evitar duplicatas
-            const existingDot = btn.querySelector('.submenu-notification-dot');
+            const existingDot = btn.querySelector(`.${dotClass}`);
             if (existingDot) existingDot.remove();
 
+            // Verifica se deve mostrar a bolinha
             if (status[t.key] === true) {
-                hasAnyPending = true;
                 const dot = document.createElement('div');
-                dot.className = 'submenu-notification-dot';
+                dot.className = dotClass;
                 btn.appendChild(dot);
+
+                // Se for um item de submenu, marca que o pai precisa de notificação
+                if (t.isSubmenu) {
+                    hasPendingSubmenu = true;
+                }
             }
         });
 
-        // 2. Renderiza bolinha no botão principal (Iniciar)
+        // Lógica Específica para o botão PAI "Recursos/Iniciar" (#recursosBtn)
+        // Ele acende se qualquer filho (AFK, Arena, Boss) estiver pendente
         const mainBtn = document.getElementById('recursosBtn');
         if (mainBtn) {
             const existingMainDot = mainBtn.querySelector('.footer-notification-dot');
             if (existingMainDot) existingMainDot.remove();
 
-            if (hasAnyPending) {
+            if (hasPendingSubmenu) {
                 const dot = document.createElement('div');
                 dot.className = 'footer-notification-dot';
                 mainBtn.appendChild(dot);
@@ -88,24 +111,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- Inicialização ---
 
     // 1. Checa reset e desenha bolinhas iniciais
-    let currentStatus = checkDailyReset();
+    let currentStatus = checkReset();
     renderDots(currentStatus);
 
-    // 2. Adiciona Listeners de clique aos botões do submenu
+    // 2. Adiciona Listeners de clique
     targets.forEach(t => {
         const btn = document.getElementById(t.id);
         if (btn) {
-            // Usa 'mousedown' ou 'click' para garantir captura rápida
             btn.addEventListener('click', () => handleActionClick(t.key));
         }
     });
 
     // 3. Verificação periódica (caso o jogador esteja com o jogo aberto na virada do dia)
     setInterval(() => {
-        const today = getTodayUTC();
+        const todayStr = getTodayUTC();
         const lastReset = localStorage.getItem(STORAGE_KEY_DATE);
-        if (today !== lastReset) {
-            currentStatus = checkDailyReset();
+        if (todayStr !== lastReset) {
+            currentStatus = checkReset();
             renderDots(currentStatus);
         }
     }, 60000); // Checa a cada 1 minuto

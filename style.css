@@ -2083,7 +2083,8 @@ button, .btn {
 #recursosBtn, 
 #btnAfk, 
 #btnArena, 
-#btnBoss {
+#btnBoss,
+#guildBtn {
     position: relative !important; 
 }
 

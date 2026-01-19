@@ -1689,6 +1689,11 @@ function formatTimeCombat(totalSeconds) {
         window.location.href = "index.html"; 
         return; 
       }
+      try {
+          await supabase.rpc('resolve_all_expired_mines');
+      } catch (err) {
+          console.warn("Erro ao tentar resolver minas expiradas no boot:", err);
+      }
 
       showLoading();
       

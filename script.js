@@ -1,10 +1,28 @@
-// Registro do Service Worker focado em Assets
+// Registro do Service Worker Otimizado
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    const registerSW = () => {
         navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW de Assets ativo em:', reg.scope))
-            .catch(err => console.error('Erro ao registrar SW:', err));
-    });
+            .then(reg => {
+                // Verifica se há atualizações a cada 1 hora se o app ficar aberto
+                setInterval(() => reg.update(), 60 * 60 * 1000); 
+                
+                if (reg.installing) {
+                    console.log('⚙️ SW: Instalando...');
+                } else if (reg.waiting) {
+                    console.log('⚙️ SW: Aguardando ativação...');
+                } else if (reg.active) {
+                    console.log('✅ SW: Ativo e servindo cache!');
+                }
+            })
+            .catch(err => console.error('❌ Erro ao registrar SW:', err));
+    };
+
+    // Se a página já carregou, registra agora. Se não, espera o load.
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        registerSW();
+    } else {
+        window.addEventListener('load', registerSW);
+    }
 }
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;

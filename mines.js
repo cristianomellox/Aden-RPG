@@ -1691,7 +1691,7 @@ function formatTimeCombat(totalSeconds) {
       }
       const BOT_IDS = [
           "bc6b795d-da47-4f14-9f57-3781bfb21e53",
-          "31dfad6d-3d1a-493f-ae72-423c65156e01",
+          "856545ef-e33e-4b86-b2af-71957a9772f9",
           "9d0af1a4-7f36-4f19-9ce6-5e507b17e912",
           "37baa684-f4dc-4d80-93cb-9004a3cbe2b9"
       ];

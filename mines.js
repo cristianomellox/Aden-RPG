@@ -1689,6 +1689,21 @@ function formatTimeCombat(totalSeconds) {
         window.location.href = "index.html"; 
         return; 
       }
+      const BOT_IDS = [
+          "bc6b795d-da47-4f14-9f57-3781bfb21e53",
+          "31dfad6d-3d1a-493f-ae72-423c65156e01",
+          "9d0af1a4-7f36-4f19-9ce6-5e507b17e912",
+          "37baa684-f4dc-4d80-93cb-9004a3cbe2b9"
+      ];
+
+      // [NOVO] Popula os bots antes de carregar o jogo
+      // Usamos Promise.all ou await direto, mas sem bloquear se der erro
+      try {
+          await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS });
+      } catch (botErr) {
+          console.warn("Erro ao popular bots (ignorado):", botErr);
+      }
+      
       try {
           await supabase.rpc('resolve_all_expired_mines');
       } catch (err) {

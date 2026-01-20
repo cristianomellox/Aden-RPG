@@ -1,89 +1,107 @@
-// auto_translate.js — Versão Multi-Language + Fix TopBar + Spinner Fix
+// auto_translate.js — Versão Final: Nuclear Style Injection
 
 const DEFAULT_LANG = "pt"; 
 
 // ======================================================================
-// 1. Inicialização do Google Translate
+// 1. INJEÇÃO DE CSS "NUCLEAR" (A Solução Definitiva)
+// ======================================================================
+// Criamos os estilos via JS para garantir que eles sejam aplicados
+// independentemente de carregamento de arquivos CSS externos.
+function injectNuclearStyles() {
+    const style = document.createElement('style');
+    style.id = 'google-translate-overrides';
+    style.innerHTML = `
+        /* Oculta o container do Spinner de carregamento */
+        .goog-te-spinner-pos {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        
+        /* Oculta a imagem do spinner especificamente */
+        .goog-te-spinner-pos img, 
+        .goog-te-spinner-animation,
+        img[src*="loading.gif"] { 
+            display: none !important; 
+        }
+
+        /* Oculta a barra superior (Banner Frame) */
+        .goog-te-banner-frame {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+
+        /* Oculta tooltips/balões do Google */
+        .goog-te-balloon-frame,
+        #goog-gt-tt,
+        .goog-tooltip {
+            display: none !important;
+            visibility: hidden !important;
+            box-shadow: none !important;
+        }
+
+        /* Força o corpo da página a ficar no topo */
+        body {
+            top: 0 !important;
+            margin-top: 0 !important;
+            position: static !important;
+        }
+        
+        /* Oculta o link "Sugerir uma tradução melhor" */
+        .goog-text-highlight {
+            background-color: transparent !important;
+            box-shadow: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ======================================================================
+// 2. Inicialização do Google Translate
 // ======================================================================
 function googleTranslateElementInit() {
+    // 1. Injeta os estilos antes de tudo
+    injectNuclearStyles();
+
+    // 2. Inicia o Widget
     new google.translate.TranslateElement({
         pageLanguage: DEFAULT_LANG,
-        // LISTA ATUALIZADA DE IDIOMAS SOLICITADOS
         includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr,hi,ms,vi,ar",
         layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
         autoDisplay: false
     }, "google_translate_element");
 
     syncSelectorWithCookie();
+    
+    // 3. Ativa o vigilante para casos extremos
     fixGoogleLayout(); 
 }
 
 // ======================================================================
-// 2. Vigilância Ativa (MutationObserver)
+// 3. Vigilância Ativa (MutationObserver)
 // ======================================================================
 function fixGoogleLayout() {
-    
-    // Função para remover a barra superior e corrigir margens
-    const removeBar = () => {
-        const frames = document.querySelectorAll('.goog-te-banner-frame');
-        frames.forEach(frame => {
-            frame.style.display = 'none';
-            frame.style.visibility = 'hidden';
-            frame.style.height = '0';
-        });
-        
-        // Garante que o body não desça
+    const observer = new MutationObserver(() => {
+        // Mesmo com o CSS, o Google tenta mudar o style inline do body.
+        // O Observer garante que o margin-top volte a zero.
         if (document.body.style.marginTop !== '0px') {
             document.body.style.marginTop = '0px';
             document.body.style.top = '0px';
-            document.body.style.position = 'static';
         }
-    };
-
-    // Função específica para esconder o Loader/Spinner e Tooltips
-    const hideSpinner = () => {
-        // Seleciona o container do loader redondo
-        const spinner = document.querySelector('.goog-te-spinner-pos');
-        if (spinner) {
-            spinner.style.display = 'none';
-            spinner.style.visibility = 'hidden';
-            spinner.style.width = '0';
-            spinner.style.height = '0';
-            spinner.style.zIndex = '-1000'; // Garante que não bloqueie cliques
-        }
-
-        // Opcional: Remove também o balão de tooltip se ele aparecer
-        const balloon = document.querySelector('.goog-te-balloon-frame');
-        if (balloon) {
-            balloon.style.display = 'none';
-        }
-    };
-
-    // Executa imediatamente na carga
-    removeBar();
-    hideSpinner();
-
-    // Cria o vigilante
-    const observer = new MutationObserver(() => {
-        // Se algo mudar, forçamos a remoção novamente
-        removeBar();
-        hideSpinner();
     });
 
-    // CONFIGURAÇÃO CRUCIAL:
-    // 'attributes': detecta mudança no style (margin-top do body)
-    // 'childList': detecta quando o Google INJETA o loader no HTML
-    // 'subtree': garante que verifique elementos aninhados
     observer.observe(document.body, { 
         attributes: true, 
-        attributeFilter: ['style'], 
-        childList: true, 
-        subtree: true 
+        attributeFilter: ['style']
     });
 }
 
 // ======================================================================
-// 3. Lê o cookie "googtrans"
+// 4. Utilitários de Cookie e Idioma
 // ======================================================================
 function getCurrentLangFromCookie() {
     const cookies = document.cookie.split(";").map(c => c.trim());
@@ -94,9 +112,6 @@ function getCurrentLangFromCookie() {
     return parts[parts.length - 1] || DEFAULT_LANG;
 }
 
-// ======================================================================
-// 4. Sincroniza o seletor (se existir na página)
-// ======================================================================
 function syncSelectorWithCookie() {
     const selector = document.getElementById("languageSelector");
     if (!selector) return;
@@ -105,9 +120,6 @@ function syncSelectorWithCookie() {
     else selector.value = DEFAULT_LANG;
 }
 
-// ======================================================================
-// 5. Trocar idioma via cookies
-// ======================================================================
 window.changeLanguage = function(lang) {
     if (lang === DEFAULT_LANG) {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -121,15 +133,15 @@ window.changeLanguage = function(lang) {
 }
 
 // ======================================================================
-// 6. Eventos
+// 5. Eventos de Inicialização
 // ======================================================================
 document.addEventListener("DOMContentLoaded", () => {
+    // Injeta estilos imediatamente ao carregar o DOM (segurança dupla)
+    injectNuclearStyles();
+
     const selector = document.getElementById("languageSelector");
     if (selector) {
         selector.addEventListener("change", e => window.changeLanguage(e.target.value));
     }
     syncSelectorWithCookie();
-    
-    // Garante que rode no load
-    window.onload = fixGoogleLayout;
 });

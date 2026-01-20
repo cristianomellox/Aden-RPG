@@ -1,4 +1,4 @@
-// auto_translate.js — Versão Multi-Language + Fix TopBar
+// auto_translate.js — Versão Multi-Language + Fix TopBar + Fix Spinner
 
 const DEFAULT_LANG = "pt"; 
 
@@ -8,7 +8,7 @@ const DEFAULT_LANG = "pt";
 function googleTranslateElementInit() {
     new google.translate.TranslateElement({
         pageLanguage: DEFAULT_LANG,
-        // LISTA ATUALIZADA DE IDIOMAS SOLICITADOS
+        // LISTA DE IDIOMAS
         includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr,hi,ms,vi,ar",
         layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
         autoDisplay: false
@@ -19,28 +19,70 @@ function googleTranslateElementInit() {
 }
 
 // ======================================================================
-// 2. Vigilância Ativa (MutationObserver)
+// 2. Vigilância Ativa (MutationObserver) - ATUALIZADO
 // ======================================================================
 function fixGoogleLayout() {
-    const removeBar = () => {
+    // Função para limpar elementos indesejados
+    const cleanGoogleElements = () => {
+        // Remove a barra do topo
         const frames = document.querySelectorAll('.goog-te-banner-frame');
         frames.forEach(frame => {
             frame.style.display = 'none';
             frame.style.visibility = 'hidden';
             frame.style.height = '0';
         });
+
+        // Remove o Spinner/Loader redondo
+        const spinners = document.querySelectorAll('.goog-te-spinner-pos');
+        spinners.forEach(spinner => {
+            spinner.style.display = 'none'; // Garante display none
+            spinner.remove(); // Remove do DOM fisicamente
+        });
+
+        // Corrige margem do body
         if (document.body.style.marginTop !== '0px') {
             document.body.style.marginTop = '0px';
             document.body.style.top = '0px';
         }
     };
-    removeBar();
-    const observer = new MutationObserver(() => {
-        if (document.body.style.marginTop && document.body.style.marginTop !== '0px') {
-            removeBar();
+
+    // Executa imediatamente
+    cleanGoogleElements();
+
+    // Cria o observador
+    const observer = new MutationObserver((mutations) => {
+        let shouldClean = false;
+        
+        mutations.forEach((mutation) => {
+            // Se mudou estilo do body (margem)
+            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                shouldClean = true;
+            }
+            // Se adicionou novos nós (como o spinner injetado)
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) { // É um elemento HTML
+                        // Verifica se é o frame ou o spinner
+                        if (node.classList && (node.classList.contains('goog-te-banner-frame') || node.classList.contains('goog-te-spinner-pos'))) {
+                            shouldClean = true;
+                        }
+                    }
+                });
+            }
+        });
+
+        if (shouldClean) {
+            cleanGoogleElements();
         }
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+
+    // Configuração do observador: vigia atributos E novos elementos filhos
+    observer.observe(document.body, { 
+        attributes: true, 
+        attributeFilter: ['style'], 
+        childList: true, 
+        subtree: false 
+    });
 }
 
 // ======================================================================
@@ -69,7 +111,6 @@ function syncSelectorWithCookie() {
 // ======================================================================
 // 5. Trocar idioma via cookies
 // ======================================================================
-// Exposta globalmente para ser usada pelo Modal de Intro
 window.changeLanguage = function(lang) {
     if (lang === DEFAULT_LANG) {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -91,5 +132,14 @@ document.addEventListener("DOMContentLoaded", () => {
         selector.addEventListener("change", e => window.changeLanguage(e.target.value));
     }
     syncSelectorWithCookie();
+    
+    // Fallback: Tenta limpar periodicamente nos primeiros segundos caso o Observer falhe
+    let checkCount = 0;
+    const interval = setInterval(() => {
+        fixGoogleLayout();
+        checkCount++;
+        if (checkCount > 20) clearInterval(interval); // Para após 10 segundos (20 * 500ms)
+    }, 500);
+
     window.onload = fixGoogleLayout;
 });

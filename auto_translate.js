@@ -1,5 +1,4 @@
-// auto_translate.js — Versão Force Delete
-
+// auto_translate.js — Versão "Hard Delete"
 const DEFAULT_LANG = "pt"; 
 
 function googleTranslateElementInit() {
@@ -10,43 +9,49 @@ function googleTranslateElementInit() {
         autoDisplay: false
     }, "google_translate_element");
 
-    // Inicia a limpeza agressiva
-    startAggressiveCleaner();
+    // Inicia a limpeza imediata e contínua
+    startGlobalCleaner();
 }
 
-function startAggressiveCleaner() {
+function startGlobalCleaner() {
+    const selectorToKill = [
+        '.goog-te-spinner-pos',
+        '.goog-te-spinner',
+        '.goog-te-loader',
+        '#goog-gt-tt',
+        '.goog-te-banner-frame',
+        '.goog-te-banner'
+    ].join(',');
+
     const clean = () => {
-        // 1. Remove a barra de topo e margem do body
-        const frames = document.querySelectorAll('.goog-te-banner-frame, .goog-te-banner');
-        frames.forEach(f => f.remove()); // .remove() é mais eficaz que display:none
-
-        if (document.body.style.top !== '0px' || document.body.style.marginTop !== '0px') {
-            document.body.style.top = '0px';
-            document.body.style.marginTop = '0px';
-        }
-
-        // 2. Localiza o SPINNER (Loader redondo)
-        // Tentamos por classe, por atributo e por tags de imagem comuns do Google
-        const spinners = document.querySelectorAll([
-            '.goog-te-spinner-pos',
-            '.goog-te-spinner',
-            '[id*="goog-te-spinner"]',
-            '.sk-circle', // Algumas versões usam classes de animação específicas
-            '#goog-gt-tt'  // Tooltip que as vezes trava o spinner
-        ].join(','));
-        
-        spinners.forEach(s => {
-            s.style.opacity = '0';
-            s.style.pointerEvents = 'none';
-            s.style.display = 'none';
+        // 1. Remove fisicamente os elementos do HTML
+        const elements = document.querySelectorAll(selectorToKill);
+        elements.forEach(el => {
+            if (el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
         });
+
+        // 2. Reseta o Body (impede que a página "pule" para baixo)
+        if (document.body.style.top !== '0px' || document.body.style.marginTop !== '0px') {
+            document.body.style.top = '0px !important';
+            document.body.style.marginTop = '0px !important';
+            document.body.style.position = 'static !important';
+        }
     };
 
-    // Roda a cada 50ms para garantir que o loader não tenha tempo de aparecer
-    setInterval(clean, 50);
+    // Executa a cada 30ms (extremamente rápido para o olho humano não ver)
+    const cleanerInterval = setInterval(clean, 30);
+
+    // Para economizar memória, se após 10 segundos nada novo aparecer, 
+    // diminuímos a frequência, mas não paramos.
+    setTimeout(() => {
+        clearInterval(cleanerInterval);
+        setInterval(clean, 200);
+    }, 10000);
 }
 
-// --- Funções de Cookie (Mantidas iguais) ---
+// --- Funções de Sincronização e Cookie ---
 
 function getCurrentLangFromCookie() {
     const cookies = document.cookie.split(";").map(c => c.trim());

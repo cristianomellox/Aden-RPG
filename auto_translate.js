@@ -1,4 +1,4 @@
-// auto_translate.js — Versão Nuclear (Anti-Spinner)
+// auto_translate.js — Versão Final "Silent Mode"
 
 const DEFAULT_LANG = "pt"; 
 
@@ -9,110 +9,44 @@ function googleTranslateElementInit() {
     new google.translate.TranslateElement({
         pageLanguage: DEFAULT_LANG,
         includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr,hi,ms,vi,ar",
-        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
-        autoDisplay: false
+        // 'SIMPLE' gera menos HTML intrusivo que outros layouts
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE, 
+        autoDisplay: false, // Tenta impedir o popup automático
+        multilanguagePage: true
     }, "google_translate_element");
 
     syncSelectorWithCookie();
-    
-    // Inicia a vigilância imediatamente após carregar
-    startAggressiveCleanup();
+    fixBodyMargin();
 }
 
 // ======================================================================
-// 2. Limpeza Agressiva (The Nuclear Option)
+// 2. Correção de Layout (Apenas Margem)
 // ======================================================================
-function startAggressiveCleanup() {
-    
-    // Função que aplica o estilo inline para garantir sumiço
-    const nukeElement = (el) => {
-        if (!el) return;
-        el.style.display = 'none';
-        el.style.visibility = 'hidden';
-        el.style.opacity = '0';
-        el.style.width = '0';
-        el.style.height = '0';
-        el.style.pointerEvents = 'none';
-        el.style.position = 'absolute';
-        el.style.top = '-9999px';
-        el.style.zIndex = '-9999';
-    };
-
-    const cleanup = () => {
-        // 1. Mata o Spinner
-        const spinners = document.querySelectorAll('.goog-te-spinner-pos, .goog-te-spinner-animation');
-        spinners.forEach(nukeElement);
-
-        // 2. Mata o Banner Topo
-        const frames = document.querySelectorAll('.goog-te-banner-frame, iframe[id^=":"]');
-        frames.forEach(frame => {
-            // Verifica se é frame do google pelo ID ou classe
-            if (frame.classList.contains('goog-te-banner-frame') || (frame.id && frame.id.includes('.container'))) {
-                nukeElement(frame);
-            }
-        });
-
-        // 3. Reseta o Body
+function fixBodyMargin() {
+    // Remove apenas a margem do body, deixa o CSS lidar com a invisibilidade do spinner
+    const removeMargin = () => {
         if (document.body.style.marginTop && document.body.style.marginTop !== '0px') {
             document.body.style.marginTop = '0px';
             document.body.style.top = '0px';
         }
+        
+        // Reforço para ocultar iframe de banner se ele existir
+        const banner = document.querySelector('.goog-te-banner-frame');
+        if (banner) banner.style.display = 'none';
     };
 
-    // EXECUÇÃO IMEDIATA
-    cleanup();
+    removeMargin();
 
-    // LOOP RÁPIDO (A cada 50ms) - Para pegar assim que nasce
-    // Roda intensamente nos primeiros 5 segundos
-    let count = 0;
-    const interval = setInterval(() => {
-        cleanup();
-        count++;
-        if (count > 100) { // 100 * 50ms = 5 segundos
-            clearInterval(interval);
-            // Depois de 5s, muda para um observer mais leve
-            startObserver(); 
-        }
-    }, 50);
+    // Monitora apenas mudanças de estilo no body para remover a margem teimosa
+    const observer = new MutationObserver(() => {
+        removeMargin();
+    });
+
+    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
 }
 
 // ======================================================================
-// 3. Vigilância Constante (Observer) - Para mudanças tardias
-// ======================================================================
-function startObserver() {
-    const observer = new MutationObserver((mutations) => {
-        let needsClean = false;
-        mutations.forEach(m => {
-            if (m.type === 'childList' || (m.type === 'attributes' && m.attributeName === 'style')) {
-                needsClean = true;
-            }
-        });
-        if (needsClean) {
-            // Re-aplica a lógica simples de limpeza
-            const spinners = document.querySelectorAll('.goog-te-spinner-pos');
-            if (spinners.length > 0) {
-                spinners.forEach(el => {
-                     el.style.display = 'none';
-                     el.style.top = '-9999px';
-                });
-            }
-            if (document.body.style.marginTop !== '0px') {
-                document.body.style.marginTop = '0px';
-                document.body.style.top = '0px';
-            }
-        }
-    });
-
-    observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['style'],
-        childList: true,
-        subtree: true // Olha dentro de tudo
-    });
-}
-
-// ======================================================================
-// 4. Utilitários de Cookie e Idioma (Mantidos)
+// 3. Funções de Cookie e Idioma (Padrão)
 // ======================================================================
 function getCurrentLangFromCookie() {
     const cookies = document.cookie.split(";").map(c => c.trim());
@@ -144,7 +78,7 @@ window.changeLanguage = function(lang) {
 }
 
 // ======================================================================
-// 5. Inicializadores
+// 4. Inicializadores
 // ======================================================================
 document.addEventListener("DOMContentLoaded", () => {
     const selector = document.getElementById("languageSelector");
@@ -152,9 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
         selector.addEventListener("change", e => window.changeLanguage(e.target.value));
     }
     syncSelectorWithCookie();
+    
+    // Pequeno delay para garantir limpeza após scripts externos
+    setTimeout(fixBodyMargin, 1000);
 });
-
-// Garante limpeza extra no window.onload
-window.onload = function() {
-    startAggressiveCleanup();
-};

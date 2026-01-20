@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient.js'
 
 window.supabase = supabase;
@@ -16,7 +17,7 @@ window.selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 42; 
+const DB_VERSION = 46; 
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -134,6 +135,49 @@ function getLocalUserId() {
     return null;
 }
 
+// ===============================
+// LÓGICA DE DELTA SYNC (MANIFESTO)
+// ===============================
+
+// Gera o manifesto leve para enviar ao servidor
+function generateManifest(items) {
+    return items.map(item => ({
+        id: item.id,
+        // Assinatura: Quantidade_Nivel_Refino_Slot
+        // Se qualquer um desses mudar, o servidor manda o update
+        s: `${item.quantity}_${item.level || 0}_${item.refine_level || 0}_${item.equipped_slot || 'none'}`
+    }));
+}
+
+// Aplica as diferenças retornadas pelo servidor ao array local
+function processInventoryDelta(localItems, delta) {
+    let updatedList = [...localItems];
+    
+    // 1. Remover itens deletados no servidor
+    if (delta.remove && delta.remove.length > 0) {
+        const removeSet = new Set(delta.remove);
+        updatedList = updatedList.filter(item => !removeSet.has(item.id));
+    }
+
+    // 2. Upsert (Adicionar ou Atualizar) itens retornados pelo servidor
+    if (delta.upsert && delta.upsert.length > 0) {
+        delta.upsert.forEach(newItem => {
+            const idx = updatedList.findIndex(i => i.id === newItem.id);
+            if (idx !== -1) {
+                // >>> OTIMIZAÇÃO AQUI <<<
+                // Se o item já existe, fazemos MERGE (preserva 'items' estático)
+                // Se o 'newItem' vier do servidor como Partial (sem 'items'),
+                // o spread operator mantém o 'items' do 'updatedList[idx]'.
+                updatedList[idx] = { ...updatedList[idx], ...newItem };
+            } else {
+                // Item Novo (Server mandou Full Object)
+                updatedList.push(newItem);
+            }
+        });
+    }
+
+    return updatedList;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
@@ -277,88 +321,124 @@ function showCustomConfirm(message, onConfirm) {
 }
 
 // ===============================
-// CARREGAMENTO OTIMIZADO (ZERO EGRESS + LAZY LOAD FIX)
+// CARREGAMENTO OTIMIZADO (Delta Sync + Lazy Load Fallback)
 // ===============================
 
 async function loadPlayerAndItems(forceRefresh = false) {
     if (!globalUser) return;
 
-    // 1. Check de Timestamp (Leitura Leve)
-    const { data: serverMeta, error: metaError } = await supabase
-        .from('players')
-        .select('last_inventory_update')
-        .eq('id', globalUser.id)
-        .single();
+    let localItems = [];
+    let localStats = null;
+    let localTimestamp = null;
 
-    if (metaError) {
-        console.error('Erro ao verificar versão do cache:', metaError);
-    }
+    // 1. Tenta carregar dados do Cache Local (IndexedDB)
+    try {
+        [localItems, localStats, localTimestamp] = await Promise.all([
+            loadCache(),
+            loadPlayerStatsFromCache(),
+            getLastUpdated()
+        ]);
 
-    const localTimestamp = await getLastUpdated();
-    
-    // Verifica se podemos usar o cache local (Zero Egress)
-    const canUseCache = !forceRefresh && localTimestamp && serverMeta && (localTimestamp === serverMeta.last_inventory_update);
-
-    console.log(`[CACHE] forceRefresh=${forceRefresh}, local=${localTimestamp}, server=${serverMeta?.last_inventory_update}, Match=${canUseCache}`);
-
-    if (canUseCache) {
-        try {
-            const [itemsFromCache, statsFromCache] = await Promise.all([
-                loadCache(),
-                loadPlayerStatsFromCache()
-            ]);
-
-            if (itemsFromCache && itemsFromCache.length >= 0 && statsFromCache) {
-                console.log('✅ Zero Egress: Usando dados do IndexedDB.');
-                allInventoryItems = itemsFromCache.filter(i => i.quantity > 0);
-                playerBaseStats = statsFromCache;
-                equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
-                renderUI();
-                return;
-            }
-        } catch (e) {
-            console.warn('Erro ao ler cache local. Baixando do servidor...', e);
+        // Se tiver dados locais, exibe imediatamente (Optimistic UI)
+        if (localItems && localItems.length >= 0) {
+            console.log('✅ UI Otimista: Exibindo dados locais enquanto sincroniza...');
+            allInventoryItems = localItems.filter(i => i.quantity > 0);
+            playerBaseStats = localStats || {};
+            equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+            renderUI();
         }
+    } catch (e) {
+        console.warn("Erro ao ler cache local:", e);
     }
 
-    // 2. Fetch via RPC Seguro
-    console.log('⬇️ Baixando cache consolidado via RPC Lazy Load...');
+    // 2. Se for Refresh Forçado ou Cache Vazio -> Download Completo
+    if (forceRefresh || !localItems || localItems.length === 0) {
+        console.log('🔄 Cache vazio ou Refresh forçado. Iniciando Download Completo...');
+        await fullDownload();
+        return;
+    }
+
+    // 3. Tenta Sincronização Diferencial (Delta Sync)
+    console.log('🔄 Iniciando Delta Sync com servidor...');
+    const manifest = generateManifest(localItems);
+
+    const { data: deltaData, error: deltaError } = await supabase.rpc('sync_inventory', {
+        p_player_id: globalUser.id,
+        p_client_manifest: manifest
+    });
+
+    if (deltaError || !deltaData) {
+        console.warn('⚠️ Falha no Delta Sync (RPC error). Fazendo fallback para Download Completo.', deltaError);
+        await fullDownload();
+        return;
+    }
+
+    // 4. Aplica as mudanças do Delta Sync
+    try {
+        console.log(`📥 Delta recebido: ${deltaData.upsert?.length || 0} modificados, ${deltaData.remove?.length || 0} removidos.`);
+        
+        const mergedList = processInventoryDelta(localItems, deltaData);
+        
+        // Atualiza variáveis globais
+        allInventoryItems = mergedList.filter(i => i.quantity > 0);
+        equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+        
+        // Atualiza stats se o servidor mandou (mandará se houver mudança ou sync)
+        if (deltaData.player_stats) {
+            playerBaseStats = deltaData.player_stats;
+        }
+
+        // Renderiza com os dados atualizados
+        renderUI();
+
+        // Salva o novo estado no cache
+        await saveCache(allInventoryItems, playerBaseStats, deltaData.last_inventory_update);
+        console.log('💾 Cache local sincronizado e salvo.');
+
+    } catch (e) {
+        console.error("Erro ao processar Delta Sync:", e);
+        await fullDownload(); // Última tentativa de segurança
+    }
+}
+
+// Função de Download Completo (Fallback seguro)
+async function fullDownload() {
+    console.log('⬇️ Executando get_player_data_lazy (Full Load)...');
     
     const { data: playerData, error: rpcError } = await supabase
         .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
 
     if (rpcError) {
-        console.error('❌ Erro na RPC get_player_data_lazy:', rpcError.message);
-        showCustomAlert('Erro ao carregar inventário. Tente atualizar a página.');
+        console.error('❌ Erro crítico ao baixar inventário:', rpcError.message);
+        showCustomAlert('Erro ao carregar inventário. Verifique sua conexão.');
         return;
     }
 
-    // Atualiza variáveis globais com o retorno da RPC
+    // Atualiza variáveis globais
     playerBaseStats = playerData.cached_combat_stats || {};
-    
     const rawItems = playerData.cached_inventory || [];
     allInventoryItems = rawItems.filter(item => item.quantity > 0);
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
 
-    // --- CORREÇÃO CRÍTICA AQUI ---
-    
-    // 1. RENDERIZA PRIMEIRO (Garante que o jogador veja os itens imediatamente)
+    // Renderiza
     renderUI();
 
-    // 2. Tenta salvar no cache DEPOIS (Em background)
+    // Salva no cache
     try {
         await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
-        console.log('💾 Cache local atualizado.');
+        console.log('💾 Cache completo salvo com sucesso.');
     } catch (e) {
-        console.warn("⚠️ Falha não-crítica ao salvar cache (UI não afetada):", e);
-        // Se falhar aqui, o jogador ainda vê os itens, e o cache será tentado na próxima vez.
+        console.warn("⚠️ Erro não-crítico ao salvar cache:", e);
     }
 }
 
 function renderUI() {
     updateStatsUI(playerBaseStats);
     renderEquippedItems();
-    loadItems('all', allInventoryItems);
+    // Recupera a tab ativa ou usa 'all'
+    const activeTab = document.querySelector('.tab-button.active');
+    const tabId = activeTab ? activeTab.id.replace('tab-', '') : 'all';
+    loadItems(tabId, allInventoryItems);
 }
 
 // Atualiza a UI usando os stats já calculados pelo servidor

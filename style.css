@@ -2126,55 +2126,62 @@ button, .btn {
 }
 
 /* =========================================================
-   CORREÇÃO VISUAL EXTREMA GOOGLE TRANSLATE
+   CORREÇÃO DEFINITIVA GOOGLE TRANSLATE (Manto da Invisibilidade)
    ========================================================= */
 
-/* 1. Oculta o container principal do Topbar */
+/* Oculta o Topbar / Banner */
 .goog-te-banner-frame.skiptranslate {
     display: none !important;
 }
 
-/* 2. Oculta o Spinner (Carregamento Redondo) - Múltiplos seletores para garantir */
+/* Oculta o Spinner (Loader Redondo) */
+/* NÃO usamos display:none, pois o Google detecta e recria. */
+/* Usamos recorte e transparência. */
 .goog-te-spinner-pos,
+.goog-te-spinner-pos *,
 .goog-te-spinner,
 .goog-te-spinner-animation,
-.goog-logo-link,
-img[src*="google_translate"],
-img[src*="spinner"],
-.goog-te-gadget .goog-te-spinner-pos {
-    /* Torna invisível */
-    visibility: hidden !important;
+.goog-logo-link {
+    /* 1. Torna transparente */
     opacity: 0 !important;
+    visibility: hidden !important;
     
-    /* Remove dimensões */
-    width: 0 !important;
-    height: 0 !important;
-    max-width: 0 !important;
-    max-height: 0 !important;
-    
-    /* Joga para fora da tela (Caso o display:block seja forçado pelo JS do Google) */
-    position: fixed !important;
-    top: -10000px !important;
-    left: -10000px !important;
-    z-index: -99999 !important;
-    
-    /* Impede interação */
+    /* 2. Remove a capacidade de clicar */
     pointer-events: none !important;
     
-    /* Remove margens e bordas */
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
+    /* 3. Recorta o elemento para tamanho ZERO */
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    -webkit-clip-path: inset(50%) !important;
+    
+    /* 4. Força tamanho zero sem usar display:none */
+    height: 0px !important;
+    width: 0px !important;
+    max-height: 0px !important;
+    max-width: 0px !important;
+    overflow: hidden !important;
+    
+    /* 5. Tira da frente de tudo */
+    z-index: -99999 !important;
+    position: absolute !important;
 }
 
-/* 3. Remove o deslocamento do corpo da página */
+/* Garante que imagens de loading específicas sumam */
+img[src*="google"][src*="spinner"],
+img[src*="gstatic"][src*="loader"] {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Remove margem do body */
 body {
     top: 0 !important;
     margin-top: 0 !important;
     position: static !important;
 }
 
-/* 4. Esconde tooltips e popups do Google */
+/* Remove tooltips */
 .goog-te-balloon-frame,
 #goog-gt-tt {
     display: none !important;

@@ -1,58 +1,51 @@
-// auto_translate.js — Versão "Hard Delete"
+// auto_translate.js — Versão Multi-Language + Fix TopBar
+
 const DEFAULT_LANG = "pt"; 
 
+// ======================================================================
+// 1. Inicialização do Google Translate
+// ======================================================================
 function googleTranslateElementInit() {
     new google.translate.TranslateElement({
         pageLanguage: DEFAULT_LANG,
+        // LISTA ATUALIZADA DE IDIOMAS SOLICITADOS
         includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr,hi,ms,vi,ar",
         layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
         autoDisplay: false
     }, "google_translate_element");
 
-    // Inicia a limpeza imediata e contínua
-    startGlobalCleaner();
+    syncSelectorWithCookie();
+    fixGoogleLayout(); 
 }
 
-function startGlobalCleaner() {
-    const selectorToKill = [
-        '.goog-te-spinner-pos',
-        '.goog-te-spinner',
-        '.goog-te-loader',
-        '#goog-gt-tt',
-        '.goog-te-banner-frame',
-        '.goog-te-banner'
-    ].join(',');
-
-    const clean = () => {
-        // 1. Remove fisicamente os elementos do HTML
-        const elements = document.querySelectorAll(selectorToKill);
-        elements.forEach(el => {
-            if (el.parentNode) {
-                el.parentNode.removeChild(el);
-            }
+// ======================================================================
+// 2. Vigilância Ativa (MutationObserver)
+// ======================================================================
+function fixGoogleLayout() {
+    const removeBar = () => {
+        const frames = document.querySelectorAll('.goog-te-banner-frame');
+        frames.forEach(frame => {
+            frame.style.display = 'none';
+            frame.style.visibility = 'hidden';
+            frame.style.height = '0';
         });
-
-        // 2. Reseta o Body (impede que a página "pule" para baixo)
-        if (document.body.style.top !== '0px' || document.body.style.marginTop !== '0px') {
-            document.body.style.top = '0px !important';
-            document.body.style.marginTop = '0px !important';
-            document.body.style.position = 'static !important';
+        if (document.body.style.marginTop !== '0px') {
+            document.body.style.marginTop = '0px';
+            document.body.style.top = '0px';
         }
     };
-
-    // Executa a cada 30ms (extremamente rápido para o olho humano não ver)
-    const cleanerInterval = setInterval(clean, 30);
-
-    // Para economizar memória, se após 10 segundos nada novo aparecer, 
-    // diminuímos a frequência, mas não paramos.
-    setTimeout(() => {
-        clearInterval(cleanerInterval);
-        setInterval(clean, 200);
-    }, 10000);
+    removeBar();
+    const observer = new MutationObserver(() => {
+        if (document.body.style.marginTop && document.body.style.marginTop !== '0px') {
+            removeBar();
+        }
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
 }
 
-// --- Funções de Sincronização e Cookie ---
-
+// ======================================================================
+// 3. Lê o cookie "googtrans"
+// ======================================================================
 function getCurrentLangFromCookie() {
     const cookies = document.cookie.split(";").map(c => c.trim());
     const googCookie = cookies.find(c => c.startsWith("googtrans="));
@@ -62,13 +55,21 @@ function getCurrentLangFromCookie() {
     return parts[parts.length - 1] || DEFAULT_LANG;
 }
 
+// ======================================================================
+// 4. Sincroniza o seletor (se existir na página)
+// ======================================================================
 function syncSelectorWithCookie() {
     const selector = document.getElementById("languageSelector");
     if (!selector) return;
     const lang = getCurrentLangFromCookie();
     if (selector.querySelector(`option[value="${lang}"]`)) selector.value = lang;
+    else selector.value = DEFAULT_LANG;
 }
 
+// ======================================================================
+// 5. Trocar idioma via cookies
+// ======================================================================
+// Exposta globalmente para ser usada pelo Modal de Intro
 window.changeLanguage = function(lang) {
     if (lang === DEFAULT_LANG) {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -81,6 +82,14 @@ window.changeLanguage = function(lang) {
     window.location.reload();
 }
 
+// ======================================================================
+// 6. Eventos
+// ======================================================================
 document.addEventListener("DOMContentLoaded", () => {
+    const selector = document.getElementById("languageSelector");
+    if (selector) {
+        selector.addEventListener("change", e => window.changeLanguage(e.target.value));
+    }
     syncSelectorWithCookie();
+    window.onload = fixGoogleLayout;
 });

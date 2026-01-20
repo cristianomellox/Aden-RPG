@@ -1,4 +1,4 @@
-// auto_translate.js — Versão Multi-Language + Fix TopBar
+// auto_translate.js — Versão Multi-Language + Fix TopBar + Spinner Fix
 
 const DEFAULT_LANG = "pt"; 
 
@@ -22,6 +22,8 @@ function googleTranslateElementInit() {
 // 2. Vigilância Ativa (MutationObserver)
 // ======================================================================
 function fixGoogleLayout() {
+    
+    // Função para remover a barra superior e corrigir margens
     const removeBar = () => {
         const frames = document.querySelectorAll('.goog-te-banner-frame');
         frames.forEach(frame => {
@@ -29,18 +31,55 @@ function fixGoogleLayout() {
             frame.style.visibility = 'hidden';
             frame.style.height = '0';
         });
+        
+        // Garante que o body não desça
         if (document.body.style.marginTop !== '0px') {
             document.body.style.marginTop = '0px';
             document.body.style.top = '0px';
+            document.body.style.position = 'static';
         }
     };
-    removeBar();
-    const observer = new MutationObserver(() => {
-        if (document.body.style.marginTop && document.body.style.marginTop !== '0px') {
-            removeBar();
+
+    // Função específica para esconder o Loader/Spinner e Tooltips
+    const hideSpinner = () => {
+        // Seleciona o container do loader redondo
+        const spinner = document.querySelector('.goog-te-spinner-pos');
+        if (spinner) {
+            spinner.style.display = 'none';
+            spinner.style.visibility = 'hidden';
+            spinner.style.width = '0';
+            spinner.style.height = '0';
+            spinner.style.zIndex = '-1000'; // Garante que não bloqueie cliques
         }
+
+        // Opcional: Remove também o balão de tooltip se ele aparecer
+        const balloon = document.querySelector('.goog-te-balloon-frame');
+        if (balloon) {
+            balloon.style.display = 'none';
+        }
+    };
+
+    // Executa imediatamente na carga
+    removeBar();
+    hideSpinner();
+
+    // Cria o vigilante
+    const observer = new MutationObserver(() => {
+        // Se algo mudar, forçamos a remoção novamente
+        removeBar();
+        hideSpinner();
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+
+    // CONFIGURAÇÃO CRUCIAL:
+    // 'attributes': detecta mudança no style (margin-top do body)
+    // 'childList': detecta quando o Google INJETA o loader no HTML
+    // 'subtree': garante que verifique elementos aninhados
+    observer.observe(document.body, { 
+        attributes: true, 
+        attributeFilter: ['style'], 
+        childList: true, 
+        subtree: true 
+    });
 }
 
 // ======================================================================
@@ -69,7 +108,6 @@ function syncSelectorWithCookie() {
 // ======================================================================
 // 5. Trocar idioma via cookies
 // ======================================================================
-// Exposta globalmente para ser usada pelo Modal de Intro
 window.changeLanguage = function(lang) {
     if (lang === DEFAULT_LANG) {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -91,5 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
         selector.addEventListener("change", e => window.changeLanguage(e.target.value));
     }
     syncSelectorWithCookie();
+    
+    // Garante que rode no load
     window.onload = fixGoogleLayout;
 });

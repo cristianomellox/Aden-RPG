@@ -523,7 +523,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 2;
+const GLOBAL_DB_VERSION = 3;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 
@@ -693,7 +693,7 @@ function updateLocalPlayerData(changes) {
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 42; // Mantenha a mesma versão do inventory.js
+const DB_VERSION = 46; // Mantenha a mesma versão do inventory.js
 
 function openDB() {
     return new Promise((resolve, reject) => {

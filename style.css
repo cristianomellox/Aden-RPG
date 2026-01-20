@@ -2124,3 +2124,35 @@ button, .btn {
     70% { transform: scale(1.1); box-shadow: 0 0 0 4px rgba(255, 0, 0, 0); }
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
 }
+
+/* =========================================================
+   CORREÇÃO VISUAL GOOGLE TRANSLATE (Spinner/Loader)
+   ========================================================= */
+
+/* Oculta especificamente o loader de carregamento redondo */
+.goog-te-spinner-pos {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Garante que qualquer imagem de loading dentro dele também suma */
+.goog-te-spinner-pos img {
+    display: none !important;
+}
+
+/* Oculta tooltips (balões de texto) que aparecem ao passar o mouse */
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+    box-shadow: none !important;
+}
+
+/* Previne que o loader crie bloqueios de clique */
+#goog-gt-tt {
+    display: none !important;
+    visibility: hidden !important;
+}

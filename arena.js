@@ -1,8 +1,8 @@
+
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
 // 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC)
-// Copiado de script.js / afk_page.js para manter consistência
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
 const GLOBAL_DB_VERSION = 3;
@@ -44,7 +44,6 @@ const GlobalDB = {
             });
         } catch(e) { return null; }
     },
-    // Atualiza apenas campos específicos no cache global (ex: crystals, gold)
     updatePlayerPartial: async function(changes) {
         try {
             const db = await this.open();
@@ -67,7 +66,7 @@ const GlobalDB = {
 };
 
 // =======================================================================
-// 2. HELPER INDEXEDDB INVENTORY (Manter para Surgical Update de Itens)
+// 2. HELPER INDEXEDDB INVENTORY (Surgical Update)
 // =======================================================================
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
@@ -82,10 +81,6 @@ function openDB() {
     });
 }
 
-/**
- * Atualiza o cache local "cirurgicamente" para evitar redownload no inventário.
- * Agora sincroniza também com o GlobalDB se houver stats.
- */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
         const db = await openDB();
@@ -93,28 +88,22 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualiza ou insere os itens modificados
         if (Array.isArray(newItems)) {
             newItems.forEach(item => store.put(item));
         }
 
-        // 2. Atualiza Timestamp
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
-        // 3. Atualiza stats no InventoryDB (Legacy) E no GlobalDB (Novo)
         if (updatedStats) {
-            // Atualiza InventoryDB Meta
             const req = meta.get("player_stats");
             req.onsuccess = () => {
                 const currentStats = req.result ? req.result.value : {};
                 const finalStats = { ...currentStats, ...updatedStats };
                 meta.put({ key: "player_stats", value: finalStats });
             };
-            
-            // Atualiza GlobalDB (para o Menu/Index ver a mudança)
             await GlobalDB.updatePlayerPartial(updatedStats);
         }
 
@@ -134,17 +123,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 3. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
     // =======================================================================
     let userId = null;
+    
+    // --- CACHE DE DEFINIÇÕES DE ITENS (Lê do LocalStorage gerado pelo script.js) ---
+    let localItemDefinitions = new Map();
 
-    // --- HELPER DE AUTH OTIMISTA (MODIFICADO PARA GLOBALDB) ---
+    function loadLocalItemDefinitions() {
+        try {
+            const cached = localStorage.getItem('item_definitions_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                // script.js salva como { expires: ..., data: [[id, obj], [id, obj]] }
+                if (parsed && Array.isArray(parsed.data)) {
+                    localItemDefinitions = new Map(parsed.data);
+                    console.log(`📦 [Arena] Definições de itens carregadas: ${localItemDefinitions.size}`);
+                }
+            }
+        } catch (e) {
+            console.warn("Erro ao ler item_definitions_cache:", e);
+        }
+    }
+    // Carrega imediatamente ao iniciar
+    loadLocalItemDefinitions();
+
+    function getItemName(id) {
+        const def = localItemDefinitions.get(parseInt(id));
+        return def ? def.name : 'unknown'; // Retorna o nome do arquivo (ex: 'pocao_vida')
+    }
+    
+    function getItemDisplayName(id) {
+        const def = localItemDefinitions.get(parseInt(id));
+        // O script.js original salva {item_id, name, rarity}. 
+        // Se precisar do display_name, teria que ajustar o script.js. 
+        // Por enquanto, usaremos um fallback ou formataremos o name.
+        return def ? (def.display_name || def.name.replace(/_/g, ' ')) : 'Item Desconhecido';
+    }
+
     async function getLocalUserId() {
-        // 1. Tenta GlobalDB (Zero Egress)
         const globalAuth = await GlobalDB.getAuth();
         if (globalAuth && globalAuth.value && globalAuth.value.user) {
-            console.log("⚡ [Arena] Auth recuperado do GlobalDB.");
             return globalAuth.value.user.id;
         }
-
-        // 2. Fallback: LocalStorage (Legacy Cache de Player)
         try {
             const cached = localStorage.getItem('player_data_cache');
             if (cached) {
@@ -154,8 +172,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
         } catch (e) {}
-
-        // 3. Fallback: LocalStorage (Supabase Token)
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -170,14 +186,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) {}
         return null;
     }
-
-    // Mapa de IDs para Nomes de Arquivo
-    const POTION_MAP = {
-        43: "pocao_de_cura_r", 44: "pocao_de_cura_sr",
-        45: "pocao_de_furia_r", 46: "pocao_de_furia_sr",
-        47: "pocao_de_destreza_r", 48: "pocao_de_destreza_sr",
-        49: "pocao_de_ataque_r", 50: "pocao_de_ataque_sr"
-    };
 
     // --- RASTREADOR DE CONSUMO DE POÇÕES ---
     let sessionConsumedPotions = {}; 
@@ -237,9 +245,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             const oppStats = opponentData.combat_stats || {};
             const uniqueOppPotions = {};
             (opponentData.potions || []).forEach(p => {
-                const pId = parseInt(p.item_id);
+                const pId = parseInt(p.item_id || p.itemId); // Fallback para compatibilidade
                 if(!uniqueOppPotions[pId]) {
-                    uniqueOppPotions[pId] = { ...p, cd: 0, quantity: parseInt(p.qty || p.quantity || 1) };
+                    uniqueOppPotions[pId] = { 
+                        item_id: pId, 
+                        cd: 0, 
+                        quantity: parseInt(p.qty || p.quantity || 1) 
+                    };
                 }
             });
 
@@ -282,6 +294,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     pot.quantity--; 
                     trackConsumedPotion(pot.item_id); 
                     syncSessionLoadout(pot.item_id, pot.quantity);
+                    // Recarga: Cura (0), Buffs (1 turno para evitar spam instantaneo visual)
                     pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
                     actionResult.heal = 1; 
                 } else {
@@ -326,7 +339,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             for (let pot of this.opponent.potions) {
                 if (pot.quantity > 0 && pot.cd <= 0) {
                     const pId = parseInt(pot.item_id);
-                    if ([43,44].includes(pId)) {
+                    // Lógica simples de IA
+                    if ([43,44].includes(pId)) { // Cura
                         if (this.opponent.hp < (this.opponent.maxHp * 0.65)) {
                             let oldHp = this.opponent.hp;
                             this.applyEffect(this.opponent, pId);
@@ -335,7 +349,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             trackOpponentConsumption(this.opponent.id, pId);
                             actions.push({ type: 'POTION', itemId: pId, healed: healedAmount });
                         }
-                    } else {
+                    } else { // Buffs
                         let type = 'ATK';
                         if ([45,46].includes(pId)) type = 'FURY';
                         if ([47,48].includes(pId)) type = 'DEX';
@@ -568,8 +582,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         confirmModal.style.display = 'flex';
     }
 
-    const CACHE_TTL_24H = 4320;
-    function setCache(key, data, ttlMinutes = CACHE_TTL_24H) {
+    const CACHE_TTL_24H_MIN = 4320;
+    function setCache(key, data, ttlMinutes = CACHE_TTL_24H_MIN) {
         try { localStorage.setItem(key, JSON.stringify({ expires: Date.now() + ttlMinutes * 60000, data })); } catch {}
     }
     function getCache(key) {
@@ -675,23 +689,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     ensureStreakDate();
 
     // =======================================================================
-    // 6. LOADOUT E POÇÕES
+    // 6. LOADOUT E POÇÕES (OTIMIZADO COM DEFINITIONS LOCAIS)
     // =======================================================================
     async function loadArenaLoadout() {
         if (!userId) return;
+        
+        // RPC get_my_arena_loadout retorna item_id e slot_type. 
+        // O restante (imagem) montamos aqui.
         const { data, error } = await supabase.rpc('get_my_arena_loadout');
+        
         document.querySelectorAll('.potion-slot').forEach(el => {
             el.innerHTML = '<span style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; font-size:2em; color:#555; pointer-events:none;">+</span>';
             el.dataset.itemId = "";
             el.style.border = "1px dashed #555";
         });
+
         if (error) return console.error("Erro loadout:", error);
+        
         if (data && Array.isArray(data)) {
             data.forEach(item => {
                 const typeMap = item.slot_type.toLowerCase() === 'attack' ? 'atk' : 'def';
                 const slotEl = document.getElementById(`slot-${typeMap}-${item.slot_index}`);
                 if (slotEl) {
-                    slotEl.innerHTML = `<img src="${item.item_image}" style="width:100%; height:100%; object-fit:contain; border-radius:4px;">`;
+                    const itemName = getItemName(item.item_id);
+                    const imgUrl = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+                    slotEl.innerHTML = `<img src="${imgUrl}" onerror="this.style.display='none'" style="width:100%; height:100%; object-fit:contain; border-radius:4px;">`;
                     slotEl.dataset.itemId = item.item_id;
                     slotEl.style.border = "1px solid gold";
                 }
@@ -706,14 +728,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             potionListGrid.innerHTML = '<p style="color:#fff;">Carregando...</p>';
             
             const allowedIds = [43, 44, 45, 46, 47, 48, 49, 50];
+            
+            // OTIMIZAÇÃO: Busca apenas ID e Quantidade
             const { data: items, error } = await supabase
                 .from('inventory_items')
-                .select('*, items(*)')
+                .select('item_id, quantity')
                 .in('item_id', allowedIds)
                 .eq('player_id', userId)
                 .gt('quantity', 0);
 
             potionListGrid.innerHTML = "";
+            
+            // Botão Remover
             const unequipBtn = document.createElement('div');
             unequipBtn.className = "inventory-item"; 
             unequipBtn.style.border = "1px solid red";
@@ -739,10 +765,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const div = document.createElement('div');
                 div.className = "inventory-item";
                 div.style.cursor = "pointer";
+                
+                // Usa Definições Locais
+                const itemName = getItemName(inv.item_id);
+                const displayName = getItemDisplayName(inv.item_id);
+                
                 div.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/itens/${inv.items.name}.webp" style="width:50px; height:50px;">
+                    <img src="https://aden-rpg.pages.dev/assets/itens/${itemName}.webp" style="width:50px; height:50px;">
                     <span class="item-quantity">${inv.quantity}</span>
-                    <div style="font-size:0.7em; margin-top:5px; color:#fff;">${inv.items.display_name}</div>
+                    <div style="font-size:0.7em; margin-top:5px; color:#fff;">${displayName}</div>
                 `;
                 div.onclick = async () => {
                     showLoading();
@@ -764,6 +795,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         });
     });
+    
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
@@ -1118,24 +1150,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                         const parsed = JSON.parse(cached);
                         if (parsed && parsed.data) {
                             if (typeof res.crystals === 'number') {
-                                // Soma os cristais ganhos ao atual
                                 parsed.data.crystals = (parsed.data.crystals || 0) + res.crystals;
-                                currentCrystals = parsed.data.crystals; // Salva para o GlobalDB
+                                currentCrystals = parsed.data.crystals; 
                             }
                             localStorage.setItem('player_data_cache', JSON.stringify(parsed));
                         }
                     } catch(e) {}
                 }
 
-                // 2. Atualiza Inventário no IndexedDB e o GlobalDB com o novo saldo
-                // Se não conseguimos ler do localStorage, pegamos do res.crystals como delta, 
-                // mas updatePlayerPartial precisa do total absoluto ou mescla.
-                // Se GlobalDB já existe, pegamos de lá.
+                // 2. Atualiza GlobalDB
                 let updateData = {};
                 if (currentCrystals > 0) {
                      updateData.crystals = currentCrystals;
                 } else {
-                     // Tenta ler do GlobalDB para somar
                      const gPlayer = await GlobalDB.getPlayer();
                      if (gPlayer) {
                          updateData.crystals = (gPlayer.crystals || 0) + (res.crystals || 0);
@@ -1144,7 +1171,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 await surgicalCacheUpdate(res.inventory_updates, res.timestamp, updateData);
             }
-            // =======================================================
             
             localStorage.removeItem('arena_session_v1');
             currentSession = null;
@@ -1192,7 +1218,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (buff.ends_at > currentTurn) { 
                 const img = document.createElement('img');
                 const itemId = parseInt(buff.item_id);
-                const itemName = POTION_MAP[itemId] || `item_${itemId}`;
+                // USA CACHE LOCAL
+                const itemName = getItemName(itemId);
                 img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
                 img.style.width = '35px'; img.style.height = '35px';
                 img.style.animation = 'blinkPotion 1s infinite alternate';
@@ -1226,7 +1253,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                  slot.style.filter = "grayscale(1)"; slot.style.opacity = "0.7";
             }
             const itemId = parseInt(p.item_id);
-            const name = p.item_name || POTION_MAP[itemId] || `item_${itemId}`;
+            // USA CACHE LOCAL
+            const name = getItemName(itemId);
             const cdHeight = (cd > 0) ? "100%" : "0%";
             slot.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/itens/${name}.webp" style="width:100%;height:100%;object-fit:contain;"><span style="position:absolute; bottom:0; right:0; font-size:0.7em; color:white; background:rgba(0,0,0,0.7); padding:1px;">${qty}</span><div class="cooldown-overlay" style="position:absolute;bottom:0;left:0;width:100%;height:${cdHeight};background:rgba(0,0,0,0.7);transition:height 0.3s;"></div>`;
             ct.appendChild(slot);
@@ -1265,7 +1293,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     function flashPotionIcon(itemId, sideElement) {
         const img = document.createElement("img");
         const iId = parseInt(itemId);
-        const itemName = POTION_MAP[iId] || `item_${iId}`; 
+        // USA CACHE LOCAL
+        const itemName = getItemName(iId); 
         img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`; 
         img.style.cssText = "position:absolute; top:50%; left:50%; width:50px; height:50px; z-index:25; animation: floatUpPotion 1s ease-out forwards;";
         sideElement.appendChild(img);
@@ -1478,11 +1507,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function boot() {
         showLoading();
         try {
-            // AUTH OTIMIZADO VIA GLOBAL DB
             userId = await getLocalUserId();
             if (!userId) {
-                // Se não achou em nenhum lugar, tenta sessão de rede
-                
                 if (!session) { window.location.href = "index.html"; return; }
                 userId = session.user.id;
             }

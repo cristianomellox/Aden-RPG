@@ -1,4 +1,3 @@
-
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
@@ -148,7 +147,7 @@ const GlobalDB = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Cache de Donos (v3)");
+  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Cache de Donos (v3) + Evento FDS");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -483,6 +482,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =================================================================
   // 5. FUNÇÕES UTILITÁRIAS
   // =================================================================
+  
+  // -- Helper para Evento de Coleta Dobrada (FDS) --
+  function getWeekendMultiplier() {
+      const day = new Date().getUTCDay();
+      // 6 = Sábado, 0 = Domingo
+      return (day === 6 || day === 0) ? 2 : 1;
+  }
+
+  // -- Verifica e exibe aviso de evento na tela --
+  function checkEventStatus() {
+      const mult = getWeekendMultiplier();
+      const cycleInfo = document.getElementById("cycleInfo");
+      
+      // Remove aviso anterior se existir
+      const existingBanner = document.getElementById("eventBanner");
+      if (existingBanner) existingBanner.remove();
+
+      if (mult > 1 && cycleInfo) {
+          const banner = document.createElement("h4");
+          banner.id = "eventBanner";
+          banner.textContent = "Coleta dobrada!";
+          banner.style.cssText = "text-shadow: none!important; background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 5px 0 0 0;";
+          
+          if (cycleInfo.parentNode) {
+              cycleInfo.parentNode.appendChild(banner);
+          }
+      }
+  }
+
   function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
   function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
   const esc = (s) => (s === 0 || s) ? String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;") : "";
@@ -1096,7 +1124,13 @@ function formatTimeCombat(totalSeconds) {
       if (mine.owner_player_id) {
         const start = new Date(mine.open_time || new Date());
         const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-        const crystals = Math.min(1500, Math.floor(seconds * (1500.0 / 6600)));
+        
+        // --- EVENTO FDS: MULTIPLICADOR ---
+        const mult = getWeekendMultiplier();
+        const maxCrystals = 1500 * mult;
+        const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
+        // ---------------------------------
+        
         collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
       }
 
@@ -1136,14 +1170,68 @@ function formatTimeCombat(totalSeconds) {
     }
   }
 
+  // --- Função Auxiliar para renderizar um card individual e adicionar ao container ---
+  function renderAndAppendSingleCard(mine) {
+      if (!minesContainer) return;
+      if (document.getElementById(`mine-card-${mine.id}`)) return; // Já existe
+
+      const owner = globalOwnersMap[mine.owner_player_id];
+      const ownerName = owner ? (owner.name || "Desconhecido") : null;
+      const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
+
+      let collectingHtml = "";
+      if (mine.owner_player_id) {
+        const start = new Date(mine.open_time || new Date());
+        const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
+        const mult = getWeekendMultiplier();
+        const maxCrystals = 1500 * mult;
+        const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
+        collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
+      }
+
+      let actionType = null;
+      let cardClass = "";
+
+      if (mine.status === "aberta" && !mine.owner_player_id) {
+        actionType = "startCombat";
+      } else if (mine.status === "disputando") {
+        actionType = "startCombat";
+      } else if (mine.owner_player_id && mine.owner_player_id !== userId) {
+        actionType = "challengeMine";
+      } else if (mine.owner_player_id === userId) {
+        cardClass = "disabled-card";
+      }
+
+      const card = document.createElement("div");
+      card.id = `mine-card-${mine.id}`;
+      card.className = `mine-card ${mine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
+      card.innerHTML = `
+        <h3 style="color: yellow;">${esc(mine.name)}</h3>
+        <p>${esc(mine.status || "Fechada")}</p>
+        ${ownerName ? `
+          <div class="mine-owner-container">
+            ${ownerAvatarHtml}
+            <span>${esc(ownerName)}</span>
+          </div>` : "<p><strong>Sem Dono</strong></p>"}
+        ${collectingHtml}`;
+
+      if (actionType) {
+        card.addEventListener("click", () => {
+          if (actionType === "startCombat") startCombat(mine.id);
+          else if (actionType === "challengeMine") challengeMine(mine, owner, []);
+        });
+      }
+      minesContainer.appendChild(card);
+  }
+
   // =================================================================
   // FUNÇÃO DE ATUALIZAÇÃO CIRÚRGICA (ECONOMIA DE DADOS)
   // =================================================================
   async function updateSingleMineCard(targetMineId) {
-      if (!targetMineId) return;
+      if (!targetMineId) return null;
       
       const cardElement = document.getElementById(`mine-card-${targetMineId}`);
-      if (!cardElement) return; 
+      if (!cardElement) return null; 
 
       try {
           const { data: mine, error } = await supabase
@@ -1175,7 +1263,13 @@ function formatTimeCombat(totalSeconds) {
           if (mine.owner_player_id) {
               const start = new Date(mine.open_time || new Date());
               const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-              const crystals = Math.min(1500, Math.floor(seconds * (1500.0 / 6600)));
+              
+              // --- EVENTO FDS: MULTIPLICADOR ---
+              const mult = getWeekendMultiplier();
+              const maxCrystals = 1500 * mult;
+              const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
+              // ---------------------------------
+
               collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
           }
 
@@ -1214,10 +1308,13 @@ function formatTimeCombat(totalSeconds) {
 
           if (mine.owner_player_id === userId) myOwnedMineId = mine.id;
           else if (myOwnedMineId === mine.id) myOwnedMineId = null;
+          
+          return mine; // Retorna os dados para verificação de status
 
       } catch (e) {
           console.warn("[Mines] Surgical update failed, fallback to full load", e);
           loadMines(); 
+          return null;
       }
   }
 
@@ -1530,7 +1627,7 @@ function formatTimeCombat(totalSeconds) {
     }
   }
 
-  async function resetCombatUI() { // Note: Adicionei async para garantir o await se necessário
+  async function resetCombatUI() { 
     const mineToUpdate = currentMineId;
 
     if (combatModal) combatModal.style.display = "none";
@@ -1548,9 +1645,37 @@ function formatTimeCombat(totalSeconds) {
     ambientMusic.currentTime = 0;
 
     if (mineToUpdate) {
-        // CORREÇÃO: Atualiza SOMENTE o card da mina que estava sendo atacada.
-        // Removemos o loadMines() daqui para evitar recarregar a lista inteira.
-        await updateSingleMineCard(mineToUpdate);
+        // 1. Atualiza visualmente APENAS a mina que estávamos atacando
+        const updatedMine = await updateSingleMineCard(mineToUpdate);
+        
+        // 2. Lógica Especial: Se a mina virou "disputando", significa que uma NOVA mina pode ter sido liberada
+        //    pela regra SQL. Para economizar egress (evitando loadMines completo), buscamos APENAS a próxima mina.
+        if (updatedMine && updatedMine.status === 'disputando') {
+            try {
+                // Pega IDs já renderizados na tela para excluir da busca
+                const renderedIds = Array.from(document.querySelectorAll('.mine-card'))
+                                         .map(el => el.id.replace('mine-card-', ''));
+                
+                // Busca EXATAMENTE UMA mina que esteja aberta, vazia e não esteja na tela
+                const { data: newMine, error } = await supabase
+                    .from('mining_caverns')
+                    .select('id, name, status, owner_player_id, open_time, competition_end_time, monster_health, initial_monster_health')
+                    .is('owner_player_id', null)
+                    .eq('status', 'aberta')
+                    .not('id', 'in', `(${renderedIds.join(',')})`)
+                    .order('name', { ascending: true })
+                    .limit(1)
+                    .single();
+
+                if (!error && newMine) {
+                    // Renderiza e adiciona apenas esta nova mina
+                    renderAndAppendSingleCard(newMine);
+                }
+            } catch (err) {
+                console.warn("Erro ao buscar próxima mina single:", err);
+                // Se der erro, não faz nada ou poderia chamar loadMines como fallback extremo
+            }
+        }
     } else {
         // Fallback: Apenas carrega tudo se não soubermos qual mina atualizar (ex: erro de estado)
         loadMines();
@@ -1828,6 +1953,8 @@ function formatTimeCombat(totalSeconds) {
       // Fallback de emergência: tenta carregar só as minas
       loadMines();
     } finally {
+      // Verifica Banner de Evento
+      checkEventStatus();
       hideLoading();
     }
   }
@@ -1865,9 +1992,11 @@ function formatTimeCombat(totalSeconds) {
     const diffInMs = nextSessionDate.getTime() - now.getTime();
     const diffInSeconds = Math.floor(diffInMs / 1000);
     if (cycleInfoElement) {
-    cycleInfoElement.innerHTML = ` <strong>${formatTimeHHMMSS(diffInSeconds)}</strong>`;
+        cycleInfoElement.innerHTML = ` <strong>${formatTimeHHMMSS(diffInSeconds)}</strong>`;
+    }
+    // Verifica evento periodicamente (ex: virada do dia)
+    checkEventStatus();
   }
-}
   setInterval(updateCountdown, 1000);
   updateCountdown();
 

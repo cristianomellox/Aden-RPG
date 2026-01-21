@@ -773,7 +773,7 @@ async function handleEquipUnequip(item, isEquipped) {
         document.getElementById('itemDetailsModal').style.display = 'none';
         
         // Força recarga completa pois equipamento afeta stats globais
-        await loadPlayerAndItems(true); 
+        await updateLocalInventoryState(item.id); 
     } catch (err) {
         console.error('Erro geral ao equipar/desequipar:', err);
         showCustomAlert('Ocorreu um erro inesperado.');

@@ -949,7 +949,7 @@ const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
 // Função para carregar definições de itens no cache local (MODIFICADA COM CACHE PERSISTENTE)
 async function loadItemDefinitions() {
     const CACHE_KEY = 'item_definitions_cache';
-    const CACHE_TTL_24H = 1440; // 24 horas * 60 minutos
+    const CACHE_TTL_24H = 43200; // 24 horas * 60 minutos
 
     // 1. Tenta carregar do cache em memória (RAM) - lógica original
     if (itemDefinitions.size > 0) return;

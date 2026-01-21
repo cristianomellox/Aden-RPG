@@ -1630,6 +1630,7 @@ function formatTimeCombat(totalSeconds) {
   async function resetCombatUI() { 
     const mineToUpdate = currentMineId;
 
+    // 1. Limpa UI de combate
     if (combatModal) combatModal.style.display = "none";
     
     clearOptimisticState();
@@ -1645,39 +1646,36 @@ function formatTimeCombat(totalSeconds) {
     ambientMusic.currentTime = 0;
 
     if (mineToUpdate) {
-        // 1. Atualiza visualmente APENAS a mina que estávamos atacando
+        // 2. Atualiza visualmente a mina que acabamos de sair
         const updatedMine = await updateSingleMineCard(mineToUpdate);
         
-        // 2. Lógica Especial: Se a mina virou "disputando", significa que uma NOVA mina pode ter sido liberada
-        //    pela regra SQL. Para economizar egress (evitando loadMines completo), buscamos APENAS a próxima mina.
+        // 3. Lógica Segura: Pergunta ao Backend se precisamos de mais uma mina
+        // Se a mina atual ficou 'disputando', pode ser que precise abrir uma vaga,
+        // mas só o backend sabe se já alcançamos o limite de slots.
         if (updatedMine && updatedMine.status === 'disputando') {
             try {
-                // Pega IDs já renderizados na tela para excluir da busca
+                // Coleta todos os IDs que já estão renderizados na tela para enviar ao Backend
                 const renderedIds = Array.from(document.querySelectorAll('.mine-card'))
                                          .map(el => el.id.replace('mine-card-', ''));
                 
-                // Busca EXATAMENTE UMA mina que esteja aberta, vazia e não esteja na tela
-                const { data: newMine, error } = await supabase
-                    .from('mining_caverns')
-                    .select('id, name, status, owner_player_id, open_time, competition_end_time, monster_health, initial_monster_health')
-                    .is('owner_player_id', null)
-                    .eq('status', 'aberta')
-                    .not('id', 'in', `(${renderedIds.join(',')})`)
-                    .order('name', { ascending: true })
-                    .limit(1)
-                    .single();
+                // RPC: "Get Next Mine If Needed"
+                // O Backend vai calcular: (Total Necessário) - (O que eu já tenho). 
+                // Se sobrar > 0, ele manda a mina. Se não, manda null.
+                const { data: newMine, error } = await supabase.rpc('get_next_open_mine', { 
+                    p_visible_ids: renderedIds 
+                });
 
-                if (!error && newMine) {
-                    // Renderiza e adiciona apenas esta nova mina
-                    renderAndAppendSingleCard(newMine);
+                // Se a RPC retornou uma mina (array com 1 item ou objeto dependendo da config), renderiza
+                if (!error && newMine && newMine.length > 0) {
+                    // Como a function retorna TABLE, o supabase retorna um array [obj]
+                    renderAndAppendSingleCard(newMine[0]);
                 }
             } catch (err) {
-                console.warn("Erro ao buscar próxima mina single:", err);
-                // Se der erro, não faz nada ou poderia chamar loadMines como fallback extremo
+                console.warn("[Mines] Erro ao buscar próxima mina (smart check):", err);
             }
         }
     } else {
-        // Fallback: Apenas carrega tudo se não soubermos qual mina atualizar (ex: erro de estado)
+        // Fallback se perdemos a referência
         loadMines();
     }
   }

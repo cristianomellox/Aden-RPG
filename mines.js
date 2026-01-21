@@ -147,7 +147,7 @@ const GlobalDB = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Cache de Donos (v3) + Evento FDS");
+  console.log("[mines] DOM ready - Versão Otimizada (Single RPC Entry + Minified PvP Logs)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -268,8 +268,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const BATCH_THRESHOLD_MULTI = 5;   // Padrão Multi
   const BATCH_THRESHOLD_SOLO = 10;   // Padrão Solo (acumula mais)
   
-  const DEBOUNCE_TIME_MULTI = 10000;  // 4s Multi
-  const DEBOUNCE_TIME_SOLO = 40000;  // 10s Solo
+  const DEBOUNCE_TIME_MULTI = 10000;  // 10s Multi
+  const DEBOUNCE_TIME_SOLO = 40000;  // 40s Solo
   
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; // 72 Horas
   
@@ -1389,45 +1389,68 @@ function formatTimeCombat(totalSeconds) {
       return false;
   }
 
+  // --- OTIMIZADO V2: Unificado em 1 única Request RPC ---
   async function startCombat(mineId) {
     showLoading();
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
     
-    // Reset para modo solo até o servidor dizer o contrário
-    knownParticipantCount = 1;
-
-    if (buyAttackBtn) buyAttackBtn.disabled = false;
-    
+    // Reset temporário
     pendingBatch = 0;
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
+    if (buyAttackBtn) buyAttackBtn.disabled = false;
+
     try {
-      const sel = await supabase
-        .from("mining_caverns")
-        .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
-        .eq("id", mineId)
-        .single();
-      
-      if (sel.error || !sel.data) { showModalAlert("Caverna não encontrada."); return; }
-      const cavern = sel.data;
-      if (cavern.owner_player_id) { showModalAlert('Mina já tem dono.'); return; }
+      // NOVA REQUEST ÚNICA: substitui "select mine", "get stats" e "get ranking" separados
+      const { data, error } = await supabase.rpc('enter_mine_combat_session', { 
+            p_player_id: userId, 
+            p_mine_id: mineId 
+      });
 
-      currentMineId = mineId;
-      maxMonsterHealth = Number(cavern.initial_monster_health || 1);
+      if (error) throw error;
+      if (!data.success) { showModalAlert(data.msg || "Não foi possível entrar."); return; }
+
+      // Desempacota o retorno da RPC unificada
+      const cavern = data.mine;     // { id, hp, max_hp, status, end_time }
+      const pInfo = data.player;    // { al, ab, has_mine, stats }
+      const ranking = data.ranking; // [...]
       
-      currentMonsterHealthGlobal = cavern.monster_health;
+      if (pInfo.has_mine) { showModalAlert('Você já é dono de uma mina.'); return; }
+      
+      currentMineId = cavern.id;
+      maxMonsterHealth = cavern.max_hp;
+      currentMonsterHealthGlobal = cavern.hp;
+      
+      // Cache de Stats: usa o que veio do RPC ou fallback para a função dedicada
+      if (pInfo.stats) {
+          cachedCombatStats = pInfo.stats;
+          // Atualiza cache local também
+          localStorage.setItem(`player_combat_stats_${userId}`, JSON.stringify({timestamp: Date.now(), data: pInfo.stats}));
+      } else {
+          await getOrUpdatePlayerStatsCache(true);
+      }
+      
+      // Seta Estamina Local
+      localAttacksLeft = pInfo.al;
+      
+      // (Re)inicia cooldown visual caso necessário (lógica simplificada de atualização)
+      // Aqui assumimos que se o jogador entrou e não tem 5 ataques, o timer deve rodar.
+      if (localAttacksLeft < 5 && !nextAttackTime) {
+           nextAttackTime = Date.now() + 30000;
+           startLocalCooldownTimer();
+      }
+      updateAttacksDisplay();
+
+      // UI
       updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
-      
-      await getOrUpdatePlayerStatsCache();
-      await syncAttacksState();
+      if (combatTitle) combatTitle.textContent = `Disputa pela Mina`; // Simplificado, poderia pegar nome via props extras se precisasse
 
-      restoreOptimisticState(cavern);
+      // Restaura estado otimista (se houver crash anterior recente)
+      restoreOptimisticState({ initial_monster_health: maxMonsterHealth });
 
-      if (combatTitle) combatTitle.textContent = `Disputa pela ${esc(cavern.name)}`;
-
-      if (cavern.competition_end_time) {
-        const remaining = Math.max(0, Math.floor((new Date(cavern.competition_end_time).getTime() - Date.now()) / 1000));
+      if (cavern.end_time) {
+        const remaining = Math.max(0, Math.floor((new Date(cavern.end_time).getTime() - Date.now()) / 1000));
         startCombatTimer(remaining);
       } else {
         if (combatTimerSpan) combatTimerSpan.textContent = "Aguardando 1º golpe";
@@ -1436,14 +1459,11 @@ function formatTimeCombat(totalSeconds) {
 
       if (combatModal) combatModal.style.display = "flex";
       
-      const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      
       // Define se é solo baseado no ranking retornado
-      knownParticipantCount = rankingData ? rankingData.length : 0;
+      knownParticipantCount = ranking ? ranking.length : 0;
       const isSolo = (knownParticipantCount <= 1);
       
-      // Renderiza apenas os top 3, mas se for solo renderiza aviso especial
-      renderRanking(rankingData ? rankingData.slice(0, 3) : [], isSolo);
+      renderRanking(ranking ? ranking.slice(0, 3) : [], isSolo);
 
       ambientMusic.play();
     } catch (e) {
@@ -1528,7 +1548,8 @@ function formatTimeCombat(totalSeconds) {
               showModalAlert("Mina conquistada/resetada!");
               // Força renderização completa do ranking ao vencer
               renderRanking(data.r || [], false); 
-              resetCombatUI();
+              // Se houver Piggyback data do final de sessão, passa para o reset
+              resetCombatUI(data.ui_update); 
           } else {
               updateBlindRanking(data.pc, data.md, data.td, data.il);
           }
@@ -1619,15 +1640,25 @@ function formatTimeCombat(totalSeconds) {
     try {
       if (!currentMineId) return;
       showLoading();
-      await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
-      showModalAlert("Tempo esgotado!");
+      // Ao terminar tempo, RPC final pode retornar dados atualizados
+      const { data, error } = await supabase.rpc("end_mine_combat_session", { _mine_id: currentMineId });
+      
+      if (!error && data?.ui_update) {
+         showModalAlert(data.message || "Tempo esgotado!");
+         resetCombatUI(data.ui_update);
+      } else {
+         showModalAlert("Tempo esgotado!");
+         resetCombatUI();
+      }
     } catch (e) {
-    } finally {
-      resetCombatUI();
-    }
+       console.error(e);
+       resetCombatUI();
+    } 
   }
 
-  async function resetCombatUI() { 
+  // --- OTIMIZAÇÃO DE UPDATE UI ---
+  // Aceita `directUpdateData` opcional para evitar FETCH da mina
+  async function resetCombatUI(directUpdateData = null) { 
     const mineToUpdate = currentMineId;
 
     // 1. Limpa UI de combate
@@ -1646,38 +1677,83 @@ function formatTimeCombat(totalSeconds) {
     ambientMusic.currentTime = 0;
 
     if (mineToUpdate) {
-        // 2. Atualiza visualmente a mina que acabamos de sair
-        const updatedMine = await updateSingleMineCard(mineToUpdate);
-        
-        // 3. Lógica Segura: Pergunta ao Backend se precisamos de mais uma mina
-        // Se a mina atual ficou 'disputando', pode ser que precise abrir uma vaga,
-        // mas só o backend sabe se já alcançamos o limite de slots.
-        if (updatedMine && updatedMine.status === 'disputando') {
-            try {
-                // Coleta todos os IDs que já estão renderizados na tela para enviar ao Backend
-                const renderedIds = Array.from(document.querySelectorAll('.mine-card'))
-                                         .map(el => el.id.replace('mine-card-', ''));
-                
-                // RPC: "Get Next Mine If Needed"
-                // O Backend vai calcular: (Total Necessário) - (O que eu já tenho). 
-                // Se sobrar > 0, ele manda a mina. Se não, manda null.
-                const { data: newMine, error } = await supabase.rpc('get_next_open_mine', { 
-                    p_visible_ids: renderedIds 
-                });
+        // Se temos dados direto do Piggyback, usamos para evitar requisição extra
+        if (directUpdateData && document.getElementById(`mine-card-${directUpdateData.i}`)) {
+             const cardElement = document.getElementById(`mine-card-${directUpdateData.i}`);
+             // Atualiza apenas classes e textos essenciais manualmente
+             // Formato Piggyback esperado: {i: id, n: name, s: status, m: hp, ...}
+             
+             // Simplificação: apenas reaplica status no card.
+             // Para lógica mais robusta, pode chamar renderMines com dado injetado, 
+             // mas aqui a estratégia é atualização cirúrgica.
+             let actionType = null;
+             let cardClass = "";
+             
+             // Atualiza referência
+             const ownerId = directUpdateData.o;
+             const newStatus = directUpdateData.s === 'A' ? 'aberta' : (directUpdateData.s === 'D' ? 'disputando' : (directUpdateData.s === 'O' ? 'ocupada' : directUpdateData.s));
+             
+             if (newStatus === "aberta" && !ownerId) { actionType = "startCombat"; }
+             else if (newStatus === "disputando") { actionType = "startCombat"; }
+             else if (ownerId && ownerId !== userId) { actionType = "challengeMine"; }
+             else if (ownerId === userId) { cardClass = "disabled-card"; }
 
-                // Se a RPC retornou uma mina (array com 1 item ou objeto dependendo da config), renderiza
-                if (!error && newMine && newMine.length > 0) {
-                    // Como a function retorna TABLE, o supabase retorna um array [obj]
-                    renderAndAppendSingleCard(newMine[0]);
-                }
-            } catch (err) {
-                console.warn("[Mines] Erro ao buscar próxima mina (smart check):", err);
+             cardElement.className = `mine-card ${newStatus} ${actionType ? 'clickable' : ''} ${cardClass}`;
+             const pStat = cardElement.querySelector('p');
+             if (pStat) pStat.textContent = newStatus;
+
+             // Clona para remover listeners antigos e add novo
+             const newCard = cardElement.cloneNode(true);
+             cardElement.parentNode.replaceChild(newCard, cardElement);
+
+             if (actionType) {
+                 const mineObjForListener = { id: directUpdateData.i, name: directUpdateData.n }; // Minimal mock obj
+                 // Busca info do owner no map global se tiver
+                 const ownerInfo = ownerId ? globalOwnersMap[ownerId] : null; 
+                 newCard.addEventListener("click", () => {
+                     if (actionType === "startCombat") startCombat(mineToUpdate);
+                     else if (actionType === "challengeMine") challengeMine(mineObjForListener, ownerInfo, []); 
+                 });
+             }
+
+             if (ownerId === userId) myOwnedMineId = mineToUpdate;
+             else if (myOwnedMineId === mineToUpdate) myOwnedMineId = null;
+
+             // Verifica Smart Check da próxima mina
+             if (newStatus === 'disputando' || newStatus === 'ocupada') {
+                 checkForNextMineSmart();
+             }
+
+        } else {
+            // Fallback: 2. Atualiza visualmente via fetch se não veio direto
+            const updatedMine = await updateSingleMineCard(mineToUpdate);
+            // 3. Smart Check via RPC
+            if (updatedMine && (updatedMine.status === 'disputando' || updatedMine.status === 'ocupada')) {
+                checkForNextMineSmart();
             }
         }
     } else {
-        // Fallback se perdemos a referência
+        // Fallback total se perdemos a referência
         loadMines();
     }
+  }
+
+  // Lógica separada para checar nova mina disponível
+  async function checkForNextMineSmart() {
+      try {
+            const renderedIds = Array.from(document.querySelectorAll('.mine-card'))
+                                        .map(el => el.id.replace('mine-card-', ''));
+            
+            const { data: newMine, error } = await supabase.rpc('get_next_open_mine', { 
+                p_visible_ids: renderedIds 
+            });
+
+            if (!error && newMine && newMine.length > 0) {
+                renderAndAppendSingleCard(newMine[0]);
+            }
+        } catch (err) {
+            console.warn("[Mines] Erro smart check:", err);
+        }
   }
 
   // =================================================================
@@ -1685,7 +1761,9 @@ function formatTimeCombat(totalSeconds) {
   // =================================================================
   async function challengeMine(targetMine, owner, allMines) {
     if (!userId) return;
-    const ownerName = owner.name || "Desconhecido";
+    const ownerName = (owner && owner.name) ? owner.name : "Desconhecido";
+    const ownerIdSafe = (owner && owner.id) ? owner.id : (targetMine.owner_player_id);
+
     showLoading();
     try {
         let attemptsLeft = 0;
@@ -1712,12 +1790,15 @@ function formatTimeCombat(totalSeconds) {
 
         confirmActionBtn.onclick = () => {
             confirmModal.style.display = 'none';
-            startPvpCombat(targetMine.id, owner.id, owner.name, owner.avatar_url);
+            // Usa avatar se disponível, ou fallback
+            const avt = (owner && owner.avatar_url) ? owner.avatar_url : 'https://aden-rpg.pages.dev/assets/default_avatar.png';
+            startPvpCombat(targetMine.id, ownerIdSafe, ownerName, avt);
         };
         confirmCancelBtn.onclick = () => confirmModal.style.display = 'none';
     } catch (e) { showModalAlert("Erro PvP check."); } finally { hideLoading(); }
   }
 
+  // --- OTIMIZAÇÃO: LÓGICA MINIFICADA DO BATTLE LOG ---
   async function startPvpCombat(mineId, ownerId, ownerName, ownerAvatar) {
     showLoading();
     try {
@@ -1755,24 +1836,66 @@ function formatTimeCombat(totalSeconds) {
         pvpCountdown.style.display = 'none';
 
         const combatLog = data.combat.battle_log;
+        
+        // Loop que aceita log minificado [turn, atkIdx, dmg, crit, evade] 
+        // ou objeto {turn, attacker_id, damage, ...} (legacy safe)
         for (const turn of combatLog) {
-            const targetElement = turn.attacker_id === ownerId ? challengerSide : defenderSide;
-            if (turn.attacker_id === ownerId) {
-                challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(turn.damage));
-                updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
-            } else {
-                defenderCurrentHp = Math.max(0, defenderCurrentHp - Number(turn.damage));
-                updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
-            }
-            displayDamageNumber(turn.damage, turn.critical, turn.evaded, targetElement);
-            const victimAvatarId = turn.attacker_id === ownerId ? "challengerAvatar" : "defenderAvatar";
-            const vImg = document.getElementById(victimAvatarId);
+            let damage, isCrit, isEvaded, attackerIdOrIndex;
             
-            if (vImg) {
-                vImg.classList.remove('shake-animation');
-                void vImg.offsetWidth;
-                vImg.classList.add('shake-animation');
-                setTimeout(() => vImg.classList.remove('shake-animation'), 300);
+            // Verifica se é Array (formato novo) ou Objeto (formato antigo)
+            if (Array.isArray(turn)) {
+                // [turn_num, attacker_index, damage, is_crit, is_evade]
+                // attacker_index: 0 = challenger (atacante), 1 = defender (dono)
+                const attackerIdx = turn[1];
+                damage = turn[2];
+                isCrit = (turn[3] === 1);
+                isEvaded = (turn[4] === 1);
+                
+                if (attackerIdx === 0) { // Desafiante ataca
+                     defenderCurrentHp = Math.max(0, defenderCurrentHp - Number(damage));
+                     updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
+                     displayDamageNumber(damage, isCrit, isEvaded, defenderSide); // Mostra dano no lado do defensor
+                } else { // Dono ataca
+                     challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(damage));
+                     updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
+                     displayDamageNumber(damage, isCrit, isEvaded, challengerSide); // Mostra dano no lado do desafiante
+                }
+
+                const victimAvatarId = (attackerIdx === 0) ? "defenderAvatar" : "challengerAvatar";
+                const vImg = document.getElementById(victimAvatarId);
+                if (vImg) {
+                    vImg.classList.remove('shake-animation');
+                    void vImg.offsetWidth;
+                    vImg.classList.add('shake-animation');
+                    setTimeout(() => vImg.classList.remove('shake-animation'), 300);
+                }
+
+            } else {
+                // FORMATO LEGACY (FALLBACK)
+                damage = turn.damage;
+                isCrit = turn.critical;
+                isEvaded = turn.evaded;
+                attackerIdOrIndex = turn.attacker_id;
+
+                const targetElement = (attackerIdOrIndex === ownerId) ? challengerSide : defenderSide;
+                
+                if (attackerIdOrIndex === ownerId) {
+                    challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(damage));
+                    updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
+                } else {
+                    defenderCurrentHp = Math.max(0, defenderCurrentHp - Number(damage));
+                    updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
+                }
+                
+                displayDamageNumber(damage, isCrit, isEvaded, targetElement);
+                const victimAvatarId = (attackerIdOrIndex === ownerId) ? "challengerAvatar" : "defenderAvatar";
+                const vImg = document.getElementById(victimAvatarId);
+                if (vImg) {
+                    vImg.classList.remove('shake-animation');
+                    void vImg.offsetWidth;
+                    vImg.classList.add('shake-animation');
+                    setTimeout(() => vImg.classList.remove('shake-animation'), 300);
+                }
             }
             await new Promise(r => setTimeout(r, 1000));
         }

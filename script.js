@@ -984,7 +984,7 @@ async function loadItemDefinitions() {
     
     // 4. Salva no cache persistente para a próxima vez com TTL de 24h
     setCache(CACHE_KEY, dataForCache, CACHE_TTL_24H);
-    console.log('Definições de itens carregadas do Supabase e salvas no cache.');
+    console.log(`Definições carregadas do servidor: ${data.length} itens.`);
 }
 
 // Funções de Notificação Flutuante
@@ -2153,6 +2153,7 @@ confirmDrawBtn.addEventListener('click', async () => {
 
         if (error) throw error;
 
+        // Fecha modal de confirmação APENAS se deu sucesso
         drawConfirmModal.style.display = 'none';
         
         // 1. Mostra resultados VISUAIS usando dados parciais + Definições Locais
@@ -2193,13 +2194,21 @@ function displayDrawResults(itemsMap) {
         const itemId = parseInt(itemIdStr, 10);
         
         // 1. Busca definição no CACHE LOCAL (Sem ir ao servidor)
-        const itemDef = itemDefinitions.get(itemId);
-
-        const name = itemDef ? itemDef.name : 'unknown';
-        // Caso não tenha definição (raro), usa placeholder ou tenta nome genérico
-        const imgUrl = itemDef 
-            ? `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`
-            : `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
+        // Se itemDefinitions ainda não carregou, tenta recarregar (fallback seguro)
+        let itemDef = itemDefinitions.get(itemId);
+        
+        // Se não achou, define placeholders seguros
+        const name = itemDef ? itemDef.name : `Item #${itemId}`;
+        
+        // URL da imagem
+        let imgUrl;
+        if (itemDef) {
+             imgUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
+        } else {
+             // Fallback para imagem desconhecida ou placeholder
+             console.warn(`Definição de item ${itemId} não encontrada no cache local.`);
+             imgUrl = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`; 
+        }
 
         const itemDiv = document.createElement('div');
         itemDiv.className = 'result-item';

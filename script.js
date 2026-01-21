@@ -1,3 +1,4 @@
+
 // Registro do Service Worker Otimizado
 if ('serviceWorker' in navigator) {
     const registerSW = () => {
@@ -969,7 +970,7 @@ async function loadItemDefinitions() {
 
     // 3. Se não houver cache, busca no Supabase
     console.log('Buscando definições de itens do Supabase...');
-    const { data, error } = await supabaseClient.from('items').select('item_id, name');
+    const { data, error } = await supabaseClient.from('items').select('item_id, name, rarity');
     if (error) {
         console.error('Erro ao carregar definições de itens:', error);
         return;
@@ -2090,28 +2091,40 @@ decreaseCardQtyBtn.addEventListener('click', () => {
 confirmPurchaseBtn.addEventListener('click', async () => {
     const quantity = parseInt(cardQtyToBuySpan.textContent);
     confirmPurchaseBtn.disabled = true;
-    buyCardsMessage.textContent = 'Processando compra...';
+    buyCardsMessage.textContent = 'Processando...';
 
-    const { data, error } = await supabaseClient.rpc('buy_spiral_cards', { purchase_quantity: quantity });
+    try {
+        const { data, error } = await supabaseClient.rpc('buy_spiral_cards', { purchase_quantity: quantity });
 
-    if (error) {
-        buyCardsMessage.textContent = `Erro: ${error.message}`;
+        if (error) throw error;
+        if (!data.success) throw new Error(data.message);
+
+        buyCardsMessage.textContent = data.message;
+        
+        // 1. Atualiza Cristais na UI e Cache Local (Sem refresh)
+        updateLocalPlayerData({ crystals: data.new_crystals });
+        
+        // 2. Atualiza Cartões no Cache e UI (Via Surgical Update)
+        // O surgicalCacheUpdate atualiza o IndexedDB e a UI se programado para isso
+        if (data.inventory_updates && data.timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
+            
+            // Atualiza visualmente o contador de cartões no modal aberto
+            const cardItem = data.inventory_updates.find(i => i.item_id === 41);
+            if (cardItem && commonCardCountSpan) {
+                commonCardCountSpan.textContent = `x ${cardItem.quantity}`;
+            }
+        }
+
+        setTimeout(() => {
+            buyCardsModal.style.display = 'none';
+            confirmPurchaseBtn.disabled = false;
+        }, 1000);
+
+    } catch (err) {
+        buyCardsMessage.textContent = `Erro: ${err.message}`;
         confirmPurchaseBtn.disabled = false;
-        return;
     }
-
-    buyCardsMessage.textContent = data.message;
-    
-    // Atualiza SALDO localmente
-    updateLocalPlayerData({ crystals: data.new_crystals });
-    
-    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA
-    await syncSpiralCardsWithServer();
-    
-    setTimeout(() => {
-        buyCardsModal.style.display = 'none';
-        confirmPurchaseBtn.disabled = false;
-    }, 1500);
 });
 
 function openDrawConfirmModal(type) {
@@ -2127,68 +2140,79 @@ drawAdvancedBtn.addEventListener('click', () => openDrawConfirmModal('advanced')
 // MODIFICADO PARA GARANTIR SYNC APÓS SORTEIO
 confirmDrawBtn.addEventListener('click', async () => {
     const quantity = parseInt(drawQuantityInput.value);
-    if (isNaN(quantity) || quantity <= 0) {
-        drawConfirmMessage.textContent = 'Por favor, insira uma quantidade válida.';
-        return;
-    }
+    if (isNaN(quantity) || quantity <= 0) return;
 
     confirmDrawBtn.disabled = true;
     drawConfirmMessage.textContent = 'Sorteando...';
 
-    // O retorno agora é um JSON complexo
-    const { data, error } = await supabaseClient.rpc('perform_spiral_draw', {
-        draw_type: currentDrawType,
-        p_quantity: quantity
-    });
+    try {
+        const { data, error } = await supabaseClient.rpc('perform_spiral_draw', {
+            draw_type: currentDrawType,
+            p_quantity: quantity
+        });
 
-    if (error) {
-        drawConfirmMessage.textContent = `Erro: ${error.message}`;
+        if (error) throw error;
+
+        drawConfirmModal.style.display = 'none';
+        
+        // 1. Mostra resultados VISUAIS usando dados parciais + Definições Locais
+        displayDrawResults(data.visual_rewards);
+
+        // 2. Atualiza Cache em Background (Sem travar a UI)
+        if (data.inventory_updates && data.timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
+            
+            // Atualiza contador de cartões na UI imediatamente
+            const cardIdToCheck = currentDrawType === 'common' ? 41 : 42;
+            const cardItem = data.inventory_updates.find(i => i.item_id === cardIdToCheck);
+            const targetSpan = currentDrawType === 'common' ? commonCardCountSpan : advancedCardCountSpan;
+            
+            if (targetSpan) {
+                targetSpan.textContent = `x ${cardItem ? cardItem.quantity : 0}`;
+            }
+        }
+
+    } catch (err) {
+        drawConfirmMessage.textContent = `Erro: ${err.message}`;
+    } finally {
         confirmDrawBtn.disabled = false;
-        return;
-    } 
-
-    drawConfirmModal.style.display = 'none';
-    
-    // Mostra resultados
-    displayDrawResults(data.won_items_map);
-
-    // Salva os prêmios no cache (itens ganhos)
-    if (data.inventory_updates && data.timestamp) {
-        await surgicalCacheUpdate(data.inventory_updates, data.timestamp);
     }
-
-    // FORÇA O SYNC TOTAL DOS CARTÕES PARA GARANTIR LIMPEZA DO GASTO
-    await syncSpiralCardsWithServer();
-
-    confirmDrawBtn.disabled = false;
 });
 
-function displayDrawResults(items) {
+function displayDrawResults(itemsMap) {
     drawResultsGrid.innerHTML = '';
-    if (Object.keys(items).length === 0) {
-        drawResultsGrid.innerHTML = '<p>Nenhum item especial foi obtido desta vez.</p>';
-    } else {
-        for (const itemIdStr in items) {
-            const itemId = parseInt(itemIdStr, 10);
-            const quantity = items[itemId];
-            const itemDef = itemDefinitions.get(itemId);
-
-            if (!itemDef) {
-                console.warn(`Definição não encontrada para o item ID: ${itemId}`);
-                continue; 
-            }
-            
-            const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
-
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'result-item';
-            itemDiv.innerHTML = `
-                <img src="${imageUrl}" alt="${itemDef.name}">
-                <span>x${quantity}</span>
-            `;
-            drawResultsGrid.appendChild(itemDiv);
-        }
+    
+    if (!itemsMap || Object.keys(itemsMap).length === 0) {
+        drawResultsGrid.innerHTML = '<p>Nenhum item.</p>';
+        drawResultsModal.style.display = 'flex';
+        return;
     }
+
+    // Itera sobre o mapa simples ID -> Qtd
+    for (const [itemIdStr, qty] of Object.entries(itemsMap)) {
+        const itemId = parseInt(itemIdStr, 10);
+        
+        // 1. Busca definição no CACHE LOCAL (Sem ir ao servidor)
+        const itemDef = itemDefinitions.get(itemId);
+
+        const name = itemDef ? itemDef.name : 'unknown';
+        // Caso não tenha definição (raro), usa placeholder ou tenta nome genérico
+        const imgUrl = itemDef 
+            ? `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`
+            : `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
+
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'result-item';
+        // Adiciona classe de raridade se disponível para efeito visual extra (opcional)
+        if (itemDef && itemDef.rarity) itemDiv.classList.add(`rarity-${itemDef.rarity.toLowerCase()}`);
+        
+        itemDiv.innerHTML = `
+            <img src="${imgUrl}" alt="${name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+            <span>x${qty}</span>
+        `;
+        drawResultsGrid.appendChild(itemDiv);
+    }
+    
     drawResultsModal.style.display = 'flex';
 }
 

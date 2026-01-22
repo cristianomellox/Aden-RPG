@@ -147,7 +147,7 @@ const GlobalDB = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Híbrida (Solo/Multi) + Ranking Fix + Cache de Donos (v3) + Evento FDS");
+  console.log("[mines] DOM ready - Versão Otimizada (Zero Egress Selects)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -594,36 +594,6 @@ function formatTimeCombat(totalSeconds) {
       localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
   }
 
-  // Função Legacy (ainda usada para refresh manual, mas não no boot)
-  async function syncAndCheckLogs() {
-      if (!userId) return;
-      const lastSync = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || '1970-01-01T00:00:00Z';
-      
-      try {
-          const { data, error } = await supabase.rpc('sync_pvp_history', { 
-              p_player_id: userId, 
-              p_last_sync_time: lastSync 
-          });
-
-          if (error) { console.warn("Sync error:", error); return; }
-
-          const newLogs = data.new_logs || [];
-          if (newLogs.length > 0) {
-              const currentLogs = getLocalLogs();
-              const updatedLogs = [...currentLogs, ...newLogs];
-              if (updatedLogs.length > 50) updatedLogs.splice(0, updatedLogs.length - 50);
-              
-              saveLocalLogs(updatedLogs);
-              const lastLogTime = newLogs[newLogs.length - 1].attack_time;
-              localStorage.setItem(STORAGE_KEY_LAST_SYNC, lastLogTime);
-              
-              if (newLogIndicator) newLogIndicator.style.display = 'block';
-          }
-      } catch (e) {
-          console.warn("History sync error:", e);
-      }
-  }
-
   function openHistory() {
       const logs = getLocalLogs();
       logs.sort((a, b) => new Date(b.attack_time) - new Date(a.attack_time));
@@ -672,7 +642,7 @@ function formatTimeCombat(totalSeconds) {
       }
 
       for (const row of rankingData) {
-        const rName = row.n || row.player_name;
+        const rName = row.n || row.name || row.player_name;
         const rDamage = row.d || row.total_damage_dealt;
         const rId = row.pid || row.player_id;
 
@@ -1225,7 +1195,7 @@ function formatTimeCombat(totalSeconds) {
   }
 
   // =================================================================
-  // FUNÇÃO DE ATUALIZAÇÃO CIRÚRGICA (ECONOMIA DE DADOS)
+  // OTIMIZAÇÃO: UPDATE CIRÚRGICO VIA RPC (SEM SELECT *)
   // =================================================================
   async function updateSingleMineCard(targetMineId) {
       if (!targetMineId) return null;
@@ -1234,20 +1204,29 @@ function formatTimeCombat(totalSeconds) {
       if (!cardElement) return null; 
 
       try {
-          const { data: mine, error } = await supabase
-              .from("mining_caverns")
-              .select("id, name, status, monster_health, owner_player_id, open_time, initial_monster_health")
-              .eq("id", targetMineId)
-              .single();
+          // OTIMIZAÇÃO: Usa RPC leve em vez de select direto
+          const { data: mine, error } = await supabase.rpc("get_mine_info_light", { p_mine_id: targetMineId });
 
           if (error || !mine) throw error;
 
+          // Mapeia chaves curtas do RPC para o formato esperado
+          const mappedMine = {
+              id: mine.id,
+              name: mine.n,
+              status: mine.s,
+              monster_health: mine.m,
+              initial_monster_health: mine.h,
+              owner_player_id: mine.o,
+              open_time: mine.t
+          };
+
           let owner = null;
-          if (mine.owner_player_id) {
-              if (globalOwnersMap[mine.owner_player_id]) {
-                  owner = globalOwnersMap[mine.owner_player_id];
+          if (mappedMine.owner_player_id) {
+              if (globalOwnersMap[mappedMine.owner_player_id]) {
+                  owner = globalOwnersMap[mappedMine.owner_player_id];
               } else {
-                  const { data: p } = await supabase.from("players").select("id, name, avatar_url, guild_id").eq("id", mine.owner_player_id).single();
+                  // Fallback: Se não tiver no cache, busca (raro)
+                  const { data: p } = await supabase.from("players").select("id, name, avatar_url, guild_id").eq("id", mappedMine.owner_player_id).single();
                   if (p) {
                       globalOwnersMap[p.id] = p;
                       await GlobalDB.saveOwners([p]); // Salva no cache também
@@ -1260,8 +1239,8 @@ function formatTimeCombat(totalSeconds) {
           const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
 
           let collectingHtml = "";
-          if (mine.owner_player_id) {
-              const start = new Date(mine.open_time || new Date());
+          if (mappedMine.owner_player_id) {
+              const start = new Date(mappedMine.open_time || new Date());
               const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
               
               // --- EVENTO FDS: MULTIPLICADOR ---
@@ -1275,20 +1254,20 @@ function formatTimeCombat(totalSeconds) {
 
           let actionType = null;
           let cardClass = "";
-          if (mine.status === "aberta" && !mine.owner_player_id) {
+          if (mappedMine.status === "aberta" && !mappedMine.owner_player_id) {
               actionType = "startCombat";
-          } else if (mine.status === "disputando") {
+          } else if (mappedMine.status === "disputando") {
               actionType = "startCombat";
-          } else if (mine.owner_player_id && mine.owner_player_id !== userId) {
+          } else if (mappedMine.owner_player_id && mappedMine.owner_player_id !== userId) {
               actionType = "challengeMine";
-          } else if (mine.owner_player_id === userId) {
+          } else if (mappedMine.owner_player_id === userId) {
               cardClass = "disabled-card";
           }
           
-          cardElement.className = `mine-card ${mine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
+          cardElement.className = `mine-card ${mappedMine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
           cardElement.innerHTML = `
-            <h3 style="color: yellow;">${esc(mine.name)}</h3>
-            <p>${esc(mine.status || "Fechada")}</p>
+            <h3 style="color: yellow;">${esc(mappedMine.name)}</h3>
+            <p>${esc(mappedMine.status || "Fechada")}</p>
             ${ownerName ? `
               <div class="mine-owner-container">
                 ${ownerAvatarHtml}
@@ -1301,15 +1280,15 @@ function formatTimeCombat(totalSeconds) {
           
           if (actionType) {
               newCard.addEventListener("click", () => {
-                  if (actionType === "startCombat") startCombat(mine.id);
-                  else if (actionType === "challengeMine") challengeMine(mine, owner, []); 
+                  if (actionType === "startCombat") startCombat(mappedMine.id);
+                  else if (actionType === "challengeMine") challengeMine(mappedMine, owner, []); 
               });
           }
 
-          if (mine.owner_player_id === userId) myOwnedMineId = mine.id;
-          else if (myOwnedMineId === mine.id) myOwnedMineId = null;
+          if (mappedMine.owner_player_id === userId) myOwnedMineId = mappedMine.id;
+          else if (myOwnedMineId === mappedMine.id) myOwnedMineId = null;
           
-          return mine; // Retorna os dados para verificação de status
+          return mappedMine; // Retorna os dados para verificação de status
 
       } catch (e) {
           console.warn("[Mines] Surgical update failed, fallback to full load", e);
@@ -1389,6 +1368,9 @@ function formatTimeCombat(totalSeconds) {
       return false;
   }
 
+  // =================================================================
+  // OTIMIZAÇÃO: START COMBAT VIA RPC (SEM SELECT *)
+  // =================================================================
   async function startCombat(mineId) {
     showLoading();
     hasAttackedOnce = false;
@@ -1403,15 +1385,26 @@ function formatTimeCombat(totalSeconds) {
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
     try {
-      const sel = await supabase
-        .from("mining_caverns")
-        .select("id, name, status, monster_health, initial_monster_health, owner_player_id, competition_end_time")
-        .eq("id", mineId)
-        .single();
+      // OTIMIZAÇÃO: RPC ÚNICA que retorna dados da mina + ranking
+      const { data, error } = await supabase.rpc("enter_mine_combat", { 
+          p_mine_id: mineId,
+          p_player_id: userId
+      });
       
-      if (sel.error || !sel.data) { showModalAlert("Caverna não encontrada."); return; }
-      const cavern = sel.data;
-      if (cavern.owner_player_id) { showModalAlert('Mina já tem dono.'); return; }
+      if (error || !data.success) { 
+          showModalAlert(data?.message || "Erro ao entrar na mina."); 
+          return; 
+      }
+
+      // Mapeia o retorno da RPC para o formato esperado
+      const cavern = {
+          id: data.mine.id,
+          name: data.mine.name,
+          status: data.mine.status,
+          monster_health: data.mine.hp,
+          initial_monster_health: data.mine.max_hp,
+          competition_end_time: data.mine.end_time
+      };
 
       currentMineId = mineId;
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
@@ -1436,14 +1429,13 @@ function formatTimeCombat(totalSeconds) {
 
       if (combatModal) combatModal.style.display = "flex";
       
-      const { data: rankingData } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-      
-      // Define se é solo baseado no ranking retornado
-      knownParticipantCount = rankingData ? rankingData.length : 0;
+      // Usa o ranking que já veio na RPC
+      const rankingData = data.ranking;
+      knownParticipantCount = data.participant_count || 0;
       const isSolo = (knownParticipantCount <= 1);
       
       // Renderiza apenas os top 3, mas se for solo renderiza aviso especial
-      renderRanking(rankingData ? rankingData.slice(0, 3) : [], isSolo);
+      renderRanking(rankingData, isSolo);
 
       ambientMusic.play();
     } catch (e) {
@@ -1647,6 +1639,7 @@ function formatTimeCombat(totalSeconds) {
 
     if (mineToUpdate) {
         // 2. Atualiza visualmente a mina que acabamos de sair
+        // OTIMIZAÇÃO: Usa a nova função leve
         const updatedMine = await updateSingleMineCard(mineToUpdate);
         
         // 3. Lógica Segura: Pergunta ao Backend se precisamos de mais uma mina
@@ -1722,19 +1715,40 @@ function formatTimeCombat(totalSeconds) {
     showLoading();
     try {
         const challengerData = await getOrUpdatePlayerStatsCache();
-        const { data: defenderData } = await supabase.rpc('get_player_combat_stats', { p_player_id: ownerId });
+        
+        // OTIMIZAÇÃO: Não busca stats do defensor aqui. O capture_mine já resolve o combate.
+        // Apenas para UI, usamos valores padrão ou o que vier no log se possível, 
+        // mas para manter a UI bonita, vamos assumir que o capture_mine retorna sucesso.
         
         let challengerAvatarUrl = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         const cachedP = await getCachedPlayerData();
         if(cachedP && cachedP.avatar_url) challengerAvatarUrl = cachedP.avatar_url;
 
         const challengerMaxHp = Number(challengerData.health || 0);
-        const defenderMaxHp = Number(defenderData.health || 0);
         let challengerCurrentHp = challengerMaxHp;
-        let defenderCurrentHp = defenderMaxHp;
-
+        
+        // Executa o combate
         const { data, error } = await supabase.rpc("capture_mine", { p_challenger_id: userId, p_mine_id: mineId });
         if (error || !data?.success) throw error || data?.message;
+
+        // Extrai HP inicial do defensor do log (primeiro turno onde ele é defensor ou atacante)
+        // Ou faz uma estimativa baseada no log.
+        // Para simplificar e economizar egress, vamos pegar o max_health do primeiro log entry se disponível,
+        // ou apenas usar o HP restante + dano tomado.
+        
+        // Hack para UI: Calcula Max HP baseado no log
+        let defenderMaxHp = 0;
+        const combatLog = data.combat.battle_log;
+        
+        // Tenta achar o HP inicial no retorno (se você alterar o simulate_pvp_battle para retornar, melhor)
+        // Como não alteramos o simulate_pvp_battle para retornar max_hp, vamos usar o valor do log final + dano total
+        let totalDmgToDefender = 0;
+        combatLog.forEach(l => {
+            if (l.attacker_id !== ownerId) totalDmgToDefender += l.damage;
+        });
+        const defenderLeft = data.combat.defender_health_left;
+        defenderMaxHp = defenderLeft + totalDmgToDefender;
+        let defenderCurrentHp = defenderMaxHp;
 
         challengerName.textContent = challengerData.name || "Desafiante";
         defenderName.textContent = ownerName || "Dono";
@@ -1754,7 +1768,6 @@ function formatTimeCombat(totalSeconds) {
         }
         pvpCountdown.style.display = 'none';
 
-        const combatLog = data.combat.battle_log;
         for (const turn of combatLog) {
             const targetElement = turn.attacker_id === ownerId ? challengerSide : defenderSide;
             if (turn.attacker_id === ownerId) {

@@ -1830,9 +1830,7 @@ function formatTimeCombat(totalSeconds) {
           "856545ef-e33e-4b86-b2af-71957a9772f9",
           "9d0af1a4-7f36-4f19-9ce6-5e507b17e912",
           "37baa684-f4dc-4d80-93cb-9004a3cbe2b9",
-          "1888d6d8-ca41-48cc-b92e-e48af088d643",
-          "10fddae3-d7d0-4784-b1ed-54883596b19b",
-          "31dfad6d-3d1a-493f-ae72-423c65156e01"
+          "1888d6d8-ca41-48cc-b92e-e48af088d643"
       ];
 
       // [NOVO] Popula os bots antes de carregar o jogo

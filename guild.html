@@ -794,7 +794,7 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("DOMContentLoaded", () => {
     // 1. Verifica se hoje é Sábado (6 em UTC)
     const today = new Date();
-    const isSaturday = today.getUTCDay() === 6;
+    const isSaturday = today.getUTCDay() === 0;
 
     if (isSaturday) {
         // Seleciona a aba de Batalhas pelo atributo data-tab

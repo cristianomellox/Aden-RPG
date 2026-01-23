@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true },
         { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true },
         { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true },
-        { id: 'guildBtn', key: 'guild', type: 'weekly', day: 6, isSubmenu: false } // 6 = Sábado (UTC)
+        { id: 'guildBtn', key: 'guild', type: 'weekly', day: 0, isSubmenu: false } // 6 = Sábado (UTC)
     ];
 
     // Obtém a data UTC atual no formato YYYY-MM-DD

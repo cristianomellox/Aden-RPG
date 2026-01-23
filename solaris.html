@@ -99,7 +99,7 @@ body {
     height: 30px;
 }
 #pageTitle {
-    color: gray; /* Cor Avermelhada para indicar perigo/Boss */
+    color: gray; 
     font-size: 1.2em;
     font-weight: bold;
     text-shadow: 1px 1px 2px #000;
@@ -121,7 +121,6 @@ body {
 }
 
 #map {
-    /* Ajuste o nome do arquivo se necessário, assumi solaris.webp */
     background-image: url('https://aden-rpg.pages.dev/assets/solaris.jpg'); 
     background-size: contain;
     background-repeat: no-repeat;
@@ -163,9 +162,9 @@ body {
 }
 
 #zionContent h2 {
-    margin-top: -5px; /* Ajuste leve pois não tem Guilda Regente */
+    margin-top: -5px; 
     margin-bottom: 5px;
-    color: #ff4444; /* Título em vermelho */
+    color: #ff4444; 
     text-shadow: 2px 2px 6px black; 
 }
 
@@ -175,7 +174,7 @@ body {
     padding: 10px;
     pointer-events: auto;
     display: flex;
-    flex-direction: column; /* Empilha os botões em telas pequenas */
+    flex-direction: column; 
     gap: 10px;
     align-items: center;
     width: 100%;
@@ -195,19 +194,12 @@ body {
     color: #e0dccc;
     font-weight: bold;
     padding: 15px 20px; 
-    font-size: 14px;
+    font-size: 1.2em;
     text-shadow: 1px 1px 2px #000;
-    width: 100%; /* Botões ocupam a largura do container */
+    
 }
 .action-btn:hover {
     opacity: 0.9;
-}
-
-/* Estilo específico para o botão de Boss para destaque */
-.boss-btn {
-    color: gold;
-    border: 1px solid rgba(255, 0, 0, 0.3);
-    border-radius: 4px;
 }
 
 /* Estilos do Modal */
@@ -220,7 +212,7 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: rgba(0,0,0,0.8); /* Fundo escuro */
+    background-color: rgba(0,0,0,0.8); 
     justify-content: center;
     align-items: center;
 }
@@ -262,6 +254,55 @@ body {
     text-align: left;
     color: #ccc;
 }
+
+/* === ESTILOS DO SUBMENU (Portado do Index/Style.css) === */
+.footer-submenu {
+    position: fixed;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 5px;
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    z-index: 9998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
+    min-width: 180px;
+}
+
+.footer-submenu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    color: #e0dccc;
+    text-decoration: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    font-weight: bold;
+    background: #1e1e1e; 
+    border: 1px solid #555;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
+    white-space: nowrap;      
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.footer-submenu-btn:hover {
+    background-color: #333;
+    border-color: gold;
+    color: #fff;
+}
+
+.submenu-icon {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+    display: block;
+}
 </style>
 <body>
 
@@ -274,21 +315,27 @@ body {
     </div>
 
     <div id="mapContainer">
-        <div id="map">
-            </div>
+        <div id="map"></div>
     </div>
 
     <div id="contentOverlay">
         
         <div id="zionContent">
-            
             </div>
 
         <div id="zionFooter">
-            <button id="openHistoryModalBtn" class="action-btn">História</button>
-            <button onclick="window.location.href='solo_boss.html'" class="action-btn boss-btn">Enfrentar Kar-Drakul</button>
+            <button id="solarisMenuBtn" class="action-btn">Menu</button>
         </div>
 
+    </div>
+
+    <div id="solarisSubmenu" class="footer-submenu">
+        <div id="btnOpenHistory" class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="submenu-icon"> História
+        </div>
+        <div onclick="window.location.href='solo_boss.html'" class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/iniciar.webp" class="submenu-icon"> Desafiar Kar-Drakul
+        </div>
     </div>
     
     <div id="historyModal" class="modal-container" style="display: none;">
@@ -512,16 +559,59 @@ function enableMapInteraction() {
     }, 100);
 }
 
-// Lógica do Modal de História
+// Lógica de UI (Menu e Modais)
 document.addEventListener('DOMContentLoaded', () => {
-    const openBtn = document.getElementById('openHistoryModalBtn');
+    // === LÓGICA DO MENU POPUP (Trazida do script.js) ===
+    const menuBtn = document.getElementById('solarisMenuBtn');
+    const submenu = document.getElementById('solarisSubmenu');
+    
+    // Função para abrir/fechar o submenu
+    if (menuBtn && submenu) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Impede fechar imediatamente
+            
+            const isVisible = submenu.style.display === 'flex';
+            
+            if (!isVisible) {
+                submenu.style.display = 'flex';
+                
+                // Calcula posição para aparecer ACIMA do botão
+                const btnRect = menuBtn.getBoundingClientRect();
+                const submenuRect = submenu.getBoundingClientRect();
+                
+                // Centraliza horizontalmente com o botão
+                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+                
+                // Posiciona acima
+                let newTop = btnRect.top - submenuRect.height - 10; // 10px de margem
+
+                submenu.style.top = newTop + 'px';
+                submenu.style.left = newLeft + 'px';
+            } else {
+                submenu.style.display = 'none';
+            }
+        });
+
+        // Fechar submenu ao clicar fora
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#solarisSubmenu') && !e.target.closest('#solarisMenuBtn')) {
+                submenu.style.display = 'none';
+            }
+        });
+    }
+
+    // === LÓGICA DO MODAL DE HISTÓRIA ===
+    // Agora o gatilho é o item dentro do submenu
+    const openHistoryBtn = document.getElementById('btnOpenHistory');
     const modal = document.getElementById('historyModal');
     const closeBtn = modal.querySelector('.close-btn');
 
-    if (openBtn && modal && closeBtn) {
-        openBtn.addEventListener('click', () => {
+    if (openHistoryBtn && modal && closeBtn) {
+        openHistoryBtn.addEventListener('click', () => {
             modal.style.display = 'flex'; 
             document.body.style.overflow = 'hidden'; 
+            // Fecha o submenu ao abrir o modal
+            if(submenu) submenu.style.display = 'none';
         });
 
         closeBtn.addEventListener('click', () => {

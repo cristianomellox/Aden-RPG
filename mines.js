@@ -1846,6 +1846,11 @@ function formatTimeCombat(totalSeconds) {
       } catch (err) {
           console.warn("Erro ao tentar resolver minas expiradas no boot:", err);
       }
+      try {
+          await supabase.rpc('reset_player_pvp_attempts');
+      } catch (pvpErr) {
+          console.warn("Erro ao verificar reset diário de PvP:", pvpErr);
+      }
 
       showLoading();
       

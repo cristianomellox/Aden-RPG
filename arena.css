@@ -284,7 +284,7 @@ body, html {
 }
 .crit-damage-number {
     font-family: Georgia, serif;
-    font-size: 27px;
+    font-size: 1.5em;
     color: red;
     text-shadow: -1px -1px 0 yellow, 1px -1px 0 yellow, -1px 1px 0 yellow, 1px 1px 0 yellow;
     animation: floating-damage-crit 1.5s ease-out forwards;
@@ -952,4 +952,62 @@ textarea:focus, textarea:active {
     border: 3px solid #FFD700; 
     /* Adicionado o efeito de pulse */
     animation: pulse 2s infinite; 
+}
+
+/* === BARRA FIXA DE RANKING DO JOGADOR (ARENA) === */
+#fixedArenaRank {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 2100; /* Acima do modal (z-index 1000/2000) */
+    background: linear-gradient(to top, #141414, #2a2a2a);
+    border-top: 3px solid #c9a94a;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.9);
+}
+
+.fixed-rank-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    width: 100%;
+    max-width: 95vw; /* Mesma largura do modal content */
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Tipografia da barra fixa */
+.fixed-rank-pos { 
+    color: #fff; 
+    font-size: 1.3em; 
+    font-weight: bold; 
+    width: 40px; 
+    text-align: center; 
+}
+.fixed-rank-avatar { 
+    width: 45px; height: 45px; 
+    border-radius: 50%; 
+    border: 2px solid #fff; 
+    box-shadow: 0 0 5px gold; 
+    margin-right: 10px;
+}
+.fixed-rank-info { flex-grow: 1; text-align: left; }
+.fixed-rank-name { 
+    color: #fff; font-size: 1.1em; font-weight: bold; display: block;
+    text-shadow: 1px 1px 2px #000;
+}
+.fixed-rank-guild { color: #ddd; font-size: 0.8em; font-weight: bold; }
+.fixed-rank-points { 
+    color: gold; 
+    text-shadow: 0 0 3px black; 
+    font-size: 1.2em; 
+    font-weight: bold; 
+    min-width: 80px; text-align: right;
+}
+
+/* Ajuste para não cobrir o último item da lista no modal */
+#rankingListContainer, #rankingListContainerPast {
+    padding-bottom: 70px; /* Espaço para a barra fixa */
 }

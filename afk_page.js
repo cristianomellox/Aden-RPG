@@ -74,11 +74,9 @@ const GlobalDB = {
 // Converte os arrays do SQL otimizado de volta para Objetos JS
 // =======================================================================
 function mapLoadData(arr, uid) {
-    // SQL Retorna: [0:Success, 1:XP, 2:Gold, 3:Stage, 4:Attempts, 5:MonsterHP, 6:AttacksLeft, 7:StartEpoch, 8:Level]
     if (!arr || !Array.isArray(arr) || arr[0] !== 1) return null;
-    
     return {
-        id: uid, // Reinsere o ID localmente
+        id: uid,
         xp: arr[1],
         gold: arr[2],
         current_afk_stage: arr[3],
@@ -86,8 +84,8 @@ function mapLoadData(arr, uid) {
         current_monster_health: arr[5],
         remaining_attacks_in_combat: arr[6],
         last_afk_start_time: arr[7] ? new Date(arr[7] * 1000).toISOString() : new Date().toISOString(),
-        level: arr[8]
-        // cached_combat_stats foi removido do fetch inicial para economizar dados
+        level: arr[8],
+        daily_rewards_log: arr[9] // <--- Adicione esta linha se não houver
     };
 }
 
@@ -715,46 +713,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Listener do Botão de Vídeo (+1 Tentativa)
     if (watchAdAttemptBtn) {
         watchAdAttemptBtn.addEventListener("click", async () => {
-            if (!userId) return;
-            watchAdAttemptBtn.disabled = true;
-            watchAdAttemptBtn.textContent = "Carregando...";
+        watchAdAttemptBtn.disabled = true;
+        watchAdAttemptBtn.textContent = "Carregando...";
+        try {
+            const { data: token, error: rpcError } = await supabase.rpc('generate_reward_token', { p_reward_type: 'afk_attempt' });
+            
+            if (rpcError) {
+                // EXIBE NO MODAL EM VEZ DE ALERT
+                resultText.textContent = rpcError.message.toLowerCase().includes('limite') 
+                    ? "Limite diário de vídeos atingido!" 
+                    : rpcError.message;
+                resultModal.style.display = "block";
 
-            try {
-                // Gera o token (reutiliza a RPC existente)
-                const { data: token, error: rpcError } = await supabase.rpc('generate_reward_token', {
-                    p_reward_type: 'afk_attempt'
-                });
-
-                if (rpcError) {
-                    // Se der erro de limite, esconde o botão permanentemente na sessão
-                    if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
-                        alert('Limite diário de vídeos atingido!');
-                        watchAdAttemptBtn.style.display = 'none';
-                        startAfkBtn.style.display = 'inline-block';
-                    } else {
-                        alert(`Erro: ${rpcError.message}`);
-                    }
-                    watchAdAttemptBtn.disabled = false;
-                    watchAdAttemptBtn.textContent = "Assistir +1";
-                    return;
+                if (rpcError.message.toLowerCase().includes('limite')) {
+                    watchAdAttemptBtn.style.display = 'none';
+                    startAfkBtn.style.display = 'inline-block';
+                    startAfkBtn.disabled = true;
+                    startAfkBtn.style.opacity = "0.5";
                 }
-
-                // Salva token e clica no link
-                localStorage.setItem('pending_reward_token', token);
                 
-                if (triggerAdLink) {
-                    triggerAdLink.click(); // Dispara o 'go:anaf' do AppCreator
-                } else {
-                    alert("Erro interno: Link de anúncio não encontrado.");
-                }
-
-            } catch (e) {
-                console.error(e);
-                alert("Erro ao conectar com o servidor.");
                 watchAdAttemptBtn.disabled = false;
                 watchAdAttemptBtn.textContent = "Assistir +1";
+                return;
             }
-        });
+
+            localStorage.setItem('pending_reward_token', token);
+            triggerAdLink.click();
+        } catch (e) {
+            resultText.textContent = "Erro ao conectar com o servidor.";
+            resultModal.style.display = "block";
+            watchAdAttemptBtn.disabled = false;
+            watchAdAttemptBtn.textContent = "Assistir +1";
+        }
+    });
     }
 
     if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
@@ -767,7 +758,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     
     returnMainIdleBtn.addEventListener("click", () => {
-        window.location.href = "index.html?refresh=true";
+        window.location.href = "index.html";
     });
 
     saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");

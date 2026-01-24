@@ -503,7 +503,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const banner = document.createElement("h4");
           banner.id = "eventBanner";
           banner.textContent = "Coleta dobrada!";
-          banner.style.cssText = "text-shadow: none!important; background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 5px 0 0 0;";
+          banner.style.cssText = "text-shadow: none!important; background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 5px 0 0 0; font-size: 1.6em;";
           
           if (cycleInfo.parentNode) {
               cycleInfo.parentNode.appendChild(banner);

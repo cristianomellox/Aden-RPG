@@ -1467,6 +1467,10 @@ function formatTimeCombat(totalSeconds) {
   }
 
   // Processar Fila (Batch com Smoke Signal)
+  // ... (código anterior permanece igual até a função processAttackQueue)
+
+  // Processar Fila (Batch com Smoke Signal)
+  
   async function processAttackQueue() {
       if (pendingBatch === 0) return;
 
@@ -1487,48 +1491,55 @@ function formatTimeCombat(totalSeconds) {
           if (error) throw error;
           if (!data.success) {
               console.warn("Erro no sync:", data.message);
-              showModalAlert(data.message);
-              syncAttacksState();
-              loadMines();
+              // Se disser que não tem ataques, apenas sincroniza a stamina
+              if (data.al !== undefined) localAttacksLeft = data.al;
+              updateAttacksDisplay();
+              
+              // Se a mensagem for crítica, recarrega
+              if (data.message !== 'Sem ataques.') {
+                  showModalAlert(data.message);
+                  loadMines();
+              }
               return;
           }
 
           // Atualiza contagem real de participantes vinda do server
           knownParticipantCount = data.pc || 1;
 
-          // LÓGICA HÍBRIDA (SOLO vs MULTI)
-          if (knownParticipantCount <= 1 && !data.win) {
-              // Solo Mode: Mantém HP local calculado para fluidez (evita "pulos" de lag)
-              // Aceita apenas o update de Stamina do servidor (authoritative)
-              localAttacksLeft = data.al;
-              // NOTA: Ignoramos data.hp aqui intencionalmente se estiver em modo solo
-              
+          // === CORREÇÃO AQUI: LÓGICA DE SINCRONIZAÇÃO DE HP ===
+          if (data.win) {
+              // Se ganhou, não importa o modo, processa a vitória
+              showModalAlert("Mina conquistada/resetada!");
+              renderRanking(data.r || [], false); 
+              resetCombatUI();
+              return;
+          }
+
+          // Atualiza stamina (authoritative)
+          localAttacksLeft = data.al;
+          updateAttacksDisplay();
+
+          if (knownParticipantCount <= 1) {
+              // Solo Mode:
+              // Se o HP local é 0, mas o servidor diz que tem HP (RNG ou Lag), 
+              // ACEITAMOS o HP do servidor para destravar o jogo.
               if (currentMonsterHealthGlobal <= 0 && data.hp > 0) {
-                  console.warn("Ressincronizando HP (RNG Divergence)");
+                  console.warn("[mines] Ressincronizando HP: Local=0, Server=" + data.hp);
                   currentMonsterHealthGlobal = data.hp;
                   updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
               }
+              // Caso contrário, mantemos o HP local para fluidez visual enquanto > 0
           } else {
-              // Multiplayer: Usa HP do servidor (verdade absoluta)
+              // Multiplayer: Sempre usa HP do servidor
               currentMonsterHealthGlobal = data.hp;
               updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
-              localAttacksLeft = data.al;
           }
-
-          updateAttacksDisplay();
+          
+          updateBlindRanking(data.pc, data.md, data.td, data.il);
 
           if (data.end && !combatTimerInterval) {
              const remaining = Math.max(0, Math.floor((new Date(data.end).getTime() - Date.now()) / 1000));
              startCombatTimer(remaining);
-          }
-
-          if (data.win) {
-              showModalAlert("Mina conquistada/resetada!");
-              // Força renderização completa do ranking ao vencer
-              renderRanking(data.r || [], false); 
-              resetCombatUI();
-          } else {
-              updateBlindRanking(data.pc, data.md, data.td, data.il);
           }
 
       } catch (e) {
@@ -1545,6 +1556,17 @@ function formatTimeCombat(totalSeconds) {
     }
     
     if (!currentMineId) return;
+
+    // === CORREÇÃO: GUARDA DE HP ZERO ===
+    // Se o monstro já morreu localmente, não permite gastar stamina nem enviar batch.
+    // Isso evita o envio de ataques com dano 0 e o "bouncing" de estamina.
+    if (currentMonsterHealthGlobal <= 0) {
+        // Se temos um batch pendente (o golpe fatal), força o envio agora.
+        if (pendingBatch > 0) {
+            await processAttackQueue();
+        }
+        return; 
+    }
 
     if (localAttacksLeft <= 0) return; 
 
@@ -1564,7 +1586,10 @@ function formatTimeCombat(totalSeconds) {
     currentMonsterHealthGlobal = Math.max(0, currentMonsterHealthGlobal - damage);
     updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
     displayDamageNumber(damage, isCrit, false, monsterArea);
+    
     if (!hasAttackedOnce) hasAttackedOnce = true;
+    
+    // Animação do monstro
     const mImg = document.getElementById("monsterImage");
     if (mImg) {
         mImg.classList.remove('shake-animation');
@@ -1577,6 +1602,13 @@ function formatTimeCombat(totalSeconds) {
 
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
+    // Se matou localmente, envia IMEDIATAMENTE para finalizar
+    if (currentMonsterHealthGlobal <= 0) {
+        saveOptimisticState(null);
+        await processAttackQueue();
+        return;
+    }
+
     if (isFirstAttackSequence) {
         isFirstAttackSequence = false;
         saveOptimisticState(null);
@@ -1588,7 +1620,7 @@ function formatTimeCombat(totalSeconds) {
     const debounceTime = (knownParticipantCount <= 1) ? DEBOUNCE_TIME_SOLO : DEBOUNCE_TIME_MULTI;
     const threshold = (knownParticipantCount <= 1) ? BATCH_THRESHOLD_SOLO : BATCH_THRESHOLD_MULTI;
 
-    if (pendingBatch >= threshold || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
+    if (pendingBatch >= threshold || localAttacksLeft === 0) {
         await processAttackQueue();
     } else {
         const flushTime = Date.now() + debounceTime;
@@ -1596,6 +1628,8 @@ function formatTimeCombat(totalSeconds) {
         saveOptimisticState(flushTime);
     }
   }
+
+// ... (resto do código permanece igual)
 
   function startCombatTimer(seconds) {
     if (combatTimerInterval) clearInterval(combatTimerInterval);

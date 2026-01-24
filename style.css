@@ -2125,3 +2125,23 @@ button, .btn {
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
 }
 
+/* Garante que a bolinha fique posicionada corretamente na aba */
+#btnShopVideoTab {
+    position: relative !important;
+    overflow: visible !important; /* Permite que a bolinha saia um pouco se necessário */
+}
+
+/* Bolinha específica para abas de modais */
+.tab-notification-dot {
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 10;
+    pointer-events: none;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
+}

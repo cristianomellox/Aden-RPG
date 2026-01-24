@@ -6,12 +6,16 @@ document.addEventListener("DOMContentLoaded", () => {
     // Mapeamento dos botões
     // type: 'daily' = reseta todo dia
     // type: 'weekly' = reseta em dia específico (day: 6 = Sábado)
-    // isSubmenu: true = usa a bolinha pequena e ativa o botão pai "Iniciar"
+    // isSubmenu: true = ativa lógica de notificação pai
     const targets = [
-        { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true },
-        { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true },
-        { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true },
-        { id: 'guildBtn', key: 'guild', type: 'weekly', day: 0, isSubmenu: false } // 6 = Sábado (UTC)
+        // Menu Iniciar (Footer)
+        { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
+        { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
+        { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
+        { id: 'guildBtn', key: 'guild', type: 'weekly', day: 0, isSubmenu: false }, 
+        
+        // Menu Loja (Side Menu & Modal)
+        { id: 'btnShopVideoTab', key: 'shop_video', type: 'daily', isSubmenu: true, parentGroup: 'loja' }
     ];
 
     // Obtém a data UTC atual no formato YYYY-MM-DD
@@ -37,8 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     // Diários sempre resetam para true na virada do dia
                     currentStatus[t.key] = true;
                 } else if (t.type === 'weekly') {
-                    // Semanais só ficam true se for o dia correto (Ex: Sábado)
-                    // Caso contrário, ficam false (para limpar notificações antigas)
+                    // Semanais só ficam true se for o dia correto
                     currentStatus[t.key] = (currentDayOfWeek === t.day);
                 }
             });
@@ -56,43 +59,77 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Renderiza as bolinhas na tela
     const renderDots = (status) => {
-        let hasPendingSubmenu = false;
+        let pendingRecursos = false;
+        let pendingLoja = false;
 
         targets.forEach(t => {
             const btn = document.getElementById(t.id);
-            if (!btn) return;
-
-            // Define qual classe CSS usar baseada se é submenu ou botão principal
-            const dotClass = t.isSubmenu ? 'submenu-notification-dot' : 'footer-notification-dot';
-
-            // Remove bolinha existente para evitar duplicatas
-            const existingDot = btn.querySelector(`.${dotClass}`);
-            if (existingDot) existingDot.remove();
-
-            // Verifica se deve mostrar a bolinha
+            
+            // Se a ação está pendente (true)
             if (status[t.key] === true) {
-                const dot = document.createElement('div');
-                dot.className = dotClass;
-                btn.appendChild(dot);
+                
+                // Marca flags para os pais
+                if (t.parentGroup === 'recursos') pendingRecursos = true;
+                if (t.parentGroup === 'loja') pendingLoja = true;
 
-                // Se for um item de submenu, marca que o pai precisa de notificação
-                if (t.isSubmenu) {
-                    hasPendingSubmenu = true;
+                // Desenha a bolinha no próprio elemento (Submenu ou Tab)
+                if (btn) {
+                    // Remove anterior
+                    const existingDot = btn.querySelector('.notification-dot, .submenu-notification-dot, .footer-notification-dot, .tab-notification-dot');
+                    if (existingDot) existingDot.remove();
+
+                    // Cria nova
+                    const dot = document.createElement('div');
+                    
+                    // Define classe baseada no tipo de botão
+                    if (t.id === 'btnShopVideoTab') {
+                         dot.className = 'tab-notification-dot'; // Classe específica para a aba
+                    } else if (t.isSubmenu) {
+                        dot.className = 'submenu-notification-dot';
+                    } else {
+                        dot.className = 'footer-notification-dot';
+                    }
+                    
+                    btn.appendChild(dot);
+                }
+            } else {
+                // Se status é false, garante que remove a bolinha
+                if (btn) {
+                    const existingDot = btn.querySelector('.notification-dot, .submenu-notification-dot, .footer-notification-dot, .tab-notification-dot');
+                    if (existingDot) existingDot.remove();
                 }
             }
         });
 
-        // Lógica Específica para o botão PAI "Recursos/Iniciar" (#recursosBtn)
-        // Ele acende se qualquer filho (AFK, Arena, Boss) estiver pendente
+        // --- Lógica do Pai: Recursos/Iniciar (#recursosBtn) ---
         const mainBtn = document.getElementById('recursosBtn');
         if (mainBtn) {
             const existingMainDot = mainBtn.querySelector('.footer-notification-dot');
             if (existingMainDot) existingMainDot.remove();
 
-            if (hasPendingSubmenu) {
+            if (pendingRecursos) {
                 const dot = document.createElement('div');
                 dot.className = 'footer-notification-dot';
                 mainBtn.appendChild(dot);
+            }
+        }
+
+        // --- Lógica do Pai: Loja (#btnLojaSide) ---
+        const lojaSideBtn = document.getElementById('btnLojaSide');
+        if (lojaSideBtn) {
+            // No menu lateral, a bolinha fica dentro da div .diamond
+            const diamond = lojaSideBtn.querySelector('.diamond');
+            if (diamond) {
+                // Remove bolinha antiga (usando a classe do menu lateral)
+                const existingLojaDot = diamond.querySelector('.notification-dot');
+                if (existingLojaDot) existingLojaDot.remove();
+
+                if (pendingLoja) {
+                    const dot = document.createElement('span');
+                    dot.className = 'notification-dot'; // Classe CSS já existente para o menu lateral
+                    dot.style.display = 'block'; // Força display
+                    diamond.appendChild(dot);
+                }
             }
         }
     };
@@ -104,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (status[key] === true) {
             status[key] = false; // Marca como visto/feito
             localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
-            renderDots(status); // Atualiza UI imediatamente
+            renderDots(status); // Atualiza UI imediatamente (remove do filho e verifica pais)
         }
     };
 
@@ -118,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
     targets.forEach(t => {
         const btn = document.getElementById(t.id);
         if (btn) {
+            // Quando clicar no botão alvo (ex: aba video), remove a notificação
             btn.addEventListener('click', () => handleActionClick(t.key));
         }
     });

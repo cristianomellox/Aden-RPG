@@ -1629,8 +1629,6 @@ function formatTimeCombat(totalSeconds) {
     }
   }
 
-// ... (resto do código permanece igual)
-
   function startCombatTimer(seconds) {
     if (combatTimerInterval) clearInterval(combatTimerInterval);
     combatTimeLeft = Math.max(0, Number(seconds || 0));

@@ -1467,16 +1467,18 @@ function formatTimeCombat(totalSeconds) {
   }
 
   // Processar Fila (Batch com Smoke Signal)
-  // ... (código anterior permanece igual até a função processAttackQueue)
+  // ... (código anterior)
 
   // Processar Fila (Batch com Smoke Signal)
   
   async function processAttackQueue() {
-      if (pendingBatch === 0) return;
+      // Permitimos processar se tiver batch OU se o monstro estiver morto localmente
+      // (para forçar a verificação de vitória no servidor)
+      if (pendingBatch === 0 && currentMonsterHealthGlobal > 0) return;
 
       const countToSend = pendingBatch;
+      pendingBatch = 0; // Reseta imediatamente para evitar envios duplos
       
-      pendingBatch = 0;
       if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
       clearOptimisticState();
@@ -1489,63 +1491,70 @@ function formatTimeCombat(totalSeconds) {
           });
 
           if (error) throw error;
+          
+          // Se o servidor retornar erro, mas não for erro de lógica crítica, apenas ajustamos
           if (!data.success) {
-              console.warn("Erro no sync:", data.message);
-              // Se disser que não tem ataques, apenas sincroniza a stamina
+              if (data.win) { // O server disse "Erro: Mina já conquistada" -> Trata como vitória
+                   handleVictory(data);
+                   return;
+              }
+              // Sincroniza stamina e alerta se necessário
               if (data.al !== undefined) localAttacksLeft = data.al;
               updateAttacksDisplay();
               
-              // Se a mensagem for crítica, recarrega
               if (data.message !== 'Sem ataques.') {
-                  showModalAlert(data.message);
-                  loadMines();
+                  console.warn("Server message:", data.message);
               }
               return;
           }
 
-          // Atualiza contagem real de participantes vinda do server
-          knownParticipantCount = data.pc || 1;
-
-          // === CORREÇÃO AQUI: LÓGICA DE SINCRONIZAÇÃO DE HP ===
+          // === VITÓRIA CONFIRMADA ===
           if (data.win) {
-              // Se ganhou, não importa o modo, processa a vitória
-              showModalAlert("Mina conquistada/resetada!");
-              renderRanking(data.r || [], false); 
-              resetCombatUI();
+              handleVictory(data);
               return;
           }
 
-          // Atualiza stamina (authoritative)
+          // Atualiza dados normais de combate
+          knownParticipantCount = data.pc || 1;
           localAttacksLeft = data.al;
           updateAttacksDisplay();
 
-          if (knownParticipantCount <= 1) {
-              // Solo Mode:
-              // Se o HP local é 0, mas o servidor diz que tem HP (RNG ou Lag), 
-              // ACEITAMOS o HP do servidor para destravar o jogo.
-              if (currentMonsterHealthGlobal <= 0 && data.hp > 0) {
-                  console.warn("[mines] Ressincronizando HP: Local=0, Server=" + data.hp);
-                  currentMonsterHealthGlobal = data.hp;
-                  updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
-              }
-              // Caso contrário, mantemos o HP local para fluidez visual enquanto > 0
-          } else {
-              // Multiplayer: Sempre usa HP do servidor
+          // Sincronia de HP
+          // Se o HP local for 0, mas o servidor diz que tem HP, aceitamos o servidor
+          // para evitar soft-lock
+          if (currentMonsterHealthGlobal <= 0 && data.hp > 0) {
               currentMonsterHealthGlobal = data.hp;
-              updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
+          } else if (knownParticipantCount > 1) {
+              currentMonsterHealthGlobal = data.hp;
           }
+          // (No modo solo, se local > 0 e server < local, mantemos local até o sync final)
           
+          updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
           updateBlindRanking(data.pc, data.md, data.td, data.il);
-
-          if (data.end && !combatTimerInterval) {
-             const remaining = Math.max(0, Math.floor((new Date(data.end).getTime() - Date.now()) / 1000));
-             startCombatTimer(remaining);
-          }
 
       } catch (e) {
           console.error("Falha no batch sync:", e);
-          syncAttacksState();
+          // Em caso de erro de rede, devolve o batch para tentar de novo no próximo clique
+          pendingBatch += countToSend; 
       }
+  }
+  
+  function handleVictory(data) {
+      currentMonsterHealthGlobal = 0;
+      updateHpBar(0, maxMonsterHealth);
+      
+      // Delay pequeno para garantir que a animação da barra de vida chegando a 0 seja vista
+      setTimeout(() => {
+          // Não reseta a UI imediatamente "escondendo" tudo, mostra o alerta primeiro
+          showModalAlert("Mina Conquistada! Verifique o resultado.");
+          
+          // Se houver dados de ranking final no payload, renderiza
+          // (Isso depende de como end_mine_combat_session retorna, mas o alerta é o principal)
+          
+          // Só depois fecha o combate
+          resetCombatUI(); 
+          loadMines(); // Recarrega a lista de minas
+      }, 500);
   }
 
   async function attack() {
@@ -1557,66 +1566,54 @@ function formatTimeCombat(totalSeconds) {
     
     if (!currentMineId) return;
 
-    // === CORREÇÃO: GUARDA DE HP ZERO ===
-    // Se o monstro já morreu localmente, não permite gastar stamina nem enviar batch.
-    // Isso evita o envio de ataques com dano 0 e o "bouncing" de estamina.
-    if (currentMonsterHealthGlobal <= 0) {
-        // Se temos um batch pendente (o golpe fatal), força o envio agora.
-        if (pendingBatch > 0) {
-            await processAttackQueue();
-        }
-        return; 
-    }
+    // REMOVIDO: O bloqueio "if (currentMonsterHealthGlobal <= 0) return;" 
+    // Isso impedia de enviar o "last hit confirmation".
+    
+    // Se não tem stamina E não tem batch pendente, não deixa atacar
+    // (Mas se o HP for 0, deixamos clicar para forçar o sync)
+    if (localAttacksLeft <= 0 && currentMonsterHealthGlobal > 0) return; 
 
-    if (localAttacksLeft <= 0) return; 
-
+    // Calcula Dano Local (Otimista)
     if (!cachedCombatStats) await getOrUpdatePlayerStatsCache();
-    if (!cachedCombatStats) return;
+    
+    // Só desconta stamina e mostra dano se o monstro (visualmente) ainda tiver vida
+    if (currentMonsterHealthGlobal > 0 && localAttacksLeft > 0) {
+        localAttacksLeft--;
+        updateAttacksDisplay();
 
-    localAttacksLeft--;
-    updateAttacksDisplay();
+        if (!nextAttackTime) {
+            nextAttackTime = Date.now() + 30000;
+            startLocalCooldownTimer();
+        }
 
-    if (!nextAttackTime) {
-        nextAttackTime = Date.now() + 30000;
-        startLocalCooldownTimer();
+        const { damage, isCrit } = calculateLocalDamage(cachedCombatStats, currentMonsterHealthGlobal);
+        
+        currentMonsterHealthGlobal = Math.max(0, currentMonsterHealthGlobal - damage);
+        updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
+        displayDamageNumber(damage, isCrit, false, monsterArea);
+        
+        // Animação
+        const mImg = document.getElementById("monsterImage");
+        if (mImg) {
+            mImg.classList.remove('shake-animation');
+            void mImg.offsetWidth;
+            mImg.classList.add('shake-animation');
+            setTimeout(() => mImg.classList.remove('shake-animation'), 300);
+        }
+        
+        pendingBatch++;
     }
-
-    const { damage, isCrit } = calculateLocalDamage(cachedCombatStats, currentMonsterHealthGlobal);
-    
-    currentMonsterHealthGlobal = Math.max(0, currentMonsterHealthGlobal - damage);
-    updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
-    displayDamageNumber(damage, isCrit, false, monsterArea);
-    
-    if (!hasAttackedOnce) hasAttackedOnce = true;
-    
-    // Animação do monstro
-    const mImg = document.getElementById("monsterImage");
-    if (mImg) {
-        mImg.classList.remove('shake-animation');
-        void mImg.offsetWidth;
-        mImg.classList.add('shake-animation');
-        setTimeout(() => mImg.classList.remove('shake-animation'), 300);
-    }
-    
-    pendingBatch++;
 
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
-    // Se matou localmente, envia IMEDIATAMENTE para finalizar
+    // Se HP chegou a 0 AGORA ou JÁ ERA 0, força envio IMEDIATO
     if (currentMonsterHealthGlobal <= 0) {
         saveOptimisticState(null);
-        await processAttackQueue();
+        await processAttackQueue(); // Envia o pedido de "Matar"
         return;
     }
 
-    if (isFirstAttackSequence) {
-        isFirstAttackSequence = false;
-        saveOptimisticState(null);
-        await processAttackQueue();
-        return;
-    }
-
-    // AJUSTE DINÂMICO DE DEBOUNCE (SOLO vs MULTI)
+    // Debounce padrão
     const debounceTime = (knownParticipantCount <= 1) ? DEBOUNCE_TIME_SOLO : DEBOUNCE_TIME_MULTI;
     const threshold = (knownParticipantCount <= 1) ? BATCH_THRESHOLD_SOLO : BATCH_THRESHOLD_MULTI;
 

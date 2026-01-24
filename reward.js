@@ -131,13 +131,14 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 }
 
 // Helper para atualizar localStorage
-function updateLocalPlayerCache(newCrystals) {
+function updateLocalPlayerCache(updates) {
     try {
         const cachedStr = localStorage.getItem('player_data_cache');
         if (cachedStr) {
             const cachedObj = JSON.parse(cachedStr);
             if (cachedObj.data) {
-                cachedObj.data.crystals = newCrystals;
+                // Mescla os updates no cache existente
+                Object.assign(cachedObj.data, updates);
                 localStorage.setItem('player_data_cache', JSON.stringify(cachedObj));
             }
         }
@@ -151,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const returnBtn = document.getElementById('return-btn'); 
     returnBtn.style.display = 'none'; 
 
-const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+    const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -162,9 +163,11 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
     }
 
     if (!claimToken) {
-        messageDiv.textContent = 'Erro: Token de recompensa ausente. Você será redirecionado em breve.';
+        messageDiv.textContent = 'Erro: Token de recompensa ausente. Redirecionando...';
         setTimeout(() => {
-            window.location.href = '/index.html';
+            // Usa URL de redirecionamento customizada se existir, senão vai pra index
+            const target = window.REWARD_REDIRECT_URL || '/index.html';
+            window.location.href = target;
         }, 3000);
         return;
     }
@@ -186,36 +189,64 @@ const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
         
         const updates = {};
         
-        // 1. Atualiza LocalStorage (Cristais) e prepara objeto de updates
+        // 1. Atualiza Cristais se houver mudança
         if (typeof rpcData.new_crystals === 'number') {
-            updateLocalPlayerCache(rpcData.new_crystals);
             updates.crystals = rpcData.new_crystals;
         }
 
-        // 2. Atualiza IndexedDB de Inventário (Itens e Timestamp)
+        // 2. Atualiza Tentativas de AFK se vier no retorno
+        if (typeof rpcData.new_attempts === 'number') {
+            updates.daily_attempts_left = rpcData.new_attempts;
+            
+            // Tenta atualizar especificamente o cache de AFK se ele existir no localStorage
+            try {
+                // Recupera ID do usuário (hack rápido lendo do localStorage do supabase ou cache)
+                const authKeys = Object.keys(localStorage).filter(k => k.includes('auth-token'));
+                if(authKeys.length > 0) {
+                    const session = JSON.parse(localStorage.getItem(authKeys[0]));
+                    const uid = session.user.id;
+                    const afkKey = `playerAfkData_${uid}`;
+                    const afkCache = localStorage.getItem(afkKey);
+                    if(afkCache) {
+                        const parsed = JSON.parse(afkCache);
+                        parsed.data.daily_attempts_left = rpcData.new_attempts;
+                        localStorage.setItem(afkKey, JSON.stringify(parsed));
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // 3. Aplica atualizações no LocalStorage Geral
+        updateLocalPlayerCache(updates);
+
+        // 4. Atualiza IndexedDB de Inventário (Itens e Timestamp)
         if (rpcData.new_timestamp) {
-            const statsUpdate = (typeof rpcData.new_crystals === 'number') ? { crystals: rpcData.new_crystals } : null;
+            const statsUpdate = {};
+            if (updates.crystals !== undefined) statsUpdate.crystals = updates.crystals;
+            
             // inventory_updates agora virá como [{item_id:..., quantity:...}] (lean)
             await surgicalCacheUpdate(rpcData.inventory_updates || [], rpcData.new_timestamp, statsUpdate);
         }
 
-        // 3. Atualiza GlobalDB (Player Store) para que a Home/Loja leia o saldo correto imediatamente
+        // 5. Atualiza GlobalDB (Player Store) para que a Home/Loja/AFK leia o saldo correto imediatamente
         if (Object.keys(updates).length > 0) {
             await GlobalDB.updatePlayerPartial(updates);
         }
 
-        messageDiv.innerHTML += `<p>Retornando à loja...</p>`;
+        messageDiv.innerHTML += `<p>Retornando...</p>`;
 
         // Redireciona
         setTimeout(() => {
-            window.location.href = '/index.html?action=openShopVideo';
+            const target = window.REWARD_REDIRECT_URL || '/index.html?action=openShopVideo';
+            window.location.href = target;
         }, 2000);
 
     } catch (error) {
         console.error(error);
         messageDiv.textContent = `Ocorreu um erro: ${error.message || 'Desconhecido'}. Você será redirecionado.`;
         setTimeout(() => {
-            window.location.href = '/index.html?action=openShopVideo';
+            const target = window.REWARD_REDIRECT_URL || '/index.html?action=openShopVideo';
+            window.location.href = target;
         }, 3000);
     }
 });

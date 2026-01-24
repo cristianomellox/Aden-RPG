@@ -125,6 +125,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const afkStageSpan = document.getElementById("afk-stage");
     const collectBtn = document.getElementById("collect-rewards-idle");
     const startAfkBtn = document.getElementById("start-afk");
+    const watchAdAttemptBtn = document.getElementById("watch-ad-attempt-btn");
+    const triggerAdLink = document.getElementById("trigger-afk_attempt-ad");
     const idleScreen = document.getElementById("idle-screen");
     const dailyAttemptsLeftSpan = document.getElementById("daily-attempts-left");
     const startAfkCooldownDisplay = document.getElementById("start-afk-cooldown-display");
@@ -390,13 +392,36 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function updateStartAfkButtonState(attemptsLeft) {
         if (attemptsLeft <= 0) {
+            // Desabilita o botão normal e esconde
             startAfkBtn.disabled = true;
             startAfkBtn.style.opacity = "0.5";
             startAfkBtn.style.cursor = "not-allowed";
+            startAfkBtn.style.display = "none";
+
+            // Lógica do botão de vídeo para tentativa extra
+            // Verifica no log local se já assistiu 5 vídeos
+            let videoLimitReached = false;
+            if (playerAfkData.daily_rewards_log && playerAfkData.daily_rewards_log.counts) {
+                const count = playerAfkData.daily_rewards_log.counts['afk_attempt'] || 0;
+                if (count >= 5) videoLimitReached = true;
+            }
+
+            if (!videoLimitReached && watchAdAttemptBtn) {
+                watchAdAttemptBtn.style.display = "inline-block";
+            } else if (watchAdAttemptBtn) {
+                watchAdAttemptBtn.style.display = "none";
+                // Mostra o botão normal desabilitado se não puder ver vídeo e não tiver tentativas
+                startAfkBtn.style.display = "inline-block"; 
+            }
+
         } else {
+            // Tem tentativas: mostra botão normal
             startAfkBtn.disabled = false;
             startAfkBtn.style.opacity = "1";
             startAfkBtn.style.cursor = "pointer";
+            startAfkBtn.style.display = "inline-block";
+            
+            if (watchAdAttemptBtn) watchAdAttemptBtn.style.display = "none"; 
         }
     }
 
@@ -686,6 +711,51 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
     });
+
+    // Listener do Botão de Vídeo (+1 Tentativa)
+    if (watchAdAttemptBtn) {
+        watchAdAttemptBtn.addEventListener("click", async () => {
+            if (!userId) return;
+            watchAdAttemptBtn.disabled = true;
+            watchAdAttemptBtn.textContent = "Carregando...";
+
+            try {
+                // Gera o token (reutiliza a RPC existente)
+                const { data: token, error: rpcError } = await supabase.rpc('generate_reward_token', {
+                    p_reward_type: 'afk_attempt'
+                });
+
+                if (rpcError) {
+                    // Se der erro de limite, esconde o botão permanentemente na sessão
+                    if (rpcError.message && rpcError.message.toLowerCase().includes('limite')) {
+                        alert('Limite diário de vídeos atingido!');
+                        watchAdAttemptBtn.style.display = 'none';
+                        startAfkBtn.style.display = 'inline-block';
+                    } else {
+                        alert(`Erro: ${rpcError.message}`);
+                    }
+                    watchAdAttemptBtn.disabled = false;
+                    watchAdAttemptBtn.textContent = "Assistir +1";
+                    return;
+                }
+
+                // Salva token e clica no link
+                localStorage.setItem('pending_reward_token', token);
+                
+                if (triggerAdLink) {
+                    triggerAdLink.click(); // Dispara o 'go:anaf' do AppCreator
+                } else {
+                    alert("Erro interno: Link de anúncio não encontrado.");
+                }
+
+            } catch (e) {
+                console.error(e);
+                alert("Erro ao conectar com o servidor.");
+                watchAdAttemptBtn.disabled = false;
+                watchAdAttemptBtn.textContent = "Assistir +1";
+            }
+        });
+    }
 
     if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
     if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));

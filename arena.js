@@ -1310,10 +1310,47 @@ document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     // 8. RANKING E SISTEMA
     // =======================================================================
+
+    function renderFixedFooter(playerData) {
+        const container = document.getElementById('fixedArenaRank');
+        if (!container) return;
+
+        if (!playerData) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const avatar = playerData.avatar_url || playerData.avatar || 'https://aden-rpg.pages.dev/avatar01.webp';
+        
+        container.innerHTML = `
+            <div class="fixed-rank-inner">
+                 <span class="fixed-rank-pos">${playerData.rank}º</span>
+                 <img class="fixed-rank-avatar" src="${esc(avatar)}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
+                 <div class="fixed-rank-info">
+                     <span class="fixed-rank-name">${esc(playerData.name)}</span>
+                     <span class="fixed-rank-guild">${esc(playerData.guild_name || 'Sem Guilda')}</span>
+                 </div>
+                 <span class="fixed-rank-points">${Number(playerData.ranking_points || 0).toLocaleString()} pts</span>
+            </div>
+        `;
+        container.style.display = 'block';
+    }
+
     async function fetchAndRenderRanking() {
         showLoading();
+        // Esconde barra fixa ao começar a carregar
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+
         try {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'block'; 
+            
+            // Limpa cache antigo se não tiver ID (para migração)
+            let rawCache = localStorage.getItem('arena_top_100_cache');
+            if(rawCache && !rawCache.includes('"id"')) {
+                localStorage.removeItem('arena_top_100_cache');
+            }
+
             let rankingData = getCache('arena_top_100_cache');
             if (!rankingData) { 
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_arena_top_100');
@@ -1327,6 +1364,52 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
             renderRanking(rankingData || []); 
+
+            // === LÓGICA DO RODAPÉ FIXO (ATUAL) ===
+            if (userId) {
+                let myRankObj = null;
+                // 1. Verifica se estou no Top 100 baixado
+                const myIndex = rankingData.findIndex(p => p.id === userId);
+                
+                if (myIndex !== -1) {
+                    myRankObj = { ...rankingData[myIndex], rank: myIndex + 1 };
+                } else {
+                    // 2. Se não estiver no Top 100, busca meus dados e calcula rank via Count no DB
+                    try {
+                        const { data: me } = await supabase
+                            .from('players')
+                            .select('id, name, avatar_url, ranking_points, guild_id')
+                            .eq('id', userId)
+                            .single();
+                        
+                        if (me) {
+                            // Conta quantos têm mais pontos que eu
+                            const { count } = await supabase
+                                .from('players')
+                                .select('*', { count: 'exact', head: true })
+                                .gt('ranking_points', me.ranking_points)
+                                .neq('is_banned', true);
+                            
+                            let gName = 'Sem Guilda';
+                            if (me.guild_id) {
+                                const { data: g } = await supabase.from('guilds').select('name').eq('id', me.guild_id).single();
+                                if(g) gName = g.name;
+                            }
+
+                            myRankObj = {
+                                name: me.name,
+                                avatar_url: me.avatar_url,
+                                ranking_points: me.ranking_points,
+                                guild_name: gName,
+                                rank: (count || 0) + 1
+                            };
+                        }
+                    } catch(e) { console.warn("Erro ao calcular rank pessoal", e); }
+                }
+                
+                if (myRankObj) renderFixedFooter(myRankObj);
+            }
+
             if (rankingModal) rankingModal.style.display = 'flex';
         } catch (e) { showModalAlert("Erro ao carregar ranking."); } finally { hideLoading(); }
     }
@@ -1342,6 +1425,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (guilds) guildsMap = Object.fromEntries(guilds.map(g => [g.id, g.name]));
             }
             return players.map(p => ({
+                id: p.id,
                 name: p.name,
                 avatar_url: p.avatar_url || p.avatar || 'https://aden-rpg.pages.dev/avatar01.webp',
                 ranking_points: p.ranking_points,
@@ -1370,6 +1454,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function fetchPastSeasonRanking() {
         showLoading();
+        // Esconde barra fixa ao trocar de aba
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+
         try {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingListPast) rankingListPast.innerHTML = "";
@@ -1421,6 +1509,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const av = p.avatar_url || p.avatar || defAv;
                     rankingListPast.innerHTML += `<li id="rankingListPast" style="width: 82vw;"><span style="width:40px;font-weight:bold;color:#FFC107;">${i+1}.</span><img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%"><div style="flex-grow:1;text-align:left;"><div class="rank-player-name">${esc(p.name)}</div><div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div></div><div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div></li>`;
                 });
+
+                // === LÓGICA DO RODAPÉ FIXO (PASSADO) ===
+                if (userId) {
+                    const myIndex = d.findIndex(p => p.id === userId);
+                    if (myIndex !== -1) {
+                        const myRankObj = { ...d[myIndex], rank: myIndex + 1 };
+                        renderFixedFooter(myRankObj);
+                    }
+                }
             }
             if (rankingModal) rankingModal.style.display = 'flex';
         } catch { showModalAlert("Erro ao carregar temporada passada."); } finally { hideLoading(); }
@@ -1428,6 +1525,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function fetchAttackHistory() {
         showLoading();
+        // Esconde footer no histórico
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+
         try {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
@@ -1467,6 +1568,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!tabs.length) return;
         tabs.forEach(tab => {
             tab.addEventListener("click", async () => {
+                // Esconde footer ao trocar de aba
+                const footer = document.getElementById('fixedArenaRank');
+                if(footer) footer.style.display = 'none';
+
                 tabs.forEach(t => { t.classList.remove("active"); t.style.background = "none"; t.style.color = "#e0dccc"; });
                 tab.classList.add("active"); tab.style.background = "#c9a94a"; tab.style.color = "#000";
                 document.querySelectorAll(".tab-panel").forEach(p => { p.classList.remove("active"); p.style.display = 'none'; });
@@ -1531,7 +1636,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);
     if (openRankingBtn) openRankingBtn.addEventListener("click", () => { document.querySelector(".ranking-tab[data-tab='current']").click(); });
-    if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { if (rankingModal) rankingModal.style.display = 'none'; });
+    
+    if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { 
+        if (rankingModal) rankingModal.style.display = 'none';
+        const footer = document.getElementById('fixedArenaRank');
+        if(footer) footer.style.display = 'none';
+    });
+    
     initRankingTabs();
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === 'hidden' && backgroundMusic && !backgroundMusic.paused) backgroundMusic.pause();

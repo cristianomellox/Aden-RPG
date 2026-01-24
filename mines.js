@@ -502,7 +502,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (mult > 1 && cycleInfo) {
           const banner = document.createElement("h4");
           banner.id = "eventBanner";
-          banner.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width: 40px; height: 40px; vertical-align: -5px; margin-top: 8px;"> <span> X2</span>!';
+          banner.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width: 40px; height: 40px; vertical-align: -6px; margin-top: 8px;"> <span> X2</span>!';
           banner.style.cssText = "text-shadow: none!important; background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 5px 0 0 0; font-size: 1.9em;";
           
           if (cycleInfo.parentNode) {

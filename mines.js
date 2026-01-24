@@ -1502,6 +1502,12 @@ function formatTimeCombat(totalSeconds) {
               // Aceita apenas o update de Stamina do servidor (authoritative)
               localAttacksLeft = data.al;
               // NOTA: Ignoramos data.hp aqui intencionalmente se estiver em modo solo
+              
+              if (currentMonsterHealthGlobal <= 0 && data.hp > 0) {
+                  console.warn("Ressincronizando HP (RNG Divergence)");
+                  currentMonsterHealthGlobal = data.hp;
+                  updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
+              }
           } else {
               // Multiplayer: Usa HP do servidor (verdade absoluta)
               currentMonsterHealthGlobal = data.hp;

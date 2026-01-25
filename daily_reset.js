@@ -1,4 +1,3 @@
---- START OF FILE daily_reset.js ---
 
 document.addEventListener("DOMContentLoaded", () => {
     // Configurações e Chaves de Armazenamento

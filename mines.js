@@ -147,7 +147,7 @@ const GlobalDB = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Otimizada (Zero Egress Selects)");
+  console.log("[mines] DOM ready - Versão Otimizada (Client Calculation + Lazy Owners)");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -256,9 +256,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
 
-  // --- NOVAS VARIÁVEIS PARA OTIMIZAÇÃO (BATCH & CACHE) ---
+  // --- NOVAS VARIÁVEIS PARA OTIMIZAÇÃO (BATCH & CACHE & CLIENT CALC) ---
   let cachedCombatStats = null;      // Stats de combate (Dano, Crit)
   let pendingBatch = 0;              // Contagem de ataques na fila
+  let pendingDamageBatch = 0;        // [NOVO] Acumulador de DANO REAL calculado no cliente
   let batchFlushTimer = null;        // Timer para enviar se parar de clicar
   let currentMonsterHealthGlobal = 0; // HP Otimista Global
   
@@ -1052,10 +1053,8 @@ function formatTimeCombat(totalSeconds) {
       const idsToFetch = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
 
       if (idsToFetch.length > 0) {
-        const { data: ownersData } = await supabase
-            .from("players")
-            .select("id, name, avatar_url, guild_id")
-            .in("id", idsToFetch);
+        // [MODIFICADO] Usa get_missing_profiles para ser consistente com o boot
+        const { data: ownersData } = await supabase.rpc("get_missing_profiles", { p_user_ids: idsToFetch });
         
         if (ownersData && ownersData.length > 0) {
             // Atualiza memória
@@ -1226,6 +1225,7 @@ function formatTimeCombat(totalSeconds) {
                   owner = globalOwnersMap[mappedMine.owner_player_id];
               } else {
                   // Fallback: Se não tiver no cache, busca (raro)
+                  // Aqui mantemos a busca direta para consistência local de um card específico
                   const { data: p } = await supabase.from("players").select("id, name, avatar_url, guild_id").eq("id", mappedMine.owner_player_id).single();
                   if (p) {
                       globalOwnersMap[p.id] = p;
@@ -1315,6 +1315,7 @@ function formatTimeCombat(totalSeconds) {
           hp: currentMonsterHealthGlobal,
           stamina: localAttacksLeft,
           pending: pendingBatch,
+          pendingDmg: pendingDamageBatch, // [NOVO] Salva dano pendente
           flushTime: debounceFlushTime,
           isFirst: isFirstAttackSequence, // Flag crucial
           hasAttacked: hasAttackedOnce,
@@ -1342,6 +1343,7 @@ function formatTimeCombat(totalSeconds) {
               currentMonsterHealthGlobal = cached.hp;
               localAttacksLeft = cached.stamina;
               pendingBatch = cached.pending;
+              pendingDamageBatch = cached.pendingDmg || 0; // [NOVO] Restaura dano pendente
               isFirstAttackSequence = cached.isFirst; 
               hasAttackedOnce = cached.hasAttacked;
               knownParticipantCount = cached.pc || 1;
@@ -1382,6 +1384,7 @@ function formatTimeCombat(totalSeconds) {
     if (buyAttackBtn) buyAttackBtn.disabled = false;
     
     pendingBatch = 0;
+    pendingDamageBatch = 0; // [NOVO] Reset
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
     try {
@@ -1471,8 +1474,10 @@ function formatTimeCombat(totalSeconds) {
       if (pendingBatch === 0) return;
 
       const countToSend = pendingBatch;
+      const damageToSend = pendingDamageBatch; // [NOVO] Captura o dano acumulado
       
       pendingBatch = 0;
+      pendingDamageBatch = 0; // [NOVO] Reset
       if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
       clearOptimisticState();
@@ -1481,7 +1486,8 @@ function formatTimeCombat(totalSeconds) {
           const { data, error } = await supabase.rpc("batch_attack_mine", { 
               p_player_id: userId, 
               p_mine_id: currentMineId,
-              p_attack_count: countToSend
+              p_attack_count: countToSend,
+              p_claimed_damage: damageToSend // [NOVO] Envia o dano calculado pelo cliente para validação
           });
 
           if (error) throw error;
@@ -1502,7 +1508,9 @@ function formatTimeCombat(totalSeconds) {
               // Aceita apenas o update de Stamina do servidor (authoritative)
               localAttacksLeft = data.al;
               // NOTA: Ignoramos data.hp aqui intencionalmente se estiver em modo solo
+              // pois o cliente calculou e o servidor validou, então devem ser iguais.
               
+              // Pequena proteção contra desync extremo
               if (currentMonsterHealthGlobal <= 0 && data.hp > 0) {
                   console.warn("Ressincronizando HP (RNG Divergence)");
                   currentMonsterHealthGlobal = data.hp;
@@ -1578,6 +1586,7 @@ function formatTimeCombat(totalSeconds) {
     }
     
     pendingBatch++;
+    pendingDamageBatch += damage; // [NOVO] Acumula o dano real
 
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
@@ -1642,6 +1651,7 @@ function formatTimeCombat(totalSeconds) {
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     
     pendingBatch = 0;
+    pendingDamageBatch = 0; // [NOVO] Reset
     if(batchFlushTimer) clearTimeout(batchFlushTimer);
     
     ambientMusic.pause();
@@ -1821,7 +1831,7 @@ function formatTimeCombat(totalSeconds) {
   }
 
   // =================================================================
-  // 15. INICIALIZAÇÃO OTIMIZADA (MONOLITH PATTERN)
+  // 15. INICIALIZAÇÃO OTIMIZADA (MONOLITH PATTERN + LAZY OWNERS)
   // =================================================================
   async function boot() {
     try {
@@ -1920,13 +1930,11 @@ function formatTimeCombat(totalSeconds) {
       }
 
       // D) Owners (Cache Global com Timestamp Atualizado) - key: 'o'
+      // ATENÇÃO: Se a RPC nova não retornar mais 'o', essa parte será pulada
+      // e o Lazy Load abaixo cuidará disso. Mantido para retrocompatibilidade.
       if (data.o && data.o.length > 0) {
-          // Atualiza o GlobalDB e o Map de memória com os donos novos ou atualizados vindos do servidor
-          // data.o contém os donos atuais, portanto renovamos o "cache time" deles
           await GlobalDB.saveOwners(data.o); 
-          
           data.o.forEach(o => {
-              // Mapeia chaves curtas para o formato UI: i->id, n->name, a->avatar_url, g->guild_id
               globalOwnersMap[o.i] = { id: o.i, name: o.n, avatar_url: o.a, guild_id: o.g };
           });
       }
@@ -1943,6 +1951,20 @@ function formatTimeCombat(totalSeconds) {
           monster_health: m.m,
           initial_monster_health: m.h
       }));
+      
+      // [NOVO] LAZY LOAD DE DONOS FALTANTES
+      const allOwnerIds = mappedMines.map(m => m.owner_player_id).filter(Boolean);
+      const uniqueOwnerIds = [...new Set(allOwnerIds)];
+      const missingIds = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
+
+      if (missingIds.length > 0) {
+          // Busca APENAS os perfis que faltam via RPC auxiliar
+          const { data: profiles } = await supabase.rpc('get_missing_profiles', { p_user_ids: missingIds });
+          if (profiles) {
+              await GlobalDB.saveOwners(profiles);
+              profiles.forEach(p => globalOwnersMap[p.id] = p);
+          }
+      }
       
       renderMines(mappedMines, globalOwnersMap);
       await updateDominantGuild(mappedMines, globalOwnersMap);

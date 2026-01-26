@@ -1158,7 +1158,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         raid_attacks_bought_count,
         last_afk_start_time,
         guild_id,
-        rank
+        rank,
+        daily_rewards_log 
     `;
 
     const { data: player, error: playerError } = await supabaseClient
@@ -1172,24 +1173,38 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         return;
     }
 
-    // --- LÓGICA DE CP NO SERVIDOR (GARANTIA DE ATUALIZAÇÃO) ---
-    // Chamamos a RPC para garantir que o CP no banco esteja sempre atualizado com o inventário.
-    // Isso roda em background e atualiza a UI se o valor mudar.
-    supabaseClient.rpc('update_and_get_combat_power', { target_player_id: player.id })
-        .then(({ data: newCp, error }) => {
-            if (!error && newCp !== null) {
-                // Atualiza a UI se houver mudança
-                if (player.combat_power !== newCp) {
-                    player.combat_power = newCp;
-                    document.getElementById('playerPower').textContent = formatNumberCompact(newCp);
+    // --- LÓGICA DE CP NO SERVIDOR (OTIMIZADO: 1 VEZ POR DIA) ---
+    // Só executa se a data salva for diferente da data de hoje
+    const STORAGE_KEY_CP = `aden_cp_check_${player.id}`;
+    const todayStr = new Date().toISOString().split('T')[0]; // Data atual (UTC) ex: "2023-10-27"
+    const lastCheck = localStorage.getItem(STORAGE_KEY_CP);
+
+    if (lastCheck !== todayStr) {
+        console.log("🔄 [System] Executando verificação diária de Combat Power...");
+        
+        supabaseClient.rpc('update_and_get_combat_power', { target_player_id: player.id })
+            .then(({ data: newCp, error }) => {
+                if (!error && newCp !== null) {
+                    // Marca como feito hoje
+                    localStorage.setItem(STORAGE_KEY_CP, todayStr);
                     
-                    // Atualiza cache local com o novo valor
-                    if (currentPlayerData) currentPlayerData.combat_power = newCp;
-                    GlobalDB.updatePlayerPartial({ combat_power: newCp });
-                    setCache('player_data_cache', currentPlayerData, 1440);
+                    // Atualiza a UI se houve mudança
+                    if (player.combat_power !== newCp) {
+                        console.log(`⚡ CP Atualizado de ${player.combat_power} para ${newCp}`);
+                        player.combat_power = newCp;
+                        document.getElementById('playerPower').textContent = formatNumberCompact(newCp);
+                        
+                        // Atualiza cache local com o novo valor
+                        if (currentPlayerData) currentPlayerData.combat_power = newCp;
+                        GlobalDB.updatePlayerPartial({ combat_power: newCp });
+                        setCache('player_data_cache', currentPlayerData, 1440);
+                    }
                 }
-            }
-        });
+            })
+            .catch(err => console.warn("Falha no check diário de CP:", err));
+    } else {
+        // console.log("✅ [System] CP já verificado hoje.");
+    }
 
     // Armazena e Renderiza
     currentPlayerData = player;
@@ -2329,34 +2344,63 @@ cancelPurchaseBtn.addEventListener('click', () => {
 
 async function checkRewardLimit() {
     try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return;
+        let logData = null;
 
-        const { data: playerData, error } = await supabaseClient
-            .from('players')
-            .select('daily_rewards_log')
-            .eq('id', user.id)
-            .single();
+        // 1. Tenta usar os dados já carregados na memória (ZERO EGRESS)
+        if (currentPlayerData && currentPlayerData.daily_rewards_log) {
+            logData = currentPlayerData.daily_rewards_log;
+        } else {
+            // Fallback apenas se não tiver carregado ainda (raro no fluxo normal)
+            const { data: { user } } = await supabaseClient.auth.getSession(); // getSession já pode ter cache
+            if (!user) {
+                // Tenta getUser como fallback final
+                const { data: { user: user2 } } = await supabaseClient.auth.getUser();
+                if (!user2) return;
+                
+                const { data, error } = await supabaseClient
+                    .from('players')
+                    .select('daily_rewards_log')
+                    .eq('id', user2.id)
+                    .single();
+                if (data) logData = data.daily_rewards_log;
+            } else {
+                 const { data, error } = await supabaseClient
+                    .from('players')
+                    .select('daily_rewards_log')
+                    .eq('id', user.id)
+                    .single();
+                if (data) logData = data.daily_rewards_log;
+            }
+        }
 
-        if (error || !playerData) return;
-
-        const log = playerData.daily_rewards_log || {}; //
+        const log = logData || {}; 
         const counts = (log && log.counts) ? log.counts : {};
         const logDateStr = log && log.date ? String(log.date) : null;
 
         const todayUtc = new Date(new Date().toISOString().split('T')[0]).toISOString().split('T')[0];
 
+        // Helpers visuais
+        const enableBtn = (btn) => {
+            btn.disabled = false;
+            btn.style.filter = "";
+            btn.style.pointerEvents = "";
+            if (btn.getAttribute('data-original-text')) {
+                btn.textContent = btn.getAttribute('data-original-text');
+            } else {
+                btn.setAttribute('data-original-text', btn.textContent);
+            }
+        };
+
+        const disableBtn = (btn) => {
+             btn.disabled = true;
+             btn.style.filter = "grayscale(100%) brightness(60%)";
+             btn.style.pointerEvents = "none";
+             btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
+             btn.textContent = "Limite atingido";
+        };
+
         if (!logDateStr || String(logDateStr).split('T')[0] !== todayUtc) {
-            watchVideoButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.style.filter = "";
-                btn.style.pointerEvents = "";
-                if (btn.getAttribute('data-original-text')) {
-                    btn.textContent = btn.getAttribute('data-original-text');
-                } else {
-                    btn.setAttribute('data-original-text', btn.textContent);
-                }
-            });
+            watchVideoButtons.forEach(btn => enableBtn(btn));
             return;
         }
 
@@ -2364,20 +2408,9 @@ async function checkRewardLimit() {
             const type = btn.getAttribute('data-reward');
             const count = counts && (counts[type] !== undefined) ? parseInt(counts[type], 10) : 0;
             if (isNaN(count) || count < 5) {
-                btn.disabled = false;
-                btn.style.filter = "";
-                btn.style.pointerEvents = "";
-                if (!btn.getAttribute('data-original-text')) {
-                    btn.setAttribute('data-original-text', btn.textContent);
-                } else {
-                    btn.textContent = btn.getAttribute('data-original-text');
-                }
+                enableBtn(btn);
             } else {
-                btn.disabled = true;
-                btn.style.filter = "grayscale(100%) brightness(60%)";
-                btn.style.pointerEvents = "none";
-                btn.setAttribute('data-original-text', btn.getAttribute('data-original-text') || btn.textContent);
-                btn.textContent = "Limite atingido";
+                disableBtn(btn);
             }
         });
     } catch (e) {

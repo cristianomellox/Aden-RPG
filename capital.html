@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" 
-      content="width-device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
     <meta name="robots" content="noindex, nofollow">
     <meta name="googlebot" content="noindex, nofollow">
@@ -22,7 +22,7 @@
 body, p, span, div, button {
     font-family: 'Cinzel', serif;
 }
-h1, h2 {
+h1, h2, h3 {
     font-family: 'Cinzel', serif;
     color: #e0dccc;
     text-shadow: 2px 2px 4px #000;
@@ -162,6 +162,9 @@ body {
     margin-top: auto; /* Empurra para o final do #contentOverlay */
     padding: 10px;
     pointer-events: auto;
+    display: flex;
+    justify-content: center;
+    width: 100%;
 }
 
 /* Botão História (Baseado em style.css) */
@@ -177,14 +180,14 @@ body {
     color: #e0dccc;
     font-weight: bold;
     padding: 15px 40px; 
-    font-size: 14px;
+    font-size: 1.2em;
     text-shadow: 1px 1px 2px #000;
 }
 .action-btn:hover {
     opacity: 0.9;
 }
 
-/* Estilos do Modal (Mantidos) */
+/* Estilos do Modal Padrão (Mantidos) */
 .modal-container {
     display: none; 
     position: fixed;
@@ -194,7 +197,7 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: none;
+    background-color: rgba(0,0,0,0.8);
     justify-content: center;
     align-items: center;
 }
@@ -221,6 +224,7 @@ body {
     font-weight: bold;
     cursor: pointer;
     line-height: 1;
+    z-index: 2001;
 }
 
 .close-btn:hover,
@@ -236,6 +240,292 @@ body {
     text-align: left;
     color: #ccc;
 }
+
+/* === ESTILOS DO SUBMENU (Adicionado estilo Solaris) === */
+.footer-submenu {
+    position: fixed;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 5px;
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    z-index: 9998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
+    min-width: 180px;
+}
+
+.footer-submenu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    color: #e0dccc;
+    text-decoration: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    font-weight: bold;
+    background: #1e1e1e; 
+    border: 1px solid #555;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
+    white-space: nowrap;      
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.footer-submenu-btn:hover {
+    background-color: #333;
+    border-color: gold;
+    color: #fff;
+}
+
+.submenu-icon {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+    display: block;
+}
+
+/* === MODAL FULLSCREEN MERCANTES === */
+#merchantsModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/mercantes.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 3000;
+    flex-direction: column;
+    justify-content: flex-end; /* Conteúdo no fundo */
+    align-items: center;
+}
+
+/* Footer dentro do Modal Mercantes */
+#merchantsFooter {
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+}
+
+/* ================================================================= */
+/* === ESTILOS LOJA MESTRE DE POÇÕES =============================== */
+/* ================================================================= */
+#potionMasterModal {
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.3)
+    ),
+    url('https://aden-rpg.pages.dev/assets/gmdp.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    align-items: flex-start; 
+    padding-top: 0;
+}
+
+.potion-master-content {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding: 20px 10px;
+}
+
+.pm-title {
+    color: gold;
+    font-size: 1.6em;
+    text-shadow: 2px 2px 4px #000;
+    margin-top: 40px;
+    margin-bottom: 20px;
+    text-align: center;
+  
+    padding: 5px 5px;
+    border-radius: 8px;
+    border: 1px solid #555;
+    width: 90%;
+}
+
+.potion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    width: 100%;
+    max-width: 1200px;
+    padding-bottom: 600px; /* Espaço para scroll */
+    padding-top: 150px;
+}
+
+/* Animação de Fade In para os cards */
+@keyframes fadeCardIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.potion-card {
+    background: linear-gradient(180deg, #2a2a2a80, #1a1a1a80);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    
+    /* Configuração da Animação */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.potion-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+.potion-img {
+    width: 64px;
+    height: 64px;
+    margin-right: 15px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background: #000;
+}
+
+.potion-info h4 {
+    margin: 0;
+    color: #e0dccc;
+    font-size: 1.1em;
+    text-align: left;
+}
+
+.cost-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: #ccc;
+    margin-top: 5px;
+}
+
+.cost-icon {
+    width: 40px;
+    height: 40px;
+    vertical-align: middle;
+}
+
+.pm-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.pm-qty-selector {
+    display: flex;
+    align-items: center;
+    background: #333;
+    border-radius: 5px;
+    padding: 2px;
+}
+
+.pm-qty-btn {
+    width: 35px;
+    height: 35px;
+    font-size: 1.2em;
+    background: #444;
+    border: 1px solid #555;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+.pm-qty-btn:hover { background: #555; }
+
+.pm-qty-val {
+    width: 40px;
+    text-align: center;
+    font-weight: bold;
+    color: white;
+}
+
+.total-price-display {
+    font-size: 0.9em;
+    color: orange;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.4);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.pm-buy-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a);
+    border: 1px solid #ffd700;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 1em;
+    text-shadow: none;
+    border-radius: 4px;
+}
+.pm-buy-btn:hover { filter: brightness(1.1); }
+.pm-buy-btn:disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.7; }
+
+/* Estilo para a mensagem flutuante (Toast/Modal estilo notificação) */
+#floatingMessage {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #e0dccc;
+    padding: 15px 25px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-size: 1.1em;
+    border: 2px solid gold;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
 /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
 .goog-te-banner-frame.skiptranslate, 
 .skiptranslate {
@@ -269,11 +559,15 @@ font > font {
 <body>
 
     <div id="playerTopBar">
-        <a href="index.html" class="top-bar-link" title="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-        </a>
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
        <div> <span id="pageTitle">Área Pacífica</span></div>
-        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
+        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;" onclick="window.location.reload();">
     </div>
 
     <div id="mapContainer">
@@ -296,11 +590,53 @@ font > font {
         </div>
 
         <div id="zionFooter">
-            <button id="openHistoryModalBtn" class="action-btn">História</button>
+            <button id="capitalMenuBtn" class="action-btn">Menu</button>
         </div>
 
     </div>
+
+    <div id="capitalSubmenu" class="footer-submenu">
+        <div id="btnOpenHistory" class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="submenu-icon"> História
+        </div>
+        <div id="btnOpenMerchantsModal" class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/mercante.webp" class="submenu-icon"> Distrito Mercante
+        </div>
+    </div>
     
+    <div id="merchantsModal">
+        <span class="close-btn" id="closeMerchantsModal" style="color:white; top:20px; right:20px; font-size:40px;">&times;</span>
+        
+        <div id="merchantsFooter">
+            <button id="shopsMenuBtn" class="action-btn" style="padding: 35px 40px;">Mercantes</button>
+        </div>
+    </div>
+
+    <div id="shopsSubmenu" class="footer-submenu">
+        <div class="footer-submenu-btn" id="btnPotionMaster">
+            <img src="https://aden-rpg.pages.dev/assets/mdp.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Mestre de Poções
+        </div>
+        <div class="footer-submenu-btn" style="display:none;">
+            <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Oficina
+        </div>
+        <div class="footer-submenu-btn" style="display:none;">
+            <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Escambo
+        </div>
+    </div>
+
+    <!-- Modal Mestre de Poções -->
+    <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content potion-master-content">
+            <span class="close-btn" id="closePotionMasterBtn">&times;</span>
+            
+            <h3 class="pm-title">Troque cristais por poções</h3>
+            
+            <div id="potionShopGrid" class="potion-grid">
+                <!-- Os itens serão gerados via JavaScript -->
+            </div>
+        </div>
+    </div>
+
     <div id="historyModal" class="modal-container" style="display: none;">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
@@ -313,6 +649,9 @@ font > font {
             </div>
         </div>
     </div>
+    
+    <!-- Elemento para mensagens flutuantes (substitui alert) -->
+    <div id="floatingMessage"></div>
 
 <script>
   let musicStarted = false;
@@ -605,32 +944,124 @@ function enableMapInteraction() {
 }
 
 // =======================================================================
-// Lógica do Modal de História
+// Lógica de UI (Menus, Submenus e Modais)
 // =======================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    const openBtn = document.getElementById('openHistoryModalBtn');
-    const modal = document.getElementById('historyModal');
-    const closeBtn = modal.querySelector('.close-btn');
+    
+    // --- 1. Menu Principal da Capital ---
+    const menuBtn = document.getElementById('capitalMenuBtn');
+    const submenu = document.getElementById('capitalSubmenu');
 
-    if (openBtn && modal && closeBtn) {
-        openBtn.addEventListener('click', () => {
-            modal.style.display = 'flex'; // Usar flex para centralizar
-            document.body.style.overflow = 'hidden'; // Evita scroll do body por baixo do modal
+    if (menuBtn && submenu) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = submenu.style.display === 'flex';
+            if (!isVisible) {
+                submenu.style.display = 'flex';
+                // Posiciona acima do botão Menu
+                const btnRect = menuBtn.getBoundingClientRect();
+                const submenuRect = submenu.getBoundingClientRect();
+                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+                let newTop = btnRect.top - submenuRect.height - 10; 
+                submenu.style.top = newTop + 'px';
+                submenu.style.left = newLeft + 'px';
+            } else {
+                submenu.style.display = 'none';
+            }
+        });
+    }
+
+    // --- 2. Modal de História ---
+    // Gatilho agora é o botão dentro do submenu
+    const openHistoryBtn = document.getElementById('btnOpenHistory');
+    const historyModal = document.getElementById('historyModal');
+    const closeHistoryBtn = historyModal.querySelector('.close-btn');
+
+    if (openHistoryBtn && historyModal) {
+        openHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if(submenu) submenu.style.display = 'none'; // Fecha o submenu
         });
 
-        closeBtn.addEventListener('click', () => {
-            modal.style.display = 'none';
-            document.body.style.overflow = ''; // Restaura scroll do body
+        closeHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'none';
+            document.body.style.overflow = '';
         });
-
-        // Fechar se clicar fora do modal
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
+        
+        // Fecha ao clicar fora
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                historyModal.style.display = 'none';
                 document.body.style.overflow = '';
             }
         });
     }
+
+    // --- 3. Modal de Mercantes (Tela Cheia) ---
+    const openMerchantsBtn = document.getElementById('btnOpenMerchantsModal');
+    const merchantsModal = document.getElementById('merchantsModal');
+    const closeMerchantsBtn = document.getElementById('closeMerchantsModal');
+
+    if (openMerchantsBtn && merchantsModal) {
+        openMerchantsBtn.addEventListener('click', () => {
+            merchantsModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if(submenu) submenu.style.display = 'none'; // Fecha o submenu principal
+        });
+
+        closeMerchantsBtn.addEventListener('click', () => {
+            merchantsModal.style.display = 'none';
+            document.body.style.overflow = '';
+            // Se houver submenu de lojas aberto, fecha também
+            const shopsSubmenu = document.getElementById('shopsSubmenu');
+            if(shopsSubmenu) shopsSubmenu.style.display = 'none';
+        });
+    }
+
+    // --- 4. Submenu de Lojas (Dentro do Modal Mercantes) ---
+    const shopsMenuBtn = document.getElementById('shopsMenuBtn');
+    const shopsSubmenu = document.getElementById('shopsSubmenu');
+
+    if (shopsMenuBtn && shopsSubmenu) {
+        shopsMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = shopsSubmenu.style.display === 'flex';
+            
+            if (!isVisible) {
+                shopsSubmenu.style.display = 'flex';
+                // Calcula posição baseado no botão dentro do modal
+                const btnRect = shopsMenuBtn.getBoundingClientRect();
+                const submenuRect = shopsSubmenu.getBoundingClientRect();
+                
+                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+                let newTop = btnRect.top - submenuRect.height - 10;
+                
+                // Aplica z-index alto para ficar acima do modal fullscreen
+                shopsSubmenu.style.zIndex = '3002'; 
+                shopsSubmenu.style.top = newTop + 'px';
+                shopsSubmenu.style.left = newLeft + 'px';
+            } else {
+                shopsSubmenu.style.display = 'none';
+            }
+        });
+    }
+
+    // Listener global para fechar submenus ao clicar fora
+    document.addEventListener('click', (e) => {
+        // Fechar submenu principal
+        if (submenu && submenu.style.display === 'flex') {
+            if (!e.target.closest('#capitalSubmenu') && !e.target.closest('#capitalMenuBtn')) {
+                submenu.style.display = 'none';
+            }
+        }
+        // Fechar submenu de lojas
+        if (shopsSubmenu && shopsSubmenu.style.display === 'flex') {
+            if (!e.target.closest('#shopsSubmenu') && !e.target.closest('#shopsMenuBtn')) {
+                shopsSubmenu.style.display = 'none';
+            }
+        }
+    });
 
     // Habilita o mapa arrastável após o carregamento da página
     enableMapInteraction();
@@ -673,21 +1104,52 @@ function getLocalUserId() {
 
 async function fetchAndDisplayCityOwner(cityName) {
     const cityNameLower = cityName.toLowerCase();
+    const cacheKey = `city_owner_cache_${cityNameLower}`;
     
-    // Alvos baseados na nova estrutura de IDs: guild_name_[cidade] e guild_flag_[cidade]
+    // IDs dos elementos DOM
     const nameSpan = document.getElementById(`guild_name_${cityNameLower}`);
     const flagImg = document.getElementById(`guild_flag_${cityNameLower}`);
     const defaultText = 'Nenhuma.';
 
     if (!nameSpan || !flagImg) {
-        console.error(`Elementos de guilda para ${cityName} não encontrados (guild_name_${cityNameLower} ou guild_flag_${cityNameLower}).`);
+        console.error(`Elementos de guilda para ${cityName} não encontrados.`);
         return;
     }
 
-    flagImg.style.display = 'none'; // Inicialmente oculta
-    nameSpan.textContent = defaultText;
+    // Função auxiliar para atualizar a UI
+    const updateUI = (name, flagUrl) => {
+        if (name && flagUrl) {
+            flagImg.setAttribute('src', flagUrl);
+            flagImg.style.display = 'inline-block';
+            flagImg.setAttribute('alt', `Bandeira da Guilda ${name}`);
+            nameSpan.textContent = name;
+        } else {
+            flagImg.style.display = 'none';
+            nameSpan.textContent = defaultText;
+        }
+    };
 
+    // 1. TENTATIVA DE CARREGAR DO CACHE
     try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw);
+            const now = new Date().getTime();
+
+            // Verifica se o cache existe e se ainda não expirou
+            if (cached && cached.expiry && now < cached.expiry) {
+                console.log(`[Cache] Carregando dono de ${cityName} do cache local.`);
+                updateUI(cached.guildName, cached.guildFlag);
+                return; // Encerra aqui para não chamar o Supabase
+            }
+        }
+    } catch (e) {
+        console.warn("Erro ao ler cache da cidade:", e);
+    }
+
+    // 2. BUSCA NO SUPABASE (Se não tiver cache ou expirou)
+    try {
+        console.log(`[Network] Buscando dono de ${cityName} no Supabase...`);
         const { data: ownersData, error } = await supabase.rpc('get_city_owners');
 
         if (error) {
@@ -696,24 +1158,55 @@ async function fetchAndDisplayCityOwner(cityName) {
         }
 
         const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityNameLower);
+        
+        let guildName = null;
+        let guildFlag = null;
 
         if (cityOwnerData && cityOwnerData.owner_guild_id) {
-            const guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
-            const guildFlagUrl = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'; 
+            guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
+            guildFlag = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+        }
 
-            // 1. Atualiza o SRC da imagem e a torna visível
-            flagImg.setAttribute('src', guildFlagUrl);
-            flagImg.style.display = 'inline-block'; 
-            flagImg.setAttribute('alt', `Bandeira da Guilda ${guildName}`);
+        // Atualiza a tela
+        updateUI(guildName, guildFlag);
 
-            // 2. Atualiza o TEXTO do nome
-            nameSpan.textContent = guildName;
-        } 
+        // 3. SALVAR NO CACHE (Expira na próxima meia-noite UTC)
+        const now = new Date();
+        const tomorrow = new Date(now);
+        
+        // Define para o dia seguinte
+        tomorrow.setUTCDate(now.getUTCDate() + 1);
+        // Zera o horário para meia-noite UTC (00:00:00)
+        tomorrow.setUTCHours(0, 0, 0, 0);
+        
+        const expiryTimestamp = tomorrow.getTime();
+
+        const cacheData = {
+            guildName: guildName,
+            guildFlag: guildFlag,
+            expiry: expiryTimestamp
+        };
+
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
 
     } catch (err) {
         console.error('Erro inesperado na função fetchAndDisplayCityOwner:', err);
     }
 }
+
+// Inicia a busca (Mantido igual, apenas para garantir o contexto)
+document.addEventListener('DOMContentLoaded', () => {
+    const pageTitle = document.title;
+    // Lista de cidades para verificar
+    const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
+    const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
+
+    if (cityName) {
+        fetchAndDisplayCityOwner(cityName);
+    } else {
+        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+    }
+});
 
 // Inicia a busca
 document.addEventListener('DOMContentLoaded', () => {
@@ -725,6 +1218,235 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchAndDisplayCityOwner(cityName);
     } else {
         console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+    }
+});
+
+/* ================================================================= */
+/* === LÓGICA MESTRE DE POÇÕES ===================================== */
+/* ================================================================= */
+
+// Lista de Receitas do Mestre de Poções
+const potionRecipes = [
+    // --- RANK R ---
+    {
+        id: 43, name: "Poção de Cura R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_r.webp",
+        resId: 51, resName: "Elora", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        cryCost: 200
+    },
+    {
+        id: 47, name: "Poção de Destreza R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_r.webp",
+        resId: 52, resName: "Lumina", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        cryCost: 200
+    },
+    {
+        id: 45, name: "Poção de Fúria R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_r.webp", 
+        resId: 53, resName: "Rutus", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        cryCost: 200
+    },
+    {
+        id: 49, name: "Poção de Ataque R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_r.webp", 
+        resId: 54, resName: "Galdra", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        cryCost: 200
+    },
+    // --- RANK SR ---
+    {
+        id: 44, name: "Poção de Cura SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_sr.webp",
+        resId: 51, resName: "Elora", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        cryCost: 500
+    },
+    {
+        id: 48, name: "Poção de Destreza SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_sr.webp",
+        resId: 52, resName: "Lumina", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        cryCost: 500
+    },
+    {
+        id: 46, name: "Poção de Fúria SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_sr.webp",
+        resId: 53, resName: "Rutus", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        cryCost: 500
+    },
+    {
+        id: 50, name: "Poção de Ataque SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_sr.webp",
+        resId: 54, resName: "Galdra", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        cryCost: 500
+    }
+];
+
+// Helper para formatar números
+const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
+
+// Renderiza a grade de itens
+function renderPotionShop() {
+    const grid = document.getElementById('potionShopGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    potionRecipes.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'potion-card';
+        card.innerHTML = `
+            <div class="potion-header">
+                <img src="${item.img}" class="potion-img" alt="${item.name}">
+                <div class="potion-info">
+                    <h4>${item.name}</h4>
+                    <div class="cost-row">
+                        <img src="${item.resImg}" class="cost-icon">
+                        <span>x${item.resCost}</span>
+                        <img src="https://aden-rpg.pages.dev/assets/cristais.webp" class="cost-icon" style="margin-left:5px;">
+                        <span>${item.cryCost}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pm-controls">
+                <div class="pm-qty-selector">
+                    <button class="pm-qty-btn minus" data-id="${item.id}">-</button>
+                    <span class="pm-qty-val" id="qty-${item.id}">1</span>
+                    <button class="pm-qty-btn plus" data-id="${item.id}">+</button>
+                </div>
+                
+                <div class="total-price-display">
+                    Total: 
+                    <img src="${item.resImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-res-${item.id}">${item.resCost}</span> + 
+                    <img src="https://aden-rpg.pages.dev/assets/cristais.webp" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-cry-${item.id}">${item.cryCost}</span>
+                </div>
+
+                <button class="pm-buy-btn" id="buy-btn-${item.id}" data-id="${item.id}">Trocar</button>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    // Event Listeners para botões gerados
+    document.querySelectorAll('.pm-qty-btn.plus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, 1)));
+    document.querySelectorAll('.pm-qty-btn.minus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, -1)));
+    document.querySelectorAll('.pm-buy-btn').forEach(b => b.addEventListener('click', (e) => buyPotion(e.target.dataset.id)));
+}
+
+// Atualiza quantidade e preço total na UI
+function updateQty(id, delta) {
+    id = parseInt(id);
+    const qtySpan = document.getElementById(`qty-${id}`);
+    if(!qtySpan) return;
+
+    let currentQty = parseInt(qtySpan.textContent);
+    let newQty = currentQty + delta;
+    if (newQty < 1) newQty = 1;
+    if (newQty > 99) newQty = 99; // Limite de segurança UI
+
+    qtySpan.textContent = newQty;
+
+    // Atualiza totais visuais
+    const recipe = potionRecipes.find(r => r.id === id);
+    if (recipe) {
+        document.getElementById(`tot-res-${id}`).textContent = fmt(recipe.resCost * newQty);
+        document.getElementById(`tot-cry-${id}`).textContent = fmt(recipe.cryCost * newQty);
+    }
+}
+
+// Helper para mostrar mensagem
+function showMsg(msg) {
+    // Tenta usar o floatingMessage padrão se existir (geralmente no main), senão alert
+    const floatDiv = document.getElementById('floatingMessage');
+    if (floatDiv) {
+        floatDiv.textContent = msg;
+        floatDiv.style.display = 'block';
+        floatDiv.style.opacity = '1';
+        setTimeout(() => { floatDiv.style.opacity = '0'; setTimeout(()=>floatDiv.style.display='none', 500); }, 3000);
+    } else {
+        alert(msg);
+    }
+}
+
+// Função de Compra (Chama RPC)
+async function buyPotion(id) {
+    id = parseInt(id);
+    const btn = document.getElementById(`buy-btn-${id}`);
+    const qty = parseInt(document.getElementById(`qty-${id}`).textContent);
+    const recipe = potionRecipes.find(r => r.id === id);
+
+    if (!recipe) return;
+
+    // UI Loading
+    btn.disabled = true;
+    btn.textContent = "Trocando...";
+
+    try {
+        const { data, error } = await supabase.rpc('exchange_potion_at_master', {
+            p_potion_id: id,
+            p_quantity: qty
+        });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.message);
+
+        showMsg(`Sucesso! Você recebeu ${qty}x ${recipe.name}.`);
+
+        // Atualização Cirúrgica Local (Sem script.js, fazemos manual)
+        // 1. Atualizar Cristais no Cache do Player
+        try {
+            const cachedStr = localStorage.getItem('player_data_cache');
+            if (cachedStr) {
+                const cached = JSON.parse(cachedStr);
+                if (cached.data) {
+                    cached.data.crystals = data.new_crystals;
+                    // Salva de volta
+                    localStorage.setItem('player_data_cache', JSON.stringify(cached));
+                }
+            }
+        } catch(e) { console.warn("Cache update failed", e); }
+
+        // 2. Tentar atualizar UI global se existirem os elementos (header do jogo, se for página compartilhada)
+        const cryDisplay = document.getElementById('playerCrystals');
+        if (cryDisplay) {
+            cryDisplay.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 17px; height: 17px; vertical-align: -4px;"> ${fmt(data.new_crystals)}`;
+        }
+
+    } catch (err) {
+        console.error(err);
+        showMsg(`Erro: ${err.message || err.details || "Falha na troca."}`);
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.textContent = "Trocar";
+        }
+    }
+}
+
+// Inicialização do Modal
+document.addEventListener('DOMContentLoaded', () => {
+    // Botão que abre o modal (Submenu Mestre de Poções -> ID btnPotionMaster)
+    const openBtn = document.getElementById('btnPotionMaster');
+    const modal = document.getElementById('potionMasterModal');
+    const closeBtn = document.getElementById('closePotionMasterBtn');
+
+    if (openBtn && modal) {
+        openBtn.addEventListener('click', () => {
+            renderPotionShop();
+            modal.style.display = 'flex';
+            // Fecha menus anteriores se estiverem abertos
+            const shopsSub = document.getElementById('shopsSubmenu');
+            const merchModal = document.getElementById('merchantsModal');
+            
+            if(shopsSub) shopsSub.style.display = 'none';
+            // Opcional: fechar o modal de fundo (mercantes) ou deixar aberto atrás
+            if(merchModal) merchModal.style.display = 'none'; 
+        });
+    }
+
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
     }
 });
 </script>
@@ -760,5 +1482,168 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // URL base para as imagens
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    // Definição dos itens com chaves de notificação
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guilda.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    // SVG Padrão (Hambúrguer)
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+
+    // Insere o SVG no botão de fechar interno
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // Identifica a página atual
+    const currentPage = window.location.pathname.split("/").pop() || "index.html";
+
+    // --- GERA O MENU ---
+    if (menuList) {
+        menuList.innerHTML = menuItems.map(item => {
+            const isActive = currentPage.includes(item.url);
+            return `
+                <li class="menu-item ${isActive ? 'active' : ''}">
+                    <a class="menu-link" ${isActive ? '' : `href="${item.url}"`} data-menu-key="${item.key || ''}">
+                        <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                        <span>${item.name}</span>
+                    </a>
+                </li>
+            `;
+        }).join('');
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) {
+                svg.classList.add('icon-vertical'); // Gira 90 graus (Fica em pé)
+            } else {
+                svg.classList.remove('icon-vertical'); // Volta ao normal
+            }
+        }
+    };
+
+    const openMenu = () => {
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        
+        // Anima o ícone do topo
+        toggleMenuRotation(true);
+
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+
+        // Retorna a animação do ícone do topo
+        toggleMenuRotation(false);
+
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (BOLINHAS) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try {
+            dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
+        } catch(e) {}
+
+        // Lógica de Guilda (Fim de semana)
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.getAttribute('data-menu-key');
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            // Limpa bolinha antiga
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            // Adiciona nova
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    // Executa ao carregar
+    renderSideMenuNotifications();
+});
+</script>
 </body>
 </html>

@@ -355,12 +355,48 @@ body {
     margin-top: 40px;
     margin-bottom: 20px;
     text-align: center;
-  
     padding: 5px 5px;
     border-radius: 8px;
     border: 1px solid #555;
     width: 90%;
 }
+
+/* --- NOVO ESTILO: BARRA DE RECURSOS --- */
+#userResourcesDisplay {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 8px 5px;
+    color: #e0dccc;
+    font-size: 0.9em;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+
+    /* --- ANIMAÇÃO IGUAL AOS CARDS --- */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.res-item-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.res-icon-display {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(1px 1px 2px black);
+}
+/* ------------------------------------- */
 
 .potion-grid {
     display: grid;
@@ -369,7 +405,7 @@ body {
     width: 100%;
     max-width: 1200px;
     padding-bottom: 600px; /* Espaço para scroll */
-    padding-top: 150px;
+    padding-top: 10px; /* Ajustado para dar espaço a barra de recursos */
 }
 
 /* Animação de Fade In para os cards */
@@ -630,6 +666,13 @@ font > font {
             <span class="close-btn" id="closePotionMasterBtn">&times;</span>
             
             <h3 class="pm-title">Troque cristais por poções</h3>
+
+            <!-- NOVA DIV: Mostra Recursos do Jogador -->
+            <div id="userResourcesDisplay">
+                <span style="width:100%; text-align:center; color:gold;">Você tem:</span>
+                <!-- Será preenchido via JS -->
+                Carregando recursos...
+            </div>
             
             <div id="potionShopGrid" class="potion-grid">
                 <!-- Os itens serão gerados via JavaScript -->
@@ -1282,6 +1325,106 @@ const potionRecipes = [
 // Helper para formatar números
 const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
 
+// --- NOVA FUNÇÃO: Ler Cache IDB ---
+// Baseado no DB_NAME e STORE_NAME do inventory.js
+async function loadResourcesFromCache() {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 46; 
+
+    const resourceMap = {
+        51: { count: 0, name: 'Elora', img: 'https://aden-rpg.pages.dev/assets/itens/elora.webp' },
+        52: { count: 0, name: 'Lumina', img: 'https://aden-rpg.pages.dev/assets/itens/lumina.webp' },
+        53: { count: 0, name: 'Rutus', img: 'https://aden-rpg.pages.dev/assets/itens/rutus.webp' },
+        54: { count: 0, name: 'Galdra', img: 'https://aden-rpg.pages.dev/assets/itens/galdra.webp' }
+    };
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        req.onerror = () => {
+            console.warn("Falha ao abrir IDB do inventário (pode não existir ainda).");
+            resolve(resourceMap); 
+        };
+
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                resolve(resourceMap);
+                return;
+            }
+
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const getAllReq = store.getAll();
+
+            getAllReq.onsuccess = () => {
+                const items = getAllReq.result || [];
+                items.forEach(invItem => {
+                    // ID do item base
+                    const itemId = invItem.items?.item_id;
+                    if (resourceMap[itemId]) {
+                        resourceMap[itemId].count += (invItem.quantity || 0);
+                    }
+                });
+                resolve(resourceMap);
+            };
+
+            getAllReq.onerror = () => resolve(resourceMap);
+        };
+    });
+}
+// ----------------------------------
+
+// Nova função para atualizar o IndexedDB
+async function updateResourceCache(resourceItemId, qtyUsed) {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 46;
+
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                resolve(); return;
+            }
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+
+            // Pegar todos para achar o item certo pelo ID numérico
+            const getAll = store.getAll();
+            getAll.onsuccess = () => {
+                const items = getAll.result;
+                let remaining = qtyUsed;
+
+                for (const item of items) {
+                    if (item.items && item.items.item_id === resourceItemId) {
+                        if (item.quantity >= remaining) {
+                            item.quantity -= remaining;
+                            remaining = 0;
+                            // Se zerou, poderíamos deletar, mas atualizar para 0 é mais seguro para lógica simples
+                            if (item.quantity <= 0) {
+                                 store.delete(item.id); // Remove do cache se zerar
+                            } else {
+                                 store.put(item); // Atualiza quantidade
+                            }
+                            break;
+                        } else {
+                            // Caso tenha stacks separadas (raro, mas possível)
+                            remaining -= item.quantity;
+                            store.delete(item.id); // Consumiu tudo deste stack
+                        }
+                    }
+                }
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); // Falha silenciosa para não travar UI
+        };
+        req.onerror = () => resolve();
+    });
+}
+
 // Renderiza a grade de itens
 function renderPotionShop() {
     const grid = document.getElementById('potionShopGrid');
@@ -1410,6 +1553,19 @@ async function buyPotion(id) {
         if (cryDisplay) {
             cryDisplay.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 17px; height: 17px; vertical-align: -4px;"> ${fmt(data.new_crystals)}`;
         }
+        
+        // 3. (Novo) Decrementar Recursos Visuais (Opcional, mas melhora UX sem recarregar)
+        // Como o IDB não foi alterado (só leitura), vamos apenas subtrair visualmente na barra
+        const resId = recipe.resId; // 51, 52 etc
+        const currentSpan = document.getElementById(`res-display-count-${resId}`);
+        if(currentSpan) {
+            let val = parseInt(currentSpan.textContent.replace('X','')) || 0;
+            val = Math.max(0, val - (recipe.resCost * qty));
+            currentSpan.textContent = `X${val}`;
+        }
+        
+        // 4. ATUALIZAR O INDEXEDDB PARA O PRÓXIMO RELOAD
+        await updateResourceCache(recipe.resId, recipe.resCost * qty);
 
     } catch (err) {
         console.error(err);
@@ -1430,9 +1586,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('closePotionMasterBtn');
 
     if (openBtn && modal) {
-        openBtn.addEventListener('click', () => {
+        openBtn.addEventListener('click', async () => {
             renderPotionShop();
             modal.style.display = 'flex';
+            
+            // --- Carrega Recursos do Cache ---
+            const resContainer = document.getElementById('userResourcesDisplay');
+            if (resContainer) {
+                resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span> Carregando...';
+                
+                try {
+                    const counts = await loadResourcesFromCache();
+                    // Limpa
+                    resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span>';
+                    
+                    // Ordem: Elora(51), Lumina(52), Rutus(53), Galdra(54)
+                    [51, 52, 53, 54].forEach(id => {
+                        const data = counts[id];
+                        const div = document.createElement('div');
+                        div.className = 'res-item-display';
+                        div.innerHTML = `
+                            <img src="${data.img}" class="res-icon-display" alt="${data.name}">
+                            <span style="font-weight:bold; color: #fff;" id="res-display-count-${id}">X${data.count}</span>
+                        `;
+                        resContainer.appendChild(div);
+                    });
+
+                } catch (e) {
+                    resContainer.innerHTML = 'Não foi possível carregar os recursos.';
+                }
+            }
+            // ---------------------------------
+
             // Fecha menus anteriores se estiverem abertos
             const shopsSub = document.getElementById('shopsSubmenu');
             const merchModal = document.getElementById('merchantsModal');

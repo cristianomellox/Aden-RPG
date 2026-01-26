@@ -294,7 +294,21 @@ document.addEventListener("DOMContentLoaded", () => {
             playerCache.set(String(currentPlayer.id), currentPlayer.name);
         }
 
-        await supabaseClient.rpc('cleanup_old_private_messages');
+        // --- LÓGICA DE LIMPEZA DIÁRIA (OTIMIZADO: 1 VEZ POR DIA) ---
+        const STORAGE_KEY_CLEANUP = `aden_pv_cleanup_${currentPlayer.id}`;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const lastCleanup = localStorage.getItem(STORAGE_KEY_CLEANUP);
+
+        if (lastCleanup !== todayStr) {
+            console.log("🧹 [PV] Executando limpeza diária de mensagens antigas...");
+            // Executa sem 'await' para não travar o carregamento da interface (Fire & Forget)
+            supabaseClient.rpc('cleanup_old_private_messages')
+                .then(() => {
+                    localStorage.setItem(STORAGE_KEY_CLEANUP, todayStr);
+                    // console.log("✅ [PV] Limpeza concluída.");
+                })
+                .catch(err => console.warn("⚠️ Falha na limpeza de PV:", err));
+        }
         
         // OTIMIZAÇÃO: Busca apenas metadados, SEM a coluna 'messages'
         const { data: dbConversations, error: convoError } = await supabaseClient
@@ -555,7 +569,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!currentPlayer) return; // Se não autenticou, para aqui.
         
-        // 1. Sincroniza mensagens privadas (apenas metadata)
+        // 1. Sincroniza mensagens privadas (apenas metadata e executa limpeza se necessário)
         await fetchAndSyncMessages();
         // 2. Sincroniza mensagens de sistema (sem marcar como lida e sem content pesado)
         await fetchAndRenderSystemMessages({ markAsRead: false }); 

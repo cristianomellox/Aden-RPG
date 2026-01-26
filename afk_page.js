@@ -142,11 +142,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const battleCountdownDisplay = document.getElementById("battle-countdown");
     const attacksLeftSpan = document.getElementById("time-left");
 
-    // Modals
+    // Modals e Botões Extras
     const resultModal = document.getElementById("result-modal");
     const resultText = document.getElementById("result-text");
     const confirmBtn = document.getElementById("confirm-btn");
-    const returnMainIdleBtn = document.getElementById("return-main-idle");
+    
+    // ATENÇÃO: Se o elemento não existir no HTML, getElementById retorna null.
+    // Antes, isso quebrava o script. Agora vamos tratar.
+    const returnMainIdleBtn = document.getElementById("return-main-idle"); 
+
     const tutorialModal = document.getElementById("tutorial-modal");
     const closeTutorialBtn = document.getElementById("close-tutorial-btn");
     const musicPermissionModal = document.getElementById("music-permission-modal");
@@ -223,14 +227,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         afkGoldSpan.textContent = formatNumberCompact(goldEarned);
 
         // Botão Coletar
-        const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
-        collectBtn.disabled = !isCollectable;
-        if(collectBtn.disabled) {
-            collectBtn.style.opacity = "0.5";
-            collectBtn.style.cursor = "not-allowed";
-        } else {
-             collectBtn.style.opacity = "1";
-             collectBtn.style.cursor = "pointer";
+        if(collectBtn) {
+            const isCollectable = (xpEarned > 0 || goldEarned > 0) && (secondsElapsed >= MIN_COLLECT_SECONDS);
+            collectBtn.disabled = !isCollectable;
+            if(collectBtn.disabled) {
+                collectBtn.style.opacity = "0.5";
+                collectBtn.style.cursor = "not-allowed";
+            } else {
+                collectBtn.style.opacity = "1";
+                collectBtn.style.cursor = "pointer";
+            }
         }
     }
 
@@ -264,10 +270,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             afkStartTime = Date.now();
         }
 
-        playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
-        playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
-        afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
-        dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
+        if(playerTotalXpSpan) playerTotalXpSpan.textContent = formatNumberCompact(playerAfkData.xp || 0);
+        if(playerTotalGoldSpan) playerTotalGoldSpan.textContent = formatNumberCompact(playerAfkData.gold || 0);
+        if(afkStageSpan) afkStageSpan.textContent = playerAfkData.current_afk_stage ?? 1;
+        if(dailyAttemptsLeftSpan) dailyAttemptsLeftSpan.textContent = playerAfkData.daily_attempts_left ?? 0;
         
         updateStartAfkButtonState(playerAfkData.daily_attempts_left ?? 0);
         updateLocalSimulation();
@@ -373,11 +379,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Verifica se é o novo formato (Array) com índice 0 = 1 (Sucesso)
             if (data && Array.isArray(data) && data[0] === 1) {
                 playerAfkData = mapLoadData(data, userId);
-                
-                // NOTA: Stats de combate não vêm mais nessa chamada para economizar dados
-                // Se o cache local de stats estiver vazio, buscamos sob demanda (opcional)
-                // ou confiamos que o GlobalDB já os tem de outras telas.
-                
                 saveToCache(playerAfkData);
             }
         }
@@ -389,6 +390,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     function updateStartAfkButtonState(attemptsLeft) {
+        if(!startAfkBtn) return; // Segurança
+
         if (attemptsLeft <= 0) {
             // Desabilita o botão normal e esconde
             startAfkBtn.disabled = true;
@@ -424,49 +427,45 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- AÇÕES DO JOGADOR ---
-
-    collectBtn.addEventListener("click", async () => {
-        if (!userId || collectBtn.disabled) return;
-        collectBtn.disabled = true; 
-        
-        const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
-        
-        if (error) {
-            console.error("Erro ao coletar:", error);
-            collectBtn.disabled = false;
-            return;
-        }
-
-        // OTIMIZAÇÃO: Protocolo Compacto
-        // SQL Retorno: [1:Success, 2:XP_Gained, 3:Gold_Gained, 4:New_Level, 5:Leveled_Up(0/1)]
-        if (data && Array.isArray(data) && data[0] === 1) {
-            const xpGained = data[1];
-            const goldGained = data[2];
-            const newLevel = data[3]; // Pode ser string "Maximo"
-            const isLevelUp = data[4] === 1;
-
-            if (xpGained) playerAfkData.xp = (playerAfkData.xp || 0) + xpGained;
-            if (goldGained) playerAfkData.gold = (playerAfkData.gold || 0) + goldGained;
+    if(collectBtn) {
+        collectBtn.addEventListener("click", async () => {
+            if (!userId || collectBtn.disabled) return;
+            collectBtn.disabled = true; 
             
-            playerAfkData.last_afk_start_time = new Date().toISOString();
-
-            if (isLevelUp) {
-                playerAfkData.level = newLevel;
-                // Como não retornamos stats novos na coleta compacta, 
-                // não atualizamos attack/def aqui para economizar bytes.
-                showLevelUpBalloon(newLevel);
+            const { data, error } = await supabase.rpc('collect_afk_rewards', { uid: userId });
+            
+            if (error) {
+                console.error("Erro ao coletar:", error);
+                collectBtn.disabled = false;
+                return;
             }
 
-            await saveToCache(playerAfkData);
-            renderPlayerData();
+            if (data && Array.isArray(data) && data[0] === 1) {
+                const xpGained = data[1];
+                const goldGained = data[2];
+                const newLevel = data[3]; 
+                const isLevelUp = data[4] === 1;
 
-            resultText.textContent = `Você coletou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro!`;
-            resultModal.style.display = "block";
-        } else {
-            // Se retornar erro ou formato antigo por engano
-            collectBtn.disabled = false;
-        }
-    });
+                if (xpGained) playerAfkData.xp = (playerAfkData.xp || 0) + xpGained;
+                if (goldGained) playerAfkData.gold = (playerAfkData.gold || 0) + goldGained;
+                
+                playerAfkData.last_afk_start_time = new Date().toISOString();
+
+                if (isLevelUp) {
+                    playerAfkData.level = newLevel;
+                    showLevelUpBalloon(newLevel);
+                }
+
+                await saveToCache(playerAfkData);
+                renderPlayerData();
+
+                resultText.textContent = `Você coletou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro!`;
+                resultModal.style.display = "block";
+            } else {
+                collectBtn.disabled = false;
+            }
+        });
+    }
 
     async function triggerAdventure(isFarming) {
         if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
@@ -475,9 +474,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             p_player_id: userId,
             p_farm_mode: isFarming
         });
-
-        // OTIMIZAÇÃO: Protocolo Compacto
-        // SQL Retorno: [0:Success, 1:Win(0/1), 2:XP, 3:Gold, 4:Level, 5:HP_Restante, 6:AttacksLog, 7:TargetStage]
         
         if (error || !data || !Array.isArray(data) || data[0] !== 1) {
             const msg = (data && data[1] === 'NO_ATTEMPTS') ? "Sem tentativas diárias!" : "Erro na aventura.";
@@ -492,10 +488,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const goldGained = data[3];
         const newLevel = data[4];
         const hpLeft = data[5];
-        const attackLog = data[6]; // Array [[dmg, crit], ...]
+        const attackLog = data[6]; 
         const targetStage = data[7];
 
-        // Atualiza estado local
         playerAfkData.daily_attempts_left = Math.max(0, playerAfkData.daily_attempts_left - 1);
         
         if (didWin) {
@@ -506,7 +501,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
         
-        // Verifica Level Up pela mudança de nível
         const currentLvlStr = String(playerAfkData.level);
         const newLvlStr = String(newLevel);
         const leveledUp = currentLvlStr !== newLvlStr;
@@ -518,14 +512,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         await saveToCache(playerAfkData);
         renderPlayerData();
 
-        // Reconstrói objeto para a função de animação (que espera o formato antigo)
         const combatDataObject = {
             venceu: didWin,
             xp_ganho: xpGained,
             gold_ganho: goldGained,
             leveled_up: leveledUp,
             new_level: newLevel,
-            monster_hp_inicial: hpLeft + calculateTotalDamage(attackLog), // Recalcula HP inicial
+            monster_hp_inicial: hpLeft + calculateTotalDamage(attackLog),
             monstro_hp_restante: hpLeft,
             attacks: attackLog,
             target_stage: targetStage
@@ -541,11 +534,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
     
-    // Helper auxiliar para reconstruir HP inicial
     function calculateTotalDamage(logs) {
         if(!logs || !Array.isArray(logs)) return 0;
         return logs.reduce((acc, curr) => {
-            // Suporte para [dano, crit] ou formato antigo
             const dmg = Array.isArray(curr) ? curr[0] : (curr.damage || 0);
             return acc + dmg;
         }, 0);
@@ -590,7 +581,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                         const attackData = attackLog[currentAttackIndex];
                         let damage, isCrit;
 
-                        // Suporte híbrido (Array otimizado ou Objeto antigo)
                         if (Array.isArray(attackData)) {
                             damage = attackData[0];
                             isCrit = attackData[1] === 1; 
@@ -647,16 +637,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- AUXILIARES VISUAIS ---
     function showIdleScreen() {
-        idleScreen.style.display = "flex";
-        combatScreen.style.display = "none";
+        if(idleScreen) idleScreen.style.display = "flex";
+        if(combatScreen) combatScreen.style.display = "none";
         combatMusic.pause();
         idleMusic.play().catch(() => {});
         renderPlayerData(); 
     }
 
     function showCombatScreen() {
-        idleScreen.style.display = "none";
-        combatScreen.style.display = "flex";
+        if(idleScreen) idleScreen.style.display = "none";
+        if(combatScreen) combatScreen.style.display = "flex";
         idleMusic.pause();
         combatMusic.play().catch(() => {});
     }
@@ -679,36 +669,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     function showLevelUpBalloon(newLevel) {
         const balloon = document.getElementById("levelUpBalloon");
         const text = document.getElementById("levelUpBalloonText");
-        text.innerText = newLevel;
-        balloon.style.display = "block";
-        setTimeout(() => balloon.style.display = "none", 5000);
+        if(balloon && text) {
+            text.innerText = newLevel;
+            balloon.style.display = "block";
+            setTimeout(() => balloon.style.display = "none", 5000);
+        }
     }
 
     // --- EVENT LISTENERS ---
 
-    musicPermissionBtn.addEventListener("click", () => {
-        musicPermissionModal.style.display = "none";
-        [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
-            audio.play().then(() => {
-                audio.pause();
-                audio.currentTime = 0;
-            }).catch(()=>{});
+    if(musicPermissionBtn) {
+        musicPermissionBtn.addEventListener("click", () => {
+            musicPermissionModal.style.display = "none";
+            [combatMusic, normalHitSound, criticalHitSound].forEach(audio => {
+                audio.play().then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }).catch(()=>{});
+            });
+            showIdleScreen();
         });
-        showIdleScreen();
-    });
+    }
 
-    startAfkBtn.addEventListener("click", () => {
-        if (startAfkBtn.disabled || !userId) return;
-        const currentStage = playerAfkData.current_afk_stage || 1;
-        if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
-        if (currentStage > 1) {
-            if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
-            if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
-        } else {
-            if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
-        }
-        if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
-    });
+    if(startAfkBtn) {
+        startAfkBtn.addEventListener("click", () => {
+            if (startAfkBtn.disabled || !userId) return;
+            const currentStage = playerAfkData.current_afk_stage || 1;
+            if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
+            if (currentStage > 1) {
+                if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
+                if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
+            } else {
+                if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
+            }
+            if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
+        });
+    }
 
     // Listener do Botão de Vídeo (+1 Tentativa)
     if (watchAdAttemptBtn) {
@@ -727,9 +723,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (rpcError.message.toLowerCase().includes('limite')) {
                     watchAdAttemptBtn.style.display = 'none';
-                    startAfkBtn.style.display = 'inline-block';
-                    startAfkBtn.disabled = true;
-                    startAfkBtn.style.opacity = "0.5";
+                    if(startAfkBtn) {
+                        startAfkBtn.style.display = 'inline-block';
+                        startAfkBtn.disabled = true;
+                        startAfkBtn.style.opacity = "0.5";
+                    }
                 }
                 
                 watchAdAttemptBtn.disabled = false;
@@ -738,7 +736,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             localStorage.setItem('pending_reward_token', token);
-            triggerAdLink.click();
+            if(triggerAdLink) triggerAdLink.click();
         } catch (e) {
             resultText.textContent = "Erro ao conectar com o servidor.";
             resultModal.style.display = "block";
@@ -752,17 +750,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
     if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
 
-    confirmBtn.addEventListener("click", () => {
-        resultModal.style.display = "none";
-        showIdleScreen(); 
-    });
+    if (confirmBtn) {
+        confirmBtn.addEventListener("click", () => {
+            resultModal.style.display = "none";
+            showIdleScreen(); 
+        });
+    }
     
-    returnMainIdleBtn.addEventListener("click", () => {
-        window.location.href = "index.html";
-    });
+    // CORREÇÃO AQUI: Verificamos se o botão existe antes de usar
+    if (returnMainIdleBtn) {
+        returnMainIdleBtn.addEventListener("click", () => {
+            window.location.href = "index.html";
+        });
+    }
 
-    saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
-    closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
+    if(saibaMaisBtn) saibaMaisBtn.addEventListener("click", () => tutorialModal.style.display = "flex");
+    if(closeTutorialBtn) closeTutorialBtn.addEventListener("click", () => tutorialModal.style.display = "none");
 
     // --- INICIALIZAÇÃO ---
     initializePlayerData();

@@ -1248,6 +1248,7 @@ margin-right: 15px;
 .shop-item-details {
     text-align: left;
     flex-grow: 1;
+    color: gold;
 }
 
 .shop-item-details h3 {
@@ -1259,7 +1260,7 @@ margin-right: 15px;
 .shop-item-details p {
     margin: 0 0 10px 0;
     font-size: 0.9em;
-    color: #ccc;
+    color: #fff;
 }
 
 .shop-item-cost {

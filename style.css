@@ -2266,6 +2266,13 @@ button, .btn {
     font-weight: bold;
     border-left: 4px solid #ffd700;
     padding-left: 11px; /* Compensa a borda para manter alinhamento */
+    
+    /* BLOQUEIA O CLIQUE */
+    pointer-events: none; 
+    cursor: default;
+    
+    /* Efeito visual opcional para parecer "afundado" ou desativado */
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
 
 /* --- ANIMAÇÃO DO BOTÃO DE MENU (TOPO) --- */

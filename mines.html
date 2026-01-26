@@ -526,19 +526,34 @@ document.addEventListener("DOMContentLoaded", () => {
         </svg>
     `;
 
-    // Insere o SVG no botão de fechar interno
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // Identifica a página atual
-    const currentPage = window.location.pathname.split("/").pop() || "index.html";
+    // --- LÓGICA DE DETECÇÃO CORRIGIDA ---
+    // Pega apenas o nome do arquivo final (ex: "mines.html") ignorando pastas anteriores
+    let currentPage = window.location.pathname.split("/").pop();
+    
+    // Se estiver vazio (raiz), considera index.html
+    if (!currentPage || currentPage === "") currentPage = "index.html";
+    
+    // Remove query strings se houver (ex: mines.html?id=1 vira mines.html)
+    currentPage = currentPage.split("?")[0].split("#")[0];
 
     // --- GERA O MENU ---
     if (menuList) {
         menuList.innerHTML = menuItems.map(item => {
-            const isActive = currentPage.includes(item.url);
+            // Verifica se a URL do item está contida na página atual (ou vice-versa para precisão)
+            const isActive = currentPage === item.url;
+            
+            // Se estiver ativo:
+            // 1. Adiciona classe 'active' (aciona o CSS pointer-events: none)
+            // 2. Remove o atributo href
+            // 3. Adiciona javascript:void(0) por segurança
+            
             return `
                 <li class="menu-item ${isActive ? 'active' : ''}">
-                    <a class="menu-link" ${isActive ? '' : `href="${item.url}"`} data-menu-key="${item.key || ''}">
+                    <a class="menu-link" 
+                       ${isActive ? 'href="javascript:void(0)"' : `href="${item.url}"`} 
+                       data-menu-key="${item.key || ''}">
                         <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                         <span>${item.name}</span>
                     </a>
@@ -547,16 +562,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }).join('');
     }
 
-    // --- FUNÇÕES DE CONTROLE DO MENU ---
-
+    // --- FUNÇÕES DE CONTROLE DO MENU (Mantidas iguais) ---
     const toggleMenuRotation = (isOpening) => {
         if (!openBtn) return;
         const svg = openBtn.querySelector('svg');
         if (svg) {
             if (isOpening) {
-                svg.classList.add('icon-vertical'); // Gira 90 graus (Fica em pé)
+                svg.classList.add('icon-vertical'); 
             } else {
-                svg.classList.remove('icon-vertical'); // Volta ao normal
+                svg.classList.remove('icon-vertical'); 
             }
         }
     };
@@ -564,10 +578,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const openMenu = () => {
         sideMenu.classList.add("open");
         if(overlay) overlay.style.display = "block";
-        
-        // Anima o ícone do topo
         toggleMenuRotation(true);
-
         setTimeout(() => {
             if(overlay) {
                 overlay.style.opacity = "1";
@@ -582,10 +593,7 @@ document.addEventListener("DOMContentLoaded", () => {
             overlay.style.opacity = "0";
             overlay.style.pointerEvents = "none";
         }
-
-        // Retorna a animação do ícone do topo
         toggleMenuRotation(false);
-
         setTimeout(() => {
             if(overlay) overlay.style.display = "none";
         }, 300);
@@ -595,7 +603,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if(closeBtn) closeBtn.addEventListener("click", closeMenu);
     if(overlay) overlay.addEventListener("click", closeMenu);
 
-    // --- RENDERIZAR NOTIFICAÇÕES (BOLINHAS) ---
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};
@@ -603,7 +611,6 @@ document.addEventListener("DOMContentLoaded", () => {
             dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
         } catch(e) {}
 
-        // Lógica de Guilda (Fim de semana)
         let showGuildDot = false;
         const now = new Date();
         const day = now.getUTCDay(); 
@@ -627,11 +634,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (key && dailyStatus[key] === true) shouldShow = true;
             if (key === 'guild' && showGuildDot) shouldShow = true;
 
-            // Limpa bolinha antiga
             const existingDot = link.querySelector('.menu-notification-dot');
             if (existingDot) existingDot.remove();
 
-            // Adiciona nova
             if (shouldShow) {
                 const dot = document.createElement('div');
                 dot.className = 'menu-notification-dot';
@@ -640,7 +645,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    // Executa ao carregar
     renderSideMenuNotifications();
 });
 </script>

@@ -234,14 +234,171 @@ font > font {
     box-shadow: none !important;
     position: static !important;
 }
+/* O Menu em si (ID alterado para não conflitar com o da direita) */
+#leftSideMenu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px; /* Largura um pouco maior para acomodar ícones */
+    height: 100%;
+    background: #1a1a1a; /* Fundo escuro */
+    border-right: 2px solid #444;
+    z-index: 9999;
+    transform: translateX(-100%); /* Começa escondido à esquerda */
+    transition: transform 2s ease;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+}
+
+/* Classe para abrir o menu via JS */
+#leftSideMenu.open {
+    transform: translateX(0);
+}
+
+/* Cabeçalho do Menu */
+.menu-header {
+    padding: 15px;
+    background: #111;
+    display: flex;
+    justify-content: space-between; /* Botão e título afastados */
+    align-items: center;
+    border-bottom: 1px solid #333;
+    height: 60px; /* Altura fixa */
+    box-sizing: border-box;
+}
+
+.menu-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.5rem;
+    flex-grow: 1;
+    text-align: center; /* Título centralizado */
+}
+
+/* Botão de Fechar (Hambúrguer) */
+.close-menu-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Lista e Itens */
+.menu-list {
+    list-style: none;
+    padding: 0; /* Remove padding padrão da UL */
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-item {
+    width: 100%;
+}
+
+.menu-link {
+    display: flex; /* Flexbox para alinhar ícone e texto */
+    align-items: center;
+    justify-content: flex-start; /* Alinha tudo à esquerda */
+    padding: 15px 15px; /* Padding reduzido na esquerda */
+    color: #e0e0e0;
+    text-decoration: none;
+    font-size: 1.4rem;
+    transition: background 0.4s, color 0.4s;
+    border-bottom: 1px solid #252525;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.menu-link:hover {
+    background: #333;
+    color: #fff;
+}
+
+/* Estilo do Ícone no Menu */
+.menu-icon {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    margin-right: 15px; /* Espaço entre ícone e texto */
+}
+
+/* Item Ativo (Página atual) */
+.menu-item.active .menu-link {
+    background: #555;
+    color: #ffd700;
+    font-weight: bold;
+    border-left: 4px solid #ffd700;
+    padding-left: 11px; /* Compensa a borda para manter alinhamento */
+}
+
+/* --- ANIMAÇÃO DO BOTÃO DE MENU (TOPO) --- */
+#menuToggleBtn svg {
+    /* Garante que a transição ocorra suavemente */
+    transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+}
+
+/* Classe para deixar o ícone "Em Pé" (Vertical) */
+/* Usamos -90deg para girar à esquerda como pediu */
+.icon-vertical {
+    transform: rotate(-90deg);
+}
+
+/* --- BOTÃO DE FECHAR (DENTRO DO MENU) --- */
+/* Força o SVG do botão de fechar a ser idêntico ao botão aberto (Vertical) */
+#closeMenuBtn svg {
+    transform: rotate(-90deg); 
+    transition: transform 3s ease;
+    cursor: pointer;
+}
+
+/* Opcional: Ao passar o mouse no fechar, ele gira um pouco */
+#closeMenuBtn:hover svg {
+    transform: rotate(0deg); /* Gira para deitado ao passar o mouse */
+    color: #ff4500;
+}
+
+/* --- BOLINHAS DE NOTIFICAÇÃO (AJUSTE FINO) --- */
+.menu-notification-dot {
+    position: absolute;
+    /* Ajuste de posição para não ficar em cima do ícone */
+    left: 45px; 
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 15;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.9);
+    pointer-events: none;
+    animation: pulseSideDot 2s infinite;
+}
+
+@keyframes pulseSideDot {
+    0% { transform: translateY(-50%) scale(1); opacity: 1; }
+    50% { transform: translateY(-50%) scale(1.3); opacity: 0.8; }
+    100% { transform: translateY(-50%) scale(1); opacity: 1; }
+}
     </style>
 </head>
 <body>
 
     <div id="playerTopBar">
-        <a href="index.html" class="top-bar-link" title="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-        </a>
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
        <div> <span id="pageTitle">Tutorial</span></div>
          <div id="lang-selector">
             
@@ -615,5 +772,168 @@ Participe do nosso grupo no Discord, onde você poderá receber códigos de resg
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // URL base para as imagens
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    // Definição dos itens com chaves de notificação
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guilda.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    // SVG Padrão (Hambúrguer)
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+
+    // Insere o SVG no botão de fechar interno
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // Identifica a página atual
+    const currentPage = window.location.pathname.split("/").pop() || "index.html";
+
+    // --- GERA O MENU ---
+    if (menuList) {
+        menuList.innerHTML = menuItems.map(item => {
+            const isActive = currentPage.includes(item.url);
+            return `
+                <li class="menu-item ${isActive ? 'active' : ''}">
+                    <a style="font-size: 1em;" class="menu-link" ${isActive ? '' : `href="${item.url}"`} data-menu-key="${item.key || ''}">
+                        <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                        <span>${item.name}</span>
+                    </a>
+                </li>
+            `;
+        }).join('');
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) {
+                svg.classList.add('icon-vertical'); // Gira 90 graus (Fica em pé)
+            } else {
+                svg.classList.remove('icon-vertical'); // Volta ao normal
+            }
+        }
+    };
+
+    const openMenu = () => {
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        
+        // Anima o ícone do topo
+        toggleMenuRotation(true);
+
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+
+        // Retorna a animação do ícone do topo
+        toggleMenuRotation(false);
+
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (BOLINHAS) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try {
+            dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
+        } catch(e) {}
+
+        // Lógica de Guilda (Fim de semana)
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.getAttribute('data-menu-key');
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            // Limpa bolinha antiga
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            // Adiciona nova
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    // Executa ao carregar
+    renderSideMenuNotifications();
+});
+</script>
 </body>
 </html>

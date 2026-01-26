@@ -2146,3 +2146,175 @@ button, .btn {
     pointer-events: none;
     box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
 }
+
+/* =========================================
+   MENU LATERAL ESQUERDO (Slide-in)
+   ========================================= */
+
+/* Overlay escuro */
+.menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 9998;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none; /* Permite clicar através quando invisível */
+}
+
+/* O Menu em si (ID alterado para não conflitar com o da direita) */
+#leftSideMenu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px; /* Largura um pouco maior para acomodar ícones */
+    height: 100%;
+    background: #1a1a1a; /* Fundo escuro */
+    border-right: 2px solid #444;
+    z-index: 9999;
+    transform: translateX(-100%); /* Começa escondido à esquerda */
+    transition: transform 2s ease;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+}
+
+/* Classe para abrir o menu via JS */
+#leftSideMenu.open {
+    transform: translateX(0);
+}
+
+/* Cabeçalho do Menu */
+.menu-header {
+    padding: 15px;
+    background: #111;
+    display: flex;
+    justify-content: space-between; /* Botão e título afastados */
+    align-items: center;
+    border-bottom: 1px solid #333;
+    height: 60px; /* Altura fixa */
+    box-sizing: border-box;
+}
+
+.menu-header h3 {
+    margin: 0;
+    color: #ffd700;
+    font-size: 1.5rem;
+    flex-grow: 1;
+    text-align: center; /* Título centralizado */
+}
+
+/* Botão de Fechar (Hambúrguer) */
+.close-menu-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Lista e Itens */
+.menu-list {
+    list-style: none;
+    padding: 0; /* Remove padding padrão da UL */
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-item {
+    width: 100%;
+}
+
+.menu-link {
+    display: flex; /* Flexbox para alinhar ícone e texto */
+    align-items: center;
+    justify-content: flex-start; /* Alinha tudo à esquerda */
+    padding: 15px 15px; /* Padding reduzido na esquerda */
+    color: #e0e0e0;
+    text-decoration: none;
+    font-size: 1.4rem;
+    transition: background 0.4s, color 0.4s;
+    border-bottom: 1px solid #252525;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.menu-link:hover {
+    background: #333;
+    color: #fff;
+}
+
+/* Estilo do Ícone no Menu */
+.menu-icon {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    margin-right: 15px; /* Espaço entre ícone e texto */
+}
+
+/* Item Ativo (Página atual) */
+.menu-item.active .menu-link {
+    background: #555;
+    color: #ffd700;
+    font-weight: bold;
+    border-left: 4px solid #ffd700;
+    padding-left: 11px; /* Compensa a borda para manter alinhamento */
+}
+
+/* --- ANIMAÇÃO DO BOTÃO DE MENU (TOPO) --- */
+#menuToggleBtn svg {
+    /* Garante que a transição ocorra suavemente */
+    transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+}
+
+/* Classe para deixar o ícone "Em Pé" (Vertical) */
+/* Usamos -90deg para girar à esquerda como pediu */
+.icon-vertical {
+    transform: rotate(-90deg);
+}
+
+/* --- BOTÃO DE FECHAR (DENTRO DO MENU) --- */
+/* Força o SVG do botão de fechar a ser idêntico ao botão aberto (Vertical) */
+#closeMenuBtn svg {
+    transform: rotate(-90deg); 
+    transition: transform 3s ease;
+    cursor: pointer;
+}
+
+/* Opcional: Ao passar o mouse no fechar, ele gira um pouco */
+#closeMenuBtn:hover svg {
+    transform: rotate(0deg); /* Gira para deitado ao passar o mouse */
+    color: #ff4500;
+}
+
+/* --- BOLINHAS DE NOTIFICAÇÃO (AJUSTE FINO) --- */
+.menu-notification-dot {
+    position: absolute;
+    /* Ajuste de posição para não ficar em cima do ícone */
+    left: 45px; 
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    background-color: #ff0000;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 15;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.9);
+    pointer-events: none;
+    animation: pulseSideDot 2s infinite;
+}
+
+@keyframes pulseSideDot {
+    0% { transform: translateY(-50%) scale(1); opacity: 1; }
+    50% { transform: translateY(-50%) scale(1.3); opacity: 0.8; }
+    100% { transform: translateY(-50%) scale(1); opacity: 1; }
+}

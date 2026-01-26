@@ -37,9 +37,13 @@ if ('serviceWorker' in navigator) {
 <body>
 
     <div id="playerTopBar">
-        <a href="index.html" class="top-bar-link" title="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-        </a>
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
        <div> <span id="pageTitle">Guilda</span></div>
         <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px; opacity: 0;">
     </div>
@@ -954,6 +958,169 @@ document.addEventListener("DOMContentLoaded", () => {
     // O script do index.html (que tem o toggle) pode usar o window.applyGlobalMuteToMusic.
 
 })();
+</script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // URL base para as imagens
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    // Definição dos itens com chaves de notificação
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guilda.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    // SVG Padrão (Hambúrguer)
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+
+    // Insere o SVG no botão de fechar interno
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    // Identifica a página atual
+    const currentPage = window.location.pathname.split("/").pop() || "index.html";
+
+    // --- GERA O MENU ---
+    if (menuList) {
+        menuList.innerHTML = menuItems.map(item => {
+            const isActive = currentPage.includes(item.url);
+            return `
+                <li class="menu-item ${isActive ? 'active' : ''}">
+                    <a class="menu-link" ${isActive ? '' : `href="${item.url}"`} data-menu-key="${item.key || ''}">
+                        <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                        <span>${item.name}</span>
+                    </a>
+                </li>
+            `;
+        }).join('');
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) {
+                svg.classList.add('icon-vertical'); // Gira 90 graus (Fica em pé)
+            } else {
+                svg.classList.remove('icon-vertical'); // Volta ao normal
+            }
+        }
+    };
+
+    const openMenu = () => {
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        
+        // Anima o ícone do topo
+        toggleMenuRotation(true);
+
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+
+        // Retorna a animação do ícone do topo
+        toggleMenuRotation(false);
+
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (BOLINHAS) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try {
+            dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
+        } catch(e) {}
+
+        // Lógica de Guilda (Fim de semana)
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.getAttribute('data-menu-key');
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            // Limpa bolinha antiga
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            // Adiciona nova
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    // Executa ao carregar
+    renderSideMenuNotifications();
+});
 </script>
 </body>
 </html>

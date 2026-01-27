@@ -494,10 +494,8 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
-    // URL base para as imagens
     const assetBase = "https://aden-rpg.pages.dev/assets/";
 
-    // Definição dos itens
     const menuItems = [
         { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
         { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
@@ -528,43 +526,78 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // --- LÓGICA DE DETECÇÃO CORRIGIDA V2 ---
-    // 1. Pega o caminho completo
-    let path = window.location.pathname; 
+    // --- NOVA LÓGICA DE DETECÇÃO (À PROVA DE WEBVIEW) ---
+    const fullUrl = window.location.href; // Pega a URL completa (file:///android_asset/mines.html...)
     
-    // 2. Pega apenas o que vem depois da última barra (ex: "mines.html")
-    let currentPage = path.substring(path.lastIndexOf('/') + 1);
+    // Debug para você ver no console o que está acontecendo se precisar
+    console.log("[Menu Debug] Full URL:", fullUrl);
 
-    // 3. Se estiver vazio (raiz do site), define como index.html
-    if (!currentPage || currentPage === "") currentPage = "index.html";
-
-    // 4. Remove parâmetros extras (?id=123) ou âncoras (#topo)
-    currentPage = currentPage.split("?")[0].split("#")[0];
-
-    // Debug: Verifica no console o que ele detectou (ajuda se der erro)
-    console.log("Página detectada:", currentPage);
-
-    // --- GERA O MENU ---
     if (menuList) {
-        menuList.innerHTML = menuItems.map(item => {
-            // Compara o nome do arquivo detectado com a URL do item
-            const isActive = (currentPage === item.url);
-            
-            // SE ATIVO: Não coloca href. SE INATIVO: Coloca href.
-            const hrefAttr = isActive ? '' : `href="${item.url}"`;
-            
-            // Adiciona classe active se for a página atual
-            const activeClass = isActive ? 'active' : '';
+        menuList.innerHTML = ""; // Limpa antes de renderizar
 
-            return `
-                <li class="menu-item ${activeClass}">
-                    <a class="menu-link" ${hrefAttr} data-menu-key="${item.key || ''}">
-                        <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
-                        <span>${item.name}</span>
-                    </a>
-                </li>
+        menuItems.forEach(item => {
+            // Verifica se a URL completa CONTÉM o nome do arquivo do item
+            // Ex: "file:///.../mines.html" contém "mines.html"
+            let isActive = fullUrl.indexOf(item.url) !== -1;
+
+            // Tratamento especial para index.html (pode ser apenas / ou raiz)
+            if (item.url === "index.html") {
+                if (fullUrl.endsWith("/") || (fullUrl.indexOf(".html") === -1 && fullUrl.indexOf("file:") === -1)) {
+                    isActive = true;
+                }
+            }
+
+            // Cria o elemento LI
+            const li = document.createElement("li");
+            li.className = `menu-item ${isActive ? 'active' : ''}`;
+
+            // Cria o Link A
+            const a = document.createElement("a");
+            a.className = "menu-link";
+            a.dataset.menuKey = item.key || '';
+
+            // Conteúdo do Link
+            a.innerHTML = `
+                <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                <span>${item.name}</span>
             `;
-        }).join('');
+
+            // --- AQUI ESTÁ A CORREÇÃO PRINCIPAL DO BLOQUEIO ---
+            if (isActive) {
+                // Se for a página atual:
+                // 1. Remove href (visualmente e funcionalmente link morto)
+                a.removeAttribute("href");
+                
+                // 2. Adiciona evento de clique que MATA a ação
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();  // Impede navegação
+                    e.stopPropagation(); // Impede borbulhar
+                    console.log("Clique bloqueado na página atual.");
+                    
+                    // Opcional: Fechar o menu se clicar no item da página atual?
+                    // Se quiser que feche, descomente a linha abaixo:
+                    closeMenu(); 
+                    return false;
+                });
+                
+                // 3. Estilo inline forçado para garantir
+                a.style.cursor = "default";
+                a.style.pointerEvents = "none"; // CSS Backup
+                
+            } else {
+                // Se NÃO for a página atual, adiciona o link normal
+                a.href = item.url;
+                
+                // Adiciona listener para fechar o menu ao clicar em um link válido (UX melhor)
+                a.addEventListener("click", () => {
+                     // Pequeno delay visual
+                     setTimeout(closeMenu, 100);
+                });
+            }
+
+            li.appendChild(a);
+            menuList.appendChild(li);
+        });
     }
 
     // --- FUNÇÕES DE CONTROLE DO MENU ---
@@ -607,7 +640,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if(closeBtn) closeBtn.addEventListener("click", closeMenu);
     if(overlay) overlay.addEventListener("click", closeMenu);
 
-    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
+    // --- RENDERIZAR NOTIFICAÇÕES ---
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};
@@ -630,7 +663,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const links = menuList.querySelectorAll('.menu-link');
         links.forEach(link => {
-            const key = link.getAttribute('data-menu-key');
+            const key = link.dataset.menuKey; // Usa dataset
             let shouldShow = false;
 
             if (key && dailyStatus[key] === true) shouldShow = true;

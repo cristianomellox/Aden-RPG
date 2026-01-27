@@ -515,7 +515,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const openBtn = document.getElementById("menuToggleBtn");
     const closeBtn = document.getElementById("closeMenuBtn");
 
-    // Ícone SVG do Hambúrguer
     const hamburgerSVG = `
         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -526,71 +525,64 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // --- NOVA LÓGICA DE DETECÇÃO (À PROVA DE WEBVIEW) ---
-    const fullUrl = window.location.href; // Pega a URL completa (file:///android_asset/mines.html...)
+    // --- NOVA LÓGICA DE DETECÇÃO RÍGIDA ---
+    // 1. Pega a URL inteira
+    let currentUrl = window.location.href;
     
-    // Debug para você ver no console o que está acontecendo se precisar
-    console.log("[Menu Debug] Full URL:", fullUrl);
+    // 2. Limpa tudo que vem depois de '?' ou '#' (parâmetros do app)
+    currentUrl = currentUrl.split('?')[0].split('#')[0];
+    
+    // 3. Pega EXATAMENTE o que está depois da última barra
+    let fileName = currentUrl.substring(currentUrl.lastIndexOf('/') + 1);
+
+    // 4. Se estiver vazio (ex: site.com/), assume index.html
+    if (!fileName || fileName === "") {
+        fileName = "index.html";
+    }
+
+    // 5. Normaliza para minúsculas para evitar erro de digitação (Mines.html vs mines.html)
+    fileName = fileName.toLowerCase();
+
+    console.log("[Menu] Arquivo detectado:", fileName);
 
     if (menuList) {
-        menuList.innerHTML = ""; // Limpa antes de renderizar
+        menuList.innerHTML = ""; 
 
         menuItems.forEach(item => {
-            // Verifica se a URL completa CONTÉM o nome do arquivo do item
-            // Ex: "file:///.../mines.html" contém "mines.html"
-            let isActive = fullUrl.indexOf(item.url) !== -1;
+            // Compara o nome do arquivo detectado com a URL do item
+            // Ex: se fileName for "mines.html" e item.url for "mines.html", vira TRUE
+            const isPageMatch = (fileName === item.url.toLowerCase());
 
-            // Tratamento especial para index.html (pode ser apenas / ou raiz)
-            if (item.url === "index.html") {
-                if (fullUrl.endsWith("/") || (fullUrl.indexOf(".html") === -1 && fullUrl.indexOf("file:") === -1)) {
-                    isActive = true;
-                }
-            }
-
-            // Cria o elemento LI
             const li = document.createElement("li");
-            li.className = `menu-item ${isActive ? 'active' : ''}`;
+            li.className = `menu-item ${isPageMatch ? 'active' : ''}`;
 
-            // Cria o Link A
             const a = document.createElement("a");
             a.className = "menu-link";
             a.dataset.menuKey = item.key || '';
 
-            // Conteúdo do Link
             a.innerHTML = `
                 <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                 <span>${item.name}</span>
             `;
 
-            // --- AQUI ESTÁ A CORREÇÃO PRINCIPAL DO BLOQUEIO ---
-            if (isActive) {
-                // Se for a página atual:
-                // 1. Remove href (visualmente e funcionalmente link morto)
+            // --- LÓGICA DE TRAVAMENTO ---
+            if (isPageMatch) {
+                // Remove o href para garantir que não seja um link
                 a.removeAttribute("href");
                 
-                // 2. Adiciona evento de clique que MATA a ação
-                a.addEventListener("click", (e) => {
-                    e.preventDefault();  // Impede navegação
-                    e.stopPropagation(); // Impede borbulhar
-                    console.log("Clique bloqueado na página atual.");
-                    
-                    // Opcional: Fechar o menu se clicar no item da página atual?
-                    // Se quiser que feche, descomente a linha abaixo:
-                    closeMenu(); 
-                    return false;
-                });
-                
-                // 3. Estilo inline forçado para garantir
+                // Força visualmente
                 a.style.cursor = "default";
-                a.style.pointerEvents = "none"; // CSS Backup
+                a.style.pointerEvents = "none";
                 
+                // Mata qualquer clique via JS
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                };
             } else {
-                // Se NÃO for a página atual, adiciona o link normal
                 a.href = item.url;
-                
-                // Adiciona listener para fechar o menu ao clicar em um link válido (UX melhor)
                 a.addEventListener("click", () => {
-                     // Pequeno delay visual
                      setTimeout(closeMenu, 100);
                 });
             }
@@ -640,7 +632,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if(closeBtn) closeBtn.addEventListener("click", closeMenu);
     if(overlay) overlay.addEventListener("click", closeMenu);
 
-    // --- RENDERIZAR NOTIFICAÇÕES ---
+    // --- NOTIFICAÇÕES (Mantido) ---
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};
@@ -663,7 +655,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const links = menuList.querySelectorAll('.menu-link');
         links.forEach(link => {
-            const key = link.dataset.menuKey; // Usa dataset
+            const key = link.dataset.menuKey;
             let shouldShow = false;
 
             if (key && dailyStatus[key] === true) shouldShow = true;

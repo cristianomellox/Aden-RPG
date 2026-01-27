@@ -22,7 +22,7 @@
 body, p, span, div, button {
     font-family: 'Cinzel', serif;
 }
-h1, h2 {
+h1, h2, h3 {
     font-family: 'Cinzel', serif;
     color: #e0dccc;
     text-shadow: 2px 2px 4px #000;
@@ -317,6 +317,251 @@ body {
     background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
 }
 
+/* ================================================================= */
+/* === ESTILOS LOJA MESTRE DE POÇÕES =============================== */
+/* ================================================================= */
+#potionMasterModal {
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.7),
+      rgba(0, 0, 0, 0.3)
+    ),
+    url('https://aden-rpg.pages.dev/assets/gmdp.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    align-items: flex-start; 
+    padding-top: 0;
+}
+
+.potion-master-content {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding: 20px 10px;
+}
+
+.pm-title {
+    color: gold;
+    font-size: 1.6em;
+    text-shadow: 2px 2px 4px #000;
+    margin-top: 40px;
+    margin-bottom: 20px;
+    text-align: center;
+    padding: 5px 5px;
+    border-radius: 8px;
+    border: 1px solid #555;
+    width: 90%;
+}
+
+/* --- BARRA DE RECURSOS (BASE) --- */
+#userResourcesDisplay {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 8px 5px;
+    color: #e0dccc;
+    font-size: 0.9em;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+
+    /* --- ANIMAÇÃO IGUAL AOS CARDS --- */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.res-item-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.res-icon-display {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(1px 1px 2px black);
+}
+/* ------------------------------------- */
+
+.potion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    width: 100%;
+    max-width: 1200px;
+    padding-bottom: 600px; /* Espaço para scroll */
+    padding-top: 10px; /* Ajustado para dar espaço a barra de recursos */
+}
+
+/* Animação de Fade In para os cards */
+@keyframes fadeCardIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.potion-card {
+    background: linear-gradient(180deg, #2a2a2aBF, #1a1a1aBF);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    
+    /* Configuração da Animação */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.potion-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+.potion-img {
+    width: 64px;
+    height: 64px;
+    margin-right: 15px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background: #000;
+}
+
+.potion-info h4 {
+    margin: 0;
+    color: #e0dccc;
+    font-size: 1.1em;
+    text-align: left;
+}
+
+.cost-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: #ccc;
+    margin-top: 5px;
+}
+
+.cost-icon {
+    width: 40px;
+    height: 40px;
+    vertical-align: middle;
+}
+
+.pm-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.pm-qty-selector {
+    display: flex;
+    align-items: center;
+    background: #333;
+    border-radius: 5px;
+    padding: 2px;
+}
+
+.pm-qty-btn {
+    width: 35px;
+    height: 35px;
+    font-size: 1.2em;
+    background: #444;
+    border: 1px solid #555;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+.pm-qty-btn:hover { background: #555; }
+
+.pm-qty-val {
+    width: 40px;
+    text-align: center;
+    font-weight: bold;
+    color: white;
+}
+
+.total-price-display {
+    font-size: 0.9em;
+    color: orange;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.4);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.pm-buy-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a);
+    border: 1px solid #ffd700;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 1em;
+    text-shadow: none;
+    border-radius: 4px;
+}
+.pm-buy-btn:hover { filter: brightness(1.1); }
+.pm-buy-btn:disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.7; }
+
+/* Estilo para a mensagem flutuante */
+#floatingMessage {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #e0dccc;
+    padding: 15px 25px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-size: 1.1em;
+    border: 2px solid gold;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
 
 /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
 .goog-te-banner-frame.skiptranslate, 
@@ -406,17 +651,36 @@ font > font {
     </div>
 
     <div id="shopsSubmenu" class="footer-submenu">
-        <div class="footer-submenu-btn">
+        <div class="footer-submenu-btn" id="btnPotionMaster">
             <img src="https://aden-rpg.pages.dev/assets/mdp.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Mestre de Poções
         </div>
         <div class="footer-submenu-btn" style="display:none;">
             <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Oficina
         </div>
-        <div class="footer-submenu-btn">
+        <div style="display: none;" class="footer-submenu-btn">
             <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Escambo
         </div>
     </div>
     
+    <!-- Modal Mestre de Poções -->
+    <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content potion-master-content">
+            <span class="close-btn" id="closePotionMasterBtn">&times;</span>
+            
+            <h3 class="pm-title">Troque Fragmentos por Poções</h3>
+
+            <!-- Mostra Recursos do Jogador (Apenas os Base) -->
+            <div id="userResourcesDisplay">
+                <span style="width:100%; text-align:center; color:gold;">Você tem:</span>
+                Carregando recursos...
+            </div>
+            
+            <div id="potionShopGrid" class="potion-grid">
+                <!-- Itens gerados via JS -->
+            </div>
+        </div>
+    </div>
+
     <div id="historyModal" class="modal-container" style="display: none;">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
@@ -429,6 +693,9 @@ font > font {
             </div>
         </div>
     </div>
+
+    <!-- Elemento para mensagens flutuantes -->
+    <div id="floatingMessage"></div>
 
 <script>
   let musicStarted = false;
@@ -850,24 +1117,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
-// Adicionado para evitar chamadas auth.getSession() em arquivos secundários
 function getLocalUserId() {
-    // 1. Tenta pegar do seu cache personalizado (criado no script.js)
     try {
         const cached = localStorage.getItem('player_data_cache');
         if (cached) {
             const parsed = JSON.parse(cached);
-            // Verifica se não expirou (ex: 24h)
             if (parsed && parsed.data && parsed.data.id && (parsed.expires > Date.now() || !parsed.expires)) {
                 return parsed.data.id;
             }
         }
     } catch (e) {}
 
-    // 2. Tenta pegar do cache interno do Supabase (sem chamada de rede)
     try {
-        // A chave pode variar dependendo da config, mas geralmente é sb-<project-ref>-auth-token
-        // Fazemos uma busca genérica por segurança
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -897,7 +1158,6 @@ async function fetchAndDisplayCityOwner(cityName) {
         return;
     }
 
-    // Função auxiliar para atualizar a UI
     const updateUI = (name, flagUrl) => {
         if (name && flagUrl) {
             flagImg.setAttribute('src', flagUrl);
@@ -910,25 +1170,21 @@ async function fetchAndDisplayCityOwner(cityName) {
         }
     };
 
-    // 1. TENTATIVA DE CARREGAR DO CACHE
     try {
         const cachedRaw = localStorage.getItem(cacheKey);
         if (cachedRaw) {
             const cached = JSON.parse(cachedRaw);
             const now = new Date().getTime();
-
-            // Verifica se o cache existe e se ainda não expirou
             if (cached && cached.expiry && now < cached.expiry) {
                 console.log(`[Cache] Carregando dono de ${cityName} do cache local.`);
                 updateUI(cached.guildName, cached.guildFlag);
-                return; // Encerra aqui para não chamar o Supabase
+                return;
             }
         }
     } catch (e) {
         console.warn("Erro ao ler cache da cidade:", e);
     }
 
-    // 2. BUSCA NO SUPABASE (Se não tiver cache ou expirou)
     try {
         console.log(`[Network] Buscando dono de ${cityName} no Supabase...`);
         const { data: ownersData, error } = await supabase.rpc('get_city_owners');
@@ -948,16 +1204,11 @@ async function fetchAndDisplayCityOwner(cityName) {
             guildFlag = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
         }
 
-        // Atualiza a tela
         updateUI(guildName, guildFlag);
 
-        // 3. SALVAR NO CACHE (Expira na próxima meia-noite UTC)
         const now = new Date();
         const tomorrow = new Date(now);
-        
-        // Define para o dia seguinte
         tomorrow.setUTCDate(now.getUTCDate() + 1);
-        // Zera o horário para meia-noite UTC (00:00:00)
         tomorrow.setUTCHours(0, 0, 0, 0);
         
         const expiryTimestamp = tomorrow.getTime();
@@ -975,10 +1226,8 @@ async function fetchAndDisplayCityOwner(cityName) {
     }
 }
 
-// Inicia a busca (Mantido igual, apenas para garantir o contexto)
 document.addEventListener('DOMContentLoaded', () => {
     const pageTitle = document.title;
-    // Lista de cidades para verificar
     const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
     const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
 
@@ -989,16 +1238,333 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Inicia a busca
-document.addEventListener('DOMContentLoaded', () => {
-    const pageTitle = document.title;
-    const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
-    const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
 
-    if (cityName) {
-        fetchAndDisplayCityOwner(cityName);
+/* ================================================================= */
+/* === LÓGICA MESTRE DE POÇÕES (ASTRAX) ============================ */
+/* ================================================================= */
+
+// Lista de Receitas do Mestre de Poções de ASTRAX (Troca Itens, não cristais)
+const potionRecipes = [
+    // --- RANK R ---
+    {
+        id: 43, name: "Poção de Cura R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_r.webp",
+        resId: 51, resName: "Elora", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        fragId: 2, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_de_ferro.webp"
+    },
+    {
+        id: 47, name: "Poção de Destreza R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_r.webp",
+        resId: 52, resName: "Lumina", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        fragId: 8, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_vento_celeste.webp"
+    },
+    {
+        id: 45, name: "Poção de Fúria R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_r.webp", 
+        resId: 53, resName: "Rutus", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        fragId: 6, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_cajado_elfico.webp"
+    },
+    {
+        id: 49, name: "Poção de Ataque R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_r.webp", 
+        resId: 54, resName: "Galdra", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        fragId: 4, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_cutelo_tribal.webp"
+    },
+    // --- RANK SR ---
+    {
+        id: 44, name: "Poção de Cura SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_sr.webp",
+        resId: 51, resName: "Elora", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        fragId: 26, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_espada_da_justica.webp"
+    },
+    {
+        id: 48, name: "Poção de Destreza SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_sr.webp",
+        resId: 52, resName: "Lumina", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        fragId: 30, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_arco_ancestral.webp"
+    },
+    {
+        id: 46, name: "Poção de Fúria SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_sr.webp",
+        resId: 53, resName: "Rutus", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        fragId: 28, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_cajado_lunar.webp"
+    },
+    {
+        id: 50, name: "Poção de Ataque SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_sr.webp",
+        resId: 54, resName: "Galdra", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        fragId: 24, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/fragmento_de_cutelo_carniceiro.webp"
+    }
+];
+
+const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
+
+// --- Carregar Recursos Base do Cache IDB ---
+async function loadResourcesFromCache() {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 46; 
+
+    const resourceMap = {
+        51: { count: 0, name: 'Elora', img: 'https://aden-rpg.pages.dev/assets/itens/elora.webp' },
+        52: { count: 0, name: 'Lumina', img: 'https://aden-rpg.pages.dev/assets/itens/lumina.webp' },
+        53: { count: 0, name: 'Rutus', img: 'https://aden-rpg.pages.dev/assets/itens/rutus.webp' },
+        54: { count: 0, name: 'Galdra', img: 'https://aden-rpg.pages.dev/assets/itens/galdra.webp' }
+    };
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onerror = () => resolve(resourceMap); 
+
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                resolve(resourceMap); return;
+            }
+
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const getAllReq = store.getAll();
+
+            getAllReq.onsuccess = () => {
+                const items = getAllReq.result || [];
+                items.forEach(invItem => {
+                    const itemId = invItem.items?.item_id;
+                    if (resourceMap[itemId]) {
+                        resourceMap[itemId].count += (invItem.quantity || 0);
+                    }
+                });
+                resolve(resourceMap);
+            };
+            getAllReq.onerror = () => resolve(resourceMap);
+        };
+    });
+}
+
+// Atualizar Cache Local (Remove Item 1 e Item 2)
+async function updateResourceCache(resId, resQty, fragId, fragQty) {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 46;
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) { resolve(); return; }
+            
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            const getAll = store.getAll();
+
+            getAll.onsuccess = () => {
+                const items = getAll.result;
+                const toUpdate = [
+                    { id: resId, qty: resQty },
+                    { id: fragId, qty: fragQty }
+                ];
+
+                toUpdate.forEach(target => {
+                    let remaining = target.qty;
+                    for (const item of items) {
+                        if (item.items && item.items.item_id === target.id) {
+                            if (item.quantity >= remaining) {
+                                item.quantity -= remaining;
+                                remaining = 0;
+                                if (item.quantity <= 0) store.delete(item.id);
+                                else store.put(item);
+                                break;
+                            } else {
+                                remaining -= item.quantity;
+                                store.delete(item.id);
+                            }
+                        }
+                    }
+                });
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); 
+        };
+        req.onerror = () => resolve();
+    });
+}
+
+// Renderiza a grade de itens
+function renderPotionShop() {
+    const grid = document.getElementById('potionShopGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    potionRecipes.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'potion-card';
+        card.innerHTML = `
+            <div class="potion-header">
+                <img src="${item.img}" class="potion-img" alt="${item.name}">
+                <div class="potion-info">
+                    <h4>${item.name}</h4>
+                    <div class="cost-row">
+                        <img src="${item.resImg}" class="cost-icon" title="${item.resName}">
+                        <span>x${item.resCost}</span>
+                        <img src="${item.fragImg}" class="cost-icon" style="margin-left:5px;" title="Fragmento">
+                        <span>x${item.fragCost}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pm-controls">
+                <div class="pm-qty-selector">
+                    <button class="pm-qty-btn minus" data-id="${item.id}">-</button>
+                    <span class="pm-qty-val" id="qty-${item.id}">1</span>
+                    <button class="pm-qty-btn plus" data-id="${item.id}">+</button>
+                </div>
+                
+                <div class="total-price-display">
+                    Total: 
+                    <img src="${item.resImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-res-${item.id}">${item.resCost}</span> + 
+                    <img src="${item.fragImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-frag-${item.id}">${item.fragCost}</span>
+                </div>
+
+                <button class="pm-buy-btn" id="buy-btn-${item.id}" data-id="${item.id}">Trocar</button>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    // Event Listeners
+    document.querySelectorAll('.pm-qty-btn.plus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, 1)));
+    document.querySelectorAll('.pm-qty-btn.minus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, -1)));
+    document.querySelectorAll('.pm-buy-btn').forEach(b => b.addEventListener('click', (e) => buyPotion(e.target.dataset.id)));
+}
+
+// Atualiza quantidade e preço total na UI
+function updateQty(id, delta) {
+    id = parseInt(id);
+    const qtySpan = document.getElementById(`qty-${id}`);
+    if(!qtySpan) return;
+
+    let currentQty = parseInt(qtySpan.textContent);
+    let newQty = currentQty + delta;
+    if (newQty < 1) newQty = 1;
+    if (newQty > 99) newQty = 99; 
+
+    qtySpan.textContent = newQty;
+
+    // Atualiza totais visuais
+    const recipe = potionRecipes.find(r => r.id === id);
+    if (recipe) {
+        document.getElementById(`tot-res-${id}`).textContent = fmt(recipe.resCost * newQty);
+        document.getElementById(`tot-frag-${id}`).textContent = fmt(recipe.fragCost * newQty);
+    }
+}
+
+function showMsg(msg) {
+    const floatDiv = document.getElementById('floatingMessage');
+    if (floatDiv) {
+        floatDiv.textContent = msg;
+        floatDiv.style.display = 'block';
+        floatDiv.style.opacity = '1';
+        setTimeout(() => { floatDiv.style.opacity = '0'; setTimeout(()=>floatDiv.style.display='none', 500); }, 3000);
     } else {
-        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+        alert(msg);
+    }
+}
+
+// Função de Compra (Chama RPC Específica de Astrax)
+async function buyPotion(id) {
+    id = parseInt(id);
+    const btn = document.getElementById(`buy-btn-${id}`);
+    const qty = parseInt(document.getElementById(`qty-${id}`).textContent);
+    const recipe = potionRecipes.find(r => r.id === id);
+
+    if (!recipe) return;
+
+    btn.disabled = true;
+    btn.textContent = "Trocando...";
+
+    try {
+        // CHAMA A NOVA FUNÇÃO RPC PARA ASTRAX (Troca Itens, não cristais)
+        const { data, error } = await supabase.rpc('exchange_potion_astrax', {
+            p_potion_id: id,
+            p_quantity: qty
+        });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.message);
+
+        showMsg(`Sucesso! Você recebeu ${qty}x ${recipe.name}.`);
+        
+        // Atualizar visualmente o Recurso Base (O fragmento é complexo atualizar visual sem recarregar tudo)
+        const currentSpan = document.getElementById(`res-display-count-${recipe.resId}`);
+        if(currentSpan) {
+            let val = parseInt(currentSpan.textContent.replace('X','')) || 0;
+            val = Math.max(0, val - (recipe.resCost * qty));
+            currentSpan.textContent = `X${val}`;
+        }
+        
+        // Atualizar IndexedDB para ambos os itens consumidos
+        await updateResourceCache(recipe.resId, recipe.resCost * qty, recipe.fragId, recipe.fragCost * qty);
+
+    } catch (err) {
+        console.error(err);
+        showMsg(`Erro: ${err.message || "Falha na troca."}`);
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.textContent = "Trocar";
+        }
+    }
+}
+
+// Inicialização do Modal
+document.addEventListener('DOMContentLoaded', () => {
+    const openBtn = document.getElementById('btnPotionMaster');
+    const modal = document.getElementById('potionMasterModal');
+    const closeBtn = document.getElementById('closePotionMasterBtn');
+
+    if (openBtn && modal) {
+        openBtn.addEventListener('click', async () => {
+            renderPotionShop();
+            modal.style.display = 'flex';
+            
+            // --- Carrega Recursos (Somente Base) ---
+            const resContainer = document.getElementById('userResourcesDisplay');
+            if (resContainer) {
+                resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span> Carregando...';
+                
+                try {
+                    const counts = await loadResourcesFromCache();
+                    resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span>';
+                    
+                    [51, 52, 53, 54].forEach(id => {
+                        const data = counts[id];
+                        const div = document.createElement('div');
+                        div.className = 'res-item-display';
+                        div.innerHTML = `
+                            <img src="${data.img}" class="res-icon-display" alt="${data.name}">
+                            <span style="font-weight:bold; color: #fff;" id="res-display-count-${id}">X${data.count}</span>
+                        `;
+                        resContainer.appendChild(div);
+                    });
+                } catch (e) {
+                    resContainer.innerHTML = 'Não foi possível carregar os recursos.';
+                }
+            }
+
+            const shopsSub = document.getElementById('shopsSubmenu');
+            const merchModal = document.getElementById('merchantsModal');
+            
+            if(shopsSub) shopsSub.style.display = 'none';
+            if(merchModal) merchModal.style.display = 'none'; 
+        });
+    }
+
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
     }
 });
 </script>

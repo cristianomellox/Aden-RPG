@@ -497,7 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // URL base para as imagens
     const assetBase = "https://aden-rpg.pages.dev/assets/";
 
-    // Definição dos itens com chaves de notificação
+    // Definição dos itens
     const menuItems = [
         { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
         { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
@@ -517,7 +517,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const openBtn = document.getElementById("menuToggleBtn");
     const closeBtn = document.getElementById("closeMenuBtn");
 
-    // SVG Padrão (Hambúrguer)
+    // Ícone SVG do Hambúrguer
     const hamburgerSVG = `
         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -528,32 +528,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // --- LÓGICA DE DETECÇÃO CORRIGIDA ---
-    // Pega apenas o nome do arquivo final (ex: "mines.html") ignorando pastas anteriores
-    let currentPage = window.location.pathname.split("/").pop();
+    // --- LÓGICA DE DETECÇÃO CORRIGIDA V2 ---
+    // 1. Pega o caminho completo
+    let path = window.location.pathname; 
     
-    // Se estiver vazio (raiz), considera index.html
+    // 2. Pega apenas o que vem depois da última barra (ex: "mines.html")
+    let currentPage = path.substring(path.lastIndexOf('/') + 1);
+
+    // 3. Se estiver vazio (raiz do site), define como index.html
     if (!currentPage || currentPage === "") currentPage = "index.html";
-    
-    // Remove query strings se houver (ex: mines.html?id=1 vira mines.html)
+
+    // 4. Remove parâmetros extras (?id=123) ou âncoras (#topo)
     currentPage = currentPage.split("?")[0].split("#")[0];
+
+    // Debug: Verifica no console o que ele detectou (ajuda se der erro)
+    console.log("Página detectada:", currentPage);
 
     // --- GERA O MENU ---
     if (menuList) {
         menuList.innerHTML = menuItems.map(item => {
-            // Verifica se a URL do item está contida na página atual (ou vice-versa para precisão)
-            const isActive = currentPage === item.url;
+            // Compara o nome do arquivo detectado com a URL do item
+            const isActive = (currentPage === item.url);
             
-            // Se estiver ativo:
-            // 1. Adiciona classe 'active' (aciona o CSS pointer-events: none)
-            // 2. Remove o atributo href
-            // 3. Adiciona javascript:void(0) por segurança
+            // SE ATIVO: Não coloca href. SE INATIVO: Coloca href.
+            const hrefAttr = isActive ? '' : `href="${item.url}"`;
             
+            // Adiciona classe active se for a página atual
+            const activeClass = isActive ? 'active' : '';
+
             return `
-                <li class="menu-item ${isActive ? 'active' : ''}">
-                    <a class="menu-link" 
-                       ${isActive ? 'href="javascript:void(0)"' : `href="${item.url}"`} 
-                       data-menu-key="${item.key || ''}">
+                <li class="menu-item ${activeClass}">
+                    <a class="menu-link" ${hrefAttr} data-menu-key="${item.key || ''}">
                         <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                         <span>${item.name}</span>
                     </a>
@@ -562,20 +567,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }).join('');
     }
 
-    // --- FUNÇÕES DE CONTROLE DO MENU (Mantidas iguais) ---
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
     const toggleMenuRotation = (isOpening) => {
         if (!openBtn) return;
         const svg = openBtn.querySelector('svg');
         if (svg) {
-            if (isOpening) {
-                svg.classList.add('icon-vertical'); 
-            } else {
-                svg.classList.remove('icon-vertical'); 
-            }
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
         }
     };
 
     const openMenu = () => {
+        if(!sideMenu) return;
         sideMenu.classList.add("open");
         if(overlay) overlay.style.display = "block";
         toggleMenuRotation(true);
@@ -588,6 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const closeMenu = () => {
+        if(!sideMenu) return;
         sideMenu.classList.remove("open");
         if(overlay) {
             overlay.style.opacity = "0";
@@ -607,9 +611,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};
-        try {
-            dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
-        } catch(e) {}
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
 
         let showGuildDot = false;
         const now = new Date();

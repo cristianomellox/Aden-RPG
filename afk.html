@@ -627,10 +627,12 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
 </div>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
-    // URL base para as imagens
+    // --- CONFIGURAÇÃO MANUAL ---
+    // Mude isso em cada arquivo (ex: "mines.html", "capital.html", "afk.html")
+    const MANUAL_CURRENT_PAGE = "afk.html"; 
+
     const assetBase = "https://aden-rpg.pages.dev/assets/";
 
-    // Definição dos itens com chaves de notificação
     const menuItems = [
         { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
         { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
@@ -641,7 +643,23 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
         { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
         { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
         { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
-        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" }
+        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" },
+        
+        // --- NOVO MENU CIDADES (DROPDOWN) ---
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true, // Flag para indicar que é dropdown
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
     ];
 
     const menuList = document.getElementById("menuList");
@@ -650,7 +668,6 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
     const openBtn = document.getElementById("menuToggleBtn");
     const closeBtn = document.getElementById("closeMenuBtn");
 
-    // SVG Padrão (Hambúrguer)
     const hamburgerSVG = `
         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -658,49 +675,139 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
             <line x1="3" y1="18" x2="21" y2="18"></line>
         </svg>
     `;
+    
+    // Ícone de Seta para baixo (Chevron Down)
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
 
-    // Insere o SVG no botão de fechar interno
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // Identifica a página atual
-    const currentPage = window.location.pathname.split("/").pop() || "index.html";
-
-    // --- GERA O MENU ---
     if (menuList) {
-        menuList.innerHTML = menuItems.map(item => {
-            const isActive = currentPage.includes(item.url);
-            return `
-                <li class="menu-item ${isActive ? 'active' : ''}">
-                    <a style="font-size: 1em;" class="menu-link" ${isActive ? '' : `href="${item.url}"`} data-menu-key="${item.key || ''}">
-                        <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
-                        <span>${item.name}</span>
-                    </a>
-                </li>
-            `;
-        }).join('');
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: É UM MENU DROPDOWN (CIDADES) ===
+            if (item.isDropdown) {
+                // Verifica se alguma sub-página é a atual (para abrir o menu automaticamente)
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                // Link principal do Dropdown (apenas abre/fecha)
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                // Container dos Sub-itens
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`; // Abre se estiver dentro
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                // Toggle ao clicar no pai
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Não fecha o menu lateral
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                // Renderiza os Sub-itens
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`; // Aplica active no li filho
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link"; // Classe extra para padding
+                    subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
+
+                    if (isMatch) {
+                        // Bloqueio Total (igual ao código anterior)
+                        subA.removeAttribute("href");
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                        subA.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }, true);
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", () => {
+                            setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: É UM MENU NORMAL ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+
+                if (isMatch) {
+                    a.removeAttribute("href");
+                    a.style.cursor = "default";
+                    a.style.pointerEvents = "none";
+                    a.style.opacity = "1";
+                    a.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }, true);
+                } else {
+                    a.href = item.url;
+                    a.addEventListener("click", () => {
+                         setTimeout(closeMenu, 100);
+                    });
+                }
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
     }
 
     // --- FUNÇÕES DE CONTROLE DO MENU ---
-
     const toggleMenuRotation = (isOpening) => {
         if (!openBtn) return;
         const svg = openBtn.querySelector('svg');
         if (svg) {
-            if (isOpening) {
-                svg.classList.add('icon-vertical'); // Gira 90 graus (Fica em pé)
-            } else {
-                svg.classList.remove('icon-vertical'); // Volta ao normal
-            }
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
         }
     };
 
     const openMenu = () => {
+        if(!sideMenu) return;
         sideMenu.classList.add("open");
         if(overlay) overlay.style.display = "block";
-        
-        // Anima o ícone do topo
         toggleMenuRotation(true);
-
         setTimeout(() => {
             if(overlay) {
                 overlay.style.opacity = "1";
@@ -710,15 +817,13 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
     };
 
     const closeMenu = () => {
+        if(!sideMenu) return;
         sideMenu.classList.remove("open");
         if(overlay) {
             overlay.style.opacity = "0";
             overlay.style.pointerEvents = "none";
         }
-
-        // Retorna a animação do ícone do topo
         toggleMenuRotation(false);
-
         setTimeout(() => {
             if(overlay) overlay.style.display = "none";
         }, 300);
@@ -728,15 +833,12 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
     if(closeBtn) closeBtn.addEventListener("click", closeMenu);
     if(overlay) overlay.addEventListener("click", closeMenu);
 
-    // --- RENDERIZAR NOTIFICAÇÕES (BOLINHAS) ---
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};
-        try {
-            dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}');
-        } catch(e) {}
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
 
-        // Lógica de Guilda (Fim de semana)
         let showGuildDot = false;
         const now = new Date();
         const day = now.getUTCDay(); 
@@ -754,17 +856,15 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
 
         const links = menuList.querySelectorAll('.menu-link');
         links.forEach(link => {
-            const key = link.getAttribute('data-menu-key');
+            const key = link.dataset.menuKey;
             let shouldShow = false;
 
             if (key && dailyStatus[key] === true) shouldShow = true;
             if (key === 'guild' && showGuildDot) shouldShow = true;
 
-            // Limpa bolinha antiga
             const existingDot = link.querySelector('.menu-notification-dot');
             if (existingDot) existingDot.remove();
 
-            // Adiciona nova
             if (shouldShow) {
                 const dot = document.createElement('div');
                 dot.className = 'menu-notification-dot';
@@ -773,7 +873,6 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
         });
     };
 
-    // Executa ao carregar
     renderSideMenuNotifications();
 });
 </script>

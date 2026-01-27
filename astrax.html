@@ -162,6 +162,9 @@ body {
     margin-top: auto; /* Empurra para o final do #contentOverlay */
     padding: 10px;
     pointer-events: auto;
+    display: flex; /* Adicionado para centralizar botão Menu */
+    justify-content: center;
+    width: 100%;
 }
 
 /* Botão História (Baseado em style.css) */
@@ -194,7 +197,7 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: none;
+    background-color: rgba(0,0,0,0.8); /* Ajustado para fundo escuro consistente */
     justify-content: center;
     align-items: center;
 }
@@ -221,6 +224,7 @@ body {
     font-weight: bold;
     cursor: pointer;
     line-height: 1;
+    z-index: 2001; /* Garante que fique acima */
 }
 
 .close-btn:hover,
@@ -236,6 +240,83 @@ body {
     text-align: left;
     color: #ccc;
 }
+
+/* === ESTILOS DO SUBMENU (Adicionado estilo Solaris/Capital) === */
+.footer-submenu {
+    position: fixed;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 5px;
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    z-index: 9998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
+    min-width: 180px;
+}
+
+.footer-submenu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    color: #e0dccc;
+    text-decoration: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    font-weight: bold;
+    background: #1e1e1e; 
+    border: 1px solid #555;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
+    white-space: nowrap;      
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.footer-submenu-btn:hover {
+    background-color: #333;
+    border-color: gold;
+    color: #fff;
+}
+
+.submenu-icon {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+    display: block;
+}
+
+/* === MODAL FULLSCREEN MERCANTES === */
+#merchantsModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/mercantes_astrax.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 3000;
+    flex-direction: column;
+    justify-content: flex-end; /* Conteúdo no fundo */
+    align-items: center;
+}
+
+/* Footer dentro do Modal Mercantes */
+#merchantsFooter {
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+}
+
 
 /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
 .goog-te-banner-frame.skiptranslate, 
@@ -270,9 +351,13 @@ font > font {
 <body>
 
     <div id="playerTopBar">
-        <a href="index.html" class="top-bar-link" title="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
-        </a>
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
        <div> <span id="pageTitle">Área Pacífica</span></div>
         <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px;">
     </div>
@@ -298,9 +383,38 @@ font > font {
         </div>
 
         <div id="zionFooter">
-            <button id="openHistoryModalBtn" class="action-btn">História</button>
+            <button id="astraxMenuBtn" class="action-btn">Menu</button>
         </div>
 
+    </div>
+
+    <div id="astraxSubmenu" class="footer-submenu">
+        <div id="btnOpenHistory" class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="submenu-icon"> História
+        </div>
+        <div id="btnOpenMerchantsModal" class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/mercante.webp" class="submenu-icon"> Distrito Mercante
+        </div>
+    </div>
+    
+    <div id="merchantsModal">
+        <span class="close-btn" id="closeMerchantsModal" style="color:white; top:20px; right:20px; font-size:40px;">&times;</span>
+        
+        <div id="merchantsFooter">
+            <button id="shopsMenuBtn" class="action-btn" style="padding: 35px 40px;">Mercantes</button>
+        </div>
+    </div>
+
+    <div id="shopsSubmenu" class="footer-submenu">
+        <div class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/mdp.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Mestre de Poções
+        </div>
+        <div class="footer-submenu-btn" style="display:none;">
+            <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Oficina
+        </div>
+        <div class="footer-submenu-btn">
+            <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Escambo
+        </div>
     </div>
     
     <div id="historyModal" class="modal-container" style="display: none;">
@@ -607,32 +721,124 @@ function enableMapInteraction() {
 }
 
 // =======================================================================
-// Lógica do Modal de História
+// Lógica de UI (Menus, Submenus e Modais) - ATUALIZADO PARA ASTRAX
 // =======================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    const openBtn = document.getElementById('openHistoryModalBtn');
-    const modal = document.getElementById('historyModal');
-    const closeBtn = modal.querySelector('.close-btn');
+    
+    // --- 1. Menu Principal de Astrax ---
+    const menuBtn = document.getElementById('astraxMenuBtn');
+    const submenu = document.getElementById('astraxSubmenu');
 
-    if (openBtn && modal && closeBtn) {
-        openBtn.addEventListener('click', () => {
-            modal.style.display = 'flex'; // Usar flex para centralizar
-            document.body.style.overflow = 'hidden'; // Evita scroll do body por baixo do modal
+    if (menuBtn && submenu) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = submenu.style.display === 'flex';
+            if (!isVisible) {
+                submenu.style.display = 'flex';
+                // Posiciona acima do botão Menu
+                const btnRect = menuBtn.getBoundingClientRect();
+                const submenuRect = submenu.getBoundingClientRect();
+                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+                let newTop = btnRect.top - submenuRect.height - 10; 
+                submenu.style.top = newTop + 'px';
+                submenu.style.left = newLeft + 'px';
+            } else {
+                submenu.style.display = 'none';
+            }
+        });
+    }
+
+    // --- 2. Modal de História ---
+    // Gatilho agora é o botão dentro do submenu
+    const openHistoryBtn = document.getElementById('btnOpenHistory');
+    const historyModal = document.getElementById('historyModal');
+    const closeHistoryBtn = historyModal.querySelector('.close-btn');
+
+    if (openHistoryBtn && historyModal) {
+        openHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if(submenu) submenu.style.display = 'none'; // Fecha o submenu
         });
 
-        closeBtn.addEventListener('click', () => {
-            modal.style.display = 'none';
-            document.body.style.overflow = ''; // Restaura scroll do body
+        closeHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'none';
+            document.body.style.overflow = '';
         });
-
-        // Fechar se clicar fora do modal
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
+        
+        // Fecha ao clicar fora
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                historyModal.style.display = 'none';
                 document.body.style.overflow = '';
             }
         });
     }
+
+    // --- 3. Modal de Mercantes (Tela Cheia) ---
+    const openMerchantsBtn = document.getElementById('btnOpenMerchantsModal');
+    const merchantsModal = document.getElementById('merchantsModal');
+    const closeMerchantsBtn = document.getElementById('closeMerchantsModal');
+
+    if (openMerchantsBtn && merchantsModal) {
+        openMerchantsBtn.addEventListener('click', () => {
+            merchantsModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if(submenu) submenu.style.display = 'none'; // Fecha o submenu principal
+        });
+
+        closeMerchantsBtn.addEventListener('click', () => {
+            merchantsModal.style.display = 'none';
+            document.body.style.overflow = '';
+            // Se houver submenu de lojas aberto, fecha também
+            const shopsSubmenu = document.getElementById('shopsSubmenu');
+            if(shopsSubmenu) shopsSubmenu.style.display = 'none';
+        });
+    }
+
+    // --- 4. Submenu de Lojas (Dentro do Modal Mercantes) ---
+    const shopsMenuBtn = document.getElementById('shopsMenuBtn');
+    const shopsSubmenu = document.getElementById('shopsSubmenu');
+
+    if (shopsMenuBtn && shopsSubmenu) {
+        shopsMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = shopsSubmenu.style.display === 'flex';
+            
+            if (!isVisible) {
+                shopsSubmenu.style.display = 'flex';
+                // Calcula posição baseado no botão dentro do modal
+                const btnRect = shopsMenuBtn.getBoundingClientRect();
+                const submenuRect = shopsSubmenu.getBoundingClientRect();
+                
+                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+                let newTop = btnRect.top - submenuRect.height - 10;
+                
+                // Aplica z-index alto para ficar acima do modal fullscreen
+                shopsSubmenu.style.zIndex = '3002'; 
+                shopsSubmenu.style.top = newTop + 'px';
+                shopsSubmenu.style.left = newLeft + 'px';
+            } else {
+                shopsSubmenu.style.display = 'none';
+            }
+        });
+    }
+
+    // Listener global para fechar submenus ao clicar fora
+    document.addEventListener('click', (e) => {
+        // Fechar submenu principal
+        if (submenu && submenu.style.display === 'flex') {
+            if (!e.target.closest('#astraxSubmenu') && !e.target.closest('#astraxMenuBtn')) {
+                submenu.style.display = 'none';
+            }
+        }
+        // Fechar submenu de lojas
+        if (shopsSubmenu && shopsSubmenu.style.display === 'flex') {
+            if (!e.target.closest('#shopsSubmenu') && !e.target.closest('#shopsMenuBtn')) {
+                shopsSubmenu.style.display = 'none';
+            }
+        }
+    });
 
     // Habilita o mapa arrastável após o carregamento da página
     enableMapInteraction();
@@ -679,21 +885,52 @@ function getLocalUserId() {
 
 async function fetchAndDisplayCityOwner(cityName) {
     const cityNameLower = cityName.toLowerCase();
+    const cacheKey = `city_owner_cache_${cityNameLower}`;
     
-    // Alvos baseados na nova estrutura de IDs: guild_name_[cidade] e guild_flag_[cidade]
+    // IDs dos elementos DOM
     const nameSpan = document.getElementById(`guild_name_${cityNameLower}`);
     const flagImg = document.getElementById(`guild_flag_${cityNameLower}`);
     const defaultText = 'Nenhuma.';
 
     if (!nameSpan || !flagImg) {
-        console.error(`Elementos de guilda para ${cityName} não encontrados (guild_name_${cityNameLower} ou guild_flag_${cityNameLower}).`);
+        console.error(`Elementos de guilda para ${cityName} não encontrados.`);
         return;
     }
 
-    flagImg.style.display = 'none'; // Inicialmente oculta
-    nameSpan.textContent = defaultText;
+    // Função auxiliar para atualizar a UI
+    const updateUI = (name, flagUrl) => {
+        if (name && flagUrl) {
+            flagImg.setAttribute('src', flagUrl);
+            flagImg.style.display = 'inline-block';
+            flagImg.setAttribute('alt', `Bandeira da Guilda ${name}`);
+            nameSpan.textContent = name;
+        } else {
+            flagImg.style.display = 'none';
+            nameSpan.textContent = defaultText;
+        }
+    };
 
+    // 1. TENTATIVA DE CARREGAR DO CACHE
     try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw);
+            const now = new Date().getTime();
+
+            // Verifica se o cache existe e se ainda não expirou
+            if (cached && cached.expiry && now < cached.expiry) {
+                console.log(`[Cache] Carregando dono de ${cityName} do cache local.`);
+                updateUI(cached.guildName, cached.guildFlag);
+                return; // Encerra aqui para não chamar o Supabase
+            }
+        }
+    } catch (e) {
+        console.warn("Erro ao ler cache da cidade:", e);
+    }
+
+    // 2. BUSCA NO SUPABASE (Se não tiver cache ou expirou)
+    try {
+        console.log(`[Network] Buscando dono de ${cityName} no Supabase...`);
         const { data: ownersData, error } = await supabase.rpc('get_city_owners');
 
         if (error) {
@@ -702,24 +939,55 @@ async function fetchAndDisplayCityOwner(cityName) {
         }
 
         const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityNameLower);
+        
+        let guildName = null;
+        let guildFlag = null;
 
         if (cityOwnerData && cityOwnerData.owner_guild_id) {
-            const guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
-            const guildFlagUrl = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp'; 
+            guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
+            guildFlag = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+        }
 
-            // 1. Atualiza o SRC da imagem e a torna visível
-            flagImg.setAttribute('src', guildFlagUrl);
-            flagImg.style.display = 'inline-block'; 
-            flagImg.setAttribute('alt', `Bandeira da Guilda ${guildName}`);
+        // Atualiza a tela
+        updateUI(guildName, guildFlag);
 
-            // 2. Atualiza o TEXTO do nome
-            nameSpan.textContent = guildName;
-        } 
+        // 3. SALVAR NO CACHE (Expira na próxima meia-noite UTC)
+        const now = new Date();
+        const tomorrow = new Date(now);
+        
+        // Define para o dia seguinte
+        tomorrow.setUTCDate(now.getUTCDate() + 1);
+        // Zera o horário para meia-noite UTC (00:00:00)
+        tomorrow.setUTCHours(0, 0, 0, 0);
+        
+        const expiryTimestamp = tomorrow.getTime();
+
+        const cacheData = {
+            guildName: guildName,
+            guildFlag: guildFlag,
+            expiry: expiryTimestamp
+        };
+
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
 
     } catch (err) {
         console.error('Erro inesperado na função fetchAndDisplayCityOwner:', err);
     }
 }
+
+// Inicia a busca (Mantido igual, apenas para garantir o contexto)
+document.addEventListener('DOMContentLoaded', () => {
+    const pageTitle = document.title;
+    // Lista de cidades para verificar
+    const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
+    const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
+
+    if (cityName) {
+        fetchAndDisplayCityOwner(cityName);
+    } else {
+        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+    }
+});
 
 // Inicia a busca
 document.addEventListener('DOMContentLoaded', () => {
@@ -766,5 +1034,267 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="auto_translate.js"></script>
 
 <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    // Mude isso em cada arquivo (ex: "mines.html", "capital.html", "afk.html")
+    const MANUAL_CURRENT_PAGE = "astrax.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guilda.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" },
+        
+        // --- NOVO MENU CIDADES (DROPDOWN) ---
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true, // Flag para indicar que é dropdown
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    // Ícone de Seta para baixo (Chevron Down)
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: É UM MENU DROPDOWN (CIDADES) ===
+            if (item.isDropdown) {
+                // Verifica se alguma sub-página é a atual (para abrir o menu automaticamente)
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                // Link principal do Dropdown (apenas abre/fecha)
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                // Container dos Sub-itens
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`; // Abre se estiver dentro
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                // Toggle ao clicar no pai
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Não fecha o menu lateral
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                // Renderiza os Sub-itens
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`; // Aplica active no li filho
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link"; // Classe extra para padding
+                    subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
+
+                    if (isMatch) {
+                        // Bloqueio Total (igual ao código anterior)
+                        subA.removeAttribute("href");
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                        subA.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }, true);
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", () => {
+                            setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: É UM MENU NORMAL ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+
+                if (isMatch) {
+                    a.removeAttribute("href");
+                    a.style.cursor = "default";
+                    a.style.pointerEvents = "none";
+                    a.style.opacity = "1";
+                    a.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }, true);
+                } else {
+                    a.href = item.url;
+                    a.addEventListener("click", () => {
+                         setTimeout(closeMenu, 100);
+                    });
+                }
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
 </body>
 </html>

@@ -494,6 +494,11 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL (A SOLUÇÃO DEFINITIVA) ---
+    // Como este arquivo é o mines.html, definimos isso manualmente.
+    // Quando você copiar este script para outras páginas, mude apenas esta linha.
+    const MANUAL_CURRENT_PAGE = "mines.html"; 
+
     const assetBase = "https://aden-rpg.pages.dev/assets/";
 
     const menuItems = [
@@ -525,66 +530,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // === FUNÇÃO DE LIMPEZA DE NOME DE ARQUIVO ===
-    function extractFileName(path) {
-        if (!path) return "";
-        // 1. Remove parâmetros de URL (?id=1) e âncoras (#top)
-        let clean = path.split('?')[0].split('#')[0];
-        
-        // 2. Remove a barra final se existir (ex: site.com/ virar site.com)
-        if (clean.endsWith('/')) {
-            return "index.html"; // Assume index se for raiz
-        }
-
-        // 3. Pega tudo depois da última barra
-        let name = clean.substring(clean.lastIndexOf('/') + 1);
-
-        // 4. Se vazio, é index
-        if (!name || name.trim() === "") return "index.html";
-
-        // 5. Retorna em minúsculo para comparar sem erros
-        return name.toLowerCase();
-    }
-
-    // Pega o nome do arquivo atual REAIS
-    const currentFileName = extractFileName(window.location.href);
-    console.log("[Menu Debug] Arquivo Atual Normalizado:", currentFileName);
-
     if (menuList) {
         menuList.innerHTML = ""; 
 
         menuItems.forEach(item => {
-            // Limpa o nome do item do menu também
-            const itemFileName = extractFileName(item.url);
-            
-            // Compara maçã com maçã
-            const isMatch = (currentFileName === itemFileName);
+            // COMPARAÇÃO MANUAL: Infalível
+            const isMatch = (item.url === MANUAL_CURRENT_PAGE);
 
-            // Criação do elemento
             const li = document.createElement("li");
             li.className = `menu-item ${isMatch ? 'active' : ''}`;
 
             const a = document.createElement("a");
             a.className = "menu-link";
             a.dataset.menuKey = item.key || '';
-            
+
             a.innerHTML = `
                 <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                 <span>${item.name}</span>
             `;
 
             if (isMatch) {
-                // Lógica de bloqueio
-                a.removeAttribute("href"); 
-                a.style.cursor = "default";
-                a.style.pointerEvents = "none"; // Reforço de JS
+                // --- BLOQUEIO TOTAL ---
+                // 1. Remove o destino
+                a.removeAttribute("href");
                 
-                // Mata o clique
-                a.onclick = (e) => {
+                // 2. Estilos inline para garantir
+                a.style.cursor = "default";
+                a.style.pointerEvents = "none";
+                a.style.opacity = "1"; // Garante que não fique transparente
+                
+                // 3. Evento de clique que mata qualquer ação
+                a.addEventListener("click", (e) => {
                     e.preventDefault();
-                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     return false;
-                };
+                }, true); // UseCapture true para interceptar primeiro
+                
             } else {
                 // Link normal
                 a.href = item.url;

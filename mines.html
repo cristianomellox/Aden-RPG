@@ -525,62 +525,68 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-    // --- NOVA LÓGICA DE DETECÇÃO RÍGIDA ---
-    // 1. Pega a URL inteira
-    let currentUrl = window.location.href;
-    
-    // 2. Limpa tudo que vem depois de '?' ou '#' (parâmetros do app)
-    currentUrl = currentUrl.split('?')[0].split('#')[0];
-    
-    // 3. Pega EXATAMENTE o que está depois da última barra
-    let fileName = currentUrl.substring(currentUrl.lastIndexOf('/') + 1);
+    // === FUNÇÃO DE LIMPEZA DE NOME DE ARQUIVO ===
+    function extractFileName(path) {
+        if (!path) return "";
+        // 1. Remove parâmetros de URL (?id=1) e âncoras (#top)
+        let clean = path.split('?')[0].split('#')[0];
+        
+        // 2. Remove a barra final se existir (ex: site.com/ virar site.com)
+        if (clean.endsWith('/')) {
+            return "index.html"; // Assume index se for raiz
+        }
 
-    // 4. Se estiver vazio (ex: site.com/), assume index.html
-    if (!fileName || fileName === "") {
-        fileName = "index.html";
+        // 3. Pega tudo depois da última barra
+        let name = clean.substring(clean.lastIndexOf('/') + 1);
+
+        // 4. Se vazio, é index
+        if (!name || name.trim() === "") return "index.html";
+
+        // 5. Retorna em minúsculo para comparar sem erros
+        return name.toLowerCase();
     }
 
-    // 5. Normaliza para minúsculas para evitar erro de digitação (Mines.html vs mines.html)
-    fileName = fileName.toLowerCase();
-
-    console.log("[Menu] Arquivo detectado:", fileName);
+    // Pega o nome do arquivo atual REAIS
+    const currentFileName = extractFileName(window.location.href);
+    console.log("[Menu Debug] Arquivo Atual Normalizado:", currentFileName);
 
     if (menuList) {
         menuList.innerHTML = ""; 
 
         menuItems.forEach(item => {
-            // Compara o nome do arquivo detectado com a URL do item
-            // Ex: se fileName for "mines.html" e item.url for "mines.html", vira TRUE
-            const isPageMatch = (fileName === item.url.toLowerCase());
+            // Limpa o nome do item do menu também
+            const itemFileName = extractFileName(item.url);
+            
+            // Compara maçã com maçã
+            const isMatch = (currentFileName === itemFileName);
 
+            // Criação do elemento
             const li = document.createElement("li");
-            li.className = `menu-item ${isPageMatch ? 'active' : ''}`;
+            li.className = `menu-item ${isMatch ? 'active' : ''}`;
 
             const a = document.createElement("a");
             a.className = "menu-link";
             a.dataset.menuKey = item.key || '';
-
+            
             a.innerHTML = `
                 <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                 <span>${item.name}</span>
             `;
 
-            // --- LÓGICA DE TRAVAMENTO ---
-            if (isPageMatch) {
-                // Remove o href para garantir que não seja um link
-                a.removeAttribute("href");
-                
-                // Força visualmente
+            if (isMatch) {
+                // Lógica de bloqueio
+                a.removeAttribute("href"); 
                 a.style.cursor = "default";
-                a.style.pointerEvents = "none";
+                a.style.pointerEvents = "none"; // Reforço de JS
                 
-                // Mata qualquer clique via JS
+                // Mata o clique
                 a.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
                 };
             } else {
+                // Link normal
                 a.href = item.url;
                 a.addEventListener("click", () => {
                      setTimeout(closeMenu, 100);
@@ -632,7 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if(closeBtn) closeBtn.addEventListener("click", closeMenu);
     if(overlay) overlay.addEventListener("click", closeMenu);
 
-    // --- NOTIFICAÇÕES (Mantido) ---
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};

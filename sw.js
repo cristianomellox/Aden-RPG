@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aden-rpg-assets-v10'; // Subi a versão para limpar o antigo
+const CACHE_NAME = 'aden-rpg-assets-v11'; // Subi a versão para limpar o antigo
 const ASSET_PREFIX = '/assets/';
 
 // O que NÃO deve ser cacheado de jeito nenhum

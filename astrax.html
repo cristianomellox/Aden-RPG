@@ -325,7 +325,7 @@ body {
       rgba(0, 0, 30, 0.7),
       rgba(0, 0, 0, 0.3)
     ),
-    url('https://aden-rpg.pages.dev/assets/gmdp.webp');
+    url('https://aden-rpg.pages.dev/assets/mdp_astrax.webp');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -1359,28 +1359,30 @@ async function updateResourceCache(resId, resQty, fragId, fragQty) {
 
             getAll.onsuccess = () => {
                 const items = getAll.result;
-                const toUpdate = [
-                    { id: resId, qty: resQty },
-                    { id: fragId, qty: fragQty }
+                const targets = [
+                    { id: String(resId), qty: resQty },
+                    { id: String(fragId), qty: fragQty }
                 ];
 
-                toUpdate.forEach(target => {
-                    let remaining = target.qty;
-                    for (const item of items) {
-                        if (item.items && item.items.item_id === target.id) {
-                            if (item.quantity >= remaining) {
-                                item.quantity -= remaining;
-                                remaining = 0;
-                                if (item.quantity <= 0) store.delete(item.id);
-                                else store.put(item);
-                                break;
-                            } else {
-                                remaining -= item.quantity;
-                                store.delete(item.id);
-                            }
+                for (const item of items) {
+                    if (!item.items || !item.items.item_id) continue;
+                    
+                    const currentId = String(item.items.item_id);
+                    const targetIndex = targets.findIndex(t => t.id === currentId);
+                    
+                    if (targetIndex !== -1) {
+                        const target = targets[targetIndex];
+                        if (item.quantity >= target.qty) {
+                            item.quantity -= target.qty;
+                            target.qty = 0;
+                            if (item.quantity <= 0) store.delete(item.id);
+                            else store.put(item);
+                        } else {
+                            target.qty -= item.quantity;
+                            store.delete(item.id);
                         }
                     }
-                });
+                }
             };
             tx.oncomplete = () => resolve();
             tx.onerror = () => resolve(); 
@@ -1504,7 +1506,7 @@ async function buyPotion(id) {
             currentSpan.textContent = `X${val}`;
         }
         
-        // Atualizar IndexedDB para ambos os itens consumidos
+        // Atualizar IndexedDB para ambos os itens consumidos (Correção: converter IDs para string)
         await updateResourceCache(recipe.resId, recipe.resCost * qty, recipe.fragId, recipe.fragCost * qty);
 
     } catch (err) {

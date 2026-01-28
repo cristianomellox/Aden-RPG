@@ -292,7 +292,6 @@ document.addEventListener("DOMContentLoaded", () => {
 <script>
   document.addEventListener("DOMContentLoaded", () => {
     // --- CONFIGURAÇÃO MANUAL ---
-    // Mude isso em cada arquivo (ex: "mines.html", "capital.html", "afk.html")
     const MANUAL_CURRENT_PAGE = "arena.html"; 
 
     const assetBase = "https://aden-rpg.pages.dev/assets/";
@@ -309,11 +308,10 @@ document.addEventListener("DOMContentLoaded", () => {
         { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
         { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" },
         
-        // --- NOVO MENU CIDADES (DROPDOWN) ---
         { 
             name: "Cidades", 
             icon: assetBase + "mapicon.webp",
-            isDropdown: true, // Flag para indicar que é dropdown
+            isDropdown: true,
             subItems: [
                 { name: "Capital", url: "capital.html" },
                 { name: "Astrax", url: "astrax.html" },
@@ -340,7 +338,6 @@ document.addEventListener("DOMContentLoaded", () => {
         </svg>
     `;
     
-    // Ícone de Seta para baixo (Chevron Down)
     const chevronDownSVG = `
         <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
@@ -349,6 +346,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
+    // --- FUNÇÃO PARA LIMPAR NOTIFICAÇÃO ---
+    const clearNotification = (key) => {
+        if (!key) return;
+
+        // 1. Limpa status geral (AFK, Arena, Boss, etc)
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let status = {};
+        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+        
+        if (status[key] === true) {
+            status[key] = false;
+            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+            console.log(`[Menu] Notificação removida para: ${key}`);
+        }
+
+        // 2. Lógica Especial da Guilda
+        if (key === 'guild') {
+            const now = new Date();
+            const day = now.getUTCDay();
+            const hours = now.getUTCHours();
+            const minutes = now.getUTCMinutes();
+            
+            if (day === 6) { // Sábado
+                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+            }
+            if (day === 0 && (hours === 23 && minutes >= 30)) { // Domingo noite
+                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+            }
+        }
+    };
+
     if (menuList) {
         menuList.innerHTML = ""; 
 
@@ -356,12 +384,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const li = document.createElement("li");
             li.className = "menu-item";
 
-            // === CASO 1: É UM MENU DROPDOWN (CIDADES) ===
+            // === CASO 1: DROPDOWN (Cidades) ===
             if (item.isDropdown) {
-                // Verifica se alguma sub-página é a atual (para abrir o menu automaticamente)
                 const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
                 
-                // Link principal do Dropdown (apenas abre/fecha)
                 const a = document.createElement("a");
                 a.className = "menu-link dropdown-toggle";
                 a.style.cursor = "pointer";
@@ -371,45 +397,36 @@ document.addEventListener("DOMContentLoaded", () => {
                     ${chevronDownSVG}
                 `;
 
-                // Container dos Sub-itens
                 const subUl = document.createElement("ul");
-                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`; // Abre se estiver dentro
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`;
 
                 if(isSubItemActive) li.classList.add('dropdown-active');
 
-                // Toggle ao clicar no pai
                 a.addEventListener("click", (e) => {
                     e.preventDefault();
-                    e.stopPropagation(); // Não fecha o menu lateral
+                    e.stopPropagation();
                     subUl.classList.toggle("open");
                     li.classList.toggle("dropdown-active");
                 });
 
-                // Renderiza os Sub-itens
                 item.subItems.forEach(sub => {
                     const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
                     const subLi = document.createElement("li");
-                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`; // Aplica active no li filho
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`;
 
                     const subA = document.createElement("a");
-                    subA.className = "menu-link submenu-link"; // Classe extra para padding
-                    subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
+                    subA.className = "menu-link submenu-link";
+                    subA.innerHTML = `<span>${sub.name}</span>`;
 
                     if (isMatch) {
-                        // Bloqueio Total
-                        subA.removeAttribute("href");
                         subA.style.cursor = "default";
                         subA.style.pointerEvents = "none";
                         subA.style.opacity = "1";
-                        subA.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
-                            return false;
-                        }, true);
                     } else {
                         subA.href = sub.url;
-                        subA.addEventListener("click", () => {
-                            setTimeout(closeMenu, 100);
+                        subA.addEventListener("click", (e) => {
+                             // Sem notificação em subitens por enquanto, navegação normal
+                             setTimeout(closeMenu, 100);
                         });
                     }
 
@@ -421,7 +438,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 li.appendChild(subUl);
 
             } else {
-                // === CASO 2: É UM MENU NORMAL ===
+                // === CASO 2: MENU NORMAL (Pode ter notificação) ===
                 const isMatch = (item.url === MANUAL_CURRENT_PAGE);
                 if(isMatch) li.classList.add('active');
 
@@ -433,62 +450,34 @@ document.addEventListener("DOMContentLoaded", () => {
                     <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
                     <span>${item.name}</span>
                 `;
+                
+                // Define o HREF para acessibilidade, mas vamos interceptar no click
+                a.href = isMatch ? "javascript:void(0)" : item.url;
 
-                // --- ATUALIZAÇÃO PARA REMOVER NOTIFICAÇÃO AO CLICAR ---
-                a.addEventListener("click", () => {
-                    // 1. Lógica para remover a notificação
+                a.addEventListener("click", (e) => {
+                    // Se for a página atual ou um link normal
+                    e.preventDefault(); // PAUSA TUDO
+
+                    // 1. Executa a limpeza da notificação (SÍNCRONO)
                     if (item.key) {
-                        // Lógica Padrão de Ações Diárias (AFK, Arena, Boss)
-                        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
-                        let status = {};
-                        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
-                        
-                        if (status[item.key] === true) {
-                            status[item.key] = false;
-                            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
-                            // Remove visualmente se ainda estiver visível antes da navegação
-                            const dot = a.querySelector('.menu-notification-dot');
-                            if(dot) dot.remove();
-                        }
-
-                        // Lógica Especial da Guilda (Sábado e Domingo)
-                        if (item.key === 'guild') {
-                            const now = new Date();
-                            const day = now.getUTCDay();
-                            const hours = now.getUTCHours();
-                            const minutes = now.getUTCMinutes();
-                            
-                            // Se for Sábado, marca o sábado como visto
-                            if (day === 6) {
-                                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
-                            }
-                            // Se for Domingo após 23:30, marca domingo como visto
-                            if (day === 0 && (hours === 23 && minutes >= 30)) {
-                                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
-                            }
-                        }
+                        clearNotification(item.key);
+                        // Remove bolinha visualmente na hora
+                        const dot = a.querySelector('.menu-notification-dot');
+                        if(dot) dot.remove();
                     }
 
-                    // 2. Lógica de Navegação Original (fecha menu se não for a página atual)
-                    if (!isMatch) {
-                         setTimeout(closeMenu, 100);
+                    // 2. Se for a página atual, não faz nada além de fechar menu (se quiser)
+                    if (isMatch) {
+                        // Já estamos na página, só removemos a bolinha (feito acima)
+                        return;
                     }
+
+                    // 3. Navegação Manual
+                    setTimeout(() => {
+                        window.location.href = item.url;
+                    }, 50); // Pequeno delay para garantir UI update se necessário
                 });
-                // -----------------------------------------------------
 
-                if (isMatch) {
-                    a.removeAttribute("href");
-                    a.style.cursor = "default";
-                    a.style.pointerEvents = "none";
-                    a.style.opacity = "1";
-                    a.addEventListener("click", (e) => {
-                        e.preventDefault();
-                        e.stopImmediatePropagation();
-                        return false;
-                    }, true);
-                } else {
-                    a.href = item.url;
-                }
                 li.appendChild(a);
             }
 
@@ -536,7 +525,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if(closeBtn) closeBtn.addEventListener("click", closeMenu);
     if(overlay) overlay.addEventListener("click", closeMenu);
 
-    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido) ---
     const renderSideMenuNotifications = () => {
         const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
         let dailyStatus = {};

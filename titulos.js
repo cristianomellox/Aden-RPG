@@ -371,10 +371,17 @@ btnSave.onclick = async () => {
     modalStatus.className = '';
     btnSave.disabled = true;
 
+    // Se existe um titular atual, mandamos o ID para ser substituído
+    const overwriteId = (activeEdit.currentHolderId && activeEdit.currentHolderId !== '') 
+                        ? activeEdit.currentHolderId 
+                        : null;
+
+    // RPC atualizada recebendo overwrite_player_id
     const { data, error } = await supabase.rpc('set_city_title', {
         target_player_name: name,
         title_id: activeEdit.noblessId,
-        city_id: activeEdit.cityId
+        city_id: activeEdit.cityId,
+        overwrite_player_id: overwriteId
     });
 
     btnSave.disabled = false;
@@ -394,7 +401,6 @@ btnSave.onclick = async () => {
         modalStatus.className = 'status-success';
         
         // --- Atualiza e Trava pelo ID do Jogador ---
-        // Agora usa diretamente o ID retornado pela RPC (exige atualização no SQL também)
         if (data.target_id) {
             const lockKey = `aden_lock_player_${data.target_id}`;
             const nextReset = getNextMidnightUTC();

@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v14.0 - Client Calc + Batch Auth)");
+console.log("guild_raid.js (v14.1 - HP Cap Fix + Button Disabled Logic)");
 
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
@@ -8,7 +8,7 @@ console.log("guild_raid.js (v14.0 - Client Calc + Batch Auth)");
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 46;
+const DB_VERSION = 47;
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -1013,12 +1013,20 @@ function updateAttackUI() {
   }
   
   const playerDead = isPlayerDeadLocal();
-  if (playerDead || isProcessingAction || isSwitchingFloors) { 
-    attackBtn.style.pointerEvents = "none";
-    attackBtn.style.filter = "grayscale(80%)";
+  const shouldDisable = (visualAttacksLeft <= 0) || playerDead || isProcessingAction || isSwitchingFloors;
+
+  if (shouldDisable) {
+      attackBtn.disabled = true;
+      attackBtn.style.pointerEvents = "none";
+      attackBtn.style.filter = "grayscale(100%)";
+      attackBtn.style.opacity = "0.7";
+      if (visualAttacksLeft <= 0) attackBtn.classList.add('disabled-attack-btn'); // Opcional, se existir CSS
   } else {
-    attackBtn.style.pointerEvents = visualAttacksLeft > 0 ? "" : "none";
-    attackBtn.style.filter = visualAttacksLeft > 0 ? "" : "grayscale(60%)";
+      attackBtn.disabled = false;
+      attackBtn.style.pointerEvents = "auto";
+      attackBtn.style.filter = "none";
+      attackBtn.style.opacity = "1";
+      attackBtn.classList.remove('disabled-attack-btn');
   }
 }
 
@@ -1039,6 +1047,9 @@ async function loadInitialPlayerState() {
     const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until, avatar_url").eq("id", userId).single();
     if(pData) {
         localPlayerHp = pData.raid_player_health !== null ? pData.raid_player_health : playerMaxHealth;
+        // AJUSTE 1: CLAMP PARA HP NÃO ESTOURAR
+        localPlayerHp = Math.min(localPlayerHp, playerMaxHealth);
+
         _playerReviveUntil = pData.revive_until;
         if(pData.avatar_url && $id("raidPlayerAvatar")) $id("raidPlayerAvatar").src = pData.avatar_url;
     } else {
@@ -1260,7 +1271,7 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
     crEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px; justify-content: center; text-align: center;"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width:70px;height:70px;object-fit:contain;"> x <span style="font-weight:bold; font-size: 1.3em;">${Number(crystals || 0).toLocaleString()}</span></div>`;
   }
   const itemsContainerId = "rewardItemsContainer";
-  let itemsContainer = $id(itemsContainerId);
+  let itemsContainer = $id("rewardItemsContainer");
   if (!itemsContainer) {
     itemsContainer = document.createElement("div");
     itemsContainer.id = itemsContainerId;

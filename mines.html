@@ -599,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
 
                     if (isMatch) {
-                        // Bloqueio Total (igual ao código anterior)
+                        // Bloqueio Total
                         subA.removeAttribute("href");
                         subA.style.cursor = "default";
                         subA.style.pointerEvents = "none";
@@ -637,6 +637,48 @@ document.addEventListener("DOMContentLoaded", () => {
                     <span>${item.name}</span>
                 `;
 
+                // --- ATUALIZAÇÃO PARA REMOVER NOTIFICAÇÃO AO CLICAR ---
+                a.addEventListener("click", () => {
+                    // 1. Lógica para remover a notificação
+                    if (item.key) {
+                        // Lógica Padrão de Ações Diárias (AFK, Arena, Boss)
+                        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+                        let status = {};
+                        try { status = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+                        
+                        if (status[item.key] === true) {
+                            status[item.key] = false;
+                            localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(status));
+                            // Remove visualmente se ainda estiver visível antes da navegação
+                            const dot = a.querySelector('.menu-notification-dot');
+                            if(dot) dot.remove();
+                        }
+
+                        // Lógica Especial da Guilda (Sábado e Domingo)
+                        if (item.key === 'guild') {
+                            const now = new Date();
+                            const day = now.getUTCDay();
+                            const hours = now.getUTCHours();
+                            const minutes = now.getUTCMinutes();
+                            
+                            // Se for Sábado, marca o sábado como visto
+                            if (day === 6) {
+                                localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
+                            }
+                            // Se for Domingo após 23:30, marca domingo como visto
+                            if (day === 0 && (hours === 23 && minutes >= 30)) {
+                                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+                            }
+                        }
+                    }
+
+                    // 2. Lógica de Navegação Original (fecha menu se não for a página atual)
+                    if (!isMatch) {
+                         setTimeout(closeMenu, 100);
+                    }
+                });
+                // -----------------------------------------------------
+
                 if (isMatch) {
                     a.removeAttribute("href");
                     a.style.cursor = "default";
@@ -649,9 +691,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     }, true);
                 } else {
                     a.href = item.url;
-                    a.addEventListener("click", () => {
-                         setTimeout(closeMenu, 100);
-                    });
                 }
                 li.appendChild(a);
             }

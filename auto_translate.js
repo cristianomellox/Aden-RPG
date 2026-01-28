@@ -87,7 +87,7 @@ window.addEventListener("load", () => {
             // Remove classe que ativa observer interno
             document.body.classList.remove("goog-te-enabled");
         } catch (e) {}
-    }, 800);
+    }, 10800);
 });
 
 // ======================================================================

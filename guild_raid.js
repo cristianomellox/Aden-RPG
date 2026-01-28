@@ -1,16 +1,14 @@
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v13.3) - Independent IndexedDB Update Logic");
+console.log("guild_raid.js (v14.0 - Client Calc + Batch Auth)");
 
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
 // =========================================================
-// Isso permite que a Raid atualize o cache de inventário
-// sem depender que o script.js esteja carregado na página.
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 46; // Mantenha a mesma versão do inventory.js
+const DB_VERSION = 46;
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -22,8 +20,6 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
- * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
- * @param {String} newTimestamp - O novo timestamp vindo do servidor
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
@@ -32,16 +28,12 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualiza ou insere os itens modificados
         if (Array.isArray(newItems)) {
             newItems.forEach(item => store.put(item));
         }
 
-        // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
@@ -56,7 +48,6 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     }
 }
 // =========================================================
-
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
@@ -820,7 +811,6 @@ async function handleRaidCountdown(raidData) {
     countdownInterval = setInterval(updateTimer, 1000);
 }
 
-// Substitua a função loadRaid existente por esta:
 async function loadRaid() {
     if (!userGuildId) return;
     stopAllFloorMusic();
@@ -846,24 +836,13 @@ async function loadRaid() {
         const endsAt = new Date(data.ends_at);
         const startTime = new Date(data.starts_at);
 
-        // --- CORREÇÃO DO BUG "PRESO NO FINAL" ---
-        // Se a Raid está marcada como ativa no banco, mas o tempo já acabou:
         if (now >= endsAt) {
             console.log("Detectada Raid expirada durante o load. Finalizando no servidor...");
-            
-            // Chama a função SQL para marcar active = false oficialmente
             await supabase.rpc('end_expired_raid', { p_raid_id: data.id });
-            
-            // Exibe o alerta e encerra o load. 
-            // Na próxima vez que o jogador clicar, ela não virá mais como ativa.
             showRaidAlert("A Raid anterior chegou ao fim.");
             closeCombatModal();
-            
-            // Opcional: Recarregar a página ou reabrir o modal para cair no "lastRaidResultModal"
-            // Mas apenas fechar já resolve o loop.
             return; 
         }
-        // ----------------------------------------
 
         if (now < startTime) {
             await handleRaidCountdown(data);
@@ -992,11 +971,7 @@ async function loadAttempts() {
 function computeShownAttacksAndRemaining() {
   const now = new Date();
   
-  // [FIX 1 - Robustez do Timer]
-  // Se temos menos que o máximo e o timer é nulo, houve um desync.
-  // Forçamos um "lastAttackAt" para agora para evitar UI travada em 0/3 sem texto.
   if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
-      // Auto-correção visual: assume que gastou agora
       return { shownAttacks: attacksLeft, secondsToNext: ATTACK_COOLDOWN_SECONDS };
   }
 
@@ -1029,7 +1004,6 @@ function updateAttackUI() {
 
   attacksEl.textContent = `${visualAttacksLeft} / ${MAX_ATTACKS}`;
   
-  // [FIX] Se estiver 0/3 e timer vazio, exibe algo genérico ou força estado de espera
   if (visualAttacksLeft < MAX_ATTACKS && secondsToNext <= 0) {
       cooldownEl.textContent = "Recuperando...";
   } else {
@@ -1082,6 +1056,26 @@ async function loadInitialPlayerState() {
   }
 }
 
+// -----------------------------------------------------
+// FUNÇÃO AUXILIAR DE CÁLCULO DE DANO (CLIENTE)
+// -----------------------------------------------------
+function calculateRaidDamage(stats) {
+    const min = stats.min_attack || 0;
+    const max = stats.attack || 0;
+    const critChance = stats.crit_chance || 0;
+    const critDmg = stats.crit_damage || 0;
+
+    const damageRange = Math.max(0, max - min);
+    let damage = Math.floor(Math.random() * (damageRange + 1)) + min;
+    let isCrit = false;
+
+    if ((Math.random() * 100) < critChance) {
+        isCrit = true;
+        damage = Math.floor(damage * (1 + (critDmg / 100.0)));
+    }
+    return { damage: Math.max(1, damage), isCrit };
+}
+
 async function performAttackOptimistic() {
     if (!currentRaidId || !userId || isProcessingAction) return;
     if (isPlayerDeadLocal()) { showRaidAlert("Você está morto."); return; }
@@ -1097,12 +1091,9 @@ async function performAttackOptimistic() {
 
     if (!playerStatsCache) await cachePlayerStats();
     
-    const { min_attack, attack, crit_chance, crit_damage } = playerStatsCache || { min_attack: 1, attack: 5, crit_chance: 0, crit_damage: 0 };
-    const isCrit = (Math.random() * 100) < crit_chance;
-    let damage = Math.floor(Math.random() * ((attack - min_attack) + 1) + min_attack);
-    if (isCrit) damage = Math.floor(damage * (1 + crit_damage / 100.0));
-    damage = Math.max(1, damage);
-
+    // CÁLCULO LOCAL DE DANO
+    const { damage, isCrit } = calculateRaidDamage(playerStatsCache || {});
+    
     displayFloatingDamageOver($id("raidMonsterArea"), damage, isCrit);
     playHitSound(isCrit);
     
@@ -1116,6 +1107,7 @@ async function performAttackOptimistic() {
         setTimeout(() => monsterImg.classList.remove('shake-animation'), 300);
     }
 
+    // Acumula dano e contagem
     pendingAttacksQueue++;
     localDamageDealtInBatch += damage;
     
@@ -1146,7 +1138,7 @@ async function triggerBatchSync() {
     isBatchSyncing = true;
 
     const attacksToSend = pendingAttacksQueue;
-    const expectedDamage = localDamageDealtInBatch; 
+    const damageToSend = localDamageDealtInBatch; // Dano total acumulado
 
     pendingAttacksQueue = 0;
     localDamageDealtInBatch = 0;
@@ -1156,35 +1148,27 @@ async function triggerBatchSync() {
     updateAttackUI();
 
     try {
-        console.log(`[Sync] Enviando lote de ${attacksToSend} ataques...`);
+        console.log(`[Sync] Enviando lote: ${attacksToSend} atqs, ${damageToSend} dano.`);
         
+        // ENVIA DANO CALCULADO
         const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
             p_player_id: userId,
             p_raid_id: currentRaidId,
-            p_attack_count: attacksToSend
+            p_attack_count: attacksToSend,
+            p_claimed_damage: damageToSend
         });
 
-        // [FIX - Tratamento de Erro vs Morte]
-        if (error) {
-            throw new Error(error.message);
-        }
+        if (error) throw new Error(error.message);
 
-        // Se o sucesso for false mas tiver revive_until, tratamos como morte, não erro
-        // O SQL atualizado retorna success: true mesmo se morto, mas vamos garantir.
+        // Se o servidor retornar que o jogador morreu, processa a morte (prioridade máxima)
         if (data.revive_until && new Date(data.revive_until) > new Date()) {
-             // O jogador morreu durante o batch ou já estava morto
              _playerReviveUntil = data.revive_until;
              localPlayerHp = 0;
              updatePlayerHpUi(0, playerMaxHealth);
              
-             // Inicia timer de revive
              if (!reviveUITickerInterval) startReviveUITicker();
-             
-             // Mostra banner se ainda não mostrou
              displayDeathNotification(userName || "Você");
              
-             // NÃO faz rollback de ataques se morreu. Os ataques foram "gastos" ou invalidados.
-             // Apenas atualiza o contador real do server
              if (data.attacks_left !== undefined) {
                  attacksLeft = data.attacks_left;
                  lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
@@ -1200,11 +1184,11 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
-        // --- Sucesso Normal ---
+        // Sucesso Normal
         updateHpBar(data.monster_health, data.max_monster_health);
         
         if (data.player_health !== undefined) {
-             localPlayerHp = Math.min(localPlayerHp, data.player_health);
+             localPlayerHp = data.player_health;
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
         }
 
@@ -1218,11 +1202,10 @@ async function triggerBatchSync() {
         saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
 
-        // === [NOVO] ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (LOCALMENTE) ===
+        // Atualização Cirúrgica de Inventário
         if (data.inventory_updates && data.new_timestamp) {
              await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }
-        // ================================================================
 
         if (data.monster_health <= 0) {
              const floorDefeated = currentFloor; 
@@ -1249,9 +1232,9 @@ async function triggerBatchSync() {
 
     } catch (e) {
         console.error("Falha no Sync Batch:", e);
-        // Rollback APENAS se for erro de rede/lógica, não morte
+        // Rollback
         pendingAttacksQueue += attacksToSend;
-        localDamageDealtInBatch += expectedDamage;
+        localDamageDealtInBatch += damageToSend;
         isSwitchingFloors = false;
         saveBatchState();
         updateAttackUI();

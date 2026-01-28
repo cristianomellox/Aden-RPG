@@ -1,4 +1,3 @@
-
 import { supabase } from './supabaseClient.js'
 
 window.supabase = supabase;
@@ -17,7 +16,7 @@ window.selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 46; 
+const DB_VERSION = 47; // Incrementado para garantir limpeza de estruturas antigas
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -47,9 +46,11 @@ async function saveCache(items, stats, timestamp) {
     const meta = tx.objectStore(META_STORE);
 
     store.clear();
-    // Filtro de segurança extra: nunca salva item com qtd 0 no banco
-    const validItems = (items || []).filter(item => item.quantity > 0);
-    validItems.forEach(item => store.put(item));
+    
+    // >>> ALTERAÇÃO PARA MANIFESTO EFICIENTE <<<
+    // Não filtramos itens com quantity <= 0. Salvamos TUDO.
+    // Assim, se o jogador ganhar o item de novo, o manifesto sabe que já temos os dados estáticos.
+    (items || []).forEach(item => store.put(item));
     
     meta.put({ key: "last_updated", value: timestamp }); 
     meta.put({ key: "player_stats", value: stats });     
@@ -91,12 +92,9 @@ async function getLastUpdated() {
 }
 
 async function updateCacheItem(item) {
-    // Se tentar atualizar um item para qtd 0, removemos ele
-    if (item.quantity <= 0) {
-        return removeCacheItem(item.id);
-    }
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
+    // Agora permitimos salvar item com quantidade 0 (placeholder para manifesto)
     tx.objectStore(STORE_NAME).put(item);
     return tx.complete;
 }
@@ -141,6 +139,7 @@ function getLocalUserId() {
 
 // Gera o manifesto leve para enviar ao servidor
 function generateManifest(items) {
+    // O manifesto deve incluir itens com qtd 0 para o servidor saber que já temos o cache
     return items.map(item => ({
         id: item.id,
         // Assinatura: Quantidade_Nivel_Refino_Slot
@@ -153,7 +152,7 @@ function generateManifest(items) {
 function processInventoryDelta(localItems, delta) {
     let updatedList = [...localItems];
     
-    // 1. Remover itens deletados no servidor
+    // 1. Remover itens deletados no servidor (se houver remoção explícita)
     if (delta.remove && delta.remove.length > 0) {
         const removeSet = new Set(delta.remove);
         updatedList = updatedList.filter(item => !removeSet.has(item.id));
@@ -164,10 +163,7 @@ function processInventoryDelta(localItems, delta) {
         delta.upsert.forEach(newItem => {
             const idx = updatedList.findIndex(i => i.id === newItem.id);
             if (idx !== -1) {
-                // >>> OTIMIZAÇÃO AQUI <<<
-                // Se o item já existe, fazemos MERGE (preserva 'items' estático)
-                // Se o 'newItem' vier do servidor como Partial (sem 'items'),
-                // o spread operator mantém o 'items' do 'updatedList[idx]'.
+                // Merge inteligente (preserva 'items' estático se o servidor mandou partial)
                 updatedList[idx] = { ...updatedList[idx], ...newItem };
             } else {
                 // Item Novo (Server mandou Full Object)
@@ -342,9 +338,16 @@ async function loadPlayerAndItems(forceRefresh = false) {
         // Se tiver dados locais, exibe imediatamente (Optimistic UI)
         if (localItems && localItems.length >= 0) {
             console.log('✅ UI Otimista: Exibindo dados locais enquanto sincroniza...');
-            allInventoryItems = localItems.filter(i => i.quantity > 0);
+            
+            // >>> AJUSTE PARA SOFT DELETE <<<
+            // allInventoryItems contém TUDO (inclusive zeros)
+            allInventoryItems = localItems;
+            
             playerBaseStats = localStats || {};
-            equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+            
+            // equippedItems só considera itens que existem (qtd > 0)
+            equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
+            
             renderUI();
         }
     } catch (e) {
@@ -379,9 +382,9 @@ async function loadPlayerAndItems(forceRefresh = false) {
         
         const mergedList = processInventoryDelta(localItems, deltaData);
         
-        // Atualiza variáveis globais
-        allInventoryItems = mergedList.filter(i => i.quantity > 0);
-        equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null);
+        // Atualiza variáveis globais (mergedList pode conter qtd=0)
+        allInventoryItems = mergedList;
+        equippedItems = allInventoryItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
         
         // Atualiza stats se o servidor mandou (mandará se houver mudança ou sync)
         if (deltaData.player_stats) {
@@ -391,7 +394,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
         // Renderiza com os dados atualizados
         renderUI();
 
-        // Salva o novo estado no cache
+        // Salva o novo estado no cache (incluindo zerados)
         await saveCache(allInventoryItems, playerBaseStats, deltaData.last_inventory_update);
         console.log('💾 Cache local sincronizado e salvo.');
 
@@ -416,9 +419,10 @@ async function fullDownload() {
 
     // Atualiza variáveis globais
     playerBaseStats = playerData.cached_combat_stats || {};
+    // Pega todos, inclusive zerados se o RPC mandar (mas RPC lazy geralmente manda tudo)
     const rawItems = playerData.cached_inventory || [];
-    allInventoryItems = rawItems.filter(item => item.quantity > 0);
-    equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null);
+    allInventoryItems = rawItems;
+    equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null && item.quantity > 0);
 
     // Renderiza
     renderUI();
@@ -438,6 +442,8 @@ function renderUI() {
     // Recupera a tab ativa ou usa 'all'
     const activeTab = document.querySelector('.tab-button.active');
     const tabId = activeTab ? activeTab.id.replace('tab-', '') : 'all';
+    
+    // loadItems é responsável por filtrar visualmente os zerados
     loadItems(tabId, allInventoryItems);
 }
 
@@ -514,7 +520,9 @@ async function loadItems(tab = 'all', itemsList = null) {
     bagItemsGrid.innerHTML = '';
 
     const filteredItems = items.filter(item => {
-        // SEGURANÇA VISUAL: Não renderiza se for equipado OU se quantidade <= 0
+        // SEGURANÇA VISUAL: 
+        // 1. Não mostra itens equipados
+        // 2. Não mostra itens com quantidade <= 0 (Isso é crucial para o sistema Soft Delete)
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
         
         if (tab === 'all') return true;
@@ -784,6 +792,7 @@ function renderFragmentList(itemToLevelUp) {
     const fragmentListContainer = document.getElementById('fragmentList');
     fragmentListContainer.innerHTML = '';
 
+    // Filtra visualmente apenas os que tem > 0
     const fragments = allInventoryItems.filter(item => item.items.item_type === 'fragmento' && item.quantity > 0);
 
     if (fragments.length === 0) {
@@ -971,6 +980,7 @@ function openRefineFragmentModal(item) {
         return;
     }
 
+    // Filtro visual: só mostra quem tem > 0
     const sameRarityFragments = (allInventoryItems || []).filter(inv =>
         inv.items?.item_type === 'fragmento' &&
         inv.items?.rarity === item.items?.rarity &&
@@ -1064,35 +1074,40 @@ function openRefineFragmentModal(item) {
 // FUNÇÃO MÁGICA DE ATUALIZAÇÃO LOCAL (Sem baixar tudo de novo)
 // -------------------------------------------------------------
 async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystals, newItem = null) {
-    // 1. Atualiza o item principal (se houver)
+    let needsSort = false;
+
+    // 1. Atualiza Item Principal (Equipamento evoluído/refinado)
     if (updatedItem) {
-        // Busca APENAS esse item no banco para garantir que temos todos os dados
-        const { data: fetchItem, error } = await supabase
+        // Se vier objeto completo ou ID
+        const itemId = updatedItem.id || updatedItem;
+        
+        // Busca dados limpos no Supabase para garantir integridade
+        // (Isso é um fetch leve por ID, muito melhor que recarregar tudo)
+        const { data: fetchItem } = await supabase
             .from('inventory_items')
             .select('*, items(*)')
-            .eq('id', updatedItem.id || updatedItem)
+            .eq('id', itemId)
             .single();
 
         if (fetchItem) {
              const idx = allInventoryItems.findIndex(i => i.id === fetchItem.id);
              
-             // SEGURANÇA: Se a quantidade retornada for 0 ou menos, removemos do array
-             if (fetchItem.quantity > 0) {
-                 if (idx !== -1) {
-                     allInventoryItems[idx] = fetchItem;
-                 } else {
-                     allInventoryItems.push(fetchItem); // Caso raro de item novo
+             // >>> AJUSTE PARA SOFT DELETE <<<
+             // Se quantity <= 0, NÃO removemos do array. Apenas atualizamos.
+             // O filtro visual acontece no renderUI.
+             if (idx !== -1) {
+                 allInventoryItems[idx] = fetchItem;
+                 if (fetchItem.quantity > 0) {
+                     selectedItem = fetchItem; 
                  }
-             } else {
-                 if (idx !== -1) {
-                     allInventoryItems.splice(idx, 1);
-                 }
+             } else if (fetchItem.quantity > 0) {
+                 allInventoryItems.push(fetchItem); // Caso raro de item novo
+                 needsSort = true;
              }
-             selectedItem = fetchItem; // Atualiza a seleção atual
         }
     }
 
-    // 2. Remove ou decrementa fragmentos usados
+    // 2. Decrementa Fragmentos Usados
     if (usedFragments && Array.isArray(usedFragments)) {
         usedFragments.forEach(usage => {
             const fragId = usage.fragment_inventory_id || usage.id; 
@@ -1101,45 +1116,56 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
             const idx = allInventoryItems.findIndex(i => i.id === fragId);
             if (idx !== -1) {
                 allInventoryItems[idx].quantity -= qtyUsed;
-                // Se zerou, remove do array
-                if (allInventoryItems[idx].quantity <= 0) {
-                    allInventoryItems.splice(idx, 1);
+                // >>> AJUSTE PARA SOFT DELETE <<<
+                // Se quantity chegar a 0, mantemos no array.
+                // Apenas garantimos que não fique negativo.
+                if (allInventoryItems[idx].quantity < 0) {
+                    allInventoryItems[idx].quantity = 0;
                 }
             }
         });
     }
 
-    // 3. Adiciona item novo (ex: craft)
+    // 3. Adiciona Item Novo (ex: craft)
     if (newItem) {
+        const newItemId = newItem.id || newItem;
         const { data: newFetchItem } = await supabase
             .from('inventory_items')
             .select('*, items(*)')
-            .eq('id', newItem.id || newItem)
+            .eq('id', newItemId)
             .single();
         
         if (newFetchItem && newFetchItem.quantity > 0) {
             allInventoryItems.push(newFetchItem);
+            needsSort = true;
         }
     }
 
     // 4. Atualiza Cristais do Jogador (se gasto)
     if (usedCrystals && playerBaseStats) {
-        playerBaseStats.crystals = (playerBaseStats.crystals || 0) - usedCrystals;
+        playerBaseStats.crystals = Math.max(0, (playerBaseStats.crystals || 0) - usedCrystals);
     }
     
     // 5. >>> CORREÇÃO: Atualiza os STATS de Combate <<<
     // O backend já recalculou isso na tabela players. Vamos buscar só essa coluna (MUITO leve).
     await refreshPlayerStatsOnly();
 
-    // 6. Atualiza Globais e Limpa Fantasmas antes de salvar
-    // Filtro de segurança final para garantir que o array na memória esteja limpo
-    allInventoryItems = allInventoryItems.filter(i => i.quantity > 0);
-    equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null);
+    // 6. Atualiza Globais
+    // equippedItems só deve ter itens válidos (>0)
+    equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null && invItem.quantity > 0);
 
-    // 7. Salva no Cache Local e Re-renderiza
-    await saveCache(allInventoryItems, playerBaseStats, new Date().toISOString()); 
+    // 7. Salva no Cache Local (INCLUINDO ITEMS COM QTD 0) e Re-renderiza
+    const nowISO = new Date().toISOString();
+    await saveCache(allInventoryItems, playerBaseStats, nowISO); 
+
     renderUI();
-    if (selectedItem) showItemDetails(selectedItem);
+    
+    // Se estávamos vendo detalhes de um item que ainda existe (qtd>0), atualiza a modal
+    if (selectedItem && allInventoryItems.find(i => i.id === selectedItem.id && i.quantity > 0)) {
+        showItemDetails(selectedItem);
+    } else {
+        document.getElementById('itemDetailsModal').style.display = 'none';
+    }
 }
 
 // Helper para buscar APENAS os stats do jogador (Egress mínimo)

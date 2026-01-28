@@ -1296,7 +1296,7 @@ const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
 async function loadResourcesFromCache() {
     const DB_NAME = "aden_inventory_db";
     const STORE_NAME = "inventory_store";
-    const DB_VERSION = 46; 
+    const DB_VERSION = 47; 
 
     const resourceMap = {
         51: { count: 0, name: 'Elora', img: 'https://aden-rpg.pages.dev/assets/itens/elora.webp' },
@@ -1338,7 +1338,7 @@ async function loadResourcesFromCache() {
 async function updateResourceCache(resId, resQty, fragId, fragQty) {
     const DB_NAME = "aden_inventory_db";
     const STORE_NAME = "inventory_store";
-    const DB_VERSION = 46;
+    const DB_VERSION = 47;
 
     return new Promise((resolve) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);

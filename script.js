@@ -694,7 +694,7 @@ function updateLocalPlayerData(changes) {
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 46; // Mantenha a mesma versão do inventory.js
+const DB_VERSION = 47; // Mantenha a mesma versão do inventory.js
 
 function openDB() {
     return new Promise((resolve, reject) => {

@@ -21,47 +21,26 @@ function googleTranslateElementInit() {
 // ======================================================================
 // 2. Vigilância Ativa (MutationObserver)
 // ======================================================================
-// ======================================================================
-// 2. Vigilância Ativa (MutationObserver)
-// ======================================================================
 function fixGoogleLayout() {
-    // Função para destruir elementos indesejados
-    const removeGoogleElements = () => {
-        // Remove a barra superior
+    const removeBar = () => {
         const frames = document.querySelectorAll('.goog-te-banner-frame');
         frames.forEach(frame => {
             frame.style.display = 'none';
             frame.style.visibility = 'hidden';
             frame.style.height = '0';
         });
-
-        // Remove especificamente o SPINNER/LOADER
-        const spinners = document.querySelectorAll('.goog-te-spinner-pos, .goog-te-spinner, .goog-te-spinner-animation');
-        spinners.forEach(spinner => {
-            spinner.remove(); // Remove o elemento do HTML completamente
-            // Se preferir apenas esconder:
-            // spinner.style.display = 'none';
-            // spinner.style.setProperty('display', 'none', 'important');
-        });
-
-        // Força o topo do corpo para 0
         if (document.body.style.marginTop !== '0px') {
             document.body.style.marginTop = '0px';
             document.body.style.top = '0px';
         }
     };
-
-    // Executa imediatamente
-    removeGoogleElements();
-
-    // Cria o observador para vigiar se o Google tenta readicionar o spinner
+    removeBar();
     const observer = new MutationObserver(() => {
-        removeGoogleElements();
+        if (document.body.style.marginTop && document.body.style.marginTop !== '0px') {
+            removeBar();
+        }
     });
-
-    // Observa o corpo e o HTML por mudanças nos filhos e atributos
-    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
 }
 
 // ======================================================================

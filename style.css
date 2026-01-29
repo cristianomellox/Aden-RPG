@@ -2429,43 +2429,18 @@ button, .btn {
     border-radius: 3px;
 }
 
-/* =========================================================
-   REMOÇÃO TOTAL DO LOADER/SPINNER DO GOOGLE TRANSLATE
-   ========================================================= */
-
-/* Oculta o container do spinner de carregamento */
-.goog-te-spinner-pos {
+/* Esconde o spinner de loading do Google Translate */
+  .goog-te-spinner-pos,
+  .goog-te-spinner,
+  .goog-te-banner-frameskiptranslate + div,   /* às vezes o spinner fica aqui */
+  body > div[style*="position: fixed"][style*="z-index: 1000001"] {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
-    width: 0 !important;
-    height: 0 !important;
-    pointer-events: none !important;
-    z-index: -9999 !important;
-}
-
-/* Oculta a animação do spinner caso ele seja inserido de outra forma */
-.goog-te-spinner, 
-.goog-te-spinner-animation {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-/* Prevenção extra para imagens de loading do Google */
-img.goog-te-spinner-img {
-    display: none !important;
-}
-
-/* Garante que o tooltip (pop-up de texto original) não apareça ao passar o mouse */
-.goog-tooltip,
-.goog-tooltip:hover {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-/* Previne que o Google injete padding no topo do body para compensar o loader */
-body {
-    top: 0 !important;
-    margin-top: 0 !important;
-    position: static !important;
+  }
+  
+  .goog-te-gadget-icon,
+.goog-te-spinner-pos,
+.goog-te-combo ~ div {  /* esconde loader perto do select */
+  display: none !important;
 }

@@ -10,7 +10,7 @@ window.allInventoryItems = [];
 window.selectedItem = null;
 
 // ===============================
-// CACHE DE DEFINIÇÕES (Hidratação)
+// CACHE DE DEFINIÇÕES (Hidratação Visual)
 // ===============================
 let itemDefinitions = new Map();
 
@@ -47,7 +47,8 @@ function hydrateItem(invItem) {
     const def = itemDefinitions.get(invItem.item_id);
     
     if (def) {
-        invItem.items = def;
+        // Clona para não alterar a referência do Map
+        invItem.items = { ...def };
     } else {
         // Fallback seguro para não quebrar a tela enquanto carrega
         invItem.items = {
@@ -55,7 +56,7 @@ function hydrateItem(invItem) {
             name: 'unknown',
             display_name: 'Carregando...',
             rarity: 'R',
-            item_type: 'outros',
+            item_type: 'unknown', // Tipo unknown evita mostrar barra de nível errada
             stars: 0,
             description: 'Dados do item não encontrados localmente.'
         };
@@ -237,7 +238,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         button.addEventListener('click', () => {
             document.querySelector('.tab-button.active')?.classList.remove('active');
             button.classList.add('active');
-            loadItems(button.id.replace('tab-', ''));
+            // ID da aba ex: "tab-equipment" -> "equipment"
+            const category = button.id.replace('tab-', '');
+            loadItems(category);
         });
     });
 
@@ -303,12 +306,18 @@ function setupActionListeners() {
             }
         });
 
-        if (selections.length === 0) return showCustomAlert('Selecione pelo menos um fragmento e uma quantidade válida.');
+        if (selections.length === 0) {
+            showCustomAlert('Selecione pelo menos um fragmento e uma quantidade válida.');
+            return;
+        }
 
         const fragmentRarity = selections[0]?.rarity || item.items.rarity;
         const maxNecessario = calcularFragmentosNecessariosParaCap(item, fragmentRarity);
 
-        if (totalSelecionado > maxNecessario) return showCustomAlert(`Você só precisa de ${maxNecessario} fragmentos para atingir o limite. Ajuste a quantidade.`);
+        if (totalSelecionado > maxNecessario) {
+            showCustomAlert(`Você só precisa de ${maxNecessario} fragmentos para atingir o limite. Ajuste a quantidade.`);
+            return;
+        }
 
         handleLevelUpMulti(item, selections);
     });
@@ -435,6 +444,7 @@ function renderUI() {
     updateStatsUI(playerBaseStats);
     renderEquippedItems();
     
+    // Detecta aba ativa
     const activeTab = document.querySelector('.tab-button.active');
     const tabId = activeTab ? activeTab.id.replace('tab-', '') : 'all';
     
@@ -463,10 +473,13 @@ function updateStatsUI(stats) {
     setTxt('playerEvasion', `${Math.floor(stats.evasion || 0)}%`);
 }
 
-// Mantido para compatibilidade
-function calculatePlayerStats() {}
+// Mantido para compatibilidade com chamadas externas
+function calculatePlayerStats() {
+    // A lógica real agora vem do servidor (playerBaseStats), então essa função pode ser vazia
+}
 
 function renderEquippedItems() {
+    // Limpa slots
     const slots = ['weapon', 'ring', 'helm', 'special1', 'amulet', 'wing', 'armor', 'special2'];
     slots.forEach(slot => {
         const slotDiv = document.getElementById(`${slot}-slot`);
@@ -478,15 +491,22 @@ function renderEquippedItems() {
         if (item && invItem.equipped_slot) {
             const slotDiv = document.getElementById(`${invItem.equipped_slot}-slot`);
             if (slotDiv) {
+                // Lógica de URL restaurada
                 const totalStars = (item.stars || 0) + (invItem.refine_level || 0);
-                // URL segura
-                const imgSrc = item.item_type === 'fragmento'
-                    ? `https://aden-rpg.pages.dev/assets/itens/${item.name}.webp`
-                    : `https://aden-rpg.pages.dev/assets/itens/${item.name}_${totalStars}estrelas.webp`;
+                
+                // Se o nome for 'unknown', usa placeholder. Senão, monta a URL.
+                let imgSrc;
+                if (item.name === 'unknown') {
+                    imgSrc = 'https://aden-rpg.pages.dev/assets/itens/unknown.webp';
+                } else {
+                    // Equipamentos usam o sufixo _Xestrelas.webp
+                    imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.name}_${totalStars}estrelas.webp`;
+                }
 
                 slotDiv.innerHTML = `<img src="${imgSrc}" alt="${item.display_name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">`;
         
-                if (item.item_type !== 'fragmento' && item.item_type !== 'outros' && invItem.level && invItem.level >= 1) {
+                // Nível só aparece se for > 0
+                if (invItem.level && invItem.level >= 1) {
                     slotDiv.innerHTML += `<div class="item-level">Nv. ${invItem.level}</div>`;
                 }
 
@@ -507,14 +527,28 @@ function loadItems(tab = 'all', itemsList = null) {
         // Filtro de Segurança
         if (item.equipped_slot !== null || item.quantity <= 0) return false;
         
-        // Garante que item.items existe (segurança extra contra dados corrompidos)
+        // Garante que item.items existe (segurança extra)
         if (!item.items) item = hydrateItem(item);
+        
         const type = item.items.item_type;
+        // Normaliza tipo para comparação (lowercase)
+        const safeType = type ? type.toLowerCase() : 'outros';
 
         if (tab === 'all') return true;
-        if (tab === 'equipment' && type !== 'fragmento' && type !== 'outros') return true;
-        if (tab === 'fragments' && type === 'fragmento') return true;
-        if (tab === 'others' && type === 'outros') return true;
+        
+        // Equipamentos: não são fragmentos e não são outros
+        if (tab === 'equipment') {
+            return safeType !== 'fragmento' && safeType !== 'outros' && safeType !== 'consumivel' && safeType !== 'unknown';
+        }
+        
+        if (tab === 'fragments') {
+            return safeType === 'fragmento';
+        }
+        
+        if (tab === 'others') {
+            return safeType === 'outros' || safeType === 'consumivel' || safeType === 'unknown';
+        }
+        
         return false;
     });
 
@@ -527,22 +561,35 @@ function loadItems(tab = 'all', itemsList = null) {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'inventory-item';
 
+        // Efeito visual para fragmentos craftáveis
         if (item.items.item_type === 'fragmento' && item.items.crafts_item_id && item.quantity >= 30) {
             itemDiv.classList.add('zoom-border');
         }
 
         const totalStars = (item.items.stars || 0) + (item.refine_level || 0);
-        const imgSrc = item.items.item_type === 'fragmento'
-            ? `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`
-            : `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
+        let imgSrc;
+        
+        if (item.items.name === 'unknown') {
+            imgSrc = 'https://aden-rpg.pages.dev/assets/itens/unknown.webp';
+        } else if (item.items.item_type === 'fragmento' || item.items.item_type === 'outros' || item.items.item_type === 'consumivel') {
+            // Itens empilháveis não tem estrelas no nome do arquivo
+            imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
+        } else {
+            // Equipamentos
+            imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
+        }
 
         itemDiv.innerHTML = `<img src="${imgSrc}" alt="${item.items.name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">`;
         
-        if ((item.items.item_type === 'fragmento' || item.items.item_type === 'outros') && item.quantity > 1) {
+        // Lógica de Quantidade: Mostra se > 1 e for empilhável (ou se for Outros/Fragmento)
+        // Correção para Outros: Sempre mostra quantidade se > 1
+        const isStackable = ['fragmento', 'outros', 'consumivel', 'unknown'].includes(item.items.item_type);
+        if (item.quantity > 1 || isStackable) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level && item.level >= 1) {
+        // Lógica de Nível: SÓ mostra se NÃO for empilhável
+        if (!isStackable && item.level && item.level >= 1) {
             itemDiv.innerHTML += `<div class="item-level">Lv. ${item.level}</div>`;
         }
 
@@ -564,15 +611,19 @@ function showItemDetails(item) {
     const modal = document.getElementById('itemDetailsModal');
     if (!modal) return;
 
-    // Hidratação de segurança
     if(!item.items) item = hydrateItem(item);
 
-    document.getElementById('itemDetailsContent').dataset.currentItem = JSON.stringify(item);
-
     const totalStars = (item.items.stars || 0) + (item.refine_level || 0);
-    const imgSrc = item.items.item_type === 'fragmento'
-        ? `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`
-        : `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
+    
+    // Lógica de Imagem no Detalhe (Mesma do Grid)
+    let imgSrc;
+    if (item.items.name === 'unknown') {
+        imgSrc = 'https://aden-rpg.pages.dev/assets/itens/unknown.webp';
+    } else if (['fragmento', 'outros', 'consumivel'].includes(item.items.item_type)) {
+        imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
+    } else {
+        imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
+    }
 
     document.getElementById('detailItemImage').src = imgSrc;
     document.getElementById('detailItemName').textContent = item.items.display_name;
@@ -581,8 +632,13 @@ function showItemDetails(item) {
     const descDiv = document.getElementById('itemDescription');
     if(descDiv) descDiv.textContent = item.items.description || 'Nenhuma descrição.';
 
-    const isEquipment = !['consumivel', 'fragmento', 'outros'].includes(item.items.item_type);
-    const isEquipable = ['arma', 'Arma', 'Escudo', 'Anel', 'anel', 'Elmo', 'elmo', 'Asa', 'asa', 'Armadura', 'armadura', 'Colar', 'colar'].includes(item.items.item_type);
+    // Verifica se é equipamento equipável
+    const isStackable = ['consumivel', 'fragmento', 'outros', 'unknown'].includes(item.items.item_type);
+    const isEquipment = !isStackable;
+    
+    // Lista explícita de tipos equipáveis para o botão
+    const equipSlots = ['arma','Arma','Escudo','Anel','anel','Elmo','elmo','Asa','asa','Armadura','armadura','Colar','colar'];
+    const isEquipableType = equipSlots.includes(item.items.item_type);
 
     if (isEquipment) {
         const level = item.level || 0;
@@ -601,26 +657,24 @@ function showItemDetails(item) {
         
         renderStats(item);
         renderRefineInfo(item, totalStars);
+        
+        document.getElementById('itemActions').style.display = 'flex';
     } else {
+        // Esconde coisas de equipamento para itens normais
         document.querySelector('.progress-bar-container').style.display = 'none';
         document.getElementById('levelUpBtn').style.display = 'none';
-        document.getElementById('detailItemLevel').textContent = '';
+        document.getElementById('detailItemLevel').textContent = ''; // Limpa texto de nível
         document.getElementById('itemStats').style.display = 'none';
         document.getElementById('itemRefineSection').style.display = 'none';
-        document.getElementById('itemActions').style.display = 'none'; // Se não for equip, esconde ações gerais
-        // Re-mostra ações se for desconstruível (mas isso geralmente é tratado pelo tipo)
+        document.getElementById('itemActions').style.display = 'none';
     }
-
-    // Se for equipamento, mostra o bloco de ações
-    if(isEquipment) document.getElementById('itemActions').style.display = 'flex';
 
     // Botão Equipar
     const equipBtnModal = document.getElementById('equipBtnModal');
-    if (isEquipable) {
-        const isEquipped = item.equipped_slot !== null;
-        equipBtnModal.textContent = isEquipped ? 'Retirar' : 'Equipar';
+    if (isEquipableType) {
         equipBtnModal.style.display = 'block';
-        equipBtnModal.onclick = () => handleEquipUnequip(item, isEquipped);
+        equipBtnModal.textContent = item.equipped_slot ? 'Retirar' : 'Equipar';
+        equipBtnModal.onclick = () => handleEquipUnequip(item, !!item.equipped_slot);
     } else {
         equipBtnModal.style.display = 'none';
     }
@@ -636,7 +690,6 @@ function renderStats(item) {
     const i = item.items; // Definição base
     const b = item;       // Dados de inventário (bônus)
 
-    // Helper para exibir stat
     const show = (label, base, bonus, suffix='') => {
         if(base > 0 || bonus > 0) {
             itemStats.innerHTML += `<p>${label} Base: ${base}${suffix}</p>`;
@@ -699,15 +752,11 @@ function getXpRequired(level, rarity) {
 }
 
 function formatAttrName(attr) {
-    switch (attr) {
-        case "attack_bonus": return "ATK";
-        case "defense_bonus": return "DEF";
-        case "health_bonus": return "HP";
-        case "crit_chance_bonus": return "TAXA CRIT";
-        case "crit_damage_bonus": return "DANO CRIT";
-        case "evasion_bonus": return "EVASÃO";
-        default: return attr;
-    }
+    const map = {
+        'attack_bonus': 'ATK', 'defense_bonus': 'DEF', 'health_bonus': 'HP',
+        'crit_chance_bonus': 'TAXA CRIT', 'crit_damage_bonus': 'DANO CRIT', 'evasion_bonus': 'EVASÃO'
+    };
+    return map[attr] || attr;
 }
 
 // ===============================
@@ -988,7 +1037,6 @@ async function showCraftingModal(fragment) {
     if(!fragment.items) fragment = hydrateItem(fragment);
 
     // Precisa buscar dados do item ALVO (Server ou Cache)
-    // Para simplificar, buscamos do server (é uma operação rara)
     const { data: itemToCraft, error } = await supabase
         .from('items')
         .select(`name, display_name, rarity, stars`)
@@ -1091,7 +1139,6 @@ function openRefineFragmentModal(item) {
             li.dataset.inventoryItemId = f.id;
             li.classList.add('inventory-item');
             
-            // Listeners iguais aos outros (simplificado)
             li.onclick = (e) => { if(e.target.tagName !== 'INPUT' && !e.target.classList.contains('btn-max-action')) li.classList.toggle('selected'); };
             const inp = li.querySelector('input');
             li.querySelector('.btn-max-action').onclick = (e) => { e.stopPropagation(); inp.value = f.quantity; inp.dispatchEvent(new Event('input')); };

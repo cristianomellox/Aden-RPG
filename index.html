@@ -1009,5 +1009,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 </script>
 <script src="daily_reset.js"></script>
+
+
+<script>
+// Usa MutationObserver para esconder o loader assim que ele aparecer
+const observer = new MutationObserver(() => {
+  // Tenta esconder o spinner e elementos relacionados
+  document.querySelectorAll(
+    '.goog-te-spinner-pos, .goog-te-spinner, ' +
+    'body > div[style*="position: fixed"][style*="z-index: 1000001"], ' +
+    '.goog-te-banner-frame + div, ' +
+    '[aria-label*="Translating"]'
+  ).forEach(el => {
+    el.style.display = 'none';
+    el.style.visibility = 'hidden';
+    el.remove(); // ou .remove() se quiser tirar do DOM de vez
+  });
+});
+
+// Observa o body inteiro (onde o Google injeta os elementos)
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+  attributes: true
+});
+
+// Executa uma vez no carregamento também
+setTimeout(() => {
+  document.querySelectorAll('.goog-te-spinner, .goog-te-spinner-pos').forEach(el => el.remove());
+}, 1000);
+</script>
 </body>
 </html>

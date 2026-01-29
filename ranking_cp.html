@@ -343,7 +343,6 @@
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
 
-  <!-- CONTAINER PARA BARRA FIXA DO JOGADOR -->
   <div id="fixedPlayerRank"></div>
 
   <div id="playerModal">
@@ -408,21 +407,28 @@
   (function(){
     // CONFIG DO SUPABASE
     
-
     function esc(s){ return String(s||''); }
     function safeNum(n){ return typeof n === 'number' ? n : (n?Number(n):0); }
 
     // =======================================================================
-    // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+    // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS COMPARTILHADO COM MINAS)
     // =======================================================================
     const GLOBAL_DB_NAME = 'aden_global_db';
     const GLOBAL_DB_VERSION = 3;
     const AUTH_STORE = 'auth_store';
+    const OWNERS_STORE = 'owners_store'; // Store compartilhada com mines.js
     
     const GlobalDB = {
         open: function() {
             return new Promise((resolve, reject) => {
                 const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+                // NOTA: Se o DB já foi criado pelo mines.js com versão 3, este upgrade não roda.
+                // Isso garante compatibilidade.
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
+                    if (!db.objectStoreNames.contains(OWNERS_STORE)) db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
+                };
                 req.onsuccess = () => resolve(req.result);
                 req.onerror = () => reject(req.error);
             });
@@ -437,17 +443,56 @@
                     req.onerror = () => resolve(null);
                 });
             } catch(e) { return null; }
+        },
+        // --- NOVO: Lê todos os donos cacheados (Minas + Bots + Players) ---
+        getAllOwners: async function() {
+            try {
+                const db = await this.open();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(OWNERS_STORE, 'readonly');
+                    const store = tx.objectStore(OWNERS_STORE);
+                    const req = store.getAll();
+                    req.onsuccess = () => {
+                        const result = req.result || [];
+                        const map = {};
+                        // Mapeia por ID para acesso rápido
+                        result.forEach(o => map[o.id] = o);
+                        resolve(map);
+                    };
+                    req.onerror = () => resolve({});
+                });
+            } catch(e) { return {}; }
+        },
+        // Salva donos/jogadores no cache compartilhado (útil para mines.js)
+        saveOwners: async function(ownersList) {
+            if (!ownersList || ownersList.length === 0) return;
+            try {
+                const db = await this.open();
+                const tx = db.transaction(OWNERS_STORE, 'readwrite');
+                const store = tx.objectStore(OWNERS_STORE);
+                const now = Date.now();
+
+                ownersList.forEach(o => {
+                    const cacheObj = {
+                        id: o.id,
+                        name: o.name,
+                        avatar_url: o.avatar_url,
+                        guild_id: o.guild_id,
+                        timestamp: now // Atualiza timestamp para o TTL de 24h do mines.js
+                    };
+                    store.put(cacheObj);
+                });
+                return new Promise(resolve => { tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); });
+            } catch(e) { console.warn("Erro ao salvar donos no cache global:", e); }
         }
     };
 
     // Helper Otimista de Auth (Zero Egress)
     async function getLocalUserId() {
-        // 1. GlobalDB
         const globalAuth = await GlobalDB.getAuth();
         if (globalAuth && globalAuth.value && globalAuth.value.user) {
             return globalAuth.value.user.id;
         }
-        // 2. LocalStorage
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -461,23 +506,19 @@
     }
 
     // ====================================================================================
-    // CACHE #1: RANKING DIÁRIO (AGORA: SEG, QUA, SEX)
+    // CACHE #1: RANKING DIÁRIO (SEG, QUA, SEX)
     // ====================================================================================
     function calculateNextUpdateDate(){
         const now = new Date();
-        
-        // Loop a partir de amanhã para encontrar a próxima Seg(1), Qua(3) ou Sex(5)
         for(let i = 1; i <= 7; i++){
             const nextDate = new Date(now);
             nextDate.setUTCDate(now.getUTCDate() + i);
             nextDate.setUTCHours(0,0,0,0);
-            
             const day = nextDate.getUTCDay(); // 0=Dom, 1=Seg ...
             if (day === 1 || day === 3 || day === 5) {
                 return nextDate.getTime();
             }
         }
-        // Fallback seguro (+1 dia) caso o loop falhe
         return now.getTime() + 86400000;
     }
 
@@ -497,7 +538,7 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL (24 HORAS)
+    // CACHE #2: PLAYER MODAL
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
@@ -513,50 +554,9 @@
     function setPlayerCache(playerId, data) {
         try {
             const key = `player_details_v2_${playerId}`;
-            const expirationTime = Date.now() + (24 * 60 * 60 * 1000); // 24 horas
+            const expirationTime = Date.now() + (24 * 60 * 60 * 1000); 
             localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
-        } catch (e) { console.warn("Erro ao salvar cache local do player", e); }
-    }
-
-    // ====================================================================================
-    // LÓGICA DE CP (MANTIDO PARA CÁLCULO VISUAL NO MODAL)
-    // ====================================================================================
-    function applyItemBonuses(player, equippedItems){
-        let combinedStats = Object.assign({}, player); 
-        ['min_attack','attack','defense','health','crit_chance','crit_damage','evasion'].forEach(k => combinedStats[k] = safeNum(combinedStats[k]));
-
-        (equippedItems || []).forEach(invItem => {
-            if (invItem.items) {
-                combinedStats.min_attack += safeNum(invItem.items.min_attack);
-                combinedStats.attack += safeNum(invItem.items.attack);
-                combinedStats.defense += safeNum(invItem.items.defense);
-                combinedStats.health += safeNum(invItem.items.health);
-                combinedStats.crit_chance += safeNum(invItem.items.crit_chance);
-                combinedStats.crit_damage += safeNum(invItem.items.crit_damage);
-                combinedStats.evasion += safeNum(invItem.items.evasion);
-            }
-            combinedStats.min_attack += safeNum(invItem.min_attack_bonus);
-            combinedStats.attack += safeNum(invItem.attack_bonus);
-            combinedStats.defense += safeNum(invItem.defense_bonus);
-            combinedStats.health += safeNum(invItem.health_bonus);
-            combinedStats.crit_chance += safeNum(invItem.crit_chance_bonus);
-            combinedStats.crit_damage += safeNum(invItem.crit_damage_bonus);
-            combinedStats.evasion += safeNum(invItem.evasion_bonus);
-        });
-        return combinedStats;
-    }
-
-    // Helper antigo mantido para compatibilidade, caso algum módulo precise, mas não usado no ranking
-    function calculateCombatPowerFromCombined(stats){
-        return Math.floor(
-            (safeNum(stats.attack) * 12.5) +
-            (safeNum(stats.min_attack) * 1.5) +
-            (safeNum(stats.crit_chance) * 5.35) +
-            (safeNum(stats.crit_damage) * 6.5) +
-            (safeNum(stats.defense) * 2) +
-            (safeNum(stats.health) * 3.2625) +
-            (safeNum(stats.evasion) * 1)
-        );
+        } catch (e) { }
     }
 
     // ====================================================================================
@@ -565,13 +565,12 @@
     function renderRanking(list, myRankObj){
       const w = document.getElementById('rankingWrapper');
       
-      // Renderiza lista
       if((!list || list.length === 0)){ w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>'; } 
       else {
         let html = '<div id="rankingListContainerCP"><ol id="rankingListCP">';
         
-        // Renderiza Top 10 (ou top 100 conforme código original)
-        for(let i=0;i<list.length && i<100;i++){
+        // Renderiza Top 10 (Limite restaurado)
+        for(let i=0;i<list.length && i<10;i++){
             const p = list[i]; 
             const pos = i+1;
             const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
@@ -595,7 +594,7 @@
         w.innerHTML = html;
       }
 
-      // === Renderização da BARRA FIXA (Para todos que tem Rank definido) ===
+      // === Renderização da BARRA FIXA ===
       const fixedRankContainer = document.getElementById('fixedPlayerRank');
       if (myRankObj) {
           const p = myRankObj;
@@ -617,7 +616,6 @@
           </div>`;
           fixedRankContainer.style.display = 'block';
 
-          // Listener na barra fixa
           fixedRankContainer.addEventListener('click', (e) => {
               const trigger = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
               if (trigger) {
@@ -633,7 +631,6 @@
           fixedRankContainer.style.display = 'none';
       }
 
-      // Evento de clique para a lista principal
       document.getElementById('rankingListCP')?.addEventListener('click', (e) => {
           const trigger = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
           if (!trigger) return;
@@ -647,12 +644,11 @@
     }
 
     // ====================================================================================
-    // FETCH DETALHES DO JOGADOR (COM CACHE 24H E CORREÇÃO VISUAL)
+    // FETCH DETALHES DO JOGADOR
     // ====================================================================================
     window.fetchPlayerDetailsWithCache = async function(playerId) {
         resetModalUI();
         
-        // 1. Verificar Cache
         const cachedData = getPlayerCache(playerId);
         if (cachedData) {
             populatePlayerModal(cachedData);
@@ -662,15 +658,13 @@
         if (!supabase) return;
 
         try {
-            // A) Buscar Jogador (inclui combat_power pré-calculado)
             const { data: player, error: pErr } = await supabase
                 .from('players')
-                .select('*')
+                .select('name, level, avatar_url, guild_id, combat_power, cached_combat_stats')
                 .eq('id', playerId)
                 .single();
             if (pErr) throw pErr;
 
-            // B) Buscar Guilda
             let guildInfo = { name: 'Sem Guilda', flag: 'https://aden-rpg.pages.dev/assets/guildaflag.webp' };
             if(player.guild_id){
                 const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
@@ -680,21 +674,26 @@
                 }
             }
 
-            // C) Buscar Itens Equipados (Incluindo 'level' para o visual)
             const { data: equippedItems, error: iErr } = await supabase
                 .from('inventory_items')
                 .select(`
                     equipped_slot,
                     level, 
-                    min_attack_bonus, attack_bonus, defense_bonus, health_bonus,
-                    crit_chance_bonus, crit_damage_bonus, evasion_bonus,
-                    items ( id, name, image_url, min_attack, attack, defense, health, crit_chance, crit_damage, evasion )
+                    items ( image_url )
                 `)
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            // D) Calcular Status para exibição visual (O CP vem do DB)
-            const combinedStats = applyItemBonuses(player, equippedItems || []);
+            const serverStats = player.cached_combat_stats || {};
+            
+            const displayStats = {
+                attack: safeNum(serverStats.attack),
+                defense: safeNum(serverStats.defense),
+                health: safeNum(serverStats.health),
+                evasion: safeNum(serverStats.evasion),
+                crit_chance: safeNum(serverStats.crit_chance),
+                crit_damage: safeNum(serverStats.crit_damage)
+            };
             
             const fullPlayerData = {
                 basic: {
@@ -703,13 +702,12 @@
                     avatar_url: player.avatar_url,
                     guild_name: guildInfo.name,
                     guild_flag: guildInfo.flag,
-                    cp: player.combat_power || 0 // Usa valor do DB direto
+                    cp: player.combat_power || 0
                 },
-                stats: combinedStats,
+                stats: displayStats,
                 items: equippedItems || []
             };
 
-            // E) Salvar no Cache e Renderizar
             setPlayerCache(playerId, fullPlayerData);
             populatePlayerModal(fullPlayerData);
 
@@ -719,7 +717,6 @@
         }
     };
 
-    // Função de Preenchimento Visual (Restaurada para o layout original)
     function populatePlayerModal(data) {
         const { basic, stats, items } = data;
 
@@ -756,23 +753,17 @@
             if(el) { el.textContent = val; el.classList.remove('shimmer'); }
         }
 
-        // Limpa slots
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         
-        // Renderiza itens com a bolinha de nível
         items.forEach(invItem => {
             if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
                 const slotId = `${invItem.equipped_slot}-slot`;
                 const slotDiv = document.getElementById(slotId);
                 if(slotDiv) {
-                    // Monta o HTML interno com a imagem e a bolinha de nível
                     let itemHtml = `<img src="${invItem.items.image_url}" alt="Item">`;
-                    
-                    // Se o item tiver nível (ex: +10), adiciona a div .item-level
                     if(invItem.level > 0) {
                         itemHtml += `<div class="item-level">+${invItem.level}</div>`;
                     }
-                    
                     slotDiv.innerHTML = itemHtml;
                 }
             }
@@ -797,91 +788,153 @@
         document.getElementById('sendmp').style.display = 'none';
     }
 
-    // Sobrescreve a função global
     window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
 
     // ====================================================================================
-    // FETCH RANKING PRINCIPAL (OTIMIZADO - DB SIDE)
+    // FETCH RANKING PRINCIPAL (COM OTIMIZAÇÃO ZERO EGRESS VIA GLOBALDB)
     // ====================================================================================
     async function fetchTop100ByCombatPower(){
-      // 0. Inicializa Auth Local
       const myId = await getLocalUserId();
 
-      const cacheKey = 'ranking_cp_MWF_v4'; 
-      const cached = getRankingCache(cacheKey);
+      const viewCacheKey = 'ranking_cp_MWF_v4'; 
+      const cachedView = getRankingCache(viewCacheKey);
       
       if(!supabase){ document.getElementById('loading').textContent = 'Supabase erro.'; return; }
       
-      let rankingList = [];
+      let finalRankingList = [];
 
       try {
-        if(cached) {
-             rankingList = cached;
+        if(cachedView) {
+             finalRankingList = cachedView;
         } else {
-            document.getElementById('loading').textContent = 'Buscando ranking...';
+            document.getElementById('loading').textContent = 'Sincronizando Ranking...';
             
-            // 1. Players - Busca top 10
-            const { data: players, error: pErr } = await supabase
+            // 1. Passo Leve: Buscar apenas IDs e CP (O "Esqueleto" do Ranking)
+            // Economiza banda pois não baixamos strings longas (avatares/nomes) ainda
+            const { data: skeletonList, error: skelErr } = await supabase
               .from('players')
-              .select('id,name,avatar_url,guild_id,combat_power')
+              .select('id, guild_id, combat_power') // SELECT MAGRO
               .neq('is_banned', true)
               .order('combat_power', { ascending: false })
-              .limit(10); 
+              .limit(10); // Mantive 10 conforme solicitado
 
-            if(pErr) throw pErr;
-            if(!players) players = [];
+            if(skelErr) throw skelErr;
+            if(!skeletonList) skeletonList = [];
 
-            // 2. Guilds - Apenas resolver nomes
-            const uniqueGuilds = Array.from(new Set(players.map(p=>p.guild_id).filter(Boolean)));
+            // 2. Ler Cache Global (Populado por minas.js e acessos anteriores)
+            const globalCacheMap = await GlobalDB.getAllOwners();
+            const missingIds = [];
+            const idsToUpdateTimestamp = []; // IDs que já temos, mas vamos avisar o DB que estão "ativos"
+
+            // 3. Cruzamento de Dados (Hydration)
+            const hydratedList = skeletonList.map(item => {
+                const cachedProfile = globalCacheMap[item.id];
+                
+                if (cachedProfile && cachedProfile.name) {
+                    // Temos no cache! Usamos o dado local.
+                    idsToUpdateTimestamp.push(cachedProfile);
+                    return {
+                        ...item,
+                        name: cachedProfile.name,
+                        avatar_url: cachedProfile.avatar_url,
+                        // Guild ID já veio do skeleton, mas mantemos o do cache se quiser consistência
+                    };
+                } else {
+                    // Não temos, marcar para baixar
+                    missingIds.push(item.id);
+                    return { ...item, _needsFetch: true };
+                }
+            });
+
+            // 4. Baixar APENAS os dados faltantes (Delta Fetch)
+            if (missingIds.length > 0) {
+                const { data: freshProfiles } = await supabase
+                    .from('players')
+                    .select('id, name, avatar_url')
+                    .in('id', missingIds);
+                
+                if (freshProfiles) {
+                    // Atualiza a lista hidratada com os dados novos
+                    freshProfiles.forEach(fp => {
+                        const index = hydratedList.findIndex(h => h.id === fp.id);
+                        if (index !== -1) {
+                            hydratedList[index].name = fp.name;
+                            hydratedList[index].avatar_url = fp.avatar_url;
+                            delete hydratedList[index]._needsFetch;
+                        }
+                    });
+                    
+                    // Salva os novos no Cache Global
+                    // Adiciona guild_id que já tínhamos no skeleton para o cache ficar completo para as minas
+                    const toSave = freshProfiles.map(fp => {
+                        const original = hydratedList.find(h => h.id === fp.id);
+                        return { ...fp, guild_id: original?.guild_id };
+                    });
+                    await GlobalDB.saveOwners(toSave);
+                }
+            }
+
+            // 5. Atualizar Timestamps dos que já tínhamos (Refresh Cache TTL)
+            // Isso impede que o mines.js apague esses jogadores se eles não visitarem minas por 24h
+            if (idsToUpdateTimestamp.length > 0) {
+                await GlobalDB.saveOwners(idsToUpdateTimestamp);
+            }
+
+            // 6. Resolver Nomes de Guildas (Cachear Guildas separadamente seria ideal no futuro)
+            const uniqueGuilds = Array.from(new Set(hydratedList.map(p=>p.guild_id).filter(Boolean)));
             const guildsById = {};
             if(uniqueGuilds.length){
               const { data: guilds } = await supabase.from('guilds').select('id,name').in('id', uniqueGuilds);
               (guilds||[]).forEach(g => guildsById[g.id] = g.name);
             }
 
-            // 3. Montar Objeto Final
-            rankingList = players.map(p => {
-              return {
+            // 7. Formatação Final
+            finalRankingList = hydratedList.map(p => ({
                 id: p.id,
-                name: p.name,
+                name: p.name || 'Desconhecido', 
                 avatar_url: p.avatar_url,
                 guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
-                cp: p.combat_power // Usa diretamente do DB
-              };
-            });
-            
-            // Salva apenas o Top 10 no cache
-            setRankingCache(cacheKey, rankingList);
+                guild_id: p.guild_id,
+                cp: p.combat_power
+            }));
+
+            // Salva no cache de visualização da página (Seg/Qua/Sex)
+            setRankingCache(viewCacheKey, finalRankingList);
         }
 
         // === LÓGICA DO JOGADOR ATUAL PARA BARRA FIXA ===
         let myRankObj = null;
 
         if (myId) {
-            // Verifica se o usuário JÁ está no Top 10 que baixamos
-            // Nota: rankingList tem objetos com ID
-            const indexInTop = rankingList.findIndex(p => p.id === myId);
+            const indexInTop = finalRankingList.findIndex(p => p.id === myId);
             
             if (indexInTop !== -1) {
-                // Se está na lista principal, copiamos os dados e setamos o Rank
                 myRankObj = { 
-                    ...rankingList[indexInTop], 
+                    ...finalRankingList[indexInTop], 
                     rank: indexInTop + 1 
                 };
             } else {
-                // Se NÃO está na lista principal, busca do banco
-                const { data: me } = await supabase
-                    .from('players')
-                    .select('id, name, avatar_url, guild_id, combat_power')
-                    .eq('id', myId)
-                    .single();
+                // Tenta pegar do cache global primeiro
+                const globalCache = await GlobalDB.getAllOwners();
+                let me = globalCache[myId];
                 
+                // Se não estiver no cache ou faltar CP, busca no server
+                if (!me || me.cp === undefined) {
+                     const { data: serverMe } = await supabase
+                        .from('players')
+                        .select('id, name, avatar_url, guild_id, combat_power')
+                        .eq('id', myId)
+                        .single();
+                     me = serverMe;
+                     // Salva meus dados atualizados no cache global
+                     if(me) await GlobalDB.saveOwners([me]);
+                }
+
                 if (me) {
-                     // Calcula o Rank: Quantos jogadores têm CP MAIOR que o meu?
-                     const { count, error: cErr } = await supabase
+                     const { count } = await supabase
                         .from('players')
                         .select('*', { count: 'exact', head: true })
-                        .gt('combat_power', me.combat_power);
+                        .gt('combat_power', me.combat_power || me.cp);
                     
                      let myGuildName = 'Sem Guilda';
                      if (me.guild_id) {
@@ -894,15 +947,14 @@
                         name: me.name,
                         avatar_url: me.avatar_url,
                         guild_name: myGuildName,
-                        cp: me.combat_power,
-                        rank: (count || 0) + 1 // Rank é a quantidade acima + 1
+                        cp: me.combat_power || me.cp,
+                        rank: (count || 0) + 1
                      };
                 }
             }
         }
 
-        // Renderiza lista Top 10 e o footer Fixo se houver myRankObj
-        renderRanking(rankingList, myRankObj);
+        renderRanking(finalRankingList, myRankObj);
 
       } catch(err){
         document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;

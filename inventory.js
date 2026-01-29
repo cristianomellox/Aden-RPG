@@ -16,7 +16,7 @@ window.selectedItem = null;
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47; // Incrementado para garantir limpeza de estruturas antigas
+const DB_VERSION = 47; // Mantenha a versão para garantir compatibilidade
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -49,7 +49,6 @@ async function saveCache(items, stats, timestamp) {
     
     // >>> ALTERAÇÃO PARA MANIFESTO EFICIENTE <<<
     // Não filtramos itens com quantity <= 0. Salvamos TUDO.
-    // Assim, se o jogador ganhar o item de novo, o manifesto sabe que já temos os dados estáticos.
     (items || []).forEach(item => store.put(item));
     
     meta.put({ key: "last_updated", value: timestamp }); 
@@ -175,6 +174,62 @@ function processInventoryDelta(localItems, delta) {
     return updatedList;
 }
 
+// ========================================================
+// >>> HIDRATAÇÃO DO LADO DO CLIENTE (ZERO EGRESS) <<<
+// ========================================================
+// Pega um item "pelado" do banco (só IDs e stats variáveis)
+// e anexa os dados estáticos (nome, imagem, descrição) do cache global.
+function hydrateItem(rawItem) {
+    if (!rawItem) return null;
+    
+    // Se já estiver hidratado (tem a propriedade items e ela não é nula), retorna ele mesmo
+    if (rawItem.items && rawItem.items.name) return rawItem;
+
+    // Busca definição no cache global (carregado pelo script.js)
+    let def = null;
+    
+    // Tenta usar a função global ou acessar o Map diretamente
+    if (window.getItemDefinition) {
+        def = window.getItemDefinition(rawItem.item_id);
+    } else if (window.itemDefinitions) {
+        def = window.itemDefinitions.get(rawItem.item_id);
+    }
+
+    // Se não achar (cache não carregou ainda ou item novo?), cria um placeholder seguro
+    if (!def) {
+        // Tenta buscar no cache do localStorage como fallback final se a RAM estiver vazia
+        try {
+             const fallbackCache = localStorage.getItem('item_definitions_full_v1');
+             if(fallbackCache) {
+                 const mapArr = JSON.parse(fallbackCache);
+                 const tempMap = new Map(mapArr);
+                 def = tempMap.get(rawItem.item_id);
+             }
+        } catch(e){}
+
+        if (!def) {
+            console.warn(`Definição do item ID ${rawItem.item_id} não encontrada no cache.`);
+            def = {
+                item_id: rawItem.item_id,
+                name: "unknown",
+                display_name: "Carregando...",
+                rarity: "R",
+                item_type: "outros",
+                stars: 1,
+                description: "Dados do item carregando...",
+                // Stats zerados para não quebrar cálculos visuais
+                min_attack: 0, attack: 0, defense: 0, health: 0
+            };
+        }
+    }
+
+    // Retorna o objeto combinado na estrutura que o código espera
+    return {
+        ...rawItem,
+        items: def
+    };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
     
@@ -185,6 +240,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         globalUser = { id: localId };
     } else {
         console.warn("Auth Cache Miss: Buscando sessão no servidor...");
+        // Tenta obter sessão
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
             console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
@@ -380,7 +437,13 @@ async function loadPlayerAndItems(forceRefresh = false) {
     try {
         console.log(`📥 Delta recebido: ${deltaData.upsert?.length || 0} modificados, ${deltaData.remove?.length || 0} removidos.`);
         
-        const mergedList = processInventoryDelta(localItems, deltaData);
+        // Processa as diferenças
+        let mergedList = processInventoryDelta(localItems, deltaData);
+        
+        // >>> HIDRATAÇÃO EM MASSA DO DELTA <<<
+        // O servidor agora envia itens "pelados" (sem o objeto 'items').
+        // Precisamos hidratá-los usando o cache global de definições.
+        mergedList = mergedList.map(item => hydrateItem(item));
         
         // Atualiza variáveis globais (mergedList pode conter qtd=0)
         allInventoryItems = mergedList;
@@ -408,6 +471,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
 async function fullDownload() {
     console.log('⬇️ Executando get_player_data_lazy (Full Load)...');
     
+    // Agora o RPC get_player_data_lazy retorna itens "crus" para economizar tráfego
     const { data: playerData, error: rpcError } = await supabase
         .rpc('get_player_data_lazy', { p_player_id: globalUser.id });
 
@@ -419,9 +483,11 @@ async function fullDownload() {
 
     // Atualiza variáveis globais
     playerBaseStats = playerData.cached_combat_stats || {};
-    // Pega todos, inclusive zerados se o RPC mandar (mas RPC lazy geralmente manda tudo)
+    
+    // Pega itens crus e HIDRATA no cliente
     const rawItems = playerData.cached_inventory || [];
-    allInventoryItems = rawItems;
+    allInventoryItems = rawItems.map(item => hydrateItem(item));
+    
     equippedItems = allInventoryItems.filter(item => item.equipped_slot !== null && item.quantity > 0);
 
     // Renderiza
@@ -523,7 +589,8 @@ async function loadItems(tab = 'all', itemsList = null) {
         // SEGURANÇA VISUAL: 
         // 1. Não mostra itens equipados
         // 2. Não mostra itens com quantidade <= 0 (Isso é crucial para o sistema Soft Delete)
-        if (item.equipped_slot !== null || item.quantity <= 0) return false;
+        // 3. Garante que 'items' (definição) exista
+        if (!item.items || item.equipped_slot !== null || item.quantity <= 0) return false;
         
         if (tab === 'all') return true;
         if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
@@ -793,7 +860,7 @@ function renderFragmentList(itemToLevelUp) {
     fragmentListContainer.innerHTML = '';
 
     // Filtra visualmente apenas os que tem > 0
-    const fragments = allInventoryItems.filter(item => item.items.item_type === 'fragmento' && item.quantity > 0);
+    const fragments = allInventoryItems.filter(item => item.items && item.items.item_type === 'fragmento' && item.quantity > 0);
 
     if (fragments.length === 0) {
         fragmentListContainer.innerHTML = '<p>Você não tem fragmentos para usar.</p>';
@@ -900,16 +967,25 @@ async function showCraftingModal(fragment) {
 
     document.getElementById('craftingContent').dataset.currentFragment = JSON.stringify(fragment);
 
-    const { data: itemToCraft, error: itemError } = await supabase
-        .from('items')
-        .select(`name, display_name, rarity, stars`)
-        .eq('item_id', fragment.items.crafts_item_id)
-        .single();
+    // Usa o cache local se disponível, senão busca
+    let itemToCraft = null;
+    if (window.getItemDefinition) {
+        itemToCraft = window.getItemDefinition(fragment.items.crafts_item_id);
+    }
+    
+    if (!itemToCraft) {
+        const { data: itemData, error: itemError } = await supabase
+            .from('items')
+            .select(`name, display_name, rarity, stars`)
+            .eq('item_id', fragment.items.crafts_item_id)
+            .single();
 
-    if (itemError) {
-        console.error('Erro ao buscar item a ser construído:', itemError.message);
-        showCustomAlert('Não foi possível carregar os detalhes de construção.');
-        return;
+        if (itemError) {
+            console.error('Erro ao buscar item a ser construído:', itemError.message);
+            showCustomAlert('Não foi possível carregar os detalhes de construção.');
+            return;
+        }
+        itemToCraft = itemData;
     }
 
     document.getElementById('craftingFragmentImage').src =
@@ -1081,27 +1157,29 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
         // Se vier objeto completo ou ID
         const itemId = updatedItem.id || updatedItem;
         
-        // Busca dados limpos no Supabase para garantir integridade
-        // (Isso é um fetch leve por ID, muito melhor que recarregar tudo)
+        // Busca dados "crus" no Supabase (sem JOIN) para economizar dados
         const { data: fetchItem } = await supabase
             .from('inventory_items')
-            .select('*, items(*)')
+            .select('*')
             .eq('id', itemId)
             .single();
 
         if (fetchItem) {
-             const idx = allInventoryItems.findIndex(i => i.id === fetchItem.id);
+             // Hidrata o item para ter acesso ao nome/imagem
+             const hydratedItem = hydrateItem(fetchItem);
+             
+             const idx = allInventoryItems.findIndex(i => i.id === hydratedItem.id);
              
              // >>> AJUSTE PARA SOFT DELETE <<<
              // Se quantity <= 0, NÃO removemos do array. Apenas atualizamos.
              // O filtro visual acontece no renderUI.
              if (idx !== -1) {
-                 allInventoryItems[idx] = fetchItem;
-                 if (fetchItem.quantity > 0) {
-                     selectedItem = fetchItem; 
+                 allInventoryItems[idx] = hydratedItem;
+                 if (hydratedItem.quantity > 0) {
+                     selectedItem = hydratedItem; 
                  }
-             } else if (fetchItem.quantity > 0) {
-                 allInventoryItems.push(fetchItem); // Caso raro de item novo
+             } else if (hydratedItem.quantity > 0) {
+                 allInventoryItems.push(hydratedItem); // Caso raro de item novo
                  needsSort = true;
              }
         }
@@ -1131,12 +1209,14 @@ async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystal
         const newItemId = newItem.id || newItem;
         const { data: newFetchItem } = await supabase
             .from('inventory_items')
-            .select('*, items(*)')
+            .select('*')
             .eq('id', newItemId)
             .single();
         
         if (newFetchItem && newFetchItem.quantity > 0) {
-            allInventoryItems.push(newFetchItem);
+            // Hidrata antes de adicionar
+            const hydratedNewItem = hydrateItem(newFetchItem);
+            allInventoryItems.push(hydratedNewItem);
             needsSort = true;
         }
     }

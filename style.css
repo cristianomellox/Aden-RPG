@@ -2429,18 +2429,23 @@ button, .btn {
     border-radius: 3px;
 }
 
-/* Esconde o spinner de loading do Google Translate */
+
+  /* Esconde o spinner de loading do translate automático do Chrome/Edge */
   .goog-te-spinner-pos,
   .goog-te-spinner,
-  .goog-te-banner-frameskiptranslate + div,   /* às vezes o spinner fica aqui */
-  body > div[style*="position: fixed"][style*="z-index: 1000001"] {
+  body > div[style*="position: fixed"][style*="z-index: 1000001"],
+  body > div[style*="position: fixed"][style*="z-index: 100000"],
+  .goog-te-banner-frame + div,               /* loader residual */
+  .skiptranslate > div:not(.goog-te-gadget) { /* tenta pegar variantes */
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
-  
-  .goog-te-gadget-icon,
-.goog-te-spinner-pos,
-.goog-te-combo ~ div {  /* esconde loader perto do select */
-  display: none !important;
-}
+
+  /* Força remoção do padding/top que o translate adiciona no body */
+  body {
+    top: 0 !important;
+  }

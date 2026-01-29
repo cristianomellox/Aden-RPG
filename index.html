@@ -1009,35 +1009,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 </script>
 <script src="daily_reset.js"></script>
-
-
 <script>
-// Usa MutationObserver para esconder o loader assim que ele aparecer
-const observer = new MutationObserver(() => {
-  // Tenta esconder o spinner e elementos relacionados
-  document.querySelectorAll(
-    '.goog-te-spinner-pos, .goog-te-spinner, ' +
-    'body > div[style*="position: fixed"][style*="z-index: 1000001"], ' +
-    '.goog-te-banner-frame + div, ' +
-    '[aria-label*="Translating"]'
-  ).forEach(el => {
-    el.style.display = 'none';
-    el.style.visibility = 'hidden';
-    el.remove(); // ou .remove() se quiser tirar do DOM de vez
+// Função para esconder elementos do Google Translate
+function hideGoogleLoader() {
+  const selectors = [
+    '.goog-te-spinner-pos',
+    '.goog-te-spinner',
+    'body > div[style*="position: fixed"][style*="z-index: 100000"]',
+    'body > div[style*="position: fixed"][style*="z-index: 1000001"]',
+    '.goog-te-banner-frame + div',
+    '[role="alert"][aria-label*="Translating"]',
+    '.skiptranslate > div[style*="position: fixed"]'
+  ];
+
+  document.querySelectorAll(selectors.join(', ')).forEach(el => {
+    el.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+    if (el.parentNode) el.parentNode.removeChild(el);  // Remove do DOM se possível
   });
+}
+
+// MutationObserver para detectar inserções dinâmicas
+const observer = new MutationObserver((mutations) => {
+  hideGoogleLoader();  // Chama toda vez que houver mudança no DOM
 });
 
-// Observa o body inteiro (onde o Google injeta os elementos)
-observer.observe(document.body, {
+// Observa o body inteiro (onde o Google injeta tudo)
+observer.observe(document.body || document.documentElement, {
   childList: true,
   subtree: true,
-  attributes: true
+  attributes: true,
+  attributeFilter: ['style', 'class']
 });
 
-// Executa uma vez no carregamento também
-setTimeout(() => {
-  document.querySelectorAll('.goog-te-spinner, .goog-te-spinner-pos').forEach(el => el.remove());
-}, 1000);
+// Executa imediatamente e em intervalos curtos (fallback para casos teimosos)
+hideGoogleLoader();
+setInterval(hideGoogleLoader, 300);   // A cada 300ms checa (pode reduzir para 500 se preferir)
+setTimeout(hideGoogleLoader, 1000);   // Extra após 1s
+setTimeout(hideGoogleLoader, 3000);   // Extra após 3s
 </script>
 </body>
 </html>

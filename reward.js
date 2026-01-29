@@ -72,7 +72,7 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         if (!window.itemDefinitions) {
             // Em reward.js, talvez o script.js não esteja totalmente carregado ou a página seja independente.
             // Para garantir, tentamos buscar do LocalStorage.
-            const CACHE_KEY = 'item_definitions_cache';
+            const CACHE_KEY = 'item_definitions_full_v1';
             try {
                 const cachedData = localStorage.getItem(CACHE_KEY);
                 if (cachedData) {

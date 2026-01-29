@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v14.1 - HP Cap Fix + Button Disabled Logic)");
+console.log("guild_raid.js (v15 - Zero Egress Optimization)");
 
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
@@ -29,7 +29,17 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         const meta = tx.objectStore(META_STORE);
 
         if (Array.isArray(newItems)) {
-            newItems.forEach(item => store.put(item));
+            newItems.forEach(item => {
+                // Tenta hidratar o item antes de salvar no cache para manter consistência
+                // Se window.getItemDefinition existir (do script.js)
+                if (window.getItemDefinition && (!item.items || !item.items.name)) {
+                    const def = window.getItemDefinition(item.item_id);
+                    if (def) {
+                        item.items = def;
+                    }
+                }
+                store.put(item);
+            });
         }
 
         if (newTimestamp) {
@@ -1309,24 +1319,31 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
       ul.appendChild(li);
     });
     itemsContainer.appendChild(ul);
-    try {
-      const ids = itemsArray.map(i => i.item_id);
-      supabase.from('items').select('item_id, display_name, name').in('item_id', ids).then(res => {
-        if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
-          const map = {};
-          res.data.forEach(r => { map[r.item_id] = { name: r.name, display_name: r.display_name || r.name || (`#${r.item_id}`) }; });
-          const lis = ul.querySelectorAll('li');
-          itemsArray.forEach((it, idx) => {
-            const entry = map[it.item_id];
-            const li = lis[idx];
-            if (!li) return;
-            const img = li.querySelector('img');
-            const imageUrl = entry?.name ? `https://aden-rpg.pages.dev/assets/itens/${entry.name}.webp` : "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
-            if (img) img.src = imageUrl;
-          });
+    
+    // OTIMIZAÇÃO: Usar o cache global de definições
+    const lis = ul.querySelectorAll('li');
+    itemsArray.forEach((it, idx) => {
+        const li = lis[idx];
+        if (!li) return;
+        const img = li.querySelector('img');
+        
+        // Tenta pegar do cache global do script.js
+        let def = null;
+        if (window.getItemDefinition) {
+            def = window.getItemDefinition(it.item_id);
+        } else if (window.itemDefinitions) {
+            def = window.itemDefinitions.get(it.item_id);
         }
-      });
-    } catch(e) { console.warn('Erro ao processar itemsDropped:', e); }
+
+        if (def) {
+            const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${def.name}.webp`;
+            if (img) img.src = imageUrl;
+        } else {
+            // Fallback (apenas se não achar no cache)
+            console.warn(`Definição de item ${it.item_id} não encontrada no cache.`);
+        }
+    });
+
   } else {
     itemsContainer.style.display = "none";
   }

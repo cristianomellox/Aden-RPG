@@ -631,8 +631,21 @@ function showVictoryModal(data, isVictory) {
     if (data.items && data.items.length > 0) {
         list.innerHTML += `<div style="margin-top:10px; border-top:1px solid #444; padding-top:5px; color: gold; margin-bottom:5px;"><strong>Itens achados:</strong></div>`;
         data.items.forEach(item => {
-            const itemName = item.name || "placeholder";
-            const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+            // CORREÇÃO: Pega o nome do item do cache global
+            let itemName = "Item Desconhecido";
+            let imageUrl = "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
+
+            if (window.getItemDefinition) {
+                const def = window.getItemDefinition(item.item_id);
+                if (def) {
+                    itemName = def.display_name || def.name;
+                    imageUrl = `https://aden-rpg.pages.dev/assets/itens/${def.name}.webp`;
+                }
+            } else if (item.name) {
+                // Fallback para caso o RPC ainda retorne nome (retrocompatibilidade)
+                itemName = item.name;
+                imageUrl = `https://aden-rpg.pages.dev/assets/itens/${item.name}.webp`;
+            }
 
             list.innerHTML += `
             <div class="reward-item">

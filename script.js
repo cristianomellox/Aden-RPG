@@ -946,12 +946,13 @@ const confirmPurchaseFinalBtn = document.getElementById('confirmPurchaseFinalBtn
 const cancelPurchaseBtn = document.getElementById('cancelPurchaseBtn');
 
 
-// Função para carregar definições de itens no cache local (MODIFICADA COM CACHE PERSISTENTE)
+// Função OTIMIZADA para carregar definições de itens no cache local
+// Modificado para reduzir Egress buscando apenas o necessário e cacheando tudo
 async function loadItemDefinitions() {
-    const CACHE_KEY = 'item_definitions_cache';
+    const CACHE_KEY = 'item_definitions_full_v1'; // Alterado para forçar novo cache completo
     const CACHE_TTL_24H = 43200; // 24 horas * 60 minutos
 
-    // 1. Tenta carregar do cache em memória (RAM) - lógica original
+    // 1. Tenta carregar do cache em memória (RAM)
     if (itemDefinitions.size > 0) return;
 
     // 2. Tenta carregar do cache persistente (LocalStorage)
@@ -960,7 +961,7 @@ async function loadItemDefinitions() {
         // Recria o Map a partir dos dados [key, value] salvos no cache
         try {
              itemDefinitions = new Map(cachedData);
-             console.log('Definições de itens carregadas do LocalStorage.');
+             console.log('📚 [Cache] Definições de itens carregadas (Memória/Local).');
              return;
         } catch(e) {
             console.warn("Falha ao parsear cache de itens, buscando novamente.", e);
@@ -969,8 +970,17 @@ async function loadItemDefinitions() {
     }
 
     // 3. Se não houver cache, busca no Supabase
-    console.log('Buscando definições de itens do Supabase...');
-    const { data, error } = await supabaseClient.from('items').select('item_id, name, rarity');
+    // OTIMIZAÇÃO: Buscamos TODAS as colunas estáticas necessárias para evitar JOINs futuros
+    console.log('🌐 [Network] Baixando definições COMPLETAS de itens...');
+    const { data, error } = await supabaseClient
+        .from('items')
+        .select(`
+            item_id, name, display_name, description, rarity, item_type, stars,
+            min_attack, attack, defense, health, 
+            crit_chance, crit_damage, evasion,
+            crafts_item_id
+        `);
+    
     if (error) {
         console.error('Erro ao carregar definições de itens:', error);
         return;
@@ -978,14 +988,23 @@ async function loadItemDefinitions() {
     
     const dataForCache = []; // Array [key, value] para salvar no localStorage
     for (const item of data) {
+        // Fallback para display_name se vazio
+        if (!item.display_name) item.display_name = item.name;
+        
         itemDefinitions.set(item.item_id, item);
         dataForCache.push([item.item_id, item]); // Salva como [key, value]
     }
     
     // 4. Salva no cache persistente para a próxima vez com TTL de 24h
     setCache(CACHE_KEY, dataForCache, CACHE_TTL_24H);
-    console.log(`Definições carregadas do servidor: ${data.length} itens.`);
+    console.log(`✅ [Cache] ${data.length} definições completas salvas.`);
 }
+
+// Expõe globalmente para que o inventory.js possa hidratar itens sem ir ao banco
+window.itemDefinitions = itemDefinitions;
+window.getItemDefinition = function(itemId) {
+    return itemDefinitions.get(itemId);
+};
 
 // Funções de Notificação Flutuante
 function showFloatingMessage(message, duration = 5000) {

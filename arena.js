@@ -1,4 +1,3 @@
-
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
@@ -66,7 +65,7 @@ const GlobalDB = {
 };
 
 // =======================================================================
-// 2. HELPER INDEXEDDB INVENTORY (Surgical Update)
+// 2. HELPER INDEXEDDB INVENTORY (Surgical Update com Hidratação)
 // =======================================================================
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
@@ -81,6 +80,7 @@ function openDB() {
     });
 }
 
+// >>> ATUALIZADO: Inclui hidratação de itens crus <<<
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
         const db = await openDB();
@@ -89,7 +89,24 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         const meta = tx.objectStore(META_STORE);
 
         if (Array.isArray(newItems)) {
-            newItems.forEach(item => store.put(item));
+            newItems.forEach(item => {
+                // Tenta hidratar se o item estiver "pelado" (veio do RPC sem JOIN)
+                if (!item.items || !item.items.name) {
+                    if (window.itemDefinitions) {
+                        const def = window.itemDefinitions.get(item.item_id);
+                        if (def) item.items = def;
+                    } else if (localStorage.getItem('item_definitions_full_v1')) {
+                        // Fallback: lê do storage se a RAM não tiver
+                        try {
+                             const cached = JSON.parse(localStorage.getItem('item_definitions_full_v1'));
+                             const map = new Map(cached.data || cached);
+                             const def = map.get(item.item_id);
+                             if(def) item.items = def;
+                        } catch(e){}
+                    }
+                }
+                store.put(item);
+            });
         }
 
         if (newTimestamp) {
@@ -129,17 +146,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function loadLocalItemDefinitions() {
         try {
-            const cached = localStorage.getItem('item_definitions_cache');
+            const cached = localStorage.getItem('item_definitions_full_v1');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                // script.js salva como { expires: ..., data: [[id, obj], [id, obj]] }
                 if (parsed && Array.isArray(parsed.data)) {
                     localItemDefinitions = new Map(parsed.data);
-                    console.log(`📦 [Arena] Definições de itens carregadas: ${localItemDefinitions.size}`);
+                } else if (Array.isArray(parsed)) { // Formato array simples
+                    localItemDefinitions = new Map(parsed);
                 }
+                // Expor globalmente para o surgicalCacheUpdate usar
+                if (!window.itemDefinitions) window.itemDefinitions = localItemDefinitions;
+                console.log(`📦 [Arena] Definições de itens carregadas: ${localItemDefinitions.size}`);
             }
         } catch (e) {
-            console.warn("Erro ao ler item_definitions_cache:", e);
+            console.warn("Erro ao ler item_definitions_full_v1:", e);
         }
     }
     // Carrega imediatamente ao iniciar
@@ -152,9 +172,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     function getItemDisplayName(id) {
         const def = localItemDefinitions.get(parseInt(id));
-        // O script.js original salva {item_id, name, rarity}. 
-        // Se precisar do display_name, teria que ajustar o script.js. 
-        // Por enquanto, usaremos um fallback ou formataremos o name.
         return def ? (def.display_name || def.name.replace(/_/g, ' ')) : 'Item Desconhecido';
     }
 

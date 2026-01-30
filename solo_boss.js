@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js'
 // MÓDULO: ADEN GLOBAL DB (CÓPIA LOCAL OTIMIZADA)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 4;
+const GLOBAL_DB_VERSION = 5;
 const AUTH_STORE = 'auth_store';
 
 const GlobalDB = {

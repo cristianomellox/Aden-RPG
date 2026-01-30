@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js'
 // 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 4; // Versão 4 para garantir compatibilidade com owners_store
+const GLOBAL_DB_VERSION = 5; // Versão 4 para garantir compatibilidade com owners_store
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 const OWNERS_STORE = 'owners_store'; // Store compartilhada com ranking_cp.js e mines.js

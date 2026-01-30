@@ -2428,24 +2428,3 @@ button, .btn {
     background: #444; 
     border-radius: 3px;
 }
-
-
-  /* Esconde o spinner de loading do translate automático do Chrome/Edge */
-  .goog-te-spinner-pos,
-  .goog-te-spinner,
-  body > div[style*="position: fixed"][style*="z-index: 1000001"],
-  body > div[style*="position: fixed"][style*="z-index: 100000"],
-  .goog-te-banner-frame + div,               /* loader residual */
-  .skiptranslate > div:not(.goog-te-gadget) { /* tenta pegar variantes */
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    width: 0 !important;
-    height: 0 !important;
-  }
-
-  /* Força remoção do padding/top que o translate adiciona no body */
-  body {
-    top: 0 !important;
-  }

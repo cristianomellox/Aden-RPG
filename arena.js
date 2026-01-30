@@ -1,12 +1,13 @@
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
-// 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC)
+// 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 3;
+const GLOBAL_DB_VERSION = 4; // Versão 4 para garantir compatibilidade com owners_store
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
+const OWNERS_STORE = 'owners_store'; // Store compartilhada com ranking_cp.js e mines.js
 
 const GlobalDB = {
     open: function() {
@@ -16,6 +17,7 @@ const GlobalDB = {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
                 if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
@@ -61,6 +63,47 @@ const GlobalDB = {
                 console.log("⚡ [Arena] GlobalDB atualizado parcialmente:", changes);
             }
         } catch(e) { console.warn("Erro update parcial GlobalDB", e); }
+    },
+    // --- Lógica Compartilhada de Leitura de Donos/Perfis ---
+    getAllOwners: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(OWNERS_STORE, 'readonly');
+                const store = tx.objectStore(OWNERS_STORE);
+                const req = store.getAll();
+                req.onsuccess = () => {
+                    const result = req.result || [];
+                    const map = {};
+                    result.forEach(o => map[o.id] = o);
+                    resolve(map);
+                };
+                req.onerror = () => resolve({});
+            });
+        } catch(e) { return {}; }
+    },
+    // --- Salva e Atualiza Timestamp (Keep-Alive para Cache) ---
+    saveOwners: async function(ownersList) {
+        if (!ownersList || ownersList.length === 0) return;
+        try {
+            const db = await this.open();
+            const tx = db.transaction(OWNERS_STORE, 'readwrite');
+            const store = tx.objectStore(OWNERS_STORE);
+            const now = Date.now();
+
+            ownersList.forEach(o => {
+                // Salva ID, Nome, Avatar e GuildID. Timestamp atualizado impede expiração nas Minas.
+                const cacheObj = {
+                    id: o.id,
+                    name: o.name,
+                    avatar_url: o.avatar_url,
+                    guild_id: o.guild_id, 
+                    timestamp: now 
+                };
+                store.put(cacheObj);
+            });
+            return new Promise(resolve => { tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); });
+        } catch(e) { console.warn("Erro ao salvar donos no cache global:", e); }
     }
 };
 
@@ -135,9 +178,88 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     }
 }
 
+// =======================================================================
+// 3. FUNÇÃO DE HIDRATAÇÃO DE PERFIS (ZERO EGRESS)
+// =======================================================================
+/**
+ * Recebe uma lista de objetos "esqueleto" (com id, guild_id, etc).
+ * Verifica o cache GlobalDB.
+ * Baixa apenas os perfis faltantes do Supabase.
+ * Retorna lista completa com names e avatares.
+ */
+async function hydrateProfiles(skeletonList) {
+    if (!skeletonList || skeletonList.length === 0) return [];
+
+    // 1. Ler Cache Global
+    const globalCacheMap = await GlobalDB.getAllOwners();
+    const missingIds = [];
+    const idsToUpdateTimestamp = [];
+    const hydratedList = [];
+
+    // 2. Cruzamento (Cache Hit vs Miss)
+    skeletonList.forEach(item => {
+        // Suporta tanto item.id quanto item.opponent_id (se vier de log)
+        const targetId = item.id || item.opponent_id; 
+        if(!targetId) return;
+
+        const cached = globalCacheMap[targetId];
+        if (cached && cached.name) {
+            // Temos no cache!
+            hydratedList.push({
+                ...item,
+                name: cached.name,
+                avatar_url: cached.avatar_url,
+                // Mantém o guild_id do esqueleto se existir (prioridade), ou usa do cache
+                guild_id: item.guild_id || cached.guild_id
+            });
+            idsToUpdateTimestamp.push(cached);
+        } else {
+            // Não temos, marcar para baixar
+            missingIds.push(targetId);
+            hydratedList.push({ ...item, _needsFetch: true });
+        }
+    });
+
+    // 3. Fetch dos faltantes (Delta Fetch)
+    if (missingIds.length > 0) {
+        // Selecionamos apenas campos leves. 'guild_id' é importante salvar no cache para outras páginas.
+        const { data: freshProfiles } = await supabase
+            .from('players')
+            .select('id, name, avatar_url, guild_id') 
+            .in('id', missingIds);
+
+        if (freshProfiles) {
+            const toSave = [];
+            freshProfiles.forEach(fp => {
+                // Encontra todos os itens na lista hidratada que precisam desse perfil
+                // (pode haver duplicados se o mesmo oponente aparecer várias vezes)
+                hydratedList.forEach(hItem => {
+                   const tId = hItem.id || hItem.opponent_id;
+                   if(tId === fp.id && hItem._needsFetch) {
+                       hItem.name = fp.name;
+                       hItem.avatar_url = fp.avatar_url;
+                       if (!hItem.guild_id) hItem.guild_id = fp.guild_id; 
+                       delete hItem._needsFetch;
+                   }
+                });
+                toSave.push(fp);
+            });
+            // Salva novos perfis no cache global
+            await GlobalDB.saveOwners(toSave);
+        }
+    }
+
+    // 4. Renova TTL dos caches usados (Keep-alive para Minas/Ranking CP)
+    if (idsToUpdateTimestamp.length > 0) {
+        await GlobalDB.saveOwners(idsToUpdateTimestamp);
+    }
+
+    return hydratedList;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
-    // 3. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
+    // 4. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
     // =======================================================================
     let userId = null;
     
@@ -493,7 +615,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const potionSlots = document.querySelectorAll(".potion-slot");
 
     // =======================================================================
-    // 4. SISTEMA DE ÁUDIO
+    // 5. SISTEMA DE ÁUDIO
     // =======================================================================
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffers = {};
@@ -581,7 +703,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // =======================================================================
-    // 5. UTILITÁRIOS E UI
+    // 6. UTILITÁRIOS E UI
     // =======================================================================
     function showLoading() { if (loadingOverlay) loadingOverlay.style.display = "flex"; }
     function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
@@ -706,7 +828,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ensureStreakDate();
 
     // =======================================================================
-    // 6. LOADOUT E POÇÕES (OTIMIZADO COM DEFINITIONS LOCAIS)
+    // 7. LOADOUT E POÇÕES (OTIMIZADO COM DEFINITIONS LOCAIS)
     // =======================================================================
     async function loadArenaLoadout() {
         if (!userId) return;
@@ -816,7 +938,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closePotionModalBtn) closePotionModalBtn.addEventListener('click', () => potionSelectModal.style.display = 'none');
 
     // =======================================================================
-    // 7. LÓGICA DE COMBATE E UI
+    // 8. LÓGICA DE COMBATE E UI
     // =======================================================================
     const style = document.createElement('style');
     style.innerHTML = `
@@ -870,7 +992,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
     
-    // --- LÓGICA DE SESSÃO ---
+    // --- LÓGICA DE SESSÃO COM HIDRATAÇÃO ---
     async function handleChallengeClick() {
         if (!challengeBtn || challengeBtn.disabled) return;
         if (arenaAttemptsLeftSpan.textContent === '0') return;
@@ -883,20 +1005,29 @@ document.addEventListener("DOMContentLoaded", async () => {
                 currentSession = JSON.parse(savedSession);
                 sessionResults = currentSession.results || [];
                 currentOpponentIndex = sessionResults.length;
+                startNextFight();
             } else {
+                // RPC LEVE: Retorna ID e Stats
                 const { data, error } = await supabase.rpc('get_arena_daily_session');
                 const result = normalizeRpcResult(data);
+                
                 if (error || !result?.success) {
                     challengeBtn.disabled = false;
                     return showModalAlert(result?.message || "Erro ao buscar oponentes.");
                 }
-                currentSession = result;
+
+                // HIDRATAÇÃO: Busca nomes e avatares no Cache Global
+                // Isso economiza banda baixando apenas o que falta
+                const hydratedOpponents = await hydrateProfiles(result.opponents);
+
+                currentSession = { ...result, opponents: hydratedOpponents };
                 currentSession.results = [];
                 currentOpponentIndex = 0;
                 sessionResults = [];
                 localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
+                
+                startNextFight();
             }
-            startNextFight();
         } catch (e) {
             console.error("Erro no desafio:", e);
             challengeBtn.disabled = false;
@@ -1175,7 +1306,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     } catch(e) {}
                 }
 
-                // 2. Atualiza GlobalDB
+                // 2. Atualiza GlobalDB (Novo Padrão)
                 let updateData = {};
                 if (currentCrystals > 0) {
                      updateData.crystals = currentCrystals;
@@ -1185,7 +1316,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                          updateData.crystals = (gPlayer.crystals || 0) + (res.crystals || 0);
                      }
                 }
-
+                
+                // Salva inventário atualizado
                 await surgicalCacheUpdate(res.inventory_updates, res.timestamp, updateData);
             }
             
@@ -1325,7 +1457,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // =======================================================================
-    // 8. RANKING E SISTEMA
+    // 9. RANKING E SISTEMA (COM HIDRATAÇÃO ZERO EGRESS)
     // =======================================================================
 
     function renderFixedFooter(playerData) {
@@ -1369,13 +1501,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             let rankingData = getCache('arena_top_100_cache');
+            
             if (!rankingData) { 
+                // RPC LEVE (Esqueleto)
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_arena_top_100');
+                
                 if (rpcError) rankingData = await fallbackFetchTopPlayers();
                 else {
                     const result = normalizeRpcResult(rpcData);
                     if (result?.success && Array.isArray(result.ranking)) {
-                        rankingData = result.ranking;
+                        // HIDRATAÇÃO DO RANKING
+                        rankingData = await hydrateProfiles(result.ranking);
                         if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, getMinutesToMidnightUTC());
                     } else rankingData = await fallbackFetchTopPlayers();
                 }
@@ -1471,7 +1607,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function fetchPastSeasonRanking() {
         showLoading();
-        // Esconde barra fixa ao trocar de aba
+        // Esconde footer no passado
         const footer = document.getElementById('fixedArenaRank');
         if(footer) footer.style.display = 'none';
 
@@ -1484,14 +1620,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             let snap = null;
             if (!d) {
                 try {
+                    // RPC LEVE
                     const { data: rpcData } = await supabase.rpc('get_arena_top_100_past');
                     let r = normalizeRpcResult(rpcData);
                     let candidate = null;
                     if (Array.isArray(r)) candidate = r;
                     else if (r?.ranking && Array.isArray(r.ranking)) candidate = r.ranking;
                     else if (r?.result?.ranking) candidate = r.result.ranking;
+                    
                     if (Array.isArray(candidate) && candidate.length) {
-                        d = candidate;
+                        // HIDRATAÇÃO
+                        d = await hydrateProfiles(candidate);
                         setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC());
                     }
                 } catch {}
@@ -1503,7 +1642,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                         let rv = snap.ranking;
                         if (typeof rv === 'string') try { rv = JSON.parse(rv); } catch {}
                         if (Array.isArray(rv)) { 
-                            d = rv; 
+                            // Snapshots antigos já podem ter nomes, mas se não tiverem, hidratamos
+                            d = await hydrateProfiles(rv);
                             setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC()); 
                         }
                     }
@@ -1631,11 +1771,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             userId = await getLocalUserId();
             if (!userId) {
-                if (!session) { window.location.href = "index.html"; return; }
+                // Tenta fallback com supabase session
+                if (typeof session === 'undefined' || !session) { 
+                     // Último suspiro: tenta ler de um cookie ou storage legado se houver
+                     // Se nada der certo:
+                     window.location.href = "index.html"; 
+                     return; 
+                }
                 userId = session.user.id;
             }
 
+            // Restaura sessão se existir
             if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
+            
             await checkAndResetArenaSeason();
             await checkAndResetDailyAttempts();
             await updateAttemptsUI();
@@ -1648,7 +1796,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     window.addEventListener('beforeunload', (e) => {
-        if (currentSession && currentSession.results.length > 0 && currentSession.results.length < currentSession.opponents.length) {}
+        if (currentSession && currentSession.results.length > 0 && currentSession.results.length < currentSession.opponents.length) {
+            // Lógica opcional de aviso de saída
+        }
     });
 
     if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);

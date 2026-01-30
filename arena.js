@@ -4,10 +4,10 @@ import { supabase } from './supabaseClient.js'
 // 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6; // Versão 4 para garantir compatibilidade com owners_store
+const GLOBAL_DB_VERSION = 6; 
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
-const OWNERS_STORE = 'owners_store'; // Store compartilhada com ranking_cp.js e mines.js
+const OWNERS_STORE = 'owners_store'; 
 
 const GlobalDB = {
     open: function() {
@@ -83,6 +83,7 @@ const GlobalDB = {
         } catch(e) { return {}; }
     },
     // --- Salva e Atualiza Timestamp (Keep-Alive para Cache) ---
+    // [ATUALIZADO] Agora salva guild_name também
     saveOwners: async function(ownersList) {
         if (!ownersList || ownersList.length === 0) return;
         try {
@@ -92,12 +93,13 @@ const GlobalDB = {
             const now = Date.now();
 
             ownersList.forEach(o => {
-                // Salva ID, Nome, Avatar e GuildID. Timestamp atualizado impede expiração nas Minas.
+                // Salva ID, Nome, Avatar, GuildID e GuildName. Timestamp atualizado impede expiração.
                 const cacheObj = {
                     id: o.id,
                     name: o.name,
                     avatar_url: o.avatar_url,
-                    guild_id: o.guild_id, 
+                    guild_id: o.guild_id,
+                    guild_name: o.guild_name, // [NOVO] Persistência do nome da guilda
                     timestamp: now 
                 };
                 store.put(cacheObj);
@@ -123,7 +125,6 @@ function openDB() {
     });
 }
 
-// >>> ATUALIZADO: Inclui hidratação de itens crus <<<
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
         const db = await openDB();
@@ -179,13 +180,13 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 }
 
 // =======================================================================
-// 3. FUNÇÃO DE HIDRATAÇÃO DE PERFIS (ZERO EGRESS)
+// 3. FUNÇÃO DE HIDRATAÇÃO DE PERFIS (ZERO EGRESS - ATUALIZADA)
 // =======================================================================
 /**
  * Recebe uma lista de objetos "esqueleto" (com id, guild_id, etc).
  * Verifica o cache GlobalDB.
- * Baixa apenas os perfis faltantes do Supabase.
- * Retorna lista completa com names e avatares.
+ * Baixa apenas os perfis faltantes do Supabase (com JOIN de guilda).
+ * Retorna lista completa com names, avatares e nomes de guilda.
  */
 async function hydrateProfiles(skeletonList) {
     if (!skeletonList || skeletonList.length === 0) return [];
@@ -203,6 +204,7 @@ async function hydrateProfiles(skeletonList) {
         if(!targetId) return;
 
         const cached = globalCacheMap[targetId];
+        // [ATUALIZADO] Verifica se temos nome e agora também guild_name no cache
         if (cached && cached.name) {
             // Temos no cache!
             hydratedList.push({
@@ -210,11 +212,13 @@ async function hydrateProfiles(skeletonList) {
                 name: cached.name,
                 avatar_url: cached.avatar_url,
                 // Mantém o guild_id do esqueleto se existir (prioridade), ou usa do cache
-                guild_id: item.guild_id || cached.guild_id
+                guild_id: item.guild_id || cached.guild_id,
+                // [ATUALIZADO] Tenta pegar o nome da guilda do cache ou usa 'Sem Guilda'
+                guild_name: cached.guild_name || item.guild_name || 'Sem Guilda'
             });
             idsToUpdateTimestamp.push(cached);
         } else {
-            // Não temos, marcar para baixar
+            // Não temos (ou está incompleto), marcar para baixar
             missingIds.push(targetId);
             hydratedList.push({ ...item, _needsFetch: true });
         }
@@ -222,15 +226,27 @@ async function hydrateProfiles(skeletonList) {
 
     // 3. Fetch dos faltantes (Delta Fetch)
     if (missingIds.length > 0) {
-        // Selecionamos apenas campos leves. 'guild_id' é importante salvar no cache para outras páginas.
+        // [ATUALIZADO] Fazemos o Join com a tabela de guildas para pegar o nome
         const { data: freshProfiles } = await supabase
             .from('players')
-            .select('id, name, avatar_url, guild_id') 
+            .select('id, name, avatar_url, guild_id, guilds (name)') 
             .in('id', missingIds);
 
         if (freshProfiles) {
             const toSave = [];
             freshProfiles.forEach(fp => {
+                // [ATUALIZADO] Achatar o objeto da guilda
+                const gName = fp.guilds ? fp.guilds.name : 'Sem Guilda';
+                
+                // Cria objeto plano para salvar no cache
+                const flatProfile = {
+                    id: fp.id,
+                    name: fp.name,
+                    avatar_url: fp.avatar_url,
+                    guild_id: fp.guild_id,
+                    guild_name: gName
+                };
+
                 // Encontra todos os itens na lista hidratada que precisam desse perfil
                 // (pode haver duplicados se o mesmo oponente aparecer várias vezes)
                 hydratedList.forEach(hItem => {
@@ -239,12 +255,13 @@ async function hydrateProfiles(skeletonList) {
                        hItem.name = fp.name;
                        hItem.avatar_url = fp.avatar_url;
                        if (!hItem.guild_id) hItem.guild_id = fp.guild_id; 
+                       hItem.guild_name = gName; // Preenche o nome da guilda
                        delete hItem._needsFetch;
                    }
                 });
-                toSave.push(fp);
+                toSave.push(flatProfile);
             });
-            // Salva novos perfis no cache global
+            // Salva novos perfis no cache global (incluindo o nome da guilda)
             await GlobalDB.saveOwners(toSave);
         }
     }
@@ -1016,7 +1033,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return showModalAlert(result?.message || "Erro ao buscar oponentes.");
                 }
 
-                // HIDRATAÇÃO: Busca nomes e avatares no Cache Global
+                // HIDRATAÇÃO: Busca nomes, avatares e nomes de guilda no Cache Global
                 // Isso economiza banda baixando apenas o que falta
                 const hydratedOpponents = await hydrateProfiles(result.opponents);
 
@@ -1510,7 +1527,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 else {
                     const result = normalizeRpcResult(rpcData);
                     if (result?.success && Array.isArray(result.ranking)) {
-                        // HIDRATAÇÃO DO RANKING
+                        // HIDRATAÇÃO DO RANKING (Agora busca nome da guilda corretamente)
                         rankingData = await hydrateProfiles(result.ranking);
                         if (rankingData.length > 0) setCache('arena_top_100_cache', rankingData, getMinutesToMidnightUTC());
                     } else rankingData = await fallbackFetchTopPlayers();
@@ -1629,7 +1646,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     else if (r?.result?.ranking) candidate = r.result.ranking;
                     
                     if (Array.isArray(candidate) && candidate.length) {
-                        // HIDRATAÇÃO
+                        // HIDRATAÇÃO (Busca nome da guilda se necessário)
                         d = await hydrateProfiles(candidate);
                         setCache('arena_last_season_cache', d, getMinutesToNextMonthUTC());
                     }
@@ -1771,17 +1788,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             userId = await getLocalUserId();
             if (!userId) {
-                // Tenta fallback com supabase session
                 if (typeof session === 'undefined' || !session) { 
-                     // Último suspiro: tenta ler de um cookie ou storage legado se houver
-                     // Se nada der certo:
                      window.location.href = "index.html"; 
                      return; 
                 }
                 userId = session.user.id;
             }
 
-            // Restaura sessão se existir
             if (localStorage.getItem('arena_session_v1')) handleChallengeClick();
             
             await checkAndResetArenaSeason();

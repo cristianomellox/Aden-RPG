@@ -524,7 +524,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 4;
+const GLOBAL_DB_VERSION = 5;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 

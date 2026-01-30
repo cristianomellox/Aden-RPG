@@ -713,8 +713,8 @@ function createFloatingText(text, className, targetId) {
 
 function playVideo(src, callback) {
     // Pausa BGM para focar no vídeo
-    const wasBgmPlaying = !AUDIO_BGM.paused;
-    if (wasBgmPlaying) AUDIO_BGM.pause();
+    //const wasBgmPlaying = !AUDIO_BGM.paused;
+   // if (wasBgmPlaying) AUDIO_BGM.pause();
 
     const overlay = document.getElementById('videoOverlay');
     const vid = document.getElementById('gameVideo');
@@ -774,9 +774,9 @@ function playVideo(src, callback) {
             vid.currentTime = 0;
             
             // Retoma BGM se estava tocando
-            if (wasBgmPlaying && state.active) {
-                AUDIO_BGM.play().catch(()=>{});
-            }
+        //    if (wasBgmPlaying && state.active) {
+        //        AUDIO_BGM.play().catch(()=>{});
+        //    }
             if(callback) callback();
         }, 300);
     };

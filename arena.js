@@ -60,7 +60,6 @@ const GlobalDB = {
             if (currentData) {
                 const newData = { ...currentData, ...changes };
                 store.put({ key: 'player_data', value: newData });
-                console.log("⚡ [Arena] GlobalDB atualizado parcialmente:", changes);
             }
         } catch(e) { console.warn("Erro update parcial GlobalDB", e); }
     },
@@ -83,7 +82,6 @@ const GlobalDB = {
         } catch(e) { return {}; }
     },
     // --- Salva e Atualiza Timestamp (Keep-Alive para Cache) ---
-    // [ATUALIZADO] Agora salva guild_name também
     saveOwners: async function(ownersList) {
         if (!ownersList || ownersList.length === 0) return;
         try {
@@ -93,13 +91,12 @@ const GlobalDB = {
             const now = Date.now();
 
             ownersList.forEach(o => {
-                // Salva ID, Nome, Avatar, GuildID e GuildName. Timestamp atualizado impede expiração.
                 const cacheObj = {
                     id: o.id,
                     name: o.name,
                     avatar_url: o.avatar_url,
                     guild_id: o.guild_id,
-                    guild_name: o.guild_name, // [NOVO] Persistência do nome da guilda
+                    guild_name: o.guild_name, 
                     timestamp: now 
                 };
                 store.put(cacheObj);
@@ -180,13 +177,13 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 }
 
 // =======================================================================
-// 3. FUNÇÃO DE HIDRATAÇÃO DE PERFIS (ZERO EGRESS - ATUALIZADA)
+// 3. FUNÇÃO DE HIDRATAÇÃO DE PERFIS (ZERO EGRESS - SAFE MODE)
 // =======================================================================
 /**
  * Recebe uma lista de objetos "esqueleto" (com id, guild_id, etc).
  * Verifica o cache GlobalDB.
- * Baixa apenas os perfis faltantes do Supabase (com JOIN de guilda).
- * Retorna lista completa com names, avatares e nomes de guilda.
+ * Baixa apenas os perfis faltantes do Supabase (Apenas ID, Name, Avatar, GuildID).
+ * O nome da guilda deve vir do SQL (RPC) ou Cache, não tentamos buscar via JS join.
  */
 async function hydrateProfiles(skeletonList) {
     if (!skeletonList || skeletonList.length === 0) return [];
@@ -204,7 +201,7 @@ async function hydrateProfiles(skeletonList) {
         if(!targetId) return;
 
         const cached = globalCacheMap[targetId];
-        // [ATUALIZADO] Verifica se temos nome e agora também guild_name no cache
+        
         if (cached && cached.name) {
             // Temos no cache!
             hydratedList.push({
@@ -213,32 +210,33 @@ async function hydrateProfiles(skeletonList) {
                 avatar_url: cached.avatar_url,
                 // Mantém o guild_id do esqueleto se existir (prioridade), ou usa do cache
                 guild_id: item.guild_id || cached.guild_id,
-                // [ATUALIZADO] Tenta pegar o nome da guilda do cache ou usa 'Sem Guilda'
+                // Usa o nome da guilda do cache ou o que veio do SQL, fallback para 'Sem Guilda'
                 guild_name: cached.guild_name || item.guild_name || 'Sem Guilda'
             });
             idsToUpdateTimestamp.push(cached);
         } else {
-            // Não temos (ou está incompleto), marcar para baixar
+            // Não temos, marcar para baixar
             missingIds.push(targetId);
             hydratedList.push({ ...item, _needsFetch: true });
         }
     });
 
-    // 3. Fetch dos faltantes (Delta Fetch)
+    // 3. Fetch dos faltantes (Delta Fetch Simples)
     if (missingIds.length > 0) {
-        // [ATUALIZADO] Fazemos o Join com a tabela de guildas para pegar o nome
+        // REMOVIDO: guilds (name) -> Isso causava erro se a relação não fosse detectada.
+        // Buscamos apenas os dados básicos do player.
         const { data: freshProfiles } = await supabase
             .from('players')
-            .select('id, name, avatar_url, guild_id, guilds (name)') 
+            .select('id, name, avatar_url, guild_id') 
             .in('id', missingIds);
 
         if (freshProfiles) {
             const toSave = [];
             freshProfiles.forEach(fp => {
-                // [ATUALIZADO] Achatar o objeto da guilda
-                const gName = fp.guilds ? fp.guilds.name : 'Sem Guilda';
-                
-                // Cria objeto plano para salvar no cache
+                // Tenta achar o guild_name no item original se existir
+                const originalItem = skeletonList.find(sk => (sk.id === fp.id || sk.opponent_id === fp.id));
+                const gName = (originalItem && originalItem.guild_name) ? originalItem.guild_name : 'Sem Guilda';
+
                 const flatProfile = {
                     id: fp.id,
                     name: fp.name,
@@ -247,26 +245,24 @@ async function hydrateProfiles(skeletonList) {
                     guild_name: gName
                 };
 
-                // Encontra todos os itens na lista hidratada que precisam desse perfil
-                // (pode haver duplicados se o mesmo oponente aparecer várias vezes)
+                // Preenche a lista hidratada
                 hydratedList.forEach(hItem => {
                    const tId = hItem.id || hItem.opponent_id;
                    if(tId === fp.id && hItem._needsFetch) {
                        hItem.name = fp.name;
                        hItem.avatar_url = fp.avatar_url;
                        if (!hItem.guild_id) hItem.guild_id = fp.guild_id; 
-                       hItem.guild_name = gName; // Preenche o nome da guilda
+                       hItem.guild_name = gName; 
                        delete hItem._needsFetch;
                    }
                 });
                 toSave.push(flatProfile);
             });
-            // Salva novos perfis no cache global (incluindo o nome da guilda)
             await GlobalDB.saveOwners(toSave);
         }
     }
 
-    // 4. Renova TTL dos caches usados (Keep-alive para Minas/Ranking CP)
+    // 4. Renova TTL
     if (idsToUpdateTimestamp.length > 0) {
         await GlobalDB.saveOwners(idsToUpdateTimestamp);
     }
@@ -280,7 +276,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     let userId = null;
     
-    // --- CACHE DE DEFINIÇÕES DE ITENS (Lê do LocalStorage gerado pelo script.js) ---
+    // --- CACHE DE DEFINIÇÕES DE ITENS ---
     let localItemDefinitions = new Map();
 
     function loadLocalItemDefinitions() {
@@ -290,23 +286,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const parsed = JSON.parse(cached);
                 if (parsed && Array.isArray(parsed.data)) {
                     localItemDefinitions = new Map(parsed.data);
-                } else if (Array.isArray(parsed)) { // Formato array simples
+                } else if (Array.isArray(parsed)) { 
                     localItemDefinitions = new Map(parsed);
                 }
-                // Expor globalmente para o surgicalCacheUpdate usar
                 if (!window.itemDefinitions) window.itemDefinitions = localItemDefinitions;
-                console.log(`📦 [Arena] Definições de itens carregadas: ${localItemDefinitions.size}`);
             }
-        } catch (e) {
-            console.warn("Erro ao ler item_definitions_full_v1:", e);
-        }
+        } catch (e) {}
     }
-    // Carrega imediatamente ao iniciar
     loadLocalItemDefinitions();
 
     function getItemName(id) {
         const def = localItemDefinitions.get(parseInt(id));
-        return def ? def.name : 'unknown'; // Retorna o nome do arquivo (ex: 'pocao_vida')
+        return def ? def.name : 'unknown'; 
     }
     
     function getItemDisplayName(id) {
@@ -401,7 +392,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const oppStats = opponentData.combat_stats || {};
             const uniqueOppPotions = {};
             (opponentData.potions || []).forEach(p => {
-                const pId = parseInt(p.item_id || p.itemId); // Fallback para compatibilidade
+                const pId = parseInt(p.item_id || p.itemId); 
                 if(!uniqueOppPotions[pId]) {
                     uniqueOppPotions[pId] = { 
                         item_id: pId, 
@@ -450,7 +441,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     pot.quantity--; 
                     trackConsumedPotion(pot.item_id); 
                     syncSessionLoadout(pot.item_id, pot.quantity);
-                    // Recarga: Cura (0), Buffs (1 turno para evitar spam instantaneo visual)
                     pot.cd = ([43,44].includes(parseInt(pot.item_id))) ? 0 : 1;
                     actionResult.heal = 1; 
                 } else {
@@ -495,8 +485,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             for (let pot of this.opponent.potions) {
                 if (pot.quantity > 0 && pot.cd <= 0) {
                     const pId = parseInt(pot.item_id);
-                    // Lógica simples de IA
-                    if ([43,44].includes(pId)) { // Cura
+                    if ([43,44].includes(pId)) { 
                         if (this.opponent.hp < (this.opponent.maxHp * 0.65)) {
                             let oldHp = this.opponent.hp;
                             this.applyEffect(this.opponent, pId);
@@ -505,7 +494,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             trackOpponentConsumption(this.opponent.id, pId);
                             actions.push({ type: 'POTION', itemId: pId, healed: healedAmount });
                         }
-                    } else { // Buffs
+                    } else { 
                         let type = 'ATK';
                         if ([45,46].includes(pId)) type = 'FURY';
                         if ([47,48].includes(pId)) type = 'DEX';

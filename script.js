@@ -524,9 +524,10 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 5;
+const GLOBAL_DB_VERSION = 6;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
+const OWNERS_STORE = 'owners_store';
 
 const GlobalDB = {
     open: function() {
@@ -539,6 +540,9 @@ const GlobalDB = {
                 }
                 if (!db.objectStoreNames.contains(PLAYER_STORE)) {
                     db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) {
+                    db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
                 }
             };
             req.onsuccess = () => resolve(req.result);

@@ -4,7 +4,7 @@
 // >>> ADEN GLOBAL DB (Para Atualização Local) <<<
 // =========================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 5;
+const GLOBAL_DB_VERSION = 6;
 const PLAYER_STORE = 'player_store';
 const AUTH_STORE = 'auth_store'; 
 

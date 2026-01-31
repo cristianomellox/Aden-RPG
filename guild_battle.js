@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient.js'
 
-
+// --- Configurações & Constantes ---
+const REGEN_TIME_MS = 3600 * 1000; // 1 Hora
+const MAX_ACTIONS = 5;
 
 // --- Variáveis de Estado Global ---
 let userId = null;
@@ -13,14 +15,14 @@ let heartbeatInterval = null;
 let uiTimerInterval = null;
 let selectedObjective = null;
 
-// REQ 2/3: Flag para previnir ações duplicadas
+// Flag para previnir ações duplicadas (clique frenético)
 let isProcessingBattleAction = false;
 
 let damagePollInterval = null;
 let playerDamageCache = new Map();
 let cityToRegister = null;
 let pendingGarrisonLeaveAction = null;
-let resultsPollTimeout = null; // NOVO: Para controlar o poll da tela de resultados
+let resultsPollTimeout = null;
 
 let captureNotificationQueue = [];
 let isDisplayingCaptureNotification = false;
@@ -48,14 +50,12 @@ const REWARD_ITEMS = {
 // --- Elementos DOM ---
 const $ = (selector) => document.getElementById(selector);
 
-// MODIFICAÇÃO: Declarar como 'let' e vazios. Serão populados no init.
 let screens = {};
 let battle = {};
 let modals = {};
 let audio = {};
 
-// Áudio
-// REQ 1 (Bug Áudio): Desbloqueio de Mídia (Correção)
+// Áudio Context & Unlock
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let isMediaUnlocked = false;
 
@@ -63,12 +63,10 @@ function unlockBattleAudio() {
     if (isMediaUnlocked) return;
     isMediaUnlocked = true; 
 
-    // 1. Resume o AudioContext
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.warn("AudioContext resume falhou", e));
     }
 
-    // 2. Toca e pausa um som de forma silenciosa
     try {
         const sound = audio.normal || audio.enemy_p1;
         if (sound && sound.paused) {
@@ -105,7 +103,6 @@ function showAlert(message) {
     modals.alert.style.display = 'flex';
 }
 
-// NOVO: Função para fechar modal de resultados e voltar à tela de cidades
 function closeResultsAndShowCities() {
     if (resultsPollTimeout) clearTimeout(resultsPollTimeout);
     resultsPollTimeout = null;
@@ -114,7 +111,6 @@ function closeResultsAndShowCities() {
 }
 
 function formatTime(totalSeconds) {
-    // ATUALIZADO: para lidar com dias, horas, minutos e segundos
     if (totalSeconds < 0) totalSeconds = 0;
     
     const days = Math.floor(totalSeconds / 86400);
@@ -163,63 +159,108 @@ function displayFloatingDamage(targetEl, val, isCrit) {
 }
 
 // =================================================================
-// NOVA FUNÇÃO DE CORREÇÃO
+// CÁLCULO LOCAL E OTIMISTA (Client-Side Logic)
 // =================================================================
+
 /**
- * Replica a lógica de recuperação e consumo de ações do servidor,
- * para ser usada nas atualizações otimistas do cliente,
- * corrigindo o bug de inconsistência de ações.
+ * Calcula o dano localmente baseado nos stats do jogador.
+ * Deve espelhar a lógica do servidor para validação anti-cheat.
  */
-function optimisticUpdatePlayerActions() {
+function calculateLocalDamage(stats) {
+    const min = parseInt(stats.min_attack || 0);
+    const max = parseInt(stats.attack || 0);
+    const critChance = parseFloat(stats.crit_chance || 0);
+    const critDamage = parseFloat(stats.crit_damage || 0);
+
+    let damage = Math.floor(Math.random() * (max - min + 1)) + min;
+    const isCrit = (Math.random() * 100) < critChance;
+
+    if (isCrit) {
+        damage = Math.floor(damage * (1 + (critDamage / 100)));
+    }
+    
+    return { damage, isCrit };
+}
+
+/**
+ * Replica a lógica de recuperação de ações (1h / 5 Max)
+ * para atualização visual imediata.
+ */
+function computeShownAttacksAndRemaining() {
+    const playerState = (currentBattleState && currentBattleState.player_state) ? currentBattleState.player_state : null;
+    const now = new Date();
+    
+    if (!playerState) {
+        return { shownAttacks: 0, secondsToNext: 0 };
+    }
+
+    const attacksLeft = playerState.attacks_left || 0;
+    const lastAttackAt = playerState.last_attack_at;
+
+    // Se já está no cap
+    if (attacksLeft >= MAX_ACTIONS) {
+        return { shownAttacks: MAX_ACTIONS, secondsToNext: 0 };
+    }
+    
+    // Se não tem data de último ataque (mas não está full), assume agora
+    if (!lastAttackAt) {
+        return { shownAttacks: attacksLeft, secondsToNext: 0 };
+    }
+
+    const elapsedMs = now - new Date(lastAttackAt);
+    const elapsedSeconds = Math.floor(elapsedMs / 1000);
+    const recovered = Math.floor(elapsedMs / REGEN_TIME_MS);
+    
+    let shown = Math.min(MAX_ACTIONS, attacksLeft + recovered);
+    let secondsToNext = 0;
+    
+    if (shown < MAX_ACTIONS) {
+        // Tempo restante = Ciclo total - (Tempo passado % Ciclo total)
+        // Convertendo para segundos para facilitar
+        const cycleSeconds = REGEN_TIME_MS / 1000;
+        const timeInCurrentCycle = elapsedSeconds % cycleSeconds;
+        secondsToNext = cycleSeconds - timeInCurrentCycle;
+    }
+    
+    return { shownAttacks: shown, secondsToNext };
+}
+
+// Atualiza o objeto de estado localmente após uma ação (Optimistic Update)
+function optimisticUpdatePlayerActions(consumed = 1) {
     if (!currentBattleState || !currentBattleState.player_state) return;
 
-    const playerState = currentBattleState.player_state;
+    const ps = currentBattleState.player_state;
     const now = new Date();
-    const naturalCap = 3; // Limite de ações que recuperam
     
-    // Pega o estado atual ANTES de modificar
-    let attacksLeft = playerState.attacks_left || 0;
-    let lastAttackAt = playerState.last_attack_at ? new Date(playerState.last_attack_at) : null;
-
-    // 1. Replica a lógica de RECUPERAÇÃO do servidor
-    // Só recupera se o 'last_attack_at' existir (indicando que o timer está correndo)
-    // E se as ações estiverem abaixo do limite natural
-    if (lastAttackAt && attacksLeft < naturalCap) {
-        const elapsed = Math.floor((now - lastAttackAt) / 1000); // Segundos desde o início do timer
-        const recovered = Math.floor(elapsed / 60);             // Ações recuperadas
-        
-        if (recovered > 0) {
-            // Adiciona as ações recuperadas, limitando ao teto
-            attacksLeft = Math.min(naturalCap, attacksLeft + recovered);
-            
-            if (attacksLeft >= naturalCap) {
-                // Totalmente recuperado, para o timer
-                lastAttackAt = null; 
-            } else {
-                // Parcialmente recuperado, avança o timer
-                // Ex: Tinha 0, timer em T=0. Passou 1.5 min. Recuperou 1.
-                // Novo timer base é T=60s.
-                lastAttackAt = new Date(lastAttackAt.getTime() + recovered * 60000);
-            }
-        }
+    // 1. Aplica a regeneração pendente ao estado base
+    const { shownAttacks } = computeShownAttacksAndRemaining();
+    
+    // 2. Consome a ação
+    let newAttacks = Math.max(0, shownAttacks - consumed);
+    
+    // 3. Reseta ou Ajusta o Timer
+    // Se estava full e gastou, o timer começa agora.
+    // Se não estava full, o timer continua rodando do "passado" ajustado (complicado ajustar o passado perfeitamente sem drift, 
+    // então para simplificar otimistamente: se regenerou algo, avançamos o last_attack_at).
+    
+    if (shownAttacks > (ps.attacks_left || 0)) {
+         // Houve regeneração, avançamos o relógio base
+         const recoveredCount = shownAttacks - (ps.attacks_left || 0);
+         if (ps.last_attack_at) {
+             const oldTime = new Date(ps.last_attack_at).getTime();
+             const newTime = oldTime + (recoveredCount * REGEN_TIME_MS);
+             ps.last_attack_at = new Date(newTime).toISOString();
+         }
     }
 
-    // 2. Replica o CONSUMO da ação
-    attacksLeft = attacksLeft - 1;
-
-    // 3. Replica o INÍCIO do timer
-    // Se o timer estava parado (lastAttackAt == null), inicia ele agora.
-    if (lastAttackAt === null) {
-        lastAttackAt = now;
+    if (newAttacks >= MAX_ACTIONS) {
+        ps.last_attack_at = null;
+    } else if (newAttacks < MAX_ACTIONS && !ps.last_attack_at) {
+        ps.last_attack_at = now.toISOString();
     }
-
-    // 4. Aplica o novo estado calculado ao objeto local
-    currentBattleState.player_state.attacks_left = attacksLeft;
-    currentBattleState.player_state.last_attack_at = lastAttackAt ? lastAttackAt.toISOString() : null;
+    
+    ps.attacks_left = newAttacks;
 }
-// =================================================================
-// FIM DA NOVA FUNÇÃO
-// =================================================================
 
 
 // --- Funções de Notificação ---
@@ -316,12 +357,12 @@ function renderCitySelectionScreen(playerRank) {
     const cityGrid = $('cityGrid');
     cityGrid.innerHTML = '';
     
-    // LÓGICA ATUALIZADA: Checa o dia e hora em UTC
+    // LÓGICA ATUALIZADA: Sábado (Dia 6)
     const now = new Date();
-    const dayUTC = now.getUTCDay(); // 0 = Domingo
+    const dayUTC = now.getUTCDay(); // 6 = Sábado
     const hoursUTC = now.getUTCHours();
     const isLeader = playerRank === 'leader' || playerRank === 'co-leader';
-    let registrationOpen = (dayUTC === 0 && hoursUTC < 23); // Domingo, antes das 23:00 UTC
+    let registrationOpen = (dayUTC === 6 && hoursUTC < 23); // Sábado, antes das 23:30 (margem visual)
 
     CITIES.forEach(city => {
         const btn = document.createElement('button');
@@ -346,11 +387,11 @@ function updateCityRegistrationButtons() {
     if (screens.citySelection.style.display !== 'flex') return;
     const isLeader = userRank === 'leader' || userRank === 'co-leader';
     
-    // LÓGICA ATUALIZADA: Checa o dia e hora em UTC
+    // LÓGICA ATUALIZADA: Sábado (Dia 6)
     const now = new Date();
-    const dayUTC = now.getUTCDay(); // 0 = Domingo
+    const dayUTC = now.getUTCDay(); // 6 = Sábado
     const hoursUTC = now.getUTCHours();
-    let registrationOpen = (dayUTC === 0 && hoursUTC < 23); // Domingo, antes das 23:00 UTC
+    let registrationOpen = (dayUTC === 6 && hoursUTC < 23); 
 
     const cityButtons = document.querySelectorAll('#cityGrid .city-btn');
 
@@ -487,8 +528,6 @@ function renderAllObjectives(objectives) {
         }
 
         const ownerEl = $(`obj-owner-${fullObj.objective_index}`);
-        
-        // MUDANÇA: Seleciona a imagem
         const imgEl = obj.objective_type === 'nexus' ? $('img-nexus') : $(`img-cp-${obj.objective_index}`);
 
         if (ownerEl) {
@@ -499,7 +538,6 @@ function renderAllObjectives(objectives) {
                 ownerEl.textContent = guild ? guild.guild_name : 'Dominado';
                 ownerEl.style.color = color;
                 
-                // MUDANÇA: Aplica o brilho na imagem
                 if (imgEl) {
                     imgEl.style.filter = `drop-shadow(0px 0px 8px ${color}) drop-shadow(0px 0px 15px ${color})`;
                 }
@@ -508,7 +546,6 @@ function renderAllObjectives(objectives) {
                 ownerEl.textContent = 'Não Dominado';
                 ownerEl.style.color = 'var(--guild-color-neutral)';
                 
-                // MUDANÇA: Reseta o brilho
                 if (imgEl) {
                     imgEl.style.filter = 'drop-shadow(0px 0px 5px var(--guild-color-neutral))';
                 }
@@ -517,54 +554,18 @@ function renderAllObjectives(objectives) {
     });
 }
 
-// REQ 2/3: Adicionada função auxiliar para checagem de ataques
-function computeShownAttacksAndRemaining() {
-    const playerState = (currentBattleState && currentBattleState.player_state) ? currentBattleState.player_state : null;
-    const now = new Date();
-    
-    if (!playerState) {
-        return { shownAttacks: 0, secondsToNext: 0 };
-    }
-
-    const naturalCap = 3;
-    const attacksLeft = playerState.attacks_left || 0;
-    const lastAttackAt = playerState.last_attack_at;
-
-    if (attacksLeft >= naturalCap) {
-        return { shownAttacks: attacksLeft, secondsToNext: 0 };
-    }
-    
-    if (!lastAttackAt) {
-        return { shownAttacks: attacksLeft, secondsToNext: 0 };
-    }
-
-    const elapsed = Math.floor((now - new Date(lastAttackAt)) / 1000);
-    const recovered = Math.floor(elapsed / 60);
-    
-    let shown = Math.min(naturalCap, attacksLeft + recovered);
-    let secondsToNext = 0;
-    
-    if (shown < naturalCap) {
-        const sinceLast = elapsed % 60;
-        secondsToNext = 60 - sinceLast;
-    }
-    
-    return { shownAttacks: shown, secondsToNext };
-}
-
 function renderPlayerFooter(playerState, playerGarrison) {
     if (!playerState) return; 
 
-    // Atualiza o estado local para o helper
+    // Atualiza estado local globalmente
     if (currentBattleState) {
         currentBattleState.player_state = playerState;
         currentBattleState.player_garrison = playerGarrison;
     }
 
     const { shownAttacks, secondsToNext } = computeShownAttacksAndRemaining();
-    const naturalCap = 3;
-
-    battle.playerAttacks.textContent = `Ações: ${Math.max(0, shownAttacks)} / ${naturalCap}`;
+    
+    battle.playerAttacks.textContent = `Ações: ${Math.max(0, shownAttacks)} / ${MAX_ACTIONS}`;
     battle.playerCooldown.textContent = secondsToNext > 0 ? `+1 em ${formatTime(secondsToNext)}` : "";
 
     if (playerGarrison) {
@@ -574,6 +575,7 @@ function renderPlayerFooter(playerState, playerGarrison) {
         if (objective) {
             objName = objective.objective_type === 'nexus' ? 'Nexus' : `Ponto ${objective.objective_index}`;
         } else {
+            // Se o objetivo não está em memória, força um sync rápido
             setTimeout(pollBattleState, 1500); 
         }
         battle.garrisonStatus.textContent = `Guarnecendo: ${objName}`;
@@ -697,31 +699,32 @@ function renderResultsScreen(instance, playerDamageRanking) {
     let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
     let hasGuildRewards = false;
 
+    // --- RECOMPENSAS VISUAIS ATUALIZADAS (DOBRADAS) ---
     if (myGuildRank === 1 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = 'gold';
         guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 3000);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 4);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 50);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); // 3k * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); // 4 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100); // 50 * 2
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = '#00bcd4';
         guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 6);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); // 1k * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); // 6 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); // 20 * 2
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else if (myGuildRank === 3 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = '#cd7f32';
         guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 500);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 4);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 10);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); // 500 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); // 4 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); // 10 * 2
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else {
@@ -739,17 +742,17 @@ function renderResultsScreen(instance, playerDamageRanking) {
     if (myGuildRank === 1 && myPlayerDamageRank === 1) {
         playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano (Multiplicador 3x):</p>';
         playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "3000 (Base) + 6000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "4 (Base) + 8 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "50 (Base) + 100 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "6000 (Base) + 12000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "8 (Base) + 16 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "100 (Base) + 200 (Bônus)");
         playerRewardsHTML += '</div>';
         hasPlayerRewards = true;
     } else if (myGuildRank === 1 && myPlayerDamageRank === 2) {
         playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano (Multiplicador 2x):</p>';
         playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "3000 (Base) + 3000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "4 (Base) + 4 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "50 (Base) + 50 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "6000 (Base) + 6000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "8 (Base) + 8 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "100 (Base) + 100 (Bônus)");
         playerRewardsHTML += '</div>';
         hasPlayerRewards = true;
     }
@@ -766,17 +769,15 @@ function renderResultsScreen(instance, playerDamageRanking) {
 // --- Lógica de Interação ---
 
 async function handleCityRegistrationPre(cityId, cityName) {
-    unlockBattleAudio(); // Desbloqueia áudio
+    unlockBattleAudio(); 
     cityToRegister = { id: cityId, name: cityName };
     
-    // Reset visual do modal
     modals.cityRegisterCityName.textContent = cityName;
     modals.cityRegisterMessage.textContent = "Carregando informações...";
     modals.cityRegisterGuildList.innerHTML = '<li style="text-align:center; color:#aaa;">Carregando...</li>';
     modals.cityRegisterConfirmBtn.disabled = true;
     modals.cityRegister.style.display = 'flex';
 
-    // Chama o RPC atualizado
     const { data, error } = await supabase.rpc('get_city_registrations', { p_city_id: cityId });
 
     if (error || !data.success) {
@@ -794,9 +795,7 @@ async function handleCityRegistrationPre(cityId, cityName) {
 
     modals.cityRegisterGuildList.innerHTML = '';
 
-    // LÓGICA DE EXIBIÇÃO
     if (isRevealed) {
-        // --- CENÁRIO A: LISTA REVELADA (Já registrado ou Cheio) ---
         if (guilds.length === 0) {
             modals.cityRegisterGuildList.innerHTML = '<li style="text-align:center; font-style:italic; color:#aaa;">Nenhuma guilda registrada.</li>';
         } else {
@@ -804,7 +803,6 @@ async function handleCityRegistrationPre(cityId, cityName) {
                 const li = document.createElement('li');
                 li.textContent = `${index + 1}. ${g.guild_name}`;
                 
-                // Destaque para a guilda do usuário
                 if (g.guild_id === userGuildId) {
                     li.style.color = 'gold';
                     li.style.fontWeight = 'bold';
@@ -814,7 +812,6 @@ async function handleCityRegistrationPre(cityId, cityName) {
             });
         }
     } else {
-        // --- CENÁRIO B: LISTA OCULTA (Ainda não registrou e tem vaga) ---
         const li = document.createElement('li');
         li.style.listStyle = 'none';
         li.style.textAlign = 'center';
@@ -827,13 +824,11 @@ async function handleCityRegistrationPre(cityId, cityName) {
             li.style.color = '#aaa';
             li.style.fontStyle = 'italic';
         } else {
-            // Mostra apenas a contagem
             li.innerHTML = `<strong style="color: #00bcd4; font-size: 1.3em;">>> ${count}</strong> guilda(s) registrada(s).`;
         }
         modals.cityRegisterGuildList.appendChild(li);
     }
 
-    // CONTROLE DO BOTÃO DE REGISTRO
     if (count >= maxGuilds && !isUserRegistered) {
         modals.cityRegisterMessage.textContent = `Esta cidade atingiu o limite de ${maxGuilds} guildas.`;
         modals.cityRegisterMessage.style.color = '#ffc107';
@@ -842,7 +837,6 @@ async function handleCityRegistrationPre(cityId, cityName) {
         modals.cityRegisterMessage.textContent = "Sua guilda já está registrada aqui.";
         modals.cityRegisterMessage.style.color = '#28a745';
         modals.cityRegisterConfirmBtn.disabled = true;
-        // Se já está registrado, garante que o botão mude visualmente
         modals.cityRegisterConfirmBtn.textContent = "Registrado";
     } else {
         modals.cityRegisterMessage.textContent = "";
@@ -875,7 +869,7 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
 }
 
 function handleObjectiveClick(objective) {
-    unlockBattleAudio(); // Desbloqueia áudio
+    unlockBattleAudio(); 
     if (isProcessingBattleAction) return;
 
     const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
@@ -926,16 +920,10 @@ function checkGarrisonLeaveAndExecute(actionCallback) {
     modals.garrisonLeave.style.display = 'flex';
 }
 
-// =================================================================
-// CORREÇÃO DA LOJA: Função adicionada que estava faltando
-// =================================================================
 function openBattleShop() {
-    // Limpa mensagens anteriores
     if (modals.battleShopMessage) {
         modals.battleShopMessage.textContent = "";
     }
-    
-    // Reabilita os botões caso tenham ficado travados em loading
     if (modals.shopBtnPack1) {
         modals.shopBtnPack1.disabled = false;
         modals.shopBtnPack1.textContent = "Comprar";
@@ -944,8 +932,6 @@ function openBattleShop() {
         modals.shopBtnPack2.disabled = false;
         modals.shopBtnPack2.textContent = "Comprar";
     }
-
-    // Exibe o modal
     modals.battleShop.style.display = 'flex';
 }
 
@@ -967,7 +953,7 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     modals.battleShopMessage.textContent = data.message;
     modals.battleShopMessage.style.color = '#28a745';
     btnEl.textContent = "Comprado";
-    pollBattleState();
+    pollBattleState(); // Sync para garantir as novas ações
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
     }, 1500);
@@ -976,10 +962,10 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
 // --- Lógica de Polling e Estado ---
 
 async function pollBattleState() {
+    // Para qualquer polling automático anterior
     stopHeartbeatPolling();
     stopDamagePolling();
     
-    // Limpa o timeout de re-poll de resultados se o pollBattleState for chamado
     if (resultsPollTimeout) clearTimeout(resultsPollTimeout);
     resultsPollTimeout = null;
     
@@ -1010,36 +996,28 @@ async function pollBattleState() {
     switch(data.status) {
         case 'active':
             if (!data || !data.instance || !data.objectives) {
-                console.warn("Estado da batalha incompleto, aguardando...");
                 setTimeout(pollBattleState, 1000); 
                 return;
             }
 
-            // *** CORREÇÃO (REQ 1) ***
-            // A lógica de captura no Full Load agora APENAS preenche o histórico
+            // Histórico de capturas
             processedCaptureTimestamps.clear();
             const captures = (data.instance && data.instance.recent_captures) ? data.instance.recent_captures : [];
             if (captures.length > 0) {
-                // 1. Preenche o set com TODO o histórico
                 captures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
-                // 2. Define o timestamp para o próximo heartbeat
                 lastCaptureTimestamp = captures[captures.length - 1].timestamp; 
             } else {
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
-            // *** FIM DA CORREÇÃO ***
 
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
                 setTimeout(() => {
                     renderBattleScreen(data);
-                    startHeartbeatPolling();
-                    startDamagePolling();
+                    // Não iniciamos polling agressivo aqui, apenas o render inicial
                 }, 500);
             } else {
                 renderBattleScreen(data);
-                startHeartbeatPolling();
-                startDamagePolling();
             }
             break;
             
@@ -1048,10 +1026,9 @@ async function pollBattleState() {
             break;
             
         case 'finished':
-            if (resultsPollTimeout) clearTimeout(resultsPollTimeout); // Limpa o timeout anterior
+            if (resultsPollTimeout) clearTimeout(resultsPollTimeout);
             playerDamageCache.clear();
             renderResultsScreen(data.instance, data.player_damage_ranking);
-            // Define um novo timeout para o caso do usuário não fechar o modal
             resultsPollTimeout = setTimeout(pollBattleState, 7000);
             break;
             
@@ -1180,10 +1157,7 @@ async function pollDamageRanking() {
         p_battle_instance_id: currentBattleState.instance.id 
     });
     
-    if (error || !data) {
-        console.warn("Erro no poll de dano:", error ? error.message : "Sem dados");
-        return;
-    }
+    if (error || !data) return;
 
     const newRanking = data.map(p => ({
         player_id: p.player_id,
@@ -1195,7 +1169,6 @@ async function pollDamageRanking() {
     currentBattleState.player_damage_ranking = newRanking;
     renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
 }
-
 
 function startHeartbeatPolling() {
     stopHeartbeatPolling(); 
@@ -1224,38 +1197,38 @@ function startGlobalUITimer() {
         const now = new Date();
         
         if (screens.citySelection.style.display === 'flex') {
-            // LÓGICA ATUALIZADA: Timer de registro semanal
+            // LÓGICA ATUALIZADA: Sábado (Dia 6)
             const registrationTimer = $('registrationTimer');
-            const dayUTC = now.getUTCDay(); // 0 = Domingo
+            const dayUTC = now.getUTCDay(); // 6 = Sábado
             const hoursUTC = now.getUTCHours();
             
-            if (dayUTC === 0 && hoursUTC < 23) {
-                // REGISTRO ABERTO: Contagem regressiva para 23:00 UTC de hoje
-                const registrationEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 0, 0));
+            if (dayUTC === 6 && hoursUTC < 23) {
+                // REGISTRO ABERTO Sábado
+                const registrationEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 30, 0));
                 const timeLeft = Math.max(0, Math.floor((registrationEnd - now) / 1000));
                 registrationTimer.textContent = `Registro fecha em: ${formatTime(timeLeft)}`;
             } else {
-                // REGISTRO FECHADO: Contagem regressiva para 00:00 UTC do próximo Domingo
-                const daysToSunday = (7 - dayUTC) % 7;
-                let nextSunday = new Date(now.getTime());
-                nextSunday.setUTCDate(now.getUTCDate() + daysToSunday);
-                nextSunday.setUTCHours(0, 0, 0, 0);
+                // Contagem para o próximo Sábado 00:00 UTC
+                const daysToSaturday = (6 - dayUTC + 7) % 7;
+                let nextSaturday = new Date(now.getTime());
+                nextSaturday.setUTCDate(now.getUTCDate() + daysToSaturday);
+                nextSaturday.setUTCHours(0, 0, 0, 0);
 
-                if (dayUTC === 0 && hoursUTC >= 23) { // Se for Domingo depois das 23h
-                    nextSunday.setUTCDate(now.getUTCDate() + 7);
+                if (dayUTC === 6 && hoursUTC >= 23) { 
+                    nextSaturday.setUTCDate(now.getUTCDate() + 7);
                 }
                 
-                const timeToOpen = Math.max(0, Math.floor((nextSunday - now) / 1000));
+                const timeToOpen = Math.max(0, Math.floor((nextSaturday - now) / 1000));
                 registrationTimer.innerHTML = `Registro abre em: <br><span id="timerreg">${formatTime(timeToOpen)}</span>`;
             }
             updateCityRegistrationButtons();
         }
 
         if (screens.waiting.style.display === 'flex' && currentBattleState && currentBattleState.status === 'registering') {
-            // LÓGICA ATUALIZADA: Contagem para o *início* da batalha (23:30 UTC)
-            // O end_time é Segunda 00:00 UTC. A batalha dura 30 min.
-            const battleEnd = new Date(currentBattleState.instance.end_time);
-            const battleStart = new Date(battleEnd.getTime() - 30 * 60 * 1000); // 30 mins antes do fim
+            // Contagem para o *início* da batalha (Domingo 00:00 UTC)
+            // A batalha começa 30 min após fechar o registro (Sábado 23:30 -> Domingo 00:00)
+            const battleStart = new Date(currentBattleState.instance.registration_end_time); 
+            battleStart.setMinutes(battleStart.getMinutes() + 30); // Ajuste manual caso o backend não tenha start_time
             
             const timeLeft = Math.max(0, Math.floor((battleStart - now) / 1000));
             $('waitTimer').textContent = formatTime(timeLeft);
@@ -1266,10 +1239,17 @@ function startGlobalUITimer() {
         }
 
         if (screens.battle.style.display === 'flex' && currentBattleState && currentBattleState.status === 'active') {
-            // LÓGICA ATUALIZADA: Contagem para o *fim* da batalha (30 minutos de duração)
-            const battleEnd = new Date(currentBattleState.instance.end_time); // Segunda 00:00 UTC
+            // Contagem para o fim da batalha (Domingo 23:59 UTC)
+            const battleEnd = new Date(currentBattleState.instance.end_time);
             const timeLeft = Math.max(0, Math.floor((battleEnd - now) / 1000));
             battle.timer.textContent = formatTime(timeLeft);
+
+            // Lazy Polling: Ativa polling agressivo nos últimos 5 minutos (300s)
+            if (timeLeft <= 300 && timeLeft > 0 && !heartbeatInterval) {
+                 console.log("Fase final da batalha: Iniciando polling agressivo.");
+                 startHeartbeatPolling();
+                 startDamagePolling();
+            }
 
             if (currentBattleState.player_state) {
                  renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
@@ -1287,7 +1267,6 @@ function startGlobalUITimer() {
 // FUNÇÃO DE INICIALIZAÇÃO
 // =================================================================
 
-// NOVO: Função para popular os elementos DOM
 function setupDOMElements() {
     screens = {
         loading: $('loadingScreen'),
@@ -1367,17 +1346,13 @@ function setupDOMElements() {
         ally_nexus: new Audio('https://aden-rpg.pages.dev/assets/ally_nexus.mp3')
     };
     
-    // Ajusta o volume (como era feito antes)
     if(audio.normal) audio.normal.volume = 0.5;
     if(audio.crit) audio.crit.volume = 0.1;
 }
 
-
 async function init() {
-    // CHAMA A NOVA FUNÇÃO AQUI
     setupDOMElements(); 
-    
-    showScreen('loading'); // Agora 'screens.loading' existe
+    showScreen('loading'); 
 
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session) {
@@ -1387,13 +1362,11 @@ async function init() {
     userId = session.user.id; 
 
     createCaptureNotificationUI();
-    // REQ 1 (Bug Áudio): Listener genérico
     document.body.addEventListener('click', unlockBattleAudio, { once: true });
 
 
     // =================================================================
     // ATRIBUIÇÃO DE EVENTOS
-    // (Movido para dentro do init e com checagens para segurança)
     // =================================================================
 
     // Listeners dos Modais
@@ -1429,17 +1402,16 @@ async function init() {
         pendingGarrisonLeaveAction = null;
     };
     
-    // Listeners dos Botões de Ação
+    // Listeners dos Botões de Ação - ATAQUE (Modo Otimista / Anti-Cheat)
     if (modals.objectiveAttackBtn) {
         modals.objectiveAttackBtn.onclick = async () => {
-            unlockBattleAudio(); // Desbloqueia áudio
+            unlockBattleAudio(); 
             if (!selectedObjective) return;
 
-            // *** CORREÇÃO (REQ 2/3) ***
-            // Verifica ataques *antes* de executar
+            // 1. Verificação Local (Ações)
             const { shownAttacks } = computeShownAttacksAndRemaining();
             if (shownAttacks <= 0) {
-                showAlert('Sem ações restantes.');
+                showAlert('Sem ações restantes. Aguarde regenerar.');
                 return; 
             }
             
@@ -1450,74 +1422,89 @@ async function init() {
                 modals.objectiveAttackBtn.disabled = true;
                 modals.objective.style.display = 'none';
                 
-                supabase.rpc('attack_battle_objective', { p_objective_id: selectedObjective.id })
-                    .then(({ data, error }) => {
-                        if (error || !data.success) {
-                            showAlert(error ? error.message : data.message);
-                            pollBattleState(); // Força re-sincronização
-                            return;
-                        }
-
-                        const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
-                        if (objectiveEl) {
-                            playHitSound(data.is_crit);
-                            displayFloatingDamage(objectiveEl, data.damage_dealt, data.is_crit);
-                            objectiveEl.classList.add('shake-animation');
-                            setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
-                        }
-
-                        // ***** INÍCIO DA MODIFICAÇÃO *****
-                        if(currentBattleState.player_state) {
-                            
-                            // Substitui a lógica de decremento antiga
-                            optimisticUpdatePlayerActions();
-                            
-                            // Mantém a lógica de guarnição que já existia
-                            if(data.garrison_left) { 
-                                currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
-                                currentBattleState.player_garrison = null;
-                            }
-                            renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
-
+                // 2. Cálculo Local de Dano (Optimistic UI)
+                const { damage, isCrit } = calculateLocalDamage(userPlayerStats);
+                
+                // 3. Atualização Visual Imediata
+                playHitSound(isCrit);
+                
+                // Atualiza Ações
+                optimisticUpdatePlayerActions(1);
+                
+                // Atualiza HP Visualmente (apenas para feedback, o sync real vem do server se necessário)
+                const targetObj = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                if (targetObj) {
+                    const totalHp = (targetObj.current_hp || 0) + (targetObj.garrison_hp || 0);
+                    const newHp = Math.max(0, totalHp - damage);
+                    const effectiveDmg = totalHp - newHp;
+                    
+                    // Ajuste simples para UI (Garrison primeiro)
+                    if (targetObj.garrison_hp > 0) {
+                        if (effectiveDmg >= targetObj.garrison_hp) {
+                            const remain = effectiveDmg - targetObj.garrison_hp;
+                            targetObj.garrison_hp = 0;
+                            targetObj.current_hp = Math.max(0, targetObj.current_hp - remain);
                         } else {
-                            pollBattleState(); 
+                            targetObj.garrison_hp -= effectiveDmg;
                         }
-                        // ***** FIM DA MODIFICAÇÃO *****
-                        
-                        const obj = currentBattleState && currentBattleState.objectives ? currentBattleState.objectives.find(o => o.id === selectedObjective.id) : null;
-                        if (obj) {
-                            if (data.objective_destroyed) {
-                                pollHeartbeatState();
-                            } else {
-                                obj.current_hp = data.objective_new_hp;
-                                obj.garrison_hp = data.objective_new_garrison_hp;
-                                renderAllObjectives(currentBattleState.objectives);
-                            }
-                        } else {
-                            pollBattleState();
-                        }
+                    } else {
+                        targetObj.current_hp -= effectiveDmg;
+                    }
+                    
+                    const objectiveEl = $(`obj-cp-${selectedObjective.objective_index}`) || $('obj-nexus');
+                    displayFloatingDamage(objectiveEl, effectiveDmg, isCrit);
+                    if(objectiveEl) {
+                        objectiveEl.classList.add('shake-animation');
+                        setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
+                    }
+                }
+                
+                // Se saiu da guarnição, atualiza estado
+                if(currentBattleState.player_garrison) { 
+                    currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                    currentBattleState.player_garrison = null;
+                }
+                
+                renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+                renderAllObjectives(currentBattleState.objectives);
 
-                    })
-                    .finally(() => {
-                        // *** CORREÇÃO (REQ 3) ***
-                        // Adiciona cooldown para previnir spam
-                        setTimeout(() => {
-                            isProcessingBattleAction = false;
-                            if (selectedObjective && currentBattleState) {
-                                const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
-                                if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
-                                    modals.objectiveAttackBtn.disabled = false;
-                                }
+                // 4. Envio Assíncrono (Fire-and-Forget / Validate)
+                supabase.rpc('attack_battle_objective', { 
+                    p_objective_id: selectedObjective.id,
+                    p_claimed_damage: damage,
+                    p_is_crit: isCrit
+                })
+                .then(({ data, error }) => {
+                    if (error || !data.success) {
+                        console.warn("Sync Error:", error ? error.message : data.message);
+                        if (data?.force_sync) pollBattleState(); // Cheat/Desync detectado
+                        else showAlert(data.message); // Erro lógico (ex: sem ações reais)
+                        return;
+                    }
+
+                    // Se o objetivo foi destruído, precisamos sincronizar tudo (vencedor, honra, etc)
+                    if (data.objective_destroyed) {
+                        pollHeartbeatState(); // Traz o novo dono e toca sons
+                    }
+                })
+                .finally(() => {
+                    setTimeout(() => {
+                        isProcessingBattleAction = false;
+                        if (selectedObjective && currentBattleState) {
+                            const latestObjState = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
+                            if (latestObjState && latestObjState.owner_guild_id !== userGuildId) {
+                                modals.objectiveAttackBtn.disabled = false;
                             }
-                        }, 800); // Cooldown de 800ms
-                    });
+                        }
+                    }, 800); 
+                });
             });
         };
     }
 
     if (modals.objectiveGarrisonBtn) {
         modals.objectiveGarrisonBtn.onclick = async () => {
-            unlockBattleAudio(); // Desbloqueia áudio
+            unlockBattleAudio(); 
             if (!selectedObjective) return;
             
             if (currentBattleState && currentBattleState.player_state && currentBattleState.player_state.last_garrison_leave_at) {
@@ -1531,12 +1518,10 @@ async function init() {
                 }
             }
 
-            // *** CORREÇÃO (REQ 2/3) ***
-            // Verifica ataques *antes* de executar
             const { shownAttacks } = computeShownAttacksAndRemaining();
             if (shownAttacks <= 0) {
                 showAlert('Sem ações restantes.');
-                return; // Impede a ação e o bug de remoção otimista
+                return; 
             }
             
             checkGarrisonLeaveAndExecute(async () => {
@@ -1545,12 +1530,10 @@ async function init() {
                 modals.objectiveGarrisonBtn.disabled = true;
                 modals.objective.style.display = 'none';
 
-                // ***** INÍCIO DA MODIFICAÇÃO *****
                 if (currentBattleState) {
                     try {
                         if (!currentBattleState.player_state) currentBattleState.player_state = {};
                         
-                        // Lógica de sair da guarnição anterior (está OK)
                         if (currentBattleState.player_garrison && userPlayerStats) {
                             const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
                             if (oldObj) {
@@ -1559,10 +1542,8 @@ async function init() {
                             currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
                         }
                         
-                        // Substitui a lógica de decremento antiga
-                        optimisticUpdatePlayerActions();
+                        optimisticUpdatePlayerActions(1);
                         
-                        // Lógica de entrar na nova guarnição (está OK)
                         currentBattleState.player_garrison = {
                             objective_id: selectedObjective.id,
                             started_at: new Date().toISOString()
@@ -1582,38 +1563,28 @@ async function init() {
                         console.warn("Erro atualização otimista (garrison):", e);
                     }
                 }
-                // ***** FIM DA MODIFICAÇÃO *****
 
                 supabase.rpc('garrison_battle_objective', { p_objective_id: selectedObjective.id })
                     .then(({ data, error }) => {
                         if (error || !data.success) {
                             showAlert(error ? error.message : data.message);
                             setTimeout(pollBattleState, 500); 
-                        } else if (data.message) {
-                            console.log("Guarnição confirmada:", data.message);
                         }
                     })
-                    .catch(err => {
-                        console.error("Erro RPC guarnição:", err);
-                        showAlert("Erro ao guarnecer. Sincronizando...");
-                    })
                     .finally(() => {
-                        // *** CORREÇÃO (REQ 3) ***
-                        // Adiciona cooldown para previnir spam
                         setTimeout(() => {
                             isProcessingBattleAction = false;
                             modals.objectiveGarrisonBtn.disabled = false;
-                        }, 800); // Cooldown de 800ms
-                        setTimeout(pollHeartbeatState, 1500); // Sincroniza
+                        }, 800); 
+                        setTimeout(pollHeartbeatState, 1500); 
                     });
             });
         };
     }
     
-    // Listeners dos Objetivos do Mapa
     document.querySelectorAll('.battle-objective').forEach(el => {
         el.addEventListener('click', () => {
-            unlockBattleAudio(); // Garante o desbloqueio
+            unlockBattleAudio(); 
             if (!currentBattleState || currentBattleState.status !== 'active' || !currentBattleState.objectives) return;
             const index = parseInt(el.dataset.index, 10);
             const objective = currentBattleState.objectives.find(o => o.objective_index === index);
@@ -1623,10 +1594,9 @@ async function init() {
         });
     });
 
-    // Listener do Ranking (Ponto do Erro Original)
     if (battle.rankingBtn) {
         battle.rankingBtn.onclick = () => {
-            unlockBattleAudio(); // Garante o desbloqueio
+            unlockBattleAudio(); 
             modals.ranking.style.display = 'flex';
             document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const defaultTabBtn = modals.ranking.querySelector('.tab-btn[data-tab="guilds"]');
@@ -1645,7 +1615,6 @@ async function init() {
         modals.rankingClose.onclick = () => modals.ranking.style.display = 'none';
     }
 
-    // Listener das Abas do Ranking
     document.querySelectorAll('.ranking-tabs .tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tabId = btn.dataset.tab;
@@ -1660,11 +1629,10 @@ async function init() {
         });
     });
 
-    // Listeners da Loja
-    const showShopBtnEl = $('showShopBtn'); // Pega o elemento da loja (ID do HTML)
+    const showShopBtnEl = $('showShopBtn'); 
     if (showShopBtnEl) {
         showShopBtnEl.onclick = () => {
-            unlockBattleAudio(); // Garante o desbloqueio
+            unlockBattleAudio(); 
             openBattleShop();
         };
     }
@@ -1675,10 +1643,8 @@ async function init() {
         modals.shopBtnPack2.onclick = () => handleBuyBattleActions(2, 75, 5, modals.shopBtnPack2);
     }
 
-    // Inicia os loops de polling
     pollBattleState();
     startGlobalUITimer();
 }
 
-// --- Inicialização ---
 document.addEventListener('DOMContentLoaded', init);

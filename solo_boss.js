@@ -109,10 +109,10 @@ const AUDIO_CRIT = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3
 // Áudio de fundo
 const AUDIO_BGM = new Audio("https://aden-rpg.pages.dev/assets/desolation_tower.mp3"); 
 AUDIO_BGM.loop = true;
-AUDIO_BGM.volume = 0.07;
+AUDIO_BGM.volume = 0.06;
 
 AUDIO_HIT.volume = 0.3;
-AUDIO_CRIT.volume = 0.3;
+AUDIO_CRIT.volume = 0.2;
 
 // ================= ESTADO LOCAL =================
 let state = {

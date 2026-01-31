@@ -796,85 +796,88 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="guild_pv.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // Função para verificar e exibir a notificação na aba de Batalhas
+    
+    // --- Configurações ---
+    const KEY_TAB_SAT = 'aden_guild_tab_seen_saturday';
+    // Removemos KEY_TAB_SUN pois domingo agora é baseado puramente no horário
+    
+    const batalhasTab = document.querySelector('.tab-btn[data-tab="batalhas"]');
+
+    // --- 1. Lógica Visual (Rodada ao carregar e no Intervalo) ---
     function checkGuildTabNotification() {
+        if (!batalhasTab) return;
+
         const now = new Date();
         const day = now.getUTCDay(); // 0=Dom, 6=Sab, 1=Seg
         const hours = now.getUTCHours();
         const minutes = now.getUTCMinutes();
 
-        const batalhasTab = document.querySelector('.tab-btn[data-tab="batalhas"]');
-        if (!batalhasTab) return;
-
-        // Chaves de armazenamento (mesmas lógicas, mas controle específico da aba interna se quiser separar, 
-        // mas aqui vamos usar chaves para a "aba" especificamente para garantir que ele entre na guilda e clique na aba)
-        // Vamos usar keys com sufixo _tab para diferenciar do footer se necessário, 
-        // ou as mesmas se quiser que clicar no footer limpe tudo. 
-        // O pedido diz: "sumir quando clicar na aba". Então usaremos uma chave específica para a aba.
-        
-        const KEY_TAB_SAT = 'aden_guild_tab_seen_saturday';
-        const KEY_TAB_SUN = 'aden_guild_tab_seen_sunday';
-
         let showDot = false;
-        let activeKey = null;
 
-        // Limpeza na Segunda (Segurança)
+        // Limpeza na Segunda-feira
         if (day === 1) {
             localStorage.removeItem(KEY_TAB_SAT);
-            localStorage.removeItem(KEY_TAB_SUN);
             const dot = batalhasTab.querySelector('.tab-notification-dot');
             if (dot) dot.remove();
             return;
         }
 
-        // Verifica Sábado (Registro)
+        // Verifica Sábado (Lógica Padrão: Verifica Storage)
         if (day === 6) {
             if (!localStorage.getItem(KEY_TAB_SAT)) {
                 showDot = true;
-                activeKey = KEY_TAB_SAT;
             }
         }
 
-        // Verifica Domingo 23:30+ (Batalha)
+        // Verifica Domingo (Lógica Persistente: Horário 00:01 - 23:59)
         else if (day === 0) {
-            if (hours === 23 && minutes >= 30) {
-                if (!localStorage.getItem(KEY_TAB_SUN)) {
-                    showDot = true;
-                    activeKey = KEY_TAB_SUN;
-                }
+            // Início: 00:01 | Fim: 23:58:59
+            const isAfterStart = (hours === 0 && minutes >= 1) || hours > 0;
+            const isBeforeEnd = (hours < 23) || (hours === 23 && minutes < 59);
+
+            if (isAfterStart && isBeforeEnd) {
+                showDot = true; // Força true, ignora storage
             }
         }
 
-        // Renderiza
+        // Renderização
+        const existingDot = batalhasTab.querySelector('.tab-notification-dot');
+        
         if (showDot) {
-            // Verifica se já não tem uma bolinha
-            if (!batalhasTab.querySelector('.tab-notification-dot')) {
+            if (!existingDot) {
                 const dot = document.createElement('div');
                 dot.className = 'tab-notification-dot';
                 batalhasTab.appendChild(dot);
             }
-
-            // Adiciona evento de clique para remover e salvar
-            // Usamos { once: true } para evitar múltiplos listeners
-            batalhasTab.addEventListener('click', function() {
-                const dot = batalhasTab.querySelector('.tab-notification-dot');
-                if (dot) dot.remove();
-                
-                if (activeKey) {
-                    localStorage.setItem(activeKey, 'true');
-                }
-            }, { once: true });
         } else {
-            // Garante que não tenha bolinha se não for o horário ou já tiver visto
-            const dot = batalhasTab.querySelector('.tab-notification-dot');
-            if (dot) dot.remove();
+            // Se showDot virou false (ex: virou 23:59 UTC de domingo), removemos
+            if (existingDot) existingDot.remove();
         }
     }
 
-    // Executa ao carregar
+    // --- 2. Evento de Clique (Definido apenas uma vez) ---
+    if (batalhasTab) {
+        batalhasTab.addEventListener('click', () => {
+            const now = new Date();
+            const day = now.getUTCDay();
+
+            // Se for Sábado: Comportamento padrão (salva visto e remove bolinha)
+            if (day === 6) {
+                localStorage.setItem(KEY_TAB_SAT, 'true');
+                const dot = batalhasTab.querySelector('.tab-notification-dot');
+                if (dot) dot.remove();
+            }
+
+            // Se for Domingo (day === 0): 
+            // NÃO faz nada. A bolinha continua lá visualmente e não salvamos nada.
+            // Ela sumirá sozinha quando checkGuildTabNotification detectar 23:59 UTC.
+        });
+    }
+
+    // --- 3. Inicialização e Loop ---
     checkGuildTabNotification();
 
-    // Opcional: Verifica a cada minuto caso o jogador esteja com a tela aberta na virada do horário
+    // Verifica a cada minuto para atualizar automaticamente (importante para remover às 23:59 de domingo)
     setInterval(checkGuildTabNotification, 60000);
 });
 </script>
@@ -1196,8 +1199,8 @@ document.addEventListener("DOMContentLoaded", () => {
              localStorage.removeItem(KEY_SAT); 
              localStorage.removeItem(KEY_SUN); 
         }
-        if (day === 0 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
-        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 00 && minutes >= 01) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
 
         const links = menuList.querySelectorAll('.menu-link');
         links.forEach(link => {

@@ -1,11 +1,9 @@
-
 document.addEventListener("DOMContentLoaded", () => {
     // Configurações e Chaves de Armazenamento
     const STORAGE_KEY_DATE = 'aden_last_daily_reset_utc';
     const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
     
     // Mapeamento dos botões
-    // OBS: Removi a guilda da lista genérica para tratar com lógica de horário específica abaixo
     const targets = [
         // Menu Iniciar (Footer)
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
@@ -27,7 +25,6 @@ document.addEventListener("DOMContentLoaded", () => {
             console.log("🔄 [Reset System] Novo dia detectado (UTC).");
             const currentStatus = {};
             targets.forEach(t => {
-                // Como removemos 'weekly' genérico da guilda, todos aqui são daily
                 currentStatus[t.key] = true;
             });
             
@@ -97,11 +94,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
-        // --- LÓGICA ESPECIAL DA GUILDA (Sábado e Domingo 23:30+) ---
+        // Atualiza a lógica da guilda
         handleGuildSpecialEvents();
     };
 
-    // Lógica Específica para a Guilda (Index/Footer)
+    // --- LÓGICA ESPECIAL DA GUILDA ---
     const handleGuildSpecialEvents = () => {
         const now = new Date();
         const day = now.getUTCDay(); // 0=Dom, 6=Sab, 1=Seg
@@ -110,14 +107,12 @@ document.addEventListener("DOMContentLoaded", () => {
         
         let showGuildDot = false;
         
-        // 1. Definição das Chaves de Controle
         const KEY_SAT = 'aden_guild_notif_seen_saturday';
-        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+        // Nota: Removemos a KEY_SUN pois a lógica de domingo agora é persistente por horário
 
-        // 2. Limpeza na Segunda-feira (Dia 1)
+        // 1. Limpeza na Segunda-feira (Dia 1)
         if (day === 1) {
             localStorage.removeItem(KEY_SAT);
-            localStorage.removeItem(KEY_SUN);
             // Remove a bolinha se existir
             const guildBtn = document.getElementById('guildBtn');
             if (guildBtn) {
@@ -127,33 +122,40 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // 3. Verifica Sábado (Dia 6)
-        if (day === 0) {
-            // Se ainda não viu (null), mostra bolinha
+        // 2. Verifica Sábado (Dia 6) - Comportamento Padrão (some ao clicar)
+        if (day === 6) {
             if (!localStorage.getItem(KEY_SAT)) {
                 showGuildDot = true;
             }
         }
 
-        // 4. Verifica Domingo (Dia 0) APÓS 23:30 UTC
+        // 3. Verifica Domingo (Dia 0) - Comportamento Persistente
+        // Mostra a partir de 00:01 UTC até 23:58:59 UTC
+        // Some automaticamente quando bater 23:59 UTC
         if (day === 0) {
-            if (hours === 23 && minutes >= 30) {
-                if (!localStorage.getItem(KEY_SUN)) {
-                    showGuildDot = true;
-                }
+            const isAfterStart = (hours === 0 && minutes >= 1) || hours > 0;
+            const isBeforeEnd = (hours < 23) || (hours === 23 && minutes < 59);
+
+            if (isAfterStart && isBeforeEnd) {
+                showGuildDot = true; // Força true independente de cliques
             }
         }
 
-        // 5. Renderiza a bolinha no botão da Guilda
+        // 4. Renderiza a bolinha no botão da Guilda
         const guildBtn = document.getElementById('guildBtn');
         if (guildBtn) {
             const existingDot = guildBtn.querySelector('.footer-notification-dot');
-            if (existingDot) existingDot.remove();
 
             if (showGuildDot) {
-                const dot = document.createElement('div');
-                dot.className = 'footer-notification-dot';
-                guildBtn.appendChild(dot);
+                // Só cria se ainda não existir para evitar duplicidade
+                if (!existingDot) {
+                    const dot = document.createElement('div');
+                    dot.className = 'footer-notification-dot';
+                    guildBtn.appendChild(dot);
+                }
+            } else {
+                // Se showGuildDot for false (ex: virou 23:59 no domingo), removemos
+                if (existingDot) existingDot.remove();
             }
         }
     };
@@ -178,31 +180,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
     
-    // Listener específico para o botão da Guilda no index
+    // Listener específico para o botão da Guilda
     const guildBtn = document.getElementById('guildBtn');
     if (guildBtn) {
         guildBtn.addEventListener('click', () => {
-            // Ao clicar no botão do footer, marcamos como visto para o horário atual
             const now = new Date();
             const day = now.getUTCDay();
-            const hours = now.getUTCHours();
-            const minutes = now.getUTCMinutes();
             
-            // Se for Sábado, marca o sábado como visto
-            if (day === 0) {
+            // Se for Sábado, marca como visto e remove a bolinha (comportamento padrão)
+            if (day === 6) {
                 localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
-            }
-            // Se for Domingo após 23:30, marca domingo como visto
-            if (day === 0 && (hours === 23 && minutes >= 30)) {
-                localStorage.setItem('aden_guild_notif_seen_sunday', 'true');
+                const dot = guildBtn.querySelector('.footer-notification-dot');
+                if (dot) dot.remove();
             }
             
-            // Remove a bolinha visualmente na hora
-            const dot = guildBtn.querySelector('.footer-notification-dot');
-            if (dot) dot.remove();
+            // Se for Domingo (day === 0), NÃO fazemos nada.
+            // A bolinha continua lá visualmente e não salvamos nada no storage.
+            // Ela sumirá sozinha quando handleGuildSpecialEvents detectar 23:59 UTC.
         });
     }
 
+    // Intervalo de verificação (a cada 60s)
     setInterval(() => {
         const todayStr = getTodayUTC();
         const lastReset = localStorage.getItem(STORAGE_KEY_DATE);
@@ -210,7 +208,8 @@ document.addEventListener("DOMContentLoaded", () => {
             currentStatus = checkReset();
             renderDots(currentStatus);
         } else {
-            // Verifica os horários especiais da guilda a cada minuto também
+            // Verifica os horários especiais da guilda a cada minuto
+            // Isso garante que a bolinha suma sozinha às 23:59 UTC no Domingo
             handleGuildSpecialEvents();
         }
     }, 60000);

@@ -1196,7 +1196,7 @@ document.addEventListener("DOMContentLoaded", () => {
              localStorage.removeItem(KEY_SAT); 
              localStorage.removeItem(KEY_SUN); 
         }
-        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
         if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
 
         const links = menuList.querySelectorAll('.menu-link');

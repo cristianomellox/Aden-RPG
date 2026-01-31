@@ -37,7 +37,8 @@ const GUILD_COLORS = [
     'var(--guild-color-mine)',
     'var(--guild-color-enemy-1)',
     'var(--guild-color-enemy-2)',
-    'var(--guild-color-enemy-3)'
+    'var(--guild-color-enemy-3)',
+    'var(--guild-color-enemy-4)'
 ];
 
 const REWARD_ITEMS = {

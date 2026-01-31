@@ -128,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // 3. Verifica Sábado (Dia 6)
-        if (day === 6) {
+        if (day === 0) {
             // Se ainda não viu (null), mostra bolinha
             if (!localStorage.getItem(KEY_SAT)) {
                 showGuildDot = true;
@@ -189,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const minutes = now.getUTCMinutes();
             
             // Se for Sábado, marca o sábado como visto
-            if (day === 6) {
+            if (day === 0) {
                 localStorage.setItem('aden_guild_notif_seen_saturday', 'true');
             }
             // Se for Domingo após 23:30, marca domingo como visto

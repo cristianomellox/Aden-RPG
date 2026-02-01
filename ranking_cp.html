@@ -1250,12 +1250,13 @@
     const style = document.createElement('style');
 
     style.innerHTML = `
+        /* Animação de movimento */
         @keyframes shine {
             0% { background-position: -200% center; }
             100% { background-position: 200% center; }
         }
 
-        /* --- ESTILO NOBRES (Mantido igual) --- */
+        /* --- 1. ESTILO DOS NOBRES (MANTIDO ORIGINAL) --- */
         .shiny-icon {
             display: inline-block;
             background: linear-gradient(
@@ -1276,55 +1277,57 @@
             font-size: 1.1em;
             line-height: 1;
             vertical-align: middle;
+            text-shadow: none !important;
         }
 
-        /* --- ESTILO JESTER (Correção: Sheen por sobreposição) --- */
+        /* --- 2. ESTILO DO JESTER (Visível + Brilho por cima) --- */
         .jester-icon {
             display: inline-block;
             position: relative; /* Necessário para alinhar o brilho */
             font-size: 1.1em;
             line-height: 1;
             vertical-align: middle;
-            /* Mantém a cor original do emoji */
-            color: inherit; 
-            z-index: 1;
+            text-shadow: none !important;
+            
+            /* Mantém a cor original do emoji visível */
+            color: inherit !important; 
+            -webkit-text-fill-color: inherit !important;
         }
 
-        /* O "Clone" que brilha por cima */
+        /* O "Reflexo" (Shimmer) que passa por cima */
         .jester-icon::after {
-            content: attr(data-text); /* Pega o mesmo emoji */
+            content: attr(data-text); /* Clona o emoji */
             position: absolute;
             left: 0;
             top: 0;
-            z-index: 2;
-            pointer-events: none; /* Deixa clicar através dele */
+            pointer-events: none;
             
-            /* Gradiente Negativo: Transparente -> Vermelho Sombrio -> Transparente */
-            /* Isso cria o efeito de um brilho "malígno" passando, sem pintar o fundo */
+            /* O TRUQUE: 
+               O texto é transparente, mas o fundo tem um gradiente
+               que vai de Transparente -> Vermelho Brilhante -> Transparente.
+               Isso cria apenas o reflexo passando.
+            */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
             background: linear-gradient(
                 120deg, 
-                transparent 30%, 
-                rgba(0, 0, 0, 0.4) 45%,    /* Sombra leve antes do brilho */
-                rgba(178, 34, 34, 0.9) 50%, /* Firebrick Red (O Brilho) */
-                rgba(0, 0, 0, 0.4) 55%,    /* Sombra leve depois */
-                transparent 70%
+                rgba(255,255,255,0) 30%, 
+                rgba(220, 20, 60, 0.8) 50%, /* Vermelho 'Crimson' intenso no meio */
+                rgba(255,255,255,0) 70%
             );
-            
             background-size: 200% auto;
             
-            /* Recorta o gradiente no formato do emoji */
+            /* Recorta o brilho no formato do emoji */
             -webkit-background-clip: text;
             background-clip: text;
             
-            /* Torna o texto do clone transparente para ver só o gradiente */
-            -webkit-text-fill-color: transparent;
-            color: transparent;
-            
-            animation: shine 4s linear infinite;
+            animation: shine 3s linear infinite; /* Um pouco mais rápido e nervoso */
         }
     `;
     document.head.appendChild(style);
 
+    // Lista de ícones
     const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
     const jesterEmoji = '\uD83E\uDD21'; // 🤡
 
@@ -1333,16 +1336,14 @@
             const span = document.createElement('span');
             span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
                 
-                // Se for o Jester
+                // Se for o Palhaço (Jester)
                 if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
-                    // Importante: Adicionamos data-text="${match}" para o CSS ler
+                    // Adicionamos 'data-text' para o CSS criar o clone de brilho
                     return `<span class="jester-icon" data-text="${match}">${match}</span>`;
-                } 
-                
-                // Se for Nobre
-                else {
-                    return `<span class="shiny-icon">${match}</span>`;
                 }
+                
+                // Se for Nobre (Mantém original)
+                return `<span class="shiny-icon">${match}</span>`;
             });
             node.parentNode.replaceChild(span, node);
         } else if (node.nodeType === 1 && 

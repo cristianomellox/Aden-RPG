@@ -1,7 +1,9 @@
 import { supabase } from './supabaseClient.js'
 
 // --- Configurações & Constantes ---
-const REGEN_TIME_MS = 3600 * 1000; // 1 Hora
+const NORMAL_REGEN_MS = 3600 * 1000; // 1 Hora (Fase Normal)
+const FAST_REGEN_MS = 60 * 1000;     // 1 Minuto (Fase Final - 20 min)
+const FINAL_PHASE_SECONDS = 1200;     // 20 Minutos para o fim
 const MAX_ACTIONS = 5;
 
 // --- Variáveis de Estado Global ---
@@ -37,8 +39,7 @@ const GUILD_COLORS = [
     'var(--guild-color-mine)',
     'var(--guild-color-enemy-1)',
     'var(--guild-color-enemy-2)',
-    'var(--guild-color-enemy-3)',
-    'var(--guild-color-enemy-4)'
+    'var(--guild-color-enemy-3)'
 ];
 
 const REWARD_ITEMS = {
@@ -164,6 +165,24 @@ function displayFloatingDamage(targetEl, val, isCrit) {
 // =================================================================
 
 /**
+ * Determina a velocidade de regeneração atual com base no tempo restante.
+ * Retorna milissegundos (3600000 ou 60000).
+ */
+function getCurrentRegenRate() {
+    if (!currentBattleState || !currentBattleState.instance) return NORMAL_REGEN_MS;
+
+    const now = new Date();
+    const end = new Date(currentBattleState.instance.end_time);
+    const diffSeconds = Math.floor((end - now) / 1000);
+
+    // Se faltar menos que o limite da fase final (10 min), acelera
+    if (diffSeconds > 0 && diffSeconds <= FINAL_PHASE_SECONDS) {
+        return FAST_REGEN_MS;
+    }
+    return NORMAL_REGEN_MS;
+}
+
+/**
  * Calcula o dano localmente baseado nos stats do jogador.
  * Deve espelhar a lógica do servidor para validação anti-cheat.
  */
@@ -184,8 +203,8 @@ function calculateLocalDamage(stats) {
 }
 
 /**
- * Replica a lógica de recuperação de ações (1h / 5 Max)
- * para atualização visual imediata.
+ * Replica a lógica de recuperação de ações.
+ * Usa getCurrentRegenRate() para alternar entre 1h e 1min.
  */
 function computeShownAttacksAndRemaining() {
     const playerState = (currentBattleState && currentBattleState.player_state) ? currentBattleState.player_state : null;
@@ -208,17 +227,19 @@ function computeShownAttacksAndRemaining() {
         return { shownAttacks: attacksLeft, secondsToNext: 0 };
     }
 
+    // Pega a taxa atual (1h ou 1min)
+    const regenRateMs = getCurrentRegenRate();
+
     const elapsedMs = now - new Date(lastAttackAt);
     const elapsedSeconds = Math.floor(elapsedMs / 1000);
-    const recovered = Math.floor(elapsedMs / REGEN_TIME_MS);
+    const recovered = Math.floor(elapsedMs / regenRateMs);
     
     let shown = Math.min(MAX_ACTIONS, attacksLeft + recovered);
     let secondsToNext = 0;
     
     if (shown < MAX_ACTIONS) {
         // Tempo restante = Ciclo total - (Tempo passado % Ciclo total)
-        // Convertendo para segundos para facilitar
-        const cycleSeconds = REGEN_TIME_MS / 1000;
+        const cycleSeconds = regenRateMs / 1000;
         const timeInCurrentCycle = elapsedSeconds % cycleSeconds;
         secondsToNext = cycleSeconds - timeInCurrentCycle;
     }
@@ -232,6 +253,7 @@ function optimisticUpdatePlayerActions(consumed = 1) {
 
     const ps = currentBattleState.player_state;
     const now = new Date();
+    const regenRateMs = getCurrentRegenRate();
     
     // 1. Aplica a regeneração pendente ao estado base
     const { shownAttacks } = computeShownAttacksAndRemaining();
@@ -240,16 +262,12 @@ function optimisticUpdatePlayerActions(consumed = 1) {
     let newAttacks = Math.max(0, shownAttacks - consumed);
     
     // 3. Reseta ou Ajusta o Timer
-    // Se estava full e gastou, o timer começa agora.
-    // Se não estava full, o timer continua rodando do "passado" ajustado (complicado ajustar o passado perfeitamente sem drift, 
-    // então para simplificar otimistamente: se regenerou algo, avançamos o last_attack_at).
-    
     if (shownAttacks > (ps.attacks_left || 0)) {
-         // Houve regeneração, avançamos o relógio base
+         // Houve regeneração, avançamos o relógio base para não "roubar" tempo do próximo ciclo
          const recoveredCount = shownAttacks - (ps.attacks_left || 0);
          if (ps.last_attack_at) {
              const oldTime = new Date(ps.last_attack_at).getTime();
-             const newTime = oldTime + (recoveredCount * REGEN_TIME_MS);
+             const newTime = oldTime + (recoveredCount * regenRateMs);
              ps.last_attack_at = new Date(newTime).toISOString();
          }
     }
@@ -705,27 +723,27 @@ function renderResultsScreen(instance, playerDamageRanking) {
         modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = 'gold';
         guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); // 3k * 2
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); // 4 * 2
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100); // 50 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100); 
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = '#00bcd4';
         guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); // 1k * 2
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); // 6 * 2
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); // 20 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); 
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else if (myGuildRank === 3 && myGuildResult.honor_points > 0) {
         modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
         modals.resultsRewardMessage.style.color = '#cd7f32';
         guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); // 500 * 2
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); // 4 * 2
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); // 10 * 2
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); 
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else {
@@ -1007,6 +1025,9 @@ async function pollBattleState() {
             if (captures.length > 0) {
                 captures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
                 lastCaptureTimestamp = captures[captures.length - 1].timestamp; 
+                
+                // GARANTIA: Banner no Boot - processa capturas recentes
+                handleNewCaptures(captures);
             } else {
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
@@ -1173,7 +1194,7 @@ async function pollDamageRanking() {
 
 function startHeartbeatPolling() {
     stopHeartbeatPolling(); 
-    heartbeatInterval = setInterval(pollHeartbeatState, 10000);
+    heartbeatInterval = setInterval(pollHeartbeatState, 20000);
 }
 
 function stopHeartbeatPolling() {
@@ -1243,13 +1264,29 @@ function startGlobalUITimer() {
             // Contagem para o fim da batalha (Domingo 23:59 UTC)
             const battleEnd = new Date(currentBattleState.instance.end_time);
             const timeLeft = Math.max(0, Math.floor((battleEnd - now) / 1000));
-            battle.timer.textContent = formatTime(timeLeft);
+            
+            const timerEl = battle.timer;
+            timerEl.textContent = formatTime(timeLeft);
 
-            // Lazy Polling: Ativa polling agressivo nos últimos 5 minutos (300s)
-            if (timeLeft <= 300 && timeLeft > 0 && !heartbeatInterval) {
-                 console.log("Fase final da batalha: Iniciando polling agressivo.");
-                 startHeartbeatPolling();
-                 startDamagePolling();
+            // Lazy Polling & Visual Change: Últimos 20 minutos (600s)
+            if (timeLeft <= FINAL_PHASE_SECONDS) {
+                 
+                 // Mudança Visual
+                 timerEl.style.background = "linear-gradient(to bottom, white, orange, orange)";
+                 timerEl.style.webkitBackgroundClip = "text";
+                 timerEl.style.webkitTextFillColor = "transparent";
+
+                 // Ativa Polling Agressivo se ainda não estiver ativo
+                 if (timeLeft > 0 && !heartbeatInterval) {
+                     console.log("Fase final da batalha (10min): Iniciando polling agressivo.");
+                     startHeartbeatPolling();
+                     startDamagePolling();
+                 }
+            } else {
+                 // Reseta estilo visual caso saia da fase (raro, mas garante consistência)
+                 timerEl.style.background = "linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%)";
+                 timerEl.style.webkitBackgroundClip = "text";
+                 timerEl.style.webkitTextFillColor = "transparent";
             }
 
             if (currentBattleState.player_state) {

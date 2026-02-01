@@ -1,11 +1,9 @@
-
 import { supabase } from './supabaseClient.js';
 
 // --- Configuração e Estado ---
-const CHECK_INTERVAL = 300000; // Checa a cada 5 minutos
+const CHECK_INTERVAL = 300000; // Checa a cada 30 segundos
 const STORAGE_KEY = 'aden_titles_last_check';
-const OWNERS_KEY = 'aden_city_owners'; // Rastreia mudança de dono das Cidades
-const RESET_TRACKER_KEY = 'aden_sunday_reset_log'; // Rastreia se o reset de domingo já ocorreu
+const OWNERS_KEY = 'aden_city_owners'; // NOVO: Para rastrear mudança de dono
 let notificationQueue = [];
 let isDisplaying = false;
 
@@ -70,35 +68,7 @@ function injectStyles() {
     }
 }
 
-// --- 2. Lógica de Reset Semanal (Domingo) ---
-function checkSundayReset() {
-    try {
-        const now = new Date();
-        const dayOfWeek = now.getDay(); // 0 = Domingo, 1 = Segunda, etc.
-        
-        // Verifica se é Domingo
-        if (dayOfWeek === 0) {
-            const todayStr = now.toDateString(); // Ex: "Sun Feb 01 2026"
-            const lastReset = localStorage.getItem(RESET_TRACKER_KEY);
-
-            // Se ainda não fizemos o reset HOJE
-            if (lastReset !== todayStr) {
-                console.log("[TitleNotifications] Domingo detectado: Limpando cache de donos e notificações...");
-                
-                // Limpa os donos e timestamps deste script
-                localStorage.removeItem(OWNERS_KEY);
-                localStorage.removeItem(STORAGE_KEY);
-                
-                // Registra que o reset foi feito hoje para não repetir no reload
-                localStorage.setItem(RESET_TRACKER_KEY, todayStr);
-            }
-        }
-    } catch (e) {
-        console.warn("[TitleNotifications] Erro ao verificar reset de domingo:", e);
-    }
-}
-
-// --- 3. Lógica Principal ---
+// --- 2. Lógica Principal ---
 
 async function checkTitleUpdates() {
     const { data: cities, error } = await supabase
@@ -129,7 +99,7 @@ async function checkTitleUpdates() {
     }
 }
 
-// --- 4. Processamento de Dados ---
+// --- 3. Processamento de Dados ---
 
 async function processUpdates(cities) {
     // Carrega cache de donos anteriores
@@ -223,7 +193,7 @@ async function processUpdates(cities) {
     }
 }
 
-// --- 5. Sistema de Fila e Exibição ---
+// --- 4. Sistema de Fila e Exibição ---
 
 function queueNotification(data) {
     notificationQueue.push(data);
@@ -290,9 +260,6 @@ function processQueue() {
 // --- Inicialização ---
 document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
-    // Executa a verificação de reset antes de buscar atualizações
-    checkSundayReset(); 
-    
     setTimeout(checkTitleUpdates, 2000);
     setInterval(checkTitleUpdates, CHECK_INTERVAL);
 });

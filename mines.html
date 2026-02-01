@@ -771,5 +771,67 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSideMenuNotifications();
 });
 </script>
+<script>
+(function() {
+    // 1. Definição dos Estilos
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .shiny-icon {
+            display: inline-block;
+            text-shadow: none !important;
+            background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            /* Garante que o emoji não seja renderizado como imagem nativa colorida */
+            color: transparent; 
+            font-weight: bold;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // 2. Ícones alvo
+    const targetIcons = /[👑⚜️🤡🛡️🔰]/g;
+
+    // 3. Função que processa os nós de texto
+    function styleTextNodes(node) {
+        // Se for um nó de texto e contiver os ícones
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            // Substitui os ícones pelo HTML estilizado, mantendo o resto do texto seguro
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            
+            // Substitui o nó de texto original pelo novo span processado
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE' && !node.classList.contains('shiny-icon')) {
+            // Se for um elemento (div, p, etc), percorre os filhos
+            // (Usamos Array.from para evitar problemas com a lista mudando durante o loop)
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    // 4. Observador de Mudanças (MutationObserver)
+    // Isso é necessário porque seu jogo carrega dados do Supabase e monta o HTML depois do load inicial
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    // Inicia o observador no corpo da página
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // Roda uma vez inicial para pegar o que já estiver estático
+    styleTextNodes(document.body);
+
+})();
+</script>
 </body>
 </html>

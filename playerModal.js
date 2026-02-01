@@ -7,7 +7,7 @@ const GLOBAL_DB_NAME = 'aden_global_db';
 const GLOBAL_DB_VERSION = 6;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
-const OWNERS_STORE = 'owners_store'; // Cache compartilhado de perfis (Minas/Arena/Ranking)
+const OWNERS_STORE = 'owners_store'; // Cache compartilhado (Minas/Arena/Ranking)
 
 const GlobalDB = {
     open: function() {
@@ -60,29 +60,27 @@ const GlobalDB = {
 };
 
 // =======================================================================
-// INVENTORY DB (CACHE DE ITENS DO JOGADOR LOCAL)
+// INVENTORY DB (CACHE DE ITENS E STATS DO JOGADOR LOCAL)
 // =======================================================================
-// Conecta no mesmo banco usado pelo inventory.js para ler itens equipados sem ir ao servidor
 const INV_DB_NAME = "aden_inventory_db";
 const INV_STORE_NAME = "inventory_store";
+const META_STORE_NAME = "meta_store"; // Onde os stats (Atk/Def/HP) ficam salvos
 
 const InventoryDB = {
     open: function() {
         return new Promise((resolve, reject) => {
-            // Apenas abre, não cria upgrade (deixa o inventory.js gerenciar versão)
             const req = indexedDB.open(INV_DB_NAME); 
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
     },
+    // Busca itens equipados
     getEquippedItems: async function() {
         try {
             const db = await this.open();
             return new Promise((resolve) => {
-                if (!db.objectStoreNames.contains(INV_STORE_NAME)) {
-                    resolve([]); 
-                    return;
-                }
+                if (!db.objectStoreNames.contains(INV_STORE_NAME)) { resolve([]); return; }
+                
                 const tx = db.transaction(INV_STORE_NAME, 'readonly');
                 const store = tx.objectStore(INV_STORE_NAME);
                 const req = store.getAll();
@@ -92,9 +90,8 @@ const InventoryDB = {
                     // Filtra apenas itens equipados
                     const equipped = allItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
                     
-                    // Garante hidratação com definições globais se necessário
+                    // Hidratação
                     const hydrated = equipped.map(item => {
-                        // Se o item salvo não tem o objeto 'items' com nome, tenta pegar do window.itemDefinitions
                         if ((!item.items || !item.items.name) && window.itemDefinitions) {
                             const def = window.itemDefinitions.get(item.item_id);
                             if (def) item.items = def;
@@ -105,10 +102,22 @@ const InventoryDB = {
                 };
                 req.onerror = () => resolve([]);
             });
-        } catch(e) { 
-            console.warn("Erro ao ler InventoryDB local:", e);
-            return []; 
-        }
+        } catch(e) { return []; }
+    },
+    // NOVO: Busca os STATS de combate salvos pelo inventory.js
+    getStats: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                if (!db.objectStoreNames.contains(META_STORE_NAME)) { resolve(null); return; }
+                
+                const tx = db.transaction(META_STORE_NAME, 'readonly');
+                const req = tx.objectStore(META_STORE_NAME).get('player_stats');
+                
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
     }
 };
 
@@ -159,22 +168,11 @@ document.addEventListener("DOMContentLoaded", () => {
         armadura: 'armor'
     };
 
-    // Helper numérico
-    const formatNumberCompact = window.formatNumberCompact || ((n) => {
-        try {
-            if (n === 0) return "0";
-            if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + "B";
-            if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + "M";
-            if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + "K";
-            return String(n);
-        } catch (e) { return String(n); }
-    });
+    const formatNumberCompact = window.formatNumberCompact || ((n) => n);
 
-    // --- CACHE LOCALSTORAGE (Fallback e Cache de Terceiros) ---
+    // --- CACHE LOCALSTORAGE (Cache de Terceiros) ---
     function setCache(key, data, ttl) {
-        try {
-            localStorage.setItem(key, JSON.stringify({ data, expiry: Date.now() + ttl }));
-        } catch (e) {}
+        try { localStorage.setItem(key, JSON.stringify({ data, expiry: Date.now() + ttl })); } catch (e) {}
     }
     function getCache(key) {
         try {
@@ -208,19 +206,18 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             if (!player) return;
 
-            // Stats: Tenta usar cached_combat_stats (DB) ou stats diretos (Local Player Object)
-            // Se for o próprio jogador, 'player' pode ter os atributos direto na raiz se vier do GlobalDB
-            const cachedStats = player.cached_combat_stats || player;
+            // Stats: Tenta usar cached_combat_stats, ou stats diretos (se vier do InventoryDB.getStats)
+            const statsSource = player.cached_combat_stats || player;
             
             const stats = {
-                min_attack: cachedStats.min_attack || player.min_attack || 0,
-                attack: cachedStats.attack || player.attack || 0,
-                defense: cachedStats.defense || player.defense || 0,
-                health: cachedStats.health || player.health || 0,
-                crit_chance: cachedStats.crit_chance || player.crit_chance || 0,
-                crit_damage: cachedStats.crit_damage || player.crit_damage || 0,
-                evasion: cachedStats.evasion || player.evasion || 0,
-                avatar_url: player.avatar_url || cachedStats.avatar_url
+                min_attack: statsSource.min_attack || 0,
+                attack: statsSource.attack || 0,
+                defense: statsSource.defense || 0,
+                health: statsSource.health || 0,
+                crit_chance: statsSource.crit_chance || 0,
+                crit_damage: statsSource.crit_damage || 0,
+                evasion: statsSource.evasion || 0,
+                avatar_url: player.avatar_url || statsSource.avatar_url
             };
 
             // Identidade
@@ -228,28 +225,22 @@ document.addEventListener("DOMContentLoaded", () => {
             if(ui.level) ui.level.textContent = `Nv. ${player.level || 1}`;
 
             // Guilda
-            // Prioridade: guildData passado > guild_name no player (OwnersStore) > Default
-            let gName = guildData?.name || player.guild_name || '';
+            let gName = guildData?.name || player.guild_name || 'Sem Guilda';
             let gFlag = guildData?.flag_url || "https://aden-rpg.pages.dev/assets/guildaflag.webp";
             
-            // Se não veio guildData mas tem guild_id, tenta buscar nome rápido no OwnersStore cache ou deixa vazio
-            if (!gName && player.guild_id && window.itemDefinitions) { 
-               // Lógica opcional futura: cache de guildas
-            }
-
             if(ui.flag) ui.flag.src = gFlag;
             if(ui.guildName) ui.guildName.textContent = gName;
             
             // Avatar
-            if(ui.avatar) ui.avatar.src = stats.avatar_url || 'https://via.placeholder.com/100';
+            if(ui.avatar) ui.avatar.src = stats.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
 
             // Stats
-            if(ui.stats.atk) ui.stats.atk.textContent = `${formatNumberCompact(stats.min_attack)} - ${formatNumberCompact(stats.attack)}`;
-            if(ui.stats.def) ui.stats.def.textContent = formatNumberCompact(stats.defense);
-            if(ui.stats.hp) ui.stats.hp.textContent = formatNumberCompact(stats.health);
-            if(ui.stats.critChance) ui.stats.critChance.textContent = `${stats.crit_chance}%`;
-            if(ui.stats.critDmg) ui.stats.critDmg.textContent = `${stats.crit_damage}%`;
-            if(ui.stats.evasion) ui.stats.evasion.textContent = `${stats.evasion}%`;
+            if(ui.stats.atk) ui.stats.atk.textContent = `${formatNumberCompact(Math.floor(stats.min_attack))} - ${formatNumberCompact(Math.floor(stats.attack))}`;
+            if(ui.stats.def) ui.stats.def.textContent = formatNumberCompact(Math.floor(stats.defense));
+            if(ui.stats.hp) ui.stats.hp.textContent = formatNumberCompact(Math.floor(stats.health));
+            if(ui.stats.critChance) ui.stats.critChance.textContent = `${Math.floor(stats.crit_chance)}%`;
+            if(ui.stats.critDmg) ui.stats.critDmg.textContent = `${Math.floor(stats.crit_damage)}%`;
+            if(ui.stats.evasion) ui.stats.evasion.textContent = `${Math.floor(stats.evasion)}%`;
 
             if(ui.cp) ui.cp.textContent = formatNumberCompact(Number(player.combat_power || 0));
 
@@ -270,7 +261,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     let html = `<img src="${imgSrc}" alt="${invItem.items.display_name || ''}">`;
                     if (invItem.level && invItem.level >= 1) {
-                        html += `<div class="item-level">Nv. ${invItem.level}</div>`;
+                        html += `<div class="item-level">+${invItem.level}</div>`;
                     }
                     slotDiv.innerHTML = html;
                 }
@@ -282,7 +273,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ----------------------------------------
-    // fetchPlayerData: SUPER OTIMIZADO
+    // fetchPlayerData: OTIMIZADO
     // ----------------------------------------
     async function fetchPlayerData(playerId) {
         try {
@@ -308,29 +299,36 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             // =========================================================
-            // CASO A: VENDO O PRÓPRIO PERFIL (ZERO EGRESS TOTAL)
+            // CASO A: VENDO O PRÓPRIO PERFIL (CORREÇÃO DE STATS ZERADOS)
             // =========================================================
             if (currentUserId && playerId === currentUserId) {
-                console.log("[playerModal] Visualizando perfil próprio (Modo Offline/Local).");
+                console.log("[playerModal] Visualizando perfil próprio (Local).");
                 
-                // A. Carrega Perfil do GlobalDB
+                // A. Carrega Perfil Básico (GlobalDB)
                 const localData = await GlobalDB.getPlayer();
                 
-                // B. Carrega Itens Equipados do InventoryDB (IndexedDB)
+                // B. Carrega Itens Equipados (InventoryDB)
                 const localItems = await InventoryDB.getEquippedItems();
+
+                // C. CORREÇÃO: Carrega Stats Calculados (InventoryDB - Meta Store)
+                // O script.js salva dados básicos, mas o inventory.js salva os stats completos.
+                const localStats = await InventoryDB.getStats();
                 
                 if (localData) {
-                    // Prepara estrutura de guilda se existir nos dados locais
+                    // Mescla os dados básicos com os stats completos do cache local
+                    // Se localStats for null (primeiro load), localData serve de base
+                    const finalData = { ...localData, ...localStats };
+
+                    // Prepara estrutura de guilda
                     let guildData = null;
                     if (localData.guild_name) {
                         guildData = { name: localData.guild_name, flag_url: localData.guild_flag || '' };
                     }
                     
-                    // Configura botão MP (esconde para si mesmo)
                     if (sendMpButton) sendMpButton.style.display = 'none';
 
-                    populateModal(localData, localItems, guildData);
-                    return; // FIM - Não chama Supabase
+                    populateModal(finalData, localItems, guildData);
+                    return; // FIM - Zero Egress
                 }
             }
 
@@ -338,44 +336,50 @@ document.addEventListener("DOMContentLoaded", () => {
             // CASO B: VENDO OUTRO JOGADOR
             // =========================================================
             
-            // Configura botão MP
             if (sendMpButton) {
                 sendMpButton.setAttribute('data-player-id', playerId);
-                sendMpButton.setAttribute('data-player-name', '...'); // Preenche depois
+                sendMpButton.setAttribute('data-player-name', '...');
                 sendMpButton.style.display = 'flex';
+                sendMpButton.href = "#"; // Evita navegação padrão
+                sendMpButton.onclick = (e) => {
+                    e.preventDefault();
+                    document.getElementById('playerModal').style.display = 'none';
+                    // Lógica para abrir PV
+                    const targetName = sendMpButton.getAttribute('data-player-name');
+                    if(window.location.href.includes('capital.html') || window.location.href.includes('index.html')) {
+                       // Se já estiver numa página com chat
+                       const pvModal = document.getElementById('pvModal');
+                       if(pvModal) {
+                           pvModal.style.display = 'flex';
+                           // Aqui precisaria da lógica de abrir conversa específica
+                       }
+                    } else {
+                       // Redireciona para index com parametros
+                       window.location.href = `index.html?action=open_pv&target_id=${playerId}&target_name=${encodeURIComponent(targetName)}`;
+                    }
+                };
             }
 
             // 1. UI Otimista com Cache de Donos (OwnersStore)
-            // Tenta mostrar Nome, Avatar e Guilda IMEDIATAMENTE se já vimos esse jogador
             const cachedOwner = await GlobalDB.getOwner(playerId);
             if (cachedOwner) {
                 console.log("[playerModal] Hit no cache de donos (UI Otimista).");
                 if(ui.name) ui.name.textContent = cachedOwner.name;
-                if(ui.avatar) ui.avatar.src = cachedOwner.avatar_url || 'https://via.placeholder.com/100';
-                // Guilda pode estar no cache
-                if(cachedOwner.guild_id && window.itemDefinitions && ui.guildName) {
-                    // Se tivermos um mapa de guildas cacheado em algum lugar, poderíamos usar.
-                    // Por enquanto, deixa carregar no fetch completo.
-                }
-                
+                if(ui.avatar) ui.avatar.src = cachedOwner.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
                 if (sendMpButton) sendMpButton.setAttribute('data-player-name', cachedOwner.name);
             }
 
-            // 2. Verifica Cache LocalStorage Completo (Profile + Items)
+            // 2. Cache Local Completo (LocalStorage)
             const cacheKey = `player_modal_data_${playerId}`;
             const cachedData = getCache(cacheKey);
             
-            // Validação simples do cache (evita bugs de troca de itens não refletida)
-            // Para outros jogadores, aceitamos o cache de 24h para economizar egress,
-            // a menos que o usuário queira "refresh" (não implementado aqui, mas o cache TTL cuida).
             if (cachedData) {
-                console.log("[playerModal] Hit no cache completo (LocalStorage).");
+                console.log("[playerModal] Hit no cache completo.");
                 populateModal(cachedData.player, cachedData.items || [], cachedData.guildData);
                 return;
             }
 
-            // 3. Busca Fresca (Egress Necessário para Stats e Itens de outros)
-            // OTIMIZAÇÃO: Seleciona apenas colunas necessárias e itens equipados
+            // 3. Busca Fresca (Egress)
             console.log(`[playerModal] Buscando dados remotos para ${playerId}`);
 
             const playerPromise = supabase
@@ -388,7 +392,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 .from('inventory_items')
                 .select(`id, equipped_slot, level, refine_level, items (name, display_name, stars)`)
                 .eq('player_id', playerId)
-                .not('equipped_slot', 'is', null); // SÓ EQUIPADOS
+                .not('equipped_slot', 'is', null);
 
             const [playerRes, itemsRes] = await Promise.all([playerPromise, itemsPromise]);
 
@@ -396,7 +400,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const player = playerRes.data;
             const items = itemsRes.data || [];
 
-            // 4. Busca Guilda (se houver e não estiver no cache simples)
+            // 4. Busca Guilda
             let guildData = null;
             if (player.guild_id) {
                 try {
@@ -409,23 +413,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 } catch (e) {}
             }
 
-            // Atualiza Botão MP
             if (sendMpButton) sendMpButton.setAttribute('data-player-name', player.name);
 
-            // Popula Modal
             populateModal(player, items, guildData);
 
             // 5. Salva Cache Completo
             setCache(cacheKey, { player, items, guildData }, CACHE_TTL_MS);
-
-            // 6. Atualiza Cache de Donos (para uso futuro otimista)
-            // Salva apenas dados básicos para não poluir o store de owners
-            if (player) {
-                // Aqui precisaríamos de uma função GlobalDB.saveOwners, mas o script atual não tem exposta.
-                // Como este arquivo é um módulo, não temos acesso fácil ao saveOwners do arena.js/mines.js 
-                // a menos que movamos para o GlobalDB object deste arquivo.
-                // (Opcional, mas recomendado se possível).
-            }
 
         } catch (e) {
             console.error('Erro ao carregar jogador:', e);
@@ -451,13 +444,3 @@ document.addEventListener("DOMContentLoaded", () => {
                 fetchPlayerData(playerId);
             });
         }
-    };
-
-    setupClickListener('guildMemberList');
-    setupClickListener('guildViewMemberList');
-    setupClickListener('guildRequestsList');
-
-    // Exporta globalmente
-    window.clearModalContent = clearModalContent;
-    window.fetchPlayerData = fetchPlayerData;
-});

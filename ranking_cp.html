@@ -1245,5 +1245,114 @@
     renderSideMenuNotifications();
 });
 </script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    // Adicionamos as animações e estilos
+    style.innerHTML = `
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- ESTILO PARA OS NOBRES (Azul/Brilho) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 40%, 
+                #ffffff 50%, 
+                #2b4bf2 60%, 
+                #add8e6 100%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 5s linear infinite;
+            font-weight: 900;
+            font-size: 1.6em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- ESTILO PARA O JESTER/BOBO (Negativo/Sombrio) --- */
+        .jester-icon {
+            display: inline-block;
+            /* Cores: Preto/Cinza -> Vermelho Escuro -> Roxo -> Vermelho Escuro -> Preto */
+            background: linear-gradient(
+                120deg, 
+                #333333 0%,    /* Cinza Escuro */
+                #8b0000 40%,   /* Vermelho Sangue */
+                #4b0082 50%,   /* Roxo (Indigo) - o "brilho" maligno */
+                #8b0000 60%,   
+                #333333 100%
+            );
+            background-size: 200% auto;
+            
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            
+            /* Animação um pouco mais rápida e caótica ou igual, mantive igual */
+            animation: shine 4s linear infinite; 
+            
+            font-weight: 900;
+            font-size: 1.1em;
+            line-height: 1;
+            vertical-align: middle;
+            
+            /* Opcional: Adiciona uma "aura" ruim leve */
+            filter: drop-shadow(0 0 1px rgba(139, 0, 0, 0.3));
+            text-shadow: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Regex segura
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    
+    // Identificador do Palhaço para comparação
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                // VERIFICAÇÃO: Se for o palhaço, usa a classe jester-icon, senão usa shiny-icon
+                const className = (match.indexOf(jesterEmoji) !== -1 || match === '🤡') 
+                                  ? 'jester-icon' 
+                                  : 'shiny-icon';
+                                  
+                return `<span class="${className}">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) { // Proteção para não re-estilizar
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
 </body>
 </html>

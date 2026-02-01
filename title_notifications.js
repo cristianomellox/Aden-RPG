@@ -1,9 +1,9 @@
 import { supabase } from './supabaseClient.js';
 
 // --- Configuração e Estado ---
-const CHECK_INTERVAL = 300000; // Checa a cada 30 segundos
+const CHECK_INTERVAL = 300000; // Checa a cada 5 minutos
 const STORAGE_KEY = 'aden_titles_last_check';
-const OWNERS_KEY = 'aden_city_owners'; // NOVO: Para rastrear mudança de dono
+const OWNERS_KEY = 'aden_city_owners'; // Rastreamento local de mudança de dono (Localstorage)
 let notificationQueue = [];
 let isDisplaying = false;
 
@@ -147,8 +147,6 @@ async function processUpdates(cities) {
         }
 
         // B. Busca Nobres (Títulos normais)
-        // Só busca se NÃO for uma troca de dono imediata (para evitar spam se o rei limpar a mesa)
-        // Ou busca sempre, mas geralmente na troca de dono os títulos são resetados.
         
         let rangeStart, rangeEnd;
         if (city.id === 1) {
@@ -257,9 +255,55 @@ function processQueue() {
     banner.addEventListener('animationend', onAnimationEnd);
 }
 
+// --- NOVO: Verificação de Domingo para Limpeza de Cache ---
+function checkSundayOwnerCacheReset() {
+    const today = new Date();
+    // 0 = Domingo
+    if (today.getDay() === 0) {
+        const todayStr = today.toDateString(); // Ex: "Sun Feb 01 2026"
+        const lastCleared = localStorage.getItem('aden_sunday_owners_cleared');
+
+        // Se ainda não limpamos hoje
+        if (lastCleared !== todayStr) {
+            console.log("🧹 [System] Domingo detectado. Tentando limpar cache de donos (GlobalDB)...");
+            
+            // Acessa o IndexedDB diretamente
+            const DB_NAME = 'aden_global_db';
+            const OWNERS_STORE = 'owners_store';
+            
+            const req = indexedDB.open(DB_NAME);
+            
+            req.onsuccess = (e) => {
+                const db = e.target.result;
+                if (db.objectStoreNames.contains(OWNERS_STORE)) {
+                    const tx = db.transaction(OWNERS_STORE, 'readwrite');
+                    tx.objectStore(OWNERS_STORE).clear();
+                    
+                    tx.oncomplete = () => {
+                        console.log("✅ [System] Store 'owners_store' limpa com sucesso.");
+                        // Marca como feito para não repetir hoje
+                        localStorage.setItem('aden_sunday_owners_cleared', todayStr);
+                    };
+                } else {
+                    // Store não existe ainda, mas marcamos como feito
+                    localStorage.setItem('aden_sunday_owners_cleared', todayStr);
+                }
+            };
+
+            req.onerror = (e) => {
+                console.warn("⚠️ [System] Erro ao abrir GlobalDB para limpeza:", e);
+            };
+        }
+    }
+}
+
 // --- Inicialização ---
 document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
+    
+    // Executa a limpeza se for domingo
+    checkSundayOwnerCacheReset();
+
     setTimeout(checkTitleUpdates, 2000);
     setInterval(checkTitleUpdates, CHECK_INTERVAL);
 });

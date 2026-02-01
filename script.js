@@ -1,4 +1,3 @@
-
 // Registro do Service Worker Otimizado
 if ('serviceWorker' in navigator) {
     const registerSW = () => {
@@ -224,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // =======================================================================
 
 (function() {
-    const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v31';
+    const INTRO_LOCALSTORAGE_KEY = 'aden_intro_seen_v32';
     const INTRO_VIDEO_SRC = 'https://aden-rpg.pages.dev/assets/aden_intro.webm';
     const FORCE_SHOW_PARAM = 'show_intro';
 
@@ -417,22 +416,22 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     };
 
-    // Função interna para rodar o vídeo da intro
+    // Função interna para rodar o vídeo da intro com Fade In/Out suave
     function startVideoFromUserGesture(lang, modalEl) {
         try {
             localStorage.setItem(INTRO_LOCALSTORAGE_KEY, '1');
             window.__introSeen = true;
 
-            modalEl.remove(); // Remove o modal
+            if(modalEl) modalEl.remove(); // Remove o modal
 
             // Cria overlay do vídeo
             const overlay = document.createElement('div');
             overlay.id = 'gameIntroOverlay';
-            overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;';
+            // Garante fundo preto absoluto
+            overlay.style.cssText = 'position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background-color:black;z-index:2147483647;padding:0;margin:0;overflow:hidden;';
             
             const container = document.createElement('div');
-            // FIX: Adicionado background-color: black para evitar o cinza do placeholder
-            container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;background-color: black;'; 
+            container.style.cssText = 'width:100vw;height:100vh;display:flex;justify-content:center;align-items:center;background-color:black;'; 
             
             const video = document.createElement('video');
             video.id = 'gameIntroVideo';
@@ -440,8 +439,9 @@ document.addEventListener("DOMContentLoaded", () => {
             video.setAttribute('playsinline', '');
             video.setAttribute('webkit-playsinline', '');
             video.setAttribute('preload', 'auto');
-            // FIX: Adicionado background-color: black para o elemento de vídeo
-            video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;background-color: black;'; 
+            
+            // COMEÇA INVISÍVEL PARA O FADE IN
+            video.style.cssText = 'width:100%;height:100%;max-width:540px;max-height:960px;object-fit:cover;outline:none;border:none;background-color:black;opacity:0;transition:opacity 0.8s ease-in-out;'; 
             
             container.appendChild(video);
             overlay.appendChild(container);
@@ -451,29 +451,50 @@ document.addEventListener("DOMContentLoaded", () => {
             const prevOverflow = document.documentElement.style.overflow;
             document.documentElement.style.overflow = 'hidden';
 
+            // Lógica de Fade Out próximo ao fim (0.8s antes)
+            const timeUpdateHandler = () => {
+                if (video.duration && video.currentTime > video.duration - 0.8) {
+                    video.style.opacity = '0'; // Fade Out
+                }
+            };
+            video.addEventListener('timeupdate', timeUpdateHandler);
+
+            // Lógica de Fade In assim que começar a tocar
+            video.addEventListener('playing', () => {
+                requestAnimationFrame(() => {
+                    video.style.opacity = '1';
+                });
+            }, { once: true });
+
             video.muted = false;
             video.play().catch(() => {
+                // Fallback para autoplay com som bloqueado
                 video.muted = true;
                 video.play().catch(() => {});
             });
 
             video.addEventListener('ended', () => {
                 window.__introPlaying = false;
-                overlay.remove();
-                document.documentElement.style.overflow = prevOverflow || '';
+                
+                // Pequeno delay para garantir que o fade out visual terminou
+                setTimeout(() => {
+                    overlay.remove();
+                    document.documentElement.style.overflow = prevOverflow || '';
 
-                if (typeof window.startBackgroundMusic === 'function') {
-                    window.startBackgroundMusic();
-                }
+                    if (typeof window.startBackgroundMusic === 'function') {
+                        window.startBackgroundMusic();
+                    }
 
-                // Se não for PT, recarrega para garantir tradução se não aplicou ainda
-                if (lang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
-                    window.location.reload();
-                }
+                    // Se não for PT, recarrega para garantir tradução se não aplicou ainda
+                    if (lang !== 'pt' && !document.querySelector('.goog-te-banner-frame')) {
+                        window.location.reload();
+                    }
+                }, 100);
             }, { once: true });
 
         } catch (e) {
             console.warn('Erro intro', e);
+            window.__introPlaying = false; // Garante liberação em caso de erro
         }
     }
 
@@ -1523,7 +1544,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
     if (!isVisible) {
       submenu.style.display = "flex";
-      const btnRect = btn.getBoundingClientRect();
+      const btnRect = button.getBoundingClientRect();
       submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
     }
   }
@@ -2011,76 +2032,91 @@ const drawResultsModal = document.getElementById('drawResultsModal');
 const drawResultsGrid = document.getElementById('drawResultsGrid');
 
 /**
- * === CORREÇÃO "EXORCISTA" ===
- * Esta função força a sincronização APENAS dos cartões com o servidor.
- * Ela apaga TODOS os cartões locais (para eliminar fantasmas) e insere
- * os que vieram do servidor.
+ * === GACHA OTIMIZADO (Prioridade Cache Local) ===
+ * Tenta ler os cartões (IDs 41 e 42) do IndexedDB (aden_inventory_db).
+ * Só vai ao servidor se o cache estiver vazio ou inacessível.
  */
-async function syncSpiralCardsWithServer() {
-    // 1. Busca estado real no servidor
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
-
-    // Busca apenas os cartões (item_id 41 e 42)
-    const { data: serverItems, error } = await supabaseClient
-        .from('inventory_items')
-        .select('*, items!inner(item_id)')
-        .eq('player_id', user.id)
-        .in('items.item_id', [41, 42]);
-
-    if (error) {
-        console.warn("⚠️ [Gacha] Erro ao sincronizar cartões:", error);
-        return; // Se der erro de rede, não mexe no cache para não piorar
-    }
+async function loadSpiralCardsLocalFirst() {
+    let common = 0;
+    let advanced = 0;
+    let foundInCache = false;
 
     try {
         const db = await openDB();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
 
-        // 2. Busca TUDO localmente para identificar os fantasmas
-        const allLocal = await new Promise((resolve) => {
+        const allItems = await new Promise((resolve) => {
             const req = store.getAll();
             req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => resolve([]);
         });
 
-        // Identifica IDs locais que são cartões (mesmo os fantasmas)
-        const localCardIds = allLocal
-            .filter(i => (i.item_id === 41 || i.items?.item_id === 41 || i.item_id === 42 || i.items?.item_id === 42))
-            .map(i => i.id);
+        // Filtra cartões na memória
+        allItems.forEach(item => {
+            // Verifica estrutura direta ou aninhada (compatibilidade)
+            const itemId = item.item_id || (item.items ? item.items.item_id : 0);
+            
+            if (itemId === 41) { // Cartão Comum
+                common += (item.quantity || 0);
+                foundInCache = true;
+            }
+            if (itemId === 42) { // Cartão Avançado
+                advanced += (item.quantity || 0);
+                foundInCache = true;
+            }
+        });
 
-        // 3. APAGA TODOS os cartões locais (Exorcismo)
-        if (localCardIds.length > 0) {
-            // console.log(`🗑️ [Gacha] Removendo ${localCardIds.length} slots de cartões locais para limpeza.`);
-            localCardIds.forEach(id => store.delete(id));
-        }
+        // Atualiza UI com dados do cache
+        if (commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
+        if (advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
 
-        // 4. INSERE a verdade do servidor
-        let common = 0, advanced = 0;
-        if (serverItems && serverItems.length > 0) {
-            serverItems.forEach(item => {
-                if(item.quantity > 0) {
-                    store.put(item); // Salva o item correto
-                }
-                // Conta para a UI
-                if (item.items.item_id === 41) common += item.quantity;
-                if (item.items.item_id === 42) advanced += item.quantity;
-            });
-        }
-
-        // 5. Atualiza a UI imediatamente
-        if(commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
-        if(advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
+        console.log(`🃏 [Gacha] Cartões carregados do cache: Comum=${common}, Adv=${advanced}`);
 
     } catch (e) {
-        console.warn("Erro ao limpar cache de cartões:", e);
+        console.warn("⚠️ Falha ao ler cache de cartões:", e);
+    }
+
+    // === FALLBACK ===
+    // Se não achou NADA no cache (e sabemos que o usuário pode ter cartões mas nunca abriu o inventário),
+    // ou se quisermos garantir sincronia forçada em algum momento, chamamos o server.
+    // Mas para priorizar performance, só chamamos se 'foundInCache' for false e o usuário estiver logado.
+    
+    if (!foundInCache) {
+        fetchSpiralCardsFromServerFallback(); 
+    }
+}
+
+// Fallback que vai ao servidor (Egress)
+async function fetchSpiralCardsFromServerFallback() {
+    // Usa currentPlayerId global para evitar chamada de Auth
+    if (!currentPlayerId) return; 
+
+    console.log("🌐 [Gacha] Cache vazio/falho. Buscando cartões no servidor...");
+    
+    const { data: serverItems, error } = await supabaseClient
+        .from('inventory_items')
+        .select('quantity, item_id') // Select mínimo
+        .eq('player_id', currentPlayerId)
+        .in('item_id', [41, 42]);
+
+    if (!error && serverItems) {
+        let common = 0, advanced = 0;
+        serverItems.forEach(i => {
+            if (i.item_id === 41) common += i.quantity;
+            if (i.item_id === 42) advanced += i.quantity;
+        });
+        if (commonCardCountSpan) commonCardCountSpan.textContent = `x ${common}`;
+        if (advancedCardCountSpan) advancedCardCountSpan.textContent = `x ${advanced}`;
+        
+        // Opcional: Salvar isso no cache agora para a próxima vez
+        // surgicalCacheUpdate(...)
     }
 }
 
 function openSpiralModal() {
-    // CHAMA A NOVA FUNÇÃO DE SINCRONIZAÇÃO FORÇADA
-    syncSpiralCardsWithServer();
+    // Chama a função otimizada
+    loadSpiralCardsLocalFirst();
     spiralModal.style.display = 'flex';
 }
 
@@ -2369,28 +2405,20 @@ async function checkRewardLimit() {
     try {
         let logData = null;
 
-        // 1. Tenta usar os dados já carregados na memória (ZERO EGRESS)
+        // 1. Tenta usar os dados já carregados na memória (ZERO EGRESS - Ideal)
         if (currentPlayerData && currentPlayerData.daily_rewards_log) {
             logData = currentPlayerData.daily_rewards_log;
         } else {
-            // Fallback apenas se não tiver carregado ainda (raro no fluxo normal)
-            const { data: { user } } = await supabaseClient.auth.getSession(); // getSession já pode ter cache
-            if (!user) {
-                // Tenta getUser como fallback final
-                const { data: { user: user2 } } = await supabaseClient.auth.getUser();
-                if (!user2) return;
-                
-                const { data, error } = await supabaseClient
-                    .from('players')
-                    .select('daily_rewards_log')
-                    .eq('id', user2.id)
-                    .single();
-                if (data) logData = data.daily_rewards_log;
-            } else {
+            // 2. Fallback: Tenta pegar o ID da sessão local (Zero Egress)
+            // Não usamos getUser() aqui para economizar chamadas de API de Auth.
+            // Se o getSession falhar, o usuário provavelmente não está logado ou token expirou.
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            if (session && session.user) {
                  const { data, error } = await supabaseClient
                     .from('players')
                     .select('daily_rewards_log')
-                    .eq('id', user.id)
+                    .eq('id', session.user.id)
                     .single();
                 if (data) logData = data.daily_rewards_log;
             }

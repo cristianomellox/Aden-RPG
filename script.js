@@ -1544,8 +1544,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("#sideMenu .submenu").forEach(s => s.style.display = "none");
     if (!isVisible) {
       submenu.style.display = "flex";
-      const btnRect = button.getBoundingClientRect();
-      submenu.style.top = btn.offsetTop + btn.offsetHeight / 2 + "px";
+      submenu.style.top = btn.offsetTop + "px"; 
     }
   }
 

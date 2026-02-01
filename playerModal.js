@@ -1,12 +1,13 @@
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
-// NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
+// ADEN GLOBAL DB (CACHE DE PERFIL E DONOS)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
 const GLOBAL_DB_VERSION = 6;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
+const OWNERS_STORE = 'owners_store'; // Cache compartilhado de perfis (Minas/Arena/Ranking)
 
 const GlobalDB = {
     open: function() {
@@ -16,6 +17,7 @@ const GlobalDB = {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
                 if (!db.objectStoreNames.contains(PLAYER_STORE)) db.createObjectStore(PLAYER_STORE, { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
@@ -32,7 +34,6 @@ const GlobalDB = {
             });
         } catch(e) { return null; }
     },
-    // Usado para verificar dados do próprio usuário se necessário
     getPlayer: async function() {
         try {
             const db = await this.open();
@@ -43,71 +44,98 @@ const GlobalDB = {
                 req.onerror = () => resolve(null);
             });
         } catch(e) { return null; }
+    },
+    // Busca um perfil no cache de "Donos" (populado por ranking/arena/minas)
+    getOwner: async function(id) {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                const tx = db.transaction(OWNERS_STORE, 'readonly');
+                const req = tx.objectStore(OWNERS_STORE).get(id);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    }
+};
+
+// =======================================================================
+// INVENTORY DB (CACHE DE ITENS DO JOGADOR LOCAL)
+// =======================================================================
+// Conecta no mesmo banco usado pelo inventory.js para ler itens equipados sem ir ao servidor
+const INV_DB_NAME = "aden_inventory_db";
+const INV_STORE_NAME = "inventory_store";
+
+const InventoryDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            // Apenas abre, não cria upgrade (deixa o inventory.js gerenciar versão)
+            const req = indexedDB.open(INV_DB_NAME); 
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getEquippedItems: async function() {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                if (!db.objectStoreNames.contains(INV_STORE_NAME)) {
+                    resolve([]); 
+                    return;
+                }
+                const tx = db.transaction(INV_STORE_NAME, 'readonly');
+                const store = tx.objectStore(INV_STORE_NAME);
+                const req = store.getAll();
+                
+                req.onsuccess = () => {
+                    const allItems = req.result || [];
+                    // Filtra apenas itens equipados
+                    const equipped = allItems.filter(i => i.equipped_slot !== null && i.quantity > 0);
+                    
+                    // Garante hidratação com definições globais se necessário
+                    const hydrated = equipped.map(item => {
+                        // Se o item salvo não tem o objeto 'items' com nome, tenta pegar do window.itemDefinitions
+                        if ((!item.items || !item.items.name) && window.itemDefinitions) {
+                            const def = window.itemDefinitions.get(item.item_id);
+                            if (def) item.items = def;
+                        }
+                        return item;
+                    });
+                    resolve(hydrated);
+                };
+                req.onerror = () => resolve([]);
+            });
+        } catch(e) { 
+            console.warn("Erro ao ler InventoryDB local:", e);
+            return []; 
+        }
     }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
     
-    // --- INÍCIO: FUNÇÕES DE CACHE ---
-    /**
-     * Armazena dados no localStorage com um tempo de expiração.
-     */
-    function setCache(key, data, ttl) {
-        const now = new Date();
-        const item = {
-            data: data,
-            expiry: now.getTime() + ttl,
-        };
-        try {
-            localStorage.setItem(key, JSON.stringify(item));
-        } catch (e) {
-            console.warn("[playerModal.js] Erro ao salvar no cache (localStorage cheio?):", e);
-        }
-    }
-
-    /**
-     * Recupera dados do localStorage se não estiverem expirados.
-     */
-    function getCache(key) {
-        const itemStr = localStorage.getItem(key);
-        if (!itemStr) return null;
-        try {
-            const item = JSON.parse(itemStr);
-            const now = new Date();
-            if (now.getTime() > item.expiry) {
-                localStorage.removeItem(key);
-                return null;
-            }
-            return item.data;
-        } catch (e) {
-            console.error("[playerModal.js] Erro ao ler cache:", e);
-            localStorage.removeItem(key); 
-            return null;
-        }
-    }
-    // --- FIM: FUNÇÕES DE CACHE ---
-
-    // Tempo de vida do cache (24 horas) - usado como fallback
-    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; 
-
     // Referências DOM
     const playerModal = document.getElementById('playerModal');
     const closeBtn = document.getElementById('closePlayerModal');
-    const playerNameEl = document.getElementById('playerName');
-    const playerLevelEl = document.getElementById('playerLevel');
-    const playerGuildFlagImg = document.getElementById('playerGuildFlag');
-    const playerGuildNameEl = document.getElementById('playerGuildName');
-    const playerAvatarEl = document.getElementById('playerAvatarEquip');
-    const combatPowerEl = document.getElementById('playerCombatPower');
+    
+    // Referências de UI
+    const ui = {
+        name: document.getElementById('playerName'),
+        level: document.getElementById('playerLevel'),
+        flag: document.getElementById('playerGuildFlag'),
+        guildName: document.getElementById('playerGuildName'),
+        avatar: document.getElementById('playerAvatarEquip'),
+        cp: document.getElementById('playerCombatPower'),
+        stats: {
+            atk: document.getElementById('playerAttack'),
+            def: document.getElementById('playerDefense'),
+            hp: document.getElementById('playerHealth'),
+            critChance: document.getElementById('playerCritChance'),
+            critDmg: document.getElementById('playerCritDamage'),
+            evasion: document.getElementById('playerEvasion')
+        }
+    };
 
-    const playerAttackEl = document.getElementById('playerAttack');
-    const playerDefenseEl = document.getElementById('playerDefense');
-    const playerHealthEl = document.getElementById('playerHealth');
-    const playerCritChanceEl = document.getElementById('playerCritChance');
-    const playerCritDamageEl = document.getElementById('playerCritDamage');
-    const playerEvasionEl = document.getElementById('playerEvasion');
-
-    // Referência ao botão de Enviar MP
     const sendMpButton = document.getElementById('sendmp');
 
     // Slots de equipamentos
@@ -122,7 +150,6 @@ document.addEventListener("DOMContentLoaded", () => {
         special2: document.getElementById('special2-slot')
     };
 
-    // Tradução de slots
     const SLOT_MAP = {
         arma: 'weapon',
         anel: 'ring',
@@ -132,7 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
         armadura: 'armor'
     };
 
-    // fallback para formatNumberCompact se não existir em outro script
+    // Helper numérico
     const formatNumberCompact = window.formatNumberCompact || ((n) => {
         try {
             if (n === 0) return "0";
@@ -140,58 +167,51 @@ document.addEventListener("DOMContentLoaded", () => {
             if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + "M";
             if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + "K";
             return String(n);
-        } catch (e) {
-            return String(n);
-        }
+        } catch (e) { return String(n); }
     });
 
+    // --- CACHE LOCALSTORAGE (Fallback e Cache de Terceiros) ---
+    function setCache(key, data, ttl) {
+        try {
+            localStorage.setItem(key, JSON.stringify({ data, expiry: Date.now() + ttl }));
+        } catch (e) {}
+    }
+    function getCache(key) {
+        try {
+            const item = JSON.parse(localStorage.getItem(key));
+            if (!item) return null;
+            if (Date.now() > item.expiry) { localStorage.removeItem(key); return null; }
+            return item.data;
+        } catch (e) { return null; }
+    }
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
     function clearModalContent() {
-        if (playerNameEl) playerNameEl.textContent = 'Carregando...';
-        if (playerLevelEl) playerLevelEl.textContent = '';
-        if (playerGuildFlagImg) playerGuildFlagImg.setAttribute("src", "https://aden-rpg.pages.dev/assets/guildaflag.webp");
-        if (playerGuildNameEl) playerGuildNameEl.textContent = '';
-        if (playerAvatarEl) playerAvatarEl.src = 'https://via.placeholder.com/100';
-        if (combatPowerEl) combatPowerEl.textContent = '';
+        if(ui.name) ui.name.textContent = 'Carregando...';
+        if(ui.level) ui.level.textContent = '';
+        if(ui.flag) ui.flag.setAttribute("src", "https://aden-rpg.pages.dev/assets/guildaflag.webp");
+        if(ui.guildName) ui.guildName.textContent = '';
+        if(ui.avatar) ui.avatar.src = 'https://via.placeholder.com/100';
+        if(ui.cp) ui.cp.textContent = '';
 
-        const statsElements = [
-            playerAttackEl,
-            playerDefenseEl,
-            playerHealthEl,
-            playerCritChanceEl,
-            playerCritDamageEl,
-            playerEvasionEl
-        ];
-        statsElements.forEach(el => {
-            if (!el) return;
-            el.textContent = '';
-            el.classList.add('shimmer');
+        Object.values(ui.stats).forEach(el => {
+            if(el) { el.textContent = ''; el.classList.add('shimmer'); }
         });
-
         Object.values(equipmentSlots).forEach(slot => {
-            if (slot) {
-                slot.innerHTML = '';
-                slot.classList.add('shimmer');
-            }
+            if(slot) { slot.innerHTML = ''; slot.classList.add('shimmer'); }
         });
-
-        if (sendMpButton) {
-            sendMpButton.style.display = 'none';
-            sendMpButton.removeAttribute('data-player-id');
-            sendMpButton.removeAttribute('data-player-name');
-        }
+        if(sendMpButton) sendMpButton.style.display = 'none';
     }
 
-    // --- POPULATE MODAL OTIMIZADO ---
-    // Agora usa cached_combat_stats em vez de calcular manualmente
+    // --- POPULATE MODAL ---
     async function populateModal(player, equippedItems = [], guildData = null) {
         try {
             if (!player) return;
 
-            // 1. Obtém Stats diretamente do JSON cacheado do banco
-            // Se o JSON for nulo (conta nova/bug), usa fallback seguro
-            const cachedStats = player.cached_combat_stats || {};
+            // Stats: Tenta usar cached_combat_stats (DB) ou stats diretos (Local Player Object)
+            // Se for o próprio jogador, 'player' pode ter os atributos direto na raiz se vier do GlobalDB
+            const cachedStats = player.cached_combat_stats || player;
             
-            // Fallback para atributos base se o JSON estiver vazio
             const stats = {
                 min_attack: cachedStats.min_attack || player.min_attack || 0,
                 attack: cachedStats.attack || player.attack || 0,
@@ -200,64 +220,59 @@ document.addEventListener("DOMContentLoaded", () => {
                 crit_chance: cachedStats.crit_chance || player.crit_chance || 0,
                 crit_damage: cachedStats.crit_damage || player.crit_damage || 0,
                 evasion: cachedStats.evasion || player.evasion || 0,
-                // O avatar também pode vir do cache ou da coluna direta
-                avatar_url: cachedStats.avatar_url || player.avatar_url
+                avatar_url: player.avatar_url || cachedStats.avatar_url
             };
 
-            // Preenche UI - Identidade
-            if (playerNameEl) playerNameEl.textContent = player.name || 'Jogador';
-            if (playerLevelEl) playerLevelEl.textContent = `Nv. ${player.level || 1}`;
+            // Identidade
+            if(ui.name) ui.name.textContent = player.name || 'Jogador';
+            if(ui.level) ui.level.textContent = `Nv. ${player.level || 1}`;
 
-            if (playerGuildFlagImg) {
-                playerGuildFlagImg.setAttribute("src",
-                    guildData?.flag_url && guildData.flag_url.trim() !== ""
-                        ? guildData.flag_url
-                        : "https://aden-rpg.pages.dev/assets/guildaflag.webp"
-                );
+            // Guilda
+            // Prioridade: guildData passado > guild_name no player (OwnersStore) > Default
+            let gName = guildData?.name || player.guild_name || '';
+            let gFlag = guildData?.flag_url || "https://aden-rpg.pages.dev/assets/guildaflag.webp";
+            
+            // Se não veio guildData mas tem guild_id, tenta buscar nome rápido no OwnersStore cache ou deixa vazio
+            if (!gName && player.guild_id && window.itemDefinitions) { 
+               // Lógica opcional futura: cache de guildas
             }
 
-            if (playerGuildNameEl) playerGuildNameEl.textContent = guildData?.name || '';
-            if (playerAvatarEl) playerAvatarEl.src = stats.avatar_url || 'https://via.placeholder.com/100';
+            if(ui.flag) ui.flag.src = gFlag;
+            if(ui.guildName) ui.guildName.textContent = gName;
+            
+            // Avatar
+            if(ui.avatar) ui.avatar.src = stats.avatar_url || 'https://via.placeholder.com/100';
 
-            // Preenche UI - Atributos Totais (Sem cálculo local)
-            if (playerAttackEl) playerAttackEl.textContent = `${formatNumberCompact(stats.min_attack)} - ${formatNumberCompact(stats.attack)}`;
-            if (playerDefenseEl) playerDefenseEl.textContent = `${formatNumberCompact(stats.defense)}`;
-            if (playerHealthEl) playerHealthEl.textContent = `${formatNumberCompact(stats.health)}`;
-            if (playerCritChanceEl) playerCritChanceEl.textContent = `${stats.crit_chance}%`;
-            if (playerCritDamageEl) playerCritDamageEl.textContent = `${stats.crit_damage}%`;
-            if (playerEvasionEl) playerEvasionEl.textContent = `${stats.evasion}%`;
+            // Stats
+            if(ui.stats.atk) ui.stats.atk.textContent = `${formatNumberCompact(stats.min_attack)} - ${formatNumberCompact(stats.attack)}`;
+            if(ui.stats.def) ui.stats.def.textContent = formatNumberCompact(stats.defense);
+            if(ui.stats.hp) ui.stats.hp.textContent = formatNumberCompact(stats.health);
+            if(ui.stats.critChance) ui.stats.critChance.textContent = `${stats.crit_chance}%`;
+            if(ui.stats.critDmg) ui.stats.critDmg.textContent = `${stats.crit_damage}%`;
+            if(ui.stats.evasion) ui.stats.evasion.textContent = `${stats.evasion}%`;
 
-            // CP (Se estiver disponível no objeto player ou calculado previamente)
-            const cp = player.combat_power || 0; 
-            if (combatPowerEl) combatPowerEl.textContent = `${formatNumberCompact(Number(cp))}`;
+            if(ui.cp) ui.cp.textContent = formatNumberCompact(Number(player.combat_power || 0));
 
-            // Remove shimmer
-            const allShimmer = document.querySelectorAll('.shimmer');
-            allShimmer.forEach(el => el.classList.remove('shimmer'));
+            // Remove Shimmer
+            document.querySelectorAll('.shimmer').forEach(el => el.classList.remove('shimmer'));
 
-            // Limpa slots e monta equipamentos (Visual Only)
-            Object.values(equipmentSlots).forEach(slot => {
-                if (slot) slot.innerHTML = '';
-            });
+            // Equipamentos
+            Object.values(equipmentSlots).forEach(s => s ? s.innerHTML = '' : null);
 
             (equippedItems || []).forEach(invItem => {
                 const mapped = SLOT_MAP[invItem.equipped_slot] || invItem.equipped_slot;
-                if (mapped && equipmentSlots[mapped]) {
-                    const slotDiv = equipmentSlots[mapped];
-                    if (!slotDiv) return;
-
-                    const totalStars = (invItem.items?.stars || 0) + (invItem.refine_level || 0);
-                    const safeName = invItem.items?.name || 'unknown';
+                const slotDiv = equipmentSlots[mapped];
+                
+                if (slotDiv && invItem.items) {
+                    const totalStars = (invItem.items.stars || 0) + (invItem.refine_level || 0);
+                    const safeName = invItem.items.name || 'unknown';
                     const imgSrc = `https://aden-rpg.pages.dev/assets/itens/${safeName}_${totalStars}estrelas.webp`;
-
-                    slotDiv.innerHTML = `<img src="${imgSrc}" alt="${invItem.items?.display_name || ''}">`;
-
+                    
+                    let html = `<img src="${imgSrc}" alt="${invItem.items.display_name || ''}">`;
                     if (invItem.level && invItem.level >= 1) {
-                        const levelElement = document.createElement('div');
-                        levelElement.className = 'item-level';
-                        levelElement.textContent = `Nv. ${invItem.level}`;
-                        slotDiv.appendChild(levelElement);
+                        html += `<div class="item-level">Nv. ${invItem.level}</div>`;
                     }
+                    slotDiv.innerHTML = html;
                 }
             });
 
@@ -267,172 +282,154 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ----------------------------------------
-    // fetchPlayerData: OTIMIZADO
+    // fetchPlayerData: SUPER OTIMIZADO
     // ----------------------------------------
     async function fetchPlayerData(playerId) {
         try {
-            if (!supabase) {
-                console.error("Supabase não inicializado.");
-                return;
-            }
-
-            // --- ID do usuário atual (para lógica do botão MP) ---
+            clearModalContent();
+            
+            // 1. Identificar Usuário Atual (Zero Egress via Auth Cache)
             let currentUserId = null;
             const globalAuth = await GlobalDB.getAuth();
             if (globalAuth && globalAuth.value && globalAuth.value.user) {
                 currentUserId = globalAuth.value.user.id;
             } else {
+                // Fallback LocalStorage
                 try {
-                    const { data: sessionData } = await supabase.auth.getSession({ cache: 'memory-only' });
-                    currentUserId = sessionData?.session?.user?.id || null;
-                } catch (e) {}
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                            const session = JSON.parse(localStorage.getItem(k));
+                            if (session?.user?.id) currentUserId = session.user.id;
+                            break;
+                        }
+                    }
+                } catch(e) {}
             }
 
-            clearModalContent();
-
-            const cacheKey = `player_modal_data_${playerId}`;
-            const cachedData = getCache(cacheKey);
-
-            // --- Validação de Cache ---
-            if (cachedData) {
-                let validationFailed = false;
-                let newProfileUpdate = null;
-                let newGuildId = null;
-                let newEquipmentFingerprint = { total_item_level: 0, equipped_count: 0 }; 
-
-                try {
-                    // Checagem Leve 1: Perfil
-                    const profilePromise = supabase
-                        .from('players')
-                        .select('last_profile_update, guild_id')
-                        .eq('id', playerId)
-                        .single();
-
-                    // Checagem Leve 2: Impressão digital dos itens (apenas id e level)
-                    // Necessário para saber se mudou o visual dos itens
-                    const itemsPromise = supabase
-                        .from('inventory_items')
-                        .select('level, id')
-                        .eq('player_id', playerId)
-                        .not('equipped_slot', 'is', null);
-
-                    const [profileResult, itemsResult] = await Promise.all([profilePromise, itemsPromise]);
-
-                    if (profileResult.error) throw profileResult.error;
-
-                    newProfileUpdate = profileResult.data.last_profile_update;
-                    newGuildId = profileResult.data.guild_id;
-
-                    if (!itemsResult.error && itemsResult.data) {
-                        newEquipmentFingerprint.equipped_count = itemsResult.data.length;
-                        newEquipmentFingerprint.total_item_level = itemsResult.data.reduce(
-                            (sum, item) => sum + (Number(item.level) || 0), 0
-                        );
-                    }
-
-                } catch (e) {
-                    console.warn("[playerModal.js] Falha na validação cache. Forçando refresh.", e);
-                    validationFailed = true;
-                }
-
-                const profileMatches = (newProfileUpdate === cachedData.player.last_profile_update);
-                const guildMatches = (newGuildId === cachedData.player.guild_id);
-                const cachedFingerprint = cachedData.equipmentFingerprint || { total_item_level: 0, equipped_count: 0 }; 
-                const levelMatches = newEquipmentFingerprint.total_item_level === cachedFingerprint.total_item_level;
-                const countMatches = newEquipmentFingerprint.equipped_count === cachedFingerprint.equipped_count;
-
-                if (!validationFailed && profileMatches && guildMatches && levelMatches && countMatches) {
-                    // Configura botão MP
-                    if (sendMpButton) {
-                        sendMpButton.setAttribute('data-player-id', cachedData.player.id);
-                        sendMpButton.setAttribute('data-player-name', cachedData.player.name);
-                        sendMpButton.style.display = (currentUserId && cachedData.player.id === currentUserId) ? 'none' : 'flex';
+            // =========================================================
+            // CASO A: VENDO O PRÓPRIO PERFIL (ZERO EGRESS TOTAL)
+            // =========================================================
+            if (currentUserId && playerId === currentUserId) {
+                console.log("[playerModal] Visualizando perfil próprio (Modo Offline/Local).");
+                
+                // A. Carrega Perfil do GlobalDB
+                const localData = await GlobalDB.getPlayer();
+                
+                // B. Carrega Itens Equipados do InventoryDB (IndexedDB)
+                const localItems = await InventoryDB.getEquippedItems();
+                
+                if (localData) {
+                    // Prepara estrutura de guilda se existir nos dados locais
+                    let guildData = null;
+                    if (localData.guild_name) {
+                        guildData = { name: localData.guild_name, flag_url: localData.guild_flag || '' };
                     }
                     
-                    await populateModal(cachedData.player, cachedData.items || [], cachedData.guildData);
-                    return; // Cache hit
+                    // Configura botão MP (esconde para si mesmo)
+                    if (sendMpButton) sendMpButton.style.display = 'none';
+
+                    populateModal(localData, localItems, guildData);
+                    return; // FIM - Não chama Supabase
                 }
             }
-            // --- Fim Validação Cache ---
 
+            // =========================================================
+            // CASO B: VENDO OUTRO JOGADOR
+            // =========================================================
+            
+            // Configura botão MP
+            if (sendMpButton) {
+                sendMpButton.setAttribute('data-player-id', playerId);
+                sendMpButton.setAttribute('data-player-name', '...'); // Preenche depois
+                sendMpButton.style.display = 'flex';
+            }
 
-            // --- BUSCA FRESCA OTIMIZADA ---
-            console.log(`[playerModal.js] Buscando dados frescos para ${playerId}`);
+            // 1. UI Otimista com Cache de Donos (OwnersStore)
+            // Tenta mostrar Nome, Avatar e Guilda IMEDIATAMENTE se já vimos esse jogador
+            const cachedOwner = await GlobalDB.getOwner(playerId);
+            if (cachedOwner) {
+                console.log("[playerModal] Hit no cache de donos (UI Otimista).");
+                if(ui.name) ui.name.textContent = cachedOwner.name;
+                if(ui.avatar) ui.avatar.src = cachedOwner.avatar_url || 'https://via.placeholder.com/100';
+                // Guilda pode estar no cache
+                if(cachedOwner.guild_id && window.itemDefinitions && ui.guildName) {
+                    // Se tivermos um mapa de guildas cacheado em algum lugar, poderíamos usar.
+                    // Por enquanto, deixa carregar no fetch completo.
+                }
+                
+                if (sendMpButton) sendMpButton.setAttribute('data-player-name', cachedOwner.name);
+            }
 
-            // 1. Busca Player + Cached Stats (Substitui busca de colunas individuais)
-            const { data: player, error: playerError } = await supabase
-                .from('players')
-                .select(`
-                    id, name, level, avatar_url, guild_id, last_profile_update, combat_power,
-                    cached_combat_stats
-                `)
-                .eq('id', playerId)
-                .single();
-
-            if (playerError || !player) {
-                console.error('Erro ao buscar jogador', playerError);
+            // 2. Verifica Cache LocalStorage Completo (Profile + Items)
+            const cacheKey = `player_modal_data_${playerId}`;
+            const cachedData = getCache(cacheKey);
+            
+            // Validação simples do cache (evita bugs de troca de itens não refletida)
+            // Para outros jogadores, aceitamos o cache de 24h para economizar egress,
+            // a menos que o usuário queira "refresh" (não implementado aqui, mas o cache TTL cuida).
+            if (cachedData) {
+                console.log("[playerModal] Hit no cache completo (LocalStorage).");
+                populateModal(cachedData.player, cachedData.items || [], cachedData.guildData);
                 return;
             }
 
-            // 2. BUSCA DE ITENS OTIMIZADA (Apenas visual)
-            // Removemos attack, defense, crit, etc. da query.
-            const { data: items, error: itemsError } = await supabase
+            // 3. Busca Fresca (Egress Necessário para Stats e Itens de outros)
+            // OTIMIZAÇÃO: Seleciona apenas colunas necessárias e itens equipados
+            console.log(`[playerModal] Buscando dados remotos para ${playerId}`);
+
+            const playerPromise = supabase
+                .from('players')
+                .select(`id, name, level, avatar_url, guild_id, combat_power, cached_combat_stats`)
+                .eq('id', playerId)
+                .single();
+
+            const itemsPromise = supabase
                 .from('inventory_items')
-                .select(`
-                    id,
-                    equipped_slot,
-                    level,
-                    refine_level,
-                    items (name, display_name, stars)
-                `)
+                .select(`id, equipped_slot, level, refine_level, items (name, display_name, stars)`)
                 .eq('player_id', playerId)
-                .not('equipped_slot', 'is', null);
+                .not('equipped_slot', 'is', null); // SÓ EQUIPADOS
 
-            if (itemsError) console.error('Erro ao buscar itens', itemsError);
+            const [playerRes, itemsRes] = await Promise.all([playerPromise, itemsPromise]);
 
-            // 3. Busca Guilda (se houver)
+            if (playerRes.error) throw playerRes.error;
+            const player = playerRes.data;
+            const items = itemsRes.data || [];
+
+            // 4. Busca Guilda (se houver e não estiver no cache simples)
             let guildData = null;
             if (player.guild_id) {
                 try {
                     const { data: guild } = await supabase
                         .from('guilds')
-                        .select('id, name, flag_url')
+                        .select('name, flag_url')
                         .eq('id', player.guild_id)
                         .single();
                     guildData = guild;
-                } catch (e) { console.warn("Erro ao buscar guilda:", e); }
+                } catch (e) {}
             }
 
-            // Configura botão MP
-            if (sendMpButton) {
-                sendMpButton.setAttribute('data-player-id', player.id);
-                sendMpButton.setAttribute('data-player-name', player.name);
-                sendMpButton.style.display = (currentUserId && player.id === currentUserId) ? 'none' : 'flex';
-            }
+            // Atualiza Botão MP
+            if (sendMpButton) sendMpButton.setAttribute('data-player-name', player.name);
 
             // Popula Modal
-            await populateModal(player, items || [], guildData);
+            populateModal(player, items, guildData);
 
-            // --- Salva Cache ---
-            try {
-                const allItems = items || [];
-                const newFingerprint = {
-                    total_item_level: allItems.reduce((sum, item) => sum + (Number(item.level) || 0), 0),
-                    equipped_count: allItems.length
-                };
-                
-                setCache(cacheKey, { 
-                    player, 
-                    items: allItems, 
-                    guildData, 
-                    equipmentFingerprint: newFingerprint 
-                }, CACHE_TTL_MS);
-            } catch (e) {
-                console.error("[playerModal.js] Erro ao salvar cache:", e);
+            // 5. Salva Cache Completo
+            setCache(cacheKey, { player, items, guildData }, CACHE_TTL_MS);
+
+            // 6. Atualiza Cache de Donos (para uso futuro otimista)
+            // Salva apenas dados básicos para não poluir o store de owners
+            if (player) {
+                // Aqui precisaríamos de uma função GlobalDB.saveOwners, mas o script atual não tem exposta.
+                // Como este arquivo é um módulo, não temos acesso fácil ao saveOwners do arena.js/mines.js 
+                // a menos que movamos para o GlobalDB object deste arquivo.
+                // (Opcional, mas recomendado se possível).
             }
 
         } catch (e) {
-            console.error('Erro inesperado ao carregar dados do jogador', e);
+            console.error('Erro ao carregar jogador:', e);
+            if(ui.name) ui.name.textContent = 'Erro ao carregar';
         }
     }
 
@@ -460,8 +457,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupClickListener('guildViewMemberList');
     setupClickListener('guildRequestsList');
 
+    // Exporta globalmente
     window.clearModalContent = clearModalContent;
     window.fetchPlayerData = fetchPlayerData;
-
-    console.log("[playerModal.js] carregado (versão otimizada cached_stats).");
 });

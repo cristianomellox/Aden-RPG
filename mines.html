@@ -773,47 +773,55 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 <script>
 (function() {
-    // 1. Definição dos Estilos
+    // 1. Estilo aprimorado para evitar parecer "texto simples"
     const style = document.createElement('style');
     style.innerHTML = `
         .shiny-icon {
             display: inline-block;
-            text-shadow: none !important;
-            background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+            background: linear-gradient(to bottom, #add8e6 0%, #ffffff 50%, #0000ff 100%); /* LightBlue, White, Blue */
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            /* Garante que o emoji não seja renderizado como imagem nativa colorida */
-            color: transparent; 
-            font-weight: bold;
+            color: transparent;
+            
+            /* Ajustes para manter a aparência de ícone forte */
+            font-weight: 900;
+            font-size: 1.1em; /* Levemente maior para destacar o gradiente */
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
         }
     `;
     document.head.appendChild(style);
 
-    // 2. Ícones alvo
-    const targetIcons = /[👑⚜️🤡🛡️🔰]/g;
+    // 2. Regex segura usando Unicode Escapes para não quebrar os caracteres (evita o bug ??)
+    // \uD83D\uDC51 = Coroa (👑)
+    // \u269C(\uFE0F)? = Flor de Lis (⚜️) - O \uFE0F é opcional mas crucial para não bugar
+    // \uD83E\uDD21 = Palhaço (🤡)
+    // \uD83D\uDEE1(\uFE0F)? = Escudo (🛡️)
+    // \uD83D\uDD30 = Chevrom (🔰)
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
 
-    // 3. Função que processa os nós de texto
     function styleTextNodes(node) {
-        // Se for um nó de texto e contiver os ícones
+        // Verifica se é texto e se tem um dos nossos ícones
         if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
             const span = document.createElement('span');
-            // Substitui os ícones pelo HTML estilizado, mantendo o resto do texto seguro
+            
+            // Substitui preservando o caractere original dentro do span
             span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
                 return `<span class="shiny-icon">${match}</span>`;
             });
             
-            // Substitui o nó de texto original pelo novo span processado
             node.parentNode.replaceChild(span, node);
-        } else if (node.nodeType === 1 && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE' && !node.classList.contains('shiny-icon')) {
-            // Se for um elemento (div, p, etc), percorre os filhos
-            // (Usamos Array.from para evitar problemas com a lista mudando durante o loop)
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon')) {
             Array.from(node.childNodes).forEach(styleTextNodes);
         }
     }
 
-    // 4. Observador de Mudanças (MutationObserver)
-    // Isso é necessário porque seu jogo carrega dados do Supabase e monta o HTML depois do load inicial
+    // 3. Observador para pegar o conteúdo que carrega depois (Supabase/Dinâmico)
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
@@ -822,13 +830,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Inicia o observador no corpo da página
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
 
-    // Roda uma vez inicial para pegar o que já estiver estático
+    // Execução inicial
     styleTextNodes(document.body);
 
 })();

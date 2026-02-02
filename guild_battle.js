@@ -1519,6 +1519,13 @@ async function init() {
                         else showAlert(data.message); // Erro lógico (ex: sem ações reais)
                         return;
                     }
+                    
+                    // FIX: Atualiza estado de ações imediatamente com resposta do servidor
+                    if (data.new_attacks_left !== undefined && currentBattleState && currentBattleState.player_state) {
+                        currentBattleState.player_state.attacks_left = data.new_attacks_left;
+                        currentBattleState.player_state.last_attack_at = data.new_last_attack_at;
+                        renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+                    }
 
                     // Se o objetivo foi destruído, precisamos sincronizar tudo (vencedor, honra, etc)
                     if (data.objective_destroyed) {

@@ -256,18 +256,20 @@ function processQueue() {
 }
 
 // --- NOVO: Verificação de Domingo para Limpeza de Cache ---
-function checkSundayOwnerCacheReset() {
+// --- Função Atualizada para Domingo e Segunda-feira ---
+function checkWeeklyOwnerCacheReset() {
     const today = new Date();
-    // 0 = Domingo
-    if (today.getDay() === 0) {
-        const todayStr = today.toDateString(); // Ex: "Sun Feb 01 2026"
-        const lastCleared = localStorage.getItem('aden_sunday_owners_cleared');
+    const dayOfWeek = today.getDay(); 
+    
+    // 0 = Domingo, 1 = Segunda-feira
+    if (dayOfWeek === 0 || dayOfWeek === 1) {
+        const todayStr = today.toDateString(); // Ex: "Mon Feb 02 2026"
+        const lastCleared = localStorage.getItem('aden_weekly_owners_cleared');
 
-        // Se ainda não limpamos hoje
+        // Se ainda não limpamos hoje (neste dia específico da semana)
         if (lastCleared !== todayStr) {
-            console.log("🧹 [System] Domingo detectado. Tentando limpar cache de donos (GlobalDB)...");
+            console.log(`🧹 [System] ${dayOfWeek === 0 ? 'Domingo' : 'Segunda-feira'} detectado. Limpando cache de donos...`);
             
-            // Acessa o IndexedDB diretamente
             const DB_NAME = 'aden_global_db';
             const OWNERS_STORE = 'owners_store';
             
@@ -281,12 +283,12 @@ function checkSundayOwnerCacheReset() {
                     
                     tx.oncomplete = () => {
                         console.log("✅ [System] Store 'owners_store' limpa com sucesso.");
-                        // Marca como feito para não repetir hoje
-                        localStorage.setItem('aden_sunday_owners_cleared', todayStr);
+                        // Salva que a limpeza de hoje foi concluída
+                        localStorage.setItem('aden_weekly_owners_cleared', todayStr);
                     };
                 } else {
-                    // Store não existe ainda, mas marcamos como feito
-                    localStorage.setItem('aden_sunday_owners_cleared', todayStr);
+                    // Se a store não existe, marcamos como feito para evitar tentativas inúteis
+                    localStorage.setItem('aden_weekly_owners_cleared', todayStr);
                 }
             };
 

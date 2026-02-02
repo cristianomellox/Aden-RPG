@@ -1134,5 +1134,41 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 })();
 </script>
+<script>
+  (function cleanAdenCache() {
+    const DB_NAME = 'aden_global_db';
+    const STORE_NAME = 'player_store';
+
+    // 1. Limpa o IndexedDB
+    const request = indexedDB.open(DB_NAME);
+
+    request.onsuccess = (event) => {
+        const db = event.target.result;
+        
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const clearRequest = store.clear();
+
+            clearRequest.onsuccess = () => {
+                console.log(`%c✅ [Cache] Store '${STORE_NAME}' limpa com sucesso!`, 'color: #00ff00; font-weight: bold;');
+                
+                // 2. Limpa as flags de controle local
+                localStorage.removeItem('aden_weekly_owners_cleared');
+                localStorage.removeItem('aden_city_owners');
+                localStorage.removeItem('aden_titles_last_check');
+                
+                console.log('%c✅ [Cache] Flags do LocalStorage removidas. Atualize a página (F5).', 'color: #00ff00;');
+            };
+
+            clearRequest.onerror = () => console.error('❌ Erro ao limpar a store.');
+        } else {
+            console.warn(`⚠️ A store '${STORE_NAME}' não foi encontrada no banco '${DB_NAME}'.`);
+        }
+    };
+
+    request.onerror = () => console.error('❌ Não foi possível abrir o banco de dados.');
+})();
+</script>
 </body>
 </html>

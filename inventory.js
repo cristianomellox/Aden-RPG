@@ -229,6 +229,9 @@ async function ensureDefinitionsLoaded() {
 // Função robusta de hidratação (cruza dados crus com definições)
 function hydrateItem(rawItem) {
     if (!rawItem) return null;
+    if (rawItem.equipped_slot === undefined) {
+        rawItem.equipped_slot = null;
+    }
     
     // Se já estiver hidratado corretamente, retorna
     if (rawItem.items && rawItem.items.name) return rawItem;

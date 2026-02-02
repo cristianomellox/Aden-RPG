@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v16 - Boss Crit & Music Update)");
+console.log("guild_raid.js (v17 - Optimistic Boss Damage & Fixes)");
 
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
@@ -116,8 +116,9 @@ let nextBossAttackTime = 0;
 // Otimista & Batch
 let playerStatsCache = null; 
 let pendingAttacksQueue = 0; 
-let batchSyncTimer = null; 
 let localDamageDealtInBatch = 0; 
+let localDamageTakenInBatch = 0; // NOVO: Acumula dano sofrido pelo player
+let batchSyncTimer = null; 
 let isBatchSyncing = false; 
 
 let isSwitchingFloors = false; 
@@ -129,7 +130,7 @@ let isMediaUnlocked = false;
 let ambientAudioInterval = null;
 let ambientAudioPlayer = null; 
 let bossMusicPlayer = null;
-let normalFloorMusicPlayer = null; // Player para andares normais
+let normalFloorMusicPlayer = null; 
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -172,6 +173,7 @@ function saveBatchState() {
     const data = {
         queue: pendingAttacksQueue,
         dmg: localDamageDealtInBatch,
+        taken: localDamageTakenInBatch, // Salva o dano sofrido
         raidId: currentRaidId,
         ts: Date.now()
     };
@@ -186,7 +188,8 @@ function loadBatchState() {
         if (data.raidId === currentRaidId && (Date.now() - data.ts < 600000)) {
             pendingAttacksQueue = data.queue || 0;
             localDamageDealtInBatch = data.dmg || 0;
-            if (pendingAttacksQueue > 0) {
+            localDamageTakenInBatch = data.taken || 0; // Recupera o dano sofrido
+            if (pendingAttacksQueue > 0 || localDamageTakenInBatch > 0) {
                  triggerBatchSync(); 
             }
         } else {
@@ -242,7 +245,7 @@ function createMediaPlayers() {
     }
     if (!ambientAudioPlayer) {
         ambientAudioPlayer = new Audio();
-        ambientAudioPlayer.volume = 0.2;
+        ambientAudioPlayer.volume = 0.5;
     }
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
@@ -1180,28 +1183,32 @@ async function performAttackOptimistic() {
 }
 
 async function triggerBatchSync() {
-    if (pendingAttacksQueue === 0 || isBatchSyncing) return;
+    if ((pendingAttacksQueue === 0 && localDamageTakenInBatch === 0) || isBatchSyncing) return;
     isBatchSyncing = true;
 
     const attacksToSend = pendingAttacksQueue;
     const damageToSend = localDamageDealtInBatch; // Dano total acumulado
+    const damageTakenToSend = localDamageTakenInBatch; // Dano sofrido
 
     pendingAttacksQueue = 0;
     localDamageDealtInBatch = 0;
+    localDamageTakenInBatch = 0; // Reset
+    
     saveBatchState(); 
     if (batchSyncTimer) clearTimeout(batchSyncTimer);
 
     updateAttackUI();
 
     try {
-        console.log(`[Sync] Enviando lote: ${attacksToSend} atqs, ${damageToSend} dano.`);
+        console.log(`[Sync] Enviando lote: ${attacksToSend} atqs, ${damageToSend} dano, ${damageTakenToSend} sofrido.`);
         
-        // ENVIA DANO CALCULADO
+        // ENVIA DANO CALCULADO E SOFRIDO
         const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
             p_player_id: userId,
             p_raid_id: currentRaidId,
             p_attack_count: attacksToSend,
-            p_claimed_damage: damageToSend
+            p_claimed_damage: damageToSend,
+            p_damage_taken: damageTakenToSend
         });
 
         if (error) throw new Error(error.message);
@@ -1281,6 +1288,7 @@ async function triggerBatchSync() {
         // Rollback
         pendingAttacksQueue += attacksToSend;
         localDamageDealtInBatch += damageToSend;
+        localDamageTakenInBatch += damageTakenToSend; // Restaura
         isSwitchingFloors = false;
         saveBatchState();
         updateAttackUI();
@@ -1477,6 +1485,10 @@ async function simulateLocalBossAttackLogic() {
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
              
+             // ACUMULA O DANO PARA ENVIAR
+             localDamageTakenInBatch += finalDmg; 
+             saveBatchState();
+
              // Exibe dano com cor de crítico se necessário
              displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, isBossCrit);
              
@@ -1493,6 +1505,11 @@ async function simulateLocalBossAttackLogic() {
 
              if (localPlayerHp <= 0) {
                  handleOptimisticDeath();
+                 triggerBatchSync(); // Sincroniza morte imediatamente
+             } else {
+                 // Sincroniza dano sofrido com debounce
+                 if (batchSyncTimer) clearTimeout(batchSyncTimer);
+                 batchSyncTimer = setTimeout(triggerBatchSync, BATCH_DEBOUNCE_MS);
              }
         });
     });

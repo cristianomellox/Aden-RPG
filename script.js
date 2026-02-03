@@ -1,30 +1,3 @@
-// Registro do Service Worker Otimizado
-if ('serviceWorker' in navigator) {
-    const registerSW = () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => {
-                // Verifica se há atualizações a cada 1 hora se o app ficar aberto
-                setInterval(() => reg.update(), 60 * 60 * 1000); 
-                
-                if (reg.installing) {
-                    console.log('⚙️ SW: Instalando...');
-                } else if (reg.waiting) {
-                    console.log('⚙️ SW: Aguardando ativação...');
-                } else if (reg.active) {
-                    console.log('✅ SW: Ativo e servindo cache!');
-                }
-            })
-            .catch(err => console.error('❌ Erro ao registrar SW:', err));
-    };
-
-    // Se a página já carregou, registra agora. Se não, espera o load.
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        registerSW();
-    } else {
-        window.addEventListener('load', registerSW);
-    }
-}
-
 (function() {
     console.log("🛡️ Monitor de Egress Supabase Iniciado (Fetch + WebSocket)");
 
@@ -131,6 +104,33 @@ if ('serviceWorker' in navigator) {
     }
 
 })();
+
+// Registro do Service Worker Otimizado
+if ('serviceWorker' in navigator) {
+    const registerSW = () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+                // Verifica se há atualizações a cada 1 hora se o app ficar aberto
+                setInterval(() => reg.update(), 60 * 60 * 1000); 
+                
+                if (reg.installing) {
+                    console.log('⚙️ SW: Instalando...');
+                } else if (reg.waiting) {
+                    console.log('⚙️ SW: Aguardando ativação...');
+                } else if (reg.active) {
+                    console.log('✅ SW: Ativo e servindo cache!');
+                }
+            })
+            .catch(err => console.error('❌ Erro ao registrar SW:', err));
+    };
+
+    // Se a página já carregou, registra agora. Se não, espera o load.
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        registerSW();
+    } else {
+        window.addEventListener('load', registerSW);
+    }
+}
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
 let backgroundMusic;

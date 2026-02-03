@@ -1,13 +1,101 @@
-import { supabase } from './supabaseClient.js'
 
+import { supabase } from './supabaseClient.js'
+// =======================================================================
+// INÍCIO: MONITOR DE EGRESS (CORRIGIDO)
+// =======================================================================
+(function() {
+    console.log("🛡️ Monitor de Egress Supabase Iniciado (Corrigido para 'supabaseClient')");
+
+    const LOG_TABLE = 'rpc_logs'; 
+    const IGNORE_URLS = [LOG_TABLE, 'intake.supabase.co']; 
+
+    // 1. MONITOR DE HTTP (REST, Auth, Selects, RPCs)
+    const originalFetch = window.fetch;
+
+    window.fetch = async (...args) => {
+        const [resource, config] = args;
+        const urlStr = resource ? resource.toString() : "";
+
+        // 🛑 EVITA LOOP INFINITO
+        if (IGNORE_URLS.some(x => urlStr.includes(x))) {
+            return originalFetch(...args);
+        }
+
+        let response;
+        try {
+            response = await originalFetch(...args);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+
+        const clone = response.clone();
+        
+        clone.blob().then(blob => {
+            const size = blob.size;
+            const method = config?.method || 'GET';
+            
+            let functionName = "unknown";
+            try {
+                const urlObj = new URL(urlStr);
+                const pathParts = urlObj.pathname.split('/');
+                functionName = pathParts[pathParts.length - 1] || "root";
+                if (urlObj.search) functionName += ` (query)`;
+            } catch (e) {}
+
+            console.log(`📡 [HTTP] ${method} ${functionName} - ${size} bytes`);
+            logToSupabase(`http_${method}_${functionName}`, size);
+        }).catch(err => console.error("⚠️ Erro ao calcular tamanho do fetch:", err));
+
+        return response;
+    };
+
+    // 2. MONITOR DE WEBSOCKET (Realtime)
+    const OriginalWebSocket = window.WebSocket;
+    window.WebSocket = class extends OriginalWebSocket {
+        constructor(url, protocols) {
+            super(url, protocols);
+            if (url.toString().includes('supabase') || url.toString().includes('realtime')) {
+                this.addEventListener('message', (event) => {
+                    const size = new Blob([event.data]).size;
+                    logToSupabase('realtime_msg', size);
+                });
+            }
+        }
+    };
+
+    // 3. FUNÇÃO DE LOG (CORRIGIDA)
+    async function logToSupabase(name, bytes) {
+        // CORREÇÃO AQUI: Verifica se 'supabaseClient' existe (usado no script.js)
+        // Se não, tenta 'supabase' (usado em módulos), mas verifica se tem o método .from
+        const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : 
+                       ((typeof supabase !== 'undefined' && typeof supabase.from === 'function') ? supabase : null);
+
+        if (!client) {
+            console.warn("⚠️ Cliente Supabase (supabaseClient) não encontrado. O log não será salvo.");
+            return;
+        }
+
+        try {
+            await client.from(LOG_TABLE).insert({
+                function_name: name,
+                size_bytes: bytes
+            });
+        } catch (e) {
+            console.error("❌ Falha ao salvar log de egress:", e);
+        }
+    }
+})();
+// =======================================================================
+// FIM DO MONITOR
+// =======================================================================
 // =======================================================================
 // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS + CACHE DE DONOS V3)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6; // Atualizado para criar a owners_store
+const GLOBAL_DB_VERSION = 6; 
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
-const OWNERS_STORE = 'owners_store'; // Nova Store
+const OWNERS_STORE = 'owners_store'; 
 
 const OWNERS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 Horas em milissegundos
 
@@ -76,10 +164,6 @@ const GlobalDB = {
     },
 
     // --- MÉTODOS DE CACHE DE DONOS (V3) ---
-
-    /**
-     * Retorna um Mapa (objeto) com donos válidos que ainda não expiraram (24h).
-     */
     getAllOwners: async function() {
         try {
             const db = await this.open();
@@ -109,10 +193,6 @@ const GlobalDB = {
         }
     },
 
-    /**
-     * Salva ou atualiza a lista de donos no cache com timestamp atual.
-     * Normaliza as chaves curtas (do RPC) para longas se necessário.
-     */
     saveOwners: async function(ownersList) {
         if (!ownersList || ownersList.length === 0) return;
         try {
@@ -147,7 +227,7 @@ const GlobalDB = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("[mines] DOM ready - Versão Otimizada (Client Calculation + Lazy Owners)");
+  console.log("[mines] DOM ready - Versão Otimizada vFinal");
 
   // =================================================================
   // 1. ÁUDIO SYSTEM (INTACTO)
@@ -182,7 +262,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const ab = await res.arrayBuffer();
       audioBuffers[name] = await decodeAudioDataCompat(ab);
     } catch (e) {
-      console.warn(`[audio] preload ${name} falhou, fallback ativado:`, e);
       audioBuffers[name] = null;
     }
   }
@@ -243,38 +322,36 @@ document.addEventListener("DOMContentLoaded", async () => {
   let maxMonsterHealth = 1;
   let hasAttackedOnce = false;
 
-  // --- NOVO: CACHE GLOBAL DE DONOS ---
-  // Inicia vazio, será preenchido do IndexedDB no boot()
+  // --- CACHE GLOBAL DE DONOS ---
   let globalOwnersMap = {}; 
 
   // Estado Local de Ataques (Optimistic UI)
   let localAttacksLeft = 0;
-  let nextAttackTime = null; // Timestamp em milissegundos
+  let nextAttackTime = null; 
   let cooldownInterval = null;
 
   // Timers de Combate
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
 
-  // --- NOVAS VARIÁVEIS PARA OTIMIZAÇÃO (BATCH & CACHE & CLIENT CALC) ---
-  let cachedCombatStats = null;      // Stats de combate (Dano, Crit)
-  let pendingBatch = 0;              // Contagem de ataques na fila
-  let pendingDamageBatch = 0;        // [NOVO] Acumulador de DANO REAL calculado no cliente
-  let batchFlushTimer = null;        // Timer para enviar se parar de clicar
-  let currentMonsterHealthGlobal = 0; // HP Otimista Global
+  // --- VARIÁVEIS OTIMIZAÇÃO ---
+  let cachedCombatStats = null;      
+  let pendingBatch = 0;              
+  let pendingDamageBatch = 0;        
+  let batchFlushTimer = null;        
+  let currentMonsterHealthGlobal = 0; 
   
-  // CONFIGURAÇÃO DE BATCH, DEBOUNCE E MODO HÍBRIDO
-  let knownParticipantCount = 0;     // NOVO: Controla se estamos Solo ou Multi
+  // CONFIGURAÇÃO DE BATCH
+  let knownParticipantCount = 0;     
   
-  const BATCH_THRESHOLD_MULTI = 5;   // Padrão Multi
-  const BATCH_THRESHOLD_SOLO = 10;   // Padrão Solo (acumula mais)
+  const BATCH_THRESHOLD_MULTI = 5;   
+  const BATCH_THRESHOLD_SOLO = 10;   
   
-  const DEBOUNCE_TIME_MULTI = 10000;  // 4s Multi
-  const DEBOUNCE_TIME_SOLO = 40000;  // 10s Solo
+  const DEBOUNCE_TIME_MULTI = 10000;  
+  const DEBOUNCE_TIME_SOLO = 40000;  
   
-  const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; // 72 Horas
+  const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; 
   
-  // Controle do primeiro ataque
   let isFirstAttackSequence = true; 
 
   // =================================================================
@@ -304,7 +381,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Botões Gerais
   const buyAttackBtn = document.getElementById("buyAttackBtn");
-  // O botão de Refresh foi removido conforme solicitado
   const cycleInfoElement = document.getElementById("cycleInfo");
 
   // Footer & History
@@ -386,17 +462,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     return null;
   }
 
-  // Cache Genérico de Player Data (Gold, etc.) - OTIMIZADO PARA GLOBALDB
   async function getCachedPlayerData() {
     try {
-      // 1. Tenta ler do GlobalDB
       const globalData = await GlobalDB.getPlayer();
       if (globalData) return globalData;
-
-      // 2. Fallback window memory
       if (window.currentPlayerData) return window.currentPlayerData;
-      
-      // 3. Fallback LocalStorage
       const cached = localStorage.getItem('player_data_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -406,17 +476,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     return null;
   }
 
-  // --- CACHE DE COMBAT STATS (Zero Egress: Lê do DB Local se possível) ---
+  // --- CACHE DE COMBAT STATS (Zero Egress) ---
   async function getOrUpdatePlayerStatsCache(forceUpdate = false) {
     if (!userId) return null;
     const now = Date.now();
     const cacheKey = `player_combat_stats_${userId}`;
     
     if (!forceUpdate) {
-        // Se já tivermos a variável em memória (do boot), usa
         if (cachedCombatStats) return cachedCombatStats;
 
-        // 1. Tenta ler do GlobalDB
         const globalData = await GlobalDB.getPlayer();
         if (globalData && globalData.attack !== undefined) {
              cachedCombatStats = {
@@ -429,7 +497,6 @@ document.addEventListener("DOMContentLoaded", async () => {
              return cachedCombatStats;
         }
 
-        // 2. Fallback LocalStorage
         let stored = localStorage.getItem(cacheKey);
         if (stored) {
             try {
@@ -442,7 +509,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // 3. Busca do Backend (Apenas se não achou em nenhum cache local)
     const { data, error } = await supabase.rpc('get_player_combat_stats', { p_player_id: userId });
     
     if (error || !data) {
@@ -450,30 +516,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         return null;
     }
 
-    // Salva no Cache
     const cacheObj = { timestamp: now, data: data };
     localStorage.setItem(cacheKey, JSON.stringify(cacheObj));
     cachedCombatStats = data;
     return cachedCombatStats;
   }
 
-  // Atualiza Gold em todos os níveis (GlobalDB, LocalStorage, Memória)
   function updateCachedGold(newGold) {
     try {
-      // 1. Memória
       if (window.currentPlayerData) window.currentPlayerData.gold = newGold;
-      
-      // 2. GlobalDB (IndexedDB)
       GlobalDB.updatePlayerPartial({ gold: newGold });
-
-      // 3. LocalStorage Legacy
       const cached = localStorage.getItem('player_data_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
         parsed.data.gold = newGold;
         localStorage.setItem('player_data_cache', JSON.stringify(parsed));
       }
-      
       if (typeof window.renderPlayerUI === 'function' && window.currentPlayerData) {
         window.renderPlayerUI(window.currentPlayerData, true);
       }
@@ -484,31 +542,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 5. FUNÇÕES UTILITÁRIAS
   // =================================================================
   
-  // -- Helper para Evento de Coleta Dobrada (FDS) --
   function getWeekendMultiplier() {
       const day = new Date().getUTCDay();
-      // 6 = Sábado, 0 = Domingo
       return (day === 6 || day === 0) ? 2 : 1;
   }
 
-  // -- Verifica e exibe aviso de evento na tela --
   function checkEventStatus() {
       const mult = getWeekendMultiplier();
-      const cycleInfo = document.getElementById("cycleInfo");
-      
-      // Remove aviso anterior se existir
       const existingBanner = document.getElementById("eventBanner");
       if (existingBanner) existingBanner.remove();
 
-      if (mult > 1 && cycleInfo) {
+      if (mult > 1 && cycleInfoElement && cycleInfoElement.parentNode) {
           const banner = document.createElement("h4");
           banner.id = "eventBanner";
-          banner.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width: 40px; height: 40px; vertical-align: -6px; margin-top: 8px;"> <span> X2</span>!';
+          banner.innerHTML = '<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 40px; height: 40px; vertical-align: -6px; margin-top: 8px;"> <span> X2</span>!';
           banner.style.cssText = "text-shadow: none!important; background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 5px 0 0 0; font-size: 1.9em;";
-          
-          if (cycleInfo.parentNode) {
-              cycleInfo.parentNode.appendChild(banner);
-          }
+          cycleInfoElement.parentNode.appendChild(banner);
       }
   }
 
@@ -516,7 +565,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   function hideLoading() { if (loadingOverlay) loadingOverlay.style.display = "none"; }
   const esc = (s) => (s === 0 || s) ? String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;") : "";
 
-  // Formato para Tela Inicial (00:00:00)
 function formatTimeHHMMSS(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = String(Math.floor(s / 3600)).padStart(2, "0");
@@ -525,7 +573,6 @@ function formatTimeHHMMSS(totalSeconds) {
   return `${h}:${m}:${ss}`;
 }
 
-// Formato para Combate (M:SS ou MM:SS)
 function formatTimeCombat(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const m = Math.floor(s / 60);
@@ -631,7 +678,6 @@ function formatTimeCombat(totalSeconds) {
       if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
       
-      // Se for explicitamente solo, apenas uma linha de aviso
       if (isSolo) {
           damageRankingList.innerHTML = "<li style='text-align:center;color:#4caf50;font-style:italic;'>Apenas você disputando...</li>";
           return;
@@ -659,12 +705,9 @@ function formatTimeCombat(totalSeconds) {
       }
   }
 
-  // NOVA FUNÇÃO: Renderiza o ranking "cego" (Smoke Signal)
   function updateBlindRanking(count, myDmg, topDmg, isLeader) {
       if (!damageRankingList) return;
       damageRankingList.innerHTML = "";
-
-      // Atualiza variável global de participantes para ajustar debounce
       knownParticipantCount = count || 0;
 
       const myDmgFmt = Number(myDmg||0).toLocaleString();
@@ -710,7 +753,6 @@ function formatTimeCombat(totalSeconds) {
           btn.onclick = async (e) => {
               e.target.textContent = "Carregando...";
               const { data } = await supabase.rpc("get_mine_damage_ranking", { _mine_id: currentMineId });
-              // Passa false para renderRanking para forçar a lista detalhada mesmo que só tenha 1
               renderRanking(data || [], false); 
           };
       }
@@ -743,7 +785,6 @@ function formatTimeCombat(totalSeconds) {
   async function openBuyModal() {
     if (!userId) { showModalAlert("Faça login para comprar."); return; }
     
-    // OTIMIZAÇÃO: Usa cache local (GlobalDB)
     const playerData = await getCachedPlayerData();
     
     if (playerData) {
@@ -898,18 +939,23 @@ function formatTimeCombat(totalSeconds) {
   async function updatePVPAttemptsUI() {
     if (!userId) return;
     try {
-        const { data, error } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
-        if (error) throw error;
-        if (playerAttemptsSpan) playerAttemptsSpan.textContent = data?.mine_pvp_attempts_left || 0;
-    } catch (e) {}
+        // [OTIMIZADO] Usa RPC 'get_player_pvp_simple' (leitura leve)
+        const { data } = await supabase.rpc('get_player_pvp_simple', { p_player_id: userId });
+        if (data && playerAttemptsSpan) {
+            playerAttemptsSpan.textContent = data.l;
+        }
+    } catch (e) { console.warn("Erro ao buscar tentativas PvP", e); }
   }
 
-  async function updatePlayerMineUI() {
-    if (!userId) return;
-    try {
-        const { data } = await supabase.from('mining_caverns').select('name').eq('owner_player_id', userId).single();
-        if (playerMineSpan) playerMineSpan.textContent = data ? data.name : 'Nenhuma';
-    } catch (e) {}
+  // [OTIMIZADO] Calcula mina do jogador baseado na lista JÁ carregada
+  function updatePlayerMineUI(minesList) {
+    if (!userId || !minesList) return;
+    const myMine = minesList.find(m => m.owner_player_id === userId);
+    
+    if (playerMineSpan) {
+        playerMineSpan.textContent = myMine ? myMine.name : 'Nenhuma';
+    }
+    myOwnedMineId = myMine ? myMine.id : null;
   }
 
   // =================================================================
@@ -1007,74 +1053,48 @@ function formatTimeCombat(totalSeconds) {
   }
 
   // =================================================================
-  // 12. GUILDA DOMINANTE E MINAS
+  // 12. CARREGAMENTO DE MINAS (RPC LEVE)
   // =================================================================
-  async function updateDominantGuild(mines, ownersMap) {
-      const guilddomSpan = document.getElementById("guilddom");
-      if (!guilddomSpan) return;
-      const guildCounts = {};
-      for (const mine of mines) {
-          if (mine.owner_player_id) {
-              const owner = ownersMap[mine.owner_player_id];
-              if (owner && owner.guild_id) {
-                  guildCounts[owner.guild_id] = (guildCounts[owner.guild_id] || 0) + 1;
-              }
-          }
-      }
-      let dominantGuildId = null; let maxMines = 0;
-      for (const guildId in guildCounts) {
-          if (guildCounts[guildId] > maxMines) { maxMines = guildCounts[guildId]; dominantGuildId = guildId; }
-      }
-      if (dominantGuildId) {
-          try {
-              const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', dominantGuildId).single();
-              if (guild) {
-                  const flagUrl = guild.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
-                  guilddomSpan.innerHTML = `<img src="${esc(flagUrl)}" style="width:50px; height:50px; border-radius: 4px; vertical-align: middle; margin-right: 8px;"><span style="font-weight: bold; color: yellow;">${esc(guild.name)}</span>`;
-              } else { guilddomSpan.textContent = 'Nenhuma.'; }
-          } catch (e) { guilddomSpan.textContent = 'Nenhuma.'; }
-      } else { guilddomSpan.textContent = 'Nenhuma.'; }
-  }
-
-  // Função Legacy atualizada para usar a lógica de Janela Deslizante (RPC)
-  // Usada internamente para recarregar sem refresh da página
   async function loadMines() {
     showLoading();
     try {
-      // MUDANÇA: Usa RPC em vez de Select direto na tabela
-      const { data: mines, error } = await supabase.rpc("get_visible_mines");
-      
-      if (error) throw error;
+      // [OTIMIZADO] Usa 'get_visible_mines' (chaves minificadas)
+      const { data: minesJson } = await supabase.rpc("get_visible_mines");
+      const mines = minesJson || [];
 
-      const allOwnerIds = (mines || []).map(m => m.owner_player_id).filter(Boolean);
+      // Mapeia chaves curtas para longas
+      const mappedMines = mines.map(m => ({
+          id: m.i, 
+          name: m.n, 
+          status: m.s === 'A' ? 'aberta' : (m.s === 'D' ? 'disputando' : (m.s === 'O' ? 'ocupada' : m.s)), 
+          owner_player_id: m.o, 
+          open_time: m.t, 
+          competition_end_time: m.e, 
+          monster_health: m.m, 
+          initial_monster_health: m.h
+      }));
+
+      // Lazy Load Profiles
+      const allOwnerIds = mappedMines.map(m => m.owner_player_id).filter(Boolean);
       const uniqueOwnerIds = [...new Set(allOwnerIds)];
+      const missingIds = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
       
-      // Filtra apenas os donos que ainda não temos no cache global
-      const idsToFetch = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
-
-      if (idsToFetch.length > 0) {
-        // [MODIFICADO] Usa get_missing_profiles para ser consistente com o boot
-        const { data: ownersData } = await supabase.rpc("get_missing_profiles", { p_user_ids: idsToFetch });
-        
-        if (ownersData && ownersData.length > 0) {
-            // Atualiza memória
-            ownersData.forEach(p => globalOwnersMap[p.id] = p);
-            // Salva no DB Global para a próxima vez (persistência 24h)
-            await GlobalDB.saveOwners(ownersData);
-        }
+      if (missingIds.length > 0) {
+          const { data: profiles } = await supabase.rpc("get_missing_profiles", { p_user_ids: missingIds });
+          if (profiles) {
+              await GlobalDB.saveOwners(profiles);
+              profiles.forEach(p => globalOwnersMap[p.id] = p);
+          }
       }
 
-      const ownersMap = globalOwnersMap;
-      const myMine = (mines || []).find(m => m.owner_player_id === userId);
-      myOwnedMineId = myMine ? myMine.id : null;
+      renderMines(mappedMines, globalOwnersMap);
+      await updateDominantGuild(mappedMines, globalOwnersMap);
+      updatePlayerMineUI(mappedMines); // Cálculo local
+      await updatePVPAttemptsUI(); // RPC leve
 
-      renderMines(mines || [], ownersMap);
-      await updateDominantGuild(mines || [], ownersMap);
-      await updatePVPAttemptsUI();
-      await updatePlayerMineUI();
-    } catch (err) {
-      console.error(err);
-      minesContainer.innerHTML = `<p>Erro ao carregar minas: ${esc(err.message)}</p>`;
+    } catch (e) {
+      console.error(e);
+      minesContainer.innerHTML = `<p>Erro ao carregar minas.</p>`;
     } finally {
       hideLoading();
     }
@@ -1093,13 +1113,9 @@ function formatTimeCombat(totalSeconds) {
       if (mine.owner_player_id) {
         const start = new Date(mine.open_time || new Date());
         const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-        
-        // --- EVENTO FDS: MULTIPLICADOR ---
         const mult = getWeekendMultiplier();
         const maxCrystals = 1500 * mult;
         const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
-        // ---------------------------------
-        
         collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
       }
 
@@ -1139,10 +1155,9 @@ function formatTimeCombat(totalSeconds) {
     }
   }
 
-  // --- Função Auxiliar para renderizar um card individual e adicionar ao container ---
   function renderAndAppendSingleCard(mine) {
       if (!minesContainer) return;
-      if (document.getElementById(`mine-card-${mine.id}`)) return; // Já existe
+      if (document.getElementById(`mine-card-${mine.id}`)) return;
 
       const owner = globalOwnersMap[mine.owner_player_id];
       const ownerName = owner ? (owner.name || "Desconhecido") : null;
@@ -1193,9 +1208,34 @@ function formatTimeCombat(totalSeconds) {
       minesContainer.appendChild(card);
   }
 
-  // =================================================================
-  // OTIMIZAÇÃO: UPDATE CIRÚRGICO VIA RPC (SEM SELECT *)
-  // =================================================================
+  async function updateDominantGuild(mines, ownersMap) {
+      const guilddomSpan = document.getElementById("guilddom");
+      if (!guilddomSpan) return;
+      const guildCounts = {};
+      for (const mine of mines) {
+          if (mine.owner_player_id) {
+              const owner = ownersMap[mine.owner_player_id];
+              if (owner && owner.guild_id) {
+                  guildCounts[owner.guild_id] = (guildCounts[owner.guild_id] || 0) + 1;
+              }
+          }
+      }
+      let dominantGuildId = null; let maxMines = 0;
+      for (const guildId in guildCounts) {
+          if (guildCounts[guildId] > maxMines) { maxMines = guildCounts[guildId]; dominantGuildId = guildId; }
+      }
+      if (dominantGuildId) {
+          try {
+              const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', dominantGuildId).single();
+              if (guild) {
+                  const flagUrl = guild.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+                  guilddomSpan.innerHTML = `<img src="${esc(flagUrl)}" style="width:50px; height:50px; border-radius: 4px; vertical-align: middle; margin-right: 8px;"><span style="font-weight: bold; color: yellow;">${esc(guild.name)}</span>`;
+              } else { guilddomSpan.textContent = 'Nenhuma.'; }
+          } catch (e) { guilddomSpan.textContent = 'Nenhuma.'; }
+      } else { guilddomSpan.textContent = 'Nenhuma.'; }
+  }
+
+  // [OTIMIZADO] Atualiza um card individual
   async function updateSingleMineCard(targetMineId) {
       if (!targetMineId) return null;
       
@@ -1203,12 +1243,11 @@ function formatTimeCombat(totalSeconds) {
       if (!cardElement) return null; 
 
       try {
-          // OTIMIZAÇÃO: Usa RPC leve em vez de select direto
+          // Usa RPC leve 'get_mine_info_light'
           const { data: mine, error } = await supabase.rpc("get_mine_info_light", { p_mine_id: targetMineId });
 
           if (error || !mine) throw error;
 
-          // Mapeia chaves curtas do RPC para o formato esperado
           const mappedMine = {
               id: mine.id,
               name: mine.n,
@@ -1224,12 +1263,11 @@ function formatTimeCombat(totalSeconds) {
               if (globalOwnersMap[mappedMine.owner_player_id]) {
                   owner = globalOwnersMap[mappedMine.owner_player_id];
               } else {
-                  // Fallback: Se não tiver no cache, busca (raro)
-                  // Aqui mantemos a busca direta para consistência local de um card específico
+                  // Fallback
                   const { data: p } = await supabase.from("players").select("id, name, avatar_url, guild_id").eq("id", mappedMine.owner_player_id).single();
                   if (p) {
                       globalOwnersMap[p.id] = p;
-                      await GlobalDB.saveOwners([p]); // Salva no cache também
+                      await GlobalDB.saveOwners([p]);
                       owner = p;
                   }
               }
@@ -1242,13 +1280,9 @@ function formatTimeCombat(totalSeconds) {
           if (mappedMine.owner_player_id) {
               const start = new Date(mappedMine.open_time || new Date());
               const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-              
-              // --- EVENTO FDS: MULTIPLICADOR ---
               const mult = getWeekendMultiplier();
               const maxCrystals = 1500 * mult;
               const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
-              // ---------------------------------
-
               collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
           }
 
@@ -1288,7 +1322,7 @@ function formatTimeCombat(totalSeconds) {
           if (mappedMine.owner_player_id === userId) myOwnedMineId = mappedMine.id;
           else if (myOwnedMineId === mappedMine.id) myOwnedMineId = null;
           
-          return mappedMine; // Retorna os dados para verificação de status
+          return mappedMine;
 
       } catch (e) {
           console.warn("[Mines] Surgical update failed, fallback to full load", e);
@@ -1315,11 +1349,11 @@ function formatTimeCombat(totalSeconds) {
           hp: currentMonsterHealthGlobal,
           stamina: localAttacksLeft,
           pending: pendingBatch,
-          pendingDmg: pendingDamageBatch, // [NOVO] Salva dano pendente
+          pendingDmg: pendingDamageBatch, 
           flushTime: debounceFlushTime,
-          isFirst: isFirstAttackSequence, // Flag crucial
+          isFirst: isFirstAttackSequence, 
           hasAttacked: hasAttackedOnce,
-          pc: knownParticipantCount // Persiste contagem de jogadores
+          pc: knownParticipantCount 
       };
       localStorage.setItem(key, JSON.stringify(state));
   }
@@ -1343,7 +1377,7 @@ function formatTimeCombat(totalSeconds) {
               currentMonsterHealthGlobal = cached.hp;
               localAttacksLeft = cached.stamina;
               pendingBatch = cached.pending;
-              pendingDamageBatch = cached.pendingDmg || 0; // [NOVO] Restaura dano pendente
+              pendingDamageBatch = cached.pendingDmg || 0;
               isFirstAttackSequence = cached.isFirst; 
               hasAttackedOnce = cached.hasAttacked;
               knownParticipantCount = cached.pc || 1;
@@ -1371,24 +1405,22 @@ function formatTimeCombat(totalSeconds) {
   }
 
   // =================================================================
-  // OTIMIZAÇÃO: START COMBAT VIA RPC (SEM SELECT *)
+  // OTIMIZAÇÃO: START COMBAT VIA RPC
   // =================================================================
   async function startCombat(mineId) {
     showLoading();
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
     
-    // Reset para modo solo até o servidor dizer o contrário
     knownParticipantCount = 1;
 
     if (buyAttackBtn) buyAttackBtn.disabled = false;
     
     pendingBatch = 0;
-    pendingDamageBatch = 0; // [NOVO] Reset
+    pendingDamageBatch = 0; 
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
     try {
-      // OTIMIZAÇÃO: RPC ÚNICA que retorna dados da mina + ranking
       const { data, error } = await supabase.rpc("enter_mine_combat", { 
           p_mine_id: mineId,
           p_player_id: userId
@@ -1399,7 +1431,6 @@ function formatTimeCombat(totalSeconds) {
           return; 
       }
 
-      // Mapeia o retorno da RPC para o formato esperado
       const cavern = {
           id: data.mine.id,
           name: data.mine.name,
@@ -1432,12 +1463,10 @@ function formatTimeCombat(totalSeconds) {
 
       if (combatModal) combatModal.style.display = "flex";
       
-      // Usa o ranking que já veio na RPC
       const rankingData = data.ranking;
       knownParticipantCount = data.participant_count || 0;
       const isSolo = (knownParticipantCount <= 1);
       
-      // Renderiza apenas os top 3, mas se for solo renderiza aviso especial
       renderRanking(rankingData, isSolo);
 
       ambientMusic.play();
@@ -1474,10 +1503,10 @@ function formatTimeCombat(totalSeconds) {
       if (pendingBatch === 0) return;
 
       const countToSend = pendingBatch;
-      const damageToSend = pendingDamageBatch; // [NOVO] Captura o dano acumulado
+      const damageToSend = pendingDamageBatch; 
       
       pendingBatch = 0;
-      pendingDamageBatch = 0; // [NOVO] Reset
+      pendingDamageBatch = 0; 
       if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
       clearOptimisticState();
@@ -1487,7 +1516,7 @@ function formatTimeCombat(totalSeconds) {
               p_player_id: userId, 
               p_mine_id: currentMineId,
               p_attack_count: countToSend,
-              p_claimed_damage: damageToSend // [NOVO] Envia o dano calculado pelo cliente para validação
+              p_claimed_damage: damageToSend 
           });
 
           if (error) throw error;
@@ -1499,25 +1528,17 @@ function formatTimeCombat(totalSeconds) {
               return;
           }
 
-          // Atualiza contagem real de participantes vinda do server
           knownParticipantCount = data.pc || 1;
 
-          // LÓGICA HÍBRIDA (SOLO vs MULTI)
+          // LÓGICA HÍBRIDA
           if (knownParticipantCount <= 1 && !data.win) {
-              // Solo Mode: Mantém HP local calculado para fluidez (evita "pulos" de lag)
-              // Aceita apenas o update de Stamina do servidor (authoritative)
               localAttacksLeft = data.al;
-              // NOTA: Ignoramos data.hp aqui intencionalmente se estiver em modo solo
-              // pois o cliente calculou e o servidor validou, então devem ser iguais.
-              
-              // Pequena proteção contra desync extremo
+              // No modo solo, confiamos no cálculo local
               if (currentMonsterHealthGlobal <= 0 && data.hp > 0) {
-                  console.warn("Ressincronizando HP (RNG Divergence)");
                   currentMonsterHealthGlobal = data.hp;
                   updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
               }
           } else {
-              // Multiplayer: Usa HP do servidor (verdade absoluta)
               currentMonsterHealthGlobal = data.hp;
               updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
               localAttacksLeft = data.al;
@@ -1532,7 +1553,6 @@ function formatTimeCombat(totalSeconds) {
 
           if (data.win) {
               showModalAlert("Mina conquistada/resetada!");
-              // Força renderização completa do ranking ao vencer
               renderRanking(data.r || [], false); 
               resetCombatUI();
           } else {
@@ -1586,7 +1606,7 @@ function formatTimeCombat(totalSeconds) {
     }
     
     pendingBatch++;
-    pendingDamageBatch += damage; // [NOVO] Acumula o dano real
+    pendingDamageBatch += damage;
 
     if (batchFlushTimer) clearTimeout(batchFlushTimer);
 
@@ -1597,7 +1617,6 @@ function formatTimeCombat(totalSeconds) {
         return;
     }
 
-    // AJUSTE DINÂMICO DE DEBOUNCE (SOLO vs MULTI)
     const debounceTime = (knownParticipantCount <= 1) ? DEBOUNCE_TIME_SOLO : DEBOUNCE_TIME_MULTI;
     const threshold = (knownParticipantCount <= 1) ? BATCH_THRESHOLD_SOLO : BATCH_THRESHOLD_MULTI;
 
@@ -1641,7 +1660,6 @@ function formatTimeCombat(totalSeconds) {
   async function resetCombatUI() { 
     const mineToUpdate = currentMineId;
 
-    // 1. Limpa UI de combate
     if (combatModal) combatModal.style.display = "none";
     
     clearOptimisticState();
@@ -1651,44 +1669,33 @@ function formatTimeCombat(totalSeconds) {
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
     
     pendingBatch = 0;
-    pendingDamageBatch = 0; // [NOVO] Reset
+    pendingDamageBatch = 0;
     if(batchFlushTimer) clearTimeout(batchFlushTimer);
     
     ambientMusic.pause();
     ambientMusic.currentTime = 0;
 
     if (mineToUpdate) {
-        // 2. Atualiza visualmente a mina que acabamos de sair
-        // OTIMIZAÇÃO: Usa a nova função leve
         const updatedMine = await updateSingleMineCard(mineToUpdate);
         
-        // 3. Lógica Segura: Pergunta ao Backend se precisamos de mais uma mina
-        // Se a mina atual ficou 'disputando', pode ser que precise abrir uma vaga,
-        // mas só o backend sabe se já alcançamos o limite de slots.
+        // Verifica se precisa renderizar nova mina
         if (updatedMine && updatedMine.status === 'disputando') {
             try {
-                // Coleta todos os IDs que já estão renderizados na tela para enviar ao Backend
                 const renderedIds = Array.from(document.querySelectorAll('.mine-card'))
                                          .map(el => el.id.replace('mine-card-', ''));
                 
-                // RPC: "Get Next Mine If Needed"
-                // O Backend vai calcular: (Total Necessário) - (O que eu já tenho). 
-                // Se sobrar > 0, ele manda a mina. Se não, manda null.
                 const { data: newMine, error } = await supabase.rpc('get_next_open_mine', { 
                     p_visible_ids: renderedIds 
                 });
 
-                // Se a RPC retornou uma mina (array com 1 item ou objeto dependendo da config), renderiza
                 if (!error && newMine && newMine.length > 0) {
-                    // Como a function retorna TABLE, o supabase retorna um array [obj]
                     renderAndAppendSingleCard(newMine[0]);
                 }
             } catch (err) {
-                console.warn("[Mines] Erro ao buscar próxima mina (smart check):", err);
+                console.warn("[Mines] Erro ao buscar próxima mina:", err);
             }
         }
     } else {
-        // Fallback se perdemos a referência
         loadMines();
     }
   }
@@ -1701,14 +1708,9 @@ function formatTimeCombat(totalSeconds) {
     const ownerName = owner.name || "Desconhecido";
     showLoading();
     try {
-        let attemptsLeft = 0;
-        const cached = await getCachedPlayerData();
-        if (cached && cached.mine_pvp_attempts_left !== undefined) {
-             attemptsLeft = cached.mine_pvp_attempts_left;
-        } else {
-             const { data: player } = await supabase.from('players').select('mine_pvp_attempts_left').eq('id', userId).single();
-             attemptsLeft = player?.mine_pvp_attempts_left || 0;
-        }
+        // [OTIMIZADO]
+        const { data } = await supabase.rpc('get_player_pvp_simple', { p_player_id: userId });
+        const attemptsLeft = data?.l || 0;
 
         if (attemptsLeft <= 0) { showModalAlert("Sem tentativas de PvP hoje."); return; }
 
@@ -1736,10 +1738,6 @@ function formatTimeCombat(totalSeconds) {
     try {
         const challengerData = await getOrUpdatePlayerStatsCache();
         
-        // OTIMIZAÇÃO: Não busca stats do defensor aqui. O capture_mine já resolve o combate.
-        // Apenas para UI, usamos valores padrão ou o que vier no log se possível, 
-        // mas para manter a UI bonita, vamos assumir que o capture_mine retorna sucesso.
-        
         let challengerAvatarUrl = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         const cachedP = await getCachedPlayerData();
         if(cachedP && cachedP.avatar_url) challengerAvatarUrl = cachedP.avatar_url;
@@ -1747,21 +1745,12 @@ function formatTimeCombat(totalSeconds) {
         const challengerMaxHp = Number(challengerData.health || 0);
         let challengerCurrentHp = challengerMaxHp;
         
-        // Executa o combate
         const { data, error } = await supabase.rpc("capture_mine", { p_challenger_id: userId, p_mine_id: mineId });
         if (error || !data?.success) throw error || data?.message;
 
-        // Extrai HP inicial do defensor do log (primeiro turno onde ele é defensor ou atacante)
-        // Ou faz uma estimativa baseada no log.
-        // Para simplificar e economizar egress, vamos pegar o max_health do primeiro log entry se disponível,
-        // ou apenas usar o HP restante + dano tomado.
-        
-        // Hack para UI: Calcula Max HP baseado no log
         let defenderMaxHp = 0;
         const combatLog = data.combat.battle_log;
         
-        // Tenta achar o HP inicial no retorno (se você alterar o simulate_pvp_battle para retornar, melhor)
-        // Como não alteramos o simulate_pvp_battle para retornar max_hp, vamos usar o valor do log final + dano total
         let totalDmgToDefender = 0;
         combatLog.forEach(l => {
             if (l.attacker_id !== ownerId) totalDmgToDefender += l.damage;
@@ -1835,53 +1824,24 @@ function formatTimeCombat(totalSeconds) {
   // =================================================================
   async function boot() {
     try {
-      // 1. Auth Local
       userId = await getLocalUserId();
       if (window.currentPlayerId) userId = window.currentPlayerId;
       if (!userId && typeof session !== 'undefined' && session) userId = session.user.id;
       
-      if (!userId) { 
-        // Se ainda assim não tiver ID, redireciona
-        window.location.href = "index.html"; 
-        return; 
-      }
-      const BOT_IDS = [
-          "bc6b795d-da47-4f14-9f57-3781bfb21e53",
-          "856545ef-e33e-4b86-b2af-71957a9772f9",
-          "9d0af1a4-7f36-4f19-9ce6-5e507b17e912",
-          "37baa684-f4dc-4d80-93cb-9004a3cbe2b9",
-          "1888d6d8-ca41-48cc-b92e-e48af088d643"
-      ];
-
-      // [NOVO] Popula os bots antes de carregar o jogo
-      // Usamos Promise.all ou await direto, mas sem bloquear se der erro
-      try {
-          await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS });
-      } catch (botErr) {
-          console.warn("Erro ao popular bots (ignorado):", botErr);
-      }
+      if (!userId) { window.location.href = "index.html"; return; }
       
-      try {
-          await supabase.rpc('resolve_all_expired_mines');
-      } catch (err) {
-          console.warn("Erro ao tentar resolver minas expiradas no boot:", err);
-      }
-      try {
-          await supabase.rpc('reset_player_pvp_attempts');
-      } catch (pvpErr) {
-          console.warn("Erro ao verificar reset diário de PvP:", pvpErr);
-      }
+      const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912", "37baa684-f4dc-4d80-93cb-9004a3cbe2b9", "1888d6d8-ca41-48cc-b92e-e48af088d643"];
+
+      try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS }); } catch (e) {}
+      try { await supabase.rpc('resolve_all_expired_mines'); } catch (e) {}
+      try { await supabase.rpc('reset_player_pvp_attempts'); } catch (e) {}
 
       showLoading();
       
-      // === 2. Carrega donos válidos do Cache (24h) ===
       const cachedOwners = await GlobalDB.getAllOwners();
-      // Preenche o mapa de memória
       globalOwnersMap = { ...cachedOwners };
-      // ==============================================
 
       // 3. MONOLITH FETCH (1 única requisição RPC)
-      // Substitui 7 calls anteriores
       const lastSync = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || '1970-01-01T00:00:00Z';
       
       const { data, error } = await supabase.rpc('get_mine_boot_state', { 
@@ -1891,19 +1851,13 @@ function formatTimeCombat(totalSeconds) {
 
       if (error) throw error;
 
-      // 4. PROCESSA DADOS DO MONOLITH
-      
-      // A) Stats (Cache) - key: 's'
+      // A) Stats
       if (data.s && data.s.success) {
           cachedCombatStats = data.s; 
           localStorage.setItem(`player_combat_stats_${userId}`, JSON.stringify({ timestamp: Date.now(), data: data.s }));
-          
-          if (data.s.crystals !== undefined) {
-             // Exemplo de update parcial se necessário
-          }
       }
 
-      // B) Attacks (Stamina) - key: 'a' -> 'al' (left), 't' (time)
+      // B) Attacks
       if (data.a) {
           localAttacksLeft = data.a.al;
           const timeToNext = data.a.t;
@@ -1917,30 +1871,22 @@ function formatTimeCombat(totalSeconds) {
           updateAttacksDisplay();
       }
 
-      // C) PvP Info - key: 'p' -> 'l' (left), 'b' (bought)
+      // C) PvP Info
       if (data.p) {
-          if (playerAttemptsSpan) {
-              playerAttemptsSpan.textContent = data.p.l; 
-          }
-          
+          if (playerAttemptsSpan) playerAttemptsSpan.textContent = data.p.l; 
           if (window.currentPlayerData) {
                window.currentPlayerData.mine_pvp_attempts_left = data.p.l;
                window.currentPlayerData.mine_pvp_attempts_bought_count = data.p.b;
           }
       }
 
-      // D) Owners (Cache Global com Timestamp Atualizado) - key: 'o'
-      // ATENÇÃO: Se a RPC nova não retornar mais 'o', essa parte será pulada
-      // e o Lazy Load abaixo cuidará disso. Mantido para retrocompatibilidade.
+      // D) Owners (Compatibilidade)
       if (data.o && data.o.length > 0) {
           await GlobalDB.saveOwners(data.o); 
-          data.o.forEach(o => {
-              globalOwnersMap[o.i] = { id: o.i, name: o.n, avatar_url: o.a, guild_id: o.g };
-          });
+          data.o.forEach(o => { globalOwnersMap[o.i] = { id: o.i, name: o.n, avatar_url: o.a, guild_id: o.g }; });
       }
 
-      // E) Minas (Render) - key: 'm'
-      // Mapeamento: i->id, n->name, s->status, o->owner, t->open_time, e->end_time, m->hp, h->max_hp
+      // E) Minas (Render)
       const mappedMines = data.m.map(m => ({
           id: m.i, 
           name: m.n, 
@@ -1952,13 +1898,12 @@ function formatTimeCombat(totalSeconds) {
           initial_monster_health: m.h
       }));
       
-      // [NOVO] LAZY LOAD DE DONOS FALTANTES
+      // LAZY LOAD DE DONOS
       const allOwnerIds = mappedMines.map(m => m.owner_player_id).filter(Boolean);
       const uniqueOwnerIds = [...new Set(allOwnerIds)];
       const missingIds = uniqueOwnerIds.filter(id => !globalOwnersMap[id]);
 
       if (missingIds.length > 0) {
-          // Busca APENAS os perfis que faltam via RPC auxiliar
           const { data: profiles } = await supabase.rpc('get_missing_profiles', { p_user_ids: missingIds });
           if (profiles) {
               await GlobalDB.saveOwners(profiles);
@@ -1971,10 +1916,9 @@ function formatTimeCombat(totalSeconds) {
       
       const myMine = mappedMines.find(m => m.owner_player_id === userId);
       myOwnedMineId = myMine ? myMine.id : null;
-      updatePlayerMineUI();
+      updatePlayerMineUI(mappedMines);
 
-      // F) Logs (Histórico) - key: 'l'
-      // Mapeamento: an->attacker, at->time, da->dmg atk, dd->dmg def
+      // F) Logs (Histórico)
       const newLogs = data.l || [];
       if (newLogs.length > 0) {
           const mappedLogs = newLogs.map(l => ({
@@ -1985,21 +1929,17 @@ function formatTimeCombat(totalSeconds) {
           }));
           const currentLogs = getLocalLogs();
           const updatedLogs = [...currentLogs, ...mappedLogs];
-          // Limita tamanho local
           if (updatedLogs.length > 50) updatedLogs.splice(0, updatedLogs.length - 50);
           
           saveLocalLogs(updatedLogs);
           localStorage.setItem(STORAGE_KEY_LAST_SYNC, mappedLogs[mappedLogs.length - 1].attack_time);
-          
           if (newLogIndicator) newLogIndicator.style.display = 'block';
       }
 
     } catch (e) {
       console.error("[mines] boot critical error:", e);
-      // Fallback de emergência: tenta carregar só as minas
       loadMines();
     } finally {
-      // Verifica Banner de Evento
       checkEventStatus();
       hideLoading();
     }
@@ -2011,20 +1951,14 @@ function formatTimeCombat(totalSeconds) {
           ambientMusic.pause(); 
           ambientMusic._wasPlaying = true; 
       }
-      
       if (currentMineId) { 
           avisoTelaSound.currentTime = 0; 
           avisoTelaSound.play().catch(()=>{}); 
           processAttackQueue();
       }
-    } else {
-        if (currentMineId && document.visibilityState === 'visible') {
-           // Lógica de restoreState cuida se necessário
-        }
     }
   });
 
-  // Cycle Countdown
   function updateCountdown() {
     const now = new Date();
     const currentHour = now.getHours();
@@ -2037,16 +1971,12 @@ function formatTimeCombat(totalSeconds) {
     nextSessionDate.setHours(nextSessionHour, 0, 0, 0);
     const diffInMs = nextSessionDate.getTime() - now.getTime();
     const diffInSeconds = Math.floor(diffInMs / 1000);
-    if (cycleInfoElement) {
-        cycleInfoElement.innerHTML = ` <strong>${formatTimeHHMMSS(diffInSeconds)}</strong>`;
-    }
-    // Verifica evento periodicamente (ex: virada do dia)
+    if (cycleInfoElement) cycleInfoElement.innerHTML = ` <strong>${formatTimeHHMMSS(diffInSeconds)}</strong>`;
     checkEventStatus();
   }
   setInterval(updateCountdown, 1000);
   updateCountdown();
 
-  // Listeners
   if (attackBtn) attackBtn.addEventListener("click", attack);
   if (backBtn) backBtn.addEventListener("click", endCombat);
   if (buyAttackBtn) buyAttackBtn.addEventListener("click", () => {
@@ -2056,7 +1986,6 @@ function formatTimeCombat(totalSeconds) {
   if (buyPVPAttemptsBtn) buyPVPAttemptsBtn.addEventListener("click", () => openBuyPvpModal());
   if (openHistoryBtn) openHistoryBtn.addEventListener("click", openHistory);
   if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", () => historyModal.style.display = 'none');
-  // O Listener do refreshBtn foi removido conforme solicitado
 
   boot();
 });

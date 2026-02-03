@@ -1022,7 +1022,7 @@ async function loadItemDefinitions() {
     const { data, error } = await supabaseClient
         .from('items')
         .select(`
-            item_id, name, display_name, description, rarity, item_type, stars,
+            item_id, name, display_name, rarity, item_type, stars,
             min_attack, attack, defense, health, 
             crit_chance, crit_damage, evasion,
             crafts_item_id

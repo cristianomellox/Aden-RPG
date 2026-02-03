@@ -27,7 +27,99 @@ if ('serviceWorker' in navigator) {
 // 🎵 Música de Fundo (Refatorada para nova estratégia de MUTE/UNMUTE)
 let musicStarted = false;
 let backgroundMusic;
+console.log("🔧 Override supabase.rpc ativado!");
 
+try {
+    const rpcOriginal = supabase.rpc.bind(supabase);
+
+    supabase.rpc = async (name, params) => {
+        console.log("🔎 RPC chamada:", name, params);
+
+        let res;
+        try {
+            res = await rpcOriginal(name, params);
+        } catch (e) {
+            console.error("❌ Erro ao executar RPC original:", name, e);
+            throw e;
+        }
+
+        try {
+            const size = JSON.stringify(res?.data ?? null).length;
+
+            supabase
+                .from('rpc_logs')
+                .insert({
+                    function_name: name,
+                    size_bytes: size
+                })
+                .then(() => console.log("📘 [RPC LOG] registro inserido:", name))
+                .catch((e) => console.error("❌ [RPC LOG] erro ao inserir:", e));
+
+        } catch (e) {
+            console.error("❌ Erro ao medir tamanho ou logar:", e);
+        }
+
+        return res;
+    };
+
+} catch (e) {
+    console.error("❌ Falha ao aplicar override supabase.rpc:", e);
+}
+
+console.log("🔧 Override supabase.from().select() ativado!");
+
+try {
+    const fromOriginal = supabase.from.bind(supabase);
+
+    supabase.from = (table_name) => {
+        const fromObject = fromOriginal(table_name);
+        const selectOriginal = fromObject.select.bind(fromObject);
+
+        fromObject.select = (columns) => {
+            const selectObject = selectOriginal(columns);
+            const thenOriginal = selectObject.then.bind(selectObject);
+
+            // Substitui o método .then() para interceptar o resultado da query
+            selectObject.then = async (onFulfilled, onRejected) => {
+                let res;
+                try {
+                    // Executa a query original
+                    res = await thenOriginal(onFulfilled, onRejected);
+                } catch (e) {
+                    console.error("❌ Erro ao executar SELECT original:", table_name, e);
+                    throw e;
+                }
+
+                try {
+                    // Métrica de Egress: mede o tamanho da resposta
+                    const size = JSON.stringify(res?.data ?? null).length;
+
+                    // Registra a chamada na sua tabela de logs
+                    supabase
+                        .from('rpc_logs') // Usando a mesma tabela para simplificar
+                        .insert({
+                            function_name: `select_${table_name}`,
+                            size_bytes: size
+                        })
+                        .then(() => console.log("📘 [SELECT LOG] registro inserido:", table_name))
+                        .catch((e) => console.error("❌ [SELECT LOG] erro ao inserir:", e));
+
+                } catch (e) {
+                    console.error("❌ Erro ao medir tamanho ou logar o SELECT:", e);
+                }
+
+                return res;
+            };
+
+            return selectObject;
+        };
+
+        return fromObject;
+    };
+
+} catch (e) {
+    console.error("❌ Falha ao aplicar override supabase.from():", e);
+}
 /**
  * Função global para iniciar a música de fundo.
  * Se chamada com forceMute=true (pelo intro), ela inicia o áudio no mudo.
@@ -2679,55 +2771,4 @@ function enableMapInteraction() {
     } else {
         window.enableMapInteraction = enableMapInteraction;
     }
-})();
-
-// --- COLE AO FINAL ABSOLUTO DO SCRIPT.JS ---
-(function() {
-    const LOG_TABLE = 'rpc_logs';
-    const SUPABASE_DOMAIN = 'lqzlblvmkuwedcofmgfb.supabase.co'; 
-
-    const originalFetch = window.fetch;
-
-    window.fetch = async (...args) => {
-        const urlStr = args[0].toString();
-
-        // Filtra: Apenas o seu banco e ignora o próprio log
-        if (!urlStr.includes(SUPABASE_DOMAIN) || urlStr.includes(LOG_TABLE)) {
-            return originalFetch(...args);
-        }
-
-        let response;
-        try {
-            response = await originalFetch(...args);
-        } catch (e) { return Promise.reject(e); }
-
-        const clone = response.clone();
-        
-        clone.blob().then(blob => {
-            const size = blob.size;
-            
-            let functionName = "data_query";
-            try {
-                const urlObj = new URL(urlStr);
-                functionName = urlObj.pathname.split('/').pop();
-                if (urlObj.search) functionName += " (query)";
-            } catch (e) {}
-
-            // Tenta encontrar o cliente supabase de todas as formas possíveis
-            const client = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
-
-            if (client && typeof client.from === 'function') {
-                client.from(LOG_TABLE).insert({ 
-                    function_name: `http_GET_${functionName}`, 
-                    size_bytes: size 
-                }).catch(err => console.warn("Erro ao inserir log:", err));
-            } else {
-                // Se o código chegar aqui, o fetch foi interceptado, mas o cliente não foi achado
-                console.log(`📡 Egress detectado: ${functionName} - ${size} bytes (Supabase não inicializado para log)`);
-            }
-        }).catch(err => {});
-
-        return response;
-    };
-    console.log("✅ Monitor de Egress acoplado ao Fetch global com sucesso.");
 })();

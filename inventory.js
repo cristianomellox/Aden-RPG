@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient.js'
 // =======================================================================
 // INÍCIO: MONITOR DE EGRESS (CORRIGIDO)
@@ -141,8 +142,8 @@ async function saveCache(items, stats, timestamp) {
     // Salva TUDO (inclusive itens com qtd 0 para o manifesto funcionar)
     (items || []).forEach(item => store.put(item));
     
-    meta.put({ key: "last_updated", value: timestamp }); 
-    meta.put({ key: "player_stats", value: stats });     
+    if (timestamp) meta.put({ key: "last_updated", value: timestamp }); 
+    if (stats) meta.put({ key: "player_stats", value: stats });     
     meta.put({ key: "cache_time", value: Date.now() });  
 
     return new Promise((resolve) => {
@@ -266,12 +267,11 @@ async function ensureDefinitionsLoaded() {
 
     const CACHE_KEY = 'item_definitions_full_v1';
 
-    // 2. Tenta carregar do LocalStorage (caso script.js tenha salvo mas ainda não carregou na RAM)
+    // 2. Tenta carregar do LocalStorage
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
         try {
             const mapData = JSON.parse(cached); // Array de [key, value]
-            // Converte para Map garantindo que as chaves sejam acessíveis
             window.itemDefinitions = new Map(mapData);
             console.log("📚 [Inventory] Definições recuperadas do LocalStorage e carregadas na RAM.");
             return;
@@ -282,13 +282,13 @@ async function ensureDefinitionsLoaded() {
     }
 
     // 3. ÚLTIMO RECURSO: Baixa agora se não existir em lugar nenhum
-    console.log("⚠️ [Inventory] Definições ausentes. Baixando emergencialmente do servidor...");
+    console.log("⚠️ [Inventory] Definições ausentes. Baixando definições 'Lite'...");
+    
+    // OTIMIZAÇÃO: Removemos description e stats de combate do load inicial.
     const { data, error } = await supabase
         .from('items')
         .select(`
-            item_id, name, display_name, description, rarity, item_type, stars,
-            min_attack, attack, defense, health, 
-            crit_chance, crit_damage, evasion,
+            item_id, name, display_name, rarity, item_type, stars,
             crafts_item_id
         `);
 
@@ -301,7 +301,6 @@ async function ensureDefinitionsLoaded() {
             dataForCache.push([item.item_id, item]);
         });
         
-        // Salva no LocalStorage para a próxima vez
         try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(dataForCache));
         } catch(e) {
@@ -337,10 +336,6 @@ function hydrateItem(rawItem) {
 
     // Se ainda não achou, usa placeholder para não quebrar a UI
     if (!def) {
-        // Tenta verificar se o item ID é válido
-        if (itemId) {
-             console.warn(`Item ID ${itemId} sem definição no cache. Usando placeholder.`);
-        }
         def = {
             item_id: rawItem.item_id,
             name: "unknown",
@@ -348,8 +343,8 @@ function hydrateItem(rawItem) {
             rarity: "R",
             item_type: "outros",
             stars: 1,
-            description: "Dados do item sendo carregados...",
-            min_attack: 0, attack: 0, defense: 0, health: 0 // Stats zerados
+            description: "Carregando...",
+            min_attack: 0, attack: 0, defense: 0, health: 0 
         };
     }
 
@@ -379,7 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         globalUser = session.user;
     }
     
-    // >>> PASSO CRUCIAL: Garante que temos as definições (Nomes/Imagens) ANTES de carregar os itens <<<
+    // >>> PASSO CRUCIAL: Garante que temos as definições <<<
     await ensureDefinitionsLoaded();
 
     // Inicia carregamento do inventário
@@ -400,6 +395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Eventos de Modais
     document.getElementById('closeDetailsModal')?.addEventListener('click', () => {
         document.getElementById('itemDetailsModal').style.display = 'none';
     });
@@ -528,7 +524,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
         if (localItems && localItems.length >= 0) {
             console.log('✅ UI Otimista: Exibindo dados locais enquanto sincroniza...');
             
-            // Hidrata os itens do cache (caso tenham sido salvos sem 'items' ou para garantir update)
+            // Hidrata os itens do cache
             allInventoryItems = localItems.map(item => hydrateItem(item));
             
             playerBaseStats = localStats || {};
@@ -570,7 +566,6 @@ async function loadPlayerAndItems(forceRefresh = false) {
         let mergedList = processInventoryDelta(localItems, deltaData);
         
         // >>> HIDRATAÇÃO: Cruza com as definições carregadas <<<
-        // AQUI ESTÁ A CHAVE: Transformamos itens crus em itens com nomes/imagens
         mergedList = mergedList.map(item => hydrateItem(item));
         
         allInventoryItems = mergedList;
@@ -582,7 +577,7 @@ async function loadPlayerAndItems(forceRefresh = false) {
 
         renderUI();
 
-        // Salva o novo estado no cache (Pode salvar o item hidratado ou cru, o hydrateItem lida com ambos)
+        // Salva o novo estado no cache
         await saveCache(allInventoryItems, playerBaseStats, deltaData.last_inventory_update);
         console.log('💾 Cache local sincronizado e salvo.');
 
@@ -725,9 +720,7 @@ async function loadItems(tab = 'all', itemsList = null) {
         }
 
         let imgSrc;
-        // Tratamento de imagem para unknown/placeholder
         if (item.items.name === 'unknown' || !item.items.name) {
-             // Use uma imagem genérica ou mantenha o erro, mas o hydrateItem garante 'unknown'
              imgSrc = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
         } else if (item.items.item_type === 'fragmento') {
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
@@ -761,32 +754,296 @@ async function loadItems(tab = 'all', itemsList = null) {
     });
 }
 
-function showItemDetails(item) {
+// -------------------------------------------------------------
+// FUNÇÃO MÁGICA DE ATUALIZAÇÃO LOCAL (Sem baixar tudo de novo)
+// -------------------------------------------------------------
+async function updateLocalInventoryState(args) {
+    const { updatedItemId, newItemData, usedFragments, usedCrystals, newStats, equipUpdate } = args;
+    let needsSort = false;
+
+    // 1. Atualiza Item Principal (Equipamento evoluído/refinado)
+    if (updatedItemId && newItemData) {
+        // Encontra o item localmente
+        const idx = allInventoryItems.findIndex(i => i.id === updatedItemId);
+        if (idx > -1) {
+            // Merge dos dados novos
+            allInventoryItems[idx] = { ...allInventoryItems[idx], ...newItemData };
+            
+            // Se o objeto estiver selecionado, atualiza a referência
+            if (selectedItem && selectedItem.id === updatedItemId) {
+                selectedItem = allInventoryItems[idx];
+            }
+        }
+    } else if (newItemData && newItemData.id) {
+        // Item novo (Craft) - Precisa hidratar
+        const hydrated = hydrateItem(newItemData);
+        allInventoryItems.push(hydrated);
+        needsSort = true;
+    }
+
+    // 2. Decrementa Fragmentos Usados
+    if (usedFragments && Array.isArray(usedFragments)) {
+        usedFragments.forEach(usage => {
+            const fragId = usage.fragment_inventory_id || usage.id; 
+            const qtyUsed = usage.used_qty || usage.qty;
+
+            const idx = allInventoryItems.findIndex(i => i.id === fragId);
+            if (idx !== -1) {
+                allInventoryItems[idx].quantity -= qtyUsed;
+                // >>> AJUSTE PARA SOFT DELETE <<<
+                if (allInventoryItems[idx].quantity < 0) {
+                    allInventoryItems[idx].quantity = 0;
+                }
+            }
+        });
+    }
+
+    // 3. Atualiza Cristais e Stats do Jogador (Zero Egress)
+    if (newStats) {
+        playerBaseStats = newStats;
+    }
+    
+    // Fallback visual para cristais se não vier stats completos (ex: craft que não retorna stats)
+    if (usedCrystals && playerBaseStats) {
+        playerBaseStats.crystals = Math.max(0, (playerBaseStats.crystals || 0) - usedCrystals);
+    }
+
+    // 4. Equipar/Desequipar (Logica Local)
+    if (equipUpdate) {
+        const { itemId, isEquipping, slot } = equipUpdate;
+        const idx = allInventoryItems.findIndex(i => i.id === itemId);
+        if (idx > -1) {
+            if (isEquipping) {
+                // Remove de outros itens do mesmo slot
+                allInventoryItems.forEach(i => { if (i.equipped_slot === slot) i.equipped_slot = null; });
+                allInventoryItems[idx].equipped_slot = slot;
+            } else {
+                allInventoryItems[idx].equipped_slot = null;
+            }
+        }
+    }
+
+    // 5. Salva no Cache Local e Re-renderiza
+    // equippedItems só deve ter itens válidos (>0)
+    equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null && invItem.quantity > 0);
+
+    const nowISO = new Date().toISOString();
+    await saveCache(allInventoryItems, playerBaseStats, nowISO); 
+
+    renderUI();
+    
+    // Se estávamos vendo detalhes de um item que ainda existe, atualiza a modal
+    if (selectedItem && allInventoryItems.find(i => i.id === selectedItem.id && i.quantity > 0)) {
+        showItemDetails(selectedItem);
+    } else {
+        document.getElementById('itemDetailsModal').style.display = 'none';
+    }
+}
+
+// -------------------------------------------------------------
+// HANDLERS MODIFICADOS (ZERO EGRESS)
+// -------------------------------------------------------------
+
+async function handleRefineMulti(item, selections, crystalCost) {
+    try {
+        const { data, error } = await supabase.rpc('refine_item', {
+            _inventory_item_id: item.id,
+            _fragments: selections
+        });
+
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert(`Erro ao refinar: ${error.message}`);
+            return;
+        }
+    
+        if (data && data.error) {
+            showCustomAlert(`Erro ao refinar: ${data.error}`);
+        } else if (data && data.success) {
+            const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
+            showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
+            
+            // ATUALIZAÇÃO LOCAL
+            await updateLocalInventoryState({
+                updatedItemId: item.id,
+                newItemData: { refine_level: data.new_refine_level, xp_progress: 0 }, // Reset xp usually happens
+                usedFragments: data.used_fragments,
+                usedCrystals: data.used_crystals,
+                newStats: data.player_stats // Recebe stats atualizados
+            });
+            
+            document.getElementById('itemDetailsModal').style.display = 'none';
+        } else {
+            showCustomAlert('Não foi possível refinar o item. Tente novamente.');
+        }
+    } catch (err) {
+        console.error('Erro geral ao refinar:', err);
+        showCustomAlert('Ocorreu um erro ao tentar refinar o item.');
+    }
+}
+
+async function handleLevelUpMulti(item, selections) {
+    document.getElementById('fragmentSelectModal').style.display = 'none';
+
+    try {
+        const { data, error } = await supabase.rpc('level_up_item', {
+            p_inventory_item_id: item.id,
+            p_fragments: selections
+        });
+
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert(`Erro ao subir de nível: ${error.message}`);
+            return;
+        }
+
+        if (data && data.error) {
+            showCustomAlert(`Erro ao subir de nível: ${data.error}`);
+        } else if (data && data.success) {
+            showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
+            
+            // ATUALIZAÇÃO LOCAL
+            await updateLocalInventoryState({
+                updatedItemId: item.id,
+                newItemData: { level: data.new_level, xp_progress: data.new_xp },
+                usedFragments: data.used_fragments,
+                newStats: data.player_stats // Recebe stats atualizados
+            });
+
+            document.getElementById('itemDetailsModal').style.display = 'none';
+        } else {
+            showCustomAlert('Não foi possível evoluir o item. Tente novamente.');
+        }
+    } catch (err) {
+        console.error('Erro geral ao subir o nível:', err);
+        showCustomAlert('Ocorreu um erro ao tentar subir o nível do item.');
+    }
+}
+
+async function handleCraft(itemId, fragmentId) {
+    try {
+        const { data, error } = await supabase.rpc('craft_item', {
+            p_item_id: itemId,
+            p_fragment_id: fragmentId
+        });
+
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert(`Erro ao construir o item: ${error.message}`);
+            return;
+        }
+
+        if (data && data.error) {
+            showCustomAlert(`Erro ao construir: ${data.error}`);
+        } else if (data && data.success) {
+            showCustomAlert(`Item construído com sucesso!`);
+            document.getElementById('craftingModal').style.display = 'none';
+            
+            let newItemFull = null;
+            if (data.new_item_id) {
+                // Fetch necessário aqui pois é um item novo que não temos no cache
+                const { data: fetched } = await supabase.from('inventory_items').select('*').eq('id', data.new_item_id).single();
+                newItemFull = fetched;
+            }
+
+            // ATUALIZAÇÃO LOCAL
+            await updateLocalInventoryState({
+                newItemData: newItemFull,
+                usedFragments: [{ id: fragmentId, qty: 30 }], // Construção gasta 30
+                usedCrystals: data.crystals_spent,
+                newStats: null 
+            });
+
+        } else {
+            showCustomAlert('Não foi possível construir o item. Tente novamente.');
+        }
+    } catch (err) {
+        console.error('Erro geral ao construir:', err);
+        showCustomAlert('Ocorreu um erro ao tentar construir o item.');
+    }
+}
+
+async function handleEquipUnequip(item, isEquipped) {
+    try {
+        const { data, error } = await supabase.rpc('toggle_equip', {
+            p_inventory_item_id: item.id,
+            p_player_id: globalUser.id,
+            p_equip_status: !isEquipped
+        });
+
+        if (error) {
+            console.error('Erro na chamada RPC:', error.message);
+            showCustomAlert('Erro ao equipar/desequipar item: ' + error.message);
+            return;
+        }
+        if (data && data.error) {
+            showCustomAlert(data.error);
+            return;
+        }
+
+        showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
+        document.getElementById('itemDetailsModal').style.display = 'none';
+        
+        // Determina slot para update visual
+        let slot = item.equipped_slot;
+        if (!slot) {
+             const type = item.items.item_type.toLowerCase();
+             if (type === 'arma') slot = 'weapon';
+             else if (type === 'anel') slot = 'ring';
+             else if (type === 'elmo') slot = 'helm';
+             else if (type === 'colar') slot = 'amulet';
+             else if (type === 'asa') slot = 'wing';
+             else if (type === 'armadura') slot = 'armor';
+        }
+
+        await updateLocalInventoryState({
+            equipUpdate: { itemId: item.id, isEquipping: !isEquipped, slot: slot },
+            newStats: data.player_stats // Recebe stats atualizados
+        }); 
+    } catch (err) {
+        console.error('Erro geral ao equipar/desequipar:', err);
+        showCustomAlert('Ocorreu um erro inesperado.');
+    }
+}
+
+// ===============================
+// UI HELPERS (MODALS, DETAILS, LISTS)
+// ===============================
+
+async function showItemDetails(item) {
+    if (!item.items) item = hydrateItem(item);
     selectedItem = item;
-    const itemDetails = document.getElementById('itemDetailsModal');
-    if (!itemDetails) return;
+    
+    const modal = document.getElementById('itemDetailsModal');
+    if (!modal) return;
 
     document.getElementById('itemDetailsContent').dataset.currentItem = JSON.stringify(item);
 
-    let imgSrc;
-    if (item.items.name === 'unknown') {
-        imgSrc = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
-    } else if (item.items.item_type === 'fragmento') {
-        imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
-    } else {
-        const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
-        imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}_${totalStars}estrelas.webp`;
-    }
-    document.getElementById('detailItemImage').src = imgSrc;
+    // Image logic
+    const totalStars = (item.items.stars||0) + (item.refine_level||0);
+    const imgName = item.items.item_type === 'fragmento' ? item.items.name : `${item.items.name}_${totalStars}estrelas`;
+    
+    const imgEl = document.getElementById('detailItemImage');
+    imgEl.src = `https://aden-rpg.pages.dev/assets/itens/${imgName}.webp`;
+    imgEl.onerror = () => { imgEl.src = 'https://aden-rpg.pages.dev/assets/itens/unknown.webp'; };
 
-    const itemDescriptionDiv = document.getElementById('itemDescription');
-    if (itemDescriptionDiv) {
-        itemDescriptionDiv.textContent = item.items.description || 'Carregando descrição...';
-    }
-
-    document.getElementById('detailItemRarity').textContent = item.items.rarity;
     document.getElementById('detailItemName').textContent = item.items.display_name;
-  
+    document.getElementById('detailItemRarity').textContent = item.items.rarity;
+    
+    // OTIMIZAÇÃO: Lazy Load de descrição e stats se necessário
+    const descEl = document.getElementById('itemDescription');
+    if (!item.items.description || item.items.attack === undefined) {
+        descEl.textContent = "Carregando detalhes...";
+        const { data } = await supabase.from('items')
+            .select('description, attack, defense, health, crit_chance, crit_damage, evasion, min_attack')
+            .eq('item_id', item.item_id).single();
+        if (data) {
+            Object.assign(item.items, data);
+            window.itemDefinitions.set(item.item_id, item.items);
+        }
+    }
+    descEl.textContent = item.items.description || "";
+
     const isEquipment = !['consumivel', 'fragmento', 'outros'].includes(item.items.item_type);
     const isEquipable = ['arma', 'Arma', 'Escudo', 'Anel', 'anel', 'Elmo', 'elmo', 'Asa', 'asa', 'Armadura', 'armadura', 'Colar', 'colar'].includes(item.items.item_type);
 
@@ -828,6 +1085,7 @@ function showItemDetails(item) {
             if ((item.items.crit_chance || 0) > 0) { itemStats.innerHTML += `<p>CRIT Base: ${item.items.crit_chance}%</p>`; }
             if ((item.items.crit_damage || 0) > 0) { itemStats.innerHTML += `<p>DANO CRIT Base: +${item.items.crit_damage}%</p>`; }
             if ((item.items.evasion || 0) > 0) { itemStats.innerHTML += `<p>EVASÃO Base: +${item.items.evasion}%</p>`; }
+            
             if ((item.attack_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus ATK: +${item.attack_bonus}</p>`;
             if ((item.defense_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DEF: +${item.defense_bonus}</p>`;
             if ((item.health_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus HP: +${item.health_bonus}</p>`;
@@ -838,38 +1096,22 @@ function showItemDetails(item) {
     
         const refineRow1 = document.getElementById('refineRow1');
         const refineRow2 = document.getElementById('refineRow2');
-        const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
 
         if (refineRow1) {
             if (item.reforge_slot1) {
                 const formattedName = formatAttrName(item.reforge_slot1.attr);
                 let formattedValue = item.reforge_slot1.value;
-
-                if (formattedName === 'TAXA CRIT' || formattedName === 'DANO CRIT' || formattedName === 'EVASÃO') {
-                    formattedValue += '%';
-                }
-
-                refineRow1.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 38px; height: 38px;">
-                    <p style="font-size: 1.1em;">${formattedName} +${formattedValue}</p>
-                `;
+                if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
+                refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:1.1em;">${formattedName} +${formattedValue}</p>`;
                 refineRow1.style.background = item.reforge_slot1.color;
                 refineRow1.style.color = "black";
                 refineRow1.style.height = "15px";
             } else if (totalStars >= 4) {
-                refineRow1.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Liberado" class="refine-icon" style="width: 38px; height: 38px;">
-                    <p style="font-size: 0.9em;">Liberado para Refundição</p>
-                `;
-                refineRow1.style.background = '';
-                refineRow1.style.color = '';
+                refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.9em;">Liberado para Refundição</p>`;
+                refineRow1.style.background = ''; refineRow1.style.color = '';
             } else {
-                refineRow1.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon" style="width: 38px; height: 38px;">
-                    <p style="font-size: 0.7em;">Refine para 4 estrelas para desbloquear</p>
-                `;
-                refineRow1.style.background = '';
-                refineRow1.style.color = '';
+                refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/locked.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.7em;">Refine para 4 estrelas para desbloquear</p>`;
+                refineRow1.style.background = ''; refineRow1.style.color = '';
             }
         }
 
@@ -877,32 +1119,17 @@ function showItemDetails(item) {
             if (item.reforge_slot2) {
                 const formattedName = formatAttrName(item.reforge_slot2.attr);
                 let formattedValue = item.reforge_slot2.value;
-
-                if (formattedName === 'TAXA CRIT' || formattedName === 'DANO CRIT' || formattedName === 'EVASÃO') {
-                    formattedValue += '%';
-                }
-                
-                refineRow2.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 38px; height: 38px;">
-                    <p style="font-size: 1.1em;">${formattedName} +${formattedValue}</p>
-                `;
+                if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
+                refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:1.1em;">${formattedName} +${formattedValue}</p>`;
                 refineRow2.style.background = item.reforge_slot2.color;
                 refineRow2.style.color = "black";
                 refineRow2.style.height = "15px";
             } else if (totalStars >= 5) {
-                refineRow2.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Liberado" class="refine-icon" style="width: 38px; height: 38px;">
-                    <p style="font-size: 0.9em;">Liberado para Refundição</p>
-                `;
-                refineRow2.style.background = '';
-                refineRow2.style.color = '';
+                refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.9em;">Liberado para Refundição</p>`;
+                refineRow2.style.background = ''; refineRow2.style.color = '';
             } else {
-                refineRow2.innerHTML = `
-                    <img src="https://aden-rpg.pages.dev/assets/locked.webp" alt="Bloqueado" class="refine-icon" style="width: 38px; height: 38px;">
-                    <p style="font-size: 0.7em;">Refine para 5 estrelas para desbloquear</p>
-                `;
-                refineRow2.style.background = '';
-                refineRow2.style.color = '';
+                refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/locked.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.7em;">Refine para 5 estrelas para desbloquear</p>`;
+                refineRow2.style.background = ''; refineRow2.style.color = '';
             }
         }
 
@@ -923,53 +1150,7 @@ function showItemDetails(item) {
     } else {
         equipBtnModal.style.display = 'none';
     }
-    itemDetails.style.display = 'flex';
-}
-
-function getXpRequired(level, rarity) {
-    const xpBase = { 'R': 20, 'SR': 40, 'SSR': 80 };
-    const base = xpBase[rarity] || 40;
-    return base + (level * 45);
-}
-
-function formatAttrName(attr) {
-    switch (attr) {
-        case "attack_bonus": return "ATK";
-        case "defense_bonus": return "DEF";
-        case "health_bonus": return "HP";
-        case "crit_chance_bonus": return "TAXA CRIT";
-        case "crit_damage_bonus": return "DANO CRIT";
-        case "evasion_bonus": return "EVASÃO";
-        default: return attr;
-    }
-}
-
-async function handleEquipUnequip(item, isEquipped) {
-    try {
-        const { data, error } = await supabase.rpc('toggle_equip', {
-            p_inventory_item_id: item.id,
-            p_player_id: globalUser.id,
-            p_equip_status: !isEquipped
-        });
-
-        if (error) {
-            console.error('Erro na chamada RPC:', error.message);
-            showCustomAlert('Erro ao equipar/desequipar item: ' + error.message);
-            return;
-        }
-        if (data && data.error) {
-            showCustomAlert(data.error);
-            return;
-        }
-
-        showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
-        document.getElementById('itemDetailsModal').style.display = 'none';
-        
-        await updateLocalInventoryState(item.id); 
-    } catch (err) {
-        console.error('Erro geral ao equipar/desequipar:', err);
-        showCustomAlert('Ocorreu um erro inesperado.');
-    }
+    modal.style.display = 'flex';
 }
 
 function renderFragmentList(itemToLevelUp) {
@@ -1013,7 +1194,6 @@ function renderFragmentList(itemToLevelUp) {
         const qtyInput = fragmentLi.querySelector('.fragment-quantity-input');
         const maxBtn = fragmentLi.querySelector('.btn-max-action');
 
-        // Botão MAX
         maxBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             qtyInput.value = fragment.quantity;
@@ -1029,51 +1209,12 @@ function renderFragmentList(itemToLevelUp) {
             } else {
                 qtyInput.value = v;
             }
-            if (parseInt(qtyInput.value, 10) > 0) {
-                fragmentLi.classList.add('selected');
-            } else {
-                fragmentLi.classList.remove('selected');
-            }
+            if (parseInt(qtyInput.value, 10) > 0) fragmentLi.classList.add('selected');
+            else fragmentLi.classList.remove('selected');
         });
 
         fragmentListContainer.appendChild(fragmentLi);
     });
-}
-
-function getXpGainPerFragmentByRarity(rarity) {
-    if (rarity === 'R') return 40;
-    if (rarity === 'SR') return 80;
-    if (rarity === 'SSR') return 160;
-    return 40;
-}
-
-function calcularFragmentosNecessariosParaCap(item, fragmentRarity) {
-    try {
-        const currentLevel = item.level || 0;
-        const xpProgress = item.xp_progress || 0;
-        const baseRarity = item.items?.rarity;
-        if (!baseRarity) return 0;
-
-        const capLevel = Math.min(((item.items?.stars || 0) + (item.refine_level || 0) + 1) * 5, 30);
-        if (currentLevel >= capLevel) return 0;
-
-        let totalXpNeeded = 0;
-        for (let lvl = currentLevel; lvl < capLevel; lvl++) {
-            const xpRequired = getXpRequired(lvl, baseRarity);
-            if (lvl === currentLevel) {
-                totalXpNeeded += Math.max(0, xpRequired - xpProgress);
-            } else {
-                totalXpNeeded += xpRequired;
-            }
-        }
-
-        const xpPerFragment = getXpGainPerFragmentByRarity(fragmentRarity);
-        if (xpPerFragment <= 0) return 0;
-        return Math.max(0, Math.ceil(totalXpNeeded / xpPerFragment));
-    } catch (e) {
-        console.error('Erro ao calcular fragmentos necessários:', e);
-        return 0;
-    }
 }
 
 async function showCraftingModal(fragment) {
@@ -1081,64 +1222,26 @@ async function showCraftingModal(fragment) {
     const craftingModal = document.getElementById('craftingModal');
     if (!craftingModal) return;
 
-    document.getElementById('craftingContent').dataset.currentFragment = JSON.stringify(fragment);
-
-    let itemToCraft = null;
-    if (window.itemDefinitions) {
-        itemToCraft = window.itemDefinitions.get(fragment.items.crafts_item_id);
-    }
-    
-    if (!itemToCraft) {
-        const { data: itemData, error: itemError } = await supabase
-            .from('items')
-            .select(`item_id, name, display_name, rarity, stars`)
-            .eq('item_id', fragment.items.crafts_item_id)
-            .single();
-
-        if (itemError) {
-            console.error('Erro ao buscar item a ser construído:', itemError.message);
-            showCustomAlert('Não foi possível carregar os detalhes de construção.');
-            return;
+    let targetDef = window.itemDefinitions.get(fragment.items.crafts_item_id);
+    if (!targetDef) {
+        const { data } = await supabase.from('items').select('item_id, name, display_name, rarity, stars').eq('item_id', fragment.items.crafts_item_id).single();
+        if (data) {
+            targetDef = data;
+            window.itemDefinitions.set(data.item_id, data);
+        } else {
+            return showCustomAlert('Erro ao carregar receita.');
         }
-        itemToCraft = itemData;
     }
 
-    document.getElementById('craftingFragmentImage').src =
-        `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
+    document.getElementById('craftingFragmentImage').src = `https://aden-rpg.pages.dev/assets/itens/${fragment.items.name}.webp`;
     document.getElementById('craftingFragmentName').textContent = fragment.items.display_name;
-
-    document.getElementById('craftingTargetImage').src =
-        `https://aden-rpg.pages.dev/assets/itens/${itemToCraft.name}_${itemToCraft.stars}estrelas.webp`;
+    document.getElementById('craftingTargetImage').src = `https://aden-rpg.pages.dev/assets/itens/${targetDef.name}_${targetDef.stars}estrelas.webp`;
 
     const crystalCost = { 'R': 100, 'SR': 300, 'SSR': 600 };
-    const fragmentsNeeded = 30;
-
-    document.getElementById('craftingFragmentQuantity').textContent = ` ${fragment.quantity}`;
-    document.getElementById('fragmentsNeeded').textContent = `${fragmentsNeeded} (você tem: ${fragment.quantity})`;
-    document.getElementById('crystalCost').textContent = crystalCost[itemToCraft.rarity] || 0;
+    document.getElementById('fragmentsNeeded').textContent = `30 (você tem: ${fragment.quantity})`;
+    document.getElementById('crystalCost').textContent = crystalCost[targetDef.rarity] || 0;
 
     craftingModal.style.display = 'flex';
-}
-
-function getCapLevelForCurrentStar(item) {
-    const cap = ((item.items?.stars || 0) + (item.refine_level || 0) + 1) * 5;
-    return Math.min(cap, 30);
-}
-
-function getRefineFragmentsRequired(capLevel, rarity) {
-    const table = { 5: 40, 10: 60, 15: 90, 20: 120, 25: 160 };
-    return table[capLevel] || null;
-}
-
-function getRefineCrystalsRequired(capLevel, rarity) {
-    const table = {
-        5:  { 'R': 400,  'SR': 800,   'SSR': 1600 },
-        10: { 'R': 1200, 'SR': 2400,  'SSR': 4000 },
-        15: { 'R': 1800, 'SR': 3200,  'SSR': 6000 },
-        20: { 'R': 2600, 'SR': 4500,  'SSR': 9000 },
-        25: { 'R': 3200, 'SR': 6000,  'SSR': 12000 }
-    };
-    return table[capLevel]?.[rarity] || 0;
 }
 
 function openRefineFragmentModal(item) {
@@ -1147,35 +1250,19 @@ function openRefineFragmentModal(item) {
     const costsText = document.getElementById('refineCostsText');
     const confirmBtn = document.getElementById('confirmRefineSelectionRefine');
 
-    if (!modal || !list || !costsText || !confirmBtn) {
-        showCustomAlert('Estrutura do modal de refino não encontrada.');
-        return;
-    }
+    if (!modal || !list || !costsText || !confirmBtn) return;
 
     const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
-    if (totalStars >= 5) {
-        showCustomAlert('Este item já está no refinamento máximo (5★).');
-        return;
-    }
+    if (totalStars >= 5) return showCustomAlert('Este item já está no refinamento máximo (5★).');
 
     const capLevel = getCapLevelForCurrentStar(item);
-    if ((item.level || 0) !== capLevel) {
-        showCustomAlert(`Você precisa atingir o nível ${capLevel} para refinar.`);
-        return;
-    }
+    if ((item.level || 0) !== capLevel) return showCustomAlert(`Você precisa atingir o nível ${capLevel} para refinar.`);
 
     const requiredFragments = getRefineFragmentsRequired(capLevel, item.items?.rarity);
     const requiredCrystals = getRefineCrystalsRequired(capLevel, item.items?.rarity);
-    if (!requiredFragments) {
-        showCustomAlert('Não foi possível determinar o custo de refino para este nível.');
-        return;
-    }
 
-    // Filtro visual: só mostra quem tem > 0
     const sameRarityFragments = (allInventoryItems || []).filter(inv =>
-        inv.items?.item_type === 'fragmento' &&
-        inv.items?.rarity === item.items?.rarity &&
-        (inv.quantity || 0) > 0
+        inv.items?.item_type === 'fragmento' && inv.items?.rarity === item.items?.rarity && (inv.quantity || 0) > 0
     );
 
     list.innerHTML = '';
@@ -1193,303 +1280,103 @@ function openRefineFragmentModal(item) {
         const selections = [];
         list.querySelectorAll('li.selected').forEach(li => {
             const qty = parseInt(li.querySelector('.fragment-quantity-input')?.value || '0', 10);
-            if (qty > 0) {
-                selections.push({ fragment_id: li.getAttribute('data-inventory-item-id'), qty });
-            }
+            if (qty > 0) selections.push({ fragment_id: li.getAttribute('data-inventory-item-id'), qty });
         });
 
         const sum = selections.reduce((acc, s) => acc + s.qty, 0);
-        if (sum !== requiredFragments) {
-            showCustomAlert(`A soma das quantidades deve ser exatamente ${requiredFragments}. (atual: ${sum})`);
-            return;
-        }
+        if (sum !== requiredFragments) return showCustomAlert(`A soma deve ser ${requiredFragments}. (atual: ${sum})`);
 
-        modal.style.display = 'none';
-        handleRefineMulti(item, selections, requiredCrystals); // Passamos o custo de cristais
+        handleRefineMulti(item, selections, requiredCrystals);
     };
 
-    sameRarityFragments.forEach(fragmentInv => {
-        const available = fragmentInv.quantity || 0;
+    sameRarityFragments.forEach(f => {
         const li = document.createElement('li');
-        li.className = 'inventory-item';
-        li.setAttribute('data-inventory-item-id', fragmentInv.id);
+        li.dataset.inventoryItemId = f.id;
+        li.innerHTML = `<div class="fragment-info" style="display:flex;align-items:center;gap:8px;"><img src="https://aden-rpg.pages.dev/assets/itens/${f.items.name}.webp" width="30"><span>${f.items.display_name} (x${f.quantity})</span></div><div class="fragment-quantity"><label>Qtd:</label><input class="fragment-quantity-input" type="number" max="${f.quantity}" placeholder="0"><span class="btn-max-action" style="font-size:0.75em;color:#FFD700;cursor:pointer;margin-left:4px;">MAX</span></div>`;
         
-        li.innerHTML = `
-            <div class="fragment-info" style="display:flex;align-items:center;gap:8px;">
-                <img src="https://aden-rpg.pages.dev/assets/itens/${fragmentInv.items.name}.webp"
-                     alt="${fragmentInv.items.display_name}" style="width:40px;height:40px;object-fit:contain;">
-                <span>${fragmentInv.items.display_name} (x${available})</span>
-            </div>
-            <div class="fragment-quantity" style="display:flex;align-items:center;gap:6px;">
-                <label>Qtd:</label>
-                <input type="number" class="fragment-quantity-input" max="${available}" placeholder="0" style="width: 50px; text-align: center;">
-                <span class="btn-max-action" style="font-size: 0.75em; color: #FFD700; cursor: pointer; text-decoration: underline; font-weight: bold; margin-left: 2px;">MAX</span>
-            </div>
-        `;
-
-        li.addEventListener('click', (e) => {
-            if (e.target && (e.target.classList.contains('fragment-quantity-input') || e.target.classList.contains('btn-max-action'))) return;
-            li.classList.toggle('selected');
-        });
-
-        const qtyInput = li.querySelector('.fragment-quantity-input');
+        const inp = li.querySelector('input');
         const maxBtn = li.querySelector('.btn-max-action');
 
-        // Botão MAX
+        li.addEventListener('click', (e) => {
+            if (e.target !== inp && e.target !== maxBtn) li.classList.toggle('selected');
+        });
+
         maxBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            qtyInput.value = available;
-            qtyInput.dispatchEvent(new Event('input'));
+            inp.value = f.quantity;
+            inp.dispatchEvent(new Event('input'));
         });
 
-        qtyInput.addEventListener('input', () => {
-            let val = parseInt(qtyInput.value || '0', 10);
-            if (isNaN(val) || val < 0) val = 0;
-            if (val > available) {
-                qtyInput.value = available;
-                showCustomAlert(`Você só tem ${available} fragmentos disponíveis.`);
-            } else {
-                qtyInput.value = val;
-            }
-            if (parseInt(qtyInput.value, 10) > 0) li.classList.add('selected');
-            else li.classList.remove('selected');
+        inp.addEventListener('input', () => {
+            if (parseInt(inp.value) > 0) li.classList.add('selected'); else li.classList.remove('selected');
         });
-
+        
         list.appendChild(li);
     });
-
     modal.style.display = 'flex';
 }
 
-// -------------------------------------------------------------
-// FUNÇÃO MÁGICA DE ATUALIZAÇÃO LOCAL (Sem baixar tudo de novo)
-// -------------------------------------------------------------
-async function updateLocalInventoryState(updatedItem, usedFragments, usedCrystals, newItem = null) {
-    let needsSort = false;
-
-    // 1. Atualiza Item Principal (Equipamento evoluído/refinado)
-    if (updatedItem) {
-        const itemId = updatedItem.id || updatedItem;
-        
-        // Busca dados "crus" no Supabase (sem JOIN) para economizar dados
-        const { data: fetchItem } = await supabase
-            .from('inventory_items')
-            .select('*')
-            .eq('id', itemId)
-            .single();
-
-        if (fetchItem) {
-             // Hidrata o item para ter acesso ao nome/imagem
-             const hydratedItem = hydrateItem(fetchItem);
-             
-             const idx = allInventoryItems.findIndex(i => i.id === hydratedItem.id);
-             
-             // >>> AJUSTE PARA SOFT DELETE <<<
-             // Se quantity <= 0, NÃO removemos do array. Apenas atualizamos.
-             // O filtro visual acontece no renderUI.
-             if (idx !== -1) {
-                 allInventoryItems[idx] = hydratedItem;
-                 if (hydratedItem.quantity > 0) {
-                     selectedItem = hydratedItem; 
-                 }
-             } else if (hydratedItem.quantity > 0) {
-                 allInventoryItems.push(hydratedItem); // Caso raro de item novo
-                 needsSort = true;
-             }
-        }
-    }
-
-    // 2. Decrementa Fragmentos Usados
-    if (usedFragments && Array.isArray(usedFragments)) {
-        usedFragments.forEach(usage => {
-            const fragId = usage.fragment_inventory_id || usage.id; 
-            const qtyUsed = usage.used_qty || usage.qty;
-
-            const idx = allInventoryItems.findIndex(i => i.id === fragId);
-            if (idx !== -1) {
-                allInventoryItems[idx].quantity -= qtyUsed;
-                // >>> AJUSTE PARA SOFT DELETE <<<
-                // Se quantity chegar a 0, mantemos no array.
-                // Apenas garantimos que não fique negativo.
-                if (allInventoryItems[idx].quantity < 0) {
-                    allInventoryItems[idx].quantity = 0;
-                }
-            }
-        });
-    }
-
-    // 3. Adiciona Item Novo (ex: craft)
-    if (newItem) {
-        const newItemId = newItem.id || newItem;
-        const { data: newFetchItem } = await supabase
-            .from('inventory_items')
-            .select('*')
-            .eq('id', newItemId)
-            .single();
-        
-        if (newFetchItem && newFetchItem.quantity > 0) {
-            // Hidrata antes de adicionar
-            const hydratedNewItem = hydrateItem(newFetchItem);
-            allInventoryItems.push(hydratedNewItem);
-            needsSort = true;
-        }
-    }
-
-    // 4. Atualiza Cristais do Jogador (se gasto)
-    if (usedCrystals && playerBaseStats) {
-        playerBaseStats.crystals = Math.max(0, (playerBaseStats.crystals || 0) - usedCrystals);
-    }
-    
-    // 5. >>> CORREÇÃO: Atualiza os STATS de Combate <<<
-    // O backend já recalculou isso na tabela players. Vamos buscar só essa coluna (MUITO leve).
-    await refreshPlayerStatsOnly();
-
-    // 6. Atualiza Globais
-    // equippedItems só deve ter itens válidos (>0)
-    equippedItems = allInventoryItems.filter(invItem => invItem.equipped_slot !== null && invItem.quantity > 0);
-
-    // 7. Salva no Cache Local (INCLUINDO ITEMS COM QTD 0) e Re-renderiza
-    const nowISO = new Date().toISOString();
-    await saveCache(allInventoryItems, playerBaseStats, nowISO); 
-
-    renderUI();
-    
-    // Se estávamos vendo detalhes de um item que ainda existe (qtd>0), atualiza a modal
-    if (selectedItem && allInventoryItems.find(i => i.id === selectedItem.id && i.quantity > 0)) {
-        showItemDetails(selectedItem);
-    } else {
-        document.getElementById('itemDetailsModal').style.display = 'none';
-    }
+function getXpRequired(level, rarity) {
+    const base = { 'R': 20, 'SR': 40, 'SSR': 80 }[rarity] || 40;
+    return base + (level * 45);
 }
-
-// Helper para buscar APENAS os stats do jogador (Egress mínimo)
-async function refreshPlayerStatsOnly() {
+function calcularFragmentosNecessariosParaCap(item, fragRarity) {
     try {
-        const { data, error } = await supabase
-            .from('players')
-            .select('cached_combat_stats')
-            .eq('id', globalUser.id)
-            .single();
-        
-        if (data && data.cached_combat_stats) {
-            playerBaseStats = data.cached_combat_stats;
+        const currentLevel = item.level || 0;
+        const xpProgress = item.xp_progress || 0;
+        const baseRarity = item.items?.rarity;
+        if (!baseRarity) return 0;
+        const capLevel = Math.min(((item.items?.stars || 0) + (item.refine_level || 0) + 1) * 5, 30);
+        if (currentLevel >= capLevel) return 0;
+        let totalXpNeeded = 0;
+        for (let lvl = currentLevel; lvl < capLevel; lvl++) {
+            const xpRequired = getXpRequired(lvl, baseRarity);
+            if (lvl === currentLevel) totalXpNeeded += Math.max(0, xpRequired - xpProgress);
+            else totalXpNeeded += xpRequired;
         }
-    } catch (e) {
-        console.error("Erro ao atualizar stats do jogador:", e);
+        const xpPerFragment = getXpGainPerFragmentByRarity(fragRarity);
+        if (xpPerFragment <= 0) return 0;
+        return Math.max(0, Math.ceil(totalXpNeeded / xpPerFragment));
+    } catch (e) { return 0; }
+}
+function getXpGainPerFragmentByRarity(rarity) {
+    if (rarity === 'R') return 40;
+    if (rarity === 'SR') return 80;
+    if (rarity === 'SSR') return 160;
+    return 40;
+}
+function getCapLevelForCurrentStar(item) {
+    return Math.min(((item.items?.stars || 0) + (item.refine_level || 0) + 1) * 5, 30);
+}
+function getRefineFragmentsRequired(cap, rarity) {
+    const table = { 5: 40, 10: 60, 15: 90, 20: 120, 25: 160 };
+    return table[cap] || 0;
+}
+function getRefineCrystalsRequired(cap, rarity) {
+    const table = {
+        5:  { 'R': 400,  'SR': 800,   'SSR': 1600 },
+        10: { 'R': 1200, 'SR': 2400,  'SSR': 4000 },
+        15: { 'R': 1800, 'SR': 3200,  'SSR': 6000 },
+        20: { 'R': 2600, 'SR': 4500,  'SSR': 9000 },
+        25: { 'R': 3200, 'SR': 6000,  'SSR': 12000 }
+    };
+    return table[cap]?.[rarity] || 0;
+}
+function formatAttrName(attr) {
+    switch (attr) {
+        case "attack_bonus": return "ATK";
+        case "defense_bonus": return "DEF";
+        case "health_bonus": return "HP";
+        case "crit_chance_bonus": return "TAXA CRIT";
+        case "crit_damage_bonus": return "DANO CRIT";
+        case "evasion_bonus": return "EVASÃO";
+        default: return attr;
     }
 }
-
-
-// -------------------------------------------------------------
-// HANDLERS MODIFICADOS (ZERO EGRESS)
-// -------------------------------------------------------------
-
-async function handleRefineMulti(item, selections, crystalCost) {
-    try {
-        const { data, error } = await supabase.rpc('refine_item', {
-            _inventory_item_id: item.id,
-            _fragments: selections
-        });
-
-        if (error) {
-            console.error('Erro na chamada RPC:', error.message);
-            showCustomAlert(`Erro ao refinar: ${error.message}`);
-            return;
-        }
-    
-        if (data && data.error) {
-            showCustomAlert(`Erro ao refinar: ${data.error}`);
-        } else if (data && data.success) {
-            const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
-            showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
-            
-            // ATUALIZAÇÃO LOCAL
-            await updateLocalInventoryState(item.id, data.used_fragments, data.used_crystals);
-            
-            document.getElementById('itemDetailsModal').style.display = 'none';
-        } else {
-            showCustomAlert('Não foi possível refinar o item. Tente novamente.');
-        }
-    } catch (err) {
-        console.error('Erro geral ao refinar:', err);
-        showCustomAlert('Ocorreu um erro ao tentar refinar o item.');
-    }
-}
-
-async function handleLevelUpMulti(item, selections) {
-    document.getElementById('fragmentSelectModal').style.display = 'none';
-
-    try {
-        const { data, error } = await supabase.rpc('level_up_item', {
-            p_inventory_item_id: item.id,
-            p_fragments: selections
-        });
-
-        if (error) {
-            console.error('Erro na chamada RPC:', error.message);
-            showCustomAlert(`Erro ao subir de nível: ${error.message}`);
-            return;
-        }
-
-        if (data && data.error) {
-            showCustomAlert(`Erro ao subir de nível: ${data.error}`);
-        } else if (data && data.success) {
-            showCustomAlert(`Item evoluído para Nível ${data.new_level}! XP atual: ${data.new_xp}.`);
-            
-            // ATUALIZAÇÃO LOCAL
-            await updateLocalInventoryState(item.id, data.used_fragments, 0);
-
-            document.getElementById('itemDetailsModal').style.display = 'none';
-        } else {
-            showCustomAlert('Não foi possível evoluir o item. Tente novamente.');
-        }
-    } catch (err) {
-        console.error('Erro geral ao subir o nível:', err);
-        showCustomAlert('Ocorreu um erro ao tentar subir o nível do item.');
-    }
-}
-
-async function handleCraft(itemId, fragmentId) {
-    try {
-        const { data, error } = await supabase.rpc('craft_item', {
-            p_item_id: itemId,
-            p_fragment_id: fragmentId
-        });
-
-        if (error) {
-            console.error('Erro na chamada RPC:', error.message);
-            showCustomAlert(`Erro ao construir o item: ${error.message}`);
-            return;
-        }
-
-        if (data && data.error) {
-            showCustomAlert(`Erro ao construir: ${data.error}`);
-        } else if (data && data.success) {
-            showCustomAlert(`Item construído com sucesso!`);
-            
-            // ATUALIZAÇÃO LOCAL
-            await updateLocalInventoryState(
-                null, 
-                [{fragment_inventory_id: fragmentId, used_qty: 30}], 
-                data.crystals_spent, 
-                data.new_item_id
-            );
-
-            document.getElementById('craftingModal').style.display = 'none';
-        } else {
-            showCustomAlert('Não foi possível construir o item. Tente novamente.');
-        }
-    } catch (err) {
-        console.error('Erro geral ao construir:', err);
-        showCustomAlert('Ocorreu um erro ao tentar construir o item.');
-    }
-}
-
 
 // ===============================
-// >>> Cache & Shimmer FIX PATCH (appended) <<<
+// Shimmer Patch
 // ===============================
-
 (function applyInitialShimmer(){
   function addShimmer(){
     ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
@@ -1509,11 +1396,10 @@ window.loadItems = loadItems;
 window.calculatePlayerStats = calculatePlayerStats;
 window.renderEquippedItems = renderEquippedItems;
 window.showItemDetails = showItemDetails;
-
 window.updateCacheItem = updateCacheItem;
 window.removeCacheItem = removeCacheItem;
 window.updateLocalInventoryState = updateLocalInventoryState; 
-
 window.showCustomAlert = showCustomAlert;
+window.openRefineFragmentModal = openRefineFragmentModal;
 
 if (!window.handleDeconstruct) window.handleDeconstruct = () => {};

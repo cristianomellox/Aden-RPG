@@ -1,3 +1,4 @@
+
 // Registro do Service Worker Otimizado
 if ('serviceWorker' in navigator) {
     const registerSW = () => {
@@ -740,6 +741,7 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" e REMOVE itens com qtd 0.
+ * VERSÃO OTIMIZADA: Faz Merge de itens parciais (id, quantity) com os dados completos no cache.
  */
 async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
     try {
@@ -748,19 +750,38 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualiza, insere OU DELETA os itens modificados
+        // 1. Atualiza, insere OU DELETA os itens modificados (COM MERGE)
         if (Array.isArray(newItems)) {
-            newItems.forEach(item => {
-                if (item.quantity > 0) {
-                    store.put(item); // Salva/Atualiza se tiver quantidade
-                } else {
-                    // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
-                    if (item.id) {
-                        store.delete(item.id);
-                        console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
+            // Precisamos esperar as operações assíncronas dentro do loop
+            const promises = newItems.map(item => {
+                return new Promise((resolve) => {
+                    if (item.quantity > 0) {
+                        // Leitura para Merge (Economia de Egress: Server manda parcial)
+                        const getReq = store.get(item.id);
+                        getReq.onsuccess = () => {
+                            const existingData = getReq.result || {};
+                            // Mescla: dados novos sobrescrevem antigos, mantém o resto (ex: reforge)
+                            const mergedItem = { ...existingData, ...item };
+                            store.put(mergedItem);
+                            resolve();
+                        };
+                        getReq.onerror = () => {
+                            // Fallback: tenta salvar direto se ler falhar
+                            store.put(item);
+                            resolve();
+                        };
+                    } else {
+                        // Se a quantidade for 0 ou menor, removemos fisicamente do IndexedDB
+                        if (item.id) {
+                            store.delete(item.id);
+                            console.log(`🗑️ [Cache] Item ${item.id} removido (qtd 0).`);
+                        }
+                        resolve();
                     }
-                }
+                });
             });
+            
+            await Promise.all(promises);
         }
 
         // 2. Atualiza o Timestamp para manter sync com inventory.js
@@ -782,6 +803,7 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 
         return new Promise(resolve => {
             tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); // Resolve mesmo com erro para não travar UI
         });
     } catch (e) {
         console.warn("⚠️ Falha ao atualizar IndexedDB via script.js:", e);
@@ -2680,3 +2702,92 @@ function enableMapInteraction() {
         window.enableMapInteraction = enableMapInteraction;
     }
 })();
+
+// =======================================================================
+// INÍCIO: MONITOR DE EGRESS (CORRIGIDO)
+// =======================================================================
+(function() {
+    console.log("🛡️ Monitor de Egress Supabase Iniciado (Corrigido para 'supabaseClient')");
+
+    const LOG_TABLE = 'rpc_logs'; 
+    const IGNORE_URLS = [LOG_TABLE, 'intake.supabase.co']; 
+
+    // 1. MONITOR DE HTTP (REST, Auth, Selects, RPCs)
+    const originalFetch = window.fetch;
+
+    window.fetch = async (...args) => {
+        const [resource, config] = args;
+        const urlStr = resource ? resource.toString() : "";
+
+        // 🛑 EVITA LOOP INFINITO
+        if (IGNORE_URLS.some(x => urlStr.includes(x))) {
+            return originalFetch(...args);
+        }
+
+        let response;
+        try {
+            response = await originalFetch(...args);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+
+        const clone = response.clone();
+        
+        clone.blob().then(blob => {
+            const size = blob.size;
+            const method = config?.method || 'GET';
+            
+            let functionName = "unknown";
+            try {
+                const urlObj = new URL(urlStr);
+                const pathParts = urlObj.pathname.split('/');
+                functionName = pathParts[pathParts.length - 1] || "root";
+                if (urlObj.search) functionName += ` (query)`;
+            } catch (e) {}
+
+            console.log(`📡 [HTTP] ${method} ${functionName} - ${size} bytes`);
+            logToSupabase(`http_${method}_${functionName}`, size);
+        }).catch(err => console.error("⚠️ Erro ao calcular tamanho do fetch:", err));
+
+        return response;
+    };
+
+    // 2. MONITOR DE WEBSOCKET (Realtime)
+    const OriginalWebSocket = window.WebSocket;
+    window.WebSocket = class extends OriginalWebSocket {
+        constructor(url, protocols) {
+            super(url, protocols);
+            if (url.toString().includes('supabase') || url.toString().includes('realtime')) {
+                this.addEventListener('message', (event) => {
+                    const size = new Blob([event.data]).size;
+                    logToSupabase('realtime_msg', size);
+                });
+            }
+        }
+    };
+
+    // 3. FUNÇÃO DE LOG (CORRIGIDA)
+    async function logToSupabase(name, bytes) {
+        // CORREÇÃO AQUI: Verifica se 'supabaseClient' existe (usado no script.js)
+        // Se não, tenta 'supabase' (usado em módulos), mas verifica se tem o método .from
+        const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : 
+                       ((typeof supabase !== 'undefined' && typeof supabase.from === 'function') ? supabase : null);
+
+        if (!client) {
+            console.warn("⚠️ Cliente Supabase (supabaseClient) não encontrado. O log não será salvo.");
+            return;
+        }
+
+        try {
+            await client.from(LOG_TABLE).insert({
+                function_name: name,
+                size_bytes: bytes
+            });
+        } catch (e) {
+            console.error("❌ Falha ao salvar log de egress:", e);
+        }
+    }
+})();
+// =======================================================================
+// FIM DO MONITOR
+// =======================================================================

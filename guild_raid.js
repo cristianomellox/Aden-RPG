@@ -87,7 +87,7 @@ import { supabase } from './supabaseClient.js'
 // =======================================================================
 // FIM DO MONITOR
 // =======================================================================
-console.log("guild_raid.js (v16 - Boss Crit & Music Update)");
+console.log("guild_raid.js (v15 - Zero Egress Optimization)");
 
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
@@ -118,6 +118,7 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         if (Array.isArray(newItems)) {
             newItems.forEach(item => {
                 // Tenta hidratar o item antes de salvar no cache para manter consistência
+                // Se window.getItemDefinition existir (do script.js)
                 if (window.getItemDefinition && (!item.items || !item.items.name)) {
                     const def = window.getItemDefinition(item.item_id);
                     if (def) {
@@ -175,12 +176,7 @@ const BOSS_ATTACK_VIDEO_URLS = [
 const AMBIENT_AUDIO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3", "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3", "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3", "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3", "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
 ];
-
-// Música do Chefe (Andares 5, 10, 15...)
 const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
-
-// Música dos Andares Normais (1, 2, 3, 4, 6...)
-const RAID_NORMAL_BGM_URL = "https://aden-rpg.pages.dev/assets/raid_bgm.mp3"; 
 
 // Variáveis de estado
 let userId = null, userGuildId = null, userRank = "member", userName = null;
@@ -216,8 +212,6 @@ let isMediaUnlocked = false;
 let ambientAudioInterval = null;
 let ambientAudioPlayer = null; 
 let bossMusicPlayer = null;
-let normalFloorMusicPlayer = null; // Player para andares normais
-
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -329,17 +323,12 @@ function createMediaPlayers() {
     }
     if (!ambientAudioPlayer) {
         ambientAudioPlayer = new Audio();
-        ambientAudioPlayer.volume = 0.2;
+        ambientAudioPlayer.volume = 0.5;
     }
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
         bossMusicPlayer.volume = 0.06;
         bossMusicPlayer.loop = true;
-    }
-    if (!normalFloorMusicPlayer) {
-        normalFloorMusicPlayer = new Audio(RAID_NORMAL_BGM_URL);
-        normalFloorMusicPlayer.volume = 0.06;
-        normalFloorMusicPlayer.loop = true;
     }
 }
 
@@ -394,7 +383,7 @@ function unlockMedia() {
         videoPlayer.muted = false;
     }
     
-    const audiosToUnlock = [audioNormal, audioCrit, ambientAudioPlayer, bossMusicPlayer, normalFloorMusicPlayer];
+    const audiosToUnlock = [audioNormal, audioCrit, ambientAudioPlayer, bossMusicPlayer];
     audiosToUnlock.forEach(audio => {
         if (audio && audio.paused) {
             audio.play().then(() => audio.pause()).catch(() => {});
@@ -442,20 +431,12 @@ function stopAllFloorMusic() {
         bossMusicPlayer.pause();
         bossMusicPlayer.currentTime = 0;
     }
-    if (normalFloorMusicPlayer && !normalFloorMusicPlayer.paused) {
-        normalFloorMusicPlayer.pause();
-        normalFloorMusicPlayer.currentTime = 0;
-    }
 }
 
 function startFloorMusic() {
     if (!isMediaUnlocked) return;
 
     if (currentFloor % 5 === 0) {
-        // --- É Andar de Chefe ---
-        if (normalFloorMusicPlayer && !normalFloorMusicPlayer.paused) {
-            normalFloorMusicPlayer.pause();
-        }
         if (ambientAudioInterval) {
             clearInterval(ambientAudioInterval);
             ambientAudioInterval = null;
@@ -464,15 +445,9 @@ function startFloorMusic() {
             bossMusicPlayer.play().catch(e => {});
         }
     } else {
-        // --- É Andar Normal ---
         if (bossMusicPlayer && !bossMusicPlayer.paused) {
             bossMusicPlayer.pause();
         }
-        if (normalFloorMusicPlayer && normalFloorMusicPlayer.paused) {
-            normalFloorMusicPlayer.play().catch(e => {});
-        }
-        
-        // Mantém os sons de ambiente aleatórios nos andares normais
         if (!ambientAudioInterval) {
             try { playRandomAmbientAudio(); } catch(e) {}
             ambientAudioInterval = setInterval(playRandomAmbientAudio, AMBIENT_AUDIO_INTERVAL_MS);
@@ -483,7 +458,7 @@ function startFloorMusic() {
 function displayFloatingDamageOver(targetEl, val, isCrit) {
   if (!targetEl) return;
   const el = document.createElement("div");
-  el.textContent = `${Number(val).toLocaleString()}`;
+  el.textContent = isCrit ? `${Number(val).toLocaleString()}` : String(val);
   el.className = isCrit ? "crit-damage-number" : "damage-number";
   el.style.position = "absolute";
   el.style.left = "50%";
@@ -1432,52 +1407,27 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
     });
     itemsContainer.appendChild(ul);
     
-    // OTIMIZAÇÃO E CORREÇÃO DE IMAGEM
+    // OTIMIZAÇÃO: Usar o cache global de definições
     const lis = ul.querySelectorAll('li');
     itemsArray.forEach((it, idx) => {
         const li = lis[idx];
         if (!li) return;
         const img = li.querySelector('img');
         
-        // 1. Tenta pegar do cache Global na RAM (script.js)
+        // Tenta pegar do cache global do script.js
         let def = null;
         if (window.getItemDefinition) {
             def = window.getItemDefinition(it.item_id);
-        } else if (window.itemDefinitions && window.itemDefinitions.size > 0) {
+        } else if (window.itemDefinitions) {
             def = window.itemDefinitions.get(it.item_id);
-        }
-
-        // 2. FALLBACK: Se não achou na RAM, tenta ler do LocalStorage agora mesmo
-        if (!def) {
-            try {
-                const cachedRaw = localStorage.getItem('item_definitions_full_v1');
-                if (cachedRaw) {
-                    const parsed = JSON.parse(cachedRaw);
-                    // Suporta formato Array [key, val] ou Objeto direto
-                    const mapData = Array.isArray(parsed) ? parsed : (parsed.data || []);
-                    const tempMap = new Map(mapData);
-                    // Tenta ID numérico e String
-                    def = tempMap.get(it.item_id) || tempMap.get(String(it.item_id));
-                    
-                    // Se achou, salva na RAM global para não ler dnv
-                    if (def && window.itemDefinitions) {
-                        window.itemDefinitions.set(it.item_id, def);
-                    }
-                }
-            } catch(e) { console.warn("Erro fallback item def", e); }
         }
 
         if (def) {
             const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${def.name}.webp`;
             if (img) img.src = imageUrl;
-            // Opcional: Atualizar nome se veio genérico do banco
-            const span = li.querySelector('span');
-            if(span && (it.name === 'Item' || !it.name)) {
-                 // Mantém a quantidade, adiciona o nome real
-                 span.textContent = `x ${it.quantity} ${def.display_name || def.name}`;
-            }
         } else {
-            console.warn(`[Raid] Definição de item ${it.item_id} não encontrada em lugar nenhum.`);
+            // Fallback (apenas se não achar no cache)
+            console.warn(`Definição de item ${it.item_id} não encontrada no cache.`);
         }
     });
 
@@ -1542,36 +1492,14 @@ async function simulateLocalBossAttackLogic() {
                  return;
              }
 
-             // --- LÓGICA DE CRÍTICO DO CHEFE (CLIENTE) ---
-             // Chance: 10%
-             const isBossCrit = (Math.random() * 100) < 10;
-             let critMultiplier = 1;
-             
-             if (isBossCrit) {
-                 // Dano Crítico: 80% a 130% extra (1.8x a 2.3x)
-                 const bonusPercent = Math.floor(Math.random() * (130 - 80 + 1)) + 80;
-                 critMultiplier = 1 + (bonusPercent / 100);
-             }
-
-             let baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
-             let finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
-             
-             // Aplica crítico no dano final
-             if (isBossCrit) {
-                 finalDmg = Math.floor(finalDmg * critMultiplier);
-             }
+             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
+             const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
              
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
              
-             // Exibe dano com cor de crítico se necessário
-             displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, isBossCrit);
+             displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, false);
              
-             // Efeitos visuais e sonoros de crítico do chefe
-             if (isBossCrit) {
-                 playHitSound(true); // Som de crítico
-             }
-
              const playerAvatar = $id("raidPlayerAvatar");
              if (playerAvatar) {
                 playerAvatar.classList.add('shake-animation');

@@ -90,7 +90,7 @@ import { supabase } from './supabaseClient.js'
 // FIM DO MONITOR
 // =======================================================================
 // =========================================================
-// >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
+// >>> HELPER INDEXEDDB LOCAL (ZERO EGRESS) <<<
 // =========================================================
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
@@ -100,6 +100,12 @@ const DB_VERSION = 47;
 function openDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            // Garante que as stores existam
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: "key" });
+        };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
@@ -107,6 +113,7 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
+ * Isso evita que o jogador precise recarregar a página para ver os itens ganhos.
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
@@ -134,9 +141,10 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         console.warn("⚠️ Falha ao atualizar IndexedDB localmente na Raid:", e);
     }
 }
+
 // =========================================================
-
-
+// CONFIGURAÇÕES GERAIS
+// =========================================================
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
 const ATTEMPTS_CACHE_DURATION_MS = 15 * 60 * 1000;
@@ -151,44 +159,50 @@ const BATCH_DEBOUNCE_MS = 40000;
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
 const BOSS_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossintro.webm";
 const BOSS_DEATH_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddbossoutro.webm";
+
 const BOSS_ATTACK_VIDEO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddbossatk01.webm", "https://aden-rpg.pages.dev/assets/tddbossatk02.webm",
     "https://aden-rpg.pages.dev/assets/tddbossatk03.webm", "https://aden-rpg.pages.dev/assets/tddbossatk04.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk05.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk06.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk07.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk08.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk09.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk10.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk11.webm",
-    "https://aden-rpg.pages.dev/assets/tddbossatk12.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk05.webm", "https://aden-rpg.pages.dev/assets/tddbossatk06.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk07.webm", "https://aden-rpg.pages.dev/assets/tddbossatk08.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk09.webm", "https://aden-rpg.pages.dev/assets/tddbossatk10.webm",
+    "https://aden-rpg.pages.dev/assets/tddbossatk11.webm", "https://aden-rpg.pages.dev/assets/tddbossatk12.webm",
     "https://aden-rpg.pages.dev/assets/tddbossatk13.webm"
 ];
-const AMBIENT_AUDIO_URLS = [
-    "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3", "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3", "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3", "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3", "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
-];
-const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
-const NORMAL_FLOOR_MUSIC_URL = "https://aden-rpg.pages.dev/assets/music_loop_02.mp3"; // Música comum para outros andares
 
-// Variáveis de estado
+const AMBIENT_AUDIO_URLS = [
+    "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3",
+    "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
+];
+
+// Músicas de Fundo
+const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
+const NORMAL_FLOOR_MUSIC_URL = "https://aden-rpg.pages.dev/assets/tdd_bgm.mp3"; 
+
+// Variáveis de Estado
 let userId = null, userGuildId = null, userRank = "member", userName = null;
 let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1, playerMaxHealth = 1;
 let localPlayerHp = 1;
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
+
+// Intervals
 let uiSecondInterval = null, raidTimerInterval = null, reviveUITickerInterval = null, countdownInterval = null;
 let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
 
-// Death Notification
+// Death Notification Logic
 let deathNotificationQueue = [];
 let isDisplayingDeathNotification = false;
 let processedDeathTimestamps = new Set(); 
 
-// Visual/Logic Boss
+// Visual/Logic Boss Timers
 let optimisticBossInterval = null;
 let nextBossAttackTime = 0;
 
-// Otimista & Batch
+// Otimista & Batch Variables
 let playerStatsCache = null; 
 let pendingAttacksQueue = 0; 
 let batchSyncTimer = null; 
@@ -201,15 +215,18 @@ let isSwitchingFloors = false;
 let actionQueue = [];
 let isProcessingAction = false;
 let isMediaUnlocked = false;
+
+// Audio Players
 let ambientAudioInterval = null;
 let ambientAudioPlayer = null; 
 let bossMusicPlayer = null;
-let normalMusicPlayer = null; // Player para música normal
+let normalMusicPlayer = null;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
 const audioCrit = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
+
+// Configura volumes
 audioNormal.volume = 0.5;
 audioCrit.volume = 0.1;
 
@@ -219,11 +236,12 @@ function playHitSound(isCrit) {
         const audio = isCrit ? audioCrit : audioNormal;
         audio.currentTime = 0;
         audio.play().catch(()=>{});
-    } catch(e){ console.warn("playHitSound", e); }
+    } catch(e){ console.warn("playHitSound error", e); }
 }
 
 const $id = id => document.getElementById(id);
 
+// --- MODAL DE ALERTA ---
 function showRaidAlert(message) {
   const modal = $id("raidAlertModal");
   const msgEl = $id("raidAlertMessage");
@@ -231,6 +249,7 @@ function showRaidAlert(message) {
 
   if (!modal || !msgEl || !okBtn) {
     console.warn("Modal de alerta não encontrado.");
+    alert(message);
     return;
   }
 
@@ -242,6 +261,7 @@ function showRaidAlert(message) {
   };
 }
 
+// --- BATCH STATE MANAGEMENT ---
 function saveBatchState() {
     if (!currentRaidId) return;
     const data = {
@@ -258,18 +278,23 @@ function loadBatchState() {
         const raw = localStorage.getItem('raid_batch_state');
         if (!raw) return;
         const data = JSON.parse(raw);
+        // Expira após 10 minutos
         if (data.raidId === currentRaidId && (Date.now() - data.ts < 600000)) {
             pendingAttacksQueue = data.queue || 0;
             localDamageDealtInBatch = data.dmg || 0;
+            // Se tinha pendência, tenta sincronizar
             if (pendingAttacksQueue > 0) {
                  triggerBatchSync(); 
             }
         } else {
             localStorage.removeItem('raid_batch_state');
         }
-    } catch(e) {}
+    } catch(e) {
+        console.warn("Erro ao carregar state batch", e);
+    }
 }
 
+// --- PLAYER STATS CACHE ---
 async function cachePlayerStats() {
     if (playerStatsCache) return; 
     if (!userId) return;
@@ -290,6 +315,7 @@ async function cachePlayerStats() {
     } catch(e) { console.warn("Erro ao cachear stats:", e); }
 }
 
+// --- ACTION QUEUE ---
 function processNextAction() {
     if (isProcessingAction || actionQueue.length === 0) return;
     isProcessingAction = true;
@@ -302,7 +328,9 @@ function queueAction(action) {
     processNextAction();
 }
 
+// --- MEDIA SYSTEM ---
 function createMediaPlayers() {
+    // Video Overlay
     if (!$id('raidVideoOverlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'raidVideoOverlay';
@@ -311,22 +339,27 @@ function createMediaPlayers() {
         video.id = 'raidVideoPlayer';
         video.style.cssText = 'width: 100%; height: 100%; background: none; object-fit: cover; visibility: hidden;';
         video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
         video.setAttribute('preload', 'auto');
         overlay.appendChild(video);
         document.body.appendChild(overlay);
     }
+    
+    // Audio Elements
     if (!ambientAudioPlayer) {
         ambientAudioPlayer = new Audio();
         ambientAudioPlayer.volume = 0.5;
     }
+    
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
-        bossMusicPlayer.volume = 0.06;
+        bossMusicPlayer.volume = 0.1;
         bossMusicPlayer.loop = true;
     }
+    
     if (!normalMusicPlayer) {
         normalMusicPlayer = new Audio(NORMAL_FLOOR_MUSIC_URL);
-        normalMusicPlayer.volume = 0.05;
+        normalMusicPlayer.volume = 0.2;
         normalMusicPlayer.loop = true;
     }
 }
@@ -413,7 +446,6 @@ function primeMedia() {
     }
 }
 
-
 function playRandomAmbientAudio() {
     if (!isMediaUnlocked || isProcessingAction || document.visibilityState !== 'visible') return;
     const audioSrc = AMBIENT_AUDIO_URLS[Math.floor(Math.random() * AMBIENT_AUDIO_URLS.length)];
@@ -459,6 +491,7 @@ function startFloorMusic() {
         if (normalMusicPlayer && normalMusicPlayer.paused) {
             normalMusicPlayer.play().catch(e => {});
         }
+        // Som ambiente ocasional
         if (!ambientAudioInterval) {
             try { playRandomAmbientAudio(); } catch(e) {}
             ambientAudioInterval = setInterval(playRandomAmbientAudio, AMBIENT_AUDIO_INTERVAL_MS);
@@ -735,7 +768,6 @@ function displayDeathNotification(playerName) {
 
     banner.innerHTML = `<span style="color: yellow;">${playerName}</span> foi derrotado(a) pelo <span style="color: lightgreen;">${bossName}</span>!`;
     
-    // Reset animation
     banner.classList.remove('show');
     void banner.offsetWidth; // trigger reflow
     banner.classList.add('show');
@@ -814,8 +846,7 @@ function getLocalUserId() {
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                const sessionStr = localStorage.getItem(k);
-                const session = JSON.parse(sessionStr);
+                const session = JSON.parse(localStorage.getItem(k));
                 if (session && session.user && session.user.id) {
                     return session.user.id;
                 }
@@ -1120,7 +1151,7 @@ function updateAttackUI() {
           : "";
   }
   
-  // Opacidade do botão quando ataques <= 0
+  // OPACIDADE E BLOQUEIO (Solicitação 2)
   if (visualAttacksLeft <= 0) {
       attackBtn.style.opacity = '0.4';
   } else {
@@ -1271,6 +1302,13 @@ async function triggerBatchSync() {
                  saveAttemptsCache(attacksLeft, lastAttackAt);
              }
              updateAttackUI();
+             
+             // Consistência do Boss: Se o server disse que o boss atacou, mostra visualmente
+             if (data.boss_action && data.boss_action.damage) {
+                 displayFloatingDamageOver($id("raidPlayerArea"), data.boss_action.damage, data.boss_action.boss_crit);
+                 playHitSound(data.boss_action.boss_crit); 
+             }
+             
              isBatchSyncing = false;
              return;
         }
@@ -1279,11 +1317,18 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
+        // Sucesso Normal
         updateHpBar(data.monster_health, data.max_monster_health);
         
         if (data.player_health !== undefined) {
              localPlayerHp = Math.min(localPlayerHp, data.player_health);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
+        }
+        
+        // Exibe dano do Boss vindo do Server
+        if (data.boss_action && data.boss_action.damage) {
+             displayFloatingDamageOver($id("raidPlayerArea"), data.boss_action.damage, data.boss_action.boss_crit);
+             playHitSound(data.boss_action.boss_crit); // Toca som (Normal ou Crit)
         }
 
         attacksLeft = data.attacks_left;
@@ -1296,11 +1341,12 @@ async function triggerBatchSync() {
         saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
 
-        // Zero Egress Inventory Update
+        // OTIMIZAÇÃO: Inventário sem Fetch
         if (data.inventory_updates && data.new_timestamp) {
              await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }
 
+        // OTIMIZAÇÃO: Recompensas sem Fetch (Auto-Claimed)
         if (data.monster_health <= 0) {
              const floorDefeated = currentFloor; 
              const wasBoss = floorDefeated % 5 === 0;
@@ -1475,7 +1521,7 @@ async function simulateLocalBossAttackLogic() {
              const isCrit = (Math.random() * 100 < 10);
              let damageMult = 1.0;
              if (isCrit) {
-                 damageMult = 1.0 + (0.8 + Math.random() * 0.5); // 1.8 a 2.3
+                 damageMult = 1.8 + (Math.random() * 0.5); // 1.8 a 2.3
              }
 
              let baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));

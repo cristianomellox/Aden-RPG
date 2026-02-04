@@ -267,7 +267,7 @@ function createMediaPlayers() {
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
         video.setAttribute('preload', 'auto');
-        video.volume = 0.9;
+        video.volume = 2;
         overlay.appendChild(video);
         document.body.appendChild(overlay);
     }

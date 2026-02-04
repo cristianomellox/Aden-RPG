@@ -355,7 +355,7 @@ function playVideo(src, onVideoEndCallback) {
 
     videoPlayer.style.visibility = 'hidden';
     videoPlayer.src = src;
-    videoPlayer.volume = 0.9;
+    videoPlayer.volume = 1.5;
     videoPlayer.load(); 
 
     videoOverlay.style.display = 'flex';

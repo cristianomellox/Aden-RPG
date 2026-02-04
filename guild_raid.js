@@ -98,6 +98,7 @@ const NORMAL_FLOOR_MUSIC_URL = "https://aden-rpg.pages.dev/assets/tdd_bgm.mp3";
 
 // Variáveis de Estado
 let userId = null, userGuildId = null, userRank = "member", userName = null;
+let userAvatarUrl = "https://aden-rpg.pages.dev/avatar01.webp"; // Default Avatar
 let currentRaidId = null, currentFloor = 1, maxMonsterHealth = 1, playerMaxHealth = 1;
 let localPlayerHp = 1;
 let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
@@ -138,6 +139,59 @@ let normalMusicPlayer = null;
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
 const audioCrit = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
+
+// =========================================================
+// >>> ADEN GLOBAL DB (Cache Compartilhado: Ranking/Minas/Raid) <<<
+// =========================================================
+const GLOBAL_DB_NAME = 'aden_global_db';
+const AUTH_STORE = 'auth_store';
+const OWNERS_STORE = 'owners_store'; // Store compartilhada de Avatares/Nomes
+
+const GlobalDB = {
+    open: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME); // Deixa o navegador gerenciar a versão existente
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    // Busca um único dono/jogador pelo ID
+    getOwner: async function(id) {
+        try {
+            const db = await this.open();
+            return new Promise((resolve) => {
+                if (!db.objectStoreNames.contains(OWNERS_STORE)) { resolve(null); return; }
+                const tx = db.transaction(OWNERS_STORE, 'readonly');
+                const req = tx.objectStore(OWNERS_STORE).get(id);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        } catch(e) { return null; }
+    },
+    // Salva dados do jogador no cache compartilhado
+    saveOwner: async function(playerData) {
+        if (!playerData || !playerData.id) return;
+        try {
+            const db = await this.open();
+            if (!db.objectStoreNames.contains(OWNERS_STORE)) return;
+            
+            const tx = db.transaction(OWNERS_STORE, 'readwrite');
+            const store = tx.objectStore(OWNERS_STORE);
+            
+            // Preserva dados existentes se existirem
+            const getReq = store.get(playerData.id);
+            getReq.onsuccess = () => {
+                const existing = getReq.result || {};
+                const toSave = {
+                    ...existing,
+                    ...playerData,
+                    timestamp: Date.now() // Atualiza TTL para o mines.js não apagar
+                };
+                store.put(toSave);
+            };
+        } catch(e) { console.warn("Erro ao salvar no GlobalDB:", e); }
+    }
+};
 
 // Configura volumes
 audioNormal.volume = 0.6;
@@ -260,7 +314,7 @@ function createMediaPlayers() {
     if (!$id('raidVideoOverlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'raidVideoOverlay';
-        video.volume = 0.9;
+        // video.volume definido depois
         overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 20000; display: none; justify-content: center; align-items: center;`;
         const video = document.createElement('video');
         video.id = 'raidVideoPlayer';
@@ -482,7 +536,8 @@ function ensurePlayerHpUi() {
   avatarWrap.id = "raidPlayerAvatarWrap";
   const avatar = document.createElement("img");
   avatar.id = "raidPlayerAvatar";
-  avatar.src = "https://via.placeholder.com/80";
+  // Alteração: Usa userAvatarUrl garantindo que não mostre placeholder se o dado já estiver disponível
+  avatar.src = userAvatarUrl || "https://aden-rpg.pages.dev/assets/avatar01.webp";
   avatar.style.width = "80px";
   avatar.style.height = "80px";
   avatar.style.borderRadius = "50%";
@@ -774,42 +829,87 @@ function getLocalPlayerData() {
 
 async function initSession() {
   try {
-    const cachedPlayer = getLocalPlayerData();
-    if (cachedPlayer) {
-        userId = cachedPlayer.id;
-        userName = cachedPlayer.name;
-        userGuildId = cachedPlayer.guild_id;
-        userRank = cachedPlayer.rank || "member";
-        if (cachedPlayer.avatar_url) {
-            const av = $id("raidPlayerAvatar");
-            if (av) av.src = cachedPlayer.avatar_url;
-        }
-        return; 
-    }
-
+    // 1. Tenta pegar ID da sessão local do Supabase ou Cache
     let localId = getLocalUserId();
     
+    // Fallback: Tenta pegar do Auth do GlobalDB (caso ranking tenha salvo)
+    if (!localId) {
+         try {
+             const db = await GlobalDB.open();
+             if (db.objectStoreNames.contains(AUTH_STORE)) {
+                 const tx = db.transaction(AUTH_STORE, 'readonly');
+                 const req = tx.objectStore(AUTH_STORE).get('current_session');
+                 const res = await new Promise(r => { req.onsuccess = () => r(req.result); req.onerror = () => r(null); });
+                 if (res && res.user) localId = res.user.id;
+             }
+         } catch(e){}
+    }
+
     if (!localId) {
         const { data } = await supabase.auth.getSession({ cache: 'memory-only' });
-        if (data?.session) {
-            localId = data.session.user.id;
-        }
+        if (data?.session) localId = data.session.user.id;
     }
 
     if (!localId) return; 
-
     userId = localId;
 
-    const { data: player, error } = await supabase.from("players").select("name, guild_id, rank, avatar_url").eq("id", userId).single();
+    // 2. >>> ESTRATÉGIA DE AVATAR (ZERO EGRESS) <<<
+    let foundInCache = false;
+
+    // A) Busca no GlobalDB (IndexedDB compartilhado)
+    const cachedGlobal = await GlobalDB.getOwner(userId);
+    if (cachedGlobal && cachedGlobal.name) {
+        userName = cachedGlobal.name;
+        userGuildId = cachedGlobal.guild_id; 
+        if (cachedGlobal.avatar_url) {
+            userAvatarUrl = cachedGlobal.avatar_url;
+        }
+        foundInCache = true;
+    }
+
+    // B) Se não achou completo no GlobalDB, tenta localStorage antigo
+    if (!foundInCache) {
+        const cachedLocal = getLocalPlayerData();
+        if (cachedLocal) {
+            userName = cachedLocal.name;
+            userGuildId = cachedLocal.guild_id;
+            userRank = cachedLocal.rank || "member";
+            if (cachedLocal.avatar_url) userAvatarUrl = cachedLocal.avatar_url;
+            foundInCache = true;
+            
+            // Aproveita e migra para o GlobalDB
+            GlobalDB.saveOwner(cachedLocal);
+        }
+    }
+
+    // 3. Busca autoritativa no Supabase (Atualiza cache se necessário)
+    const { data: player, error } = await supabase
+        .from("players")
+        .select("id, name, guild_id, rank, avatar_url")
+        .eq("id", userId)
+        .single();
+
     if (!error && player) {
       userName = player.name;
       userGuildId = player.guild_id;
       userRank = player.rank || "member";
       if (player.avatar_url) {
-        const av = $id("raidPlayerAvatar");
-        if (av) av.src = player.avatar_url;
+          userAvatarUrl = player.avatar_url;
       }
+      
+      // Salva no GlobalDB para as Minas/Ranking usarem depois
+      GlobalDB.saveOwner({
+          id: player.id,
+          name: player.name,
+          avatar_url: player.avatar_url,
+          guild_id: player.guild_id
+      });
     }
+    
+    // Atualiza visual se o elemento já existir (raro nesse ponto, mas seguro)
+    const av = $id("raidPlayerAvatar");
+    if (av) av.src = userAvatarUrl;
+
   } catch (e) { console.error("initSession", e); }
 }
 
@@ -1109,11 +1209,25 @@ async function loadInitialPlayerState() {
         return;
     }
     playerMaxHealth = playerDetails.health || 1;
-    const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until, avatar_url").eq("id", userId).single();
+
+    // >>> ATUALIZAÇÃO DO AVATAR <<<
+    if (playerDetails.avatar_url) {
+        userAvatarUrl = playerDetails.avatar_url;
+        const av = $id("raidPlayerAvatar");
+        if (av) av.src = userAvatarUrl;
+
+        // Atualiza cache GlobalDB
+        GlobalDB.saveOwner({
+            id: userId,
+            name: playerDetails.name, 
+            avatar_url: userAvatarUrl
+        });
+    }
+
+    const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until").eq("id", userId).single();
     if(pData) {
         localPlayerHp = pData.raid_player_health !== null ? pData.raid_player_health : playerMaxHealth;
         _playerReviveUntil = pData.revive_until;
-        if(pData.avatar_url && $id("raidPlayerAvatar")) $id("raidPlayerAvatar").src = pData.avatar_url;
     } else {
         localPlayerHp = playerMaxHealth;
     }

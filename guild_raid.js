@@ -1,16 +1,101 @@
+
 import { supabase } from './supabaseClient.js'
 
-console.log("guild_raid.js (v13.3) - Independent IndexedDB Update Logic");
+// =======================================================================
+// INÍCIO: MONITOR DE EGRESS (CORRIGIDO)
+// =======================================================================
+(function() {
+    console.log("🛡️ Monitor de Egress Supabase Iniciado (Corrigido para 'supabaseClient')");
 
+    const LOG_TABLE = 'rpc_logs'; 
+    const IGNORE_URLS = [LOG_TABLE, 'intake.supabase.co']; 
+
+    // 1. MONITOR DE HTTP (REST, Auth, Selects, RPCs)
+    const originalFetch = window.fetch;
+
+    window.fetch = async (...args) => {
+        const [resource, config] = args;
+        const urlStr = resource ? resource.toString() : "";
+
+        // 🛑 EVITA LOOP INFINITO
+        if (IGNORE_URLS.some(x => urlStr.includes(x))) {
+            return originalFetch(...args);
+        }
+
+        let response;
+        try {
+            response = await originalFetch(...args);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+
+        const clone = response.clone();
+        
+        clone.blob().then(blob => {
+            const size = blob.size;
+            const method = config?.method || 'GET';
+            
+            let functionName = "unknown";
+            try {
+                const urlObj = new URL(urlStr);
+                const pathParts = urlObj.pathname.split('/');
+                functionName = pathParts[pathParts.length - 1] || "root";
+                if (urlObj.search) functionName += ` (query)`;
+            } catch (e) {}
+
+            console.log(`📡 [HTTP] ${method} ${functionName} - ${size} bytes`);
+            logToSupabase(`http_${method}_${functionName}`, size);
+        }).catch(err => console.error("⚠️ Erro ao calcular tamanho do fetch:", err));
+
+        return response;
+    };
+
+    // 2. MONITOR DE WEBSOCKET (Realtime)
+    const OriginalWebSocket = window.WebSocket;
+    window.WebSocket = class extends OriginalWebSocket {
+        constructor(url, protocols) {
+            super(url, protocols);
+            if (url.toString().includes('supabase') || url.toString().includes('realtime')) {
+                this.addEventListener('message', (event) => {
+                    const size = new Blob([event.data]).size;
+                    logToSupabase('realtime_msg', size);
+                });
+            }
+        }
+    };
+
+    // 3. FUNÇÃO DE LOG (CORRIGIDA)
+    async function logToSupabase(name, bytes) {
+        // CORREÇÃO AQUI: Verifica se 'supabaseClient' existe (usado no script.js)
+        // Se não, tenta 'supabase' (usado em módulos), mas verifica se tem o método .from
+        const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : 
+                       ((typeof supabase !== 'undefined' && typeof supabase.from === 'function') ? supabase : null);
+
+        if (!client) {
+            console.warn("⚠️ Cliente Supabase (supabaseClient) não encontrado. O log não será salvo.");
+            return;
+        }
+
+        try {
+            await client.from(LOG_TABLE).insert({
+                function_name: name,
+                size_bytes: bytes
+            });
+        } catch (e) {
+            console.error("❌ Falha ao salvar log de egress:", e);
+        }
+    }
+})();
+// =======================================================================
+// FIM DO MONITOR
+// =======================================================================
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
 // =========================================================
-// Isso permite que a Raid atualize o cache de inventário
-// sem depender que o script.js esteja carregado na página.
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47; // Mantenha a mesma versão do inventory.js
+const DB_VERSION = 47; 
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -22,8 +107,6 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
- * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
- * @param {String} newTimestamp - O novo timestamp vindo do servidor
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
@@ -32,22 +115,18 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
-        // 1. Atualiza ou insere os itens modificados
         if (Array.isArray(newItems)) {
             newItems.forEach(item => store.put(item));
         }
 
-        // 2. Atualiza o Timestamp para "enganar" o inventory.js
-        // Dizendo: "Ei, eu já tenho a versão desse horário!"
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
-            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
         return new Promise(resolve => {
             tx.oncomplete = () => {
-                console.log("✅ [Raid Local] Cache de inventário atualizado com sucesso via IndexedDB.");
+                // console.log("✅ [Raid Local] Cache de inventário atualizado.");
                 resolve();
             }
         });
@@ -89,6 +168,7 @@ const AMBIENT_AUDIO_URLS = [
     "https://aden-rpg.pages.dev/assets/tddboss01.mp3", "https://aden-rpg.pages.dev/assets/tddboss02.mp3", "https://aden-rpg.pages.dev/assets/tddboss03.mp3", "https://aden-rpg.pages.dev/assets/tddboss04.mp3", "https://aden-rpg.pages.dev/assets/tddboss05.mp3", "https://aden-rpg.pages.dev/assets/tddboss06.mp3", "https://aden-rpg.pages.dev/assets/tddboss07.mp3", "https://aden-rpg.pages.dev/assets/tddboss08.mp3", "https://aden-rpg.pages.dev/assets/tddboss09.mp3", "https://aden-rpg.pages.dev/assets/tddboss10.mp3", "https://aden-rpg.pages.dev/assets/tddboss11.mp3", "https://aden-rpg.pages.dev/assets/tddboss12.mp3", "https://aden-rpg.pages.dev/assets/tddboss13.mp3", "https://aden-rpg.pages.dev/assets/tddboss14.mp3", "https://aden-rpg.pages.dev/assets/tddboss15.mp3"
 ];
 const BOSS_MUSIC_URL = "https://aden-rpg.pages.dev/assets/desolation_tower.mp3";
+const NORMAL_FLOOR_MUSIC_URL = "https://aden-rpg.pages.dev/assets/music_loop_02.mp3"; // Música comum para outros andares
 
 // Variáveis de estado
 let userId = null, userGuildId = null, userRank = "member", userName = null;
@@ -124,6 +204,8 @@ let isMediaUnlocked = false;
 let ambientAudioInterval = null;
 let ambientAudioPlayer = null; 
 let bossMusicPlayer = null;
+let normalMusicPlayer = null; // Player para música normal
+
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
 const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -242,6 +324,11 @@ function createMediaPlayers() {
         bossMusicPlayer.volume = 0.06;
         bossMusicPlayer.loop = true;
     }
+    if (!normalMusicPlayer) {
+        normalMusicPlayer = new Audio(NORMAL_FLOOR_MUSIC_URL);
+        normalMusicPlayer.volume = 0.05;
+        normalMusicPlayer.loop = true;
+    }
 }
 
 function playVideo(src, onVideoEndCallback) {
@@ -295,7 +382,7 @@ function unlockMedia() {
         videoPlayer.muted = false;
     }
     
-    const audiosToUnlock = [audioNormal, audioCrit, ambientAudioPlayer, bossMusicPlayer];
+    const audiosToUnlock = [audioNormal, audioCrit, ambientAudioPlayer, bossMusicPlayer, normalMusicPlayer];
     audiosToUnlock.forEach(audio => {
         if (audio && audio.paused) {
             audio.play().then(() => audio.pause()).catch(() => {});
@@ -343,12 +430,20 @@ function stopAllFloorMusic() {
         bossMusicPlayer.pause();
         bossMusicPlayer.currentTime = 0;
     }
+    if (normalMusicPlayer && !normalMusicPlayer.paused) {
+        normalMusicPlayer.pause();
+        normalMusicPlayer.currentTime = 0;
+    }
 }
 
 function startFloorMusic() {
     if (!isMediaUnlocked) return;
 
     if (currentFloor % 5 === 0) {
+        // Andar do Chefe
+        if (normalMusicPlayer && !normalMusicPlayer.paused) {
+            normalMusicPlayer.pause();
+        }
         if (ambientAudioInterval) {
             clearInterval(ambientAudioInterval);
             ambientAudioInterval = null;
@@ -357,8 +452,12 @@ function startFloorMusic() {
             bossMusicPlayer.play().catch(e => {});
         }
     } else {
+        // Andar Normal
         if (bossMusicPlayer && !bossMusicPlayer.paused) {
             bossMusicPlayer.pause();
+        }
+        if (normalMusicPlayer && normalMusicPlayer.paused) {
+            normalMusicPlayer.play().catch(e => {});
         }
         if (!ambientAudioInterval) {
             try { playRandomAmbientAudio(); } catch(e) {}
@@ -820,7 +919,6 @@ async function handleRaidCountdown(raidData) {
     countdownInterval = setInterval(updateTimer, 1000);
 }
 
-// Substitua a função loadRaid existente por esta:
 async function loadRaid() {
     if (!userGuildId) return;
     stopAllFloorMusic();
@@ -846,24 +944,13 @@ async function loadRaid() {
         const endsAt = new Date(data.ends_at);
         const startTime = new Date(data.starts_at);
 
-        // --- CORREÇÃO DO BUG "PRESO NO FINAL" ---
-        // Se a Raid está marcada como ativa no banco, mas o tempo já acabou:
         if (now >= endsAt) {
             console.log("Detectada Raid expirada durante o load. Finalizando no servidor...");
-            
-            // Chama a função SQL para marcar active = false oficialmente
             await supabase.rpc('end_expired_raid', { p_raid_id: data.id });
-            
-            // Exibe o alerta e encerra o load. 
-            // Na próxima vez que o jogador clicar, ela não virá mais como ativa.
             showRaidAlert("A Raid anterior chegou ao fim.");
             closeCombatModal();
-            
-            // Opcional: Recarregar a página ou reabrir o modal para cair no "lastRaidResultModal"
-            // Mas apenas fechar já resolve o loop.
             return; 
         }
-        // ----------------------------------------
 
         if (now < startTime) {
             await handleRaidCountdown(data);
@@ -992,11 +1079,7 @@ async function loadAttempts() {
 function computeShownAttacksAndRemaining() {
   const now = new Date();
   
-  // [FIX 1 - Robustez do Timer]
-  // Se temos menos que o máximo e o timer é nulo, houve um desync.
-  // Forçamos um "lastAttackAt" para agora para evitar UI travada em 0/3 sem texto.
   if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
-      // Auto-correção visual: assume que gastou agora
       return { shownAttacks: attacksLeft, secondsToNext: ATTACK_COOLDOWN_SECONDS };
   }
 
@@ -1029,13 +1112,19 @@ function updateAttackUI() {
 
   attacksEl.textContent = `${visualAttacksLeft} / ${MAX_ATTACKS}`;
   
-  // [FIX] Se estiver 0/3 e timer vazio, exibe algo genérico ou força estado de espera
   if (visualAttacksLeft < MAX_ATTACKS && secondsToNext <= 0) {
       cooldownEl.textContent = "Recuperando...";
   } else {
       cooldownEl.textContent = (secondsToNext > 0 && visualAttacksLeft < MAX_ATTACKS) 
           ? `+ 1 em ${formatTime(secondsToNext)}` 
           : "";
+  }
+  
+  // Opacidade do botão quando ataques <= 0
+  if (visualAttacksLeft <= 0) {
+      attackBtn.style.opacity = '0.4';
+  } else {
+      attackBtn.style.opacity = '1';
   }
   
   const playerDead = isPlayerDeadLocal();
@@ -1156,7 +1245,7 @@ async function triggerBatchSync() {
     updateAttackUI();
 
     try {
-        console.log(`[Sync] Enviando lote de ${attacksToSend} ataques...`);
+        // console.log(`[Sync] Enviando lote de ${attacksToSend} ataques...`);
         
         const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
             p_player_id: userId,
@@ -1164,34 +1253,24 @@ async function triggerBatchSync() {
             p_attack_count: attacksToSend
         });
 
-        // [FIX - Tratamento de Erro vs Morte]
         if (error) {
             throw new Error(error.message);
         }
 
-        // Se o sucesso for false mas tiver revive_until, tratamos como morte, não erro
-        // O SQL atualizado retorna success: true mesmo se morto, mas vamos garantir.
         if (data.revive_until && new Date(data.revive_until) > new Date()) {
-             // O jogador morreu durante o batch ou já estava morto
              _playerReviveUntil = data.revive_until;
              localPlayerHp = 0;
              updatePlayerHpUi(0, playerMaxHealth);
              
-             // Inicia timer de revive
              if (!reviveUITickerInterval) startReviveUITicker();
-             
-             // Mostra banner se ainda não mostrou
              displayDeathNotification(userName || "Você");
              
-             // NÃO faz rollback de ataques se morreu. Os ataques foram "gastos" ou invalidados.
-             // Apenas atualiza o contador real do server
              if (data.attacks_left !== undefined) {
                  attacksLeft = data.attacks_left;
                  lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
                  saveAttemptsCache(attacksLeft, lastAttackAt);
              }
              updateAttackUI();
-             
              isBatchSyncing = false;
              return;
         }
@@ -1200,7 +1279,6 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
-        // --- Sucesso Normal ---
         updateHpBar(data.monster_health, data.max_monster_health);
         
         if (data.player_health !== undefined) {
@@ -1218,11 +1296,10 @@ async function triggerBatchSync() {
         saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
 
-        // === [NOVO] ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (LOCALMENTE) ===
+        // Zero Egress Inventory Update
         if (data.inventory_updates && data.new_timestamp) {
              await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }
-        // ================================================================
 
         if (data.monster_health <= 0) {
              const floorDefeated = currentFloor; 
@@ -1249,7 +1326,6 @@ async function triggerBatchSync() {
 
     } catch (e) {
         console.error("Falha no Sync Batch:", e);
-        // Rollback APENAS se for erro de rede/lógica, não morte
         pendingAttacksQueue += attacksToSend;
         localDamageDealtInBatch += expectedDamage;
         isSwitchingFloors = false;
@@ -1377,6 +1453,7 @@ function stopOptimisticBossCombat() {
     optimisticBossInterval = null;
 }
 
+// SIMULAÇÃO LOCAL DE ATAQUE DO CHEFE (VISUAL)
 async function simulateLocalBossAttackLogic() {
     const currentMonsterHp = Number($id("raidMonsterHpText").textContent.split('/')[0].replace(/[^\d]/g, ''));
     if (currentMonsterHp <= 0) return;
@@ -1394,13 +1471,26 @@ async function simulateLocalBossAttackLogic() {
                  return;
              }
 
-             const baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
+             // Simula a lógica de crítico do servidor (visual apenas)
+             const isCrit = (Math.random() * 100 < 10);
+             let damageMult = 1.0;
+             if (isCrit) {
+                 damageMult = 1.0 + (0.8 + Math.random() * 0.5); // 1.8 a 2.3
+             }
+
+             let baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
+             baseDmg = Math.floor(baseDmg * damageMult);
+             
              const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
              
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
              
-             displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, false);
+             // Mostra dano (amarelo se crit)
+             displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, isCrit);
+             
+             // Toca som apropriado
+             playHitSound(isCrit);
              
              const playerAvatar = $id("raidPlayerAvatar");
              if (playerAvatar) {

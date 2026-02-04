@@ -334,7 +334,7 @@ function createMediaPlayers() {
     
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
-        bossMusicPlayer.volume = 0.2;
+        bossMusicPlayer.volume = 0.1;
         bossMusicPlayer.loop = true;
     }
     
@@ -355,7 +355,6 @@ function playVideo(src, onVideoEndCallback) {
 
     videoPlayer.style.visibility = 'hidden';
     videoPlayer.src = src;
-    videoPlayer.volume = 1.5;
     videoPlayer.load(); 
 
     videoOverlay.style.display = 'flex';

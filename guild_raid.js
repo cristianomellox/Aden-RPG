@@ -87,15 +87,17 @@ import { supabase } from './supabaseClient.js'
 // =======================================================================
 // FIM DO MONITOR
 // =======================================================================
-console.log("guild_raid.js (v15 - Zero Egress Optimization)");
+console.log("guild_raid.js (v13.3) - Independent IndexedDB Update Logic");
 
 // =========================================================
 // >>> HELPER INDEXEDDB LOCAL (REPLICADO DO INVENTORY.JS) <<<
 // =========================================================
+// Isso permite que a Raid atualize o cache de inventário
+// sem depender que o script.js esteja carregado na página.
 const DB_NAME = "aden_inventory_db";
 const STORE_NAME = "inventory_store";
 const META_STORE = "meta_store";
-const DB_VERSION = 47;
+const DB_VERSION = 47; // Mantenha a mesma versão do inventory.js
 
 function openDB() {
     return new Promise((resolve, reject) => {
@@ -107,6 +109,8 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
+ * @param {Array} newItems - Array de itens (Inventory Rows com Join em Items)
+ * @param {String} newTimestamp - O novo timestamp vindo do servidor
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
@@ -115,22 +119,16 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         const store = tx.objectStore(STORE_NAME);
         const meta = tx.objectStore(META_STORE);
 
+        // 1. Atualiza ou insere os itens modificados
         if (Array.isArray(newItems)) {
-            newItems.forEach(item => {
-                // Tenta hidratar o item antes de salvar no cache para manter consistência
-                // Se window.getItemDefinition existir (do script.js)
-                if (window.getItemDefinition && (!item.items || !item.items.name)) {
-                    const def = window.getItemDefinition(item.item_id);
-                    if (def) {
-                        item.items = def;
-                    }
-                }
-                store.put(item);
-            });
+            newItems.forEach(item => store.put(item));
         }
 
+        // 2. Atualiza o Timestamp para "enganar" o inventory.js
+        // Dizendo: "Ei, eu já tenho a versão desse horário!"
         if (newTimestamp) {
             meta.put({ key: "last_updated", value: newTimestamp });
+            // Atualiza também o cache_time para não expirar por idade
             meta.put({ key: "cache_time", value: Date.now() }); 
         }
 
@@ -145,6 +143,7 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     }
 }
 // =========================================================
+
 
 const MAX_ATTACKS = 3;
 const ATTACK_COOLDOWN_SECONDS = 60;
@@ -908,6 +907,7 @@ async function handleRaidCountdown(raidData) {
     countdownInterval = setInterval(updateTimer, 1000);
 }
 
+// Substitua a função loadRaid existente por esta:
 async function loadRaid() {
     if (!userGuildId) return;
     stopAllFloorMusic();
@@ -933,13 +933,24 @@ async function loadRaid() {
         const endsAt = new Date(data.ends_at);
         const startTime = new Date(data.starts_at);
 
+        // --- CORREÇÃO DO BUG "PRESO NO FINAL" ---
+        // Se a Raid está marcada como ativa no banco, mas o tempo já acabou:
         if (now >= endsAt) {
             console.log("Detectada Raid expirada durante o load. Finalizando no servidor...");
+            
+            // Chama a função SQL para marcar active = false oficialmente
             await supabase.rpc('end_expired_raid', { p_raid_id: data.id });
+            
+            // Exibe o alerta e encerra o load. 
+            // Na próxima vez que o jogador clicar, ela não virá mais como ativa.
             showRaidAlert("A Raid anterior chegou ao fim.");
             closeCombatModal();
+            
+            // Opcional: Recarregar a página ou reabrir o modal para cair no "lastRaidResultModal"
+            // Mas apenas fechar já resolve o loop.
             return; 
         }
+        // ----------------------------------------
 
         if (now < startTime) {
             await handleRaidCountdown(data);
@@ -1068,7 +1079,11 @@ async function loadAttempts() {
 function computeShownAttacksAndRemaining() {
   const now = new Date();
   
+  // [FIX 1 - Robustez do Timer]
+  // Se temos menos que o máximo e o timer é nulo, houve um desync.
+  // Forçamos um "lastAttackAt" para agora para evitar UI travada em 0/3 sem texto.
   if (attacksLeft < MAX_ATTACKS && !lastAttackAt) {
+      // Auto-correção visual: assume que gastou agora
       return { shownAttacks: attacksLeft, secondsToNext: ATTACK_COOLDOWN_SECONDS };
   }
 
@@ -1101,6 +1116,7 @@ function updateAttackUI() {
 
   attacksEl.textContent = `${visualAttacksLeft} / ${MAX_ATTACKS}`;
   
+  // [FIX] Se estiver 0/3 e timer vazio, exibe algo genérico ou força estado de espera
   if (visualAttacksLeft < MAX_ATTACKS && secondsToNext <= 0) {
       cooldownEl.textContent = "Recuperando...";
   } else {
@@ -1110,20 +1126,12 @@ function updateAttackUI() {
   }
   
   const playerDead = isPlayerDeadLocal();
-  const shouldDisable = (visualAttacksLeft <= 0) || playerDead || isProcessingAction || isSwitchingFloors;
-
-  if (shouldDisable) {
-      attackBtn.disabled = true;
-      attackBtn.style.pointerEvents = "none";
-      attackBtn.style.filter = "grayscale(100%)";
-      attackBtn.style.opacity = "0.7";
-      if (visualAttacksLeft <= 0) attackBtn.classList.add('disabled-attack-btn'); // Opcional, se existir CSS
+  if (playerDead || isProcessingAction || isSwitchingFloors) { 
+    attackBtn.style.pointerEvents = "none";
+    attackBtn.style.filter = "grayscale(80%)";
   } else {
-      attackBtn.disabled = false;
-      attackBtn.style.pointerEvents = "auto";
-      attackBtn.style.filter = "none";
-      attackBtn.style.opacity = "1";
-      attackBtn.classList.remove('disabled-attack-btn');
+    attackBtn.style.pointerEvents = visualAttacksLeft > 0 ? "" : "none";
+    attackBtn.style.filter = visualAttacksLeft > 0 ? "" : "grayscale(60%)";
   }
 }
 
@@ -1144,9 +1152,6 @@ async function loadInitialPlayerState() {
     const { data: pData } = await supabase.from("players").select("raid_player_health, revive_until, avatar_url").eq("id", userId).single();
     if(pData) {
         localPlayerHp = pData.raid_player_health !== null ? pData.raid_player_health : playerMaxHealth;
-        // AJUSTE 1: CLAMP PARA HP NÃO ESTOURAR
-        localPlayerHp = Math.min(localPlayerHp, playerMaxHealth);
-
         _playerReviveUntil = pData.revive_until;
         if(pData.avatar_url && $id("raidPlayerAvatar")) $id("raidPlayerAvatar").src = pData.avatar_url;
     } else {
@@ -1164,26 +1169,6 @@ async function loadInitialPlayerState() {
   }
 }
 
-// -----------------------------------------------------
-// FUNÇÃO AUXILIAR DE CÁLCULO DE DANO (CLIENTE)
-// -----------------------------------------------------
-function calculateRaidDamage(stats) {
-    const min = stats.min_attack || 0;
-    const max = stats.attack || 0;
-    const critChance = stats.crit_chance || 0;
-    const critDmg = stats.crit_damage || 0;
-
-    const damageRange = Math.max(0, max - min);
-    let damage = Math.floor(Math.random() * (damageRange + 1)) + min;
-    let isCrit = false;
-
-    if ((Math.random() * 100) < critChance) {
-        isCrit = true;
-        damage = Math.floor(damage * (1 + (critDmg / 100.0)));
-    }
-    return { damage: Math.max(1, damage), isCrit };
-}
-
 async function performAttackOptimistic() {
     if (!currentRaidId || !userId || isProcessingAction) return;
     if (isPlayerDeadLocal()) { showRaidAlert("Você está morto."); return; }
@@ -1199,9 +1184,12 @@ async function performAttackOptimistic() {
 
     if (!playerStatsCache) await cachePlayerStats();
     
-    // CÁLCULO LOCAL DE DANO
-    const { damage, isCrit } = calculateRaidDamage(playerStatsCache || {});
-    
+    const { min_attack, attack, crit_chance, crit_damage } = playerStatsCache || { min_attack: 1, attack: 5, crit_chance: 0, crit_damage: 0 };
+    const isCrit = (Math.random() * 100) < crit_chance;
+    let damage = Math.floor(Math.random() * ((attack - min_attack) + 1) + min_attack);
+    if (isCrit) damage = Math.floor(damage * (1 + crit_damage / 100.0));
+    damage = Math.max(1, damage);
+
     displayFloatingDamageOver($id("raidMonsterArea"), damage, isCrit);
     playHitSound(isCrit);
     
@@ -1215,7 +1203,6 @@ async function performAttackOptimistic() {
         setTimeout(() => monsterImg.classList.remove('shake-animation'), 300);
     }
 
-    // Acumula dano e contagem
     pendingAttacksQueue++;
     localDamageDealtInBatch += damage;
     
@@ -1246,7 +1233,7 @@ async function triggerBatchSync() {
     isBatchSyncing = true;
 
     const attacksToSend = pendingAttacksQueue;
-    const damageToSend = localDamageDealtInBatch; // Dano total acumulado
+    const expectedDamage = localDamageDealtInBatch; 
 
     pendingAttacksQueue = 0;
     localDamageDealtInBatch = 0;
@@ -1256,27 +1243,35 @@ async function triggerBatchSync() {
     updateAttackUI();
 
     try {
-        console.log(`[Sync] Enviando lote: ${attacksToSend} atqs, ${damageToSend} dano.`);
+        console.log(`[Sync] Enviando lote de ${attacksToSend} ataques...`);
         
-        // ENVIA DANO CALCULADO
         const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
             p_player_id: userId,
             p_raid_id: currentRaidId,
-            p_attack_count: attacksToSend,
-            p_claimed_damage: damageToSend
+            p_attack_count: attacksToSend
         });
 
-        if (error) throw new Error(error.message);
+        // [FIX - Tratamento de Erro vs Morte]
+        if (error) {
+            throw new Error(error.message);
+        }
 
-        // Se o servidor retornar que o jogador morreu, processa a morte (prioridade máxima)
+        // Se o sucesso for false mas tiver revive_until, tratamos como morte, não erro
+        // O SQL atualizado retorna success: true mesmo se morto, mas vamos garantir.
         if (data.revive_until && new Date(data.revive_until) > new Date()) {
+             // O jogador morreu durante o batch ou já estava morto
              _playerReviveUntil = data.revive_until;
              localPlayerHp = 0;
              updatePlayerHpUi(0, playerMaxHealth);
              
+             // Inicia timer de revive
              if (!reviveUITickerInterval) startReviveUITicker();
+             
+             // Mostra banner se ainda não mostrou
              displayDeathNotification(userName || "Você");
              
+             // NÃO faz rollback de ataques se morreu. Os ataques foram "gastos" ou invalidados.
+             // Apenas atualiza o contador real do server
              if (data.attacks_left !== undefined) {
                  attacksLeft = data.attacks_left;
                  lastAttackAt = data.last_attack_at ? new Date(data.last_attack_at) : null;
@@ -1292,11 +1287,11 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
-        // Sucesso Normal
+        // --- Sucesso Normal ---
         updateHpBar(data.monster_health, data.max_monster_health);
         
         if (data.player_health !== undefined) {
-             localPlayerHp = data.player_health;
+             localPlayerHp = Math.min(localPlayerHp, data.player_health);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
         }
 
@@ -1310,10 +1305,11 @@ async function triggerBatchSync() {
         saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
 
-        // Atualização Cirúrgica de Inventário
+        // === [NOVO] ATUALIZAÇÃO CIRÚRGICA DE INVENTÁRIO (LOCALMENTE) ===
         if (data.inventory_updates && data.new_timestamp) {
              await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }
+        // ================================================================
 
         if (data.monster_health <= 0) {
              const floorDefeated = currentFloor; 
@@ -1340,9 +1336,9 @@ async function triggerBatchSync() {
 
     } catch (e) {
         console.error("Falha no Sync Batch:", e);
-        // Rollback
+        // Rollback APENAS se for erro de rede/lógica, não morte
         pendingAttacksQueue += attacksToSend;
-        localDamageDealtInBatch += damageToSend;
+        localDamageDealtInBatch += expectedDamage;
         isSwitchingFloors = false;
         saveBatchState();
         updateAttackUI();
@@ -1368,7 +1364,7 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
     crEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px; justify-content: center; text-align: center;"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="Cristais" style="width:70px;height:70px;object-fit:contain;"> x <span style="font-weight:bold; font-size: 1.3em;">${Number(crystals || 0).toLocaleString()}</span></div>`;
   }
   const itemsContainerId = "rewardItemsContainer";
-  let itemsContainer = $id("rewardItemsContainer");
+  let itemsContainer = $id(itemsContainerId);
   if (!itemsContainer) {
     itemsContainer = document.createElement("div");
     itemsContainer.id = itemsContainerId;
@@ -1406,31 +1402,24 @@ function showRewardModal(xp, crystals, onOk, rewardId, itemsDropped) {
       ul.appendChild(li);
     });
     itemsContainer.appendChild(ul);
-    
-    // OTIMIZAÇÃO: Usar o cache global de definições
-    const lis = ul.querySelectorAll('li');
-    itemsArray.forEach((it, idx) => {
-        const li = lis[idx];
-        if (!li) return;
-        const img = li.querySelector('img');
-        
-        // Tenta pegar do cache global do script.js
-        let def = null;
-        if (window.getItemDefinition) {
-            def = window.getItemDefinition(it.item_id);
-        } else if (window.itemDefinitions) {
-            def = window.itemDefinitions.get(it.item_id);
-        }
-
-        if (def) {
-            const imageUrl = `https://aden-rpg.pages.dev/assets/itens/${def.name}.webp`;
+    try {
+      const ids = itemsArray.map(i => i.item_id);
+      supabase.from('items').select('item_id, display_name, name').in('item_id', ids).then(res => {
+        if (!res.error && Array.isArray(res.data) && res.data.length > 0) {
+          const map = {};
+          res.data.forEach(r => { map[r.item_id] = { name: r.name, display_name: r.display_name || r.name || (`#${r.item_id}`) }; });
+          const lis = ul.querySelectorAll('li');
+          itemsArray.forEach((it, idx) => {
+            const entry = map[it.item_id];
+            const li = lis[idx];
+            if (!li) return;
+            const img = li.querySelector('img');
+            const imageUrl = entry?.name ? `https://aden-rpg.pages.dev/assets/itens/${entry.name}.webp` : "https://aden-rpg.pages.dev/assets/itens/placeholder.webp";
             if (img) img.src = imageUrl;
-        } else {
-            // Fallback (apenas se não achar no cache)
-            console.warn(`Definição de item ${it.item_id} não encontrada no cache.`);
+          });
         }
-    });
-
+      });
+    } catch(e) { console.warn('Erro ao processar itemsDropped:', e); }
   } else {
     itemsContainer.style.display = "none";
   }

@@ -260,6 +260,7 @@ function createMediaPlayers() {
     if (!$id('raidVideoOverlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'raidVideoOverlay';
+        video.volume = 0.9;
         overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 20000; display: none; justify-content: center; align-items: center;`;
         const video = document.createElement('video');
         video.id = 'raidVideoPlayer';
@@ -300,6 +301,7 @@ function playVideo(src, onVideoEndCallback) {
 
     videoPlayer.style.visibility = 'hidden';
     videoPlayer.src = src;
+    videoPlayer.volume = 0.9;
     videoPlayer.load(); 
 
     videoOverlay.style.display = 'flex';

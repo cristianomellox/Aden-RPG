@@ -1,92 +1,5 @@
 import { supabase } from './supabaseClient.js'
-// =======================================================================
-// INÍCIO: MONITOR DE EGRESS (CORRIGIDO)
-// =======================================================================
-(function() {
-    console.log("🛡️ Monitor de Egress Supabase Iniciado (Corrigido para 'supabaseClient')");
 
-    const LOG_TABLE = 'rpc_logs'; 
-    const IGNORE_URLS = [LOG_TABLE, 'intake.supabase.co']; 
-
-    // 1. MONITOR DE HTTP (REST, Auth, Selects, RPCs)
-    const originalFetch = window.fetch;
-
-    window.fetch = async (...args) => {
-        const [resource, config] = args;
-        const urlStr = resource ? resource.toString() : "";
-
-        // 🛑 EVITA LOOP INFINITO
-        if (IGNORE_URLS.some(x => urlStr.includes(x))) {
-            return originalFetch(...args);
-        }
-
-        let response;
-        try {
-            response = await originalFetch(...args);
-        } catch (error) {
-            return Promise.reject(error);
-        }
-
-        const clone = response.clone();
-        
-        clone.blob().then(blob => {
-            const size = blob.size;
-            const method = config?.method || 'GET';
-            
-            let functionName = "unknown";
-            try {
-                const urlObj = new URL(urlStr);
-                const pathParts = urlObj.pathname.split('/');
-                functionName = pathParts[pathParts.length - 1] || "root";
-                if (urlObj.search) functionName += ` (query)`;
-            } catch (e) {}
-
-            console.log(`📡 [HTTP] ${method} ${functionName} - ${size} bytes`);
-            logToSupabase(`http_${method}_${functionName}`, size);
-        }).catch(err => console.error("⚠️ Erro ao calcular tamanho do fetch:", err));
-
-        return response;
-    };
-
-    // 2. MONITOR DE WEBSOCKET (Realtime)
-    const OriginalWebSocket = window.WebSocket;
-    window.WebSocket = class extends OriginalWebSocket {
-        constructor(url, protocols) {
-            super(url, protocols);
-            if (url.toString().includes('supabase') || url.toString().includes('realtime')) {
-                this.addEventListener('message', (event) => {
-                    const size = new Blob([event.data]).size;
-                    logToSupabase('realtime_msg', size);
-                });
-            }
-        }
-    };
-
-    // 3. FUNÇÃO DE LOG (CORRIGIDA)
-    async function logToSupabase(name, bytes) {
-        // CORREÇÃO AQUI: Verifica se 'supabaseClient' existe (usado no script.js)
-        // Se não, tenta 'supabase' (usado em módulos), mas verifica se tem o método .from
-        const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : 
-                       ((typeof supabase !== 'undefined' && typeof supabase.from === 'function') ? supabase : null);
-
-        if (!client) {
-            console.warn("⚠️ Cliente Supabase (supabaseClient) não encontrado. O log não será salvo.");
-            return;
-        }
-
-        try {
-            await client.from(LOG_TABLE).insert({
-                function_name: name,
-                size_bytes: bytes
-            });
-        } catch (e) {
-            console.error("❌ Falha ao salvar log de egress:", e);
-        }
-    }
-})();
-// =======================================================================
-// FIM DO MONITOR
-// =======================================================================
 // =======================================================================
 // MÓDULO: ADEN GLOBAL DB (CÓPIA LOCAL OTIMIZADA)
 // =======================================================================
@@ -198,8 +111,8 @@ const AUDIO_BGM = new Audio("https://aden-rpg.pages.dev/assets/desolation_tower.
 AUDIO_BGM.loop = true;
 AUDIO_BGM.volume = 0.06;
 
-AUDIO_HIT.volume = 0.3;
-AUDIO_CRIT.volume = 0.2;
+AUDIO_HIT.volume = 0.4;
+AUDIO_CRIT.volume = 0.1;
 
 // ================= ESTADO LOCAL =================
 let state = {
@@ -219,7 +132,8 @@ let state = {
     attacksLeft: 3,
     lastAttackTime: null,
     nextBossAttack: 0,
-    reviveUntil: null
+    reviveUntil: null,
+    timestamp: 0 // Usado para cálculo offline
 };
 
 let loops = { timer: null, combat: null };
@@ -338,12 +252,88 @@ function forceUserInteraction(onResume) {
     );
 }
 
+// Função para calcular progresso offline (regeneração e dano)
+function processOfflineEvents(savedState) {
+    const now = Date.now();
+    const lastSaveTime = savedState.timestamp || now;
+    
+    // Se passou menos de 1 segundo, ignora
+    if (now - lastSaveTime < 1000) return savedState;
+
+    console.log(`[Offline] Processando tempo decorrido: ${(now - lastSaveTime)/1000}s`);
+
+    // --- 1. REGENERAÇÃO DE ATAQUES DO JOGADOR ---
+    if (savedState.attacksLeft < MAX_ATTACKS && savedState.lastAttackTime) {
+        const timeSinceLastAttack = now - savedState.lastAttackTime;
+        // Quantos ciclos de recarga (60s) cabem nesse tempo?
+        const chargesGained = Math.floor(timeSinceLastAttack / ATTACK_REGEN_MS);
+
+        if (chargesGained > 0) {
+            savedState.attacksLeft += chargesGained;
+            // Avança o lastAttackTime para manter o "resto" do tempo (ex: faltava 5s, continua faltando 5s)
+            savedState.lastAttackTime += (chargesGained * ATTACK_REGEN_MS);
+
+            // Trava no máximo
+            if (savedState.attacksLeft >= MAX_ATTACKS) {
+                savedState.attacksLeft = MAX_ATTACKS;
+                savedState.lastAttackTime = null; // Reset se estiver cheio
+            }
+        }
+    }
+
+    // --- 2. ATAQUES DO BOSS (Dano no Jogador) ---
+    // Se o jogador já estava morto e com timer de reviver, processamos o revive primeiro
+    if (savedState.reviveUntil) {
+        if (now >= savedState.reviveUntil) {
+            savedState.reviveUntil = null;
+            savedState.playerHp = savedState.maxPlayerHp; // Reviveu full
+            console.log("[Offline] Jogador reviveu enquanto estava fora.");
+        } else {
+            // Ainda está morto, não toma dano novo
+            return savedState; 
+        }
+    }
+
+    // Se o Boss deveria ter atacado enquanto estava fora
+    if (savedState.nextBossAttack < now) {
+        const timeOverdue = now - savedState.nextBossAttack;
+        // O primeiro ataque perdido + quantos ciclos de 45s cabem no tempo extra
+        const attacksMissed = 1 + Math.floor(timeOverdue / BOSS_ATTACK_INTERVAL);
+        
+        console.log(`[Offline] O Boss atacou ${attacksMissed} vezes.`);
+
+        // Recalcula próximo ataque para o futuro
+        savedState.nextBossAttack += (attacksMissed * BOSS_ATTACK_INTERVAL);
+        // Garante que não fique no passado por lag de milissegundos
+        if(savedState.nextBossAttack < now) savedState.nextBossAttack = now + BOSS_ATTACK_INTERVAL;
+
+        // Calcula Dano (Simples, assumindo acerto)
+        const s = savedState.playerStats;
+        const baseDmg = Math.floor(savedState.maxPlayerHp * 0.15);
+        const dmgPerHit = Math.max(1, baseDmg - Math.floor(s.defense / 5));
+        
+        const totalDamage = dmgPerHit * attacksMissed;
+        
+        savedState.playerHp -= totalDamage;
+
+        // Checa Morte Offline
+        if (savedState.playerHp <= 0) {
+            savedState.playerHp = 0;
+            // Define o revive para começar a partir de agora
+            savedState.reviveUntil = now + REVIVE_TIME_MS;
+            console.log("[Offline] O Jogador morreu devido aos ataques acumulados.");
+        }
+    }
+
+    return savedState;
+}
+
 async function checkSession() {
     const localData = localStorage.getItem(CACHE_KEY_PREFIX + state.playerId);
     
     if (localData) {
         try {
-            const parsed = JSON.parse(localData);
+            let parsed = JSON.parse(localData);
             
             // Se expirou
             if (new Date(parsed.expiresAt) <= new Date()) {
@@ -352,6 +342,12 @@ async function checkSession() {
                 await finishBattle(false);
                 return;
             }
+
+            // =========================================================
+            // AQUI É A MUDANÇA: PROCESSA O TEMPO OFFLINE
+            // =========================================================
+            parsed = processOfflineEvents(parsed);
+            // =========================================================
 
             // Sessão válida encontrada
             state = parsed;
@@ -493,6 +489,8 @@ function saveState() {
         localStorage.removeItem(CACHE_KEY_PREFIX + state.playerId);
         return;
     }
+    // ADICIONADO: Timestamp atual para cálculo offline
+    state.timestamp = Date.now();
     localStorage.setItem(CACHE_KEY_PREFIX + state.playerId, JSON.stringify(state));
 }
 

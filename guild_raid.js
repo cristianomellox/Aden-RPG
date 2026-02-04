@@ -1,4 +1,3 @@
-
 import { supabase } from './supabaseClient.js'
 
 // =======================================================================
@@ -102,7 +101,6 @@ function openDB() {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
-            // Garante que as stores existam
             if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
             if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: "key" });
         };
@@ -113,7 +111,6 @@ function openDB() {
 
 /**
  * Atualiza o cache local "cirurgicamente" dentro da página de Raid.
- * Isso evita que o jogador precise recarregar a página para ver os itens ganhos.
  */
 async function localSurgicalCacheUpdate(newItems, newTimestamp) {
     try {
@@ -133,7 +130,6 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
 
         return new Promise(resolve => {
             tx.oncomplete = () => {
-                // console.log("✅ [Raid Local] Cache de inventário atualizado.");
                 resolve();
             }
         });
@@ -141,6 +137,11 @@ async function localSurgicalCacheUpdate(newItems, newTimestamp) {
         console.warn("⚠️ Falha ao atualizar IndexedDB localmente na Raid:", e);
     }
 }
+
+// =========================================================
+// CACHES EM MEMÓRIA
+// =========================================================
+const monsterCache = new Map(); // Cache floor -> {name, base_health} (Imagem é gerada localmente)
 
 // =========================================================
 // CONFIGURAÇÕES GERAIS
@@ -190,7 +191,6 @@ let attacksLeft = 0, lastAttackAt = null, raidEndsAt = null;
 
 // Intervals
 let uiSecondInterval = null, raidTimerInterval = null, reviveUITickerInterval = null, countdownInterval = null;
-let refreshAttemptsPending = false;
 let shownRewardIds = new Set(); 
 
 // Death Notification Logic
@@ -227,7 +227,7 @@ const audioNormal = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3"
 const audioCrit = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
 
 // Configura volumes
-audioNormal.volume = 0.5;
+audioNormal.volume = 0.6;
 audioCrit.volume = 0.1;
 
 function playHitSound(isCrit) {
@@ -259,6 +259,20 @@ function showRaidAlert(message) {
   okBtn.onclick = () => {
     modal.style.display = "none";
   };
+}
+
+// --- LOGICA DE IMAGEM LOCAL (Zero Egress) ---
+function getMonsterImageUrl(floor) {
+    if (!floor) return "https://aden-rpg.pages.dev/assets/tddandar01.webp"; // fallback
+    
+    // Se for múltiplo de 5, é chefe
+    if (floor % 5 === 0) {
+        return "https://aden-rpg.pages.dev/assets/tddchefe.webp";
+    }
+
+    // Pad com zero (ex: 1 -> 01, 12 -> 12)
+    const num = String(floor).padStart(2, '0');
+    return `https://aden-rpg.pages.dev/assets/tddandar${num}.webp`;
 }
 
 // --- BATCH STATE MANAGEMENT ---
@@ -330,7 +344,6 @@ function queueAction(action) {
 
 // --- MEDIA SYSTEM ---
 function createMediaPlayers() {
-    // Video Overlay
     if (!$id('raidVideoOverlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'raidVideoOverlay';
@@ -345,15 +358,14 @@ function createMediaPlayers() {
         document.body.appendChild(overlay);
     }
     
-    // Audio Elements
     if (!ambientAudioPlayer) {
         ambientAudioPlayer = new Audio();
-        ambientAudioPlayer.volume = 0.5;
+        ambientAudioPlayer.volume = 0.7;
     }
     
     if (!bossMusicPlayer) {
         bossMusicPlayer = new Audio(BOSS_MUSIC_URL);
-        bossMusicPlayer.volume = 0.1;
+        bossMusicPlayer.volume = 0.2;
         bossMusicPlayer.loop = true;
     }
     
@@ -790,46 +802,21 @@ function processDeathNotificationQueue() {
     displayDeathNotification(playerName);
 }
 
-async function checkOtherPlayerDeaths() {
-    if (!currentRaidId) return;
-    try {
-        const { data: raidData, error: raidError } = await supabase
-            .from('guild_raids')
-            .select('recent_deaths')
-            .eq('id', currentRaidId)
-            .single();
+async function checkOtherPlayerDeaths(recentDeathsPayload) {
+    if (!recentDeathsPayload || !Array.isArray(recentDeathsPayload)) return;
 
-        if (raidError || !raidData || !Array.isArray(raidData.recent_deaths)) return;
+    const newDeaths = recentDeathsPayload.filter(death => !processedDeathTimestamps.has(death.timestamp));
 
-        const newDeaths = raidData.recent_deaths.filter(death => !processedDeathTimestamps.has(death.timestamp));
+    if (newDeaths.length === 0) return;
 
-        if (newDeaths.length === 0) return;
-
-        newDeaths.forEach(death => processedDeathTimestamps.add(death.timestamp));
-        
-        const newPlayerIds = newDeaths.map(death => death.player_id);
-        const others = newPlayerIds.filter(id => id !== userId);
-        
-        if (others.length === 0) return;
-
-        const { data: players, error: playersError } = await supabase
-            .from('players')
-            .select('id, name')
-            .in('id', others);
-
-        if (playersError) return;
-
-        const playerNamesMap = new Map(players.map(p => [p.id, p.name]));
-        
-        others.forEach(pid => {
-            const name = playerNamesMap.get(pid);
-            if (name) {
-                deathNotificationQueue.push(name);
-            }
-        });
-        processDeathNotificationQueue();
-
-    } catch (e) {}
+    newDeaths.forEach(death => {
+        processedDeathTimestamps.add(death.timestamp);
+        if (death.player_id !== userId && death.player_name) {
+            deathNotificationQueue.push(death.player_name);
+        }
+    });
+    
+    processDeathNotificationQueue();
 }
 
 function getLocalUserId() {
@@ -1040,27 +1027,46 @@ async function continueLoadingRaid(raidData) {
 
 async function loadMonsterForFloor(floor) {
   if (!floor) return;
+  
+  // 1. Gera URL da imagem localmente (ZERO EGRESS)
+  const imageUrl = getMonsterImageUrl(floor);
+  const img = $id("raidMonsterImage");
+  if (img) img.src = imageUrl;
+
+  // 2. Verifica Cache de Stats (Nome/HP)
+  if (monsterCache.has(floor)) {
+      updateMonsterNameAndHp(monsterCache.get(floor));
+      return;
+  }
+
+  // 3. Busca apenas Stats no banco (payload reduzido, sem image_url)
   try {
-    const { data, error } = await supabase.from("guild_raid_monsters").select("image_url, base_health, name").eq("floor", floor).single();
+    const { data, error } = await supabase.from("guild_raid_monsters")
+        .select("base_health, name")
+        .eq("floor", floor)
+        .single();
     if (!error && data) {
-      const img = $id("raidMonsterImage");
-      if (img) img.src = data.image_url;
-      let monsterNameEl = $id("raidMonsterName");
-      if (!monsterNameEl) {
+      monsterCache.set(floor, data);
+      updateMonsterNameAndHp(data);
+    }
+  } catch (e) {
+    console.error("loadMonsterForFloor", e);
+  }
+}
+
+function updateMonsterNameAndHp(data) {
+    let monsterNameEl = $id("raidMonsterName");
+    if (!monsterNameEl) {
         monsterNameEl = document.createElement("div");
         monsterNameEl.id = "raidMonsterName";
         monsterNameEl.style.cssText = "text-align: center; font-weight: bold; font-size: 1em; color: #fff; margin-top: -5px; text-shadow: 2px 2px 4px #000;";
         const monsterArea = $id("raidMonsterArea");
         if (monsterArea) {
-          monsterArea.insertBefore(monsterNameEl, monsterArea.firstChild);
+            monsterArea.insertBefore(monsterNameEl, monsterArea.firstChild);
         }
-      }
-      monsterNameEl.textContent = data.name || "Monstro";
-      if (data.base_health) maxMonsterHealth = Number(data.base_health);
     }
-  } catch (e) {
-    console.error("loadMonsterForFloor", e);
-  }
+    monsterNameEl.textContent = data.name || "Monstro";
+    if (data.base_health) maxMonsterHealth = Number(data.base_health);
 }
 
 function saveAttemptsCache(left, last) {
@@ -1151,7 +1157,6 @@ function updateAttackUI() {
           : "";
   }
   
-  // OPACIDADE E BLOQUEIO (Solicitação 2)
   if (visualAttacksLeft <= 0) {
       attackBtn.style.opacity = '0.4';
   } else {
@@ -1276,8 +1281,6 @@ async function triggerBatchSync() {
     updateAttackUI();
 
     try {
-        // console.log(`[Sync] Enviando lote de ${attacksToSend} ataques...`);
-        
         const { data, error } = await supabase.rpc("perform_raid_attack_batch", { 
             p_player_id: userId,
             p_raid_id: currentRaidId,
@@ -1303,10 +1306,13 @@ async function triggerBatchSync() {
              }
              updateAttackUI();
              
-             // Consistência do Boss: Se o server disse que o boss atacou, mostra visualmente
              if (data.boss_action && data.boss_action.damage) {
                  displayFloatingDamageOver($id("raidPlayerArea"), data.boss_action.damage, data.boss_action.boss_crit);
                  playHitSound(data.boss_action.boss_crit); 
+             }
+
+             if (data.recent_deaths) {
+                 checkOtherPlayerDeaths(data.recent_deaths);
              }
              
              isBatchSyncing = false;
@@ -1317,7 +1323,6 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
-        // Sucesso Normal
         updateHpBar(data.monster_health, data.max_monster_health);
         
         if (data.player_health !== undefined) {
@@ -1325,10 +1330,9 @@ async function triggerBatchSync() {
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
         }
         
-        // Exibe dano do Boss vindo do Server
         if (data.boss_action && data.boss_action.damage) {
              displayFloatingDamageOver($id("raidPlayerArea"), data.boss_action.damage, data.boss_action.boss_crit);
-             playHitSound(data.boss_action.boss_crit); // Toca som (Normal ou Crit)
+             playHitSound(data.boss_action.boss_crit); 
         }
 
         attacksLeft = data.attacks_left;
@@ -1341,18 +1345,56 @@ async function triggerBatchSync() {
         saveAttemptsCache(attacksLeft, lastAttackAt);
         updateAttackUI();
 
-        // OTIMIZAÇÃO: Inventário sem Fetch
         if (data.inventory_updates && data.new_timestamp) {
              await localSurgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }
+        
+        if (data.recent_deaths) {
+             checkOtherPlayerDeaths(data.recent_deaths);
+        }
 
-        // OTIMIZAÇÃO: Recompensas sem Fetch (Auto-Claimed)
+        // --- DERROTA DO MONSTRO ---
         if (data.monster_health <= 0) {
              const floorDefeated = currentFloor; 
              const wasBoss = floorDefeated % 5 === 0;
              const rewardCallback = () => {
                 showRewardModal(data.xp_reward, data.crystals_reward, () => {
-                    setTimeout(() => loadRaid().catch(()=>{}), 200);
+                    // Transição Otimizada (Next Monster vindo do Payload)
+                    if (data.next_monster && data.next_floor) {
+                        currentFloor = data.next_floor;
+                        
+                        // Define imagem LOCALMENTE
+                        const newImageUrl = getMonsterImageUrl(currentFloor);
+                        const img = $id("raidMonsterImage");
+                        if (img) img.src = newImageUrl;
+
+                        // Atualiza Cache com nome/hp vindos do server
+                        monsterCache.set(currentFloor, {
+                            name: data.next_monster.name,
+                            base_health: data.max_monster_health
+                        });
+                        
+                        setRaidTitleFloorAndTimer(currentFloor, raidEndsAt);
+                        updateMonsterNameAndHp({
+                            name: data.next_monster.name,
+                            base_health: data.max_monster_health
+                        });
+                        updateHpBar(data.max_monster_health, data.max_monster_health);
+                        
+                        const isEnteringBossFloor = (currentFloor % 5 === 0);
+                        if (isEnteringBossFloor) {
+                            queueAction(() => playVideo(BOSS_INTRO_VIDEO_URL));
+                        }
+                        
+                        stopAllFloorMusic();
+                        startOptimisticBossCombat();
+                        startFloorMusic();
+                        isSwitchingFloors = false;
+                        updateAttackUI();
+
+                    } else {
+                        setTimeout(() => loadRaid().catch(()=>{}), 200);
+                    }
                 }, undefined, data.items_dropped);
              };
 
@@ -1364,10 +1406,6 @@ async function triggerBatchSync() {
         } else {
              isSwitchingFloors = false;
              updateAttackUI();
-        }
-        
-        if (currentFloor % 5 === 0) {
-            checkOtherPlayerDeaths();
         }
 
     } catch (e) {
@@ -1499,7 +1537,6 @@ function stopOptimisticBossCombat() {
     optimisticBossInterval = null;
 }
 
-// SIMULAÇÃO LOCAL DE ATAQUE DO CHEFE (VISUAL)
 async function simulateLocalBossAttackLogic() {
     const currentMonsterHp = Number($id("raidMonsterHpText").textContent.split('/')[0].replace(/[^\d]/g, ''));
     if (currentMonsterHp <= 0) return;
@@ -1516,26 +1553,17 @@ async function simulateLocalBossAttackLogic() {
                  displayFloatingDamageOver($id("raidPlayerArea"), "Errou!", false);
                  return;
              }
-
-             // Simula a lógica de crítico do servidor (visual apenas)
              const isCrit = (Math.random() * 100 < 10);
              let damageMult = 1.0;
              if (isCrit) {
-                 damageMult = 1.8 + (Math.random() * 0.5); // 1.8 a 2.3
+                 damageMult = 1.8 + (Math.random() * 0.5); 
              }
-
              let baseDmg = Math.max(1, Math.floor(maxMonsterHealth * 0.03));
              baseDmg = Math.floor(baseDmg * damageMult);
-             
              const finalDmg = Math.max(1, baseDmg - Math.floor(stats.defense / 10));
-             
              localPlayerHp = Math.max(0, localPlayerHp - finalDmg);
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
-             
-             // Mostra dano (amarelo se crit)
              displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, isCrit);
-             
-             // Toca som apropriado
              playHitSound(isCrit);
              
              const playerAvatar = $id("raidPlayerAvatar");
@@ -1554,7 +1582,6 @@ async function simulateLocalBossAttackLogic() {
 function handleOptimisticDeath() {
     const reviveTimeMs = 62000; 
     _playerReviveUntil = new Date(Date.now() + reviveTimeMs).toISOString();
-    
     updateAttackUI(); 
     displayDeathNotification(userName || "Você"); 
     startReviveUITicker();

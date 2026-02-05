@@ -558,12 +558,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentPlayer = { id: globalAuth.user.id, name: 'Você' };
             }
         } else {
-            // Fallback para getSession (Rede)
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session && session.user) {
-                // Aqui podemos fazer a query normal ou pegar do DB, vamos manter a query original como fallback robusto
-                const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
-                if (player) currentPlayer = player;
+            
+            // --- NOVA OTIMIZAÇÃO: Tenta pegar da variável global do script.js antes de ir pra rede
+            if (window.currentPlayerData && window.currentPlayerData.id) {
+                 currentPlayer = { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
+                 console.log("⚡ [PV] Player carregado via window.currentPlayerData.");
+            } else {
+                 // Fallback para cache legacy (localStorage) antes de chamar getSession
+                 try {
+                     const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
+                     if (legacyCache && legacyCache.data && legacyCache.data.id) {
+                        currentPlayer = { id: legacyCache.data.id, name: legacyCache.data.name };
+                        console.log("⚡ [PV] Player carregado via localStorage Legacy.");
+                     }
+                 } catch(e) {}
+            }
+
+            // Só vai pra rede se realmente não achou nada acima
+            if (!currentPlayer) {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session && session.user) {
+                    const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
+                    if (player) currentPlayer = player;
+                }
             }
         }
 

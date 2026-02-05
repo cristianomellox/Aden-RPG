@@ -544,44 +544,52 @@ document.addEventListener("DOMContentLoaded", () => {
         
         loadFromLocalStorage();
 
-        // 🔐 OTIMIZAÇÃO AUTH ZERO EGRESS
-        // Tenta pegar do GlobalDB primeiro
-        const globalAuth = await GlobalDB.getAuth();
-        if (globalAuth && globalAuth.user) {
-            // Tenta pegar dados do player também do GlobalDB
-            const globalPlayer = await GlobalDB.getPlayer();
-            if (globalPlayer && globalPlayer.id === globalAuth.user.id) {
-                 currentPlayer = { id: globalPlayer.id, name: globalPlayer.name };
-                 console.log("⚡ [PV] Player carregado via GlobalDB.");
-            } else {
-                // Se não tem player, cria o objeto básico
-                currentPlayer = { id: globalAuth.user.id, name: 'Você' };
-            }
+        // 🔐 OTIMIZAÇÃO AUTH ZERO EGRESS: Aguardar o script.js carregar primeiro!
+        
+        // 1. Verifica se os dados JÁ estão na variável global (script.js carregou rápido)
+        if (window.currentPlayerData && window.currentPlayerData.id) {
+            currentPlayer = { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
+            console.log("⚡ [PV] Player carregado via window.currentPlayerData (Imediato).");
         } else {
-            
-            // --- NOVA OTIMIZAÇÃO: Tenta pegar da variável global do script.js antes de ir pra rede
-            if (window.currentPlayerData && window.currentPlayerData.id) {
-                 currentPlayer = { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
-                 console.log("⚡ [PV] Player carregado via window.currentPlayerData.");
-            } else {
-                 // Fallback para cache legacy (localStorage) antes de chamar getSession
-                 try {
-                     const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
-                     if (legacyCache && legacyCache.data && legacyCache.data.id) {
-                        currentPlayer = { id: legacyCache.data.id, name: legacyCache.data.name };
-                        console.log("⚡ [PV] Player carregado via localStorage Legacy.");
-                     }
-                 } catch(e) {}
-            }
-
-            // Só vai pra rede se realmente não achou nada acima
-            if (!currentPlayer) {
-                const { data: { session } } = await supabaseClient.auth.getSession();
-                if (session && session.user) {
-                    const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
-                    if (player) currentPlayer = player;
+            // 2. Se não está pronto, tenta pegar do Cache Legacy (Sem rede)
+            try {
+                const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
+                if (legacyCache && legacyCache.data && legacyCache.data.id) {
+                    currentPlayer = { id: legacyCache.data.id, name: legacyCache.data.name };
+                    console.log("⚡ [PV] Player carregado via localStorage Legacy.");
                 }
+            } catch(e) {}
+
+            // 3. Se AINDA não temos player, aguardamos o evento do script.js
+            if (!currentPlayer) {
+                console.log("⏳ [PV] Aguardando evento 'aden_player_ready'...");
+                await new Promise((resolve) => {
+                    // Timeout de 5s para não travar pra sempre se der erro no script.js
+                    const timeout = setTimeout(() => {
+                        console.warn("⚠️ [PV] Timeout esperando player data. Tentando fallback...");
+                        resolve();
+                    }, 5000);
+
+                    window.addEventListener('aden_player_ready', (e) => {
+                        clearTimeout(timeout);
+                        if (e.detail) {
+                            currentPlayer = { id: e.detail.id, name: e.detail.name };
+                            console.log("✅ [PV] Evento recebido! Player carregado.");
+                        }
+                        resolve();
+                    }, { once: true });
+                });
             }
+        }
+
+        // 4. Última tentativa: Se falhou tudo acima, vai pra rede (Supabase)
+        if (!currentPlayer) {
+             console.log("🌐 [PV] Cache falhou. Buscando sessão no Supabase...");
+             const { data: { session } } = await supabaseClient.auth.getSession();
+             if (session && session.user) {
+                 const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
+                 if (player) currentPlayer = player;
+             }
         }
 
         if (!currentPlayer) return; // Se não autenticou, para aqui.

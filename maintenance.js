@@ -1,7 +1,10 @@
+
 import { supabase } from './supabaseClient.js'
 
 document.addEventListener("DOMContentLoaded", async () => {
     
+    const CACHE_KEY = 'maintenance_status_cache';
+    const CACHE_TTL = 2 * 60 * 1000; // 2 minutos de cache
 
     try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -12,15 +15,44 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        const { data, error } = await supabase
-            .from('app_status')
-            .select('is_maintenance_mode, maintenance_message, scheduled_maintenance, schedule_time')
-            .eq('id', 1)
-            .single();
+        let data = null;
+        let fromCache = false;
 
-        if (error) {
-            console.error("Erro ao verificar status de manutenção:", error);
-            return;
+        // 1. Tenta pegar do Cache Local
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached);
+                if (Date.now() - parsed.timestamp < CACHE_TTL) {
+                    data = parsed.data;
+                    fromCache = true;
+                    // console.log("🛠️ [Maintenance] Usando cache local.");
+                }
+            } catch (e) {
+                localStorage.removeItem(CACHE_KEY);
+            }
+        }
+
+        // 2. Se não tem cache, busca no Supabase
+        if (!data) {
+            const { data: serverData, error } = await supabase
+                .from('app_status')
+                .select('is_maintenance_mode, maintenance_message, scheduled_maintenance, schedule_time')
+                .eq('id', 1)
+                .single();
+
+            if (error) {
+                console.error("Erro ao verificar status de manutenção:", error);
+                return;
+            }
+            
+            data = serverData;
+            
+            // Salva no cache
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                data: data,
+                timestamp: Date.now()
+            }));
         }
 
         const maintenanceOverlay = document.getElementById('maintenance-overlay');
@@ -32,6 +64,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 document.getElementById('maintenance-message').textContent = data.maintenance_message;
                 maintenanceOverlay.style.display = 'flex';
             }
+            // Se ativou manutenção, limpa caches sensíveis para o próximo load
+            localStorage.removeItem('player_data_cache');
             return;
         }
 
@@ -44,6 +78,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (initialTimeLeft <= 0) {
                 console.log("Tempo já expirado, tentando ativar manutenção...");
+                
+                // Limpa cache para forçar verificação no server na próxima vez
+                localStorage.removeItem(CACHE_KEY);
+                
                 const { error: rpcError } = await supabase.rpc('activate_maintenance_mode_securely');
 
                 if (!rpcError) {
@@ -75,6 +113,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (timeLeft <= 0) {
                         clearInterval(countdownInterval);
                         console.log("Contador zerado, tentando ativar manutenção...");
+                        localStorage.removeItem(CACHE_KEY); // Limpa cache
+                        
                         const { error: rpcError } = await supabase.rpc('activate_maintenance_mode_securely');
 
                         if (!rpcError) {

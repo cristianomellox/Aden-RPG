@@ -1,3 +1,4 @@
+
 // refundir.js
 document.addEventListener('DOMContentLoaded', () => {
     // --- IMPLEMENTAÇÃO LOCAL DO MODAL DE ALERTA (Scope Fix) ---
@@ -41,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     costDisplay.style.alignItems = "center";
     costDisplay.style.justifyContent = "center";
     costDisplay.style.marginTop = "8px";
-    if (reforgeModal) {
+    
+    // Evita duplicar o costDisplay se o script rodar 2x
+    if (reforgeModal && !document.getElementById('reforgeCostDisplay')) {
        reforgeModal.querySelector(".modal-content").insertBefore(costDisplay, reforgeMessage);
     }
 
@@ -50,10 +53,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Abre o modal de refundição
     reforgeBtn?.addEventListener('click', async () => {
+        // Pega o item mais atualizado da lista global para garantir que temos o quantity/pending_reforge certos
+        const freshItem = allInventoryItems.find(i => i.id === selectedItem?.id);
+        if (freshItem) {
+            selectedItem = freshItem;
+            // Se necessário, re-hidrata
+            if (!selectedItem.items) {
+                 selectedItem = window.hydrateItem ? window.hydrateItem(selectedItem) : selectedItem;
+            }
+        }
+        
         if (!selectedItem) {
             showCustomAlert("Nenhum item selecionado para refundir.");
             return;
         }
+        
         currentItem = selectedItem;
         const totalStars = (currentItem.items?.stars || 0) + (currentItem.refine_level || 0);
 
@@ -72,13 +86,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Determina custo de pedras
         const cost = totalStars === 4 ? 5 : 10;
         costDisplay.innerHTML = `
-            <img src="https://raw.githubusercontent.com/cristianomellox/Aden-RPG/refs/heads/main/assets/itens/pedra_de_refundicao.webp"
-                 style="width:30px;height:30px;margin-right:6px;"> X${cost}
+            <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp"
+                 style="width:30px;height:30px;margin-right:6px;" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'"> X${cost}
         `;
 
         // Carrega tentativa anterior (se existir)
-        if (currentItem.pending_reforge) {
-            showPendingRolls(currentItem.pending_reforge);
+        if (currentItem.pending_reforge && Array.isArray(currentItem.pending_reforge) && currentItem.pending_reforge.length > 0) {
+            pendingRolls = currentItem.pending_reforge;
+            showPendingRolls(pendingRolls);
             reforgeMessage.textContent = "Você tem uma refundição pendente. Clique em Aplicar para salvar ou role novamente.";
             applyBtn.style.display = 'inline-block';
         } else {
@@ -97,14 +112,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentItem) return;
 
         try {
-            // 1. Calcula o custo em pedras no cliente antes de chamar o servidor.
+            // 1. Calcula o custo em pedras no cliente
             const totalStars = (currentItem.items?.stars || 0) + (currentItem.refine_level || 0);
             const stonesUsed = totalStars === 4 ? 5 : 10;
+            const stoneId = 20; // ID do item "Pedra de Refundição"
+
+            // Verifica se tem pedras antes de chamar o servidor
+            const stoneItem = allInventoryItems.find(item => item.item_id === stoneId);
+            if (!stoneItem || stoneItem.quantity < stonesUsed) {
+                showCustomAlert("Você não tem Pedras de Refundição suficientes.");
+                return;
+            }
+
+            // Loading state
+            reforgeBtnRoll.disabled = true;
+            reforgeBtnRoll.textContent = "...";
 
             const { data, error } = await supabase.rpc("refund_item", {
                 p_inventory_item_id: currentItem.id,
                 p_player_id: globalUser.id
             });
+
+            reforgeBtnRoll.disabled = false;
+            reforgeBtnRoll.textContent = "REFUNDIR";
 
             if (error) {
                 console.error(error);
@@ -117,29 +147,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 2. Atualiza a quantidade de pedras de refundição LOCALMENTE
-            const stoneId = 20; // ID do item "Pedra de Refundição"
-            if (typeof updateLocalInventoryState === 'function') {
-                await updateLocalInventoryState(null, [{fragment_inventory_id: null, id: 0, used_qty: 0}], 0); // Hack para só atualizar? Não, vamos fazer direito.
-                
-                // Encontra o item de pedra localmente e subtrai
-                const stoneItemIndex = allInventoryItems.findIndex(item => item.item_id === stoneId);
-                if (stoneItemIndex !== -1) {
-                    allInventoryItems[stoneItemIndex].quantity -= stonesUsed;
-                    if (allInventoryItems[stoneItemIndex].quantity <= 0) {
-                        allInventoryItems.splice(stoneItemIndex, 1);
-                    }
-                    // Atualiza cache
-                    if (typeof saveCache === 'function') saveCache(allInventoryItems, playerBaseStats, new Date().toISOString());
-                    loadItems('all', allInventoryItems);
-                }
+            // CORREÇÃO: Usando a assinatura correta de updateLocalInventoryState({ ... })
+            if (typeof updateLocalInventoryState === 'function' && stoneItem) {
+                await updateLocalInventoryState({
+                    usedFragments: [{ id: stoneItem.id, qty: stonesUsed }]
+                });
             }
 
+            // Atualiza o currentItem com o pending_reforge retornado para persistência local temporária
             pendingRolls = data.rolls || [];
+            currentItem.pending_reforge = pendingRolls;
+            
+            // Atualiza o item no array principal para caso feche o modal
+            const idx = allInventoryItems.findIndex(i => i.id === currentItem.id);
+            if (idx !== -1) {
+                allInventoryItems[idx].pending_reforge = pendingRolls;
+            }
+
             showPendingRolls(pendingRolls);
             reforgeMessage.textContent = "Clique em Aplicar para salvar ou role novamente.";
             applyBtn.style.display = 'inline-block';
+            
         } catch (err) {
             console.error(err);
+            reforgeBtnRoll.disabled = false;
+            reforgeBtnRoll.textContent = "REFUNDIR";
             showCustomAlert("Erro inesperado ao tentar refundir.");
         }
     });
@@ -149,10 +181,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentItem) return;
 
         try {
-            const { error } = await supabase.rpc("apply_reforge", {
+            applyBtn.disabled = true;
+            applyBtn.textContent = "...";
+
+            const { data, error } = await supabase.rpc("apply_reforge", {
                 p_inventory_item_id: currentItem.id,
                 p_player_id: globalUser.id
             });
+
+            applyBtn.disabled = false;
+            applyBtn.textContent = "Aplicar Atributos";
 
             if (error) {
                 console.error(error);
@@ -160,18 +198,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            showCustomAlert("Atributos aplicados com sucesso!");
-            applyBtn.style.display = 'none';
-            reforgeModal.style.display = 'none';
+            if (data && data.success) {
+                showCustomAlert("Atributos aplicados com sucesso!");
+                applyBtn.style.display = 'none';
+                reforgeModal.style.display = 'none';
 
-            // --- ATUALIZAÇÃO LOCAL ---
-            if (typeof updateLocalInventoryState === 'function') {
-                await updateLocalInventoryState(currentItem.id, [], 0);
+                // --- ATUALIZAÇÃO LOCAL ---
+                // Se o servidor retornou os dados atualizados (recomendado), usamos eles.
+                // Caso contrário, usamos lógica local para não precisar de refresh.
+                
+                let statsToUpdate = null;
+                let itemUpdates = {};
+
+                if (data.new_item_data) {
+                    // Se alteramos o SQL para retornar dados, usamos aqui
+                    itemUpdates = data.new_item_data;
+                    statsToUpdate = data.player_stats;
+                } else {
+                     // Fallback se o SQL não retornar (limpa pending)
+                     itemUpdates = { pending_reforge: null }; 
+                     // Nota: Os status numéricos não atualizarão visualmente no item sem refresh se o SQL não retornar
+                     // Por isso, é importante atualizar o apply_reforge.sql também.
+                }
+
+                if (typeof updateLocalInventoryState === 'function') {
+                    // CORREÇÃO: Passando objeto para updateLocalInventoryState
+                    await updateLocalInventoryState({
+                        updatedItemId: currentItem.id,
+                        newItemData: itemUpdates,
+                        newStats: statsToUpdate
+                    });
+                }
+            } else {
+                showCustomAlert(data?.error || "Erro desconhecido ao aplicar.");
             }
-            // -------------------------
 
         } catch (err) {
             console.error(err);
+            applyBtn.disabled = false;
+            applyBtn.textContent = "Aplicar Atributos";
             showCustomAlert("Erro inesperado ao aplicar refundição.");
         }
     });
@@ -187,18 +252,20 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.borderRadius = "6px";
             rolledContainer.appendChild(div);
 
-            // After ~1 second, switch to the real value and color
+            // After ~0.5 second, switch to the real value and color
             setTimeout(() => {
                 div.classList.remove('shimmer');
                 let formattedValue = r.value;
                 const formattedName = formatAttrName(r.attr);
-                if (formattedName === 'TAXA CRIT' || formattedName === 'DANO CRIT' || formattedName === 'EVASÃO') {
+                if (['TAXA CRIT', 'DANO CRIT', 'EVASÃO'].includes(formattedName)) {
                     formattedValue += '%';
                 }
                 div.textContent = `${formattedName} +${formattedValue}`;
                 div.style.background = r.color;
                 div.style.color = "black";
-            }, 1000);
+                div.style.fontWeight = "bold";
+                div.style.textShadow = "0px 0px 2px rgba(255,255,255,0.5)";
+            }, 500);
         });
     }
 
@@ -206,53 +273,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayExistingReforgeSlots(item) {
         slotsContainer.innerHTML = '';
         
-        // Verifica se o item tem um primeiro slot de reforge e o exibe
-        if (item.reforge_slot1) {
-            const slot1Div = document.createElement('div');
-            slot1Div.className = 'refine-row';
-            slot1Div.innerHTML = `
-                <img src="https://raw.githubusercontent.com/cristianomellox/Aden-RPG/main/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 55px; height: 55px;">
-                <p>${formatAttrName(item.reforge_slot1.attr)} +${item.reforge_slot1.value}</p>
-            `;
-            slot1Div.style.background = item.reforge_slot1.color;
-            slot1Div.style.color = "black";
-            slotsContainer.appendChild(slot1Div);
-        } else {
-            // Se o slot 1 não estiver preenchido, exibe a mensagem de bloqueio
-            const slot1Div = document.createElement('div');
-            slot1Div.className = 'refine-row';
-            slot1Div.innerHTML = `
-                <p>Espaço de Refundição para 4 estrelas</p>
-            `;
-            slotsContainer.appendChild(slot1Div);
-        }
+        // Helper interno
+        const createSlotDiv = (slotData, minStars, label) => {
+            const div = document.createElement('div');
+            div.className = 'refine-row';
+            div.style.marginBottom = "8px";
+            
+            if (slotData) {
+                div.innerHTML = `
+                    <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 40px; height: 40px;">
+                    <p style="margin:0; font-size:1.1em; font-weight:bold;">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>
+                `;
+                div.style.background = slotData.color;
+                div.style.color = "black";
+                div.style.border = "1px solid rgba(0,0,0,0.3)";
+            } else {
+                div.innerHTML = `<p style="margin:0; opacity:0.7;">${label}</p>`;
+                div.style.background = "rgba(0,0,0,0.2)";
+                div.style.border = "1px dashed rgba(255,255,255,0.1)";
+            }
+            return div;
+        };
         
-        // Verifica se o item tem um segundo slot de reforge e o exibe
-        if (item.reforge_slot2) {
-            const slot2Div = document.createElement('div');
-            slot2Div.className = 'refine-row';
-            slot2Div.innerHTML = `
-                <img src="https://raw.githubusercontent.com/cristianomellox/Aden-RPG/main/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 55px; height: 55px;">
-                <p>${formatAttrName(item.reforge_slot2.attr)} +${item.reforge_slot2.value}</p>
-            `;
-            slot2Div.style.background = item.reforge_slot2.color;
-            slot2Div.style.color = "black";
-            slotsContainer.appendChild(slot2Div);
-        } else {
-            // Se o slot 2 não estiver preenchido, exibe a mensagem de bloqueio
-            const slot2Div = document.createElement('div');
-            slot2Div.className = 'refine-row';
-            slot2Div.innerHTML = `
-                <p>Espaço de Refundição para 5 estrelas</p>
-            `;
-            slotsContainer.appendChild(slot2Div);
-        }
+        slotsContainer.appendChild(createSlotDiv(item.reforge_slot1, 4, "Slot 1 (4★)"));
+        slotsContainer.appendChild(createSlotDiv(item.reforge_slot2, 5, "Slot 2 (5★)"));
     }
 
     // Converte nome do campo para nome visível
     function formatAttrName(attr) {
         switch (attr) {
             case "attack_bonus": return "ATK";
+            case "min_attack_bonus": return "ATK Min"; // Caso exista
             case "defense_bonus": return "DEF";
             case "health_bonus": return "HP";
             case "crit_chance_bonus": return "TAXA CRIT";

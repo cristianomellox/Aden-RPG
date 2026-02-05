@@ -2428,3 +2428,41 @@ button, .btn {
     background: #444; 
     border-radius: 3px;
 }
+
+/* Botão de Upload Personalizado */
+.upload-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+}
+
+.custom-file-upload {
+    display: inline-block;
+    padding: 10px 20px;
+    cursor: pointer;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a);
+    color: #fff;
+    border-radius: 4px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    transition: opacity 0.2s;
+    border: 1px solid #ffd700;
+}
+
+.custom-file-upload:hover {
+    opacity: 0.9;
+}
+
+/* Animação simples para quando estiver carregando */
+@keyframes blink {
+    50% { opacity: 0.5; }
+}
+.uploading-text {
+    animation: blink 1s infinite;
+    color: gold !important;
+}

@@ -149,8 +149,20 @@
     <div class="avatar-grid" id="avatarSelection"></div>
     <input id="selectedAvatarUrl" type="hidden"/>
 
-    <label for="editPlayerCustomAvatarUrl">Ou use uma URL personalizada:</label><br/>
-    <input id="editPlayerCustomAvatarUrl" placeholder="https://exemplo.com/imagem.png" type="text"/><br />
+    <label>Ou envie sua própria imagem:</label><br/>
+
+<div class="upload-container">
+    <label for="avatarFileInput" class="custom-file-upload">
+        <img src="https://aden-rpg.pages.dev/assets/iniciar.webp" style="width:20px; vertical-align:middle; margin-right:5px;"> 
+        Escolher Arquivo
+    </label>
+    <input id="avatarFileInput" type="file" accept="image/*" style="display:none;"/>
+    
+    <span id="uploadStatusText" style="font-size: 0.9em; color: #aaa; margin-left: 10px;">Nenhum arquivo.</span>
+</div>
+
+<input id="editPlayerCustomAvatarUrl" type="hidden" />
+<br />
     <p id="profileEditMessage"></p>
     <button id="saveProfileBtn">Salvar Perfil</button>
     <button id="closeProfileModalBtn">Fechar</button>

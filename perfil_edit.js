@@ -44,6 +44,38 @@ const GlobalDB = {
         } catch(e) { console.warn("Erro update parcial no Perfil Edit", e); }
     }
 };
+
+// =========================================================
+// >>> CLOUDINARY UPLOAD FUNCTION <<<
+// =========================================================
+async function uploadAvatarAoCloudinary(file) {
+    const cloudName = 'dbrghqhqy';
+    const uploadPreset = 'avatars_preset'; 
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Erro no upload');
+    }
+
+    const data = await response.json();
+
+    // Prioriza transformação eager (webp otimizado) se existir
+    if (data.eager && data.eager.length > 0) {
+        return data.eager[0].secure_url; 
+    }
+
+    return data.secure_url;
+}
+
 // =========================================================
 
 let originalProfileData = {};
@@ -56,15 +88,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const editPlayerFactionSelect = document.getElementById("editPlayerFaction");
     const editPlayerGenderSelect = document.getElementById("editPlayerGender"); 
     const avatarGrid = document.getElementById("avatarSelection");
-    const selectedAvatarUrlInput = document.getElementById("selectedAvatarUrl");
-    const customAvatarUrlInput = document.getElementById("editPlayerCustomAvatarUrl");
+    
+    // CAMPOS DE AVATAR
+    const selectedAvatarUrlInput = document.getElementById("selectedAvatarUrl"); // Hidden p/ avatares padrão
+    const customAvatarUrlInput = document.getElementById("editPlayerCustomAvatarUrl"); // Hidden p/ Cloudinary
+    const avatarFileInput = document.getElementById("avatarFileInput"); // O input de arquivo novo
+    const uploadStatusText = document.getElementById("uploadStatusText"); // Texto de status
+
     const saveProfileBtn = document.getElementById("saveProfileBtn");
     const closeProfileModalBtn = document.getElementById("closeProfileModalBtn");
     const editProfileIcon = document.getElementById("editProfileIcon");
     const profileEditMessage = document.getElementById('profileEditMessage');
 
     if (editPlayerNameInput) {
-        editPlayerNameInput.maxLength = 13; // Ajustado para permitir nomes razoáveis
+        editPlayerNameInput.maxLength = 13; 
     }
 
     const avatarUrls = [
@@ -77,6 +114,41 @@ document.addEventListener("DOMContentLoaded", () => {
         'https://aden-rpg.pages.dev/assets/avatar13.webp', 'https://aden-rpg.pages.dev/assets/avatar14.webp'
     ];
 
+    // --- LÓGICA DE UPLOAD (Novo) ---
+    if (avatarFileInput) {
+        avatarFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Limpa seleção da grid de avatares padrão
+            document.querySelectorAll('.avatar-option.selected').forEach(i => i.classList.remove('selected'));
+            selectedAvatarUrlInput.value = '';
+
+            // UI de Carregando
+            uploadStatusText.textContent = "Enviando imagem...";
+            uploadStatusText.className = "uploading-text";
+            saveProfileBtn.disabled = true; // Impede salvar durante upload
+
+            try {
+                const uploadedUrl = await uploadAvatarAoCloudinary(file);
+                
+                // Sucesso
+                customAvatarUrlInput.value = uploadedUrl; // Coloca a URL no input hidden
+                uploadStatusText.textContent = "Imagem carregada com sucesso!";
+                uploadStatusText.className = "";
+                uploadStatusText.style.color = "#4CAF50"; // Verde
+                
+            } catch (error) {
+                console.error("Erro upload:", error);
+                uploadStatusText.textContent = "Erro ao enviar. Tente outra imagem.";
+                uploadStatusText.style.color = "#ff5f5f"; // Vermelho
+                customAvatarUrlInput.value = '';
+            } finally {
+                saveProfileBtn.disabled = false;
+            }
+        });
+    }
+
     function renderAvatarOptions(selectedUrl = '') {
         if (!avatarGrid || !selectedAvatarUrlInput) return;
 
@@ -86,60 +158,65 @@ document.addEventListener("DOMContentLoaded", () => {
             img.src = url;
             img.classList.add('avatar-option');
             img.title = "Clique para selecionar";
+            
+            // Verifica se é o selecionado
             if (selectedUrl === url) {
                  img.classList.add('selected');
             }
+            
             img.onclick = () => {
+                // Remove seleção visual
                 document.querySelectorAll('.avatar-option').forEach(i => i.classList.remove('selected'));
                 img.classList.add('selected');
+                
+                // Define valor no input de avatar padrão
                 selectedAvatarUrlInput.value = url;
+                
+                // Limpa o custom avatar (Cloudinary)
                 if(customAvatarUrlInput) customAvatarUrlInput.value = '';
+                if(uploadStatusText) {
+                    uploadStatusText.textContent = "Usando avatar padrão";
+                    uploadStatusText.style.color = "#aaa";
+                }
+                if(avatarFileInput) avatarFileInput.value = ""; // Reseta o input file
             };
             avatarGrid.appendChild(img);
         });
         
+        // Lógica inicial ao abrir modal
         const isCustom = selectedUrl && !avatarUrls.includes(selectedUrl);
         if (isCustom) {
+            // Se já tem um custom (vindo do banco), preenche o hidden e avisa
             if(customAvatarUrlInput) customAvatarUrlInput.value = selectedUrl;
-            selectedAvatarUrlInput.value = '';
+            if(selectedAvatarUrlInput) selectedAvatarUrlInput.value = '';
+            if(uploadStatusText) uploadStatusText.textContent = "Avatar personalizado atual carregado.";
         } else {
+             // Se é padrão
              if(customAvatarUrlInput) customAvatarUrlInput.value = '';
-             selectedAvatarUrlInput.value = selectedUrl || avatarUrls[0];
+             if(selectedAvatarUrlInput) selectedAvatarUrlInput.value = selectedUrl || avatarUrls[0];
+             if(uploadStatusText) uploadStatusText.textContent = "Nenhum arquivo.";
         }
     }
 
-    if (customAvatarUrlInput) {
-        customAvatarUrlInput.addEventListener('input', () => {
-            document.querySelectorAll('.avatar-option.selected').forEach(i => i.classList.remove('selected'));
-            selectedAvatarUrlInput.value = '';
-        });
-    }
-
-    // --- FUNÇÃO DE UPDATE DO MODAL (CORRIGIDA) ---
+    // --- FUNÇÃO DE UPDATE DO MODAL ---
     window.updateProfileEditModal = (playerData) => {
         if (playerData) {
             let currentName = playerData.name;
             let iconPrefix = "";
 
-            // Lógica robusta para separar ícone do nome no Frontend
             const icons = ['👑', '⚜️', '🤡', '🔰', '🛡️', '❤️'];
-            
-            // Verifica se o nome começa com algum dos ícones conhecidos
             for (const icon of icons) {
                 if (currentName.startsWith(icon)) {
                     iconPrefix = icon;
-                    // Remove o ícone e espaços vazios do início
                     currentName = currentName.substring(icon.length).trim();
                     break; 
                 }
             }
 
-            // Atualiza UI do ícone travado
             if (lockedTitleIcon) {
                 if (iconPrefix) {
                     lockedTitleIcon.textContent = iconPrefix;
                     lockedTitleIcon.style.display = "block";
-                    // Adiciona padding visual se tiver ícone
                     lockedTitleIcon.style.marginRight = "5px";
                 } else {
                     lockedTitleIcon.textContent = "";
@@ -147,18 +224,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
             
-            // Define o nome LIMPO no input (o usuário edita apenas o texto)
             if (editPlayerNameInput) editPlayerNameInput.value = currentName;
-            
             if (editPlayerFactionSelect) editPlayerFactionSelect.value = playerData.faction;
             if (editPlayerGenderSelect) editPlayerGenderSelect.value = playerData.gender || "Masculino";
-
-            originalProfileData = {
-                name: playerData.name,
-                faction: playerData.faction,
-                avatar_url: playerData.avatar_url,
-                gender: playerData.gender
-            };
 
             renderAvatarOptions(playerData.avatar_url);
         }
@@ -167,13 +235,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (editProfileIcon) {
         editProfileIcon.onclick = async () => {
             let userId = null;
-
-            // 1. Tenta recuperar sessão do GlobalDB primeiro
             const globalAuth = await GlobalDB.getAuth();
             if (globalAuth && globalAuth.user) {
                 userId = globalAuth.user.id;
             } else {
-                // 2. Fallback para Supabase (Rede)
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session && session.user) {
                     userId = session.user.id;
@@ -181,7 +246,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (userId) {
-                // Busca dados atualizados (incluindo gender e nobless)
                 const { data: playerData, error } = await supabaseClient
                     .from('players')
                     .select('name, faction, avatar_url, gender, nobless')
@@ -210,6 +274,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const rawName = editPlayerNameInput.value.trim();
             const newFaction = editPlayerFactionSelect.value;
             const newGender = editPlayerGenderSelect ? editPlayerGenderSelect.value : "Masculino";
+            
+            // AQUI ESTÁ O SEGREDINHO:
+            // O código pega ou do input hidden (preenchido pelo Cloudinary)
+            // Ou do selected (preenchido pela Grid)
             const newAvatar = customAvatarUrlInput.value.trim() || selectedAvatarUrlInput.value;
 
             // Validações
@@ -218,11 +286,10 @@ document.addEventListener("DOMContentLoaded", () => {
                  return;
             }
             if (!newAvatar) {
-                 if(profileEditMessage) profileEditMessage.textContent = "Por favor, selecione um avatar ou forneça uma URL.";
+                 if(profileEditMessage) profileEditMessage.textContent = "Por favor, selecione um avatar ou envie uma imagem.";
                  return;
             }
 
-            // Verifica se o usuário tentou colar um emoji no input de texto
             const regexEmoji = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
             if (regexEmoji.test(rawName)) {
                  if(profileEditMessage) profileEditMessage.textContent = "Por favor, remova os emojis do campo de texto. Seu título será adicionado automaticamente pelo sistema.";
@@ -233,7 +300,6 @@ document.addEventListener("DOMContentLoaded", () => {
             saveProfileBtn.textContent = 'Salvando...';
 
             try {
-                // Envia APENAS o texto do nome. O SQL se encarrega de recolocar o ícone.
                 const { data, error } = await supabaseClient.rpc('update_player_profile', {
                     p_name: rawName,
                     p_faction: newFaction,
@@ -241,16 +307,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     p_gender: newGender
                 });
 
-                if (error) {
-                    throw error;
-                }
+                if (error) throw error;
 
                 showFloatingMessage('Perfil atualizado com sucesso!');
                 
-                // O servidor retorna o nome completo (Ícone + Texto)
                 const finalName = (typeof data === 'string' && data.length > 0) ? data : rawName;
 
-                // === ATUALIZAÇÃO DO CACHE LOCAL (GLOBAL DB) ===
                 await GlobalDB.updatePlayerPartial({
                     name: finalName,
                     faction: newFaction,
@@ -269,13 +331,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.error('Erro ao atualizar perfil:', error);
                 if (profileEditMessage) {
                     let errorMessage = 'Ocorreu um erro ao atualizar o perfil.'; 
-                    
                     if (error.code === '23505' && error.message.includes('players_name_key')) {
                          errorMessage = "Esse nome já está em uso.";
                     } else if (error.message) {
                         errorMessage = error.message;
                     }
-                    
                     profileEditMessage.textContent = errorMessage;
                     profileEditMessage.style.color = '#ff9999';
                 }

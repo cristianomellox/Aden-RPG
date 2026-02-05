@@ -289,8 +289,18 @@ if ('serviceWorker' in navigator) {
                     <label>Descrição:</label>
                     <textarea id="editGuildDescription" style="height: 120px; width: 90%;" maxlength="100"></textarea>
 
-                    <label>Bandeira (URL):</label>
-                    <input type="text" id="editGuildFlagUrl" placeholder="https://...">
+                    <label>Bandeira da Guilda:</label>
+<div class="upload-container">
+    <label for="guildFlagFileInput" class="custom-file-upload">
+        <img src="https://aden-rpg.pages.dev/assets/promover.webp" style="width:20px; vertical-align:middle; margin-right:5px;"> 
+        Escolher Bandeira
+    </label>
+    <input id="guildFlagFileInput" type="file" accept="image/*" style="display:none;"/>
+    
+    <span id="guildUploadStatusText" style="font-size: 0.9em; color: #aaa; margin-left: 10px;">Nenhum arquivo.</span>
+</div>
+
+<input type="hidden" id="editGuildFlagUrl">
 
                     <button id="saveGuildChangesBtn" class="action-btn">Salvar Alterações</button>
                 </div>

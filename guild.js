@@ -104,6 +104,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   // --- FIM: NOVAS FUNÇÕES DE CACHE ---
 
+  // =========================================================
+  // >>> CLOUDINARY UPLOAD FUNCTION (NOVA) <<<
+  // =========================================================
+  async function uploadGuildFlagToCloudinary(file) {
+      const cloudName = 'dbrghqhqy';
+      const uploadPreset = 'avatars_preset'; // Usando o mesmo preset de imagens otimizadas
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+          method: 'POST',
+          body: formData
+      });
+
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || 'Erro no upload');
+      }
+
+      const data = await response.json();
+      // Prioriza transformação eager se existir, senão usa a padrão
+      if (data.eager && data.eager.length > 0) {
+          return data.eager[0].secure_url; 
+      }
+      return data.secure_url;
+  }
+
   // --- INÍCIO: LÓGICA DO MODAL DE INFORMAÇÕES (SUBSTITUTO DO ALERT) ---
   document.body.insertAdjacentHTML('beforeend', `
     <div id="infoModal" class="modal" style="display: none; z-index: 1500;">
@@ -265,7 +294,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const editGuildName = $('#editGuildName');
   const editNameInfo = $('#editNameInfo');
   const editGuildDescription = $('#editGuildDescription');
-  const editGuildFlagUrl = $('#editGuildFlagUrl');
+  
+  // REFERÊNCIAS ATUALIZADAS PARA UPLOAD
+  const editGuildFlagUrl = $('#editGuildFlagUrl'); // Agora Input Hidden
+  const guildFlagFileInput = $('#guildFlagFileInput'); // Novo Input File
+  const guildUploadStatusText = $('#guildUploadStatusText'); // Novo Texto de Status
+  
   const saveGuildChangesBtn = $('#saveGuildChangesBtn');
   const manageMembersList = $('#manageMembersList');
   const guildRequestsList = $('#guildRequestsList');
@@ -300,6 +334,44 @@ document.addEventListener("DOMContentLoaded", async () => {
   const guildViewLevelValue = $('#guildViewLevelValue');
   const guildViewMemberCountHeader = $('#guildViewMemberCountHeader');
   const guildViewMemberList = $('#guildViewMemberList');
+
+  // --- LÓGICA DE UPLOAD DA BANDEIRA (EVENT LISTENER) ---
+  if (guildFlagFileInput) {
+      guildFlagFileInput.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          // UI de Carregando
+          if(guildUploadStatusText) {
+              guildUploadStatusText.textContent = "Enviando bandeira...";
+              guildUploadStatusText.className = "uploading-text";
+          }
+          if(saveGuildChangesBtn) saveGuildChangesBtn.disabled = true;
+
+          try {
+              const uploadedUrl = await uploadGuildFlagToCloudinary(file);
+              
+              // Sucesso
+              if(editGuildFlagUrl) editGuildFlagUrl.value = uploadedUrl; // Preenche o hidden
+              
+              if(guildUploadStatusText) {
+                  guildUploadStatusText.textContent = "Bandeira carregada!";
+                  guildUploadStatusText.className = "";
+                  guildUploadStatusText.style.color = "#4CAF50"; // Verde
+              }
+              
+          } catch (error) {
+              console.error("Erro upload guilda:", error);
+              if(guildUploadStatusText) {
+                  guildUploadStatusText.textContent = "Erro ao enviar.";
+                  guildUploadStatusText.style.color = "#ff5f5f"; // Vermelho
+              }
+              if(editGuildFlagUrl) editGuildFlagUrl.value = '';
+          } finally {
+              if(saveGuildChangesBtn) saveGuildChangesBtn.disabled = false;
+          }
+      });
+  }
 
   // --- Main tabs ---
   function activateMainTab(tabId){
@@ -793,7 +865,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (isLeader){
       if (editGuildName) editGuildName.value = guildData.name || '';
       if (editGuildDescription) editGuildDescription.value = guildData.description || '';
+      
+      // LÓGICA DA BANDEIRA ATUALIZADA
       if (editGuildFlagUrl) editGuildFlagUrl.value = guildData.flag_url || '';
+      
+      // Reseta o status visual do upload
+      if (guildUploadStatusText) {
+          if (guildData.flag_url) {
+              guildUploadStatusText.textContent = "Bandeira atual mantida.";
+              guildUploadStatusText.style.color = "#aaa";
+          } else {
+              guildUploadStatusText.textContent = "Nenhuma bandeira.";
+          }
+          guildUploadStatusText.className = ""; // Remove animação se houver
+      }
+      if (guildFlagFileInput) guildFlagFileInput.value = ""; // Reseta o input file
+
       if (editNameInfo) editNameInfo.textContent = '';
       if (guildData.last_name_change && editGuildName){
         const last = new Date(guildData.last_name_change);

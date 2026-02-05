@@ -614,7 +614,7 @@ function performBossAttack() {
 
             if (state.playerHp <= 0) {
                 state.reviveUntil = Date.now() + REVIVE_TIME_MS;
-                createFloatingText("Morto!", "player-dmg", "playerUiArea");
+                createFloatingText("Morto!", "player-dead", "playerUiArea");
             }
         }
         saveState();

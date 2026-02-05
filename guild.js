@@ -109,7 +109,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =========================================================
   async function uploadGuildFlagToCloudinary(file) {
       const cloudName = 'dbrghqhqy';
-      const uploadPreset = 'avatars_preset'; // Usando o mesmo preset de imagens otimizadas
+      const uploadPreset = 'flag_preset'; // Usando o mesmo preset de imagens otimizadas
       
       const formData = new FormData();
       formData.append('file', file);

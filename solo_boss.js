@@ -611,6 +611,9 @@ function performBossAttack() {
             state.playerHp = Math.max(0, state.playerHp - dmg);
             createFloatingText(`-${dmg}`, "player-dmg", "playerAvatar");
             triggerShake('playerAvatar'); 
+            
+            AUDIO_HIT.currentTime = 0;
+            AUDIO_HIT.play().catch(()=>{});
 
             if (state.playerHp <= 0) {
                 state.reviveUntil = Date.now() + REVIVE_TIME_MS;

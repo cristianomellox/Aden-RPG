@@ -541,7 +541,85 @@ document.addEventListener("DOMContentLoaded", () => {
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// =======================================================================
+// MONITOR DE EGRESS OTIMIZADO (COM FILTRO DE ASSETS E OVERHEAD)
+// =======================================================================
+(function() {
+    console.log("🛡️ Monitor de Egress Supabase Otimizado");
 
+    const LOG_TABLE = 'rpc_logs'; 
+    // Ignora o log, o intake, e também assets externos (Cloudflare/Images)
+    const IGNORE_URLS = [LOG_TABLE, 'intake.supabase.co', '.mp3', '.webp', '.png', '.jpg', 'pages.dev']; 
+    
+    // Estimativa de Overhead (Headers + SSL + CORS) por request
+    const HTTP_OVERHEAD_BYTES = 800; 
+
+    const originalFetch = window.fetch;
+
+    window.fetch = async (...args) => {
+        const [resource, config] = args;
+        const urlStr = resource ? resource.toString() : "";
+
+        // 1. FILTRAGEM AGRESSIVA: Só loga se for SUPABASE e não for ASSET
+        const isSupabase = urlStr.includes('supabase.co');
+        const isIgnored = IGNORE_URLS.some(x => urlStr.includes(x));
+
+        if (!isSupabase || isIgnored) {
+            return originalFetch(...args);
+        }
+
+        let response;
+        try {
+            response = await originalFetch(...args);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+
+        const clone = response.clone();
+        
+        clone.blob().then(blob => {
+            // Soma o corpo + estimativa de cabeçalhos
+            const size = blob.size + HTTP_OVERHEAD_BYTES;
+            const method = config?.method || 'GET';
+            
+            let functionName = "unknown";
+            try {
+                const urlObj = new URL(urlStr);
+                const pathParts = urlObj.pathname.split('/');
+                functionName = pathParts[pathParts.length - 1] || "root";
+                if (urlObj.search) functionName += ` (query)`;
+            } catch (e) {}
+
+            // Log visual no console
+            console.log(`📡 [Supabase Real] ${functionName}: Payload ${blob.size}b + Overhead ~${HTTP_OVERHEAD_BYTES}b = ${size}b`);
+            
+            // Dispara o log
+            logToSupabase(`http_${method}_${functionName}`, size);
+
+        }).catch(err => console.error("⚠️ Erro monitor:", err));
+
+        return response;
+    };
+
+    // ... (Mantenha o código do WebSocket igual ou remova se não usar Realtime) ...
+
+    async function logToSupabase(name, bytes) {
+        const client = (typeof supabaseClient !== 'undefined') ? supabaseClient : 
+                       ((typeof supabase !== 'undefined' && typeof supabase.from === 'function') ? supabase : null);
+
+        if (!client) return;
+
+        // DICA PRO: Use 'rpc' para logar se possível, ou insert normal.
+        // O insert abaixo ainda gera custo, mas agora só será disparado
+        // para chamadas REAIS do Supabase (RPCs/DB), ignorando MP3s.
+        try {
+            await client.from(LOG_TABLE).insert({
+                function_name: name,
+                size_bytes: bytes
+            });
+        } catch (e) {}
+    }
+})();
 // =======================================================================
 // NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)
 // =======================================================================
@@ -1500,7 +1578,8 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
         // Atualiza Global DB no login
         await GlobalDB.setAuth(session);
-        if(!currentPlayerData) fetchAndDisplayPlayerInfo(true);
+        // CORRIGIDO: Não força o refresh (passa false). Deixa o fetchAndDisplay decidir se usa cache.
+        if(!currentPlayerData) fetchAndDisplayPlayerInfo(false);
     } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('player_data_cache');
         await GlobalDB.clearAuth();
@@ -2430,19 +2509,20 @@ async function checkRewardLimit() {
         if (currentPlayerData && currentPlayerData.daily_rewards_log) {
             logData = currentPlayerData.daily_rewards_log;
         } else {
-            // 2. Fallback: Tenta pegar o ID da sessão local (Zero Egress)
-            // Não usamos getUser() aqui para economizar chamadas de API de Auth.
-            // Se o getSession falhar, o usuário provavelmente não está logado ou token expirou.
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            
-            if (session && session.user) {
-                 const { data, error } = await supabaseClient
-                    .from('players')
-                    .select('daily_rewards_log')
-                    .eq('id', session.user.id)
-                    .single();
-                if (data) logData = data.daily_rewards_log;
+            // 2. Fallback: Tenta pegar do GlobalDB (IndexedDB)
+            // Alterado para evitar GET direto na tabela players e economizar egress
+            const cachedPlayer = await GlobalDB.getPlayer();
+            if (cachedPlayer && cachedPlayer.daily_rewards_log) {
+                 logData = cachedPlayer.daily_rewards_log;
+            } else {
+                 // Se não tiver no DB Global, tenta LocalStorage Legacy
+                 const legacyCache = getCache('player_data_cache');
+                 if (legacyCache && legacyCache.daily_rewards_log) {
+                     logData = legacyCache.daily_rewards_log;
+                 }
             }
+            // Se ainda assim não achar, não faz requisição de rede para isso.
+            // O fetchAndDisplayPlayerInfo principal cuidará de buscar e atualizar a UI depois.
         }
 
         const log = logData || {}; 
@@ -2702,4 +2782,3 @@ function enableMapInteraction() {
         window.enableMapInteraction = enableMapInteraction;
     }
 })();
-

@@ -1,10 +1,9 @@
-
 import { supabase } from './supabaseClient.js'
 
 document.addEventListener("DOMContentLoaded", async () => {
     
     const CACHE_KEY = 'maintenance_status_cache';
-    const CACHE_TTL = 2 * 60 * 1000; // 2 minutos de cache
+    const CACHE_TTL = 3 * 60 * 1000; // 3 minutos de cache
 
     try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -16,7 +15,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         let data = null;
-        let fromCache = false;
 
         // 1. Tenta pegar do Cache Local
         const cached = localStorage.getItem(CACHE_KEY);
@@ -25,8 +23,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const parsed = JSON.parse(cached);
                 if (Date.now() - parsed.timestamp < CACHE_TTL) {
                     data = parsed.data;
-                    fromCache = true;
-                    // console.log("🛠️ [Maintenance] Usando cache local.");
+                    // Cache válido, não faz requisição
                 }
             } catch (e) {
                 localStorage.removeItem(CACHE_KEY);
@@ -43,23 +40,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (error) {
                 console.error("Erro ao verificar status de manutenção:", error);
-                return;
+                // Não retorna return aqui, deixa o fluxo seguir para não travar o app se a rede falhar
+            } else {
+                data = serverData;
+                // Salva no cache
+                localStorage.setItem(CACHE_KEY, JSON.stringify({
+                    data: data,
+                    timestamp: Date.now()
+                }));
             }
-            
-            data = serverData;
-            
-            // Salva no cache
-            localStorage.setItem(CACHE_KEY, JSON.stringify({
-                data: data,
-                timestamp: Date.now()
-            }));
         }
+
+        if (!data) return; // Se falhou tudo, sai.
 
         const maintenanceOverlay = document.getElementById('maintenance-overlay');
         const countdownBanner = document.getElementById('countdown-banner');
 
         // Caso já esteja em manutenção
-        if (data && data.is_maintenance_mode) {
+        if (data.is_maintenance_mode) {
             if (maintenanceOverlay) {
                 document.getElementById('maintenance-message').textContent = data.maintenance_message;
                 maintenanceOverlay.style.display = 'flex';
@@ -70,7 +68,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         // Se há agendamento
-        if (data && data.scheduled_maintenance && data.schedule_time) {
+        if (data.scheduled_maintenance && data.schedule_time) {
             const countdownDuration = 5 * 60 * 1000; // 5 minutos
             const scheduleTime = new Date(data.schedule_time).getTime();
 

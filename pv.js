@@ -545,54 +545,63 @@ document.addEventListener("DOMContentLoaded", () => {
         loadFromLocalStorage();
 
         // 🔐 OTIMIZAÇÃO AUTH ZERO EGRESS: Aguardar o script.js carregar primeiro!
+        // NÃO fazemos fallback para rede aqui. Se script.js não carregou o player, PV espera.
         
-        // 1. Verifica se os dados JÁ estão na variável global (script.js carregou rápido)
-        if (window.currentPlayerData && window.currentPlayerData.id) {
-            currentPlayer = { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
-            console.log("⚡ [PV] Player carregado via window.currentPlayerData (Imediato).");
-        } else {
-            // 2. Se não está pronto, tenta pegar do Cache Legacy (Sem rede)
+        const waitForPlayer = async () => {
+            // 1. Verifica memória RAM (mais rápido)
+            if (window.currentPlayerData && window.currentPlayerData.id) {
+                return { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
+            }
+            
+            // 2. Verifica Cache Legacy (rápido)
             try {
                 const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
                 if (legacyCache && legacyCache.data && legacyCache.data.id) {
-                    currentPlayer = { id: legacyCache.data.id, name: legacyCache.data.name };
-                    console.log("⚡ [PV] Player carregado via localStorage Legacy.");
+                    return { id: legacyCache.data.id, name: legacyCache.data.name };
                 }
             } catch(e) {}
 
-            // 3. Se AINDA não temos player, aguardamos o evento do script.js
-            if (!currentPlayer) {
-                console.log("⏳ [PV] Aguardando evento 'aden_player_ready'...");
-                await new Promise((resolve) => {
-                    // Timeout de 5s para não travar pra sempre se der erro no script.js
-                    const timeout = setTimeout(() => {
-                        console.warn("⚠️ [PV] Timeout esperando player data. Tentando fallback...");
-                        resolve();
-                    }, 5000);
-
-                    window.addEventListener('aden_player_ready', (e) => {
-                        clearTimeout(timeout);
-                        if (e.detail) {
-                            currentPlayer = { id: e.detail.id, name: e.detail.name };
-                            console.log("✅ [PV] Evento recebido! Player carregado.");
-                        }
-                        resolve();
-                    }, { once: true });
-                });
+            // 3. Verifica GlobalDB (IndexedDB)
+            const globalPlayer = await GlobalDB.getPlayer();
+            if (globalPlayer && globalPlayer.id) {
+                return { id: globalPlayer.id, name: globalPlayer.name };
             }
-        }
 
-        // 4. Última tentativa: Se falhou tudo acima, vai pra rede (Supabase)
+            return null;
+        };
+
+        currentPlayer = await waitForPlayer();
+
+        // Se ainda não temos player, entramos em modo de espera ativo pelo evento ou polling
         if (!currentPlayer) {
-             console.log("🌐 [PV] Cache falhou. Buscando sessão no Supabase...");
-             const { data: { session } } = await supabaseClient.auth.getSession();
-             if (session && session.user) {
-                 const { data: player } = await supabaseClient.from('players').select('id, name').eq('id', session.user.id).single();
-                 if (player) currentPlayer = player;
-             }
+            console.log("⏳ [PV] Aguardando script.js carregar jogador...");
+            
+            await new Promise((resolve) => {
+                // Listener para o evento do script.js
+                const onPlayerReady = (e) => {
+                    if (e.detail) {
+                        currentPlayer = { id: e.detail.id, name: e.detail.name };
+                        // console.log("✅ [PV] Jogador recebido via evento.");
+                        resolve();
+                    }
+                };
+                window.addEventListener('aden_player_ready', onPlayerReady, { once: true });
+
+                // Polling de segurança (caso o evento já tenha disparado antes do listener)
+                const checkInterval = setInterval(async () => {
+                    const p = await waitForPlayer();
+                    if (p) {
+                        currentPlayer = p;
+                        // console.log("✅ [PV] Jogador detectado via polling.");
+                        window.removeEventListener('aden_player_ready', onPlayerReady);
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }, 500); // Checa a cada 500ms
+            });
         }
 
-        if (!currentPlayer) return; // Se não autenticou, para aqui.
+        if (!currentPlayer) return; // Segurança extra
         
         // 1. Sincroniza mensagens privadas (apenas metadata e executa limpeza se necessário)
         await fetchAndSyncMessages();

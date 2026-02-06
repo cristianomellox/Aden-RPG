@@ -896,6 +896,10 @@ async function surgicalCacheUpdate(newItems, newTimestamp, updatedStats) {
 let currentPlayerId = null; // Armazena o ID do usuário logado
 let currentPlayerData = null; // Armazena todos os dados do jogador (com bônus)
 
+// Variáveis de controle para EVITAR DUPLO LOAD (Egress)
+window.isPlayerLoading = false;
+window.initialLoadDone = false;
+
 // Definições das Missões de Progressão (Client-side para UI)
 const mission_definitions = {
     level: [
@@ -1258,122 +1262,137 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
 
 // Função principal para buscar e exibir as informações do jogador (OTIMIZADA ZERO EGRESS + SERVER-SIDE CP)
 async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveContainer = false) {
-    // 1. OTIMIZAÇÃO: Tenta carregar do GlobalDB primeiro
-    if (!forceRefresh) {
-        const cachedPlayer = await GlobalDB.getPlayer();
-        if (cachedPlayer) {
-            console.log("⚡ [PlayerInfo] Usando dados do IndexedDB Global.");
-            currentPlayerData = cachedPlayer;
-            currentPlayerId = cachedPlayer.id;
-            renderPlayerUI(cachedPlayer, preserveActiveContainer);
-            checkProgressionNotifications(cachedPlayer);
-            
-            // Dispara o evento de "Pronto" para que o PV.js saiba que pode carregar
-            window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
-            return;
-        }
-    }
-
-    // 2. Se não tiver no DB, busca do Supabase
-    let userId = currentPlayerId;
-    if (!userId) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) {
-            updateUIVisibility(false);
-            return;
-        }
-        userId = session.user.id;
-        currentPlayerId = userId;
-    }
-
-    // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
-    // Adicionei colunas usadas na UI e no 'checkProgressionNotifications'
-    const columnsToSelect = `
-        id, 
-        name, 
-        faction, 
-        avatar_url, 
-        level, 
-        xp, 
-        xp_needed_for_level, 
-        gold, 
-        crystals, 
-        combat_power, 
-        progression_state,
-        current_afk_stage,
-        last_attack_time,
-        raid_attacks_bought_count,
-        last_afk_start_time,
-        guild_id,
-        rank,
-        daily_rewards_log 
-    `;
-
-    const { data: player, error: playerError } = await supabaseClient
-        .from('players')
-        .select(columnsToSelect)
-        .eq('id', userId)
-        .single();
-        
-    if (playerError || !player) {
-        console.error("Erro ao buscar jogador:", playerError);
+    
+    // --- GATILHO DE SEGURANÇA PARA EVITAR REQUISIÇÕES DUPLICADAS ---
+    if (window.isPlayerLoading) {
+        // console.log("⏳ [PlayerInfo] Carregamento em progresso... ignorando chamada duplicada.");
         return;
     }
+    window.isPlayerLoading = true;
 
-    // --- LÓGICA DE CP NO SERVIDOR (OTIMIZADO: 1 VEZ POR DIA) ---
-    // Só executa se a data salva for diferente da data de hoje
-    const STORAGE_KEY_CP = `aden_cp_check_${player.id}`;
-    const todayStr = new Date().toISOString().split('T')[0]; // Data atual (UTC) ex: "2023-10-27"
-    const lastCheck = localStorage.getItem(STORAGE_KEY_CP);
-
-    if (lastCheck !== todayStr) {
-        console.log("🔄 [System] Executando verificação diária de Combat Power...");
-        
-        supabaseClient.rpc('update_and_get_combat_power', { target_player_id: player.id })
-            .then(({ data: newCp, error }) => {
-                if (!error && newCp !== null) {
-                    // Marca como feito hoje
-                    localStorage.setItem(STORAGE_KEY_CP, todayStr);
-                    
-                    // Atualiza a UI se houve mudança
-                    if (player.combat_power !== newCp) {
-                        console.log(`⚡ CP Atualizado de ${player.combat_power} para ${newCp}`);
-                        player.combat_power = newCp;
-                        document.getElementById('playerPower').textContent = formatNumberCompact(newCp);
-                        
-                        // Atualiza cache local com o novo valor
-                        if (currentPlayerData) currentPlayerData.combat_power = newCp;
-                        GlobalDB.updatePlayerPartial({ combat_power: newCp });
-                        setCache('player_data_cache', currentPlayerData, 1440);
-                    }
-                }
-            })
-            .catch(err => console.warn("Falha no check diário de CP:", err));
-    } else {
-        // console.log("✅ [System] CP já verificado hoje.");
-    }
-
-    // Armazena e Renderiza
-    currentPlayerData = player;
-    
-    // Salva no DB Global e Cache Legacy
-    await GlobalDB.setPlayer(player);
-    setCache('player_data_cache', player, 1440);
-
-    renderPlayerUI(player, preserveActiveContainer);
-    checkProgressionNotifications(player);
-
-    if (/^Nome_[0-9a-fA-F]{6}$/.test(player.name)) {
-        if (typeof window.updateProfileEditModal === 'function') {
-            window.updateProfileEditModal(player);
+    try {
+        // 1. OTIMIZAÇÃO: Tenta carregar do GlobalDB primeiro
+        if (!forceRefresh) {
+            const cachedPlayer = await GlobalDB.getPlayer();
+            if (cachedPlayer) {
+                console.log("⚡ [PlayerInfo] Usando dados do IndexedDB Global.");
+                currentPlayerData = cachedPlayer;
+                currentPlayerId = cachedPlayer.id;
+                renderPlayerUI(cachedPlayer, preserveActiveContainer);
+                checkProgressionNotifications(cachedPlayer);
+                
+                // Dispara o evento de "Pronto" para que o PV.js saiba que pode carregar
+                window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
+                
+                window.initialLoadDone = true; // Marca que o carregamento ocorreu
+                return;
+            }
         }
-        const nameInput = document.getElementById('editPlayerName');
-        if (nameInput) nameInput.value = '';
-        profileEditModal.style.display = 'flex';
-    }
 
-    // Dispara o evento avisando que o jogador está pronto (para PV.js e outros)
-    window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: player }));
+        // 2. Se não tiver no DB, busca do Supabase
+        let userId = currentPlayerId;
+        if (!userId) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                updateUIVisibility(false);
+                return;
+            }
+            userId = session.user.id;
+            currentPlayerId = userId;
+        }
+
+        // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
+        const columnsToSelect = `
+            id, 
+            name, 
+            faction, 
+            avatar_url, 
+            level, 
+            xp, 
+            xp_needed_for_level, 
+            gold, 
+            crystals, 
+            combat_power, 
+            progression_state,
+            current_afk_stage,
+            last_attack_time,
+            raid_attacks_bought_count,
+            last_afk_start_time,
+            guild_id,
+            rank,
+            daily_rewards_log 
+        `;
+
+        const { data: player, error: playerError } = await supabaseClient
+            .from('players')
+            .select(columnsToSelect)
+            .eq('id', userId)
+            .single();
+            
+        if (playerError || !player) {
+            console.error("Erro ao buscar jogador:", playerError);
+            return;
+        }
+
+        // --- LÓGICA DE CP NO SERVIDOR (OTIMIZADO: 1 VEZ POR DIA) ---
+        // Só executa se a data salva for diferente da data de hoje
+        const STORAGE_KEY_CP = `aden_cp_check_${player.id}`;
+        const todayStr = new Date().toISOString().split('T')[0]; // Data atual (UTC) ex: "2023-10-27"
+        const lastCheck = localStorage.getItem(STORAGE_KEY_CP);
+
+        if (lastCheck !== todayStr) {
+            console.log("🔄 [System] Executando verificação diária de Combat Power...");
+            
+            supabaseClient.rpc('update_and_get_combat_power', { target_player_id: player.id })
+                .then(({ data: newCp, error }) => {
+                    if (!error && newCp !== null) {
+                        // Marca como feito hoje
+                        localStorage.setItem(STORAGE_KEY_CP, todayStr);
+                        
+                        // Atualiza a UI se houve mudança
+                        if (player.combat_power !== newCp) {
+                            console.log(`⚡ CP Atualizado de ${player.combat_power} para ${newCp}`);
+                            player.combat_power = newCp;
+                            document.getElementById('playerPower').textContent = formatNumberCompact(newCp);
+                            
+                            // Atualiza cache local com o novo valor
+                            if (currentPlayerData) currentPlayerData.combat_power = newCp;
+                            GlobalDB.updatePlayerPartial({ combat_power: newCp });
+                            setCache('player_data_cache', currentPlayerData, 1440);
+                        }
+                    }
+                })
+                .catch(err => console.warn("Falha no check diário de CP:", err));
+        } else {
+            // console.log("✅ [System] CP já verificado hoje.");
+        }
+
+        // Armazena e Renderiza
+        currentPlayerData = player;
+        
+        // Salva no DB Global e Cache Legacy
+        await GlobalDB.setPlayer(player);
+        setCache('player_data_cache', player, 1440);
+
+        renderPlayerUI(player, preserveActiveContainer);
+        checkProgressionNotifications(player);
+
+        if (/^Nome_[0-9a-fA-F]{6}$/.test(player.name)) {
+            if (typeof window.updateProfileEditModal === 'function') {
+                window.updateProfileEditModal(player);
+            }
+            const nameInput = document.getElementById('editPlayerName');
+            if (nameInput) nameInput.value = '';
+            profileEditModal.style.display = 'flex';
+        }
+
+        // Dispara o evento avisando que o jogador está pronto (para PV.js e outros)
+        window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: player }));
+        window.initialLoadDone = true; // Marca que o carregamento ocorreu
+
+    } finally {
+        window.isPlayerLoading = false; // Libera o semáforo
+    }
 }
 
 // === Botão de copiar ID do jogador ===
@@ -1576,6 +1595,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         // Se já temos os dados, avisamos imediatamente
         window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
+        window.initialLoadDone = true; // Marca que o carregamento ocorreu
     }
 
     // 2. Inicia verificação de Auth
@@ -1585,6 +1605,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Escuta mudanças APENAS para Login/Logout explícitos
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
+        // Se já carregou via GlobalDB, ignora esse evento para não duplicar chamadas
+        if (window.initialLoadDone) return;
+
         // Atualiza Global DB no login
         await GlobalDB.setAuth(session);
         // CORRIGIDO: Não força o refresh (passa false). Deixa o fetchAndDisplay decidir se usa cache.

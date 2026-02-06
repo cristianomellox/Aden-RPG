@@ -2,8 +2,8 @@ import { supabase } from './supabaseClient.js';
 
 // --- Configuração e Estado ---
 const CHECK_INTERVAL = 300000; // Checa a cada 5 minutos
-const STORAGE_KEY = 'aden_titles_last_check';
-const OWNERS_KEY = 'aden_city_owners'; // Rastreamento local de mudança de dono (Localstorage)
+const LAST_CHECK_KEY = 'aden_titles_last_check'; // Guarda timestamps das cidades
+const HOLDERS_KEY = 'aden_title_holders'; // Guarda cache de QUEM tem os títulos { cityId: { noblessId: playerName } }
 let notificationQueue = [];
 let isDisplaying = false;
 
@@ -46,7 +46,7 @@ function injectStyles() {
             animation: slideTitleBanner 10s linear forwards;
         }
         #titleNotificationBanner.royal-announcement {
-            border-left: 4px solid #ff4444; /* Cor diferente para o Rei */
+            border-left: 4px solid #ff4444;
             background: linear-gradient(90deg, rgba(20,0,0,0.95) 0%, rgba(60,0,0,0.95) 100%);
         }
         #titleNotificationBanner strong { color: #d4af37; }
@@ -71,6 +71,7 @@ function injectStyles() {
 // --- 2. Lógica Principal ---
 
 async function checkTitleUpdates() {
+    // Busca cidades que tiveram atualizações recentes
     const { data: cities, error } = await supabase
         .from('guild_battle_cities')
         .select('id, name, owner, last_title_update')
@@ -78,116 +79,128 @@ async function checkTitleUpdates() {
 
     if (error || !cities) return;
 
-    const localTimestamps = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    let hasUpdates = false;
-    const updatesToFetch = [];
+    const localTimestamps = JSON.parse(localStorage.getItem(LAST_CHECK_KEY) || '{}');
+    const updatesToProcess = [];
 
     for (const city of cities) {
         const lastSeenTime = localTimestamps[city.id];
         
-        // Se a data de atualização mudou, precisamos processar
+        // Se a data do servidor for mais nova que a local OU se não tiver data local
+        // (Nota: Usamos string comparison direta ISO8601 que funciona bem, ou new Date)
         if (!lastSeenTime || new Date(city.last_title_update) > new Date(lastSeenTime)) {
-            updatesToFetch.push(city);
-            localTimestamps[city.id] = city.last_title_update; 
-            hasUpdates = true;
+            updatesToProcess.push(city);
         }
     }
 
-    if (hasUpdates) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(localTimestamps));
-        await processUpdates(updatesToFetch);
+    if (updatesToProcess.length > 0) {
+        await processUpdates(updatesToProcess, localTimestamps);
     }
 }
 
-// --- 3. Processamento de Dados ---
+// --- 3. Processamento de Dados (Com Diff) ---
 
-async function processUpdates(cities) {
-    // Carrega cache de donos anteriores
-    const localOwners = JSON.parse(localStorage.getItem(OWNERS_KEY) || '{}');
-    let ownersUpdated = false;
+async function processUpdates(cities, localTimestamps) {
+    // Carrega o cache de QUEM tinha os títulos
+    let storedHolders = JSON.parse(localStorage.getItem(HOLDERS_KEY) || '{}');
+    
+    // Busca informações auxiliares (Líderes)
+    // Para otimizar, pegamos todos os nobres relevantes de uma vez
+    const { data: allNobles } = await supabase
+        .from('players')
+        .select('id, name, gender, nobless')
+        .not('nobless', 'is', null);
 
-    for (const city of cities) {
-        if (!city.owner) continue;
-
-        // A. Busca o Líder da Guilda Regente
-        const { data: guildData } = await supabase
-            .from('guilds')
-            .select('leader_id, players!guilds_leader_id_fkey(name, gender)')
-            .eq('id', city.owner)
-            .single();
-
-        if (!guildData || !guildData.players) continue;
-
-        const leaderName = guildData.players.name;
-        const leaderGender = guildData.players.gender || 'Masculino';
-        
-        let leaderTitle = 'Líder';
-        if (city.id === 1) leaderTitle = (leaderGender === 'Masculino') ? 'Rei' : 'Rainha';
-        else leaderTitle = (leaderGender === 'Masculino') ? 'Lord' : 'Lady';
-
-        // --- VERIFICAÇÃO DE NOVO REINADO (Coronation) ---
-        const previousOwner = localOwners[city.id];
-        
-        // Se o dono mudou e é a Capital (ID 1)
-        if (city.id === 1 && previousOwner !== city.owner) {
-            queueNotification({
-                type: 'coronation', // Tipo especial
-                leaderTitle,
-                leaderName,
-                cityName: city.name
-            });
-            // Atualiza o dono local
-            localOwners[city.id] = city.owner;
-            ownersUpdated = true;
-        } 
-        // Lógica para outras cidades (opcional, se quiser anunciar novo Lord)
-        else if (previousOwner !== city.owner) {
-             localOwners[city.id] = city.owner;
-             ownersUpdated = true;
-        }
-
-        // B. Busca Nobres (Títulos normais)
-        
-        let rangeStart, rangeEnd;
-        if (city.id === 1) {
-            rangeStart = 101; rangeEnd = 103;
-        } else {
-            rangeStart = city.id * 100 + 1;
-            rangeEnd = city.id * 100 + 2;
-        }
-
-        const { data: nobles } = await supabase
-            .from('players')
-            .select('name, gender, nobless')
-            .gte('nobless', rangeStart)
-            .lte('nobless', rangeEnd);
-
-        if (nobles && nobles.length > 0) {
-            nobles.forEach(noble => {
-                let roleName = 'Nobre';
-                if (city.id === 1 && TITLE_MAP[noble.nobless]) {
-                    roleName = (noble.gender === 'Masculino') ? TITLE_MAP[noble.nobless].m : TITLE_MAP[noble.nobless].f;
-                } else {
-                    const suffix = noble.nobless % 100;
-                    const mapKey = (suffix === 1) ? 'x01' : 'x02';
-                    const roleMap = TITLE_MAP[mapKey];
-                    roleName = (noble.gender === 'Masculino') ? roleMap.m : roleMap.f;
-                }
-
-                queueNotification({
-                    type: 'title_grant',
-                    leaderTitle,
-                    leaderName,
-                    targetName: noble.name,
-                    roleName,
-                    cityName: city.name
-                });
-            });
-        }
+    // Mapeia nobres para busca rápida
+    // Mapa: noblessId -> Objeto Jogador
+    const noblesMap = {};
+    if (allNobles) {
+        allNobles.forEach(p => noblesMap[p.nobless] = p);
     }
 
-    if (ownersUpdated) {
-        localStorage.setItem(OWNERS_KEY, JSON.stringify(localOwners));
+    let storageUpdated = false;
+
+    for (const city of cities) {
+        // Inicializa estrutura se não existir
+        if (!storedHolders[city.id]) storedHolders[city.id] = {};
+        
+        // 1. Busca dados do Líder (Rei/Lord) da guilda dona
+        // Fazemos isso individualmente pois donos mudam pouco e são poucos requests
+        let leaderTitle = 'Líder';
+        let leaderName = 'Desconhecido';
+
+        if (city.owner) {
+            const { data: guildData } = await supabase
+                .from('guilds')
+                .select('players!guilds_leader_id_fkey(name, gender)')
+                .eq('id', city.owner)
+                .single();
+            
+            if (guildData && guildData.players) {
+                leaderName = guildData.players.name;
+                const g = guildData.players.gender || 'Masculino';
+                if (city.id === 1) leaderTitle = (g === 'Masculino') ? 'Rei' : 'Rainha';
+                else leaderTitle = (g === 'Masculino') ? 'Lord' : 'Lady';
+            }
+        }
+
+        // 2. Verifica Nobres (Titulos)
+        // Define o range de IDs para esta cidade
+        let nobleIdsToCheck = [];
+        if (city.id === 1) nobleIdsToCheck = [101, 102, 103]; // Capital
+        else nobleIdsToCheck = [(city.id * 100) + 1, (city.id * 100) + 2]; // Outras
+
+        for (const roleId of nobleIdsToCheck) {
+            const currentPlayer = noblesMap[roleId];
+            const previousHolderName = storedHolders[city.id][roleId];
+
+            // Cenário: Existe um jogador atual para este cargo
+            if (currentPlayer) {
+                // Se o nome for diferente do armazenado, TEMOS UM NOVO TITULAR
+                if (currentPlayer.name !== previousHolderName) {
+                    
+                    // Determina o nome do cargo
+                    let roleName = 'Nobre';
+                    if (city.id === 1 && TITLE_MAP[roleId]) {
+                        roleName = (currentPlayer.gender === 'Masculino') ? TITLE_MAP[roleId].m : TITLE_MAP[roleId].f;
+                    } else {
+                        const suffix = roleId % 100; // 1 ou 2
+                        const mapKey = (suffix === 1) ? 'x01' : 'x02';
+                        roleName = (currentPlayer.gender === 'Masculino') ? TITLE_MAP[mapKey].m : TITLE_MAP[mapKey].f;
+                    }
+
+                    // Fila a notificação
+                    queueNotification({
+                        type: 'title_grant',
+                        leaderTitle,
+                        leaderName,
+                        targetName: currentPlayer.name,
+                        roleName,
+                        cityName: city.name
+                    });
+
+                    // Atualiza o cache local com o novo dono
+                    storedHolders[city.id][roleId] = currentPlayer.name;
+                    storageUpdated = true;
+                }
+            } else {
+                // Se não tem jogador agora, mas tinha antes (foi removido/exonerado)
+                if (previousHolderName) {
+                     // Opcional: Notificar "Fulano perdeu o título"
+                     // Por enquanto, apenas removemos do cache para detectar quando alguém novo assumir
+                     delete storedHolders[city.id][roleId];
+                     storageUpdated = true;
+                }
+            }
+        }
+
+        // Atualiza o timestamp da cidade DEPOIS de processar
+        localTimestamps[city.id] = city.last_title_update;
+    }
+
+    // Salva tudo no LocalStorage
+    localStorage.setItem(LAST_CHECK_KEY, JSON.stringify(localTimestamps));
+    if (storageUpdated) {
+        localStorage.setItem(HOLDERS_KEY, JSON.stringify(storedHolders));
     }
 }
 
@@ -205,96 +218,54 @@ function processQueue() {
     const data = notificationQueue.shift();
     const banner = document.getElementById('titleNotificationBanner');
 
-    // Reseta classes
+    // Reseta classes e garante visibilidade
     banner.className = '';
+    banner.style.display = 'flex'; 
 
-    if (data.type === 'coronation') {
-        // --- ANÚNCIO DO REI/RAINHA ---
-        banner.classList.add('royal-announcement'); // Classe CSS especial
-        const crownIcon = '👑';
-        
-        banner.innerHTML = `
-            <div style="font-size: 1.8em; filter: drop-shadow(0 0 5px gold);">${crownIcon}</div>
-            <div style="font-size: 1.2em; line-height: 1.4;">
-                Vida longa a <span style="color: #ffda44; font-weight: bold; text-transform: uppercase;">${data.leaderName}</span>,<br>
-                ${data.leaderTitle === 'Rei' ? 'novo' : 'nova'} <strong>${data.leaderTitle}</strong> de Aden!
-            </div>
-        `;
+    let icon = '📜'; 
+    if (data.roleName.includes('Rei') || data.roleName.includes('Rainha')) icon = '👑'
+    if (data.roleName.includes('Príncipe') || data.roleName.includes('Princesa')) icon = '⚜️';
+    if (data.roleName.includes('Bobo') || data.roleName.includes('Boba')) icon = '🤡';
+    if (data.roleName.includes('Lord') || data.roleName.includes('Lady')) icon = '🔰';
+    if (data.roleName.includes('Nobre')) icon = '🛡️';
 
-    } else {
-        // --- ANÚNCIO DE TÍTULOS (PADRÃO) ---
-        let icon = '📜'; 
-        if (data.roleName.includes('Rei') || data.roleName.includes('Rainha')) icon = '👑'
-        if (data.roleName.includes('Príncipe') || data.roleName.includes('Princesa')) icon = '⚜️';
-        if (data.roleName.includes('Bobo') || data.roleName.includes('Boba')) icon = '🤡';
-        if (data.roleName.includes('Lord') || data.roleName.includes('Lady')) icon = '🔰';
-        if (data.roleName.includes('Nobre')) icon = '🛡️';
-
-        banner.innerHTML = `
-            <div style="font-size: 1.8em;">${icon}</div>
-            <div style="font-size: 1.2em;">
-                <strong>${data.leaderTitle} ${data.leaderName}</strong> nomeou <br>
-                <span class="highlight">${data.targetName}</span> como 
-                <strong>${data.roleName}</strong>!
-            </div>
-        `;
-    }
+    banner.innerHTML = `
+        <div style="font-size: 1.8em;">${icon}</div>
+        <div style="font-size: 1.2em;">
+            <strong>${data.leaderTitle} ${data.leaderName}</strong> nomeou <br>
+            <span class="highlight">${data.targetName}</span> como 
+            <strong>${data.roleName}</strong>!
+        </div>
+    `;
 
     banner.classList.add('show');
-
-    // Tempo de exibição
-    const displayTime = data.type === 'coronation' ? 14000 : 10000; // Rei fica um pouco mais
 
     const onAnimationEnd = () => {
         banner.classList.remove('show');
         banner.removeEventListener('animationend', onAnimationEnd);
         isDisplaying = false;
+        // Pequeno delay entre notificações
         setTimeout(() => { processQueue(); }, 500);
     };
 
     banner.addEventListener('animationend', onAnimationEnd);
 }
 
-// --- NOVO: Verificação de Domingo para Limpeza de Cache ---
-// --- Função Atualizada para Domingo e Segunda-feira ---
-function checkWeeklyOwnerCacheReset() {
+// --- Limpeza Semanal de Cache (Domingo/Segunda) ---
+function checkSundayOwnerCacheReset() {
     const today = new Date();
-    const dayOfWeek = today.getDay(); 
-    
-    // 0 = Domingo, 1 = Segunda-feira
+    const dayOfWeek = today.getDay(); // 0 = Domingo
     if (dayOfWeek === 0 || dayOfWeek === 1) {
-        const todayStr = today.toDateString(); // Ex: "Mon Feb 02 2026"
-        const lastCleared = localStorage.getItem('aden_weekly_owners_cleared');
+        const key = 'aden_weekly_reset_check';
+        const lastReset = localStorage.getItem(key);
+        const todayStr = today.toDateString();
 
-        // Se ainda não limpamos hoje (neste dia específico da semana)
-        if (lastCleared !== todayStr) {
-            console.log(`🧹 [System] ${dayOfWeek === 0 ? 'Domingo' : 'Segunda-feira'} detectado. Limpando cache de donos...`);
-            
-            const DB_NAME = 'aden_global_db';
-            const OWNERS_STORE = 'owners_store';
-            
-            const req = indexedDB.open(DB_NAME);
-            
-            req.onsuccess = (e) => {
-                const db = e.target.result;
-                if (db.objectStoreNames.contains(OWNERS_STORE)) {
-                    const tx = db.transaction(OWNERS_STORE, 'readwrite');
-                    tx.objectStore(OWNERS_STORE).clear();
-                    
-                    tx.oncomplete = () => {
-                        console.log("✅ [System] Store 'owners_store' limpa com sucesso.");
-                        // Salva que a limpeza de hoje foi concluída
-                        localStorage.setItem('aden_weekly_owners_cleared', todayStr);
-                    };
-                } else {
-                    // Se a store não existe, marcamos como feito para evitar tentativas inúteis
-                    localStorage.setItem('aden_weekly_owners_cleared', todayStr);
-                }
-            };
-
-            req.onerror = (e) => {
-                console.warn("⚠️ [System] Erro ao abrir GlobalDB para limpeza:", e);
-            };
+        if (lastReset !== todayStr) {
+            console.log("🧹 [System] Limpeza semanal de cache de títulos...");
+            // Limpa o cache de "quem tem o título" para forçar resincronização limpa se necessário
+            // Mas cuidado: se limparmos tudo, o Diff vai achar que todos são novos. 
+            // Melhor apenas marcar como checado e deixar o Diff trabalhar naturalmente.
+            localStorage.setItem(key, todayStr);
         }
     }
 }
@@ -302,10 +273,11 @@ function checkWeeklyOwnerCacheReset() {
 // --- Inicialização ---
 document.addEventListener("DOMContentLoaded", () => {
     injectStyles();
-    
-    // Executa a limpeza se for domingo
     checkSundayOwnerCacheReset();
 
+    // Primeira verificação rápida após carregar
     setTimeout(checkTitleUpdates, 2000);
+    
+    // Loop de verificação
     setInterval(checkTitleUpdates, CHECK_INTERVAL);
 });

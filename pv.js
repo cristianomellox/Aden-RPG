@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js'
 // >>> ADEN GLOBAL DB (Zero Egress Auth & Player) <<<
 // =========================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 3;
+const GLOBAL_DB_VERSION = 6;
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 
@@ -79,10 +79,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const systemMessageContent = document.getElementById('systemMessageContent');
     const systemMessageDate = document.getElementById('systemMessageDate');
 
-    // Referência ao Botão da Aba Sistema (para o dot local)
+    // Referência ao Botão da Aba Sistema
     const pvSystemTabBtn = document.querySelector('.pv-tab-btn[data-tab="pv-system"]');
 
-    // Lógica do Modal de Confirmação (Não alterado)
+    // Modal de Confirmação
     const confirmModal = document.getElementById('confirmModal');
     const confirmModalMessage = document.getElementById('pvConfirmModalMessage');
     let confirmModalConfirmBtn = document.getElementById('confirmModalConfirmBtn');
@@ -114,7 +114,6 @@ document.addEventListener("DOMContentLoaded", () => {
         confirmModal.addEventListener('click', (event) => { if (event.target === confirmModal) closeConfirmModal(); });
     }
 
-    // --- FUNÇÕES DO MODAL DE MENSAGEM DO SISTEMA ---
     function showSystemMessageModal(title, content, date) {
         if (!systemMessageModal) return;
         systemMessageTitle.textContent = title;
@@ -132,10 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     
-    // Event listeners do Modal de Mensagem do Sistema
-    if (closeSystemMessageModalBtn) {
-        closeSystemMessageModalBtn.onclick = closeSystemMessageModal;
-    }
+    if (closeSystemMessageModalBtn) closeSystemMessageModalBtn.onclick = closeSystemMessageModal;
     if (systemMessageModal) {
         systemMessageModal.addEventListener('click', (event) => {
             if (event.target === systemMessageModal) closeSystemMessageModal();
@@ -148,40 +144,87 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentPlayer = null;
     let currentOpenConversationId = null;
     
-    // --- CACHE DE JOGADORES ---
-    const playerCache = new Map(); 
+    // --- CACHE DE JOGADORES (PERSISTENTE) ---
+    // Alteração: Carregamos do localStorage ao iniciar
+    let playerCache = new Map(); 
+
+    function loadNameCache() {
+        try {
+            const raw = localStorage.getItem('pv_player_names_cache');
+            if (raw) {
+                const arr = JSON.parse(raw);
+                playerCache = new Map(arr);
+            }
+        } catch (e) { playerCache = new Map(); }
+    }
+
+    function saveNameCache() {
+        try {
+            // Salva como array de entradas [id, nome]
+            const arr = Array.from(playerCache.entries());
+            localStorage.setItem('pv_player_names_cache', JSON.stringify(arr));
+        } catch(e) {}
+    }
 
     // ----------------------------------------------------
     // FUNÇÕES DE MENSAGEM DE SISTEMA 
     // ----------------------------------------------------
 
-    async function fetchAndRenderSystemMessages({ markAsRead = false } = {}) {
+    async function fetchAndRenderSystemMessages({ markAsRead = false, forceRefresh = false } = {}) {
         if (!currentPlayer || !systemMessagesListDiv) return;
 
-        // 1. Busca a ID da última mensagem de sistema lida por este jogador
-        const lastReadId = parseInt(localStorage.getItem(`pv_system_last_read_${currentPlayer.id}`) || '0');
-        let highestId = lastReadId;
+        // --- OTIMIZAÇÃO: TTL (Time To Live) ---
+        // Se não for 'markAsRead' e não for 'forceRefresh', verifica se já baixamos recentemente
+        const SYS_CACHE_KEY = `pv_sys_msg_data_${currentPlayer.id}`;
+        const SYS_TIME_KEY = `pv_sys_msg_time_${currentPlayer.id}`;
+        const TTL = 24 * 60 * 60 * 1000; // 15 Minutos de Cache para Sistema
 
-        systemMessagesListDiv.innerHTML = '<p>Carregando mensagens do sistema...</p>';
+        const now = Date.now();
+        const lastFetch = parseInt(localStorage.getItem(SYS_TIME_KEY) || '0');
 
-        // Busca title, preview (LEVE) e created_at. Content (PESADO) é baixado apenas no clique.
-        const { data: dbMessages, error: msgError } = await supabaseClient
-            .from('system_messages')
-            .select('id, title, preview, created_at') 
-            .or(`target_player_id.is.null,target_player_id.eq.${currentPlayer.id}`)
-            .order('created_at', { ascending: false }); 
-        
-        if (msgError) {
-            console.error("Erro ao buscar mensagens do sistema:", msgError);
-            systemMessagesListDiv.innerHTML = '<p>Erro ao carregar mensagens do sistema.</p>';
-            return;
+        let dbMessages = null;
+
+        // Se cache válido e não estamos forçando update (abrindo a aba ou marcando lido)
+        if (!forceRefresh && !markAsRead && (now - lastFetch < TTL)) {
+            try {
+                const cached = localStorage.getItem(SYS_CACHE_KEY);
+                if (cached) {
+                    console.log("⚡ [PV System] Usando cache local (TTL válido).");
+                    dbMessages = JSON.parse(cached);
+                }
+            } catch(e){}
         }
 
-        if (dbMessages.length === 0) {
+        if (!dbMessages) {
+             console.log("🌐 [PV System] Buscando mensagens no servidor...");
+             systemMessagesListDiv.innerHTML = '<p>Carregando mensagens do sistema...</p>';
+             
+             const { data, error } = await supabaseClient
+                .from('system_messages')
+                .select('id, title, preview, created_at') 
+                .or(`target_player_id.is.null,target_player_id.eq.${currentPlayer.id}`)
+                .order('created_at', { ascending: false }); 
+            
+            if (error) {
+                console.error("Erro ao buscar mensagens do sistema:", error);
+                systemMessagesListDiv.innerHTML = '<p>Erro ao carregar.</p>';
+                return;
+            }
+            dbMessages = data;
+            
+            // Salva cache
+            localStorage.setItem(SYS_CACHE_KEY, JSON.stringify(dbMessages));
+            localStorage.setItem(SYS_TIME_KEY, now.toString());
+        }
+
+        if (!dbMessages || dbMessages.length === 0) {
             systemMessagesListDiv.innerHTML = '<p>Nenhuma mensagem do sistema.</p>';
             checkUnreadStatus(); 
             return;
         }
+
+        const lastReadId = parseInt(localStorage.getItem(`pv_system_last_read_${currentPlayer.id}`) || '0');
+        let highestId = lastReadId;
 
         localSystemMessages = new Map();
         systemMessagesListDiv.innerHTML = '';
@@ -195,15 +238,12 @@ document.addEventListener("DOMContentLoaded", () => {
             msgDiv.className = 'system-message-item conversation-item';
             
             const numericId = parseInt(msg.id);
-
-            // 2. Verifica se a mensagem é nova
             let isUnread = numericId > lastReadId;
             if (isUnread) {
                 msgDiv.classList.add('unread');
                 hasUnreadSystem = true;
             }
 
-            // 3. Atualiza a ID mais alta encontrada
             if (numericId > highestId) {
                 highestId = numericId;
             }
@@ -211,16 +251,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const sentDate = new Date(msg.created_at);
             const formattedDate = `${sentDate.toLocaleDateString()} ${sentDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
             
-            // Renderiza o TÍTULO e a PRÉVIA
             msgDiv.innerHTML = `
                 <p class="conversation-name">${msg.title || 'Mensagem do Sistema'}</p>
                 <p class="conversation-preview">${msg.preview || 'Clique para ler.'}</p> 
                 <small class="system-message-date">${formattedDate}</small>
             `;
             
-            // 4. Implementação da visualização completa da mensagem no MODAL com Fetch Lazy
             msgDiv.addEventListener('click', async () => {
-                 // Busca o conteúdo completo apenas agora
                  const { data: fullMsg } = await supabaseClient
                     .from('system_messages')
                     .select('content')
@@ -228,39 +265,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     .single();
 
                  if (fullMsg) {
-                     showSystemMessageModal(
-                        msg.title || 'Mensagem do Sistema',
-                        fullMsg.content,
-                        formattedDate
-                     );
+                     showSystemMessageModal(msg.title || 'Mensagem do Sistema', fullMsg.content, formattedDate);
                  }
-                 
-                 // Remove o visual de 'unread' localmente ao clicar
-                 if (isUnread) {
-                    msgDiv.classList.remove('unread');
-                    // Não salva no local storage aqui, apenas na abertura da aba.
-                 }
+                 if (isUnread) { msgDiv.classList.remove('unread'); }
             });
             
             systemMessagesListDiv.appendChild(msgDiv);
         });
 
-        // 5. Se for solicitado para marcar como lida, salva a ID mais alta
         if (markAsRead && highestId > lastReadId) {
             localStorage.setItem(`pv_system_last_read_${currentPlayer.id}`, highestId);
-            hasUnreadSystem = false; // A notificação deve ser desligada
+            hasUnreadSystem = false;
         }
 
-        // 6. Recalcula o status geral de notificação
         checkUnreadStatus(hasUnreadSystem);
     }
     
-    // Verifica o status de notificação geral (PV + Sistema)
     function checkUnreadStatus(hasUnreadSystem) {
-        // Verifica mensagens privadas (PV)
         const hasUnreadPv = [...localConversations.values()].some(c => c.is_unread && !c.is_server_deleted);
         
-        // Verifica mensagens de sistema (apenas se não foi passado no argumento)
         let systemUnread = hasUnreadSystem;
         if (systemUnread === undefined) {
              const lastReadId = parseInt(localStorage.getItem(`pv_system_last_read_${currentPlayer.id}`) || '0');
@@ -268,16 +291,11 @@ document.addEventListener("DOMContentLoaded", () => {
              systemUnread = newestMsg > lastReadId;
         }
 
-        // NOVO: Atualiza a bolinha de notificação local na aba "Sistema"
         if (pvSystemTabBtn) {
-            if (systemUnread) {
-                pvSystemTabBtn.classList.add('has-unread-system');
-            } else {
-                pvSystemTabBtn.classList.remove('has-unread-system');
-            }
+            if (systemUnread) { pvSystemTabBtn.classList.add('has-unread-system'); } 
+            else { pvSystemTabBtn.classList.remove('has-unread-system'); }
         }
 
-        // Se houver PV ou sistema não lida, mostra o dot principal
         const hasUnreadTotal = hasUnreadPv || systemUnread;
         if (pvNotificationDot) { pvNotificationDot.style.display = hasUnreadTotal ? 'block' : 'none'; }
     }
@@ -287,30 +305,42 @@ document.addEventListener("DOMContentLoaded", () => {
     // FUNÇÕES DE MENSAGEM PRIVADA (OTIMIZADA)
     // ----------------------------------------------------
 
-    async function fetchAndSyncMessages() {
+    async function fetchAndSyncMessages(forceRefresh = false) {
         if (!currentPlayer) return;
         
+        // --- OTIMIZAÇÃO: TTL para Mensagens Privadas ---
+        // Evita baixar metadados no boot se já baixou há menos de 3 minutos
+        const PV_SYNC_KEY = `pv_meta_sync_time_${currentPlayer.id}`;
+        const TTL_PV = 2 * 60 * 60 * 1000; // 3 Minutos
+        const now = Date.now();
+        const lastSync = parseInt(localStorage.getItem(PV_SYNC_KEY) || '0');
+
+        // Se não forçado e cache válido, pula o fetch e usa o que está no localConversations (memory/storage)
+        if (!forceRefresh && (now - lastSync < TTL_PV)) {
+            console.log("⚡ [PV Meta] Usando cache local (TTL válido).");
+            // Apenas renderiza o que já tem na memória (carregado via loadFromLocalStorage)
+            renderConversationList();
+            checkUnreadStatus();
+            return;
+        }
+
+        console.log("🌐 [PV Meta] Sincronizando conversas...");
+
         if (currentPlayer.id && currentPlayer.name) {
             playerCache.set(String(currentPlayer.id), currentPlayer.name);
         }
 
-        // --- LÓGICA DE LIMPEZA DIÁRIA (OTIMIZADO: 1 VEZ POR DIA) ---
         const STORAGE_KEY_CLEANUP = `aden_pv_cleanup_${currentPlayer.id}`;
         const todayStr = new Date().toISOString().split('T')[0];
         const lastCleanup = localStorage.getItem(STORAGE_KEY_CLEANUP);
 
         if (lastCleanup !== todayStr) {
-            console.log("🧹 [PV] Executando limpeza diária de mensagens antigas...");
-            // Executa sem 'await' para não travar o carregamento da interface (Fire & Forget)
+            // Executa limpeza (Fire & Forget)
             supabaseClient.rpc('cleanup_old_private_messages')
-                .then(() => {
-                    localStorage.setItem(STORAGE_KEY_CLEANUP, todayStr);
-                    // console.log("✅ [PV] Limpeza concluída.");
-                })
+                .then(() => { localStorage.setItem(STORAGE_KEY_CLEANUP, todayStr); })
                 .catch(err => console.warn("⚠️ Falha na limpeza de PV:", err));
         }
         
-        // OTIMIZAÇÃO: Busca apenas metadados, SEM a coluna 'messages'
         const { data: dbConversations, error: convoError } = await supabaseClient
             .from('private_messages')
             .select('id, player_one_id, player_two_id, last_message, last_sender_id, updated_at, unread_by_player_one, unread_by_player_two')
@@ -322,20 +352,20 @@ document.addEventListener("DOMContentLoaded", () => {
             checkUnreadStatus();
             return; 
         }
+
+        // Atualiza timestamp da sincronização
+        localStorage.setItem(PV_SYNC_KEY, now.toString());
         
         const activeConvoIds = new Set();
         const allPlayerIdsToFetch = new Set(); 
+        let namesChanged = false; // Flag para saber se precisamos salvar cache de nomes
         
         dbConversations.forEach(dbConvo => {
             const convoId = String(dbConvo.id);
             activeConvoIds.add(convoId);
 
-            // Mantém mensagens antigas do cache local, pois não vieram do servidor
             const localConvo = localConversations.get(convoId) || { messages: [] };
             
-            // Nota: Não fazemos merge de messages aqui para economizar banda. 
-            // O merge é feito apenas no openChatView.
-
             localConvo.id = convoId;
             localConvo.player_one_id = dbConvo.player_one_id;
             localConvo.player_two_id = dbConvo.player_two_id;
@@ -362,21 +392,26 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // OTIMIZAÇÃO: Filtra para não buscar o próprio jogador nem jogadores que já estão no cache
+        // OTIMIZAÇÃO CRÍTICA DE EGRESS:
+        // Filtra IDs que NÃO estão no cache persistente.
         const idsToFetch = [...allPlayerIdsToFetch].filter(id => 
             !playerCache.has(String(id)) && 
-            String(id) !== String(currentPlayer.id) // EVITA BUSCAR O PRÓPRIO NOME
+            String(id) !== String(currentPlayer.id) 
         );
 
         if (idsToFetch.length > 0) {
+             console.log(`🌐 [PV Names] Baixando ${idsToFetch.length} novos nomes...`);
              const { data: otherPlayersData, error: playersError } = await supabaseClient.from('players').select('id, name').in('id', idsToFetch);
              if (playersError) { console.error("Erro ao buscar nomes de jogadores:", playersError); }
              else {
                  otherPlayersData.forEach(player => {
                      playerCache.set(String(player.id), player.name);
                  });
+                 namesChanged = true;
              }
         }
+
+        if (namesChanged) saveNameCache(); // Persiste no LocalStorage
 
         saveToLocalStorage();
         renderConversationList();
@@ -443,8 +478,9 @@ document.addEventListener("DOMContentLoaded", () => {
         currentOpenConversationId = String(conversationId);
         let convo = localConversations.get(currentOpenConversationId);
         
+        // Se forçar abrir chat, força sync (pode ser que a mensagem seja nova e não esteja no cache)
         if (!convo) {
-            await fetchAndSyncMessages(); 
+            await fetchAndSyncMessages(true); // Força refresh se não achou
             convo = localConversations.get(currentOpenConversationId);
             if (!convo) { showFloatingMessage("Não foi possível carregar a conversa."); return; }
         }
@@ -458,7 +494,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         chatWithName.textContent = finalPlayerName;
 
-        // OTIMIZAÇÃO: Busca o histórico pesado (messages) SOMENTE AQUI
         if (!convo.is_server_deleted) {
             const { data: msgData } = await supabaseClient
                 .from('private_messages')
@@ -467,19 +502,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 .single();
 
             if (msgData && msgData.messages) {
-                // Mescla mensagens novas com locais
                 const existingMessageTimestamps = new Set(convo.messages.map(m => m.timestamp));
                 msgData.messages.forEach(dbMsg => { 
                     if (!existingMessageTimestamps.has(dbMsg.timestamp)) { convo.messages.push(dbMsg); } 
                 });
                 
-                // Salva o histórico atualizado no cache local
                 localConversations.set(currentOpenConversationId, convo);
                 saveToLocalStorage();
             }
         }
         
-        // CORREÇÃO: Mantém o ícone, altera apenas o atributo title (tooltip)
         if (deleteConvoBtn) {
             deleteConvoBtn.style.display = 'block';
             if (convo.is_server_deleted) {
@@ -517,7 +549,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-
         conversationListDiv.style.display = 'none';
         chatViewDiv.style.display = 'flex';
         renderChatMessages(convo);
@@ -538,83 +569,60 @@ document.addEventListener("DOMContentLoaded", () => {
         chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
     }
 
-
-    // --- INICIALIZAÇÃO E EVENT LISTENERS ---
-
     async function initializePV() {
-        if (!supabaseClient) {
-            console.error("Supabase client não encontrado. O sistema de PV não funcionará.");
-            return;
-        }
+        if (!supabaseClient) return;
         
         loadFromLocalStorage();
+        loadNameCache(); // Carrega nomes da memória persistente
 
-        // 🔐 OTIMIZAÇÃO AUTH ZERO EGRESS: Aguardar o script.js carregar primeiro!
-        // NÃO fazemos fallback para rede aqui. Se script.js não carregou o player, PV espera.
-        
         const waitForPlayer = async () => {
-            // 1. Verifica memória RAM (mais rápido)
             if (window.currentPlayerData && window.currentPlayerData.id) {
                 return { id: window.currentPlayerData.id, name: window.currentPlayerData.name };
             }
-            
-            // 2. Verifica Cache Legacy (rápido)
             try {
                 const legacyCache = JSON.parse(localStorage.getItem('player_data_cache'));
                 if (legacyCache && legacyCache.data && legacyCache.data.id) {
                     return { id: legacyCache.data.id, name: legacyCache.data.name };
                 }
             } catch(e) {}
-
-            // 3. Verifica GlobalDB (IndexedDB)
             const globalPlayer = await GlobalDB.getPlayer();
             if (globalPlayer && globalPlayer.id) {
                 return { id: globalPlayer.id, name: globalPlayer.name };
             }
-
             return null;
         };
 
         currentPlayer = await waitForPlayer();
 
-        // Se ainda não temos player, entramos em modo de espera ativo pelo evento ou polling
         if (!currentPlayer) {
-            console.log("⏳ [PV] Aguardando script.js carregar jogador...");
-            
             await new Promise((resolve) => {
-                // Listener para o evento do script.js
                 const onPlayerReady = (e) => {
                     if (e.detail) {
                         currentPlayer = { id: e.detail.id, name: e.detail.name };
-                        // console.log("✅ [PV] Jogador recebido via evento.");
                         resolve();
                     }
                 };
                 window.addEventListener('aden_player_ready', onPlayerReady, { once: true });
-
-                // Polling de segurança (caso o evento já tenha disparado antes do listener)
                 const checkInterval = setInterval(async () => {
                     const p = await waitForPlayer();
                     if (p) {
                         currentPlayer = p;
-                        // console.log("✅ [PV] Jogador detectado via polling.");
                         window.removeEventListener('aden_player_ready', onPlayerReady);
                         clearInterval(checkInterval);
                         resolve();
                     }
-                }, 500); // Checa a cada 500ms
+                }, 500); 
             });
         }
 
-        if (!currentPlayer) return; // Segurança extra
+        if (!currentPlayer) return;
         
-        // 1. Sincroniza mensagens privadas (apenas metadata e executa limpeza se necessário)
+        // 1. Sincroniza mensagens privadas (COM TTL AGORA)
         await fetchAndSyncMessages();
-        // 2. Sincroniza mensagens de sistema (sem marcar como lida e sem content pesado)
+        // 2. Sincroniza mensagens de sistema (COM TTL AGORA)
         await fetchAndRenderSystemMessages({ markAsRead: false }); 
 
         setupEventListeners();
-        // 3. Verifica o status final
         checkUnreadStatus();
     }
 
@@ -631,16 +639,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 pvSystemContent.style.display = (tab.dataset.tab === 'pv-system') ? 'block' : 'none';
 
                 if (tab.dataset.tab === 'pv-system') {
-                    // Ao abrir a aba SISTEMA, marca como lida e atualiza a lista e o dot.
-                    fetchAndRenderSystemMessages({ markAsRead: true }); 
+                    // Força refresh apenas se abrir a aba e estiver velho demais, ou se for lógica de marcar lido
+                    // Aqui chamamos markAsRead=true que vai forçar atualização do ponteiro de leitura local
+                    fetchAndRenderSystemMessages({ markAsRead: true, forceRefresh: true }); 
                 } else if (tab.dataset.tab === 'pv-messages') {
-                    // Garante que o dot é atualizado quando volta para o PV
-                    checkUnreadStatus();
+                    // Quando volta para aba PV, força sync para garantir novas mensagens?
+                    // Melhor não forçar para economizar, só faz o check visual
+                    fetchAndSyncMessages(true); // Se o usuário clicou na aba, ele QUER ver novidades.
                 }
             });
         });
 
-        // Botão Voltar (Mensagens Privadas)
         if (backToListBtn) { backToListBtn.onclick = () => { chatViewDiv.style.display = 'none'; conversationListDiv.style.display = 'flex'; currentOpenConversationId = null; }; }
         
         const handleSendMessage = async () => {
@@ -667,39 +676,31 @@ document.addEventListener("DOMContentLoaded", () => {
                 chatInput.disabled = false;
             } else {
                 chatInput.value = '';
-                await fetchAndSyncMessages();
+                await fetchAndSyncMessages(true); // Força sync após enviar
                 
-                // Após enviar, precisamos atualizar o chat view manualmente pois o fetchAndSync não traz 'messages'
                 const currentConvo = localConversations.get(currentOpenConversationId);
-                
-                // Força refresh das mensagens no chat aberto
                 if (currentConvo) {
-                    // Simula abertura para puxar novas mensagens
                     await openChatView(currentOpenConversationId);
-                    
                     chatInput.placeholder = 'Aguardando resposta...';
                     sendMessageBtn.style.filter = 'grayscale(1)';
                 } else {
                    backToListBtn.click();
                 }
                 
-                sendMessageBtn.style.pointerEvents = 'auto'; // Restaura
+                sendMessageBtn.style.pointerEvents = 'auto';
             }
         };
         
-
         if (sendMessageBtn) { sendMessageBtn.onclick = handleSendMessage; }
         if (chatInput) { chatInput.onkeydown = (e) => { if (e.key === 'Enter' && !chatInput.disabled) { handleSendMessage(); } }; }
 
         if (deleteConvoBtn) {
             deleteConvoBtn.onclick = () => {
                 if (!currentOpenConversationId) return;
-                
                 const convo = localConversations.get(currentOpenConversationId);
-                // Mensagem de confirmação que varia dinamicamente
                 const message = convo && convo.is_server_deleted 
                     ? "Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local."
-                    : "Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você. A conversa ainda existirá para a outra pessoa, caso ela não a tenha apagado.";
+                    : "Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.";
 
                 showConfirmModal(message, () => { 
                     localConversations.delete(currentOpenConversationId);
@@ -712,10 +713,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     
-    // --- PONTO DE PARTIDA ---
     window.pvInitializationPromise = new Promise(async (resolve) => {
         await initializePV();
-        console.log("[pv.js] Promise de inicialização resolvida.");
         resolve();
     });
 });

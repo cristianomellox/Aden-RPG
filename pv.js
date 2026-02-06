@@ -362,7 +362,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        const idsToFetch = [...allPlayerIdsToFetch].filter(id => !playerCache.has(String(id)) && String(id) !== String(currentPlayer.id));
+        // OTIMIZAÇÃO: Filtra para não buscar o próprio jogador nem jogadores que já estão no cache
+        const idsToFetch = [...allPlayerIdsToFetch].filter(id => 
+            !playerCache.has(String(id)) && 
+            String(id) !== String(currentPlayer.id) // EVITA BUSCAR O PRÓPRIO NOME
+        );
+
         if (idsToFetch.length > 0) {
              const { data: otherPlayersData, error: playersError } = await supabaseClient.from('players').select('id, name').in('id', idsToFetch);
              if (playersError) { console.error("Erro ao buscar nomes de jogadores:", playersError); }

@@ -1514,7 +1514,7 @@ async function checkAuthStatus() {
         await GlobalDB.setAuth(session);
         
         // Busca dados
-        fetchAndDisplayPlayerInfo(false); 
+        fetchAndDisplayPlayerInfo(true); 
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
         handleUrlActions();

@@ -1,4 +1,3 @@
-
 // Registro do Service Worker Otimizado
 if ('serviceWorker' in navigator) {
     const registerSW = () => {
@@ -822,6 +821,9 @@ let currentPlayerData = null; // Armazena todos os dados do jogador (com bônus)
 window.isPlayerLoading = false;
 window.initialLoadDone = false;
 
+// Configuração do Cache de Player (15 Minutos)
+const PLAYER_CACHE_DURATION = 15 * 60 * 1000; 
+
 // Definições das Missões de Progressão (Client-side para UI)
 const mission_definitions = {
     level: [
@@ -1193,11 +1195,17 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
     window.isPlayerLoading = true;
 
     try {
+        // [ALTERAÇÃO] Verificação de tempo do Cache
+        const now = Date.now();
+        const lastFetch = parseInt(localStorage.getItem('aden_player_last_fetch_ts') || '0');
+        const isCacheValid = (now - lastFetch) < PLAYER_CACHE_DURATION;
+
         // 1. OTIMIZAÇÃO: Tenta carregar do GlobalDB primeiro
-        if (!forceRefresh) {
+        // Só usa cache se não for forçado E se o cache estiver no prazo
+        if (!forceRefresh && isCacheValid) {
             const cachedPlayer = await GlobalDB.getPlayer();
             if (cachedPlayer) {
-                console.log("⚡ [PlayerInfo] Usando dados do IndexedDB Global.");
+                console.log(`⚡ [PlayerInfo] Cache válido (${Math.floor((now - lastFetch)/60000)}m). Usando dados locais.`);
                 currentPlayerData = cachedPlayer;
                 currentPlayerId = cachedPlayer.id;
                 renderPlayerUI(cachedPlayer, preserveActiveContainer);
@@ -1212,6 +1220,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         }
 
         // 2. Se não tiver no DB, busca do Supabase
+        console.log("🌐 [PlayerInfo] Buscando dados novos no Supabase...");
         let userId = currentPlayerId;
         if (!userId) {
             const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1314,6 +1323,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
         // Armazena e Renderiza
         currentPlayerData = player;
+        localStorage.setItem('aden_player_last_fetch_ts', now.toString()); // Marca a hora do fetch
         
         // Salva no DB Global e Cache Legacy
         await GlobalDB.setPlayer(player);
@@ -1495,8 +1505,8 @@ async function checkAuthStatus() {
          currentPlayerId = cachedAuth.value.user.id;
          window.authCheckComplete = true;
 
-         // Carrega jogador via DB ou rede se necessário
-         await fetchAndDisplayPlayerInfo();
+         // Carrega jogador via DB ou rede se necessário (FALSE para respeitar cache)
+         await fetchAndDisplayPlayerInfo(false);
          
          if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
          handleUrlActions();
@@ -1513,8 +1523,8 @@ async function checkAuthStatus() {
         // Salva no Global DB para a próxima vez ser Zero Egress
         await GlobalDB.setAuth(session);
         
-        // Busca dados
-        fetchAndDisplayPlayerInfo(true); 
+        // Busca dados (FALSE para respeitar cache)
+        fetchAndDisplayPlayerInfo(false); 
         
         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
         handleUrlActions();

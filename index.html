@@ -153,7 +153,7 @@
 
 <div class="upload-container">
     <label for="avatarFileInput" class="custom-file-upload">
-        <img src="https://aden-rpg.pages.dev/assets/iniciar.webp" style="width:20px; vertical-align:middle; margin-right:5px;"> 
+        <img src="https://aden-rpg.pages.dev/assets/promover.webp" style="width:20px; vertical-align:middle; margin-right:5px;"> 
         Escolher Arquivo
     </label>
     <input id="avatarFileInput" type="file" accept="image/*" style="display:none;"/>
@@ -831,116 +831,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
 });
-</script>
-
-
-<script type="module">
-  import { supabase } from './supabaseClient.js'
-
-// =========================================================
-// >>> ADEN GLOBAL DB (Zero Egress Auth) <<<
-// =========================================================
-const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 1;
-const AUTH_STORE = 'auth_store';
-
-const GlobalDB = {
-    open: function() {
-        return new Promise((resolve, reject) => {
-            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-    },
-    getAuth: async function() {
-        try {
-            const db = await this.open();
-            return new Promise((resolve) => {
-                const tx = db.transaction(AUTH_STORE, 'readonly');
-                const req = tx.objectStore(AUTH_STORE).get('current_session');
-                req.onsuccess = () => resolve(req.result ? req.result.value : null);
-                req.onerror = () => resolve(null);
-            });
-        } catch(e) { return null; }
-    }
-};
-// =========================================================
-
-document.addEventListener("DOMContentLoaded", async () => {
-
-  let session = null
-  let userId = null
-
-  // 🔐 Auth seguro e otimizado (Zero Egress)
-  try {
-    // 1. Tenta recuperar sessão do GlobalDB primeiro
-    const globalAuth = await GlobalDB.getAuth();
-    if (globalAuth && globalAuth.user) {
-        userId = globalAuth.user.id;
-        console.log("⚡ [BanCheck] ID recuperado do GlobalDB (Zero Egress).");
-    } else {
-        // 2. Fallback para Supabase padrão (Rede)
-        const { data: sessionData } = await supabase.auth.getSession()
-        session = sessionData?.session
-
-        if (!session?.user) {
-          const { data: refreshData } = await supabase.auth.refreshSession()
-          session = refreshData?.session
-        }
-
-        if (!session?.user) {
-          // Usuário não logado → não verifica ban
-          return
-        }
-        userId = session.user.id
-    }
-
-  } catch (e) {
-    console.error("Erro ao obter sessão:", e)
-    return
-  }
-
-  // 🔍 Verificação de banimento
-  try {
-    const { data, error } = await supabase
-      .from('players')
-      .select('is_banned, ban_reason')
-      .eq('id', userId)
-      .single()
-
-    if (error) {
-      console.error("Erro ao verificar banimento:", error)
-      return
-    }
-
-    if (data?.is_banned === true) {
-      console.warn(`Usuário ${userId} está banido.`)
-
-      const banModal = document.getElementById('banModalOverlay')
-      const banReasonContent = document.getElementById('banReasonContent')
-      const logoutBanBtn = document.getElementById('logoutBanBtn')
-
-      if (!banModal || !banReasonContent || !logoutBanBtn) {
-        window.location.href = "index.html?logout=true"
-        return
-      }
-
-      banReasonContent.innerText =
-        data.ban_reason || "Motivo não especificado. Entre em contato com o suporte."
-
-      banModal.style.display = 'flex'
-      document.body.style.overflow = 'hidden'
-
-      logoutBanBtn.onclick = async () => {
-        await supabase.auth.signOut()
-        window.location.href = "index.html?logout=true"
-      }
-    }
-
-  } catch (e) {
-    console.error("Erro geral no check de banimento:", e)
-  }
-})
 </script>
 
  <div id="google_translate_element"></div>

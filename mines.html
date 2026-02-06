@@ -7,7 +7,7 @@
 <meta name="googlebot" content="noindex, nofollow">
     <title>Minas de Cristal - Aden RPG</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="maintenance.js"></script>
+    <script src="maintenance2.js"></script>
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="mines.css" />
     <style>
@@ -268,96 +268,6 @@
         });
     </script>
    
-
-<div id="banModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.95); color: white; z-index: 10000; justify-content: center; align-items: center; text-align: center; flex-direction: column;">
-    <div style="background: #2b2b2b; padding: 30px; border-radius: 15px; box-shadow: 0 0 25px rgba(255, 69, 0, 0.8); max-width: 90%; width: 400px; border: 3px solid #ff4500;">
-        <img src="https://aden-rpg.pages.dev/assets/expulsar.webp" alt="Aviso" style="width: 80px; height: 80px; margin-bottom: 10px;">
-        <h2 style="color: #ff4500; font-size: 1.8em; margin-bottom: 20px;">Você foi banido(a)!</h2>
-        
-        <p style="text-align: left; margin-bottom: 25px;">
-            <strong>Motivo:</strong><br>
-            <span id="banReasonContent" style="color: #ffd700; display: block; margin-top: 5px; padding: 10px; border: 1px dashed #444; white-space: pre-wrap;">[Carregando Motivo...]</span>
-        </p>
-
-        <button id="logoutBanBtn" style="background: linear-gradient(to top, #ff4500, #ff8c00); color: white; padding: 12px 25px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: background 0.2s;">
-            Fechar
-        </button>
-    </div>
-</div>
-
-<script type="module">
-import { supabase } from './supabaseClient.js'
-
-document.addEventListener("DOMContentLoaded", async () => {
-
-  let session = null
-  let userId = null
-
-  // 🔐 Auth seguro (igual AFK)
-  try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    session = sessionData?.session
-
-    if (!session?.user) {
-      const { data: refreshData } = await supabase.auth.refreshSession()
-      session = refreshData?.session
-    }
-
-    if (!session?.user) {
-      // Usuário não logado → não verifica ban
-      return
-    }
-
-    userId = session.user.id
-  } catch (e) {
-    console.error("Erro ao obter sessão:", e)
-    return
-  }
-
-  // 🔍 Verificação de banimento
-  try {
-    const { data, error } = await supabase
-      .from('players')
-      .select('is_banned, ban_reason')
-      .eq('id', userId)
-      .single()
-
-    if (error) {
-      console.error("Erro ao verificar banimento:", error)
-      return
-    }
-
-    if (data?.is_banned === true) {
-      console.warn(`Usuário ${userId} está banido.`)
-
-      const banModal = document.getElementById('banModalOverlay')
-      const banReasonContent = document.getElementById('banReasonContent')
-      const logoutBanBtn = document.getElementById('logoutBanBtn')
-
-      if (!banModal || !banReasonContent || !logoutBanBtn) {
-        window.location.href = "index.html?logout=true"
-        return
-      }
-
-      banReasonContent.innerText =
-        data.ban_reason || "Motivo não especificado. Entre em contato com o suporte."
-
-      banModal.style.display = 'flex'
-      document.body.style.overflow = 'hidden'
-
-      logoutBanBtn.onclick = async () => {
-        await supabase.auth.signOut()
-        window.location.href = "index.html?logout=true"
-      }
-    }
-
-  } catch (e) {
-    console.error("Erro geral no check de banimento:", e)
-  }
-})
-</script>
-
-
 
 <div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 9999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
     <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">

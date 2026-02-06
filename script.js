@@ -1302,6 +1302,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         }
 
         // --- MUDANÇA CRÍTICA: Select específico para economizar dados ---
+        // INCLUÍDO 'is_banned' e 'ban_reason' para eliminar o script duplicado no index.html
         const columnsToSelect = `
             id, 
             name, 
@@ -1320,6 +1321,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
             last_afk_start_time,
             guild_id,
             rank,
+            is_banned,
+            ban_reason,
             daily_rewards_log 
         `;
 
@@ -1332,6 +1335,26 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         if (playerError || !player) {
             console.error("Erro ao buscar jogador:", playerError);
             return;
+        }
+
+        // --- LÓGICA DE BANIMENTO INTEGRADA (Economiza 1 requisição) ---
+        if (player.is_banned === true) {
+            console.warn(`Usuário ${userId} está banido.`);
+            const banModal = document.getElementById('banModalOverlay');
+            const banReasonContent = document.getElementById('banReasonContent');
+            const logoutBanBtn = document.getElementById('logoutBanBtn');
+
+            if (banModal && banReasonContent && logoutBanBtn) {
+                banReasonContent.innerText = player.ban_reason || "Motivo não especificado.";
+                banModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+
+                logoutBanBtn.onclick = async () => {
+                    await signOut();
+                };
+                // Interrompe o carregamento do jogo
+                return; 
+            }
         }
 
         // --- LÓGICA DE CP NO SERVIDOR (OTIMIZADO: 1 VEZ POR DIA) ---

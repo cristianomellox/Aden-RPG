@@ -258,10 +258,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   let knownParticipantCount = 0;     
   
   const BATCH_THRESHOLD_MULTI = 5;   
-  const BATCH_THRESHOLD_SOLO = 10;   
+  const BATCH_THRESHOLD_SOLO = 5;   
   
   const DEBOUNCE_TIME_MULTI = 10000;  
-  const DEBOUNCE_TIME_SOLO = 60000;  
+  const DEBOUNCE_TIME_SOLO = 300000;  
   
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; 
   
@@ -1533,7 +1533,7 @@ function formatTimeCombat(totalSeconds) {
     const debounceTime = (knownParticipantCount <= 1) ? DEBOUNCE_TIME_SOLO : DEBOUNCE_TIME_MULTI;
     const threshold = (knownParticipantCount <= 1) ? BATCH_THRESHOLD_SOLO : BATCH_THRESHOLD_MULTI;
 
-    if (pendingBatch >= threshold || currentMonsterHealthGlobal <= 0 || localAttacksLeft === 0) {
+    if (pendingBatch >= threshold || currentMonsterHealthGlobal <= 0) {
         await processAttackQueue();
     } else {
         const flushTime = Date.now() + debounceTime;

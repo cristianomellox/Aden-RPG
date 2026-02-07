@@ -482,19 +482,26 @@ Você tem 5 tentativas diárias para iniciar aventura, que são resetadas às 21
     <button id="confirm-btn" class="btn">Confirmar</button>
   </div>
   <div id="adventure-options-modal" class="modal" style="display: none;">
-  <div class="modal-content" style="max-width: 400px;">
-    <h2>Escolha sua Batalha</h2>
-    <p>Use uma tentativa diária para:</p>
+  <div id="adventure-options-content">
+    <h3>Escolha sua Estratégia</h3>
     
-    <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
-      <button id="btn-farm-previous" class="btn" style="font-size: 1.2em;">
-        Farmar Estágio <span id="farm-stage-number">--</span>
-      </button>
-
-      <button id="btn-challenge-current" class="btn" style="font-size: 1.2em;">
-        Desafiar Estágio <span id="challenge-stage-number">--</span> 
-      </button>
+    <div class="strategy-box" style="border: 1px solid #4ade80; padding: 10px; margin-bottom: 10px; border-radius: 8px;">
+        <h4 style="color: #4ade80; margin: 0;">✨ Farmar (Estágio Anterior)</h4>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button style="display: none;" id="btn-farm-1" class="btn">1x (Teste)</button>
+            <button id="btn-farm-all" class="btn" style="background-color: #2ecc71;">Iniciar (<span id="lbl-attempts-farm">0</span>)</button>
+        </div>
     </div>
+
+    <div class="strategy-box" style="border: 1px solid #e74c3c; padding: 10px; margin-bottom: 10px; border-radius: 8px;">
+        <h4 style="color: #e74c3c; margin: 0;">⚔️ Desafiar (Avançar)</h4>
+        <p style="font-size: 0.8em; color: #aaa;">Para automaticamente se perder.</p>
+        <div style="display: flex; gap: 10px; margin-top: 5px;">
+            <button style="display: none;" id="btn-push-1" class="btn">1x (Teste)</button>
+            <button id="btn-push-all" class="btn" style="background-color: #c0392b;">Iniciar (<span id="lbl-attempts-push">0</span>)</button>
+        </div>
+    </div>
+</div>
 
     <button id="close-adventure-options" class="btn" style="margin-top: 20px; background: transparent; border: 1px solid #555;">Cancelar</button>
   </div>

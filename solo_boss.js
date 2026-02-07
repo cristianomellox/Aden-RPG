@@ -107,7 +107,7 @@ const AUDIO_HIT = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
 const AUDIO_CRIT = new Audio("https://aden-rpg.pages.dev/assets/critical_hit.mp3");
 
 // Áudio de fundo
-const AUDIO_BGM = new Audio("https://aden-rpg.pages.dev/assets/desolation_tower.mp3"); 
+const AUDIO_BGM = new Audio("https://aden-rpg.pages.dev/assets/kar_bgm.mp3"); 
 AUDIO_BGM.loop = true;
 AUDIO_BGM.volume = 0.06;
 

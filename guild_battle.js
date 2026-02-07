@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient.js'
 // --- Configurações & Constantes ---
 const NORMAL_REGEN_MS = 3600 * 1000; // 1 Hora (Fase Normal)
 const FAST_REGEN_MS = 60 * 1000;     // 1 Minuto (Fase Final - 20 min)
-const FINAL_PHASE_SECONDS = 1200;     // 20 Minutos para o fim
+const FINAL_PHASE_SECONDS = 1200;    // 20 Minutos para o fim
 const MAX_ACTIONS = 5;
 
 // --- Variáveis de Estado Global ---
@@ -13,7 +13,7 @@ let userRank = null;
 let userPlayerStats = null;
 
 let currentBattleState = null; 
-let heartbeatInterval = null;
+let heartbeatTimer = null; // Timer para polling adaptativo
 let uiTimerInterval = null;
 let selectedObjective = null;
 
@@ -175,7 +175,7 @@ function getCurrentRegenRate() {
     const end = new Date(currentBattleState.instance.end_time);
     const diffSeconds = Math.floor((end - now) / 1000);
 
-    // Se faltar menos que o limite da fase final (10 min), acelera
+    // Se faltar menos que o limite da fase final (20 min), acelera
     if (diffSeconds > 0 && diffSeconds <= FINAL_PHASE_SECONDS) {
         return FAST_REGEN_MS;
     }
@@ -1160,6 +1160,9 @@ function processHeartbeat(data) {
             
             renderAllObjectives(currentBattleState.objectives);
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
+            
+            // Re-agenda o próximo heartbeat com base no estado atual
+            scheduleNextHeartbeat();
             break;
 
         case 'finished':
@@ -1192,14 +1195,45 @@ async function pollDamageRanking() {
     renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
 }
 
+// Lógica de Heartbeat Adaptativo para economizar Egress
+function getAdaptivePollingDelay() {
+    if (!currentBattleState || !currentBattleState.objectives) return 60000;
+    
+    // Verifica se algum objetivo tem menos de 30% de HP total
+    const isCritical = currentBattleState.objectives.some(obj => {
+        const totalHp = (obj.base_hp || 0) + (obj.garrison_hp || 0);
+        const currentHp = (obj.current_hp || 0) + (obj.garrison_hp || 0);
+        // Evita divisão por zero e checa 30%
+        return totalHp > 0 && (currentHp / totalHp) <= 0.30;
+    });
+
+    if (isCritical) {
+        return 20000; // 20 segundos se crítico
+    }
+    return 60000; // 60 segundos padrão (economiza egress)
+}
+
+function scheduleNextHeartbeat() {
+    // Cancela timer anterior se houver
+    if (heartbeatTimer) clearTimeout(heartbeatTimer);
+    
+    const delay = getAdaptivePollingDelay();
+    console.log(`[Heartbeat] Agendando próximo poll em ${delay/1000}s`);
+    
+    heartbeatTimer = setTimeout(() => {
+        pollHeartbeatState();
+    }, delay);
+}
+
 function startHeartbeatPolling() {
     stopHeartbeatPolling(); 
-    heartbeatInterval = setInterval(pollHeartbeatState, 20000);
+    // Inicia o ciclo imediatamente
+    pollHeartbeatState();
 }
 
 function stopHeartbeatPolling() {
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = null;
+    if (heartbeatTimer) clearTimeout(heartbeatTimer);
+    heartbeatTimer = null;
 }
 
 function startDamagePolling() {
@@ -1276,9 +1310,9 @@ function startGlobalUITimer() {
                  timerEl.style.webkitBackgroundClip = "text";
                  timerEl.style.webkitTextFillColor = "transparent";
 
-                 // Ativa Polling Agressivo se ainda não estiver ativo
-                 if (timeLeft > 0 && !heartbeatInterval) {
-                     console.log("Fase final da batalha (10min): Iniciando polling agressivo.");
+                 // Ativa Polling se ainda não estiver ativo
+                 if (timeLeft > 0 && !heartbeatTimer) {
+                     console.log("Fase final da batalha (20min): Iniciando polling adaptativo.");
                      startHeartbeatPolling();
                      startDamagePolling();
                  }
@@ -1495,6 +1529,16 @@ async function init() {
                         objectiveEl.classList.add('shake-animation');
                         setTimeout(() => objectiveEl.classList.remove('shake-animation'), 900);
                     }
+                    
+                    // Se o HP cair abaixo de 30% devido a esse ataque local, 
+                    // e estivermos na fase final, garante que o próximo polling seja rápido.
+                    if (heartbeatTimer) {
+                         const maxTotal = (targetObj.base_hp || 0) + (targetObj.garrison_hp || 0); // Aproximação, base_hp é fixo
+                         const currentTotal = targetObj.current_hp + targetObj.garrison_hp;
+                         if (maxTotal > 0 && (currentTotal / maxTotal) <= 0.30) {
+                             scheduleNextHeartbeat(); // Recalcula delay imediatamente
+                         }
+                    }
                 }
                 
                 // Se saiu da guarnição, atualiza estado
@@ -1642,6 +1686,19 @@ async function init() {
     if (battle.rankingBtn) {
         battle.rankingBtn.onclick = () => {
             unlockBattleAudio(); 
+            
+            // Verificação de Fase Final para exibir Ranking
+            if (currentBattleState && currentBattleState.instance && currentBattleState.instance.end_time) {
+                const now = new Date();
+                const end = new Date(currentBattleState.instance.end_time);
+                const secondsLeft = Math.floor((end - now) / 1000);
+
+                if (secondsLeft > FINAL_PHASE_SECONDS) {
+                    showAlert("⚔️ Nevoeiro de Guerra ⚔️\n\nOs rankings estão ocultos estrategicamente.\nEles serão revelados apenas nos últimos 20 minutos de batalha!");
+                    return;
+                }
+            }
+
             modals.ranking.style.display = 'flex';
             document.querySelectorAll('.ranking-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const defaultTabBtn = modals.ranking.querySelector('.tab-btn[data-tab="guilds"]');

@@ -31,6 +31,12 @@ let currentUser = null;
 let currentCityData = []; 
 let activeEdit = null; 
 
+// --- Configuração do DB Global (Para Invalidação de Cache) ---
+const GLOBAL_DB_NAME = 'aden_global_db';
+const GLOBAL_DB_VERSION = 6; // Mesma versão usada no mines.js e script.js
+const OWNERS_STORE = 'owners_store';
+const PLAYER_STORE = 'player_store';
+
 // --- Função Auxiliar: Próxima Meia-Noite UTC ---
 function getNextMidnightUTC() {
     const now = new Date();
@@ -40,10 +46,57 @@ function getNextMidnightUTC() {
     return next.getTime();
 }
 
+// --- Função: Invalidação Cirúrgica de Cache ---
+// Remove o jogador do owners_store para forçar recarregamento na página de minas
+function invalidateGlobalOwnerCache(playerIds) {
+    if (!playerIds) return;
+    const ids = Array.isArray(playerIds) ? playerIds : [playerIds];
+    
+    const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+    req.onsuccess = (e) => {
+        const db = e.target.result;
+        
+        // Transaction segura: tenta pegar owners e player (caso o próprio usuário tenha mudado)
+        const stores = [];
+        if (db.objectStoreNames.contains(OWNERS_STORE)) stores.push(OWNERS_STORE);
+        if (db.objectStoreNames.contains(PLAYER_STORE)) stores.push(PLAYER_STORE);
+        
+        if (stores.length === 0) return;
+
+        const tx = db.transaction(stores, 'readwrite');
+
+        ids.forEach(id => {
+            if (!id) return;
+            
+            // 1. Remove do cache de Donos (Mines)
+            if (stores.includes(OWNERS_STORE)) {
+                tx.objectStore(OWNERS_STORE).delete(id);
+            }
+
+            // 2. Remove do cache de Player (Se for o próprio usuário, força refresh do header)
+            if (stores.includes(PLAYER_STORE) && currentUser && currentUser.id === id) {
+                // Não deletamos a chave inteira 'player_data' pois contém preferences,
+                // mas como o script.js usa chave única, a melhor estratégia aqui é
+                // limpar o localStorage do player cache para forçar o script.js a atualizar.
+                localStorage.removeItem('player_data_cache');
+                
+                // Se quiséssemos ser mais agressivos no IndexedDB:
+                // tx.objectStore(PLAYER_STORE).delete('player_data'); 
+                // Mas deixamos o script.js lidar com isso via localStorage check.
+            }
+        });
+
+        tx.oncomplete = () => {
+            console.log(`[Cache] IDs invalidados cirurgicamente: ${ids.join(', ')}`);
+        };
+    };
+    req.onerror = (e) => console.warn("[Cache] Falha ao abrir DB para invalidação", e);
+}
+
 // --- Função Auth Local (Mantida) ---
 async function getLocalAuth() {
     return new Promise((resolve) => {
-        const req = indexedDB.open('aden_global_db', 2); 
+        const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION); 
         req.onerror = () => resolve(null);
         req.onsuccess = (e) => {
             const db = e.target.result;
@@ -400,12 +453,25 @@ btnSave.onclick = async () => {
         modalStatus.innerText = data.message;
         modalStatus.className = 'status-success';
         
-        // --- Atualiza e Trava pelo ID do Jogador ---
+        // --- ATUALIZAÇÃO CIRÚRGICA DE CACHE ---
+        const idsToInvalidate = [];
+        
+        // 1. Invalida o novo titular (ganhou emoji)
         if (data.target_id) {
+            idsToInvalidate.push(data.target_id);
+            
+            // Trava o jogador localmente
             const lockKey = `aden_lock_player_${data.target_id}`;
             const nextReset = getNextMidnightUTC();
             localStorage.setItem(lockKey, nextReset);
         }
+
+        // 2. Invalida o titular anterior (se houver, perdeu emoji)
+        if (overwriteId) {
+            idsToInvalidate.push(overwriteId);
+        }
+
+        invalidateGlobalOwnerCache(idsToInvalidate);
 
         // Fecha o modal e recarrega os dados com um leve delay
         setTimeout(async () => {
@@ -459,6 +525,10 @@ btnConfirmRemove.onclick = async () => {
     } else {
         confirmStatus.innerText = data.message;
         confirmStatus.className = 'status-success';
+
+        // --- ATUALIZAÇÃO CIRÚRGICA DE CACHE ---
+        // Invalida o jogador que perdeu o título (nome volta ao normal)
+        invalidateGlobalOwnerCache([activeEdit.currentHolderId]);
 
         // Sucesso: Fecha modal após 1s e recarrega
         setTimeout(() => {

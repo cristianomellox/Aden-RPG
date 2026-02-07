@@ -261,7 +261,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const BATCH_THRESHOLD_SOLO = 10;   
   
   const DEBOUNCE_TIME_MULTI = 10000;  
-  const DEBOUNCE_TIME_SOLO = 40000;  
+  const DEBOUNCE_TIME_SOLO = 60000;  
   
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; 
   

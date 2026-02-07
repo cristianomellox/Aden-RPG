@@ -156,17 +156,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const musicPermissionModal = document.getElementById("music-permission-modal");
     const musicPermissionBtn = document.getElementById("music-permission-btn");
     const adventureOptionsModal = document.getElementById("adventure-options-modal");
-    
-    // Botões antigos (Legacy support)
     const btnFarmPrevious = document.getElementById("btn-farm-previous");
     const btnChallengeCurrent = document.getElementById("btn-challenge-current");
-    
-    // Novos Botões Batch (se existirem no HTML)
-    const btnFarm1 = document.getElementById("btn-farm-1");
-    const btnFarmAll = document.getElementById("btn-farm-all");
-    const btnPush1 = document.getElementById("btn-push-1");
-    const btnPushAll = document.getElementById("btn-push-all");
-
     const closeAdventureOptionsBtn = document.getElementById("close-adventure-options");
     const farmStageNumberSpan = document.getElementById("farm-stage-number");
     const challengeStageNumberSpan = document.getElementById("challenge-stage-number");
@@ -178,9 +169,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     let localSimulationInterval;
     let cachedCombatStats = null; 
     let userId = null; 
-    
-    // --- ESTADO DO BATCH ---
-    let battleQueue = [];
 
     // --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
     async function getLocalUserId() {
@@ -479,209 +467,172 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // =========================================================
-    // NOVA LÓGICA: SMART BATCH ADVENTURE (LOTE INTELIGENTE)
-    // =========================================================
-    async function triggerSmartAdventure(isFarming, useAll) {
+    async function triggerAdventure(isFarming) {
         if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
-        
-        if (startAfkBtn) {
-            startAfkBtn.disabled = true;
-            startAfkBtn.textContent = useAll ? "Calculando Lote..." : "Lutando...";
-        }
-    
-        // RPC: start_afk_adventure_batch
-        const { data, error } = await supabase.rpc('start_afk_adventure_batch', { 
+
+        const { data, error } = await supabase.rpc('start_afk_adventure', { 
             p_player_id: userId,
-            p_farm_mode: isFarming,
-            p_use_all_attempts: useAll // TRUE = Usa tudo, FALSE = Usa 1
+            p_farm_mode: isFarming
         });
-    
-        if (error || !data || !data.success) {
-            console.error("Erro:", error);
-            const msg = data?.message || "Erro ao processar aventura.";
+        
+        if (error || !data || !Array.isArray(data) || data[0] !== 1) {
+            const msg = (data && data[1] === 'NO_ATTEMPTS') ? "Sem tentativas diárias!" : "Erro na aventura.";
             resultText.textContent = msg;
             resultModal.style.display = "block";
-            resetUIState();
             return;
         }
-    
-        // Atualiza estado local com dados reais do servidor
-        playerAfkData.daily_attempts_left = data.remaining_attempts;
+
+        // Mapeamento local dos dados compactos
+        const didWin = data[1] === 1;
+        const xpGained = data[2];
+        const goldGained = data[3];
+        const newLevel = data[4];
+        const hpLeft = data[5];
+        const attackLog = data[6]; 
+        const targetStage = data[7];
+
+        playerAfkData.daily_attempts_left = Math.max(0, playerAfkData.daily_attempts_left - 1);
         
-        if (data.new_level !== playerAfkData.level) {
-            playerAfkData.level = data.new_level;
-            showLevelUpBalloon(data.new_level);
+        if (didWin) {
+            playerAfkData.xp = (playerAfkData.xp || 0) + xpGained;
+            playerAfkData.gold = (playerAfkData.gold || 0) + goldGained;
+            if (!isFarming) {
+                playerAfkData.current_afk_stage = (playerAfkData.current_afk_stage || 1) + 1;
+            }
+        }
+        
+        const currentLvlStr = String(playerAfkData.level);
+        const newLvlStr = String(newLevel);
+        const leveledUp = currentLvlStr !== newLvlStr;
+
+        if (leveledUp) {
+            playerAfkData.level = newLevel;
         }
 
-        // Se venceu no modo desafio, o stage pode ter subido
-        // O servidor retorna resultados, mas não o stage atual do player explicitamente no topo.
-        // Assumimos que o reload/render cuidará ou que a animação mostrará o stage correto.
-        // O ideal é a RPC retornar 'current_afk_stage' também, mas podemos inferir ou recarregar depois.
-        
         await saveToCache(playerAfkData);
-        renderPlayerData(); // Atualiza contador na tela
-    
-        // Inicia Playback da Fila
-        battleQueue = data.results || [];
-        
-        if (battleQueue.length > 0) {
-            playNextBattleInQueue();
-        } else {
-            resetUIState();
-        }
-    }
+        renderPlayerData();
 
-    function playNextBattleInQueue() {
-        if (battleQueue.length === 0) {
-            // Acabou a fila
-            showIdleScreen();
-            resetUIState();
-            
-            // Se foi batch, mostra resumo final discreto ou modal
-            // Como já mostramos toasts durante o processo, o modal final pode ser simples
-            resultText.textContent = "Sequência de batalhas finalizada!";
+        const combatDataObject = {
+            venceu: didWin,
+            xp_ganho: xpGained,
+            gold_ganho: goldGained,
+            leveled_up: leveledUp,
+            new_level: newLevel,
+            monster_hp_inicial: hpLeft + calculateTotalDamage(attackLog),
+            monstro_hp_restante: hpLeft,
+            attacks: attackLog,
+            target_stage: targetStage
+        };
+
+        if (isFarming) {
+            const message = `FARM CONCLUÍDO! Ganhou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro! (Estágio mantido)`;
+            resultText.textContent = message;
             resultModal.style.display = "block";
-            return;
+            if (leveledUp) showLevelUpBalloon(newLevel);
+        } else {
+            runCombatAnimation(combatDataObject);
         }
+    }
     
-        const battleData = battleQueue.shift(); // Remove o primeiro da fila
-        runCombatAnimationBatch(battleData); 
+    function calculateTotalDamage(logs) {
+        if(!logs || !Array.isArray(logs)) return 0;
+        return logs.reduce((acc, curr) => {
+            const dmg = Array.isArray(curr) ? curr[0] : (curr.damage || 0);
+            return acc + dmg;
+        }, 0);
     }
 
-    function runCombatAnimationBatch(data) {
+    function runCombatAnimation(data) {
         showCombatScreen();
-        
-        const targetStage = data.stage;
+        const targetStage = data.target_stage; 
         monsterNameSpan.textContent = `Monstro do Estágio ${targetStage}`;
         monsterImage.src = window.monsterStageImages?.[Math.floor(Math.random() * window.monsterStageImages.length)] || '';
-        
-        // Reset visual
+
         monsterHpBar.style.display = 'none';
         attacksLeftSpan.style.display = 'none';
         battleCountdownDisplay.style.display = 'block';
         
-        // Countdown Acelerado para Batch (1s)
-        let countdown = 1; 
-        battleCountdownDisplay.textContent = `Luta ${data.battle_index}...`;
-    
-        setTimeout(() => {
-            battleCountdownDisplay.style.display = 'none';
-            monsterHpBar.style.display = 'flex';
-            attacksLeftSpan.style.display = 'block';
-    
-            const monsterMaxHp = data.monster_max_hp; 
-            let currentMonsterHp = monsterMaxHp; 
-            
-            monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
-            monsterHpFill.style.width = '100%'; 
-    
-            const attackLog = data.logs || [];
-            attacksLeftSpan.textContent = attackLog.length;
-    
-            let currentAttackIndex = 0;
-            // Velocidade acelerada: 500ms por ataque
-            const attackSpeed = 500; 
-    
-            const animateAttack = () => {
-                if (currentAttackIndex < attackLog.length) {
-                    const attackData = attackLog[currentAttackIndex];
-                    
-                    // Extrai dados do log compacto [dano, isCrit]
-                    const damage = Array.isArray(attackData) ? attackData[0] : attackData.damage;
-                    const isCrit = Array.isArray(attackData) ? (attackData[1] === 1) : attackData.is_crit;
-    
-                    displayDamageNumber(damage, isCrit);
-    
-                    if (isCrit) {
-                        criticalHitSound.currentTime = 0;
-                        criticalHitSound.play().catch(()=>{});
-                    } else {
-                        normalHitSound.currentTime = 0;
-                        normalHitSound.play().catch(()=>{});
-                    }
-    
-                    const mImg = document.getElementById("monsterImage");
-                    if (mImg) {
-                        mImg.classList.remove('shake-animation');
-                        void mImg.offsetWidth;
-                        mImg.classList.add('shake-animation');
-                    }
-    
-                    currentMonsterHp = Math.max(0, currentMonsterHp - damage);
-                    const pct = (currentMonsterHp / monsterMaxHp) * 100;
-                    monsterHpFill.style.width = `${pct}%`;
-                    monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
-    
-                    currentAttackIndex++;
-                    attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
-                    
-                    setTimeout(animateAttack, attackSpeed);
-                } else {
-                    // FIM DA BATALHA ATUAL
-                    setTimeout(() => {
-                        if (data.win) {
-                            showMiniToast(`Vitória! +${formatNumberCompact(data.xp)} XP`);
-                            // Atualiza stage localmente se venceu e não é farm (para visual)
-                            if (playerAfkData.current_afk_stage === data.stage) {
-                                playerAfkData.current_afk_stage++;
-                            }
+        let countdown = 3;
+        battleCountdownDisplay.textContent = `Batalha em: ${countdown}`;
+
+        const countdownIntervalId = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+                battleCountdownDisplay.textContent = `Batalha em: ${countdown}`;
+            } else {
+                clearInterval(countdownIntervalId);
+                battleCountdownDisplay.style.display = 'none';
+                monsterHpBar.style.display = 'flex';
+                attacksLeftSpan.style.display = 'block';
+
+                const monsterMaxHp = data.monster_hp_inicial; 
+                let currentMonsterHp = monsterMaxHp; 
+                
+                monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
+                monsterHpFill.style.width = '100%'; 
+
+                const attackLog = data.attacks || [];
+                attacksLeftSpan.textContent = attackLog.length;
+
+                let currentAttackIndex = 0;
+                
+                const animateAttack = () => {
+                    if (currentAttackIndex < attackLog.length) {
+                        const attackData = attackLog[currentAttackIndex];
+                        let damage, isCrit;
+
+                        if (Array.isArray(attackData)) {
+                            damage = attackData[0];
+                            isCrit = attackData[1] === 1; 
                         } else {
-                            showMiniToast("Derrota! Parando sequência...");
-                            // Se perdeu no modo desafio, a fila é limpa logicamente pelo servidor,
-                            // mas garantimos visualmente que paramos aqui.
-                            battleQueue = []; 
+                            damage = attackData.damage;
+                            isCrit = attackData.is_crit;
                         }
-                        playNextBattleInQueue(); // Chama recursivamente a próxima
-                    }, 800);
-                }
-            };
-            
-            animateAttack();
-    
+
+                        displayDamageNumber(damage, isCrit);
+
+                        if (isCrit) {
+                            criticalHitSound.currentTime = 0;
+                            criticalHitSound.play().catch(()=>{});
+                        } else {
+                            normalHitSound.currentTime = 0;
+                            normalHitSound.play().catch(()=>{});
+                        }
+                        const mImg = document.getElementById("monsterImage");
+                        if (mImg) {
+                            mImg.classList.remove('shake-animation');
+                            void mImg.offsetWidth;
+                            mImg.classList.add('shake-animation');
+                            setTimeout(() => {
+                                mImg.classList.remove('shake-animation');
+                            }, 300);
+                        }
+                        currentMonsterHp = Math.max(0, currentMonsterHp - damage);
+                        const pct = (currentMonsterHp / monsterMaxHp) * 100;
+                        monsterHpFill.style.width = `${pct}%`;
+                        monsterHpValueSpan.textContent = `${formatNumberCompact(currentMonsterHp)} / ${formatNumberCompact(monsterMaxHp)}`;
+
+                        currentAttackIndex++;
+                        attacksLeftSpan.textContent = attackLog.length - currentAttackIndex; 
+                        
+                        setTimeout(animateAttack, 1000);
+                    } else {
+                        let message = "";
+                        if (data.venceu) {
+                            message = `VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!`;
+                        } else {
+                            message = `Você não derrotou o monstro. Tente melhorar seus equipamentos!`;
+                        }
+                        
+                        resultText.textContent = message;
+                        resultModal.style.display = "block";
+                        if (data.leveled_up) showLevelUpBalloon(data.new_level);
+                    }
+                };
+                
+                animateAttack();
+            }
         }, 1000);
-    }
-    
-    function resetUIState() {
-        if (startAfkBtn) {
-            startAfkBtn.disabled = false;
-            startAfkBtn.textContent = "Iniciar Aventura";
-            updateStartAfkButtonState(playerAfkData.daily_attempts_left || 0);
-        }
-    }
-    
-    // Helper para feedback rápido (Toast)
-    function showMiniToast(text) {
-        const toast = document.createElement("div");
-        toast.textContent = text;
-        toast.style.position = "fixed";
-        toast.style.top = "20%";
-        toast.style.left = "50%";
-        toast.style.transform = "translate(-50%, -50%)";
-        toast.style.background = "rgba(0,0,0,0.85)";
-        toast.style.color = "#fff";
-        toast.style.padding = "10px 20px";
-        toast.style.borderRadius = "20px";
-        toast.style.zIndex = "2000";
-        toast.style.fontSize = "1.2em";
-        toast.style.fontWeight = "bold";
-        toast.style.border = "2px solid #ffd700";
-        toast.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
-        
-        document.body.appendChild(toast);
-        
-        // Animação simples de entrada/saída
-        toast.animate([
-            { opacity: 0, transform: "translate(-50%, -40%)" },
-            { opacity: 1, transform: "translate(-50%, -50%)" }
-        ], { duration: 300, fill: "forwards" });
-    
-        setTimeout(() => {
-            toast.animate([
-                { opacity: 1 },
-                { opacity: 0 }
-            ], { duration: 300, fill: "forwards" }).onfinish = () => toast.remove();
-        }, 1500);
     }
 
     // --- AUXILIARES VISUAIS ---
@@ -744,30 +695,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         startAfkBtn.addEventListener("click", () => {
             if (startAfkBtn.disabled || !userId) return;
             const currentStage = playerAfkData.current_afk_stage || 1;
-            
-            // Atualiza textos do modal antigo (compatibilidade)
             if (challengeStageNumberSpan) challengeStageNumberSpan.textContent = currentStage;
-            if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
-            
             if (currentStage > 1) {
-                if (btnFarmPrevious) btnFarmPrevious.style.display = "inline-block"; 
-                // Se existirem os novos containers, mostre-os ou esconda-os aqui
+                if (farmStageNumberSpan) farmStageNumberSpan.textContent = currentStage - 1;
+                if (btnFarmPrevious) btnFarmPrevious.style.display = "block"; 
             } else {
                 if (btnFarmPrevious) btnFarmPrevious.style.display = "none";
             }
-            
-            // ATUALIZA LABELS DOS NOVOS BOTÕES (Se existirem no HTML)
-            const attempts = playerAfkData.daily_attempts_left || 0;
-            const lblFarm = document.getElementById("lbl-attempts-farm");
-            const lblPush = document.getElementById("lbl-attempts-push");
-            
-            if (lblFarm) lblFarm.textContent = attempts;
-            if (lblPush) lblPush.textContent = attempts;
-            
-            // Habilita/Desabilita botões Batch se tiver poucas tentativas (opcional, mas recomendado)
-            // Se tiver <= 1, talvez o user queira clicar no botão "All" e gastar 1 só, então deixamos habilitado
-            // mas a lógica do botão pode mudar texto.
-            
             if (adventureOptionsModal) adventureOptionsModal.style.display = "flex";
         });
     }
@@ -812,29 +746,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     }
 
-    // --- EVENTOS DE AVENTURA (ATUALIZADOS) ---
-    // Mapeamento dos botões antigos para a nova função (Compatibilidade)
-    if (btnFarmPrevious) {
-        btnFarmPrevious.onclick = () => triggerSmartAdventure(true, false); // Farmar 1x
-    }
-    if (btnChallengeCurrent) {
-        btnChallengeCurrent.onclick = () => triggerSmartAdventure(false, false); // Desafiar 1x
-    }
-    
-    // Mapeamento dos NOVOS botões de Batch (Smart)
-    if (btnFarm1) {
-        btnFarm1.onclick = () => triggerSmartAdventure(true, false); // 1x
-    }
-    if (btnFarmAll) {
-        btnFarmAll.onclick = () => triggerSmartAdventure(true, true); // Batch (Tudo)
-    }
-    if (btnPush1) {
-        btnPush1.onclick = () => triggerSmartAdventure(false, false); // 1x
-    }
-    if (btnPushAll) {
-        btnPushAll.onclick = () => triggerSmartAdventure(false, true); // Batch (Tudo - Para se perder)
-    }
-
+    if (btnFarmPrevious) btnFarmPrevious.addEventListener("click", () => triggerAdventure(true));
+    if (btnChallengeCurrent) btnChallengeCurrent.addEventListener("click", () => triggerAdventure(false));
     if (closeAdventureOptionsBtn) closeAdventureOptionsBtn.addEventListener("click", () => adventureOptionsModal.style.display = "none");
 
     if (confirmBtn) {
@@ -844,6 +757,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
     
+    // CORREÇÃO AQUI: Verificamos se o botão existe antes de usar
     if (returnMainIdleBtn) {
         returnMainIdleBtn.addEventListener("click", () => {
             window.location.href = "index.html";

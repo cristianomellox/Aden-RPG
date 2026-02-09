@@ -1,4 +1,4 @@
-// desconstruir.js — versão corrigida para exibir Modal e Atualização Local
+// desconstruir.js — versão blindada (Validação interna na função)
 (() => {
   const CRYSTAL_COST = 400;
 
@@ -65,6 +65,18 @@
     if (!__client) { showCustomAlert("Erro: Supabase não inicializado."); return; }
     if (!itemId) { showCustomAlert("Item inválido."); return; }
 
+    // --- NOVA VALIDAÇÃO DE SEGURANÇA LOCAL ---
+    // Busca o item na lista global para verificar propriedades
+    if (typeof allInventoryItems !== 'undefined') {
+        const itemToCheck = allInventoryItems.find(i => i.id === itemId);
+        // Se encontrou o item e ele tem equipped_slot preenchido
+        if (itemToCheck && itemToCheck.equipped_slot) {
+            showCustomAlert("Este item está equipado!\nDesequipe-o antes de tentar desconstruir.");
+            return; // Interrompe a função aqui. O modal nem será criado.
+        }
+    }
+    // -----------------------------------------
+
     const { modal, preview, btnCancel, btnConfirm } = ensureDeconstructModal();
     preview.innerHTML = "<p>Calculando retorno...</p>";
     showModal(modal);
@@ -118,9 +130,6 @@
         }
 
         // 2. Adiciona os fragmentos retornados à lista local (Busca no banco apenas os fragmentos para ter dados completos)
-        const fragMap = { R: 19, SR: 21, SSR: 22 };
-        
-        // Vamos buscar os 3 fragmentos possíveis de uma vez para atualizar o inventário local
         const fragIdsToFetch = [];
         if (execData.fragments_returned.R > 0) fragIdsToFetch.push(19);
         if (execData.fragments_returned.SR > 0) fragIdsToFetch.push(21);
@@ -173,16 +182,9 @@
       btn.addEventListener("click", () => {
         const sel = (typeof selectedItem !== "undefined" && selectedItem) ? selectedItem : (window.selectedItem || null);
         
-        // Validação 1: Nenhum item selecionado
         if (!sel || !sel.id) { 
             showCustomAlert("Selecione um item para desconstruir."); 
             return; 
-        }
-
-        // Validação 2: Item Equipado (Verificação local)
-        if (sel.equipped_slot) {
-            showCustomAlert("Este item está equipado!\nDesequipe-o antes de tentar desconstruir.");
-            return;
         }
         
         handleDeconstruct(sel.id);

@@ -173,9 +173,16 @@
       btn.addEventListener("click", () => {
         const sel = (typeof selectedItem !== "undefined" && selectedItem) ? selectedItem : (window.selectedItem || null);
         
+        // Validação 1: Nenhum item selecionado
         if (!sel || !sel.id) { 
-            showCustomAlert("Retire o equipamento antes de desconstruir."); 
+            showCustomAlert("Selecione um item para desconstruir."); 
             return; 
+        }
+
+        // Validação 2: Item Equipado (Verificação local)
+        if (sel.equipped_slot) {
+            showCustomAlert("Este item está equipado!\nDesequipe-o antes de tentar desconstruir.");
+            return;
         }
         
         handleDeconstruct(sel.id);

@@ -67,7 +67,7 @@ const AMBIENT_AUDIO_INTERVAL_MS = 60 * 1000;
 const BOSS_ATTACK_INTERVAL_SECONDS = 30;
 
 const BATCH_THRESHOLD = 3;
-const BATCH_DEBOUNCE_MS = 40000;
+const BATCH_DEBOUNCE_MS = 70000;
 
 // URLs de Mídia
 const RAID_INTRO_VIDEO_URL = "https://aden-rpg.pages.dev/assets/tddintro.webm";
@@ -1218,8 +1218,9 @@ async function loadInitialPlayerState() {
         // Atualiza cache GlobalDB
         GlobalDB.saveOwner({
             id: userId,
-            name: playerDetails.name, 
-            avatar_url: userAvatarUrl
+            name: playerDetails.name || userName, 
+            avatar_url: userAvatarUrl,
+            guild_id: playerDetails.guild_id || userGuildId
         });
     }
 

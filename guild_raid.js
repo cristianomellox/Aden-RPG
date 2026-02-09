@@ -168,7 +168,8 @@ const GlobalDB = {
             });
         } catch(e) { return null; }
     },
-    // Salva dados do jogador no cache compartilhado
+  
+    // Salva dados do jogador no cache compartilhado (Versão Corrigida)
     saveOwner: async function(playerData) {
         if (!playerData || !playerData.id) return;
         try {
@@ -178,16 +179,24 @@ const GlobalDB = {
             const tx = db.transaction(OWNERS_STORE, 'readwrite');
             const store = tx.objectStore(OWNERS_STORE);
             
-            // Preserva dados existentes se existirem
             const getReq = store.get(playerData.id);
             getReq.onsuccess = () => {
                 const existing = getReq.result || {};
+                
+                // CORREÇÃO: Mapeamento explícito para evitar "poluição" com undefined
+                // Só sobrescreve se o novo dado for válido (truthy), senão mantém o antigo
                 const toSave = {
-                    ...existing,
-                    ...playerData,
-                    timestamp: Date.now() // Atualiza TTL para o mines.js não apagar
+                    id: playerData.id, // ID é obrigatório
+                    name: playerData.name || existing.name, 
+                    avatar_url: playerData.avatar_url || existing.avatar_url,
+                    guild_id: playerData.guild_id || existing.guild_id,
+                    timestamp: Date.now() // Renova o TTL
                 };
-                store.put(toSave);
+
+                // Proteção extra: Não salva se ficar sem nome (evita o bug do "Desconhecido")
+                if (toSave.name) {
+                    store.put(toSave);
+                }
             };
         } catch(e) { console.warn("Erro ao salvar no GlobalDB:", e); }
     }
@@ -876,8 +885,12 @@ async function initSession() {
             if (cachedLocal.avatar_url) userAvatarUrl = cachedLocal.avatar_url;
             foundInCache = true;
             
-            // Aproveita e migra para o GlobalDB
-            GlobalDB.saveOwner(cachedLocal);
+           GlobalDB.saveOwner({
+                id: userId,
+                name: cachedLocal.name,
+                avatar_url: cachedLocal.avatar_url,
+                guild_id: cachedLocal.guild_id
+            });
         }
     }
 

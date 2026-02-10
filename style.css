@@ -320,7 +320,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     color: #e0dccc;
     padding: 10px 20px;
     border-radius: 5px;
-    z-index: 99999;
+    z-index: 9999999!important;
     font-size: 1.1em;
     /* --- ALTERAÇÕES INCLUÍDAS ABAIXO --- */
     white-space: normal; /* Permite a quebra de linha */

@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient.js';
 const CHECK_INTERVAL = 300000; // Checa a cada 5 minutos
 const LAST_CHECK_KEY = 'aden_titles_last_check'; // Guarda timestamps das cidades
 const HOLDERS_KEY = 'aden_title_holders'; // Guarda cache de QUEM tem os títulos { cityId: { noblessId: playerName } }
+const OWNERS_KEY = 'aden_city_owners'; // NOVO: Guarda cache de QUEM é dono da cidade { cityId: guildId }
 let notificationQueue = [];
 let isDisplaying = false;
 
@@ -102,6 +103,8 @@ async function checkTitleUpdates() {
 async function processUpdates(cities, localTimestamps) {
     // Carrega o cache de QUEM tinha os títulos
     let storedHolders = JSON.parse(localStorage.getItem(HOLDERS_KEY) || '{}');
+    // Carrega o cache de QUEM era o dono da cidade
+    let storedOwners = JSON.parse(localStorage.getItem(OWNERS_KEY) || '{}');
     
     // Busca informações auxiliares (Líderes)
     // Para otimizar, pegamos todos os nobres relevantes de uma vez
@@ -140,6 +143,34 @@ async function processUpdates(cities, localTimestamps) {
                 const g = guildData.players.gender || 'Masculino';
                 if (city.id === 1) leaderTitle = (g === 'Masculino') ? 'Rei' : 'Rainha';
                 else leaderTitle = (g === 'Masculino') ? 'Lord' : 'Lady';
+            }
+        }
+
+        // --- LÓGICA DE COROAÇÃO (RESTAURADA) ---
+        // Verifica se a cidade é a Capital (ID 1) e se o dono mudou
+        if (city.id === 1 && city.owner) {
+            const previousOwner = storedOwners[city.id];
+            
+            // Se existia um dono anterior e ele é diferente do atual
+            if (previousOwner && previousOwner !== city.owner) {
+                queueNotification({
+                    type: 'coronation', // Tipo especial
+                    leaderTitle,
+                    leaderName,
+                    cityName: city.name
+                });
+            }
+            
+            // Atualiza o cache de donos
+            if (storedOwners[city.id] !== city.owner) {
+                storedOwners[city.id] = city.owner;
+                storageUpdated = true;
+            }
+        } else {
+             // Para outras cidades apenas atualizamos o cache sem notificar coroação (ou adicione aqui se quiser para Lords)
+             if (storedOwners[city.id] !== city.owner) {
+                storedOwners[city.id] = city.owner;
+                storageUpdated = true;
             }
         }
 
@@ -201,6 +232,7 @@ async function processUpdates(cities, localTimestamps) {
     localStorage.setItem(LAST_CHECK_KEY, JSON.stringify(localTimestamps));
     if (storageUpdated) {
         localStorage.setItem(HOLDERS_KEY, JSON.stringify(storedHolders));
+        localStorage.setItem(OWNERS_KEY, JSON.stringify(storedOwners));
     }
 }
 
@@ -222,21 +254,35 @@ function processQueue() {
     banner.className = '';
     banner.style.display = 'flex'; 
 
-    let icon = '📜'; 
-    if (data.roleName.includes('Rei') || data.roleName.includes('Rainha')) icon = '👑'
-    if (data.roleName.includes('Príncipe') || data.roleName.includes('Princesa')) icon = '⚜️';
-    if (data.roleName.includes('Bobo') || data.roleName.includes('Boba')) icon = '🤡';
-    if (data.roleName.includes('Lord') || data.roleName.includes('Lady')) icon = '🔰';
-    if (data.roleName.includes('Nobre')) icon = '🛡️';
+    // Lógica de Renderização Baseada no Tipo
+    if (data.type === 'coronation') {
+        // --- NOTIFICAÇÃO DE COROAÇÃO (Vida Longa ao Rei) ---
+        banner.classList.add('royal-announcement');
+        banner.innerHTML = `
+            <div style="font-size: 2.2em;">👑</div>
+            <div style="font-size: 1.2em; line-height: 1.2;">
+                <span style="color: #ff4444; font-weight: bold; text-shadow: 1px 1px 2px black;">Vida Longa ao ${data.leaderTitle}!</span><br>
+                <strong>${data.leaderName}</strong> conquistou a <span style="color: gold;">Capital</span>!
+            </div>
+        `;
+    } else {
+        // --- NOTIFICAÇÃO PADRÃO DE TÍTULOS ---
+        let icon = '📜'; 
+        if (data.roleName.includes('Rei') || data.roleName.includes('Rainha')) icon = '👑'
+        if (data.roleName.includes('Príncipe') || data.roleName.includes('Princesa')) icon = '⚜️';
+        if (data.roleName.includes('Bobo') || data.roleName.includes('Boba')) icon = '🤡';
+        if (data.roleName.includes('Lord') || data.roleName.includes('Lady')) icon = '🔰';
+        if (data.roleName.includes('Nobre')) icon = '🛡️';
 
-    banner.innerHTML = `
-        <div style="font-size: 1.8em;">${icon}</div>
-        <div style="font-size: 1.2em;">
-            <strong>${data.leaderTitle} ${data.leaderName}</strong> nomeou <br>
-            <span class="highlight">${data.targetName}</span> como 
-            <strong>${data.roleName}</strong>!
-        </div>
-    `;
+        banner.innerHTML = `
+            <div style="font-size: 1.8em;">${icon}</div>
+            <div style="font-size: 1.2em;">
+                <strong>${data.leaderTitle} ${data.leaderName}</strong> nomeou <br>
+                <span class="highlight">${data.targetName}</span> como 
+                <strong>${data.roleName}</strong>!
+            </div>
+        `;
+    }
 
     banner.classList.add('show');
 

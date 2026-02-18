@@ -2,7 +2,7 @@
     const hotspots = [
         // Adicione novos locais aqui seguindo o padrão:
         { id: 'zion', name: 'Zion', top: 390, left: 80, width: 100, height: 90, url: '/zion.html', color: '#84e000' },
-        { id: 'dg_ruinas', name: 'Ruínas Ancestrais', top: 270, left: 80, width: 100, height: 70, url: '/dg_ruinas.html', color: '#b7a5ff' },
+        { id: 'dg_ruinas', name: 'Ruínas Ancestrais', top: 230, left: 80, width: 100, height: 100, url: '/dg_ruinas.html', color: '#b7a5ff' },
         { id: 'solaris', name: 'Solaris', top: 315, left: 320, width: 100, height: 110, url: '/solaris.html', color: 'silver' },
         { id: 'duratar', name: 'Duratar', top: 260, left: 1180, width: 150, height: 100, url: '/duratar.html', color: '#84e000' },
         { id: 'astrax', name: 'Astrax', top: 1160, left: 1100, width: 150, height: 100, url: '/astrax.html', color: '#84e000' },

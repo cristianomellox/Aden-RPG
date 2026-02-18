@@ -1,0 +1,1048 @@
+/* Importa estilos base */
+body {
+    background-color: #0a0a0a;
+    color: #e0dccc;
+    overflow: hidden; /* Previne scroll na tela de jogo */
+    font-family: 'Cinzel', serif;
+    margin: 0;
+    padding: 0;
+}
+
+/* --- TOP BAR --- */
+/* Z-Index 200 para ficar acima de tudo (Lobby e Jogo) */
+#playerTopBar {
+    position: relative;
+    z-index: 200;
+    background-color: #111;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+}
+
+/* --- LOBBY --- */
+#lobbyScreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 50; /* Abaixo da TopBar, acima do Jogo */
+    padding-bottom: 50px;
+    padding-top: 60px;
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.5),
+      rgba(0, 0, 0, 0)
+    ),
+    url('https://aden-rpg.pages.dev/assets/ruinas.webp');
+  background-size: cover;
+  background-position: center;
+    box-sizing: border-box;
+}
+
+.lobby-header {
+    text-align: center;
+    padding: 10px;
+}
+
+.timer-display {
+    font-size: 2.5em;
+    font-weight: bold;
+    text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+    margin: 10px 0;
+}
+
+.class-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    padding-bottom: 80px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.class-card {
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.class-card.selected {
+    border-color: gold;
+    background: #332b00;
+    transform: scale(1.02);
+}
+
+.class-icon {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 5px;
+}
+
+.class-info h4 { margin: 5px 0; color: #fff; }
+.class-info p { font-size: 0.8em; color: #aaa; margin: 0; }
+
+/* --- GAME SCREEN --- */
+#gameScreen {
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    background: #050505;
+    z-index: 10; /* Abaixo do Lobby */
+    padding-top: 50px; /* Espaço da TopBar */
+    box-sizing: border-box;
+}
+
+/* HUD REFINADO */
+.game-hud {
+    position: relative;
+    width: 100%;
+    padding: 5px 10px;
+    background: #111;
+    border-bottom: 1px solid #333;
+    z-index: 20;
+    box-sizing: border-box;
+    flex-shrink: 0; /* Garante que o HUD não encolha */
+}
+
+.hud-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    gap: 10px;
+}
+
+.bar-container {
+    flex-grow: 1;
+    height: 20px;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    position: relative;
+}
+
+.bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #c00, #f00);
+    width: 100%;
+    transition: width 0.3s;
+}
+
+#hudHpText {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    top: 0;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-shadow: 1px 1px 1px #000;
+    line-height: 20px;
+    color: white;
+}
+
+/* AP Display - Fixado para não quebrar */
+.ap-display {
+    background: #004466;
+    border: 1px solid cyan;
+    color: cyan;
+    padding: 0 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    min-width: 50px;
+    text-align: center;
+    font-size: 0.9em;
+    height: 22px;
+    line-height: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Linha Secundária (Sala e Relíquia) */
+.hud-row.secondary {
+    font-size: 0.85em;
+    color: gold;
+    text-shadow: 1px 1px 2px #000;
+    white-space: nowrap;
+    overflow: hidden;
+    display: flex;
+    justify-content: space-between;
+}
+
+#relicStatus {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 60%;
+    text-align: right;
+}
+
+/* ÁREA DA SALA */
+#roomView {
+    flex-grow: 1;
+    position: relative;
+    background-color: #000;
+    background-image: url('https://aden-rpg.pages.dev/assets/amasmorra.webp');
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-bottom: 2px solid #444;
+}
+
+/* Entidade (Monstro/Baú) com Fade In/Out */
+.room-entity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 5;
+    opacity: 0; /* Começa invisível */
+    transition: opacity 3s ease-in; /* Fade In lento (3s) */
+}
+
+.room-entity.visible {
+    opacity: 1;
+}
+
+.room-entity.fading-out {
+    opacity: 0;
+    transition: opacity 1s ease-out; /* Fade Out rápido ao morrer */
+}
+
+#entityImg {
+    width: 180px;
+    height: 180px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 15px rgba(0,0,0,0.8));
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+#entityName {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 5px 15px;
+    border-radius: 15px;
+    border: 1px solid #555;
+    font-weight: bold;
+    color: #ff5555;
+    font-size: 1.2em;
+}
+
+/* Balão Central de Notificação (Pós-Combate) */
+.center-notification {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid gold;
+    padding: 15px 25px;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+    font-size: 1.2em;
+    text-align: center;
+    z-index: 100;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    animation: popIn 0.3s ease-out;
+}
+
+@keyframes popIn {
+    from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* CONTROLES */
+.nav-controls {
+    height: 280px;
+    background: #1a1a1a;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    border-top: 1px solid #444;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+#navMessage {
+    font-size: 1.1em;
+    color: #e0dccc;
+    margin-bottom: 10px;
+    text-align: center;
+    min-height: 1.2em;
+    font-weight: bold;
+}
+
+.action-buttons {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.nav-btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(to bottom, #333, #222);
+    border: 1px solid #555;
+    color: white;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.1s;
+}
+
+.nav-btn:active { transform: scale(0.98); background: #444; }
+.nav-btn:disabled { opacity: 0.4; filter: grayscale(1); cursor: not-allowed; }
+
+.nav-btn.secondary {
+    border-color: #0088aa;
+    color: #00ccff;
+    background: linear-gradient(to bottom, #002233, #001122);
+}
+
+.probe-grid {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.room-opt-btn {
+    flex: 1;
+    padding: 20px 10px;
+    background: #224422;
+    border: 1px solid lime;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 1em;
+}
+.room-opt-btn:active { background: #336633; }
+
+/* Timer de Cooldown (Recuperando Fôlego) */
+#cooldownTimerContainer {
+    width: 100%;
+    text-align: center;
+    margin-top: 10px;
+    display: none;
+}
+
+#cooldownText {
+    color: #aaa;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+#decisionTimerBar {
+    width: 0%;
+    height: 4px;
+    background: gold;
+    border-radius: 2px;
+    transition: width 1s linear;
+}
+
+/* LOGS ESTILIZADOS E DIVIDIDOS */
+.log-container {
+    position: absolute;
+    max-height: 200px;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none; /* Permite clicar através dos logs */
+    z-index: 99999;
+    width: 220px;
+}
+
+/* Log da Esquerda (Relíquia) - NO TOPO ESQUERDO */
+.log-container.left {
+    top: 130px; /* Logo abaixo do HUD de HP/AP */
+    left: 10px;
+    justify-content: flex-start; /* Cresce de cima para baixo */
+    align-items: flex-start; /* Texto alinhado à esquerda */
+}
+
+/* Log da Direita (Geral) - EMBAIXO DIREITA */
+.log-container.right {
+    bottom: 290px; /* Logo acima dos controles de movimento */
+    right: 10px;
+    justify-content: flex-end; /* Cresce de baixo para cima */
+    align-items: flex-end; /* Texto alinhado à direita */
+}
+
+/* Ajuste para telas pequenas */
+@media (max-height: 700px) {
+    .log-container.right {
+        bottom: 210px;
+    }
+    .log-container.left {
+        top: 110px;
+    }
+}
+
+.log-entry {
+    margin-top: 5px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.85); /* Fundo mais escuro para leitura */
+    border: 1px solid #444;
+    color: #ddd;
+    font-size: 0.85em;
+    animation: slideIn 0.3s ease-out;
+    transition: opacity 1s ease-out;
+    
+    /* Garante que o texto quebre e não invada a tela */
+    white-space: normal;
+    word-wrap: break-word;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-radius: 4px;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* Animação diferente para esquerda e direita */
+.log-container.right .log-entry {
+    border-right: 3px solid #777;
+    border-left: none;
+    text-align: right;
+    animation: slideInRight 0.3s ease-out;
+}
+
+.log-container.left .log-entry {
+    border-left: 3px solid cyan;
+    border-right: none;
+    text-align: left;
+    animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(50px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInLeft {
+    from { transform: translateX(-50px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Cores Específicas */
+.log-entry.kill { border-color: #ff4444; color: #ff9999; }
+.log-entry.chest { border-color: gold; color: #ffeb3b; }
+.log-entry.trap { border-color: orange; color: #ffcc80; }
+.log-entry.relic { 
+    border-color: cyan; 
+    color: cyan; 
+    font-weight: bold; 
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.3); 
+    background: rgba(0, 50, 50, 0.9);
+}
+
+@keyframes slideIn {
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* COMBAT OVERLAY (Estilo Arena) */
+.combat-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.combat-countdown {
+    font-size: 4em;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 10px red;
+    animation: pulse 1s infinite;
+}
+
+.combat-arena {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.combat-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.combat-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #555;
+    background: #000;
+    object-fit: cover;
+}
+
+.combat-side.left .combat-avatar { border-color: lime; }
+.combat-side.right .combat-avatar { border-color: red; }
+
+.combat-vs {
+    font-size: 2em;
+    font-weight: bold;
+    color: gold;
+    font-family: 'Cinzel', serif;
+}
+
+/* Dano Flutuante */
+.damage-number, .crit-damage-number, .evade-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 60;
+    font-weight: bold;
+    white-space: nowrap;
+    text-shadow: 2px 2px 4px #000;
+    pointer-events: none;
+}
+
+.damage-number {
+    font-family: Georgia, serif;
+    font-size: 24px;
+    color: #fff;
+    animation: floatDmg 1s forwards;
+}
+
+.crit-damage-number {
+    font-family: Georgia, serif;
+    font-size: 32px;
+    color: red;
+    text-shadow: -1px -1px 0 yellow, 1px -1px 0 yellow, -1px 1px 0 yellow, 1px 1px 0 yellow;
+    animation: floatCrit 1s forwards;
+}
+
+.evade-text {
+    font-size: 20px;
+    color: cyan;
+    animation: floatDmg 1s forwards;
+}
+
+@keyframes floatDmg {
+    0% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, -100px); }
+}
+
+@keyframes floatCrit {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -80px) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -120px) scale(1); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.shake-hit {
+    animation: shake 0.3s;
+}
+
+@keyframes shake {
+    0% { transform: translate(0,0); }
+    25% { transform: translate(-5px, 5px); }
+    50% { transform: translate(5px, -5px); }
+    75% { transform: translate(-5px, 5px); }
+    100% { transform: translate(0,0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* CHEST OVERLAY */
+.chest-overlay {
+    position: absolute;
+    top: 30%;
+    left: 10%;
+    width: 80%;
+    background: rgba(20, 20, 20, 0.95);
+    border: 2px solid gold;
+    border-radius: 10px;
+    padding: 20px;
+    z-index: 60;
+    text-align: center;
+    animation: slideDown 0.3s;
+}
+
+.chest-reward-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0;
+    font-size: 1.1em;
+    color: #e0dccc;
+}
+
+.chest-reward-item img {
+    width: 30px;
+    height: 30px;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* MODAIS */
+.modal-container {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background-color: #1a1a1a;
+    padding: 20px;
+    border: 2px solid gold;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+    color: #e0dccc;
+    font-family: 'Cinzel', serif;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #aaa;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: white;
+}
+
+.modal-content .action-btn {
+    margin-top: 15px;
+    width: 100%;
+}
+
+/* Spinner de Carregamento */
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #333;
+    border-top: 4px solid gold;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: gold;
+}
+
+ /* TELA DE INTRODUÇÃO DA PARTIDA */
+        .match-intro-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 9999; /* Acima de tudo */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.5s;
+        }
+
+        .intro-title {
+            font-size: 2.5em;
+            color: gold;
+            text-transform: uppercase;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            margin-bottom: 5px;
+            font-family: 'Cinzel', serif;
+            text-align: center;
+        }
+
+        .intro-subtitle {
+            font-size: 1.2em;
+            color: #aaa;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: 'Cinzel', serif;
+        }
+
+        .participants-container {
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .participants-container h3 {
+            color: #e0dccc;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+       /* Adicione ou substitua no ruins.css */
+
+.participants-container {
+    width: 90%;
+    max-width: 700px;
+    text-align: center;
+    background: rgba(0,0,0,0.5); /* Fundo leve para destaque */
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    max-height: 50vh; /* Limita a altura para 60% da tela */
+}
+
+.participants-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    overflow-y: auto; /* Habilita scroll vertical */
+    padding: 10px;
+    max-height: 95%; /* Respeita a altura do container */
+}
+
+/* Personalização da barra de rolagem */
+.participants-grid::-webkit-scrollbar {
+    width: 6px;
+}
+.participants-grid::-webkit-scrollbar-track {
+    background: #111;
+}
+.participants-grid::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 3px;
+}
+.participants-grid::-webkit-scrollbar-thumb:hover {
+    background: gold;
+}
+
+        
+        .participant-card img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-bottom: 5px;
+            border: 2px solid #555;
+            object-fit: cover;
+        }
+        
+        .participant-card span {
+            display: block;
+            font-size: 0.7em;
+            color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 100%;
+        }
+
+        .intro-countdown {
+            margin-top: 30px;
+            font-size: 4em;
+            font-weight: bold;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+        
+        .pulse-text {
+            animation: pulseText 1s infinite;
+        }
+        
+        @keyframes pulseText {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        #btnRegister:disabled {
+          opacity: 0.5;
+        }
+
+/* 2. Informações de Combate (Nome e Classe) */
+.combat-info {
+    margin-top: 5px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.c-name {
+    color: white;
+    font-weight: bold;
+    font-size: 0.9em;
+    text-shadow: 1px 1px 2px black;
+}
+
+.c-class {
+    color: gold;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* --- EFEITO DE COLAPSO --- */
+
+/* Overlay que fica em cima da imagem da sala, mas abaixo dos monstros/UI */
+#collapseOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 0, 0, 0.2); /* Base vermelha */
+    pointer-events: none; /* Permite clicar através dele */
+    z-index: 2; /* Acima do background (0), abaixo da entidade (5) */
+    animation: redPulse 2s infinite ease-in-out;
+    box-shadow: inset 0 0 50px rgba(255, 0, 0, 0.5);
+    display: none; /* Começa escondido */
+}
+
+@keyframes redPulse {
+    0% { opacity: 0.3; background-color: rgba(255, 0, 0, 0.1); }
+    50% { opacity: 0.8; background-color: rgba(255, 0, 0, 0.25); }
+    100% { opacity: 0.3; background-color: rgba(255, 0, 0, 0.1); }
+}
+
+/* Ajuste para garantir que o timer do colapso chame atenção quando ativo */
+.pulse-text {
+    animation: textPulse 1s infinite;
+    font-weight: bold;
+    text-shadow: 0 0 5px red;
+}
+
+@keyframes textPulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.menu-item a {
+  font-size: 1em!important;
+}
+
+
+/* --- BOTÃO LATERAL (TOGGLE) --- */
+#toggleLogBtn {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    border: 1px solid gold;
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    padding: 0;
+    cursor: pointer;
+    z-index: 70; /* Acima de tudo */
+    transition: right 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;  /* Largura fixa para centralizar melhor */
+    height: 50px; /* Altura fixa */
+}
+
+#toggleLogBtn svg {
+    fill: gold;
+    width: 24px;
+    height: 24px;
+    animation: pulseBtn 2s infinite;
+}
+
+@keyframes pulseBtn {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* --- SIDEBAR LATERAL --- */
+#ruinsSidebar {
+    position: fixed;
+    top: 0;
+    right: -320px; /* Escondido por padrão */
+    width: 300px;
+    height: 100%;
+    background-color: rgba(10, 10, 10, 0.95);
+    border-left: 2px solid #444;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.8);
+    z-index: 80;
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(5px);
+}
+
+#ruinsSidebar.open {
+    right: 0;
+}
+
+/* Mover o botão junto com a sidebar */
+#ruinsSidebar.open + #toggleLogBtn {
+    right: 300px;
+}
+
+.sidebar-section {
+    padding: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.sidebar-header {
+    font-family: 'Cinzel', serif;
+    color: gold;
+    text-align: center;
+    margin: 5px 0 10px 0;
+    font-size: 1.1em;
+    text-transform: uppercase;
+}
+
+/* Metade Superior: Logs */
+#sidebarLogsArea {
+    flex: 1; /* Ocupa 50% ou o espaço restante */
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #333;
+    margin: 5px;
+    padding: 5px;
+    font-size: 0.8em;
+    display: flex;
+    flex-direction: column-reverse; /* Logs novos no topo se preferir, ou tire para padrão */
+}
+
+.sidebar-log-entry {
+    margin-bottom: 4px;
+    padding: 4px;
+    border-bottom: 1px solid #222;
+    color: #ccc;
+}
+.sidebar-log-entry span.time { color: #666; font-size: 0.9em; margin-right: 5px; }
+
+/* Metade Inferior: Participantes */
+#sidebarParticipantsArea {
+    height: 40%; /* Ajuste a altura conforme preferir */
+    overflow-y: auto;
+    border-top: 2px solid gold;
+    background: rgba(20, 20, 20, 0.5);
+    padding: 10px;
+}
+
+.sb-participant-card {
+    display: flex;
+    align-items: center;
+    background: #222;
+    margin-bottom: 8px;
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #444;
+}
+
+.sb-participant-card.dead { filter: grayscale(1); opacity: 0.6; border-color: #500; }
+.sb-participant-card.relic { border-color: cyan; box-shadow: 0 0 5px cyan; }
+
+.sb-p-avatar { width: 32px; height: 32px; border-radius: 50%; margin-right: 10px; object-fit: cover; }
+.sb-p-info { flex: 1; }
+.sb-p-name { font-size: 0.9em; font-weight: bold; color: white; display: block; }
+.sb-p-status { font-size: 0.7em; color: #aaa; }
+
+/* Adicione isso ao ruins.css */
+#classSelectionArea {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centraliza horizontalmente */
+    width: 100%;
+    text-align: center;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+/* Opcional: Ajuste para o botão não ficar colado na grid */
+#btnRegister {
+    margin-top: -40px;
+    min-width: 200px;    /* Tamanho mínimo para o botão ficar mais bonito */
+}

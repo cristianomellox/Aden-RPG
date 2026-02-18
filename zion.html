@@ -1619,13 +1619,20 @@ document.addEventListener("DOMContentLoaded", () => {
         { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
         { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
         { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
         { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
         { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
         { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
         { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
         { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
         { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
-        { name: "Resgate", url: "resgate.html", icon: assetBase + "resgate.webp" },
         
         // --- NOVO MENU CIDADES (DROPDOWN) ---
         { 

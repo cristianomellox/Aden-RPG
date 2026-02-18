@@ -2062,6 +2062,7 @@ button, .btn {
     white-space: nowrap;      
     width: 100%;
     box-sizing: border-box;
+    position: relative;
 }
 
 

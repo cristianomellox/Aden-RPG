@@ -276,7 +276,7 @@ async function checkMenuStatus() {
     }
     
     const used = data.tickets_used || 0;
-    els.tickets.textContent = Math.max(0, 2 - used);
+    els.tickets.textContent = Math.max(0, 3 - used);
 
     // Caso 1: Jogo Ativo e usuário registrado -> Entrar direto
     if (data.is_registered && data.status === 'active') {

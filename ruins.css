@@ -1048,6 +1048,8 @@ body {
 }
 
 
+
+/* Container do widget */
 #ruinsKillsRanking {
     width: 92%;
     max-width: 420px;
@@ -1091,7 +1093,7 @@ body {
 
 .rk-loading {
     text-align: center;
-    color: #666;
+    color: silver;
     padding: 16px;
     font-size: 0.85em;
 }
@@ -1127,9 +1129,17 @@ body {
     flex-shrink: 0;
 }
 
+/* Nome e guilda em coluna */
+.rk-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0; /* permite text-overflow funcionar dentro de flex */
+    justify-content: center;
+}
+
 /* Nome */
 .rk-name {
-    flex: 1;
     font-size: 0.85em;
     font-weight: bold;
     color: #e0dccc;
@@ -1137,6 +1147,19 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 1px 1px 2px #000;
+    line-height: 1.2;
+}
+
+/* Guilda */
+.rk-guild {
+    font-size: 0.72em;
+    color: lightblue;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px 2px #000;
+    line-height: 1.2;
 }
 
 /* Kills */

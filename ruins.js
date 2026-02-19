@@ -1,10 +1,5 @@
 import { supabase } from './supabaseClient.js';
 
-// =====================================================================
-// ADEN GLOBAL DB — Cache compartilhado com mines.js e arena.js
-// Mesma DB (aden_global_db v6) e mesma store (owners_store) para que
-// perfis baixados em qualquer tela fiquem disponíveis nas outras.
-// =====================================================================
 const GLOBAL_DB_NAME    = 'aden_global_db';
 const GLOBAL_DB_VERSION = 6;
 const OWNERS_STORE      = 'owners_store';
@@ -1131,8 +1126,8 @@ async function loadRuinsKillsRanking() {
     const widget = document.getElementById('ruinsKillsRanking');
     if (!widget) return;
 
-    // Cache até meia-noite UTC — não re-busca durante o dia
-    const CACHE_KEY = 'ruins_kills_ranking_v1';
+    // Chave v2: força re-fetch limpo após o fix de guild_name
+    const CACHE_KEY = 'ruins_kills_ranking_v2';
     const cached = (() => {
         try {
             const raw = localStorage.getItem(CACHE_KEY);
@@ -1150,23 +1145,31 @@ async function loadRuinsKillsRanking() {
         const { data, error } = await supabase.rpc('get_ruins_kills_ranking');
         if (error || !data) throw new Error('rpc failed');
 
-        // Hidrata apenas o top10 (slim: só id+kills vem do servidor)
-        const top10Hydrated = await hydrateProfiles(data.top10 || []);
-
-        // Tenta recuperar avatar + guild do próprio jogador no GlobalDB para o rodapé
-        const myOwner = (await GlobalDB.getAllOwners())[state.playerId];
+        // O SQL já retorna name + avatar_url + guild_name para o top10
+        // e my_name + my_avatar + my_guild para o jogador atual.
+        // Só precisamos salvar no GlobalDB para que outras telas se beneficiem.
+        const top10 = data.top10 || [];
+        if (top10.length > 0) {
+            // Salva no GlobalDB sem precisar hidratá-los (já vieram completos)
+            GlobalDB.saveOwners(top10.map(p => ({
+                id:         p.id,
+                name:       p.name,
+                avatar_url: p.avatar_url,
+                guild_name: p.guild_name || null
+            })));
+        }
 
         const result = {
-            top10:     top10Hydrated,
+            top10:     top10,
             my_rank:   data.my_rank,
             my_kills:  data.my_kills,
             my_id:     state.playerId,
-            my_name:   myOwner?.name       || 'Você',
-            my_avatar: myOwner?.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp',
-            my_guild:  myOwner?.guild_name || null
+            my_name:   data.my_name   || 'Você',
+            my_avatar: data.my_avatar || 'https://aden-rpg.pages.dev/avatar01.webp',
+            my_guild:  data.my_guild  || null
         };
 
-        // Salva cache com TTL até meia-noite UTC
+        // Cache com TTL até meia-noite UTC
         const expiresAt = Date.now() + getMinutesToMidnightUTC() * 60000;
         localStorage.setItem(CACHE_KEY, JSON.stringify({ data: result, expires: expiresAt }));
 

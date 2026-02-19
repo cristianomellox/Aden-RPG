@@ -1126,8 +1126,8 @@ async function loadRuinsKillsRanking() {
     const widget = document.getElementById('ruinsKillsRanking');
     if (!widget) return;
 
-    // Chave v2: força re-fetch limpo após o fix de guild_name
-    const CACHE_KEY = 'ruins_kills_ranking_v2';
+    // v3: força re-fetch limpo após fix de avatar/guilda com 0 kills
+    const CACHE_KEY = 'ruins_kills_ranking_v3';
     const cached = (() => {
         try {
             const raw = localStorage.getItem(CACHE_KEY);
@@ -1145,12 +1145,10 @@ async function loadRuinsKillsRanking() {
         const { data, error } = await supabase.rpc('get_ruins_kills_ranking');
         if (error || !data) throw new Error('rpc failed');
 
-        // O SQL já retorna name + avatar_url + guild_name para o top10
-        // e my_name + my_avatar + my_guild para o jogador atual.
-        // Só precisamos salvar no GlobalDB para que outras telas se beneficiem.
         const top10 = data.top10 || [];
+
+        // Salva top10 no GlobalDB para beneficiar outras telas
         if (top10.length > 0) {
-            // Salva no GlobalDB sem precisar hidratá-los (já vieram completos)
             GlobalDB.saveOwners(top10.map(p => ({
                 id:         p.id,
                 name:       p.name,
@@ -1159,14 +1157,31 @@ async function loadRuinsKillsRanking() {
             })));
         }
 
+        // Dados pessoais: servidor é a fonte primária.
+        // Fallback para GlobalDB caso o servidor retorne null
+        // (ex: jogador sem linha na tabela de kills ainda).
+        let myName   = data.my_name;
+        let myAvatar = data.my_avatar;
+        let myGuild  = data.my_guild;
+
+        if (!myName || !myAvatar) {
+            const globalCache = await GlobalDB.getAllOwners();
+            const me = globalCache[state.playerId];
+            if (me) {
+                myName   = myName   || me.name;
+                myAvatar = myAvatar || me.avatar_url;
+                myGuild  = myGuild  || me.guild_name;
+            }
+        }
+
         const result = {
             top10:     top10,
             my_rank:   data.my_rank,
             my_kills:  data.my_kills,
             my_id:     state.playerId,
-            my_name:   data.my_name   || 'Você',
-            my_avatar: data.my_avatar || 'https://aden-rpg.pages.dev/avatar01.webp',
-            my_guild:  data.my_guild  || null
+            my_name:   myName   || 'Você',
+            my_avatar: myAvatar || 'https://aden-rpg.pages.dev/avatar01.webp',
+            my_guild:  myGuild  || null
         };
 
         // Cache com TTL até meia-noite UTC

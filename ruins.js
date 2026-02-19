@@ -1,5 +1,10 @@
 import { supabase } from './supabaseClient.js';
 
+// =====================================================================
+// ADEN GLOBAL DB — Cache compartilhado com mines.js e arena.js
+// Mesma DB (aden_global_db v6) e mesma store (owners_store) para que
+// perfis baixados em qualquer tela fiquem disponíveis nas outras.
+// =====================================================================
 const GLOBAL_DB_NAME    = 'aden_global_db';
 const GLOBAL_DB_VERSION = 6;
 const OWNERS_STORE      = 'owners_store';
@@ -41,28 +46,46 @@ const GlobalDB = {
             const now = Date.now();
             list.forEach(o => {
                 if (!o.id) return;
-                st.put({ id: o.id, name: o.name, avatar_url: o.avatar_url || o.avatar, guild_id: o.guild_id, timestamp: now });
+                // Salva todos os campos que o IndexedDB das outras telas espera:
+                // id, name, avatar_url, guild_id, guild_name e timestamp.
+                st.put({
+                    id:         o.id,
+                    name:       o.name       || o.n,
+                    avatar_url: o.avatar_url || o.avatar || o.a,
+                    guild_id:   o.guild_id   || o.g   || null,
+                    guild_name: o.guild_name || null,
+                    timestamp:  now
+                });
             });
             return new Promise(r => { tx.oncomplete = () => r(); tx.onerror = () => r(); });
         } catch(e) { console.warn('[Ruins] GlobalDB.saveOwners:', e); }
     }
 };
 
-// Hidrata lista de esqueletos { id, ...campos } com nome+avatar do
+// Hidrata lista de esqueletos { id, ...campos } com nome+avatar+guild do
 // GlobalDB, baixando apenas os perfis ausentes via get_missing_profiles.
 // Idêntico ao padrão de arena.js para reuso do cache cross-tela.
 async function hydrateProfiles(skeletonList) {
     if (!skeletonList || skeletonList.length === 0) return [];
-    const cacheMap   = await GlobalDB.getAllOwners();
-    const missingIds = [];
-    const result     = [];
+    const cacheMap            = await GlobalDB.getAllOwners();
+    const missingIds          = [];
+    const idsToRenewTimestamp = []; // entradas encontradas no cache — renova TTL
+    const result              = [];
 
     skeletonList.forEach(item => {
         const tid = item.id;
         if (!tid) { result.push(item); return; }
         const cached = cacheMap[tid];
         if (cached && cached.name) {
-            result.push({ ...item, name: cached.name, avatar_url: cached.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp' });
+            // Cache hit: propaga nome, avatar E guild_id (necessário para outras telas)
+            result.push({
+                ...item,
+                name:       cached.name,
+                avatar_url: cached.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp',
+                guild_id:   item.guild_id || cached.guild_id,
+                guild_name: cached.guild_name || null
+            });
+            idsToRenewTimestamp.push(cached); // renova TTL depois
         } else {
             missingIds.push(tid);
             result.push({ ...item, _needsFetch: true });
@@ -73,12 +96,14 @@ async function hydrateProfiles(skeletonList) {
         try {
             const { data: fresh } = await supabase.rpc('get_missing_profiles', { p_user_ids: missingIds });
             if (fresh) {
-                await GlobalDB.saveOwners(fresh);
+                await GlobalDB.saveOwners(fresh); // salva com guild_id, nome, avatar e timestamp
                 fresh.forEach(fp => {
                     result.forEach(hItem => {
                         if (hItem.id === fp.id && hItem._needsFetch) {
                             hItem.name       = fp.name       || 'Desconhecido';
                             hItem.avatar_url = fp.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+                            hItem.guild_id   = hItem.guild_id || fp.guild_id;
+                            hItem.guild_name = fp.guild_name || null;
                             delete hItem._needsFetch;
                         }
                     });
@@ -86,7 +111,21 @@ async function hydrateProfiles(skeletonList) {
             }
         } catch(e) { console.warn('[Ruins] hydrateProfiles fetch:', e); }
     }
-    result.forEach(h => { if (h._needsFetch) { h.name = 'Desconhecido'; h.avatar_url = 'https://aden-rpg.pages.dev/avatar01.webp'; delete h._needsFetch; } });
+
+    // Fallback de segurança — perfis que falharam no fetch
+    result.forEach(h => {
+        if (h._needsFetch) {
+            h.name       = 'Desconhecido';
+            h.avatar_url = 'https://aden-rpg.pages.dev/avatar01.webp';
+            delete h._needsFetch;
+        }
+    });
+
+    // Renova TTL dos perfis que vieram do cache (keep-alive de 24h, igual à arena)
+    if (idsToRenewTimestamp.length > 0) {
+        await GlobalDB.saveOwners(idsToRenewTimestamp);
+    }
+
     return result;
 }
 
@@ -1114,16 +1153,17 @@ async function loadRuinsKillsRanking() {
         // Hidrata apenas o top10 (slim: só id+kills vem do servidor)
         const top10Hydrated = await hydrateProfiles(data.top10 || []);
 
-        // Tenta recuperar avatar do próprio jogador no GlobalDB para o rodapé
+        // Tenta recuperar avatar + guild do próprio jogador no GlobalDB para o rodapé
         const myOwner = (await GlobalDB.getAllOwners())[state.playerId];
 
         const result = {
-            top10:        top10Hydrated,
-            my_rank:      data.my_rank,
-            my_kills:     data.my_kills,
-            my_id:        state.playerId,
-            my_name:      myOwner?.name       || 'Você',
-            my_avatar:    myOwner?.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp'
+            top10:     top10Hydrated,
+            my_rank:   data.my_rank,
+            my_kills:  data.my_kills,
+            my_id:     state.playerId,
+            my_name:   myOwner?.name       || 'Você',
+            my_avatar: myOwner?.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp',
+            my_guild:  myOwner?.guild_name || null
         };
 
         // Salva cache com TTL até meia-noite UTC
@@ -1149,16 +1189,23 @@ function renderRuinsKillsRanking(data) {
         listHtml = '<li class="rk-loading">Nenhuma eliminação ainda este mês.</li>';
     } else {
         top10.forEach((p, i) => {
-            const pos    = i + 1;
-            const avatar = p.avatar_url || DEF_AVATAR;
-            const name   = esc(p.name || 'Desconhecido');
-            const kills  = Number(p.kills || 0);
-            const isMe   = p.id === data.my_id;
+            const pos       = i + 1;
+            const avatar    = p.avatar_url || DEF_AVATAR;
+            const name      = esc(p.name       || 'Desconhecido');
+            const guild     = esc(p.guild_name || '');
+            const kills     = Number(p.kills   || 0);
+            const isMe      = p.id === data.my_id;
+            const guildHtml = guild
+                ? `<span class="rk-guild">${guild}</span>`
+                : '';
             listHtml += `
             <li class="rk-item rk-p${pos}${isMe ? ' rk-me' : ''}">
                 <span class="rk-pos">${pos}.</span>
                 <img class="rk-avatar${pos === 1 ? ' rk-pulse' : ''}" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
-                <span class="rk-name">${name}</span>
+                <div class="rk-info">
+                    <span class="rk-name">${name}</span>
+                    ${guildHtml}
+                </div>
                 <span class="rk-kills">${kills} ☠</span>
             </li>`;
         });
@@ -1168,13 +1215,18 @@ function renderRuinsKillsRanking(data) {
     const inTop10 = top10.some(p => p.id === data.my_id);
     let footerHtml = '';
     if (!inTop10) {
-        const myAvatar = esc(data.my_avatar || DEF_AVATAR);
+        const myAvatar = data.my_avatar || DEF_AVATAR;
         const myName   = esc(data.my_name   || 'Você');
+        const myGuild  = esc(data.my_guild  || '');
+        const myGuildHtml = myGuild ? `<span class="rk-guild">${myGuild}</span>` : '';
         footerHtml = `
         <li class="rk-item rk-footer-personal rk-me">
             <span class="rk-pos">${data.my_rank}º</span>
             <img class="rk-avatar" src="${myAvatar}" onerror="this.src='${DEF_AVATAR}'">
-            <span class="rk-name">${myName}</span>
+            <div class="rk-info">
+                <span class="rk-name">${myName}</span>
+                ${myGuildHtml}
+            </div>
             <span class="rk-kills">${data.my_kills} ☠</span>
         </li>`;
     }

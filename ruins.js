@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient.js';
 
 // --- Configurações ---
-const POLLING_INTERVAL = 30000; 
+const POLLING_INTERVAL_ACTIVE   = 30000; // 30s — jogador ativo
+const POLLING_INTERVAL_SPECTATE = 60000; // 60s — espectador (metade das chamadas)
 
 // --- Estado Local ---
 let state = {
@@ -20,8 +21,17 @@ let state = {
     relicHolderId: null,
     relicRoomId: null, 
     isSpectating: false,
-    destroyedCount: 0, 
-    
+    destroyedCount: 0,
+
+    // Cache de participantes (avatar + nome por player_id)
+    // Populado na entrada do jogo, nunca re-baixado enquanto a sessão existe.
+    participantCache: {},   // { [playerId]: { name, avatar, is_bot } }
+    participantDeadCount: -1, // versão local: só re-renderiza sidebar quando muda
+
+    // Cache de poções durante o descanso
+    // Invalidado ao usar uma poção; reutilizado nos ciclos seguintes.
+    potionCache: null,      // null = inválido, array = dado válido
+
     // Estados para o Menu Lateral
     logHistory: [], 
     isSidebarOpen: false
@@ -177,6 +187,12 @@ function updateParticipantsSidebar(list, relicHolderId, relicRoomId) {
     list.sort((a, b) => (a.is_dead === b.is_dead) ? 0 : a.is_dead ? 1 : -1);
 
     list.forEach(p => {
+        // Enriquece com dados do cache local (avatar + nome nunca vêm mais no heartbeat)
+        const cached = state.participantCache[p.id] || {};
+        const avatar = cached.avatar || 'https://aden-rpg.pages.dev/avatar01.webp';
+        const name   = cached.name   || p.name || 'Jogador';
+        const is_bot = p.is_bot !== undefined ? p.is_bot : (cached.is_bot || false);
+
         const div = document.createElement('div');
         let classes = 'sb-participant-card';
         if (p.is_dead) classes += ' dead';
@@ -210,9 +226,9 @@ function updateParticipantsSidebar(list, relicHolderId, relicRoomId) {
         }
 
         div.innerHTML = `
-            <img src="${p.avatar || 'https://aden-rpg.pages.dev/avatar01.webp'}" class="sb-p-avatar">
+            <img src="${avatar}" class="sb-p-avatar">
             <div class="sb-p-info">
-                <span class="sb-p-name">${p.name} ${p.is_bot ? '[Bot]' : ''}</span>
+                <span class="sb-p-name">${name} ${is_bot ? '[Bot]' : ''}</span>
                 <span class="sb-p-status" style="color:${statusColor}">${statusText}</span>
                 ${hpBarHtml}
             </div>
@@ -408,6 +424,8 @@ async function enterGame() {
     state.myPlayer = data.my_state;
     state.battleEndsAt = new Date(data.battle_ends_at);
     state.logHistory = []; 
+    state.participantDeadCount = -1; // força 1ª renderização completa da sidebar
+    state.potionCache = null;        // invalida cache de poções ao iniciar nova partida
     
     if (data.collapse_start) {
         state.collapseStartAt = new Date(data.collapse_start);
@@ -423,10 +441,20 @@ async function enterGame() {
     updateTimers();
     
     if(data.participants_list) {
+        // Popula cache local de avatar+nome uma única vez.
+        // O heartbeat não retorna mais esses campos — economiza
+        // ~1.5 KB de URLs por chamada (10 avatares × ~150 chars cada).
+        data.participants_list.forEach(p => {
+            const id = p.id || p.player_id;
+            if (id) {
+                state.participantCache[id] = {
+                    name:   p.name,
+                    avatar: p.avatar || p.avatar_url,
+                    is_bot: p.is_bot
+                };
+            }
+        });
         updateParticipantsSidebar(data.participants_list, data.relic_holder, null);
-    }
-    
-    if(data.participants_list) {
         await showMatchIntro(data.participants_list);
     }
 
@@ -642,15 +670,34 @@ async function startCooldownTimer(seconds) {
 }
 
 async function loadRestPotions() {
+    // Cache de poções: evita um RPC a cada jogada.
+    // O cache é invalidado apenas quando o jogador usa uma poção
+    // (ver usePotion) ou ao iniciar nova partida (enterGame).
+    if (state.potionCache !== null) {
+        renderPotionList(state.potionCache);
+        return;
+    }
+
     els.restPotionList.innerHTML = '<span style="font-size:0.8em; color:#aaa;">Carregando...</span>';
     const { data, error } = await supabase.rpc('get_ruins_potions');
     els.restPotionList.innerHTML = '';
 
     if (error || !data || data.length === 0) {
+        state.potionCache = []; // armazena lista vazia para não re-buscar
         els.restPotionList.innerHTML = '<span style="font-size:0.8em; color:#555;">Nenhuma poção disponível</span>';
         return;
     }
 
+    state.potionCache = data;
+    renderPotionList(data);
+}
+
+function renderPotionList(data) {
+    els.restPotionList.innerHTML = '';
+    if (!data || data.length === 0) {
+        els.restPotionList.innerHTML = '<span style="font-size:0.8em; color:#555;">Nenhuma poção disponível</span>';
+        return;
+    }
     data.forEach(pot => {
         const div = document.createElement('div');
         div.style.cssText = "position: relative; width: 80px; height: 80px; background: #222; border: 4px solid #777; border-radius: 8px; cursor: pointer; display: flex; gap: 100px;";
@@ -682,6 +729,8 @@ async function usePotion(itemId) {
     state.myPlayer.hp = data.new_hp;
     updateHUD();
     
+    // Invalida cache: quantidade mudou, precisa re-buscar do servidor
+    state.potionCache = null;
     await loadRestPotions();
 }
 
@@ -918,78 +967,91 @@ function updateTimers() {
 
 // --- Heartbeat e Sincronização ---
 let heartbeatInterval = null;
+
 function startHeartbeat() {
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = setInterval(async () => {
-        const { data, error } = await supabase.rpc('sync_ruins_state', {
-            p_session_id: state.sessionId,
-            p_last_event_ts: state.lastEventTs
-        });
+    if (heartbeatInterval) clearTimeout(heartbeatInterval);
+    scheduleNextHeartbeat();
+}
 
-        if (error) return;
+function scheduleNextHeartbeat() {
+    // Espectadores recebem metade das chamadas — mesmos dados com o dobro do intervalo.
+    const interval = state.isSpectating ? POLLING_INTERVAL_SPECTATE : POLLING_INTERVAL_ACTIVE;
+    heartbeatInterval = setTimeout(runHeartbeat, interval);
+}
 
-        // Atualiza Lista de Participantes na Sidebar
-        if (data.participants_summary) {
-            updateParticipantsSidebar(data.participants_summary, data.relic_holder, data.relic_room_id);
-        }
+async function runHeartbeat() {
+    const { data, error } = await supabase.rpc('sync_ruins_state', {
+        p_session_id:    state.sessionId,
+        p_last_event_ts: state.lastEventTs,
+        p_dead_count:    state.participantDeadCount   // NOVO: envia versão local
+    });
 
-        if (state.myPlayer) {
-            if (data.ap !== undefined) state.myPlayer.ap = data.ap;
-            if (data.hp !== undefined) state.myPlayer.hp = data.hp;
-            updateHUD();
-        }
+    if (error) { scheduleNextHeartbeat(); return; }
 
-        if (data.destroyed_count !== undefined) {
-            state.destroyedCount = data.destroyed_count;
-        }
+    // Sidebar de Participantes: só re-renderiza quando o servidor retorna
+    // participants_summary, ou seja, quando alguém morreu desde a última chamada.
+    // Quando não há mudanças, o servidor retorna null e economizamos ~3-5 KB.
+    if (data.participants_summary) {
+        state.participantDeadCount = data.dead_count;
+        updateParticipantsSidebar(data.participants_summary, data.relic_holder, data.relic_room_id);
+    } else if (data.dead_count !== undefined && data.dead_count !== state.participantDeadCount) {
+        // Sincronização de fallback: atualiza contador mesmo sem summary
+        state.participantDeadCount = data.dead_count;
+    }
 
-        if (data.status === 'finished') {
-            if (data.winner) {
-                endGame({ win: true, message: "VITÓRIA! Você é o último sobrevivente.\n+50 Moedas Rúnicas!" });
-            } else {
-                endGame({ win: false, message: "A partida terminou. Não restaram sobreviventes." });
-            }
-            return;
-        }
-        
-        if (data.is_dead && !ignoreHeartbeatDeath && !state.isSpectating) {
-            if (data.killed_by_collapse) {
-                endGame({ win: false, message: "Você foi eliminado pelo colapso." });
-                return;
-            } else {
-                endGame({ win: false, message: "Você foi eliminado em combate." });
-                return;
-            }
-        }
+    if (state.myPlayer) {
+        if (data.ap !== undefined) state.myPlayer.ap = data.ap;
+        if (data.hp !== undefined) state.myPlayer.hp = data.hp;
+        updateHUD();
+    }
 
-        if (data.events && data.events.length > 0) {
-            data.events.forEach(evt => {
-                if (evt.msg.includes(`atacou ${state.myPlayer.name}`)) {
-                    logEvent("Você foi atacado!", "kill");
-                    playSound('loss'); 
-                }
-                logEvent(evt.msg, evt.type);
-                state.lastEventTs = Math.max(state.lastEventTs, evt.t);
-            });
-        }
-        
-        if (data.relic_holder) {
-            state.relicHolderId = data.relic_holder;
-            els.relicStatus.textContent = "Relíquia: TOMADA!";
-            els.relicStatus.style.color = "silver";
-            
-            // Log da sala do portador (Novo)
-            if (data.relic_room_id) {
-                logEvent(`O Portador da Relíquia está na Sala ${data.relic_room_id}`, "relic");
-            }
+    if (data.destroyed_count !== undefined) {
+        state.destroyedCount = data.destroyed_count;
+    }
+
+    if (data.status === 'finished') {
+        if (data.winner) {
+            endGame({ win: true, message: "VITÓRIA! Você é o último sobrevivente.\n+50 Moedas Rúnicas!" });
         } else {
-            state.relicHolderId = null;
-            els.relicStatus.textContent = "Relíquia: Livre";
-            els.relicStatus.style.color = "gold";
-            // No log about location
+            endGame({ win: false, message: "A partida terminou. Não restaram sobreviventes." });
         }
+        return; // não reagenda
+    }
+    
+    if (data.is_dead && !ignoreHeartbeatDeath && !state.isSpectating) {
+        if (data.killed_by_collapse) {
+            endGame({ win: false, message: "Você foi eliminado pelo colapso." });
+        } else {
+            endGame({ win: false, message: "Você foi eliminado em combate." });
+        }
+        return; // não reagenda
+    }
 
-    }, POLLING_INTERVAL);
+    if (data.events && data.events.length > 0) {
+        data.events.forEach(evt => {
+            if (evt.msg.includes(`atacou ${state.myPlayer.name}`)) {
+                logEvent("Você foi atacado!", "kill");
+                playSound('loss'); 
+            }
+            logEvent(evt.msg, evt.type);
+            state.lastEventTs = Math.max(state.lastEventTs, evt.t);
+        });
+    }
+    
+    if (data.relic_holder) {
+        state.relicHolderId = data.relic_holder;
+        els.relicStatus.textContent = "Relíquia: TOMADA!";
+        els.relicStatus.style.color = "silver";
+        if (data.relic_room_id) {
+            logEvent(`O Portador da Relíquia está na Sala ${data.relic_room_id}`, "relic");
+        }
+    } else {
+        state.relicHolderId = null;
+        els.relicStatus.textContent = "Relíquia: Livre";
+        els.relicStatus.style.color = "gold";
+    }
+
+    scheduleNextHeartbeat(); // agenda próximo ciclo
 }
 
 // --- Fim de Jogo ---
@@ -1032,7 +1094,7 @@ function endGame(data) {
         };
         modalContent.appendChild(btnSpectate);
     } else {
-        if(heartbeatInterval) clearInterval(heartbeatInterval);
+        if(heartbeatInterval) clearTimeout(heartbeatInterval);
         if(state.cooldownInterval) clearInterval(state.cooldownInterval);
     }
 

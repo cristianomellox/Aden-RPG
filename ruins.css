@@ -1046,3 +1046,169 @@ body {
     margin-top: -40px;
     min-width: 200px;    /* Tamanho mínimo para o botão ficar mais bonito */
 }
+
+
+#ruinsKillsRanking {
+    width: 92%;
+    max-width: 420px;
+    margin: 18px auto 80px;
+    background: linear-gradient(180deg, rgba(20,16,10,0.95), rgba(30,24,14,0.98));
+    border: 2px solid #c9a94a;
+    border-radius: 12px;
+    box-shadow: 0 0 18px rgba(201,169,74,0.25), 0 4px 20px rgba(0,0,0,0.7);
+    overflow: hidden;
+}
+
+/* Cabeçalho */
+.rk-header {
+    padding: 12px 16px 6px;
+    border-bottom: 1px solid rgba(201,169,74,0.3);
+    text-align: center;
+}
+
+.rk-title {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: bold;
+    color: #c9a94a;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 8px rgba(201,169,74,0.5), 1px 1px 2px #000;
+}
+
+.rk-subtitle {
+    margin: 3px 0 0;
+    font-size: 0.68em;
+    color: #888;
+    font-style: italic;
+}
+
+/* Lista */
+.rk-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.rk-loading {
+    text-align: center;
+    color: #666;
+    padding: 16px;
+    font-size: 0.85em;
+}
+
+/* Item genérico */
+.rk-item {
+    display: flex;
+    align-items: center;
+    padding: 7px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    gap: 8px;
+    transition: background 0.2s;
+}
+.rk-item:last-child { border-bottom: none; }
+
+/* Posição */
+.rk-pos {
+    width: 30px;
+    min-width: 30px;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #c9a94a;
+    text-align: center;
+}
+
+/* Avatar */
+.rk-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #666;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* Nome */
+.rk-name {
+    flex: 1;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #e0dccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px 2px #000;
+}
+
+/* Kills */
+.rk-kills {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #ff6b6b;
+    white-space: nowrap;
+    text-shadow: 0 0 6px rgba(255,80,80,0.4), 1px 1px 2px #000;
+}
+
+/* Destaque do jogador atual */
+.rk-me {
+    background: rgba(255,255,255,0.05);
+    outline: 1px solid rgba(201,169,74,0.25);
+}
+.rk-me .rk-name { color: #ffd700; }
+
+/* ---- Top 3 — espelha exatamente o padrão de arena.css ---- */
+
+/* 1º Lugar (Ouro) */
+.rk-p1 {
+    background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09);
+    border-left: 5px solid gold !important;
+}
+.rk-p1 .rk-pos,
+.rk-p1 .rk-kills  { color: #FFD700; text-shadow: 0 0 8px #FFD700, 0 0 15px #000; }
+.rk-p1 .rk-avatar { border: 4px solid #FFD700 !important; box-shadow: 0 0 10px rgba(255,215,0,0.7); }
+
+/* 2º Lugar (Prata) */
+.rk-p2 {
+    background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c);
+    border-left: 5px solid silver !important;
+}
+.rk-p2 .rk-pos,
+.rk-p2 .rk-kills  { color: silver; text-shadow: 0 0 8px silver; }
+.rk-p2 .rk-avatar { border: 4px solid silver !important; box-shadow: 0 0 10px rgba(192,192,192,0.7); }
+
+/* 3º Lugar (Bronze) */
+.rk-p3 {
+    background: linear-gradient(180deg, rgba(173,99,26,0.5), rgba(152,81,11,0.7), rgba(173,99,26,0.5));
+    border-left: 5px solid #CD7F32 !important;
+}
+.rk-p3 .rk-pos,
+.rk-p3 .rk-kills  { color: #CD7F32; text-shadow: 0 0 8px #CD7F32; }
+.rk-p3 .rk-avatar { border: 4px solid #CD7F32 !important; box-shadow: 0 0 10px rgba(205,127,50,0.7); }
+
+/* Pulse no avatar do 1º lugar — mesma animação de arena.css */
+@keyframes ruins-pulse {
+    0%   { box-shadow: 0 0 0px rgba(255,215,0,1); }
+    70%  { box-shadow: 2px 2px 56px rgba(255,215,0,0.9); }
+    100% { box-shadow: 0 0 0 rgba(255,215,0,0.8); }
+}
+.rk-pulse {
+    animation: ruins-pulse 2s infinite;
+}
+
+/* ---- Rodapé pessoal (posição do jogador fora do top 10) ---- */
+.rk-footer-personal {
+    background: linear-gradient(to top, #141414, #2a2a2a);
+    border-top: 2px solid #c9a94a !important;
+    border-bottom: none !important;
+    position: relative;
+}
+.rk-footer-personal::before {
+    content: '· · ·';
+    display: block;
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75em;
+    color: #555;
+    letter-spacing: 4px;
+}

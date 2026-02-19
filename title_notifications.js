@@ -126,6 +126,9 @@ async function processUpdates(cities, localTimestamps) {
         // Inicializa estrutura se não existir
         if (!storedHolders[city.id]) storedHolders[city.id] = {};
         
+        // Verifica se já temos histórico dessa cidade (para evitar notificar no primeiro load do app)
+        const hasHistory = localTimestamps[city.id] !== undefined;
+
         // 1. Busca dados do Líder (Rei/Lord) da guilda dona
         // Fazemos isso individualmente pois donos mudam pouco e são poucos requests
         let leaderTitle = 'Líder';
@@ -146,13 +149,14 @@ async function processUpdates(cities, localTimestamps) {
             }
         }
 
-        // --- LÓGICA DE COROAÇÃO (RESTAURADA) ---
+        // --- LÓGICA DE COROAÇÃO ---
         // Verifica se a cidade é a Capital (ID 1) e se o dono mudou
         if (city.id === 1 && city.owner) {
             const previousOwner = storedOwners[city.id];
             
-            // Se existia um dono anterior e ele é diferente do atual
-            if (previousOwner && previousOwner !== city.owner) {
+            // Se temos histórico (não é a primeira vez abrindo o app) e o dono mudou
+            // Isso cobre o caso de null -> GuildID (conquista de cidade neutra)
+            if (hasHistory && city.owner !== previousOwner) {
                 queueNotification({
                     type: 'coronation', // Tipo especial
                     leaderTitle,
@@ -167,7 +171,7 @@ async function processUpdates(cities, localTimestamps) {
                 storageUpdated = true;
             }
         } else {
-             // Para outras cidades apenas atualizamos o cache sem notificar coroação (ou adicione aqui se quiser para Lords)
+             // Para outras cidades apenas atualizamos o cache sem notificar coroação
              if (storedOwners[city.id] !== city.owner) {
                 storedOwners[city.id] = city.owner;
                 storageUpdated = true;
@@ -186,8 +190,8 @@ async function processUpdates(cities, localTimestamps) {
 
             // Cenário: Existe um jogador atual para este cargo
             if (currentPlayer) {
-                // Se o nome for diferente do armazenado, TEMOS UM NOVO TITULAR
-                if (currentPlayer.name !== previousHolderName) {
+                // Se o nome for diferente do armazenado E temos histórico, TEMOS UM NOVO TITULAR
+                if (hasHistory && currentPlayer.name !== previousHolderName) {
                     
                     // Determina o nome do cargo
                     let roleName = 'Nobre';
@@ -208,11 +212,14 @@ async function processUpdates(cities, localTimestamps) {
                         roleName,
                         cityName: city.name
                     });
+                }
 
-                    // Atualiza o cache local com o novo dono
+                // Atualiza o cache local com o novo dono (sempre, para manter sincronia)
+                if (storedHolders[city.id][roleId] !== currentPlayer.name) {
                     storedHolders[city.id][roleId] = currentPlayer.name;
                     storageUpdated = true;
                 }
+
             } else {
                 // Se não tem jogador agora, mas tinha antes (foi removido/exonerado)
                 if (previousHolderName) {
@@ -257,12 +264,13 @@ function processQueue() {
     // Lógica de Renderização Baseada no Tipo
     if (data.type === 'coronation') {
         // --- NOTIFICAÇÃO DE COROAÇÃO (Vida Longa ao Rei) ---
+        const crownIcon = '👑';
         banner.classList.add('royal-announcement');
         banner.innerHTML = `
-            <div style="font-size: 2.2em;">👑</div>
-            <div style="font-size: 1.2em; line-height: 1.2;">
-                <span style="color: #ff4444; font-weight: bold; text-shadow: 1px 1px 2px black;">Vida Longa ao ${data.leaderTitle}!</span><br>
-                <strong>${data.leaderName}</strong> conquistou a <span style="color: gold;">Capital</span>!
+            <div style="font-size: 1.8em; filter: drop-shadow(0 0 5px gold);">${crownIcon}</div>
+            <div style="font-size: 1.2em; line-height: 1.4;">
+                Vida longa a <span style="color: #ffda44; font-weight: bold; text-transform: uppercase;">${data.leaderName}</span>,<br>
+                ${data.leaderTitle === 'Rei' ? 'novo' : 'nova'} <strong>${data.leaderTitle}</strong> de Aden!
             </div>
         `;
     } else {

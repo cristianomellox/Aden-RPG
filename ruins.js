@@ -1,5 +1,102 @@
 import { supabase } from './supabaseClient.js';
 
+const GLOBAL_DB_NAME    = 'aden_global_db';
+const GLOBAL_DB_VERSION = 6;
+const OWNERS_STORE      = 'owners_store';
+
+const GlobalDB = {
+    open() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('auth_store'))   db.createObjectStore('auth_store',   { keyPath: 'key' });
+                if (!db.objectStoreNames.contains('player_store')) db.createObjectStore('player_store', { keyPath: 'key' });
+                if (!db.objectStoreNames.contains(OWNERS_STORE))   db.createObjectStore(OWNERS_STORE,   { keyPath: 'id'  });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror   = () => reject(req.error);
+        });
+    },
+    async getAllOwners() {
+        try {
+            const db = await this.open();
+            return new Promise(resolve => {
+                const req = db.transaction(OWNERS_STORE, 'readonly').objectStore(OWNERS_STORE).getAll();
+                req.onsuccess = () => {
+                    const map = {};
+                    (req.result || []).forEach(o => { map[o.id] = o; });
+                    resolve(map);
+                };
+                req.onerror = () => resolve({});
+            });
+        } catch(e) { return {}; }
+    },
+    async saveOwners(list) {
+        if (!list || list.length === 0) return;
+        try {
+            const db  = await this.open();
+            const tx  = db.transaction(OWNERS_STORE, 'readwrite');
+            const st  = tx.objectStore(OWNERS_STORE);
+            const now = Date.now();
+            list.forEach(o => {
+                if (!o.id) return;
+                st.put({ id: o.id, name: o.name, avatar_url: o.avatar_url || o.avatar, guild_id: o.guild_id, timestamp: now });
+            });
+            return new Promise(r => { tx.oncomplete = () => r(); tx.onerror = () => r(); });
+        } catch(e) { console.warn('[Ruins] GlobalDB.saveOwners:', e); }
+    }
+};
+
+// Hidrata lista de esqueletos { id, ...campos } com nome+avatar do
+// GlobalDB, baixando apenas os perfis ausentes via get_missing_profiles.
+// Idêntico ao padrão de arena.js para reuso do cache cross-tela.
+async function hydrateProfiles(skeletonList) {
+    if (!skeletonList || skeletonList.length === 0) return [];
+    const cacheMap   = await GlobalDB.getAllOwners();
+    const missingIds = [];
+    const result     = [];
+
+    skeletonList.forEach(item => {
+        const tid = item.id;
+        if (!tid) { result.push(item); return; }
+        const cached = cacheMap[tid];
+        if (cached && cached.name) {
+            result.push({ ...item, name: cached.name, avatar_url: cached.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp' });
+        } else {
+            missingIds.push(tid);
+            result.push({ ...item, _needsFetch: true });
+        }
+    });
+
+    if (missingIds.length > 0) {
+        try {
+            const { data: fresh } = await supabase.rpc('get_missing_profiles', { p_user_ids: missingIds });
+            if (fresh) {
+                await GlobalDB.saveOwners(fresh);
+                fresh.forEach(fp => {
+                    result.forEach(hItem => {
+                        if (hItem.id === fp.id && hItem._needsFetch) {
+                            hItem.name       = fp.name       || 'Desconhecido';
+                            hItem.avatar_url = fp.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+                            delete hItem._needsFetch;
+                        }
+                    });
+                });
+            }
+        } catch(e) { console.warn('[Ruins] hydrateProfiles fetch:', e); }
+    }
+    result.forEach(h => { if (h._needsFetch) { h.name = 'Desconhecido'; h.avatar_url = 'https://aden-rpg.pages.dev/avatar01.webp'; delete h._needsFetch; } });
+    return result;
+}
+
+// Minutos até a próxima meia-noite UTC (para TTL do cache do ranking)
+function getMinutesToMidnightUTC() {
+    const now      = new Date();
+    const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    return Math.max(1, Math.floor((midnight - now) / 60000));
+}
+
 // --- Configurações ---
 const POLLING_INTERVAL_ACTIVE   = 30000; // 30s — jogador ativo
 const POLLING_INTERVAL_SPECTATE = 60000; // 60s — espectador (metade das chamadas)
@@ -316,6 +413,7 @@ async function checkMenuStatus() {
         els.status.style.color = "gold";
         els.classArea.style.display = 'block';
         els.waitingArea.style.display = 'none';
+        hideRuinsKillsRanking(); // não aparece durante a seleção de classe
         updateTimers();
     }
     // Caso 4: Fechado
@@ -324,6 +422,8 @@ async function checkMenuStatus() {
         els.status.style.color = "#aaa";
         els.classArea.style.display = 'none';
         els.waitingArea.style.display = 'none';
+        showRuinsKillsRanking();
+        loadRuinsKillsRanking();
         updateTimers();
     }
 }
@@ -363,6 +463,9 @@ function showWaitingScreen() {
     document.getElementById('selectedClassName').textContent = state.selectedClass ? getClassName(state.selectedClass) : "REGISTRADO";
     els.status.textContent = "Aguardando Início...";
     els.status.style.color = "cyan";
+    // Mostra ranking abaixo do spinner após escolha de classe
+    showRuinsKillsRanking();
+    loadRuinsKillsRanking();
 }
 
 async function pollLobbyStart() {
@@ -454,6 +557,12 @@ async function enterGame() {
                 };
             }
         });
+        // Persiste no GlobalDB (shared com mines.js e arena.js) —
+        // apenas perfis humanos (bots não têm perfis reais)
+        const humanParticipants = data.participants_list.filter(p => !p.is_bot);
+        if (humanParticipants.length > 0) GlobalDB.saveOwners(humanParticipants.map(p => ({
+            id: p.id || p.player_id, name: p.name, avatar_url: p.avatar || p.avatar_url
+        })));
         updateParticipantsSidebar(data.participants_list, data.relic_holder, null);
         await showMatchIntro(data.participants_list);
     }
@@ -963,6 +1072,114 @@ function updateTimers() {
             if(els.collapseOverlay) els.collapseOverlay.style.display = 'block';
         }
     }
+}
+
+// =====================================================================
+// RANKING DE ELIMINAÇÕES DAS RUÍNAS
+// =====================================================================
+
+function showRuinsKillsRanking() {
+    const el = document.getElementById('ruinsKillsRanking');
+    if (el) el.style.display = 'block';
+}
+
+function hideRuinsKillsRanking() {
+    const el = document.getElementById('ruinsKillsRanking');
+    if (el) el.style.display = 'none';
+}
+
+async function loadRuinsKillsRanking() {
+    const widget = document.getElementById('ruinsKillsRanking');
+    if (!widget) return;
+
+    // Cache até meia-noite UTC — não re-busca durante o dia
+    const CACHE_KEY = 'ruins_kills_ranking_v1';
+    const cached = (() => {
+        try {
+            const raw = localStorage.getItem(CACHE_KEY);
+            if (!raw) return null;
+            const { data, expires } = JSON.parse(raw);
+            return Date.now() < expires ? data : null;
+        } catch { return null; }
+    })();
+
+    if (cached) { renderRuinsKillsRanking(cached); return; }
+
+    widget.querySelector('.rk-list').innerHTML = '<li class="rk-loading">Carregando...</li>';
+
+    try {
+        const { data, error } = await supabase.rpc('get_ruins_kills_ranking');
+        if (error || !data) throw new Error('rpc failed');
+
+        // Hidrata apenas o top10 (slim: só id+kills vem do servidor)
+        const top10Hydrated = await hydrateProfiles(data.top10 || []);
+
+        // Tenta recuperar avatar do próprio jogador no GlobalDB para o rodapé
+        const myOwner = (await GlobalDB.getAllOwners())[state.playerId];
+
+        const result = {
+            top10:        top10Hydrated,
+            my_rank:      data.my_rank,
+            my_kills:     data.my_kills,
+            my_id:        state.playerId,
+            my_name:      myOwner?.name       || 'Você',
+            my_avatar:    myOwner?.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp'
+        };
+
+        // Salva cache com TTL até meia-noite UTC
+        const expiresAt = Date.now() + getMinutesToMidnightUTC() * 60000;
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data: result, expires: expiresAt }));
+
+        renderRuinsKillsRanking(result);
+    } catch(e) {
+        widget.querySelector('.rk-list').innerHTML = '<li class="rk-loading" style="color:#555;">Não foi possível carregar.</li>';
+    }
+}
+
+function renderRuinsKillsRanking(data) {
+    const widget = document.getElementById('ruinsKillsRanking');
+    if (!widget || !data) return;
+
+    const DEF_AVATAR = 'https://aden-rpg.pages.dev/avatar01.webp';
+    const top10      = data.top10 || [];
+    const esc        = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    let listHtml = '';
+    if (top10.length === 0) {
+        listHtml = '<li class="rk-loading">Nenhuma eliminação ainda este mês.</li>';
+    } else {
+        top10.forEach((p, i) => {
+            const pos    = i + 1;
+            const avatar = p.avatar_url || DEF_AVATAR;
+            const name   = esc(p.name || 'Desconhecido');
+            const kills  = Number(p.kills || 0);
+            const isMe   = p.id === data.my_id;
+            listHtml += `
+            <li class="rk-item rk-p${pos}${isMe ? ' rk-me' : ''}">
+                <span class="rk-pos">${pos}.</span>
+                <img class="rk-avatar${pos === 1 ? ' rk-pulse' : ''}" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
+                <span class="rk-name">${name}</span>
+                <span class="rk-kills">${kills} ☠</span>
+            </li>`;
+        });
+    }
+
+    // Rodapé pessoal — só aparece se jogador não está no top10
+    const inTop10 = top10.some(p => p.id === data.my_id);
+    let footerHtml = '';
+    if (!inTop10) {
+        const myAvatar = esc(data.my_avatar || DEF_AVATAR);
+        const myName   = esc(data.my_name   || 'Você');
+        footerHtml = `
+        <li class="rk-item rk-footer-personal rk-me">
+            <span class="rk-pos">${data.my_rank}º</span>
+            <img class="rk-avatar" src="${myAvatar}" onerror="this.src='${DEF_AVATAR}'">
+            <span class="rk-name">${myName}</span>
+            <span class="rk-kills">${data.my_kills} ☠</span>
+        </li>`;
+    }
+
+    widget.querySelector('.rk-list').innerHTML = listHtml + footerHtml;
 }
 
 // --- Heartbeat e Sincronização ---

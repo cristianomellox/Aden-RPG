@@ -707,11 +707,15 @@ function renderResultsScreen(instance, playerDamageRanking) {
         }
     }
     
+    // Rank do jogador DENTRO DA PRÓPRIA GUILDA (espelha a lógica do SQL distribute_battle_rewards)
     let myPlayerDamageRank = -1;
     if (playerDamageRanking && playerDamageRanking.length > 0) {
-        const myDamageData = playerDamageRanking.find(p => p.player_id === userId);
+        const myGuildDamageRanking = playerDamageRanking
+            .filter(p => p.guild_id === userGuildId)
+            .sort((a, b) => b.total_damage_dealt - a.total_damage_dealt);
+        const myDamageData = myGuildDamageRanking.find(p => p.player_id === userId);
         if (myDamageData) {
-            myPlayerDamageRank = playerDamageRanking.indexOf(myDamageData) + 1;
+            myPlayerDamageRank = myGuildDamageRanking.indexOf(myDamageData) + 1;
         }
     }
 
@@ -772,6 +776,38 @@ function renderResultsScreen(instance, playerDamageRanking) {
         playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "6000 (Base) + 6000 (Bônus)");
         playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "8 (Base) + 8 (Bônus)");
         playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "100 (Base) + 100 (Bônus)");
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+    } else if (myGuildRank === 2 && myPlayerDamageRank === 1) {
+        playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano na guilda (Multiplicador 3x):</p>';
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "2000 (Base) + 4000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "12 (Base) + 24 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "40 (Base) + 80 (Bônus)");
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+    } else if (myGuildRank === 2 && myPlayerDamageRank === 2) {
+        playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano na guilda (Multiplicador 2x):</p>';
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "2000 (Base) + 2000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "12 (Base) + 12 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "40 (Base) + 40 (Bônus)");
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+    } else if (myGuildRank === 3 && myPlayerDamageRank === 1) {
+        playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano na guilda (Multiplicador 3x):</p>';
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "1000 (Base) + 2000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "8 (Base) + 16 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "20 (Base) + 40 (Bônus)");
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+    } else if (myGuildRank === 3 && myPlayerDamageRank === 2) {
+        playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano na guilda (Multiplicador 2x):</p>';
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "1000 (Base) + 1000 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "8 (Base) + 8 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "20 (Base) + 20 (Bônus)");
         playerRewardsHTML += '</div>';
         hasPlayerRewards = true;
     }
@@ -903,8 +939,24 @@ function handleObjectiveClick(objective) {
     modals.objectiveAttackBtn.style.opacity = isOwned ? '0.6' : '1';
     modals.objectiveGarrisonBtn.style.display = isOwned ? 'inline-block' : 'none';
 
+    // Checa se o jogador JÁ está guarnecendo ESTE objetivo específico
+    const isAlreadyGarrisoningThis = currentBattleState.player_garrison && 
+                                     currentBattleState.player_garrison.objective_id === fullObjective.id;
+
+    if (isAlreadyGarrisoningThis) {
+        modals.objectiveGarrisonBtn.disabled = true;
+        modals.objectiveGarrisonBtn.style.filter = 'grayscale(1)';
+        modals.objectiveGarrisonBtn.style.opacity = '0.6';
+        modals.objectiveGarrisonBtn.title = 'Você já está guarnecendo este objetivo';
+    } else {
+        modals.objectiveGarrisonBtn.disabled = false;
+        modals.objectiveGarrisonBtn.style.filter = '';
+        modals.objectiveGarrisonBtn.style.opacity = '1';
+        modals.objectiveGarrisonBtn.title = '';
+    }
+
     const isGarrisonedElsewhere = currentBattleState.player_garrison && 
-                                  (!isOwned || currentBattleState.player_garrison.objective_id !== fullObjective.id);
+                                  !isAlreadyGarrisoningThis;
                                   
     modals.objectiveGarrisonWarning.style.display = isGarrisonedElsewhere ? 'block' : 'none';
     modals.objectiveGarrisonWarning.textContent = "Atenção: Esta ação removerá você da sua guarnição atual.";

@@ -802,7 +802,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (challengeBtn) {
                     if (attempts <= 0) {
                         challengeBtn.disabled = true;
-                        challengeBtn.textContent = "Volte às 21h00";
+                        challengeBtn.textContent = "Volte à meia-noite UTC";
                         challengeBtn.style.filter = "grayscale(1)";
                         challengeBtn.style.cursor = "not-allowed";
                     } else {

@@ -1085,7 +1085,7 @@ body {
     0 0 2px black,
     0 0 4px black;
   position: absolute!important;
-  margin-left: -120px!important;
+  margin-left: -60px!important;
   top: 26px!important;
   background: none!important;
     border-radius: none!important;
@@ -1476,7 +1476,7 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
     0 0 2px black,
     0 0 4px black;
   position: absolute!important;
-  margin-left: -65px!important;
+  margin-left: -2px!important;
   top: 50px!important;
   
     border-radius: none!important;

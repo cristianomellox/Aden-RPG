@@ -654,8 +654,8 @@ body {
         <div class="footer-submenu-btn" style="display:none;">
             <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Oficina
         </div>
-        <div style="display: none;" class="footer-submenu-btn">
-            <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Escambo
+                <div class="footer-submenu-btn" id="btnMercador">
+            <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Mercador
         </div>
     </div>
     
@@ -674,6 +674,17 @@ body {
             
             <div id="potionShopGrid" class="potion-grid">
                 <!-- Itens gerados via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Mercador -->
+    <div id="mercadorModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content" id="mercadorModalContent" style="width:100%;height:100%;max-width:100%;max-height:100vh;background:transparent!important;border:none!important;box-shadow:none!important;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:20px 10px 80px;">
+            <span class="close-btn" id="closeMercadorBtn" style="position:fixed;top:12px;right:18px;z-index:10;">&times;</span>
+            <h3 class="pm-title" style="margin-top:40px;">Mercador Ambulante</h3>
+            <div id="mercadorContent" style="width:100%;max-width:680px;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;animation:fadeCardIn 4s ease-out forwards;">
+                Carregando...
             </div>
         </div>
     </div>
@@ -1869,5 +1880,8 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSideMenuNotifications();
 });
 </script>
+
+<script>window.MERCHANT_CITY = "Duratar";</script>
+<script type="module" src="mercador.js"></script>
 </body>
 </html>

@@ -77,7 +77,6 @@
                     </div>
                 </div>
             </div>
-            <button id="btnRegister" class="action-btn" disabled>Inscrever-se</button>
         </div>
 
         <div id="waitingArea" style="display:none; text-align: center; margin-top: 20px;">
@@ -215,6 +214,17 @@
         </div>
     </div>
 
+    <div id="classConfirmModal" class="modal-container" style="display:none;">
+        <div class="modal-content" style="text-align:center; max-width: 340px;">
+            <h2 id="classConfirmTitle" style="color:gold; margin-bottom:10px;">Confirmar Classe</h2>
+            <p id="classConfirmText" style="color:#ddd; font-size:1em; margin-bottom:24px;">Escolher a classe <strong id="classConfirmName" style="color:gold;"></strong>?</p>
+            <div style="display:flex; gap:12px; justify-content:center;">
+                <button id="classConfirmNo" class="action-btn" style="background:#333; border:1px solid #555; flex:1;">Não</button>
+                <button id="classConfirmYes" class="action-btn" style="flex:1;">Sim</button>
+            </div>
+        </div>
+    </div>
+
     <div id="tutorialModal" class="modal-container" style="display:none;">
         <div class="modal-content" style="text-align: left; max-height: 85vh; overflow-y: auto; font-family: 'Cinzel', serif; border: 2px solid #ffd700; background: #111;">
         <span class="close-btn" onclick="document.getElementById('tutorialModal').style.display='none'" style="color: #ffd700;">&times;</span>
@@ -305,7 +315,7 @@
                     <li><strong>Peso:</strong> Mover-se custa o dobro de energia (2 AP), exceto para Batedores.</li>
                     <li><strong>Exaustão:</strong> Após qualquer combate ou ao pegar a relíquia, você sofre uma penalidade de <strong>30 segundos de descanso</strong> obrigatório.</li>
                     <li><strong>Alvo:</strong> Sua localização aproximada é revelada nos logs globais.</li>
-                    <li><strong>Vantagens:</strong> Ao adiquirir a Relíquia, você restaura imediatamente 5000 de HP, e em posse dela, você recupera 3000 de HP a cada 30 segundos. E se encontrar baús, as recompensas são dobradas.</li>
+                    <li><strong>Vantagens:</strong> Ao adquirir a Relíquia, você restaura imediatamente 5000 de HP, e em posse dela, você recupera 3000 de HP a cada 30 segundos. E se encontrar baús, as recompensas são dobradas.</li>
                 </ul>
             </div>
         </div>

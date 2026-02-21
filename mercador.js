@@ -743,10 +743,49 @@ function injectStyles() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BOOT: lê moedas rúnicas do IndexedDB e atualiza todos os displays da página
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lê a quantidade de Moedas Rúnicas (item 55) do IndexedDB e:
+ * 1. Atualiza a variável cachedMoedaQty (usada nas transações do mercador)
+ * 2. Atualiza todos os elementos da página que exibem a quantidade de moedas
+ *    (identificados pelos seletores abaixo)
+ */
+async function initRunicCoinsFromCache() {
+    try {
+        const qty = await getItemQtyFromCache(MOEDA_ID);
+        cachedMoedaQty = qty;
+
+        // Seletores dos elementos que exibem Moedas Rúnicas na página
+        // (inclui o display dentro do modal e qualquer elemento no topbar/cidade)
+        const DISPLAY_SELECTORS = [
+            '#mercadorMoedaQty',      // display dentro do modal mercador
+            '#playerMoedas',          // display no topbar (se existir)
+            '#topbarRunicCoins',      // alias alternativo do topbar
+            '[data-runic-coins]',     // atributo genérico usado por outros componentes
+        ];
+
+        const formatted = fmt(qty);
+        for (const sel of DISPLAY_SELECTORS) {
+            document.querySelectorAll(sel).forEach(el => {
+                el.textContent = `x${formatted}`;
+            });
+        }
+    } catch (e) {
+        console.warn('mercador: falha ao inicializar moedas rúnicas no boot', e);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // INICIALIZAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     injectStyles();
+
+    // Carrega a quantidade de Moedas Rúnicas do IDB logo no boot da página,
+    // garantindo que qualquer display mostre o valor correto desde o início
+    initRunicCoinsFromCache();
 
     const openBtn  = document.getElementById('btnMercador');
     const modal    = document.getElementById('mercadorModal');

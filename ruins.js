@@ -165,7 +165,13 @@ let state = {
 
     // Estados para o Menu Lateral
     logHistory: [], 
-    isSidebarOpen: false
+    isSidebarOpen: false,
+
+    // Estatísticas da partida atual (acumuladas localmente)
+    matchKills:    0,
+    matchCrystals: 0,
+    matchCoins:    0,
+    participantKillsByName: {} // { [nome]: count } — para ranking da partida
 };
 
 // Controle de morte local para evitar sobrescrita do heartbeat
@@ -581,6 +587,12 @@ async function enterGame() {
     state.participantDeadCount = -1; // força 1ª renderização completa da sidebar
     state.potionCache = null;        // invalida cache de poções ao iniciar nova partida
     
+    // Reseta estatísticas da partida
+    state.matchKills    = 0;
+    state.matchCrystals = 0;
+    state.matchCoins    = 0;
+    state.participantKillsByName = {};
+    
     if (data.collapse_start) {
         state.collapseStartAt = new Date(data.collapse_start);
     }
@@ -747,7 +759,24 @@ async function executeMove(roomId) {
         const startHP = data.hp + (data.combat_log.reduce((acc, t) => acc + t.opp_dmg, 0));
         state.myPlayer.hp = startHP; 
         updateHUD();
-        await runCombatSequence(data);
+
+        // Monta a mensagem final da notificação com bônus de kill
+        let pvpFinalMsg = data.message;
+        const isKill = data.message && (
+            data.message.includes('eliminou') ||
+            data.message.includes('TOMOU A RELÍQUIA') ||
+            data.message.includes('VOCÊ TOMOU')
+        );
+        if (isKill) {
+            state.matchKills++;
+            state.matchCoins += 5;
+            state.participantKillsByName[state.myPlayer.name] = (state.participantKillsByName[state.myPlayer.name] || 0) + 1;
+            const coinIcon = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:18px;height:18px;vertical-align:middle;margin:0 2px;">`;
+            pvpFinalMsg = `Você eliminou ${data.opponent_name}! ${coinIcon} <strong style="color:gold;">+5</strong>`;
+            if (data.message.includes('RELÍQUIA')) pvpFinalMsg += ' — RELÍQUIA CAPTURADA!';
+        }
+
+        await runCombatSequence(data, pvpFinalMsg);
         state.myPlayer.hp = data.hp;
         updateHUD();
     } 
@@ -759,6 +788,8 @@ async function executeMove(roomId) {
     else if (data.rewards && (data.rewards.crystals > 0 || data.rewards.coins > 0)) {
         playSound('chest');
         logEvent("Baú encontrado!", "chest");
+        state.matchCrystals += data.rewards.crystals || 0;
+        state.matchCoins    += data.rewards.coins    || 0;
         showChestRewards(data.rewards);
         await new Promise(r => setTimeout(r, 2000));
     } 
@@ -894,7 +925,7 @@ async function usePotion(itemId) {
     await loadRestPotions();
 }
 
-async function runCombatSequence(data) {
+async function runCombatSequence(data, finalMessage) {
     const overlay = document.getElementById('combatOverlay');
     const myAvatar = document.getElementById('combatMyAvatar');
     const oppAvatar = document.getElementById('combatOppAvatar');
@@ -956,13 +987,13 @@ async function runCombatSequence(data) {
     }
     await new Promise(r => setTimeout(r, 1000));
 
-    showCenterNotification(data.message);
+    showCenterNotification(finalMessage || data.message);
 }
 
 function showCenterNotification(msg) {
     const div = document.createElement('div');
     div.className = 'center-notification';
-    div.textContent = msg;
+    div.innerHTML = msg; // innerHTML para suportar ícones inline
     document.body.appendChild(div);
     setTimeout(() => div.remove(), 3000);
 }
@@ -1337,6 +1368,17 @@ async function runHeartbeat() {
                 logEvent("Você foi atacado!", "kill");
                 playSound('loss'); 
             }
+            // Rastreia kills de outros participantes pelo log de eventos
+            if (evt.type === 'kill' && evt.msg) {
+                const m = evt.msg.match(/^(.+?) eliminou .+/);
+                if (m) {
+                    const killerName = m[1];
+                    // Só incrementa se não foi contado em executeMove (evita dupla contagem do próprio jogador)
+                    if (killerName !== state.myPlayer.name) {
+                        state.participantKillsByName[killerName] = (state.participantKillsByName[killerName] || 0) + 1;
+                    }
+                }
+            }
             logEvent(evt.msg, evt.type);
             state.lastEventTs = Math.max(state.lastEventTs, evt.t);
         });
@@ -1367,40 +1409,150 @@ function endGame(data) {
     if (data.win) playSound('win');
     else playSound('loss');
 
-    document.getElementById('resultTitle').textContent = data.win ? "VITÓRIA!" : "FIM DE JOGO";
-    document.getElementById('resultTitle').style.color = data.win ? "gold" : "red";
-    document.getElementById('resultMessage').textContent = data.message;
-    
-    const modalContent = document.querySelector('#resultModal .modal-content');
-    
-    const oldBtns = modalContent.querySelectorAll('.action-btn');
-    oldBtns.forEach(b => b.remove());
-
-    const btnBack = document.createElement('button');
-    btnBack.className = 'action-btn';
-    btnBack.textContent = 'Sair da Masmorra';
-    btnBack.onclick = () => window.location.reload();
-    modalContent.appendChild(btnBack);
-
+    // Jogador morreu no meio da partida → oferece espectador (sem ranking detalhado)
     if (!data.win && !isGameOver) {
-        const btnSpectate = document.createElement('button');
-        btnSpectate.className = 'action-btn';
-        btnSpectate.style.marginTop = '10px';
-        btnSpectate.style.backgroundColor = '#333';
-        btnSpectate.style.border = '1px solid #555';
-        btnSpectate.textContent = 'Continuar Vendo';
-        btnSpectate.onclick = () => {
+        if(heartbeatInterval) clearTimeout(heartbeatInterval);
+        if(state.cooldownInterval) clearInterval(state.cooldownInterval);
+
+        const modal = document.getElementById('resultModal');
+        const content = modal.querySelector('.modal-content');
+        content.innerHTML = `
+            <h2 style="color:red; margin-bottom:8px;">FIM DE JOGO</h2>
+            <p style="color:#ccc; margin-bottom:20px;">${data.message}</p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="action-btn" onclick="window.location.reload()">Sair da Masmorra</button>
+                <button class="action-btn" id="btnSpectate" style="background:#1a1a1a; border:1px solid #555; color:#aaa;">
+                    Continuar Assistindo
+                </button>
+            </div>
+        `;
+        document.getElementById('btnSpectate').onclick = () => {
             state.isSpectating = true;
-            document.getElementById('resultModal').style.display = 'none';
+            modal.style.display = 'none';
             els.navMsg.textContent = "Modo Espectador";
             els.actionButtons.style.display = 'none';
             els.probeGrid.style.display = 'none';
+            scheduleNextHeartbeat();
         };
-        modalContent.appendChild(btnSpectate);
-    } else {
-        if(heartbeatInterval) clearTimeout(heartbeatInterval);
-        if(state.cooldownInterval) clearInterval(state.cooldownInterval);
+        modal.style.display = 'flex';
+        return;
     }
 
-    document.getElementById('resultModal').style.display = 'flex';
+    // Partida encerrada (vitória ou fim com espectador) → modal detalhado
+    if(heartbeatInterval) clearTimeout(heartbeatInterval);
+    if(state.cooldownInterval) clearInterval(state.cooldownInterval);
+    showDetailedEndModal(data);
+}
+
+function showDetailedEndModal(data) {
+    const isWin = !!data.win;
+    const COIN_ICON = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:18px;height:18px;vertical-align:middle;margin:0 2px;">`;
+    const CRYSTAL_ICON = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:18px;height:18px;vertical-align:middle;margin:0 2px;">`;
+
+    // Bônus de vitória
+    const winBonus = isWin ? 50 : 0;
+    const totalCoins = state.matchCoins + winBonus;
+
+    // Monta lista de participantes para o ranking da partida
+    const participants = Object.values(state.participantCache).map(p => {
+        const kills = state.participantKillsByName[p.name] || 0;
+        const coins  = kills * 5;
+        const isMe   = (p.name === state.myPlayer?.name);
+        return { ...p, kills: isMe ? state.matchKills : kills, coins: isMe ? totalCoins : coins };
+    });
+
+    // Ordena por eliminações (maior primeiro), desempate por nome
+    participants.sort((a, b) => b.kills - a.kills || a.name.localeCompare(b.name));
+
+    // Linhas do ranking
+    let rankingRows = '';
+    participants.forEach((p, i) => {
+        const pos      = i + 1;
+        const DEF_AVT  = 'https://aden-rpg.pages.dev/avatar01.webp';
+        const avatar   = p.avatar || p.avatar_url || DEF_AVT;
+        const isMe     = (p.name === state.myPlayer?.name);
+        const botLabel = p.is_bot ? ' <span style="color:#666; font-size:0.75em;">[Bot]</span>' : '';
+        const rowBg    = isMe ? 'background:rgba(255,215,0,0.08); border:1px solid rgba(255,215,0,0.3);' : 'background:rgba(255,255,255,0.03);';
+        rankingRows += `
+            <div style="display:grid; grid-template-columns:28px 36px 1fr 60px 60px; gap:6px; align-items:center;
+                        padding:6px 8px; border-radius:6px; margin-bottom:4px; ${rowBg}">
+                <span style="color:#888; font-size:0.85em; text-align:center;">${pos}º</span>
+                <img src="${avatar}" onerror="this.src='${DEF_AVT}'" 
+                     style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid #444;">
+                <span style="font-size:0.85em; color:${isMe ? 'gold' : '#ddd'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${p.name}${botLabel}
+                </span>
+                <span style="text-align:center; font-size:0.9em; color:#f44;">☠ ${p.kills}</span>
+                <span style="text-align:center; font-size:0.85em; color:#ccc;">${COIN_ICON}${p.coins}</span>
+            </div>`;
+    });
+
+    // Banner de vitória (bônus 50 moedas)
+    let winBannerHtml = '';
+    if (isWin) {
+        winBannerHtml = `
+            <div style="background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,140,0,0.1)); 
+                        border:1px solid gold; border-radius:10px; padding:14px 12px; margin-bottom:16px; text-align:center;">
+                <div style="font-size:1.4em; font-weight:bold; color:gold; margin-bottom:4px;">🏆 ÚLTIMO SOBREVIVENTE</div>
+                <div style="color:#e0dccc; font-size:0.95em;">Bônus de vitória</div>
+                <div style="font-size:1.3em; font-weight:bold; color:gold; margin-top:6px;">
+                    ${COIN_ICON} <span style="color:gold;">+50 Moedas Rúnicas</span>
+                </div>
+            </div>`;
+    }
+
+    // Resumo pessoal
+    const summaryHtml = `
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;">
+            <div style="background:rgba(244,67,54,0.12); border:1px solid rgba(244,67,54,0.3); 
+                        border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:1.5em; font-weight:bold; color:#f44;">☠</div>
+                <div style="font-size:1.3em; font-weight:bold; color:#fff;">${state.matchKills}</div>
+                <div style="font-size:0.75em; color:#888;">Eliminações</div>
+            </div>
+            <div style="background:rgba(255,215,0,0.10); border:1px solid rgba(255,215,0,0.25); 
+                        border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:1.1em;">${COIN_ICON}</div>
+                <div style="font-size:1.3em; font-weight:bold; color:gold;">${totalCoins}</div>
+                <div style="font-size:0.75em; color:#888;">Moedas Rúnicas</div>
+            </div>
+            <div style="background:rgba(33,150,243,0.10); border:1px solid rgba(33,150,243,0.25); 
+                        border-radius:8px; padding:10px; text-align:center;">
+                <div style="font-size:1.1em;">${CRYSTAL_ICON}</div>
+                <div style="font-size:1.3em; font-weight:bold; color:#64b5f6;">${state.matchCrystals}</div>
+                <div style="font-size:0.75em; color:#888;">Cristais</div>
+            </div>
+        </div>`;
+
+    // Header de ranking
+    const rankHeaderHtml = `
+        <div style="display:grid; grid-template-columns:28px 36px 1fr 60px 60px; gap:6px;
+                    padding:4px 8px; margin-bottom:4px;">
+            <span></span><span></span>
+            <span style="font-size:0.75em; color:#666;">Jogador</span>
+            <span style="font-size:0.75em; color:#666; text-align:center;">Abates</span>
+            <span style="font-size:0.75em; color:#666; text-align:center;">Moedas</span>
+        </div>`;
+
+    const modal = document.getElementById('resultModal');
+    const content = modal.querySelector('.modal-content');
+    content.style.cssText = 'max-width:420px; width:92vw; max-height:88vh; overflow-y:auto; padding:20px;';
+    content.innerHTML = `
+        <h2 style="text-align:center; color:${isWin ? 'gold' : '#f44'}; margin-bottom:4px; font-size:1.4em;">
+            ${isWin ? '⚔ VITÓRIA!' : '💀 FIM DE JOGO'}
+        </h2>
+        <p style="text-align:center; color:#888; font-size:0.85em; margin-bottom:16px;">
+            ${isWin ? 'Você dominou as Ruínas Ancestrais.' : 'A partida chegou ao fim.'}
+        </p>
+        ${winBannerHtml}
+        <div style="font-size:0.8em; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Suas Recompensas</div>
+        ${summaryHtml}
+        <div style="font-size:0.8em; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">Ranking da Partida</div>
+        ${rankHeaderHtml}
+        <div style="margin-bottom:16px;">${rankingRows}</div>
+        <button class="action-btn" onclick="window.location.reload()" style="width:100%; margin-top:4px;">
+            Sair da Masmorra
+        </button>
+    `;
+    modal.style.display = 'flex';
 }

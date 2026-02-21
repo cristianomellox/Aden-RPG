@@ -217,16 +217,27 @@ function startCountdown(nextSlot) {
 const fmt = n => new Intl.NumberFormat('pt-BR').format(n);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MENSAGEM FLUTUANTE
+// MODAL DE NOTIFICAÇÃO (substitui alert/floatingMessage)
 // ─────────────────────────────────────────────────────────────────────────────
+function ensureMsgModal() {
+    if (document.getElementById('mercadorMsgModal')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'mercadorMsgModal';
+    wrap.innerHTML = `
+        <div id="mercadorMsgBox">
+            <p id="mercadorMsgText"></p>
+            <button id="mercadorMsgOk">OK</button>
+        </div>`;
+    document.body.appendChild(wrap);
+    document.getElementById('mercadorMsgOk').addEventListener('click', () => {
+        wrap.style.display = 'none';
+    });
+}
+
 function showMsg(msg) {
-    const el = document.getElementById('floatingMessage');
-    if (el) {
-        el.textContent = msg;
-        el.style.display = 'block';
-        el.style.opacity = '1';
-        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.style.display = 'none', 500); }, 3500);
-    } else { alert(msg); }
+    ensureMsgModal();
+    document.getElementById('mercadorMsgText').textContent = msg;
+    document.getElementById('mercadorMsgModal').style.display = 'flex';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,7 +350,7 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
                 <div class="mercador-arrow">⟵</div>
                 <div class="mercador-trade-side">
                     <img src="${costImg}" class="mercador-item-icon" alt="Moeda Rúnica">
-                    <span class="mercador-trade-qty">x1</span>
+                    <span class="mercador-trade-qty" id="vcost-qty-${type}">x1</span>
                     <span class="mercador-item-name">Moeda Rúnica</span>
                 </div>
             </div>
@@ -368,7 +379,7 @@ function renderEscamboCard(pair, idx) {
             <div class="mercador-trade-icons">
                 <div class="mercador-trade-side">
                     <img src="${getImg}" class="mercador-item-icon" alt="${pair.get.name}">
-                    <span class="mercador-trade-qty">x1</span>
+                    <span class="mercador-trade-qty" id="get-qty-label-${idx}">x1</span>
                     <span class="mercador-item-name">${pair.get.name}</span>
                 </div>
                 <div class="mercador-arrow">⟵</div>
@@ -408,9 +419,11 @@ function attachMercadorEvents(pairs) {
             const moedaEl = document.getElementById(`vtot-moeda-${type}`);
             const receiveEl = document.getElementById(`vtot-receive-${type}`);
             const receiveQtyLabel = document.getElementById(`vreceive-qty-${type}`);
+            const costQtyLabel = document.getElementById(`vcost-qty-${type}`);
             if (moedaEl) moedaEl.textContent = nv;
             if (receiveEl) receiveEl.textContent = nv * base;
             if (receiveQtyLabel) receiveQtyLabel.textContent = `x${nv * base}`;
+            if (costQtyLabel) costQtyLabel.textContent = `x${nv}`;
         });
         document.querySelector(`.pm-qty-btn.minus[data-vtype="${type}"]`)?.addEventListener('click', () => {
             const cur = parseInt(getQtyEl()?.textContent || 1);
@@ -419,9 +432,11 @@ function attachMercadorEvents(pairs) {
             const moedaEl = document.getElementById(`vtot-moeda-${type}`);
             const receiveEl = document.getElementById(`vtot-receive-${type}`);
             const receiveQtyLabel = document.getElementById(`vreceive-qty-${type}`);
+            const costQtyLabel = document.getElementById(`vcost-qty-${type}`);
             if (moedaEl) moedaEl.textContent = nv;
             if (receiveEl) receiveEl.textContent = nv * base;
             if (receiveQtyLabel) receiveQtyLabel.textContent = `x${nv * base}`;
+            if (costQtyLabel) costQtyLabel.textContent = `x${nv}`;
         });
         document.getElementById(`vbuy-${type}`)?.addEventListener('click', () => {
             const qty = parseInt(document.getElementById(`vqty-${type}`)?.textContent || 1);
@@ -447,9 +462,17 @@ function updateEscamboQty(idx, delta, pairs) {
     const cur = parseInt(el.textContent || 1);
     const nv = Math.max(1, Math.min(cur + delta, 99));
     el.textContent = nv;
-    document.getElementById(`etot-${idx}`).textContent = nv * 2; // custa 2x
-    document.getElementById(`eget-${idx}`).textContent = nv;
-    document.getElementById(`give-qty-label-${idx}`).textContent = `x${nv * 2}`;
+    // texto resumo embaixo
+    const totEl = document.getElementById(`etot-${idx}`);
+    const getEl = document.getElementById(`eget-${idx}`);
+    if (totEl) totEl.textContent = nv * 2;
+    if (getEl) getEl.textContent = nv;
+    // ícones: lado direito (custo - item que dá)
+    const giveQtyLabel = document.getElementById(`give-qty-label-${idx}`);
+    if (giveQtyLabel) giveQtyLabel.textContent = `x${nv * 2}`;
+    // ícones: lado esquerdo (recebe - item que ganha)
+    const getQtyLabel = document.getElementById(`get-qty-label-${idx}`);
+    if (getQtyLabel) getQtyLabel.textContent = `x${nv}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,8 +483,11 @@ async function buyVendaItem(type, quantity) {
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
-    const totalCost = quantity; // 1 moeda por unidade de compra
-    if (cachedMoedaQty < totalCost) {
+    const totalCost = quantity; // 1 moeda por pacote
+
+    // Só bloqueia localmente se cache tem valor > 0 e é insuficiente.
+    // Se cache = 0 pode ser miss — deixa o RPC validar no servidor.
+    if (cachedMoedaQty > 0 && cachedMoedaQty < totalCost) {
         showMsg('Moedas Rúnicas insuficientes!');
         if (btn) { btn.disabled = false; btn.textContent = 'Comprar'; }
         return;
@@ -475,16 +501,22 @@ async function buyVendaItem(type, quantity) {
         if (error) throw error;
         if (!data.success) throw new Error(data.message);
 
-        cachedMoedaQty -= totalCost;
+        // Sincroniza moedas: usa valor retornado pelo servidor se disponível, senão desconta local
+        const newMoedaQty = (data.new_moeda_qty != null)
+            ? data.new_moeda_qty
+            : Math.max(0, cachedMoedaQty - totalCost);
+        cachedMoedaQty = newMoedaQty;
+
         const moedaEl = document.getElementById('mercadorMoedaQty');
         if (moedaEl) moedaEl.textContent = `x${fmt(cachedMoedaQty)}`;
+
+        // Atualiza cache IDB com o delta correto
         await updateCacheQty(MOEDA_ID, -totalCost);
 
         if (type === 'pedra') {
             await updateCacheQty(PEDRA_ID, quantity * 3);
             showMsg(`Você recebeu ${quantity * 3}x Pedra de Refundição!`);
         } else {
-            // Atualizar crystals no cache do player
             try {
                 const cStr = localStorage.getItem('player_data_cache');
                 if (cStr) {
@@ -510,7 +542,8 @@ async function doEscambo(pair, idx, tradeQty) {
     const giveTotal = tradeQty * 2;
     const haveQty = cachedTradeQtys[pair.give.id] || 0;
 
-    if (haveQty < giveTotal) {
+    // Só bloqueia localmente se cache > 0 e insuficiente. Cache=0 pode ser miss.
+    if (haveQty > 0 && haveQty < giveTotal) {
         showMsg(`${pair.give.name} insuficiente! Você tem ${haveQty}, precisa de ${giveTotal}.`);
         if (btn) { btn.disabled = false; btn.textContent = 'Trocar'; }
         return;
@@ -525,15 +558,22 @@ async function doEscambo(pair, idx, tradeQty) {
         if (error) throw error;
         if (!data.success) throw new Error(data.message);
 
-        // Atualizar cache local
-        cachedTradeQtys[pair.give.id] = Math.max(0, (cachedTradeQtys[pair.give.id] || 0) - giveTotal);
-        cachedTradeQtys[pair.get.id]  = (cachedTradeQtys[pair.get.id] || 0) + tradeQty;
+        // Sincroniza cache: usa valores do servidor se disponíveis, senão calcula local
+        const newGiveQty = (data.new_give_qty != null)
+            ? data.new_give_qty
+            : Math.max(0, (cachedTradeQtys[pair.give.id] || 0) - giveTotal);
+        const newGetQty = (data.new_get_qty != null)
+            ? data.new_get_qty
+            : (cachedTradeQtys[pair.get.id] || 0) + tradeQty;
+
+        cachedTradeQtys[pair.give.id] = newGiveQty;
+        cachedTradeQtys[pair.get.id]  = newGetQty;
 
         await updateCacheQty(pair.give.id, -giveTotal);
         await updateCacheQty(pair.get.id, tradeQty);
 
         const haveEl = document.getElementById(`give-have-${idx}`);
-        if (haveEl) haveEl.textContent = fmt(cachedTradeQtys[pair.give.id]);
+        if (haveEl) haveEl.textContent = fmt(newGiveQty);
 
         showMsg(`Troca realizada! Você recebeu ${tradeQty}x ${pair.get.name}.`);
     } catch (err) {
@@ -654,6 +694,44 @@ function injectStyles() {
 .mercador-card-info .mercador-item-name {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px;
 }
+/* ─── MODAL DE NOTIFICAÇÃO ─── */
+#mercadorMsgModal {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,.65);
+    align-items: center; justify-content: center;
+}
+#mercadorMsgBox {
+    background: linear-gradient(160deg, #1e1e2e, #12121c);
+    border: 1px solid #c9a94a;
+    border-radius: 12px;
+    padding: 28px 24px 20px;
+    max-width: 340px; width: 88%;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.8);
+    font-family: 'Cinzel', serif;
+}
+#mercadorMsgText {
+    color: #e0dccc;
+    font-size: 1em;
+    text-align: center;
+    margin: 0;
+    line-height: 1.5;
+    text-shadow: 1px 1px 3px #000;
+}
+#mercadorMsgOk {
+    background: linear-gradient(135deg, #b8860b, #8b6914);
+    color: #fff;
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 8px 32px;
+    font-family: 'Cinzel', serif;
+    font-size: .95em;
+    cursor: pointer;
+    transition: background .2s;
+}
+#mercadorMsgOk:hover { background: linear-gradient(135deg, #d4a017, #a07820); }
 `;
     document.head.appendChild(style);
 }

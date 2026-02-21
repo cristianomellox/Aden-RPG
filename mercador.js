@@ -285,7 +285,10 @@ async function openMercadorModal() {
                 <img src="https://aden-rpg.pages.dev/assets/mercador.webp" class="mercador-absent-img" alt="Mercador">
                 <p class="mercador-absent-text">Fui para a minha loja em <strong>${destLabel}</strong> e volto em breve.</p>
                 <p class="mercador-absent-sub">Próxima parada: <strong>${nextLabel}</strong></p>
-                <p class="mercador-absent-timer">Parte desta cidade em: <span id="mercadorCountdown">--:--:--</span></p>
+                <p class="mercador-absent-timer">Parte desta cidade em:<br> <span style="text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; font-size: 2em; font-weight: bold;" id="mercadorCountdown">--:--:--</span></p>
             </div>`;
         startCountdown(state.nextSlot);
         return;
@@ -316,7 +319,10 @@ async function openMercadorModal() {
         </div>
 
         <!-- TIMER -->
-        <p class="mercador-timer-text">Mercador parte em: <span id="mercadorCountdown" style="color:#ffcc44; font-weight:bold;">--:--:--</span></p>
+        <p class="mercador-timer-text">Mercador parte em:<br> <span id="mercadorCountdown" style="text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; font-size: 2em; font-weight:bold;">--:--:--</span></p>
 
         <!-- SEÇÃO VENDA -->
         <div class="mercador-section-title">⚙ Venda</div>

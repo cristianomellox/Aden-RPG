@@ -707,15 +707,14 @@ function renderResultsScreen(instance, playerDamageRanking) {
         }
     }
     
-    // Rank do jogador DENTRO DA PRÓPRIA GUILDA (espelha a lógica do SQL distribute_battle_rewards)
+    // Rank do jogador no ranking GLOBAL de dano (top 1 e top 2 entre todos os participantes)
     let myPlayerDamageRank = -1;
     if (playerDamageRanking && playerDamageRanking.length > 0) {
-        const myGuildDamageRanking = playerDamageRanking
-            .filter(p => p.guild_id === userGuildId)
+        const globalDamageRanking = [...playerDamageRanking]
             .sort((a, b) => b.total_damage_dealt - a.total_damage_dealt);
-        const myDamageData = myGuildDamageRanking.find(p => p.player_id === userId);
-        if (myDamageData) {
-            myPlayerDamageRank = myGuildDamageRanking.indexOf(myDamageData) + 1;
+        const myIndex = globalDamageRanking.findIndex(p => p.player_id === userId);
+        if (myIndex !== -1) {
+            myPlayerDamageRank = myIndex + 1;
         }
     }
 
@@ -762,55 +761,30 @@ function renderResultsScreen(instance, playerDamageRanking) {
     let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
     let hasPlayerRewards = false;
 
-    if (myGuildRank === 1 && myPlayerDamageRank === 1) {
-        playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano (Multiplicador 3x):</p>';
+    // Bônus individuais baseados no rank GLOBAL de dano (top 1 e top 2 entre todos os participantes)
+    // Os valores base dependem do rank da guilda; o multiplicador depende do rank global de dano.
+    const guildBaseRewards = {
+        1: { crystals: 6000, cards: 8,  stones: 100, cardItem: REWARD_ITEMS.CARD_ADVANCED },
+        2: { crystals: 2000, cards: 12, stones: 40,  cardItem: REWARD_ITEMS.CARD_COMMON },
+        3: { crystals: 1000, cards: 8,  stones: 20,  cardItem: REWARD_ITEMS.CARD_COMMON },
+    };
+
+    if (myGuildRank >= 1 && myGuildRank <= 3 && (myPlayerDamageRank === 1 || myPlayerDamageRank === 2)) {
+        const base = guildBaseRewards[myGuildRank];
+        const multiplier = myPlayerDamageRank === 1 ? 3 : 2;
+        const bonusMultiplier = multiplier - 1;
+        const rankLabel = myPlayerDamageRank === 1 ? 'Rank 1' : 'Rank 2';
+
+        playerRewardsHTML += `<p>Bônus por <strong>${rankLabel}</strong> em Dano global (Multiplicador ${multiplier}x):</p>`;
         playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "6000 (Base) + 12000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "8 (Base) + 16 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "100 (Base) + 200 (Bônus)");
-        playerRewardsHTML += '</div>';
-        hasPlayerRewards = true;
-    } else if (myGuildRank === 1 && myPlayerDamageRank === 2) {
-        playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano (Multiplicador 2x):</p>';
-        playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "6000 (Base) + 6000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, "8 (Base) + 8 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "100 (Base) + 100 (Bônus)");
-        playerRewardsHTML += '</div>';
-        hasPlayerRewards = true;
-    } else if (myGuildRank === 2 && myPlayerDamageRank === 1) {
-        playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano na guilda (Multiplicador 3x):</p>';
-        playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "2000 (Base) + 4000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "12 (Base) + 24 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "40 (Base) + 80 (Bônus)");
-        playerRewardsHTML += '</div>';
-        hasPlayerRewards = true;
-    } else if (myGuildRank === 2 && myPlayerDamageRank === 2) {
-        playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano na guilda (Multiplicador 2x):</p>';
-        playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "2000 (Base) + 2000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "12 (Base) + 12 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "40 (Base) + 40 (Bônus)");
-        playerRewardsHTML += '</div>';
-        hasPlayerRewards = true;
-    } else if (myGuildRank === 3 && myPlayerDamageRank === 1) {
-        playerRewardsHTML += '<p>Bônus por <strong>Rank 1</strong> em Dano na guilda (Multiplicador 3x):</p>';
-        playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "1000 (Base) + 2000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "8 (Base) + 16 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "20 (Base) + 40 (Bônus)");
-        playerRewardsHTML += '</div>';
-        hasPlayerRewards = true;
-    } else if (myGuildRank === 3 && myPlayerDamageRank === 2) {
-        playerRewardsHTML += '<p>Bônus por <strong>Rank 2</strong> em Dano na guilda (Multiplicador 2x):</p>';
-        playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, "1000 (Base) + 1000 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, "8 (Base) + 8 (Bônus)");
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, "20 (Base) + 20 (Bônus)");
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, `${base.crystals} (Base) + ${base.crystals * bonusMultiplier} (Bônus)`);
+        playerRewardsHTML += createRewardItemHTML(base.cardItem, `${base.cards} (Base) + ${base.cards * bonusMultiplier} (Bônus)`);
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, `${base.stones} (Base) + ${base.stones * bonusMultiplier} (Bônus)`);
         playerRewardsHTML += '</div>';
         hasPlayerRewards = true;
     }
+
+
     
     if (hasPlayerRewards) {
         playerRewardsEl.innerHTML = playerRewardsHTML;

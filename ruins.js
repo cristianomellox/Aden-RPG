@@ -219,7 +219,6 @@ const els = {
     tickets: document.getElementById('ticketCount'),
     classArea: document.getElementById('classSelectionArea'),
     waitingArea: document.getElementById('waitingArea'),
-    btnRegister: document.getElementById('btnRegister'),
     
     // Game HUD
     hpFill: document.getElementById('hudHpFill'),
@@ -463,17 +462,34 @@ async function checkMenuStatus() {
 }
 
 window.selectClass = (classId) => {
-    state.selectedClass = classId;
-    document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
-    document.querySelector(`.class-card[data-class="${classId}"]`).classList.add('selected');
-    els.btnRegister.disabled = false;
-    els.btnRegister.onclick = register;
+    // Abre o modal de confirmação sem selecionar a classe imediatamente
+    const modal = document.getElementById('classConfirmModal');
+    const nameEl = document.getElementById('classConfirmName');
+    if (!modal || !nameEl) return;
+
+    nameEl.textContent = getClassName(classId);
+
+    document.getElementById('classConfirmYes').onclick = async () => {
+        modal.style.display = 'none';
+        // Seleciona visualmente e inscreve
+        state.selectedClass = classId;
+        document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+        document.querySelector(`.class-card[data-class="${classId}"]`).classList.add('selected');
+        await register();
+    };
+
+    document.getElementById('classConfirmNo').onclick = () => {
+        modal.style.display = 'none';
+        // Desseleciona qualquer card previamente selecionado
+        state.selectedClass = null;
+        document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+    };
+
+    modal.style.display = 'flex';
 };
 
 async function register() {
     if (!state.selectedClass) return;
-    els.btnRegister.disabled = true;
-    els.btnRegister.textContent = "Inscrevendo...";
 
     const { data, error } = await supabase.rpc('register_for_ruins', {
         p_session_id: state.sessionId,
@@ -482,8 +498,9 @@ async function register() {
 
     if (error || !data.success) {
         alert(data?.message || error?.message || "Erro ao inscrever.");
-        els.btnRegister.disabled = false;
-        els.btnRegister.textContent = "Inscrever-se";
+        // Desseleciona o card em caso de erro
+        state.selectedClass = null;
+        document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
         return;
     }
 

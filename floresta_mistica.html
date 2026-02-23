@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Floresta Mística - Aden RPG</title>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<style>
+.goog-te-banner-frame.skiptranslate,.skiptranslate{display:none!important;visibility:hidden!important;height:0!important;}
+body{top:0!important;margin-top:0!important;position:static!important;}
+.goog-te-balloon-frame,.goog-te-gadget{display:none!important;height:0!important;overflow:hidden!important;}
+font>font{background-color:transparent!important;box-shadow:none!important;position:static!important;}
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+body,p,span,div,button,label{font-family:'Cinzel',serif;}
+h1,h2,h3{font-family:'Cinzel',serif;color:#e0dccc;text-shadow:2px 2px 4px #000;}
+html,body{height:100%;margin:0;padding:0;box-sizing:border-box;}
+body{display:flex;flex-direction:column;align-items:center;background:#121212;min-height:100vh;overflow-x:hidden;}
+
+#playerTopBar{position:fixed;top:0;left:0;width:100%;height:50px;background:#1a1a1a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 12px;box-shadow:0 2px 8px rgba(0,0,0,.7);z-index:1000;box-sizing:border-box;}
+.top-bar-link{color:#fff;text-decoration:none;display:flex;align-items:center;}
+#pageTitle{color:#ffb3b3;font-size:1.2em;font-weight:bold;text-shadow:1px 1px 2px #000;}
+
+#mapContainer{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;z-index:1;background:#0d1a0d;}
+#map{background-image:url('https://aden-rpg.pages.dev/assets/floresta_mistica.webp');background-size:contain;background-repeat:no-repeat;background-position:top left;width:1500px;height:1500px;position:absolute;cursor:grab;transform-origin:top left;transform:scale(1.1);user-select:none;}
+
+.hunt-spot{position:absolute;border:2px dashed transparent;
+/*border:2px dashed #0f0;*/
+border-radius:8px;cursor:default;overflow:visible;z-index:5;}
+.hunt-spot:hover,.hunt-spot:focus,.hunt-spot:active{border-color:transparent;outline:none;}
+.spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;}
+.hunt-spot.active-spot{cursor:default!important;}
+
+.mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
+.mob-name{font-size:.55em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.mob-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #c00;object-fit:cover;background:#222;}
+
+.player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
+.player-shield-icon{width:30px;height:30px;object-fit:contain;}
+.player-name-label{font-size:.55em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.player-spot-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #fc0;object-fit:cover;background:#222;}
+
+.other-player-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:9;cursor:pointer;}
+.other-player-shield{width:30px;height:30px;object-fit:contain;}
+.other-player-name{font-size:.55em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.other-player-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
+.other-player-avatar.eliminated{filter:grayscale(100%) brightness(.6);}
+.other-eliminated-label{font-size:.55em;color:#f44;font-weight:bold;text-shadow:1px 1px 2px #000;}
+
+#contentOverlay{position:fixed;top:50px;left:0;width:100%;display:flex;flex-direction:column;align-items:center;z-index:10;pointer-events:none;}
+#huntingHud{display:none;flex-direction:column;align-items:center;gap:5px;background:rgba(8,18,8,.9);border:1px solid #3a6c3a;border-radius:0 0 12px 12px;padding:8px 24px 12px;pointer-events:auto;min-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.6);}
+#huntTimer {
+  font-size:1.9em;
+  font-weight:bold;
+  text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 0 12px #4f4,1px 1px 2px #000;
+  letter-spacing:3px;
+  
+}
+#huntStatus{font-size:.7em;color:#b8d4b8;}
+#shieldHudRow{display:flex;align-items:center;gap:8px;font-size:.7em;color:#acf;}
+#shieldHudRow img{width:22px;height:22px;}
+#hudBtnRow{display:flex;gap:8px;margin-top:2px;}
+.hud-btn{background:rgba(255,255,255,.06);border:1px solid #455;color:#aca;padding:5px 14px;border-radius:5px;cursor:pointer;font-family:'Cinzel',serif;font-size:.65em;font-weight:bold;}
+.hud-btn:hover{background:rgba(255,255,255,.14);color:#efe;}
+.hud-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+#loadingOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:3000;justify-content:center;align-items:center;}
+.loading-spinner{border:4px solid #2a3a2a;border-top:4px solid #8f8;border-radius:50%;width:50px;height:50px;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.modal-container{display:none;position:fixed;z-index:2000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.88);justify-content:center;align-items:center;}
+.modal-content{background:#1b271b;padding:22px;border:2px solid #4a8c4a;border-radius:10px;width:92%;max-width:460px;position:relative;max-height:90vh;box-sizing:border-box;text-align:center;overflow-y:auto;}
+.modal-content h2,.modal-content h3{margin-top:0;color:#afa;text-shadow:0 0 8px #4f4,1px 1px 2px #000;font-size:1.05em;}
+.modal-content p{color:#cdc;font-size:.85em;line-height:1.6;}
+.modal-close{color:#787;position:absolute;top:8px;right:14px;font-size:26px;font-weight:bold;cursor:pointer;line-height:1;}
+.modal-close:hover{color:#afa;}
+.modal-btn-row{display:flex;gap:12px;justify-content:center;margin-top:14px;}
+.modal-btn{background-image:url('https://aden-rpg.pages.dev/assets/botao.webp');background-size:cover;background-position:center;background-color:transparent;border:none;color:#e0dccc;font-weight:bold;font-family:'Cinzel',serif;padding:12px 22px;cursor:pointer;font-size:.9em;text-shadow:1px 1px 2px #000;min-width:90px;}
+.modal-btn:hover{opacity:.9;}
+
+#pvpModal .modal-content{max-width:520px;background:#160f22;border-color:#74b;}
+#pvpModal h2{color:#daf;text-shadow:0 0 8px #a4f;}
+.pvp-arena{display:flex;justify-content:space-around;align-items:flex-start;gap:10px;margin:12px 0;}
+.pvp-fighter{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;max-width:160px;}
+.pvp-fighter-name{font-size:.7em;color:#ddd;font-weight:bold;}
+.pvp-fighter img{width:70px;height:70px;border-radius:50%;border:3px solid #85a;object-fit:cover;background:#222;}
+.pvp-vs{font-size:1.6em;color:#fa4;align-self:center;font-weight:bold;text-shadow:0 0 10px #f60;}
+.pvp-hp-bg{width:100%;height:14px;background:#333;border-radius:7px;overflow:hidden;}
+.pvp-hp-fill{height:100%;background:linear-gradient(90deg,#c24,#f46);border-radius:7px;transition:width .3s;}
+.pvp-hp-txt{font-size:.6em;color:#ccc;}
+#pvpCountdown{font-size:.95em;color:#fd8;margin:6px 0;font-weight:bold;}
+
+.damage-number{position:fixed;z-index:9999;pointer-events:none;font-family:'Cinzel',serif;font-size:1.4em;font-weight:bold;color:#fc0;text-shadow:1px 1px 3px #000;transition:transform 1.2s ease,opacity 1.2s ease;}
+.damage-number.crit{color:#f42;font-size:1.9em;}
+.damage-number.evaded{color:#8cf;font-size:1.1em;}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px) rotate(-2deg)}40%{transform:translateX(6px) rotate(2deg)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.shake-animation{animation:shake .3s ease;}
+
+#eliminatedModal .modal-content{border-color:#c22;background:#1a0808;}
+#eliminatedModal h2{color:#f66;text-shadow:0 0 8px #f00;}
+
+#rewardsModal .modal-content{border-color:#c92;background:#1c1808;max-width:460px;}
+#rewardsModal h2{color:#fd8;text-shadow:0 0 8px #fa0;}
+.region-rewards-block{margin:10px 0;text-align:left;}
+.region-rewards-title{color:#fc8;font-size:.8em;font-weight:bold;border-bottom:1px solid #432;padding-bottom:4px;margin-bottom:6px;}
+.reward-item-row{display:flex;align-items:center;gap:12px;margin:6px 0;background:rgba(255,255,255,.04);border:1px solid #432;border-radius:6px;padding:7px 10px;}
+.reward-item-row img{width:44px;height:44px;border-radius:6px;border:1px solid #653;background:#111;object-fit:cover;flex-shrink:0;}
+.reward-item-info{display:flex;flex-direction:column;gap:2px;}
+.reward-item-name{color:#eda;font-size:.75em;font-weight:bold;}
+.reward-item-qty{color:#fd8;font-size:1em;font-weight:bold;}
+.reward-xp-row{display:flex;align-items:center;gap:8px;margin:8px 0 4px;padding:8px 12px;background:rgba(100,200,100,.08);border:1px solid #2a4a2a;border-radius:6px;}
+.reward-xp-row span{color:#afa;font-size:.85em;}
+.reward-xp-row strong{color:#8f8;font-size:1.1em;}
+
+#playerTopBar {
+  display: flex;
+  align-items: flex-start;
+  background: linear-gradient(to bottom, #444, #222);
+  padding: 5px 5px;
+  width: 100%;
+  box-sizing: border-box;
+  color: #e0dccc;
+  font-family: 'Cinzel', serif;
+  border-bottom: 2px solid #555;
+  flex-wrap: wrap;
+  top: 0;
+}
+</style>
+<body>
+
+<div id="playerTopBar">
+    <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </a>
+    <span id="pageTitle" style="font-weight: bold; color: #ff9191;">Floresta Mística</span>
+    <img id="tutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="Tutorial" style="width:30px;height:30px;cursor:pointer;">
+</div>
+
+<div id="mapContainer"><div id="map"></div></div>
+
+<div id="contentOverlay">
+    <div id="huntingHud">
+        <div id="huntTimer">03:00:00</div>
+        <div id="huntStatus">⚔️ Escolha uma área para caçar</div>
+        <div id="shieldHudRow" style="display:none;">
+            <img src="https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp" alt="🛡">
+            <span id="shieldHudText"></span>
+        </div>
+        <div id="hudBtnRow">
+            <button class="hud-btn" id="pauseHuntBtn">Pausar</button>
+            <button class="hud-btn" id="activateShieldBtn">🛡 Ativar Escudo (x0)</button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<div id="loadingOverlay"><div class="loading-spinner"></div></div>
+
+<div id="alertModal" class="modal-container">
+    <div class="modal-content">
+        <p id="alertMessage" style="font-size:.92em;color:#cec;margin:10px 0 16px;"></p>
+        <div class="modal-btn-row"><button id="alertOkBtn" class="modal-btn">OK</button></div>
+    </div>
+</div>
+
+<div id="confirmModal" class="modal-container">
+    <div class="modal-content">
+        <h3 id="confirmTitle">Confirmar</h3>
+        <p id="confirmMsg" style="color:#cdc;font-size:.88em;"></p>
+        <div class="modal-btn-row">
+            <button id="confirmNoBtn" class="modal-btn">Não</button>
+            <button id="confirmYesBtn" class="modal-btn">Sim</button>
+        </div>
+    </div>
+</div>
+
+<div id="pvpModal" class="modal-container">
+    <div class="modal-content">
+        <h2>⚔️ Batalha</h2>
+        <div id="pvpCountdown" style="display:none;"></div>
+        <div class="pvp-arena">
+            <div class="pvp-fighter" id="pvpAttackerSide">
+                <div class="pvp-fighter-name" id="pvpAttackerName">Atacante</div>
+                <img id="pvpAttackerAvatar" src="" alt="">
+                <div class="pvp-hp-bg"><div class="pvp-hp-fill" id="pvpAttackerHpFill" style="width:100%"></div></div>
+                <div class="pvp-hp-txt" id="pvpAttackerHpText">0/0</div>
+            </div>
+            <div class="pvp-vs">VS</div>
+            <div class="pvp-fighter" id="pvpDefenderSide">
+                <div class="pvp-fighter-name" id="pvpDefenderName">Defensor</div>
+                <img id="pvpDefenderAvatar" src="" alt="">
+                <div class="pvp-hp-bg"><div class="pvp-hp-fill" id="pvpDefenderHpFill" style="width:100%"></div></div>
+                <div class="pvp-hp-txt" id="pvpDefenderHpText">0/0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="eliminatedModal" class="modal-container">
+    <div class="modal-content">
+        <h2>💀 Eliminado!</h2>
+        <p>Você foi eliminado por <strong id="eliminatedByName">um inimigo</strong>.</p>
+        <p style="font-size:.78em;color:#c88;">Sua caça foi pausada. Clique em uma área para retomar.</p>
+        <div class="modal-btn-row"><button id="eliminatedCloseBtn" class="modal-btn">Entendido</button></div>
+    </div>
+</div>
+
+<!-- Modal de recompensas — agrupa por região -->
+<div id="rewardsModal" class="modal-container">
+    <div class="modal-content">
+        <h2>🎉 Dia de Caça Completo!</h2>
+        <div id="rewardsContent"></div>
+        <div class="modal-btn-row"><button id="rewardsCloseBtn" class="modal-btn">Coletar!</button></div>
+    </div>
+</div>
+
+<div id="huntInfoModal" class="modal-container">
+    <div class="modal-content">
+        <span class="modal-close" id="huntInfoClose">&times;</span>
+        <h2>Floresta Mística</h2>
+        <div style="text-align:left;color:#cdc;font-size:.82em;line-height:1.7;">
+            <p>Uma floresta encantada próxima à lendária cidade élfica de Elendor.</p>
+            <p><strong style="color:#fcc;">Drops:</strong><br>
+            <strong>Unicórnio</strong> → Chifre de Unicórnio<br>
+            <strong>Fênix</strong> → Lágrima de Fênix<br>
+            <strong>Sátiro</strong> → Galho Espiritual<br>
+            <strong>Tigre Nix</strong> → Elora</p>
+            <p><strong style="color:#fd8;">⏱ Tempo:</strong> O contador de <strong>3 horas</strong> é compartilhado entre todas as regiões do jogo. Você pode dividir o tempo como quiser.</p>
+            <p><strong style="color:#afa;">Recompensas:</strong>
+            <ul>
+            <li><strong>XP:</strong> 350.</li>
+            <li><strong>Itens:</strong> Distribuídos proporcionalmente ao tempo gasto em cada região/spot ao final das 3h.</li></ul></p>
+            <p><strong style="color:#acf;">🛡 Escudo:</strong> Protege de PvP por 1 hora por uso (máx. 3h).</p>
+            <p style="color:#fd8;font-size:.9em;">⚠️ PvP é livre nesta região!</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+    const t=document.createElement("div");t.style.cssText="position:absolute;visibility:hidden;font-size:1rem;line-height:1;";t.textContent="M";document.body.appendChild(t);
+    const r=t.getBoundingClientRect().height;document.body.removeChild(t);
+    const s=document.createElement("style");s.textContent=`html{font-size:${16*(16/r)}px!important;}body{font-size:1.3rem!important;}`;document.head.appendChild(s);
+});
+</script>
+
+<script type="module">
+import { supabase } from './supabaseClient.js';
+
+// ═══════════════════════════════════════════════════════════
+// CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
+// ═══════════════════════════════════════════════════════════
+const REGION_ID = 'floresta_mistica';
+const REGION_NAME = 'Floresta Mística';
+
+// Catálogo de TODAS as regiões (para o modal de recompensas)
+// Adicione aqui as outras regiões conforme criar as páginas
+const ALL_REGIONS = {
+    floresta_mistica: { name:'Floresta Mística' },
+    // montanhas: { name:'Montanhas' },
+};
+
+// Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
+const ALL_DROPS = {
+    84: { name:'Chifre de Unicórnio', img:'https://aden-rpg.pages.dev/assets/itens/chifre_de_unicornio.webp' },
+    71: { name:'Lágrima de Fênix',    img:'https://aden-rpg.pages.dev/assets/itens/lagrima_de_fenix.webp'    },
+    74: { name:'Galho Espiritual',    img:'https://aden-rpg.pages.dev/assets/itens/galho_espiritual.webp'    },
+    51: { name:'Elora',               img:'https://aden-rpg.pages.dev/assets/itens/elora.webp'               },
+    // adicione outros drops aqui
+};
+
+const SPOTS = [
+    { id:'unicornio', name:'Unicórnio',  top:320, left:190,  width:450, height:450,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/unicornio.webp', labelColor:'#ffccee' },
+    { id:'fenix',    name:'Fênix',       top:430, left:830, width:500, height:430,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/fenix.webp',     labelColor:'#ffddaa' },
+    { id:'satiro',   name:'Sátiro',      top:880, left:100, width:600, height:550,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/satiro.webp',    labelColor:'#aaffaa' },
+    { id:'tigrenix', name:'Tigre Nix',   top:1120, left:850, width:500, height:360,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tigre_nix.webp', labelColor:'#bbbbff' },
+];
+
+const SHIELD_ITEM_ID = 85;
+const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
+const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
+const DAILY_LIMIT    = 10800; // 3h globais — mesmo valor do SQL
+const SYNC_MS        = 5 * 60 * 1000;
+const SPOT_LOCK_MS   = 15 * 60 * 1000; // 15 minutos de lock por spot
+const ACTIVITY_KEY   = 'aden_activity_state';
+
+// ── ACTIVITY STATE (cache local compartilhado com mines.js) ─
+function getActivity(){
+    try{
+        const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));
+        if(!a)return null;
+        // Expira após 6 horas sem interação (previne bloqueio por crash)
+        if(a.started_at&&(Date.now()-a.started_at)>6*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        return a;
+    }catch{return null;}
+}
+function setActivityHunting(spotId){
+    const cur=getActivity()||{};
+    localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
+        type:'hunting',region:REGION_NAME,spot_id:spotId,
+        spot_started_at:cur.type==='hunting'&&cur.spot_id===spotId?cur.spot_started_at:Date.now(),
+        started_at:Date.now()
+    }));
+}
+function clearActivity(){localStorage.removeItem(ACTIVITY_KEY);}
+function canSwitchSpot(){
+    const a=getActivity();
+    if(!a||a.type!=='hunting'||!a.spot_started_at)return true;
+    return(Date.now()-a.spot_started_at)>=SPOT_LOCK_MS;
+}
+function fmtLockTime(){
+    const a=getActivity();
+    if(!a||!a.spot_started_at)return'0:00';
+    const ms=Math.max(0,SPOT_LOCK_MS-(Date.now()-a.spot_started_at));
+    const total=Math.ceil(ms/1000);
+    const m=Math.floor(total/60),s=total%60;
+    return`${m}:${String(s).padStart(2,'0')}`;
+}
+
+// ── ESTADO ─────────────────────────────────────────────────
+let userId=null, playerData=null, currentSession=null;
+let isHunting=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
+let shieldUntil=null, cachedShieldQty=0;
+let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
+let otherPlayers=[], wanderTimers=[];
+
+// ── INDEXEDDB (mesmo do mercador.js) ───────────────────────
+const IDB_NAME='aden_inventory_db',IDB_STORE='inventory_store',IDB_VERSION=47;
+function openIdb(){return new Promise((res,rej)=>{const req=indexedDB.open(IDB_NAME,IDB_VERSION);req.onerror=()=>rej(req.error);req.onsuccess=e=>res(e.target.result);req.onupgradeneeded=()=>{};});}
+async function getItemQtyFromCache(id){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return 0;const tx=db.transaction(IDB_STORE,'readonly');const all=await new Promise((res,rej)=>{const r=tx.objectStore(IDB_STORE).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return all.filter(i=>i.items?.item_id===id).reduce((s,i)=>s+(i.quantity||0),0);}catch{return 0;}}
+async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return;const tx=db.transaction(IDB_STORE,'readwrite'),store=tx.objectStore(IDB_STORE);const all=await new Promise((res,rej)=>{const r=store.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});const m=all.filter(i=>i.items?.item_id===id);if(!m.length)return;let rem=Math.abs(delta);if(delta<0){for(const item of m){if(rem<=0)break;if(item.quantity>=rem){item.quantity-=rem;rem=0;if(item.quantity<=0)store.delete(item.id);else store.put(item);}else{rem-=item.quantity;store.delete(item.id);}}}else{const item=m[0];item.quantity=(item.quantity||0)+delta;store.put(item);}}catch(e){console.warn('[floresta] IDB fail',e);}}
+
+// ── ÁUDIO ───────────────────────────────────────────────────
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+const audioBufs={};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/floresta.mp3'};
+async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
+function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(audioCtx.destination);s.start(0);s.onended=()=>{try{s.disconnect();}catch{}};}catch{}}
+const amb=new Audio(SRC.ambient);amb.volume=0.12;amb.loop=true;
+document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
+
+// ── AUTH ────────────────────────────────────────────────────
+async function getUserId(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('sb-')&&k.endsWith('-auth-token')){const s=JSON.parse(localStorage.getItem(k));if(s?.user?.id)return s.user.id;}}}catch{}try{const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data?.id)return p.data.id;}}catch{}try{const{data}=await supabase.auth.getSession();return data?.session?.user?.id||null;}catch{return null;}}
+async function getPlayerData(){try{if(window.currentPlayerData?.id)return window.currentPlayerData;const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data)return p.data;}}catch{}return null;}
+
+// ── HELPERS ─────────────────────────────────────────────────
+function fmtTime(s){s=Math.max(0,Math.floor(s));return`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;}
+function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+function showLoading(){document.getElementById('loadingOverlay').style.display='flex';}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
+function showAlert(msg){return new Promise(r=>{const m=document.getElementById('alertModal'),el=document.getElementById('alertMessage'),btn=document.getElementById('alertOkBtn');el.innerHTML=msg;m.style.display='flex';const close=()=>{m.style.display='none';btn.onclick=null;r();};btn.onclick=close;m.addEventListener('click',e=>{if(e.target===m)close();},{once:true});});}
+function showConfirm(title,msg){return new Promise(r=>{const m=document.getElementById('confirmModal');document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMsg').innerHTML=msg;m.style.display='flex';const yes=document.getElementById('confirmYesBtn'),no=document.getElementById('confirmNoBtn');const done=v=>{m.style.display='none';yes.onclick=null;no.onclick=null;r(v);};yes.onclick=()=>done(true);no.onclick=()=>done(false);m.addEventListener('click',e=>{if(e.target===m)done(false);},{once:true});});}
+
+// ── ESCUDO (global — sem region_id) ─────────────────────────
+async function initShieldFromCache(){cachedShieldQty=await getItemQtyFromCache(SHIELD_ITEM_ID);updateShieldBtn();}
+function updateShieldBtn(){const btn=document.getElementById('activateShieldBtn');if(!btn)return;btn.textContent=`🛡 Ativar Escudo (x${cachedShieldQty})`;btn.disabled=cachedShieldQty<=0;}
+function isShieldActive(){return shieldUntil&&shieldUntil>new Date();}
+function startShieldTimer(){clearInterval(shieldTimerInterval);const row=document.getElementById('shieldHudRow'),txt=document.getElementById('shieldHudText');if(!row||!txt)return;const tick=()=>{const diff=Math.max(0,Math.floor((shieldUntil-new Date())/1000));if(diff<=0){clearInterval(shieldTimerInterval);row.style.display='none';updateMyShieldIcon(false);return;}row.style.display='flex';txt.textContent=`🛡 Protegido por ${fmtTime(diff)}`;};tick();shieldTimerInterval=setInterval(tick,1000);}
+async function handleActivateShield(){
+    if(cachedShieldQty<=0){await showAlert('Você não tem <strong>Escudo de Caça</strong> no inventário!');return;}
+    const ok=await showConfirm('🛡 Escudo de Caça',`Ativar Escudo de Caça?<br><small style="color:#aab;">Protege de PvP por 1h. Máx. 3h acumuladas. Você tem <strong>${cachedShieldQty}</strong>.</small>`);
+    if(!ok)return;
+    cachedShieldQty--;updateShieldBtn();await updateCacheQty(SHIELD_ITEM_ID,-1);
+    showLoading();
+    try{
+        // RPC activate_hunt_shield agora não precisa de p_region_id
+        const{data,error}=await supabase.rpc('activate_hunt_shield',{p_player_id:userId});
+        if(error)throw error;
+        if(!data?.success){cachedShieldQty++;updateShieldBtn();await updateCacheQty(SHIELD_ITEM_ID,1);await showAlert(data?.message||'Erro.');return;}
+        shieldUntil=new Date(data.shield_until);startShieldTimer();updateMyShieldIcon(true);
+        await showAlert('🛡 <strong>Escudo ativado!</strong>');
+    }catch(e){cachedShieldQty++;updateShieldBtn();await updateCacheQty(SHIELD_ITEM_ID,1);await showAlert('Erro: '+(e.message||''));}
+    finally{hideLoading();}
+}
+function updateMyShieldIcon(active){const el=document.getElementById('myShieldIcon');if(el)el.style.display=active?'block':'none';}
+
+// ── DRAG DO MAPA ─────────────────────────────────────────────
+function enableMapInteraction(){const cont=document.getElementById('mapContainer'),map=document.getElementById('map');if(!map||!cont)return;let drag=false,sx,sy,cx=0,cy=0,vx=0,vy=0,lt=0,aId=null;const limits=()=>{const cr=cont.getBoundingClientRect(),m=map.style.transform.match(/scale\(([^)]+)\)/),sc=m?parseFloat(m[1]):1.1;return{minX:Math.min(0,cr.width-1500*sc),maxX:0,minY:Math.min(0,cr.height-1500*sc),maxY:0};};const setPos=(x,y)=>{const L=limits();cx=Math.max(L.minX,Math.min(x,L.maxX));cy=Math.max(L.minY,Math.min(y,L.maxY));const m=map.style.transform.match(/scale\(([^)]+)\)/);map.style.transform=`translate(${cx}px,${cy}px) ${m?`scale(${m[1]})`:'scale(1.1)'}`;};const inertia=()=>{cancelAnimationFrame(aId);if(drag)return;vx*=0.94;vy*=0.94;setPos(cx+vx,cy+vy);if(Math.abs(vx)>0.4||Math.abs(vy)>0.4)aId=requestAnimationFrame(inertia);};const startDrag=e=>{if(e.touches?.length>1)return;drag=true;map.style.cursor='grabbing';sx=e.clientX??e.touches[0].clientX;sy=e.clientY??e.touches[0].clientY;vx=vy=0;lt=performance.now();cancelAnimationFrame(aId);};const onDrag=e=>{if(!drag)return;e.preventDefault();const nx=e.clientX??e.touches[0].clientX,ny=e.clientY??e.touches[0].clientY,dt=performance.now()-lt;if(dt>0){vx=(nx-sx)/dt;vy=(ny-sy)/dt;}setPos(cx+(nx-sx),cy+(ny-sy));sx=nx;sy=ny;lt=performance.now();};const endDrag=()=>{drag=false;map.style.cursor='grab';if(Math.abs(vx)>0.2||Math.abs(vy)>0.2){vx*=10;vy*=10;inertia();}};map.addEventListener('mousedown',startDrag,{passive:true});window.addEventListener('mousemove',onDrag,{passive:false});window.addEventListener('mouseup',endDrag,{passive:true});map.addEventListener('touchstart',startDrag,{passive:true});window.addEventListener('touchmove',onDrag,{passive:false});window.addEventListener('touchend',endDrag,{passive:true});map.style.cursor='grab';}
+
+// ── WANDER ───────────────────────────────────────────────────
+function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=Math.max(0,Math.random()*(w-70))+'px';el.style.top=Math.max(0,Math.random()*(h-90))+'px';wanderTimers.push(setTimeout(pause,3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,5000+Math.random()*2000));};wanderTimers.push(setTimeout(move,delay));}
+
+// ── SPOTS + MOBS ─────────────────────────────────────────────
+function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.src=spot.mobImg;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
+
+// ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
+function renderPlayerOnSpot(spotId){document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());if(!spotId||!playerData)return;const spotEl=document.getElementById(`spot-${spotId}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===spotId);const wrap=document.createElement('div');wrap.className='player-avatar-wrapper';Object.assign(wrap.style,{right:'10px',bottom:'10px',left:'auto',top:'auto'});const si=document.createElement('img');si.id='myShieldIcon';si.className='player-shield-icon';si.src=SHIELD_IMG;si.style.display=isShieldActive()?'block':'none';wrap.appendChild(si);const nm=document.createElement('div');nm.className='player-name-label';nm.textContent=playerData.name||'Você';wrap.appendChild(nm);const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);spotEl.appendChild(wrap);if(spot)startWander(wrap,spot.width,spot.height,800);}
+function removePlayerFromSpot(){document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
+
+// ── OUTROS JOGADORES ─────────────────────────────────────────
+function renderOtherPlayers(players){document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());players.forEach(p=>{if(!p.current_spot)return;const spotEl=document.getElementById(`spot-${p.current_spot}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===p.current_spot);const wrap=document.createElement('div');wrap.className='other-player-wrapper';wrap.dataset.playerId=p.id;Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});const shActive=p.shield_until&&new Date(p.shield_until)>new Date();if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}const nm=document.createElement('div');nm.className='other-player-name';nm.textContent=esc(p.name)||'?';wrap.appendChild(nm);const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');av.src=p.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);if(p.is_eliminated){const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);}else{wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});if(p.is_hunting&&spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);}spotEl.appendChild(wrap);});}
+
+// ── TIMER GLOBAL ─────────────────────────────────────────────
+function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=fmtTime(localSecondsLeft);}
+function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);}
+function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;}
+
+function updateHuntingHUD(){
+    const hud=document.getElementById('huntingHud'),status=document.getElementById('huntStatus'),pauseBtn=document.getElementById('pauseHuntBtn');
+    updateSpotStyles();
+    if(currentSession?.rewards_claimed){hud.style.display='flex';status.textContent='✅ Recompensas coletadas hoje!';pauseBtn.style.display='none';return;}
+    if(localSecondsLeft<=0&&!isHunting){hud.style.display='none';return;}
+    hud.style.display='flex';pauseBtn.style.display='block';updateTimerDisplay();
+    if(isHunting&&currentSpotId){status.textContent=`⚔️ Caçando: ${SPOTS.find(s=>s.id===currentSpotId)?.name||currentSpotId}`;pauseBtn.textContent='Pausar';pauseBtn.disabled=false;}
+    else{status.textContent='⏸️ Pausado — clique num spot para continuar';pauseBtn.textContent='Pausado';pauseBtn.disabled=true;}
+}
+function updateSpotStyles(){
+    SPOTS.forEach(s=>{
+        const el=document.getElementById(`spot-${s.id}`);
+        if(!el)return;
+        if(isHunting&&currentSpotId===s.id)el.classList.add('active-spot');
+        else el.classList.remove('active-spot');
+    });
+}
+
+// ── CONCLUSÃO DO DIA (timer global zera) ─────────────────────
+async function onHuntComplete(){
+    isHunting=false;stopLocalTimer();updateHuntingHUD();showLoading();
+    try{
+        // finish_daily_hunt distribui recompensas de TODAS as regiões visitadas
+        const{data,error}=await supabase.rpc('finish_daily_hunt',{p_player_id:userId});
+        if(error)throw error;
+        if(data?.success)showRewardsModal(data);
+        else await showAlert(data?.message||'Erro ao finalizar.');
+    }catch(e){await showAlert('Erro ao finalizar. Tente novamente.');}
+    finally{hideLoading();}
+}
+
+// ── CLICK NO SPOT ────────────────────────────────────────────
+async function handleSpotClick(spot){
+    if(currentSession?.rewards_claimed){await showAlert('✅ Tempo diário esgotado. Volte amanhã!');return;}
+    if(localSecondsLeft<=0){await showAlert('⌛ Tempo diário esgotado. Volte amanhã!');return;}
+
+    // Regra 3: já está neste spot — não faz nada
+    if(isHunting&&currentSpotId===spot.id)return;
+
+    // Verifica se está minerando em outra página
+    const activity=getActivity();
+    if(activity?.type==='mining'){
+        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está minerando.<br>Aguarde o término da mineração.');
+        return;
+    }
+
+    // Regra 2: lock de 15 minutos antes de trocar de spot
+    if(isHunting&&currentSpotId&&currentSpotId!==spot.id){
+        if(!canSwitchSpot()){
+            await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
+            return;
+        }
+    }
+
+    const ok=await showConfirm('Área de Caça',`Caçar na área de <strong>${esc(spot.name)}</strong>?`);
+    if(!ok)return;
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('start_hunt',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id});
+        if(error)throw error;
+        if(!data?.success){await showAlert(data?.message||'Erro ao iniciar.');return;}
+        localSecondsLeft=Math.max(0,DAILY_LIMIT-(data.total_seconds||0));
+        currentSpotId=spot.id;isHunting=true;
+        if(!currentSession)currentSession={};
+        currentSession.current_region=REGION_ID;currentSession.current_spot=spot.id;
+        setActivityHunting(spot.id);
+        renderPlayerOnSpot(spot.id);updateHuntingHUD();startLocalTimer();amb.play().catch(()=>{});
+    }catch(e){await showAlert('Erro: '+(e.message||''));}
+    finally{hideLoading();}
+}
+
+// ── PAUSAR (sem region_id — timer é global) ──────────────────
+async function handlePauseHunt(){
+    if(!isHunting)return;
+    if(!canSwitchSpot()){
+        await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de pausar.`);
+        return;
+    }
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('pause_hunt',{p_player_id:userId});
+        if(error)throw error;
+        isHunting=false;stopLocalTimer();
+        if(data?.total_seconds!==undefined){localSecondsLeft=Math.max(0,DAILY_LIMIT-data.total_seconds);updateTimerDisplay();}
+        clearActivity();
+        removePlayerFromSpot();updateHuntingHUD();
+    }catch(e){await showAlert('Erro ao pausar.');}
+    finally{hideLoading();}
+}
+
+// ── PVP ──────────────────────────────────────────────────────
+async function handleAttackPlayer(target){
+    // Verifica se está minerando
+    const activity=getActivity();
+    if(activity?.type==='mining'){
+        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está minerando.<br>Aguarde o término da mineração.');
+        return;
+    }
+    // Regra 1: só pode atacar se estiver no mesmo spot
+    if(!isHunting||!currentSpotId){
+        await showAlert('⚔️ Você precisa estar caçando em um spot para atacar outros jogadores.');return;
+    }
+    if(currentSpotId!==target.current_spot){
+        await showAlert(`⚔️ Você só pode atacar jogadores no mesmo spot que você.`);return;
+    }
+    const ok=await showConfirm('PvP',`Deseja atacar <strong>${esc(target.name)}</strong>?`);if(!ok)return;
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('attack_hunting_player',{p_attacker_id:userId,p_defender_id:target.id,p_region_id:REGION_ID});
+        if(error)throw error;
+        if(!data?.success){await showAlert(data?.message||'Erro no PvP.');return;}
+        await runPvpAnimation(data);
+        if(data.combat?.winner_id===userId){document.querySelectorAll(`.other-player-wrapper[data-player-id="${target.id}"]`).forEach(w=>{const img=w.querySelector('img.other-player-avatar');if(img)img.classList.add('eliminated');const clone=w.cloneNode(true);const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';clone.appendChild(lbl);w.parentNode.replaceChild(clone,w);});}
+        syncOtherPlayers();
+    }catch(e){await showAlert('Erro no PvP: '+(e.message||''));}
+    finally{hideLoading();}
+}
+
+async function runPvpAnimation(data){
+    const modal=document.getElementById('pvpModal'),combat=data.combat||{},log=combat.battle_log||[];
+    document.getElementById('pvpAttackerName').textContent=data.attacker_name||'Atacante';
+    document.getElementById('pvpDefenderName').textContent=data.defender_name||'Defensor';
+    const atkAv=document.getElementById('pvpAttackerAvatar'),defAv=document.getElementById('pvpDefenderAvatar');
+    atkAv.src=data.attacker_avatar||playerData?.avatar_url||DEFAULT_AVATAR;defAv.src=data.defender_avatar||DEFAULT_AVATAR;
+    atkAv.onerror=()=>{atkAv.src=DEFAULT_AVATAR;};defAv.onerror=()=>{defAv.src=DEFAULT_AVATAR;};
+    const atkFill=document.getElementById('pvpAttackerHpFill'),defFill=document.getElementById('pvpDefenderHpFill');
+    const atkTxt=document.getElementById('pvpAttackerHpText'),defTxt=document.getElementById('pvpDefenderHpText');
+    const atkSide=document.getElementById('pvpAttackerSide'),defSide=document.getElementById('pvpDefenderSide');
+    const cntdn=document.getElementById('pvpCountdown');
+    const atkId=combat.attacker_id,defId=combat.defender_id;
+    const dmgToDef=log.filter(t=>t.attacker_id===atkId).reduce((s,t)=>s+(t.damage||0),0);
+    const dmgToAtk=log.filter(t=>t.attacker_id===defId).reduce((s,t)=>s+(t.damage||0),0);
+    const defMaxHp=Math.max(1,(combat.defender_health_left||0)+dmgToDef);
+    const atkMaxHp=Math.max(1,(combat.attacker_health_left||0)+dmgToAtk);
+    let curAtk=atkMaxHp,curDef=defMaxHp;
+    const updBars=()=>{atkFill.style.width=Math.max(0,curAtk/atkMaxHp*100)+'%';defFill.style.width=Math.max(0,curDef/defMaxHp*100)+'%';atkTxt.textContent=`${Math.max(0,curAtk)}/${atkMaxHp}`;defTxt.textContent=`${Math.max(0,curDef)}/${defMaxHp}`;};
+    updBars();modal.style.display='flex';cntdn.style.display='block';
+    for(let i=3;i>0;i--){cntdn.textContent=`A batalha começa em ${i}...`;await new Promise(r=>setTimeout(r,1000));}
+    cntdn.style.display='none';
+    for(const turn of log){const isAtk=turn.attacker_id===atkId;const tgtSide=isAtk?defSide:atkSide,tgtAv=isAtk?defAv:atkAv;if(isAtk)curDef=Math.max(0,curDef-(turn.damage||0));else curAtk=Math.max(0,curAtk-(turn.damage||0));updBars();showDamageNumber(turn.damage,turn.critical,turn.evaded,tgtSide);if(turn.evaded)playSound('evade');else if(turn.critical)playSound('critical');else playSound('normal');tgtAv.classList.remove('shake-animation');void tgtAv.offsetWidth;tgtAv.classList.add('shake-animation');setTimeout(()=>tgtAv.classList.remove('shake-animation'),400);await new Promise(r=>setTimeout(r,950));}
+    await new Promise(r=>setTimeout(r,600));modal.style.display='none';
+    if(combat.winner_id===userId)await showAlert(`⚔️ <strong>VITÓRIA!</strong><br>${esc(data.defender_name)} foi eliminado!`);
+    else await showAlert(`⚔️ <strong>DERROTA.</strong><br>${esc(data.defender_name)} sobreviveu!`);
+}
+function showDamageNumber(dmg,crit,evaded,targetEl){const el=document.createElement('div');el.className='damage-number'+(crit?' crit':'')+(evaded?' evaded':'');el.textContent=evaded?'Evitado!':(crit?`💥 ${dmg}`:String(dmg));const rect=targetEl.getBoundingClientRect();Object.assign(el.style,{left:(rect.left+rect.width/2-25)+'px',top:(rect.top+rect.height/2)+'px',transform:'translateY(0)',opacity:'1'});document.body.appendChild(el);requestAnimationFrame(()=>{el.style.transform='translateY(-55px)';el.style.opacity='0';});setTimeout(()=>el.remove(),1500);}
+
+// ── MODAL DE RECOMPENSAS — agrupa por região ─────────────────
+function showRewardsModal(data){
+    const modal=document.getElementById('rewardsModal'),content=document.getElementById('rewardsContent');
+    const rewards=data.rewards||[]; // [{region_id, item_id, quantity}]
+    const xpGained=data.xp_gained||0;
+
+    // Agrupa por região
+    const byRegion={};
+    rewards.forEach(r=>{if(!byRegion[r.region_id])byRegion[r.region_id]=[];byRegion[r.region_id].push(r);});
+
+    let html=`<div class="reward-xp-row"><span>✨ XP Total Ganho:</span><strong>+${xpGained}</strong></div>`;
+
+    if(Object.keys(byRegion).length===0){
+        html+='<p style="color:#aab;font-size:.82em;">Nenhuma recompensa (tempo insuficiente em qualquer região).</p>';
+    } else {
+        Object.entries(byRegion).forEach(([rid,items])=>{
+            const regionName=ALL_REGIONS[rid]?.name||rid;
+            html+=`<div class="region-rewards-block"><div class="region-rewards-title">📍 ${esc(regionName)}</div>`;
+            items.forEach(g=>{
+                const drop=ALL_DROPS[g.item_id];
+                const img=drop?.img||DEFAULT_AVATAR;
+                const name=drop?.name||`Item #${g.item_id}`;
+                html+=`<div class="reward-item-row"><img src="${img}" alt="${esc(name)}" onerror="this.src='${DEFAULT_AVATAR}'"><div class="reward-item-info"><div class="reward-item-name">${esc(name)}</div><div class="reward-item-qty">x${g.quantity}</div></div></div>`;
+            });
+            html+='</div>';
+        });
+    }
+
+    content.innerHTML=html;modal.style.display='flex';
+    if(currentSession)currentSession.rewards_claimed=true;
+    clearActivity();
+    updateHuntingHUD();
+}
+
+// ── SYNC ─────────────────────────────────────────────────────
+async function syncOtherPlayers(){
+    if(!userId)return;
+    try{
+        const{data,error}=await supabase.rpc('get_hunting_players',{p_player_id:userId,p_region_id:REGION_ID});
+        if(error||!data)return;
+        otherPlayers=data.players||[];renderOtherPlayers(otherPlayers);
+        if(data.i_was_eliminated){if(isHunting){isHunting=false;stopLocalTimer();removePlayerFromSpot();updateHuntingHUD();}document.getElementById('eliminatedByName').textContent=data.eliminated_by||'um inimigo';document.getElementById('eliminatedModal').style.display='flex';}
+    }catch(e){console.warn('[floresta] sync error',e);}
+}
+
+// ── BOOT ─────────────────────────────────────────────────────
+async function boot(){
+    showLoading();
+    try{
+        userId=await getUserId();if(!userId){location.href='index.html';return;}
+        playerData=await getPlayerData();
+        preload('normal');preload('critical');preload('evade');
+
+        await initShieldFromCache();
+        // Lazy cleanup
+        (async()=>{try{await supabase.rpc('cleanup_old_hunting_sessions');}catch{}})();
+        renderSpots();
+
+        // 1 RPC de boot — retorna estado global + progresso nesta região
+        const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
+        if(error)throw error;
+
+        currentSession=data?.own_session||null;
+        otherPlayers=data?.other_players||[];
+
+        if(currentSession){
+            const srvTotal=currentSession.total_seconds||0;
+            let localTotal=srvTotal;
+            // Projeta tempo decorrido offline se estava caçando NESTA região
+            if(currentSession.is_hunting&&currentSession.hunt_started_at&&currentSession.current_region===REGION_ID){
+                const elapsed=Math.floor((Date.now()-new Date(currentSession.hunt_started_at).getTime())/1000);
+                localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
+            }
+            localSecondsLeft=Math.max(0,DAILY_LIMIT-localTotal);
+            // Spot ativo só se for DESTA região
+            currentSpotId=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
+            isHunting=currentSession.is_hunting
+                &&currentSession.current_region===REGION_ID
+                &&localSecondsLeft>0
+                &&!currentSession.is_eliminated
+                &&!currentSession.rewards_claimed;
+
+            if(currentSession.shield_until){shieldUntil=new Date(currentSession.shield_until);if(isShieldActive())startShieldTimer();}
+            if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
+
+            // Timer zerou offline
+            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
+            if(currentSession.is_eliminated){document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';document.getElementById('eliminatedModal').style.display='flex';}
+        }
+
+        updateHuntingHUD();renderOtherPlayers(otherPlayers);
+        syncInterval=setInterval(syncOtherPlayers,SYNC_MS);
+    }catch(e){console.error('[floresta] boot error',e);await showAlert('Erro ao carregar. Recarregue a página.');}
+    finally{hideLoading();}
+}
+
+// ── DOM READY ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',async()=>{
+    enableMapInteraction();
+    document.getElementById('pauseHuntBtn').addEventListener('click',handlePauseHunt);
+    document.getElementById('activateShieldBtn').addEventListener('click',handleActivateShield);
+    document.getElementById('tutorialBtn').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='flex';});
+    document.getElementById('huntInfoClose').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='none';});
+    document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});
+    document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{document.getElementById('eliminatedModal').style.display='none';});
+    document.getElementById('rewardsCloseBtn').addEventListener('click',()=>{document.getElementById('rewardsModal').style.display='none';});
+    await boot();
+});
+</script>
+
+<div id="google_translate_element"></div>
+<script src="auto_translate.js"></script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</body>
+</html>

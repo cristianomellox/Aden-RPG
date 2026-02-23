@@ -243,6 +243,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   let nextAttackTime = null; 
   let cooldownInterval = null;
 
+  // ── ACTIVITY STATE (cache local compartilhado com páginas de caça) ──
+  const ACTIVITY_KEY = 'aden_activity_state';
+  function getActivity(){
+    try{
+        const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));
+        if(!a)return null;
+        if(a.started_at&&(Date.now()-a.started_at)>6*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        return a;
+    }catch{return null;}
+  }
+  function setActivityMining(mineName){localStorage.setItem(ACTIVITY_KEY,JSON.stringify({type:'mining',mine_name:mineName,started_at:Date.now()}));}
+  function clearActivity(){localStorage.removeItem(ACTIVITY_KEY);}
+
   // Timers de Combate
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
@@ -1324,6 +1337,15 @@ function formatTimeCombat(totalSeconds) {
     showLoading();
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
+
+    // Verifica se está caçando em outra página
+    const activity = getActivity();
+    if (activity?.type === 'hunting') {
+      const regionName = activity.region || 'uma região';
+      hideLoading();
+      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está caçando em <strong>${esc(regionName)}</strong>.<br>Pause a caçada para minerar.`);
+      return;
+    }
     
     knownParticipantCount = 1;
 
@@ -1354,6 +1376,7 @@ function formatTimeCombat(totalSeconds) {
       };
 
       currentMineId = mineId;
+      setActivityMining(cavern.name || 'Mina');
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
       
       currentMonsterHealthGlobal = cavern.monster_health;
@@ -1577,6 +1600,7 @@ function formatTimeCombat(totalSeconds) {
     
     clearOptimisticState();
     currentMineId = null;
+    clearActivity();
     
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
@@ -1619,6 +1643,15 @@ function formatTimeCombat(totalSeconds) {
   async function challengeMine(targetMine, owner, allMines) {
     if (!userId) return;
     const ownerName = owner.name || "Desconhecido";
+
+    // Verifica se está caçando em outra página
+    const activity = getActivity();
+    if (activity?.type === 'hunting') {
+      const regionName = activity.region || 'uma região';
+      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está caçando em <strong>${esc(regionName)}</strong>.<br>Pause a caçada para minerar.`);
+      return;
+    }
+
     showLoading();
     try {
         // [OTIMIZADO]
@@ -1742,7 +1775,7 @@ function formatTimeCombat(totalSeconds) {
       if (!userId && typeof session !== 'undefined' && session) userId = session.user.id;
       
       if (!userId) { window.location.href = "index.html"; return; }
-      
+
       const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912", "37baa684-f4dc-4d80-93cb-9004a3cbe2b9", "1888d6d8-ca41-48cc-b92e-e48af088d643"];
 
       try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS }); } catch (e) {}

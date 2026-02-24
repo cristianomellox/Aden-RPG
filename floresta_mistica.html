@@ -914,7 +914,7 @@ async function syncOtherPlayers(){
         const{data,error}=await supabase.rpc('get_hunting_players',{p_player_id:userId,p_region_id:REGION_ID});
         if(error||!data)return;
         const newPlayers=data.players||[];
-        // Detecta novas eliminações para banner
+        // Detecta novas eliminações → banner
         newPlayers.forEach(np=>{
             const old=otherPlayers.find(op=>op.id===np.id);
             if(np.is_eliminated&&old&&!old.is_eliminated&&np.eliminated_by_name){
@@ -922,6 +922,18 @@ async function syncOtherPlayers(){
                     '<span style="color:#ff8">'+esc(np.eliminated_by_name)+'</span> acabou de eliminar '+
                     '<span style="color:#f88">'+esc(np.name)+'</span> em '+
                     '<span style="color:#8ff">'+esc(REGION_NAME)+'</span>!'
+                );
+            }
+        });
+        // Detecta jogadores que SUMIRAM do spot (saíram ou foram derrotados)
+        otherPlayers.forEach(old=>{
+            if(old.is_eliminated)return; // já estava eliminado, sem banner extra
+            const stillHere=newPlayers.find(np=>np.id===old.id);
+            if(!stillHere&&old.is_hunting){
+                // Estava caçando ativamente e sumiu — provavelmente foi derrotado ou pausou
+                pushKillNotif(
+                    '<span style="color:#ff8">'+esc(old.name)+'</span> deixou o spot em '+
+                    '<span style="color:#8ff">'+esc(REGION_NAME)+'</span>.'
                 );
             }
         });

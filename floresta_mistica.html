@@ -397,9 +397,10 @@ let userId=null, playerData=null, currentSession=null;
 let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
 let pvpOnlyExitTimer=null, pvpOnlySecondsLeft=900, pvpOnlyTimerInterval=null;
 let eliminationModalShown=false;
-function _elimAckKey(huntDate,elimBy){return `elim_ack_${userId}_${huntDate||'today'}_${elimBy||''}`;}
-function isEliminationAcknowledged(huntDate,elimBy){try{return localStorage.getItem(_elimAckKey(huntDate,elimBy))==='1';}catch{return eliminationModalShown;}}
-function setEliminationAcknowledged(huntDate,elimBy){try{localStorage.setItem(_elimAckKey(huntDate,elimBy),'1');}catch{}eliminationModalShown=true;}
+function _elimAckKey(huntDate){return `elim_ack_${userId}_${huntDate||'today'}`;}
+function isEliminationAcknowledged(huntDate){try{return localStorage.getItem(_elimAckKey(huntDate))==='1';}catch{return eliminationModalShown;}}
+function setEliminationAcknowledged(huntDate){try{localStorage.setItem(_elimAckKey(huntDate),'1');}catch{}eliminationModalShown=true;}
+function clearEliminationAcknowledged(huntDate){try{localStorage.removeItem(_elimAckKey(huntDate));}catch{}eliminationModalShown=false;}
 let shieldUntil=null, cachedShieldQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
 let otherPlayers=[], wanderTimers=[];
@@ -660,6 +661,7 @@ async function handleSpotClick(spot){
             const{data:pvpData,error:pvpErr}=await supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id});
             if(pvpErr)throw pvpErr;
             if(!pvpData?.success){await showAlert(pvpData?.message||'Erro ao entrar no modo PvP.');return;}
+            clearEliminationAcknowledged(currentSession?.hunt_date); // libera ack para próxima eliminação
             clearTimeout(pvpOnlyExitTimer);
             isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
             clearTimeout(deadTimer);deadTimer=null;
@@ -715,6 +717,7 @@ async function handleSpotClick(spot){
         if(error)throw error;
         if(!data?.success){await showAlert(data?.message||'Erro ao iniciar.');return;}
         localSecondsLeft=Math.max(0,DAILY_LIMIT-(data.total_seconds||0));
+        clearEliminationAcknowledged(data.hunt_date); // ao entrar no spot, libera ack para próxima eliminação
         currentSpotId=spot.id;isHunting=true;isPvpOnly=false;
         if(!currentSession)currentSession={};
         currentSession.current_region=REGION_ID;currentSession.current_spot=spot.id;
@@ -1017,8 +1020,7 @@ async function syncOtherPlayers(){
         });
         otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
 
-        if(data.i_was_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date,data.eliminated_by)){
-            setEliminationAcknowledged(currentSession?.hunt_date,data.eliminated_by);
+        if(data.i_was_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date)){
             isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
             clearTimeout(pvpOnlyExitTimer);
             removePlayerFromSpot();
@@ -1096,9 +1098,8 @@ async function boot(){
 
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
-            if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date,currentSession.eliminated_by_name)){
-                // Modal de eliminação no boot (só uma vez por evento de eliminação)
-                setEliminationAcknowledged(currentSession.hunt_date,currentSession.eliminated_by_name);
+            if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
+                // Modal de eliminação no boot — ack só gravado ao clicar Entendido
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';
             }
@@ -1124,6 +1125,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});
     document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{
         document.getElementById('eliminatedModal').style.display='none';
+        setEliminationAcknowledged(currentSession?.hunt_date); // grava ack aqui, não ao mostrar
         isHunting=false;isPvpOnly=false;
         stopLocalTimer();stopPvpOnlyTimer();
         clearTimeout(pvpOnlyExitTimer);

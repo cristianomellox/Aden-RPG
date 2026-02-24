@@ -396,6 +396,7 @@ function fmtLockTime(){
 let userId=null, playerData=null, currentSession=null;
 let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
 let pvpOnlyExitTimer=null, pvpOnlySecondsLeft=900, pvpOnlyTimerInterval=null;
+let eliminationModalShown=false;
 let shieldUntil=null, cachedShieldQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
 let otherPlayers=[], wanderTimers=[];
@@ -830,15 +831,26 @@ async function handleAttackPlayer(target){
     const myName=playerData?.name||'Você';
     const regionNameDisplay=REGION_NAME;
     if(pvpData.combat?.winner_id===userId){
-        // VITÓRIA — eliminação otimista (banner já disparado pelo syncGlobalPvpEvents)
+        // VITÓRIA — banner otimista imediato (não espera o sync global)
+        const kTxt=pvpData.attacker_daily_kills>0?`, eliminando um total de <span style="color:#ff8">${pvpData.attacker_daily_kills}</span> hoje!`:'!';
+        pushKillNotif(
+            `<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar `+
+            `<span style="color:#f88">${esc(pvpData.defender_name)}</span> em `+
+            `<span style="color:#8ff">${esc(regionNameDisplay)}</span>${kTxt}`
+        );
+        // Pré-marca o evento como visto para o syncGlobal não duplicar
+        if(pvpData.pvp_event_id){
+            const seenKey=`hunt_pvp_seen_${userId}`;
+            try{const seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));seen.add(pvpData.pvp_event_id);localStorage.setItem(seenKey,JSON.stringify([...seen].slice(-200)));}catch{}
+        }
         otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
         renderOtherPlayers(otherPlayers);
         // Reseta lock de 15 min
         if(currentSpotId)setActivityHunting(currentSpotId, true);
         if(isPvpOnly)resetPvpOnlyTimer();
     } else {
-        // DERROTA — fica morto 3 min (banner já disparado pelo syncGlobalPvpEvents)
-        isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();
+        // DERROTA — fica morto 3 min
+        isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();removePlayerFromSpot();
         clearTimeout(pvpOnlyExitTimer);
         if(currentSpotId)setActivityHunting(currentSpotId, true);
         currentSpotId=null;
@@ -1001,9 +1013,13 @@ async function syncOtherPlayers(){
         });
         otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
 
-        if(data.i_was_eliminated){
-            if(isHunting){isHunting=false;stopLocalTimer();removePlayerFromSpot();updateHuntingHUD();}
+        if(data.i_was_eliminated&&!eliminationModalShown){
+            eliminationModalShown=true;
+            isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
+            clearTimeout(pvpOnlyExitTimer);
+            removePlayerFromSpot();
             currentSpotId=null;
+            updateHuntingHUD();
             document.getElementById('eliminatedByName').textContent=data.eliminated_by||'alguém';
             document.getElementById('eliminatedModal').style.display='flex';
         }
@@ -1076,8 +1092,9 @@ async function boot(){
 
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
-            if(currentSession.is_eliminated){
-                // Modal de eliminação no boot
+            if(currentSession.is_eliminated&&!eliminationModalShown){
+                // Modal de eliminação no boot (só uma vez)
+                eliminationModalShown=true;
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';
             }
@@ -1103,8 +1120,13 @@ document.addEventListener('DOMContentLoaded',async()=>{
     document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});
     document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{
         document.getElementById('eliminatedModal').style.display='none';
-        currentSpotId=null; // permite entrar no mesmo spot em que foi morto
+        eliminationModalShown=false; // reset para próxima eliminação
+        isHunting=false;isPvpOnly=false;
+        stopLocalTimer();stopPvpOnlyTimer();
+        clearTimeout(pvpOnlyExitTimer);
+        currentSpotId=null;
         removePlayerFromSpot();
+        clearActivity();
         updateHuntingHUD();
     });
     document.getElementById('rewardsCloseBtn').addEventListener('click',()=>{document.getElementById('rewardsModal').style.display='none';});

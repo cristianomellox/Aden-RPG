@@ -563,7 +563,7 @@ function renderPlayerOnSpot(spotId){document.querySelectorAll('.player-avatar-wr
 function removePlayerFromSpot(){document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
 
 // ── OUTROS JOGADORES ─────────────────────────────────────────
-function renderOtherPlayers(players){document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());players.forEach(p=>{if(!p.current_spot)return;const spotEl=document.getElementById(`spot-${p.current_spot}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===p.current_spot);const wrap=document.createElement('div');wrap.className='other-player-wrapper';wrap.dataset.playerId=p.id;Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});const shActive=p.shield_until&&new Date(p.shield_until)>new Date();if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}const nm=document.createElement('div');nm.className='other-player-name';nm.textContent=esc(p.name)||'?';wrap.appendChild(nm);const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');av.src=p.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);if(p.is_eliminated){const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);}else{wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});if(p.is_hunting&&spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);}spotEl.appendChild(wrap);});}
+function renderOtherPlayers(players){document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());players.forEach(p=>{if(!p.current_spot)return;const spotEl=document.getElementById(`spot-${p.current_spot}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===p.current_spot);const wrap=document.createElement('div');wrap.className='other-player-wrapper';wrap.dataset.playerId=p.id;Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});const shActive=p.shield_until&&new Date(p.shield_until)>new Date();if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}const nm=document.createElement('div');nm.className='other-player-name';nm.textContent=esc(p.name)||'?';wrap.appendChild(nm);const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');av.src=p.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);if(p.is_eliminated){const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);}else{wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});if((p.is_hunting||p.pvp_only_entered_at)&&spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);}spotEl.appendChild(wrap);});}
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
 function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=isPvpOnly?fmtTime(pvpOnlySecondsLeft):fmtTime(localSecondsLeft);}
@@ -571,9 +571,10 @@ function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=se
 function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;}
 
 // ── TIMER PvP PURO (15 min) ───────────────────────────────
-function startPvpOnlyTimer(){
+function startPvpOnlyTimer(resetToFull=true){
     clearInterval(pvpOnlyTimerInterval);
-    pvpOnlySecondsLeft=900;updateTimerDisplay();
+    if(resetToFull)pvpOnlySecondsLeft=900;
+    updateTimerDisplay();
     pvpOnlyTimerInterval=setInterval(()=>{
         if(!isPvpOnly){clearInterval(pvpOnlyTimerInterval);return;}
         if(pvpOnlySecondsLeft<=0){clearInterval(pvpOnlyTimerInterval);exitPvpOnlyMode();return;}
@@ -1088,7 +1089,7 @@ async function boot(){
 
             if(currentSession.shield_until){shieldUntil=new Date(currentSession.shield_until);if(isShieldActive())startShieldTimer();}
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
-            if(isPvpOnly&&currentSpotId){renderPlayerOnSpot(currentSpotId);startPvpOnlyTimer();}
+            if(isPvpOnly&&currentSpotId){renderPlayerOnSpot(currentSpotId);startPvpOnlyTimer(false);}
 
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}

@@ -771,7 +771,7 @@ async function executeMove(roomId) {
             state.matchKills++;
             state.matchCoins += 5;
             state.participantKillsByName[state.myPlayer.name] = (state.participantKillsByName[state.myPlayer.name] || 0) + 1;
-            const coinIcon = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:18px;height:18px;vertical-align:middle;margin:0 2px;">`;
+            const coinIcon = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:30px;height:30px;vertical-align:middle;margin:0 2px;">`;
             pvpFinalMsg = `Você eliminou ${data.opponent_name}! ${coinIcon} <strong style="color:gold;">+5</strong>`;
             if (data.message.includes('RELÍQUIA')) pvpFinalMsg += ' — RELÍQUIA CAPTURADA!';
         }
@@ -1446,8 +1446,8 @@ function endGame(data) {
 
 function showDetailedEndModal(data) {
     const isWin = !!data.win;
-    const COIN_ICON = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:35px;height:35px;vertical-align:middle;margin:0 2px;">`;
-    const CRYSTAL_ICON = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:35px;height:35px;vertical-align:middle;margin:0 2px;">`;
+    const COIN_ICON = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:30px;height:30px;vertical-align:middle;margin:0 2px;">`;
+    const CRYSTAL_ICON = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:20px;height:23px;vertical-align:middle;margin:0 2px;">`;
 
     // Bônus de vitória
     const winBonus = isWin ? 50 : 0;

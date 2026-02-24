@@ -796,36 +796,22 @@ async function handleAttackPlayer(target){
     const myName=playerData?.name||'Você';
     const regionNameDisplay=REGION_NAME;
     if(pvpData.combat?.winner_id===userId){
-        // VITÓRIA — eliminação otimista + banner formato 1
+        // VITÓRIA — eliminação otimista (banner já disparado pelo syncGlobalPvpEvents)
         otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
         renderOtherPlayers(otherPlayers);
-        const totalKills = pvpData.attacker_daily_kills || 1;
-        pushKillNotif(
-            `<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar `+
-            `<span style="color:#f88">${esc(target.name)}</span> em `+
-            `<span style="color:#8ff">${esc(regionNameDisplay)}</span>, `+
-            `eliminando um total de <span style="color:#ff8">${totalKills}</span> hoje!`
-        );
-        // Reseta lock de 15 min ao atacar (impede saída imediata após o kill)
+        // Reseta lock de 15 min
         if(currentSpotId)setActivityHunting(currentSpotId, true);
     } else {
-        // DERROTA — fica morto 3 min + banner formato 2
+        // DERROTA — fica morto 3 min (banner já disparado pelo syncGlobalPvpEvents)
         isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();
         clearTimeout(pvpOnlyExitTimer);
         if(currentSpotId)setActivityHunting(currentSpotId, true);
         currentSpotId=null;
         clearActivity();updateHuntingHUD();
         setPlayerDead();
-        const defKills = pvpData.defender_daily_kills || 0;
-        const defKillsTxt = defKills > 0
-            ? `. <span style="color:#8ff">${esc(target.name)}</span> já eliminou <span style="color:#ff8">${defKills}</span> hoje!`
-            : '.';
-        pushKillNotif(
-            `<span style="color:#f88">${esc(myName)}</span> tentou atacar `+
-            `<span style="color:#ff8">${esc(target.name)}</span> em `+
-            `<span style="color:#8ff">${esc(regionNameDisplay)}</span> e perdeu${defKillsTxt}`
-        );
     }
+    // Sincroniza evento global imediatamente para todos verem
+    syncGlobalPvpEvents();
     syncOtherPlayers();
 }
 
@@ -922,6 +908,46 @@ function showRewardsModal(data){
     updateHuntingHUD();
 }
 
+// ── BANNERS GLOBAIS DE PVP ────────────────────────────────────
+async function syncGlobalPvpEvents(){
+    if(!userId)return;
+    try{
+        const{data,error}=await supabase.rpc('get_hunt_pvp_events',{p_since_minutes:5});
+        if(error||!data)return;
+        const seenKey=`hunt_pvp_seen_${userId}`;
+        let seen;
+        try{seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));}catch{seen=new Set();}
+        let changed=false;
+        (data||[]).forEach(ev=>{
+            if(seen.has(ev.id))return;
+            seen.add(ev.id);changed=true;
+            const regionLabel=`<span style="color:#8ff">${esc(ev.region_name)}</span>`;
+            if(ev.attacker_won){
+                const kTxt=ev.attacker_kills>0?`, eliminando um total de <span style="color:#ff8">${ev.attacker_kills}</span> hoje!`:'!';
+                pushKillNotif(
+                    `<span style="color:#ff8">${esc(ev.attacker_name)}</span> acabou de eliminar `+
+                    `<span style="color:#f88">${esc(ev.defender_name)}</span> em `+
+                    `${regionLabel}${kTxt}`
+                );
+            } else {
+                const dkTxt=ev.defender_kills>0
+                    ?`. <span style="color:#8ff">${esc(ev.defender_name)}</span> já eliminou <span style="color:#ff8">${ev.defender_kills}</span> hoje!`
+                    :'.';
+                pushKillNotif(
+                    `<span style="color:#f88">${esc(ev.attacker_name)}</span> tentou atacar `+
+                    `<span style="color:#ff8">${esc(ev.defender_name)}</span> em `+
+                    `${regionLabel} e perdeu${dkTxt}`
+                );
+            }
+        });
+        if(changed){
+            // Mantém apenas os últimos 200 IDs para não inflar o localStorage
+            const arr=[...seen].slice(-200);
+            try{localStorage.setItem(seenKey,JSON.stringify(arr));}catch{}
+        }
+    }catch(e){console.warn('[floresta] pvp events error',e);}
+}
+
 // ── SYNC ─────────────────────────────────────────────────────
 async function syncOtherPlayers(){
     if(!userId)return;
@@ -930,20 +956,7 @@ async function syncOtherPlayers(){
         if(error||!data)return;
         const newPlayers=data.players||[];
 
-        // Detecta novas eliminações → banner formato 1
-        newPlayers.forEach(np=>{
-            const old=otherPlayers.find(op=>op.id===np.id);
-            if(np.is_eliminated&&old&&!old.is_eliminated&&np.eliminated_by_name){
-                const kCount=np.daily_kills||'';
-                const kTxt=kCount?`, eliminando um total de <span style="color:#ff8">${kCount}</span> hoje!`:'!';
-                pushKillNotif(
-                    `<span style="color:#ff8">${esc(np.eliminated_by_name)}</span> acabou de eliminar `+
-                    `<span style="color:#f88">${esc(np.name)}</span> em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span>${kTxt}`
-                );
-            }
-        });
-        // Detecta jogadores que saíram do spot
+        // Detecta jogadores que saíram do spot (estado local) — sem banner, o global já cobre
         otherPlayers.forEach(old=>{
             if(old.is_eliminated)return;
             const stillHere=newPlayers.find(np=>np.id===old.id);
@@ -958,23 +971,6 @@ async function syncOtherPlayers(){
             currentSpotId=null;
             document.getElementById('eliminatedByName').textContent=data.eliminated_by||'alguém';
             document.getElementById('eliminatedModal').style.display='flex';
-        }
-        // Banner formato 2 via sync: alguém tentou atacar o próprio jogador e perdeu
-        if(data.last_attacker_name&&data.last_attacked_at){
-            const attackedMs=new Date(data.last_attacked_at).getTime();
-            const seenKey=`hunt_atk_${userId}_${data.last_attacked_at}`;
-            if(Date.now()-attackedMs<5*60*1000&&!localStorage.getItem(seenKey)){
-                localStorage.setItem(seenKey,'1');
-                const myKills=data.my_daily_kills||0;
-                const myKillsTxt=myKills>0
-                    ?`. <span style="color:#8ff">${esc(playerData?.name||'Você')}</span> já eliminou <span style="color:#ff8">${myKills}</span> hoje!`
-                    :'.';
-                pushKillNotif(
-                    `<span style="color:#f88">${esc(data.last_attacker_name)}</span> tentou atacar `+
-                    `<span style="color:#ff8">${esc(playerData?.name||'você')}</span> em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e perdeu${myKillsTxt}`
-                );
-            }
         }
     }catch(e){console.warn('[floresta] sync error',e);}
 }
@@ -1045,43 +1041,10 @@ async function boot(){
 
         updateHuntingHUD();renderOtherPlayers(otherPlayers);
 
-        // Banners de eliminações já acontecidas ao carregar a página (formato 1)
-        const _seenKey=`hunt_elim_seen_${userId}_${new Date().toISOString().slice(0,10)}`;
-        let _seenElim;
-        try{_seenElim=new Set(JSON.parse(sessionStorage.getItem(_seenKey)||'[]'));}catch{_seenElim=new Set();}
-        otherPlayers.forEach(p=>{
-            if(p.is_eliminated&&p.eliminated_by_name&&!_seenElim.has(p.id)){
-                const kCount=p.daily_kills||'';
-                const kTxt=kCount?`, eliminando um total de <span style="color:#ff8">${kCount}</span> hoje!`:'!';
-                pushKillNotif(
-                    `<span style="color:#ff8">${esc(p.eliminated_by_name)}</span> acabou de eliminar `+
-                    `<span style="color:#f88">${esc(p.name)}</span> em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span>${kTxt}`
-                );
-                _seenElim.add(p.id);
-            }
-        });
-        try{sessionStorage.setItem(_seenKey,JSON.stringify([..._seenElim]));}catch{}
+        // Banners globais de PvP (inclui eventos recentes do boot)
+        await syncGlobalPvpEvents();
 
-        // Banner formato 2 no boot: alguém tentou atacar o próprio jogador e perdeu
-        if(currentSession?.last_attacker_name&&currentSession?.last_attacked_at){
-            const attackedMs=new Date(currentSession.last_attacked_at).getTime();
-            const seenKey=`hunt_atk_${userId}_${currentSession.last_attacked_at}`;
-            if(Date.now()-attackedMs<5*60*1000&&!localStorage.getItem(seenKey)){
-                localStorage.setItem(seenKey,'1');
-                const myKills=currentSession.daily_kills||0;
-                const myKillsTxt=myKills>0
-                    ?`. <span style="color:#8ff">${esc(playerData?.name||'Você')}</span> já eliminou <span style="color:#ff8">${myKills}</span> hoje!`
-                    :'.';
-                pushKillNotif(
-                    `<span style="color:#f88">${esc(currentSession.last_attacker_name)}</span> tentou atacar `+
-                    `<span style="color:#ff8">${esc(playerData?.name||'você')}</span> em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e perdeu${myKillsTxt}`
-                );
-            }
-        }
-
-        syncInterval=setInterval(syncOtherPlayers,SYNC_MS);
+        syncInterval=setInterval(()=>{syncOtherPlayers();syncGlobalPvpEvents();},SYNC_MS);
     }catch(e){console.error('[floresta] boot error',e);await showAlert('Erro ao carregar. Recarregue a página.');}
     finally{hideLoading();}
 }

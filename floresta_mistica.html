@@ -650,16 +650,21 @@ async function handleSpotClick(spot){
             `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;
         // Entra no modo PvP puro (sem RPC start_hunt — tempo já acabou)
-        clearTimeout(pvpOnlyExitTimer);
-        isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
-        clearTimeout(deadTimer);deadTimer=null; // cancela o timer de morte se ainda pendente
-        setActivityHunting(spot.id); // bloqueia mineração
-        renderPlayerOnSpot(spot.id);
-        startPvpOnlyTimer();
-        pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
-        // Registra no servidor para outros jogadores verem e para o filtro de 15 min
-        supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id}).catch(()=>{});
-        updateHuntingHUD();
+        showLoading();
+        try{
+            const{data:pvpData,error:pvpErr}=await supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id});
+            if(pvpErr)throw pvpErr;
+            if(!pvpData?.success){await showAlert(pvpData?.message||'Erro ao entrar no modo PvP.');return;}
+            clearTimeout(pvpOnlyExitTimer);
+            isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
+            clearTimeout(deadTimer);deadTimer=null;
+            setActivityHunting(spot.id);
+            renderPlayerOnSpot(spot.id);
+            startPvpOnlyTimer();
+            pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+            updateHuntingHUD();
+        }catch(e){await showAlert('Erro: '+(e.message||''));}
+        finally{hideLoading();}
         return;
     }
 
@@ -678,6 +683,7 @@ async function handleSpotClick(spot){
         startPvpOnlyTimer();
         pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
         supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id}).catch(()=>{});
+        updateHuntingHUD();
         return;
     }
 

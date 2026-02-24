@@ -798,8 +798,8 @@ async function handleAttackPlayer(target){
         renderOtherPlayers(otherPlayers);
         // Conta total de eliminações do dia (simplificado: incrementa contador local)
         const totalElimKey=`hunt_elim_count_${userId}_${new Date().toISOString().slice(0,10)}`;
-        const totalElim=(parseInt(sessionStorage.getItem(totalElimKey)||'0')+1);
-        sessionStorage.setItem(totalElimKey,totalElim);
+        const totalElim=(parseInt(localStorage.getItem(totalElimKey)||'0')+1);
+        localStorage.setItem(totalElimKey,totalElim);
         pushKillNotif(`<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar <span style="color:#f88">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span>, eliminando um total de <span style="color:#ff8">${totalElim}</span> hoje!`);
         // Reseta lock de 15 min ao atacar (impede saída imediata após o kill)
         if(currentSpotId)setActivityHunting(currentSpotId);
@@ -947,6 +947,18 @@ async function syncOtherPlayers(){
             document.getElementById('eliminatedByName').textContent=killerName;
             document.getElementById('eliminatedModal').style.display='flex';
         }
+        // Banner de "foi atacado e o atacante perdeu" via sync
+        if(data.last_attacker_name&&data.last_attacked_at){
+            const attackedMs=new Date(data.last_attacked_at).getTime();
+            const seenAttackKey=`hunt_atk_seen_${userId}_${data.last_attacked_at}`;
+            if(Date.now()-attackedMs < 5*60*1000 && !sessionStorage.getItem(seenAttackKey)){
+                sessionStorage.setItem(seenAttackKey,'1');
+                pushKillNotif(
+                    `<span style="color:#ff8">${esc(data.last_attacker_name)}</span> tentou te atacar em `+
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e <span style="color:#4f4">perdeu</span>!`
+                );
+            }
+        }
     }catch(e){console.warn('[floresta] sync error',e);}
 }
 
@@ -1033,6 +1045,19 @@ async function boot(){
             }
         });
         try{sessionStorage.setItem(_seenKey,JSON.stringify([..._seenElim]));}catch{}
+
+        // Banner de "foi atacado e o atacante perdeu" — recente (últimos 5 min)
+        if(currentSession?.last_attacker_name&&currentSession?.last_attacked_at){
+            const attackedMs=new Date(currentSession.last_attacked_at).getTime();
+            const seenAttackKey=`hunt_atk_seen_${userId}_${currentSession.last_attacked_at}`;
+            if(Date.now()-attackedMs < 5*60*1000 && !sessionStorage.getItem(seenAttackKey)){
+                sessionStorage.setItem(seenAttackKey,'1');
+                pushKillNotif(
+                    `<span style="color:#ff8">${esc(currentSession.last_attacker_name)}</span> tentou te atacar em `+
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e <span style="color:#4f4">perdeu</span>!`
+                );
+            }
+        }
 
         syncInterval=setInterval(syncOtherPlayers,SYNC_MS);
     }catch(e){console.error('[floresta] boot error',e);await showAlert('Erro ao carregar. Recarregue a página.');}

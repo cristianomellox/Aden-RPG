@@ -960,9 +960,9 @@ async function syncOtherPlayers(){
             document.getElementById('eliminatedModal').style.display='flex';
         }
         // Banner formato 2 via sync: alguém tentou atacar o próprio jogador e perdeu
-        if(data.last_attacker_name&&data.last_failed_attack_at){
-            const attackedMs=new Date(data.last_failed_attack_at).getTime();
-            const seenKey=`hunt_fatk_${userId}_${data.last_failed_attack_at}`;
+        if(data.last_attacker_name&&data.last_attacked_at){
+            const attackedMs=new Date(data.last_attacked_at).getTime();
+            const seenKey=`hunt_atk_${userId}_${data.last_attacked_at}`;
             if(Date.now()-attackedMs<5*60*1000&&!localStorage.getItem(seenKey)){
                 localStorage.setItem(seenKey,'1');
                 const myKills=data.my_daily_kills||0;
@@ -1064,9 +1064,9 @@ async function boot(){
         try{sessionStorage.setItem(_seenKey,JSON.stringify([..._seenElim]));}catch{}
 
         // Banner formato 2 no boot: alguém tentou atacar o próprio jogador e perdeu
-        if(currentSession?.last_attacker_name&&currentSession?.last_failed_attack_at){
-            const attackedMs=new Date(currentSession.last_failed_attack_at).getTime();
-            const seenKey=`hunt_fatk_${userId}_${currentSession.last_failed_attack_at}`;
+        if(currentSession?.last_attacker_name&&currentSession?.last_attacked_at){
+            const attackedMs=new Date(currentSession.last_attacked_at).getTime();
+            const seenKey=`hunt_atk_${userId}_${currentSession.last_attacked_at}`;
             if(Date.now()-attackedMs<5*60*1000&&!localStorage.getItem(seenKey)){
                 localStorage.setItem(seenKey,'1');
                 const myKills=currentSession.daily_kills||0;

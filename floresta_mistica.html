@@ -367,11 +367,13 @@ function getActivity(){
         return a;
     }catch{return null;}
 }
-function setActivityHunting(spotId){
+function setActivityHunting(spotId, forceResetLock = false){
     const cur=getActivity()||{};
+    // forceResetLock=true (após ataque) sempre reinicia o timer de 15 min do spot
+    const keepTimer = !forceResetLock && cur.type==='hunting' && cur.spot_id===spotId;
     localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
         type:'hunting',region:REGION_NAME,spot_id:spotId,
-        spot_started_at:cur.type==='hunting'&&cur.spot_id===spotId?cur.spot_started_at:Date.now(),
+        spot_started_at: keepTimer ? cur.spot_started_at : Date.now(),
         started_at:Date.now()
     }));
 }
@@ -720,6 +722,7 @@ async function handlePauseHunt(){
         if(error)throw error;
         isHunting=false;stopLocalTimer();
         if(data?.total_seconds!==undefined){localSecondsLeft=Math.max(0,DAILY_LIMIT-data.total_seconds);updateTimerDisplay();}
+        currentSpotId=null; // permite re-entrar no mesmo spot após pausar
         clearActivity();
         removePlayerFromSpot();updateHuntingHUD();
     }catch(e){await showAlert('Erro ao pausar.');}
@@ -802,11 +805,14 @@ async function handleAttackPlayer(target){
         localStorage.setItem(totalElimKey,totalElim);
         pushKillNotif(`<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar <span style="color:#f88">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span>, eliminando um total de <span style="color:#ff8">${totalElim}</span> hoje!`);
         // Reseta lock de 15 min ao atacar (impede saída imediata após o kill)
-        if(currentSpotId)setActivityHunting(currentSpotId);
+        if(currentSpotId)setActivityHunting(currentSpotId, true);
     } else {
         // Derrota — fica morto 3 min
         isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();
         clearTimeout(pvpOnlyExitTimer);
+        // Reseta lock antes de limpar activity (setPlayerDead vai sobrescrever com pvp_dead)
+        if(currentSpotId)setActivityHunting(currentSpotId, true);
+        currentSpotId=null;
         clearActivity();updateHuntingHUD();
         setPlayerDead();
         pushKillNotif(`<span style="color:#f88">${esc(myName)}</span> tentou atacar <span style="color:#ff8">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span> e perdeu!`);
@@ -951,8 +957,8 @@ async function syncOtherPlayers(){
         if(data.last_attacker_name&&data.last_attacked_at){
             const attackedMs=new Date(data.last_attacked_at).getTime();
             const seenAttackKey=`hunt_atk_seen_${userId}_${data.last_attacked_at}`;
-            if(Date.now()-attackedMs < 5*60*1000 && !sessionStorage.getItem(seenAttackKey)){
-                sessionStorage.setItem(seenAttackKey,'1');
+            if(Date.now()-attackedMs < 5*60*1000 && !localStorage.getItem(seenAttackKey)){
+                localStorage.setItem(seenAttackKey,'1');
                 pushKillNotif(
                     `<span style="color:#ff8">${esc(data.last_attacker_name)}</span> tentou te atacar em `+
                     `<span style="color:#8ff">${esc(REGION_NAME)}</span> e <span style="color:#4f4">perdeu</span>!`
@@ -1050,8 +1056,8 @@ async function boot(){
         if(currentSession?.last_attacker_name&&currentSession?.last_attacked_at){
             const attackedMs=new Date(currentSession.last_attacked_at).getTime();
             const seenAttackKey=`hunt_atk_seen_${userId}_${currentSession.last_attacked_at}`;
-            if(Date.now()-attackedMs < 5*60*1000 && !sessionStorage.getItem(seenAttackKey)){
-                sessionStorage.setItem(seenAttackKey,'1');
+            if(Date.now()-attackedMs < 5*60*1000 && !localStorage.getItem(seenAttackKey)){
+                localStorage.setItem(seenAttackKey,'1');
                 pushKillNotif(
                     `<span style="color:#ff8">${esc(currentSession.last_attacker_name)}</span> tentou te atacar em `+
                     `<span style="color:#8ff">${esc(REGION_NAME)}</span> e <span style="color:#4f4">perdeu</span>!`

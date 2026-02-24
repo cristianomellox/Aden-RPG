@@ -95,11 +95,23 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 .pvp-hp-txt{font-size:.6em;color:#ccc;}
 #pvpCountdown{font-size:.95em;color:#fd8;margin:6px 0;font-weight:bold;}
 
-.damage-number{position:fixed;z-index:9999;pointer-events:none;font-family:'Cinzel',serif;font-size:1.4em;font-weight:bold;color:#fc0;text-shadow:1px 1px 3px #000;transition:transform 1.2s ease,opacity 1.2s ease;}
-.damage-number.crit{color:#f42;font-size:1.9em;}
-.damage-number.evaded{color:#8cf;font-size:1.1em;}
-@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px) rotate(-2deg)}40%{transform:translateX(6px) rotate(2deg)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
-.shake-animation{animation:shake .3s ease;}
+/* ── DAMAGE NUMBERS (estilo mina) ─── */
+.damage-number{font-family:Georgia,serif;font-size:23px;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;white-space:nowrap;animation:floating-damage 1.5s ease-out forwards;}
+.crit-damage-number{font-family:Georgia,serif;font-size:2.1em;color:red;text-shadow:-1px -1px 0 yellow,1px -1px 0 yellow,-1px 1px 0 yellow,1px 1px 0 yellow,-2px -2px 0 yellow,2px -2px 0 yellow,-2px 2px 0 yellow,2px 2px 0 yellow;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;white-space:nowrap;animation:floating-damage-crit 1.5s ease-out forwards;}
+.evade-text{font-size:1.4em;color:white;font-weight:bold;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;white-space:nowrap;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;animation:floating-damage 2s ease-out forwards;}
+@keyframes floating-damage{0%{opacity:1;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-150%) scale(1.3);}}
+@keyframes floating-damage-crit{0%{opacity:1;transform:translate(-50%,-50%) scale(1);}50%{transform:translate(-50%,-80%) scale(1.4);}100%{opacity:0;transform:translate(-50%,-160%) scale(1.2);}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px) rotate(-3deg)}40%{transform:translateX(8px) rotate(3deg)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.shake-animation{animation:shake .35s cubic-bezier(.36,.07,.19,.97) both!important;backface-visibility:hidden;}
+
+/* ── KILL BANNER ─── */
+#huntKillBanner{position:fixed;top:58px;right:0;background:linear-gradient(90deg,rgba(0,0,180,.92),rgba(30,0,80,.92));color:#fff;padding:9px 22px;border-radius:6px 0 0 6px;z-index:25000;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;box-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:translateX(100%);transition:opacity .3s;}
+#huntKillBanner.show{opacity:1;animation:huntBannerSlide 12s linear forwards;}
+@keyframes huntBannerSlide{0%{transform:translateX(100%);}100%{transform:translateX(calc(-100% - 5px));}}
+
+/* ── PVP FIGHTER (reposicionado) ─── */
+.pvp-fighter{position:relative;}
+.pvp-fighter img{width:70px;height:70px;border-radius:50%;border:3px solid #85a;object-fit:cover;background:#222;}
 
 #eliminatedModal .modal-content{border-color:#c22;background:#1a0808;}
 #eliminatedModal h2{color:#f66;text-shadow:0 0 8px #f00;}
@@ -137,7 +149,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
     <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </a>
-    <span id="pageTitle" style="font-weight: bold; color: #ff9191;">Floresta Mística</span>
+    <span id="pageTitle" style="font-weight: bold; color: #ffc3c3;">Floresta Mística</span>
     <img id="tutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="Tutorial" style="width:30px;height:30px;cursor:pointer;">
 </div>
 
@@ -161,6 +173,12 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 </div>
 
 <div id="loadingOverlay"><div class="loading-spinner"></div></div>
+
+<!-- Banner de kills/mortes globais -->
+<div id="huntKillBanner"></div>
+
+<!-- Áudio de fundo PvP (mesma da mina) -->
+<audio id="pvpBgMusic" src="https://aden-rpg.pages.dev/assets/mina.mp3" loop preload="none"></audio>
 
 <div id="alertModal" class="modal-container">
     <div class="modal-content">
@@ -230,7 +248,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
             <strong>Unicórnio</strong> → Chifre de Unicórnio<br>
             <strong>Fênix</strong> → Lágrima de Fênix<br>
             <strong>Sátiro</strong> → Galho Espiritual<br>
-            <strong>Tigre Nix</strong> → Elora</p>
+            <strong>Tigre Nix</strong> → Pele Animal</p>
             <p><strong style="color:#fd8;">⏱ Tempo:</strong> O contador de <strong>3 horas</strong> é compartilhado entre todas as regiões do jogo. Você pode dividir o tempo como quiser.</p>
             <p><strong style="color:#afa;">Recompensas:</strong>
             <ul>
@@ -329,10 +347,64 @@ function fmtLockTime(){
 
 // ── ESTADO ─────────────────────────────────────────────────
 let userId=null, playerData=null, currentSession=null;
-let isHunting=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
+let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
+let pvpOnlyExitTimer=null;
 let shieldUntil=null, cachedShieldQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
 let otherPlayers=[], wanderTimers=[];
+
+// ── DEAD STATE (derrota em PvP — 3 minutos) ──────────────
+let deadUntil=null; // timestamp ms
+let deadTimer=null;
+function isPlayerDead(){return deadUntil&&Date.now()<deadUntil;}
+function setPlayerDead(){
+    deadUntil=Date.now()+3*60*1000;
+    // Escreve no cache compartilhado como 'hunting' para bloquear mineração (mines.js verifica type==='hunting')
+    localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
+        type:'hunting',region:REGION_NAME,spot_id:currentSpotId||'__dead__',
+        pvp_dead:true,dead_until:deadUntil,started_at:Date.now()
+    }));
+    clearTimeout(deadTimer);
+    deadTimer=setTimeout(()=>{
+        deadUntil=null;
+        // Sai do spot automaticamente após 3 minutos
+        if(currentSpotId){
+            isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;
+            clearTimeout(pvpOnlyExitTimer);
+        }
+        clearActivity();updateHuntingHUD();
+    },3*60*1000);
+}
+function clearDeadState(){deadUntil=null;clearTimeout(deadTimer);deadTimer=null;}
+
+// ── KILL BANNER QUEUE ─────────────────────────────────────
+let _killBannerQueue=[];
+let _killBannerShowing=false;
+function createKillBannerUI(){
+    let el=document.getElementById('huntKillBanner');
+    if(!el){el=document.createElement('div');el.id='huntKillBanner';document.body.appendChild(el);}
+}
+function pushKillNotif(html){
+    _killBannerQueue.push(html);
+    if(!_killBannerShowing)_processKillQueue();
+}
+function _processKillQueue(){
+    if(_killBannerShowing||_killBannerQueue.length===0)return;
+    _killBannerShowing=true;
+    const el=document.getElementById('huntKillBanner');
+    if(!el){_killBannerShowing=false;return;}
+    el.innerHTML=_killBannerQueue.shift();
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    const done=()=>{
+        el.classList.remove('show');
+        el.removeEventListener('animationend',done);
+        _killBannerShowing=false;
+        setTimeout(_processKillQueue,400);
+    };
+    el.addEventListener('animationend',done,{once:true});
+}
 
 // ── INDEXEDDB (mesmo do mercador.js) ───────────────────────
 const IDB_NAME='aden_inventory_db',IDB_STORE='inventory_store',IDB_VERSION=47;
@@ -410,6 +482,17 @@ function updateHuntingHUD(){
     const hud=document.getElementById('huntingHud'),status=document.getElementById('huntStatus'),pauseBtn=document.getElementById('pauseHuntBtn');
     updateSpotStyles();
     if(currentSession?.rewards_claimed){hud.style.display='flex';status.textContent='✅ Recompensas coletadas hoje!';pauseBtn.style.display='none';return;}
+
+    // Modo PvP puro (tempo esgotado, entrou só para pvp)
+    if(isPvpOnly&&currentSpotId){
+        hud.style.display='flex';pauseBtn.style.display='block';
+        updateTimerDisplay();
+        const spotName=SPOTS.find(s=>s.id===currentSpotId)?.name||currentSpotId;
+        status.textContent=`⚔️ Modo PvP: ${spotName}`;
+        pauseBtn.textContent='Sair';pauseBtn.disabled=false;
+        return;
+    }
+
     if(localSecondsLeft<=0&&!isHunting){hud.style.display='none';return;}
     hud.style.display='flex';pauseBtn.style.display='block';updateTimerDisplay();
     if(isHunting&&currentSpotId){status.textContent=`⚔️ Caçando: ${SPOTS.find(s=>s.id===currentSpotId)?.name||currentSpotId}`;pauseBtn.textContent='Pausar';pauseBtn.disabled=false;}
@@ -419,7 +502,7 @@ function updateSpotStyles(){
     SPOTS.forEach(s=>{
         const el=document.getElementById(`spot-${s.id}`);
         if(!el)return;
-        if(isHunting&&currentSpotId===s.id)el.classList.add('active-spot');
+        if((isHunting||isPvpOnly)&&currentSpotId===s.id)el.classList.add('active-spot');
         else el.classList.remove('active-spot');
     });
 }
@@ -440,10 +523,45 @@ async function onHuntComplete(){
 // ── CLICK NO SPOT ────────────────────────────────────────────
 async function handleSpotClick(spot){
     if(currentSession?.rewards_claimed){await showAlert('✅ Tempo diário esgotado. Volte amanhã!');return;}
-    if(localSecondsLeft<=0){await showAlert('⌛ Tempo diário esgotado. Volte amanhã!');return;}
 
-    // Regra 3: já está neste spot — não faz nada
-    if(isHunting&&currentSpotId===spot.id)return;
+    // Bloqueado por morte em PvP
+    if(isPlayerDead()){
+        const secsLeft=Math.ceil((deadUntil-Date.now())/1000);
+        const m=Math.floor(secsLeft/60),s=secsLeft%60;
+        await showAlert(`💀 Você está no chão após a derrota.<br>Aguarde <strong>${m}:${String(s).padStart(2,'0')}</strong> para se recuperar.`);
+        return;
+    }
+
+    // Tempo de caça esgotado — oferecer modo PvP puro
+    if(localSecondsLeft<=0&&!isPvpOnly){
+        const ok=await showConfirm('⚔️ Modo PvP',
+            `Seu tempo de caça terminou.<br>Você ainda pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para atacar outros jogadores.`);
+        if(!ok)return;
+        // Entra no modo PvP puro (sem RPC start_hunt — tempo já acabou)
+        clearTimeout(pvpOnlyExitTimer);
+        isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
+        setActivityHunting(spot.id); // bloqueia mineração
+        renderPlayerOnSpot(spot.id);updateHuntingHUD();
+        // Auto-exit após SPOT_LOCK_MS
+        pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+        return;
+    }
+
+    // Já no mesmo spot (caça normal ou pvp puro) — nada a fazer
+    if(currentSpotId===spot.id)return;
+
+    // Tentativa de trocar de spot enquanto em modo pvp puro
+    if(isPvpOnly){
+        if(!canSwitchSpot()){
+            await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar.`);return;
+        }
+        clearTimeout(pvpOnlyExitTimer);
+        currentSpotId=spot.id;
+        setActivityHunting(spot.id);
+        renderPlayerOnSpot(spot.id);updateHuntingHUD();
+        pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+        return;
+    }
 
     // Verifica se está minerando em outra página
     const activity=getActivity();
@@ -452,7 +570,7 @@ async function handleSpotClick(spot){
         return;
     }
 
-    // Regra 2: lock de 15 minutos antes de trocar de spot
+    // Regra: lock de 15 minutos antes de trocar de spot
     if(isHunting&&currentSpotId&&currentSpotId!==spot.id){
         if(!canSwitchSpot()){
             await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
@@ -468,7 +586,7 @@ async function handleSpotClick(spot){
         if(error)throw error;
         if(!data?.success){await showAlert(data?.message||'Erro ao iniciar.');return;}
         localSecondsLeft=Math.max(0,DAILY_LIMIT-(data.total_seconds||0));
-        currentSpotId=spot.id;isHunting=true;
+        currentSpotId=spot.id;isHunting=true;isPvpOnly=false;
         if(!currentSession)currentSession={};
         currentSession.current_region=REGION_ID;currentSession.current_spot=spot.id;
         setActivityHunting(spot.id);
@@ -477,8 +595,22 @@ async function handleSpotClick(spot){
     finally{hideLoading();}
 }
 
-// ── PAUSAR (sem region_id — timer é global) ──────────────────
+function exitPvpOnlyMode(){
+    isPvpOnly=false;currentSpotId=null;
+    clearTimeout(pvpOnlyExitTimer);
+    clearActivity();removePlayerFromSpot();updateHuntingHUD();
+}
+
+// ── PAUSAR / SAIR ────────────────────────────────────────────
 async function handlePauseHunt(){
+    // Modo PvP puro — "Sair" é apenas local
+    if(isPvpOnly){
+        if(!canSwitchSpot()){
+            await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de sair.`);return;
+        }
+        exitPvpOnlyMode();
+        return;
+    }
     if(!isHunting)return;
     if(!canSwitchSpot()){
         await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de pausar.`);
@@ -498,34 +630,90 @@ async function handlePauseHunt(){
 
 // ── PVP ──────────────────────────────────────────────────────
 async function handleAttackPlayer(target){
-    // Verifica se está minerando
+    // Verifica se está morto (derrota recente)
+    if(isPlayerDead()){
+        const secsLeft=Math.ceil((deadUntil-Date.now())/1000);
+        const m=Math.floor(secsLeft/60),s=secsLeft%60;
+        await showAlert(`💀 Você está no chão.<br>Aguarde <strong>${m}:${String(s).padStart(2,'0')}</strong> para se recuperar.`);return;
+    }
+    // Verifica mineração em outra aba
     const activity=getActivity();
     if(activity?.type==='mining'){
-        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está minerando.<br>Aguarde o término da mineração.');
-        return;
+        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está minerando.<br>Aguarde o término da mineração.');return;
     }
-    // Regra 1: só pode atacar se estiver no mesmo spot
-    if(!isHunting||!currentSpotId){
-        await showAlert('⚔️ Você precisa estar caçando em um spot para atacar outros jogadores.');return;
+    // Só pode atacar se estiver caçando OU em modo PvP puro no mesmo spot
+    if(!isHunting&&!isPvpOnly){
+        await showAlert('⚔️ Você precisa estar em um spot para atacar outros jogadores.');return;
     }
     if(currentSpotId!==target.current_spot){
-        await showAlert(`⚔️ Você só pode atacar jogadores no mesmo spot que você.`);return;
+        await showAlert('⚔️ Você só pode atacar jogadores no mesmo spot que você.');return;
     }
-    const ok=await showConfirm('PvP',`Deseja atacar <strong>${esc(target.name)}</strong>?`);if(!ok)return;
+    // Já eliminado localmente?
+    if(target.is_eliminated){
+        await showAlert(`💀 <strong>${esc(target.name)}</strong> já foi eliminado.`);return;
+    }
+    // Escudo do atacante: avisar que perderá proteção
+    if(isShieldActive()){
+        const okShield=await showConfirm('⚠️ Escudo Ativo',
+            `Tem certeza que deseja atacar <strong>${esc(target.name)}</strong>?<br><small style="color:#f88;">Essa ação fará você perder o Escudo de Caça.</small>`);
+        if(!okShield)return;
+        // Remove escudo localmente
+        shieldUntil=null;
+        clearInterval(shieldTimerInterval);
+        document.getElementById('shieldHudRow').style.display='none';
+        updateMyShieldIcon(false);
+    } else {
+        const ok=await showConfirm('PvP',`Deseja atacar <strong>${esc(target.name)}</strong>?`);if(!ok)return;
+    }
     showLoading();
+    let pvpData=null;
     try{
         const{data,error}=await supabase.rpc('attack_hunting_player',{p_attacker_id:userId,p_defender_id:target.id,p_region_id:REGION_ID});
         if(error)throw error;
-        if(!data?.success){await showAlert(data?.message||'Erro no PvP.');return;}
-        await runPvpAnimation(data);
-        if(data.combat?.winner_id===userId){document.querySelectorAll(`.other-player-wrapper[data-player-id="${target.id}"]`).forEach(w=>{const img=w.querySelector('img.other-player-avatar');if(img)img.classList.add('eliminated');const clone=w.cloneNode(true);const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';clone.appendChild(lbl);w.parentNode.replaceChild(clone,w);});}
-        syncOtherPlayers();
-    }catch(e){await showAlert('Erro no PvP: '+(e.message||''));}
+        if(!data?.success){
+            // Banco confirmou que defensor já estava morto — atualiza UI local
+            if(data?.already_eliminated){
+                otherPlayers=otherPlayers.map(p=>p.id===target.id
+                    ?{...p,is_eliminated:true,eliminated_by_name:data.eliminated_by_name||'alguém'}
+                    :p);
+                renderOtherPlayers(otherPlayers);
+                await showAlert(`💀 <strong>${esc(target.name)}</strong> já havia sido eliminado por <strong>${esc(data.eliminated_by_name||'alguém')}</strong>.`);
+                return;
+            }
+            await showAlert(data?.message||'Erro no PvP.');return;
+        }
+        pvpData=data;
+    }catch(e){await showAlert('Erro no PvP: '+(e.message||''));return;}
     finally{hideLoading();}
+
+    // Anima com loading já escondido
+    await runPvpAnimation(pvpData);
+
+    const myName=playerData?.name||'Você';
+    const regionNameDisplay=REGION_NAME;
+    if(pvpData.combat?.winner_id===userId){
+        // Vitória — eliminação otimista
+        otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
+        renderOtherPlayers(otherPlayers);
+        // Conta total de eliminações do dia (simplificado: incrementa contador local)
+        const totalElimKey=`hunt_elim_count_${userId}_${new Date().toISOString().slice(0,10)}`;
+        const totalElim=(parseInt(sessionStorage.getItem(totalElimKey)||'0')+1);
+        sessionStorage.setItem(totalElimKey,totalElim);
+        pushKillNotif(`<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar <span style="color:#f88">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span>, eliminando um total de <span style="color:#ff8">${totalElim}</span> hoje!`);
+    } else {
+        // Derrota — fica morto 3 min
+        isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();
+        clearTimeout(pvpOnlyExitTimer);
+        clearActivity();updateHuntingHUD();
+        setPlayerDead();
+        pushKillNotif(`<span style="color:#f88">${esc(myName)}</span> tentou atacar <span style="color:#ff8">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span> e perdeu!`);
+    }
+    syncOtherPlayers();
 }
 
 async function runPvpAnimation(data){
     const modal=document.getElementById('pvpModal'),combat=data.combat||{},log=combat.battle_log||[];
+    const pvpBgMusic=document.getElementById('pvpBgMusic');
     document.getElementById('pvpAttackerName').textContent=data.attacker_name||'Atacante';
     document.getElementById('pvpDefenderName').textContent=data.defender_name||'Defensor';
     const atkAv=document.getElementById('pvpAttackerAvatar'),defAv=document.getElementById('pvpDefenderAvatar');
@@ -541,16 +729,46 @@ async function runPvpAnimation(data){
     const defMaxHp=Math.max(1,(combat.defender_health_left||0)+dmgToDef);
     const atkMaxHp=Math.max(1,(combat.attacker_health_left||0)+dmgToAtk);
     let curAtk=atkMaxHp,curDef=defMaxHp;
-    const updBars=()=>{atkFill.style.width=Math.max(0,curAtk/atkMaxHp*100)+'%';defFill.style.width=Math.max(0,curDef/defMaxHp*100)+'%';atkTxt.textContent=`${Math.max(0,curAtk)}/${atkMaxHp}`;defTxt.textContent=`${Math.max(0,curDef)}/${defMaxHp}`;};
+    function updBars(){
+        atkFill.style.width=Math.max(0,curAtk/atkMaxHp*100)+'%';
+        defFill.style.width=Math.max(0,curDef/defMaxHp*100)+'%';
+        atkTxt.textContent=Math.max(0,curAtk)+'/'+atkMaxHp;
+        defTxt.textContent=Math.max(0,curDef)+'/'+defMaxHp;
+    }
     updBars();modal.style.display='flex';cntdn.style.display='block';
-    for(let i=3;i>0;i--){cntdn.textContent=`A batalha começa em ${i}...`;await new Promise(r=>setTimeout(r,1000));}
+    // Música de combate (estilo mina)
+    try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}
+    if(pvpBgMusic){pvpBgMusic.currentTime=0;pvpBgMusic.volume=0.12;pvpBgMusic.play().catch(()=>{});}
+    for(let i=3;i>0;i--){cntdn.textContent='A batalha começa em '+i+'...';await new Promise(r=>setTimeout(r,1000));}
     cntdn.style.display='none';
-    for(const turn of log){const isAtk=turn.attacker_id===atkId;const tgtSide=isAtk?defSide:atkSide,tgtAv=isAtk?defAv:atkAv;if(isAtk)curDef=Math.max(0,curDef-(turn.damage||0));else curAtk=Math.max(0,curAtk-(turn.damage||0));updBars();showDamageNumber(turn.damage,turn.critical,turn.evaded,tgtSide);if(turn.evaded)playSound('evade');else if(turn.critical)playSound('critical');else playSound('normal');tgtAv.classList.remove('shake-animation');void tgtAv.offsetWidth;tgtAv.classList.add('shake-animation');setTimeout(()=>tgtAv.classList.remove('shake-animation'),400);await new Promise(r=>setTimeout(r,950));}
-    await new Promise(r=>setTimeout(r,600));modal.style.display='none';
-    if(combat.winner_id===userId)await showAlert(`⚔️ <strong>VITÓRIA!</strong><br>${esc(data.defender_name)} foi eliminado!`);
-    else await showAlert(`⚔️ <strong>DERROTA.</strong><br>${esc(data.defender_name)} sobreviveu!`);
+    for(const turn of log){
+        const isAtk=turn.attacker_id===atkId;
+        const tgtSide=isAtk?defSide:atkSide,tgtAv=isAtk?defAv:atkAv;
+        if(isAtk)curDef=Math.max(0,curDef-(turn.damage||0));
+        else curAtk=Math.max(0,curAtk-(turn.damage||0));
+        updBars();
+        _showDmgOnSide(turn.damage,turn.critical,turn.evaded,tgtSide);
+        if(turn.evaded)playSound('evade');
+        else if(turn.critical)playSound('critical');
+        else playSound('normal');
+        tgtAv.classList.remove('shake-animation');void tgtAv.offsetWidth;tgtAv.classList.add('shake-animation');
+        setTimeout(()=>tgtAv.classList.remove('shake-animation'),400);
+        await new Promise(r=>setTimeout(r,1000));
+    }
+    await new Promise(r=>setTimeout(r,600));
+    if(pvpBgMusic){pvpBgMusic.pause();pvpBgMusic.currentTime=0;}
+    modal.style.display='none';
+    if(combat.winner_id===userId)await showAlert('⚔️ <strong>VITÓRIA!</strong><br>'+esc(data.defender_name)+' foi eliminado!');
+    else await showAlert('⚔️ <strong>DERROTA.</strong><br>'+esc(data.defender_name)+' sobreviveu!');
 }
-function showDamageNumber(dmg,crit,evaded,targetEl){const el=document.createElement('div');el.className='damage-number'+(crit?' crit':'')+(evaded?' evaded':'');el.textContent=evaded?'Evitado!':(crit?`💥 ${dmg}`:String(dmg));const rect=targetEl.getBoundingClientRect();Object.assign(el.style,{left:(rect.left+rect.width/2-25)+'px',top:(rect.top+rect.height/2)+'px',transform:'translateY(0)',opacity:'1'});document.body.appendChild(el);requestAnimationFrame(()=>{el.style.transform='translateY(-55px)';el.style.opacity='0';});setTimeout(()=>el.remove(),1500);}
+function _showDmgOnSide(dmg,crit,evaded,sideEl){
+    const el=document.createElement('div');
+    if(evaded){el.textContent='Desviou';el.className='evade-text';}
+    else{el.textContent=Number(dmg).toLocaleString();el.className=crit?'crit-damage-number':'damage-number';}
+    sideEl.style.position='relative';
+    sideEl.appendChild(el);
+    el.addEventListener('animationend',()=>el.remove(),{once:true});
+}
 
 // ── MODAL DE RECOMPENSAS — agrupa por região ─────────────────
 function showRewardsModal(data){
@@ -592,20 +810,48 @@ async function syncOtherPlayers(){
     try{
         const{data,error}=await supabase.rpc('get_hunting_players',{p_player_id:userId,p_region_id:REGION_ID});
         if(error||!data)return;
-        otherPlayers=data.players||[];renderOtherPlayers(otherPlayers);
-        if(data.i_was_eliminated){if(isHunting){isHunting=false;stopLocalTimer();removePlayerFromSpot();updateHuntingHUD();}document.getElementById('eliminatedByName').textContent=data.eliminated_by||'um inimigo';document.getElementById('eliminatedModal').style.display='flex';}
+        const newPlayers=data.players||[];
+        // Detecta novas eliminações para banner
+        newPlayers.forEach(np=>{
+            const old=otherPlayers.find(op=>op.id===np.id);
+            if(np.is_eliminated&&old&&!old.is_eliminated&&np.eliminated_by_name){
+                pushKillNotif(
+                    '<span style="color:#ff8">'+esc(np.eliminated_by_name)+'</span> acabou de eliminar '+
+                    '<span style="color:#f88">'+esc(np.name)+'</span> em '+
+                    '<span style="color:#8ff">'+esc(REGION_NAME)+'</span>!'
+                );
+            }
+        });
+        otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
+        if(data.i_was_eliminated){
+            if(isHunting){isHunting=false;stopLocalTimer();removePlayerFromSpot();updateHuntingHUD();}
+            document.getElementById('eliminatedByName').textContent=data.eliminated_by||'um inimigo';
+            document.getElementById('eliminatedModal').style.display='flex';
+        }
     }catch(e){console.warn('[floresta] sync error',e);}
 }
 
 // ── BOOT ─────────────────────────────────────────────────────
 async function boot(){
     showLoading();
+    createKillBannerUI();
     try{
         userId=await getUserId();if(!userId){location.href='index.html';return;}
         playerData=await getPlayerData();
         preload('normal');preload('critical');preload('evade');
-
         await initShieldFromCache();
+
+        // Restaura dead state se o player recarregou enquanto morto
+        const savedAct=getActivity();
+        if(savedAct?.pvp_dead&&savedAct?.dead_until&&savedAct.dead_until>Date.now()){
+            deadUntil=savedAct.dead_until;
+            const remaining=deadUntil-Date.now();
+            clearTimeout(deadTimer);
+            deadTimer=setTimeout(()=>{
+                deadUntil=null;if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
+                clearActivity();updateHuntingHUD();
+            },remaining);
+        }
         // Lazy cleanup
         (async()=>{try{await supabase.rpc('cleanup_old_hunting_sessions');}catch{}})();
         renderSpots();

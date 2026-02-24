@@ -631,7 +631,6 @@ async function onHuntComplete(){
 
 // ── CLICK NO SPOT ────────────────────────────────────────────
 async function handleSpotClick(spot){
-    if(currentSession?.rewards_claimed){await showAlert('✅ Tempo diário esgotado. Volte amanhã!');return;}
 
     // Bloqueado por morte em PvP
     if(isPlayerDead()){

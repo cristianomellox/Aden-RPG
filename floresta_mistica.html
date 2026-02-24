@@ -437,11 +437,13 @@ function setPlayerDead(){
     clearTimeout(deadTimer);
     deadTimer=setTimeout(()=>{
         deadUntil=null;
-        if(currentSpotId){
-            isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;
+        // Não interrompe se o jogador já re-entrou em modo pvp puro durante os 3 min
+        if(!isPvpOnly){
+            if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
             clearTimeout(pvpOnlyExitTimer);
+            clearActivity();
         }
-        clearActivity();updateHuntingHUD();
+        updateHuntingHUD();
     },3*60*1000);
     _startDeadOverlay();
 }
@@ -645,11 +647,12 @@ async function handleSpotClick(spot){
     // Tempo de caça esgotado — oferecer modo PvP puro
     if(localSecondsLeft<=0&&!isPvpOnly){
         const ok=await showConfirm('⚔️ Modo PvP Puro',
-            `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você terá <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
+            `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;
         // Entra no modo PvP puro (sem RPC start_hunt — tempo já acabou)
         clearTimeout(pvpOnlyExitTimer);
         isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
+        clearTimeout(deadTimer);deadTimer=null; // cancela o timer de morte se ainda pendente
         setActivityHunting(spot.id); // bloqueia mineração
         renderPlayerOnSpot(spot.id);
         startPvpOnlyTimer();

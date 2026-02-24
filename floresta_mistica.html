@@ -116,6 +116,15 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 #eliminatedModal .modal-content{border-color:#c22;background:#1a0808;}
 #eliminatedModal h2{color:#f66;text-shadow:0 0 8px #f00;}
 
+/* ── DEAD PENALTY OVERLAY ─── */
+#deadPenaltyOverlay{display:none;position:fixed;bottom:75px;left:50%;transform:translateX(-50%);z-index:1500;flex-direction:column;align-items:center;gap:4px;pointer-events:none;}
+#deadPenaltyAvatarWrap{position:relative;}
+#deadPenaltyAvatar{width:72px;height:72px;border-radius:50%;border:3px solid #c22;filter:grayscale(80%) brightness(0.45);object-fit:cover;display:block;}
+#deadPenaltyTimer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff6666;font-weight:bold;font-size:.82em;text-align:center;text-shadow:0 0 6px #000,1px 1px 2px #000;background:rgba(0,0,0,.62);border-radius:5px;padding:2px 5px;white-space:nowrap;letter-spacing:1px;}
+#deadPenaltyLabel{color:#f88;font-size:.58em;font-weight:bold;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,.65);border-radius:4px;padding:2px 8px;}
+@keyframes deadPulse{0%,100%{opacity:1}50%{opacity:.55}}
+#deadPenaltyOverlay.active{animation:deadPulse 1.6s ease-in-out infinite;}
+
 #rewardsModal .modal-content{border-color:#c92;background:#1c1808;max-width:460px;}
 #rewardsModal h2{color:#fd8;text-shadow:0 0 8px #fa0;}
 .region-rewards-block{margin:10px 0;text-align:left;}
@@ -176,6 +185,15 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 
 <!-- Banner de kills/mortes globais -->
 <div id="huntKillBanner"></div>
+
+<!-- Overlay de penalidade de derrota PvP (cronômetro no avatar) -->
+<div id="deadPenaltyOverlay">
+    <div id="deadPenaltyAvatarWrap">
+        <img id="deadPenaltyAvatar" src="" alt="💀">
+        <div id="deadPenaltyTimer">03:00</div>
+    </div>
+    <div id="deadPenaltyLabel">💀 Penalidade de derrota</div>
+</div>
 
 <!-- Áudio de fundo PvP (mesma da mina) -->
 <audio id="pvpBgMusic" src="https://aden-rpg.pages.dev/assets/mina.mp3" loop preload="none"></audio>
@@ -335,7 +353,7 @@ const SHIELD_ITEM_ID = 85;
 const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
 const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
 const DAILY_LIMIT    = 10800; // 3h globais — mesmo valor do SQL
-const SYNC_MS        = 5 * 60 * 1000;
+const SYNC_MS        = 60 * 1000; // 1 minuto — mais responsivo para PvP
 const SPOT_LOCK_MS   = 15 * 60 * 1000; // 15 minutos de lock por spot
 const ACTIVITY_KEY   = 'aden_activity_state';
 
@@ -383,10 +401,33 @@ let otherPlayers=[], wanderTimers=[];
 // ── DEAD STATE (derrota em PvP — 3 minutos) ──────────────
 let deadUntil=null; // timestamp ms
 let deadTimer=null;
+let deadOverlayInterval=null;
 function isPlayerDead(){return deadUntil&&Date.now()<deadUntil;}
+
+function _startDeadOverlay(){
+    const overlay=document.getElementById('deadPenaltyOverlay');
+    if(!overlay)return;
+    const avImg=document.getElementById('deadPenaltyAvatar');
+    if(avImg&&playerData)avImg.src=playerData.avatar_url||DEFAULT_AVATAR;
+    overlay.style.display='flex';
+    overlay.classList.add('active');
+    const timerEl=document.getElementById('deadPenaltyTimer');
+    clearInterval(deadOverlayInterval);
+    const tick=()=>{
+        const remaining=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+        const m=Math.floor(remaining/60),s=remaining%60;
+        if(timerEl)timerEl.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        if(remaining<=0){
+            clearInterval(deadOverlayInterval);deadOverlayInterval=null;
+            overlay.style.display='none';overlay.classList.remove('active');
+        }
+    };
+    tick();
+    deadOverlayInterval=setInterval(tick,1000);
+}
+
 function setPlayerDead(){
     deadUntil=Date.now()+3*60*1000;
-    // Escreve no cache compartilhado como 'hunting' para bloquear mineração (mines.js verifica type==='hunting')
     localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
         type:'hunting',region:REGION_NAME,spot_id:currentSpotId||'__dead__',
         pvp_dead:true,dead_until:deadUntil,started_at:Date.now()
@@ -394,15 +435,20 @@ function setPlayerDead(){
     clearTimeout(deadTimer);
     deadTimer=setTimeout(()=>{
         deadUntil=null;
-        // Sai do spot automaticamente após 3 minutos
         if(currentSpotId){
             isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;
             clearTimeout(pvpOnlyExitTimer);
         }
         clearActivity();updateHuntingHUD();
     },3*60*1000);
+    _startDeadOverlay();
 }
-function clearDeadState(){deadUntil=null;clearTimeout(deadTimer);deadTimer=null;}
+function clearDeadState(){
+    deadUntil=null;clearTimeout(deadTimer);deadTimer=null;
+    clearInterval(deadOverlayInterval);deadOverlayInterval=null;
+    const overlay=document.getElementById('deadPenaltyOverlay');
+    if(overlay){overlay.style.display='none';overlay.classList.remove('active');}
+}
 
 // ── KILL BANNER QUEUE ─────────────────────────────────────
 let _killBannerQueue=[];
@@ -460,6 +506,20 @@ function showLoading(){document.getElementById('loadingOverlay').style.display='
 function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
 function showAlert(msg){return new Promise(r=>{const m=document.getElementById('alertModal'),el=document.getElementById('alertMessage'),btn=document.getElementById('alertOkBtn');el.innerHTML=msg;m.style.display='flex';const close=()=>{m.style.display='none';btn.onclick=null;r();};btn.onclick=close;m.addEventListener('click',e=>{if(e.target===m)close();},{once:true});});}
 function showConfirm(title,msg){return new Promise(r=>{const m=document.getElementById('confirmModal');document.getElementById('confirmTitle').textContent=title;document.getElementById('confirmMsg').innerHTML=msg;m.style.display='flex';const yes=document.getElementById('confirmYesBtn'),no=document.getElementById('confirmNoBtn');const done=v=>{m.style.display='none';yes.onclick=null;no.onclick=null;r(v);};yes.onclick=()=>done(true);no.onclick=()=>done(false);m.addEventListener('click',e=>{if(e.target===m)done(false);},{once:true});});}
+
+// Modal com cronômetro regressivo em tempo real (atualiza a cada segundo)
+function showLiveCountdownAlert(msgFn){
+    return new Promise(r=>{
+        const m=document.getElementById('alertModal'),el=document.getElementById('alertMessage'),btn=document.getElementById('alertOkBtn');
+        const tick=()=>{el.innerHTML=msgFn();};
+        tick();
+        m.style.display='flex';
+        const iv=setInterval(tick,1000);
+        const close=()=>{clearInterval(iv);m.style.display='none';btn.onclick=null;r();};
+        btn.onclick=close;
+        m.addEventListener('click',e=>{if(e.target===m)close();},{once:true});
+    });
+}
 
 // ── ESCUDO (global — sem region_id) ─────────────────────────
 async function initShieldFromCache(){cachedShieldQty=await getItemQtyFromCache(SHIELD_ITEM_ID);updateShieldBtn();}
@@ -553,9 +613,11 @@ async function handleSpotClick(spot){
 
     // Bloqueado por morte em PvP
     if(isPlayerDead()){
-        const secsLeft=Math.ceil((deadUntil-Date.now())/1000);
-        const m=Math.floor(secsLeft/60),s=secsLeft%60;
-        await showAlert(`💀 Você está no chão após a derrota.<br>Aguarde <strong>${m}:${String(s).padStart(2,'0')}</strong> para se recuperar.`);
+        await showLiveCountdownAlert(()=>{
+            const secsLeft=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+            const m=Math.floor(secsLeft/60),s=secsLeft%60;
+            return `💀 Você está no chão após a derrota.<br>Aguarde <strong>${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</strong> para se recuperar.`;
+        });
         return;
     }
 
@@ -580,7 +642,7 @@ async function handleSpotClick(spot){
     // Tentativa de trocar de spot enquanto em modo pvp puro
     if(isPvpOnly){
         if(!canSwitchSpot()){
-            await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar.`);return;
+            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);return;
         }
         clearTimeout(pvpOnlyExitTimer);
         currentSpotId=spot.id;
@@ -600,7 +662,7 @@ async function handleSpotClick(spot){
     // Regra: lock de 15 minutos antes de trocar de spot
     if(isHunting&&currentSpotId&&currentSpotId!==spot.id){
         if(!canSwitchSpot()){
-            await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
+            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
             return;
         }
     }
@@ -633,14 +695,23 @@ async function handlePauseHunt(){
     // Modo PvP puro — "Sair" é apenas local
     if(isPvpOnly){
         if(!canSwitchSpot()){
-            await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de sair.`);return;
+            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de sair.`);return;
         }
         exitPvpOnlyMode();
         return;
     }
     if(!isHunting)return;
+    // Penalidade de morte ativa?
+    if(isPlayerDead()){
+        await showLiveCountdownAlert(()=>{
+            const secsLeft=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+            const m=Math.floor(secsLeft/60),s=secsLeft%60;
+            return `💀 Você está no chão após a derrota.<br>Aguarde <strong>${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</strong> para se recuperar.`;
+        });
+        return;
+    }
     if(!canSwitchSpot()){
-        await showAlert(`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de pausar.`);
+        await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de pausar.`);
         return;
     }
     showLoading();
@@ -659,9 +730,12 @@ async function handlePauseHunt(){
 async function handleAttackPlayer(target){
     // Verifica se está morto (derrota recente)
     if(isPlayerDead()){
-        const secsLeft=Math.ceil((deadUntil-Date.now())/1000);
-        const m=Math.floor(secsLeft/60),s=secsLeft%60;
-        await showAlert(`💀 Você está no chão.<br>Aguarde <strong>${m}:${String(s).padStart(2,'0')}</strong> para se recuperar.`);return;
+        await showLiveCountdownAlert(()=>{
+            const secsLeft=Math.max(0,Math.ceil((deadUntil-Date.now())/1000));
+            const m=Math.floor(secsLeft/60),s=secsLeft%60;
+            return `💀 Você está no chão.<br>Aguarde <strong>${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</strong> para se recuperar.`;
+        });
+        return;
     }
     // Verifica mineração em outra aba
     const activity=getActivity();
@@ -727,6 +801,8 @@ async function handleAttackPlayer(target){
         const totalElim=(parseInt(sessionStorage.getItem(totalElimKey)||'0')+1);
         sessionStorage.setItem(totalElimKey,totalElim);
         pushKillNotif(`<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar <span style="color:#f88">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span>, eliminando um total de <span style="color:#ff8">${totalElim}</span> hoje!`);
+        // Reseta lock de 15 min ao atacar (impede saída imediata após o kill)
+        if(currentSpotId)setActivityHunting(currentSpotId);
     } else {
         // Derrota — fica morto 3 min
         isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();
@@ -852,7 +928,11 @@ async function syncOtherPlayers(){
         otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
         if(data.i_was_eliminated){
             if(isHunting){isHunting=false;stopLocalTimer();removePlayerFromSpot();updateHuntingHUD();}
-            document.getElementById('eliminatedByName').textContent=data.eliminated_by||'um inimigo';
+            currentSpotId=null; // limpa spot para permitir re-entrada após modal
+            // Banner de derrota para o próprio jogador
+            const killerName=data.eliminated_by||'alguém';
+            pushKillNotif(`<span style="color:#f88">Você</span> foi eliminado por <span style="color:#ff8">${esc(killerName)}</span> em <span style="color:#8ff">${esc(REGION_NAME)}</span>!`);
+            document.getElementById('eliminatedByName').textContent=killerName;
             document.getElementById('eliminatedModal').style.display='flex';
         }
     }catch(e){console.warn('[floresta] sync error',e);}
@@ -878,6 +958,8 @@ async function boot(){
                 deadUntil=null;if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
                 clearActivity();updateHuntingHUD();
             },remaining);
+            // Restaura overlay de penalidade
+            _startDeadOverlay();
         }
         // Lazy cleanup
         (async()=>{try{await supabase.rpc('cleanup_old_hunting_sessions');}catch{}})();
@@ -899,8 +981,9 @@ async function boot(){
                 localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
             }
             localSecondsLeft=Math.max(0,DAILY_LIMIT-localTotal);
-            // Spot ativo só se for DESTA região
+            // Spot ativo só se for DESTA região e não estiver eliminado
             currentSpotId=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
+            if(currentSession.is_eliminated)currentSpotId=null; // garante que pode re-entrar no spot
             isHunting=currentSession.is_hunting
                 &&currentSession.current_region===REGION_ID
                 &&localSecondsLeft>0
@@ -912,10 +995,33 @@ async function boot(){
 
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
-            if(currentSession.is_eliminated){document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';document.getElementById('eliminatedModal').style.display='flex';}
+            if(currentSession.is_eliminated){
+                // Banner de derrota no boot
+                const killerName=currentSession.eliminated_by_name||'um inimigo';
+                pushKillNotif(`<span style="color:#f88">Você</span> foi eliminado por <span style="color:#ff8">${esc(killerName)}</span> em <span style="color:#8ff">${esc(REGION_NAME)}</span>!`);
+                document.getElementById('eliminatedByName').textContent=killerName;
+                document.getElementById('eliminatedModal').style.display='flex';
+            }
         }
 
         updateHuntingHUD();renderOtherPlayers(otherPlayers);
+
+        // Exibe banners de kill para jogadores já eliminados (evita repetir na mesma sessão)
+        const _seenKey=`hunt_elim_seen_${userId}_${new Date().toISOString().slice(0,10)}`;
+        let _seenElim;
+        try{_seenElim=new Set(JSON.parse(sessionStorage.getItem(_seenKey)||'[]'));}catch{_seenElim=new Set();}
+        otherPlayers.forEach(p=>{
+            if(p.is_eliminated&&p.eliminated_by_name&&!_seenElim.has(p.id)){
+                pushKillNotif(
+                    `<span style="color:#ff8">${esc(p.eliminated_by_name)}</span> eliminou `+
+                    `<span style="color:#f88">${esc(p.name)}</span> em `+
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span>!`
+                );
+                _seenElim.add(p.id);
+            }
+        });
+        try{sessionStorage.setItem(_seenKey,JSON.stringify([..._seenElim]));}catch{}
+
         syncInterval=setInterval(syncOtherPlayers,SYNC_MS);
     }catch(e){console.error('[floresta] boot error',e);await showAlert('Erro ao carregar. Recarregue a página.');}
     finally{hideLoading();}
@@ -929,7 +1035,12 @@ document.addEventListener('DOMContentLoaded',async()=>{
     document.getElementById('tutorialBtn').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='flex';});
     document.getElementById('huntInfoClose').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='none';});
     document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});
-    document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{document.getElementById('eliminatedModal').style.display='none';});
+    document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{
+        document.getElementById('eliminatedModal').style.display='none';
+        currentSpotId=null; // permite entrar no mesmo spot em que foi morto
+        removePlayerFromSpot();
+        updateHuntingHUD();
+    });
     document.getElementById('rewardsCloseBtn').addEventListener('click',()=>{document.getElementById('rewardsModal').style.display='none';});
     await boot();
 });

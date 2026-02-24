@@ -1056,8 +1056,17 @@ async function boot(){
                 &&!currentSession.is_eliminated
                 &&!currentSession.rewards_claimed;
 
+            // Restaura modo PvP puro se ainda dentro dos 15 min
+            if(!isHunting&&currentSession.pvp_only_entered_at&&currentSession.current_region===REGION_ID&&!currentSession.is_eliminated){
+                const pvpEnteredAt=new Date(currentSession.pvp_only_entered_at);
+                const pvpElapsed=Math.floor((Date.now()-pvpEnteredAt.getTime())/1000);
+                const pvpRemaining=900-pvpElapsed;
+                if(pvpRemaining>0){isPvpOnly=true;pvpOnlySecondsLeft=pvpRemaining;}
+            }
+
             if(currentSession.shield_until){shieldUntil=new Date(currentSession.shield_until);if(isShieldActive())startShieldTimer();}
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
+            if(isPvpOnly&&currentSpotId){renderPlayerOnSpot(currentSpotId);startPvpOnlyTimer();}
 
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}

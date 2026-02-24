@@ -397,10 +397,9 @@ let userId=null, playerData=null, currentSession=null;
 let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
 let pvpOnlyExitTimer=null, pvpOnlySecondsLeft=900, pvpOnlyTimerInterval=null;
 let eliminationModalShown=false;
-function _elimAckKey(huntDate){return `elim_ack_${userId}_${huntDate||'today'}`;}
-function isEliminationAcknowledged(huntDate){try{return localStorage.getItem(_elimAckKey(huntDate))==='1';}catch{return eliminationModalShown;}}
-function setEliminationAcknowledged(huntDate){try{localStorage.setItem(_elimAckKey(huntDate),'1');}catch{}eliminationModalShown=true;}
-function clearEliminationAcknowledged(huntDate){try{localStorage.removeItem(_elimAckKey(huntDate));}catch{}eliminationModalShown=false;}
+function _elimAckKey(huntDate,elimBy){return `elim_ack_${userId}_${huntDate||'today'}_${elimBy||''}`;}
+function isEliminationAcknowledged(huntDate,elimBy){try{return localStorage.getItem(_elimAckKey(huntDate,elimBy))==='1';}catch{return eliminationModalShown;}}
+function setEliminationAcknowledged(huntDate,elimBy){try{localStorage.setItem(_elimAckKey(huntDate,elimBy),'1');}catch{}eliminationModalShown=true;}
 let shieldUntil=null, cachedShieldQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
 let otherPlayers=[], wanderTimers=[];
@@ -1018,8 +1017,8 @@ async function syncOtherPlayers(){
         });
         otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
 
-        if(data.i_was_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date)){
-            setEliminationAcknowledged(currentSession?.hunt_date);
+        if(data.i_was_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date,data.eliminated_by)){
+            setEliminationAcknowledged(currentSession?.hunt_date,data.eliminated_by);
             isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
             clearTimeout(pvpOnlyExitTimer);
             removePlayerFromSpot();
@@ -1097,9 +1096,9 @@ async function boot(){
 
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
-            if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
-                // Modal de eliminação no boot (só uma vez por sessão de eliminação)
-                setEliminationAcknowledged(currentSession.hunt_date);
+            if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date,currentSession.eliminated_by_name)){
+                // Modal de eliminação no boot (só uma vez por evento de eliminação)
+                setEliminationAcknowledged(currentSession.hunt_date,currentSession.eliminated_by_name);
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';
             }
@@ -1125,7 +1124,6 @@ document.addEventListener('DOMContentLoaded',async()=>{
     document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});
     document.getElementById('eliminatedCloseBtn').addEventListener('click',()=>{
         document.getElementById('eliminatedModal').style.display='none';
-        clearEliminationAcknowledged(currentSession?.hunt_date); // libera para próxima eliminação no mesmo dia
         isHunting=false;isPvpOnly=false;
         stopLocalTimer();stopPvpOnlyTimer();
         clearTimeout(pvpOnlyExitTimer);

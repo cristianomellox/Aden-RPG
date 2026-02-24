@@ -1446,8 +1446,8 @@ function endGame(data) {
 
 function showDetailedEndModal(data) {
     const isWin = !!data.win;
-    const COIN_ICON = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:18px;height:18px;vertical-align:middle;margin:0 2px;">`;
-    const CRYSTAL_ICON = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:18px;height:18px;vertical-align:middle;margin:0 2px;">`;
+    const COIN_ICON = `<img src="https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp" style="width:35px;height:35px;vertical-align:middle;margin:0 2px;">`;
+    const CRYSTAL_ICON = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:35px;height:35px;vertical-align:middle;margin:0 2px;">`;
 
     // Bônus de vitória
     const winBonus = isWin ? 50 : 0;

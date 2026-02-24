@@ -395,7 +395,7 @@ function fmtLockTime(){
 // ── ESTADO ─────────────────────────────────────────────────
 let userId=null, playerData=null, currentSession=null;
 let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
-let pvpOnlyExitTimer=null;
+let pvpOnlyExitTimer=null, pvpOnlySecondsLeft=900, pvpOnlyTimerInterval=null;
 let shieldUntil=null, cachedShieldQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
 let otherPlayers=[], wanderTimers=[];
@@ -563,9 +563,29 @@ function removePlayerFromSpot(){document.querySelectorAll('.player-avatar-wrappe
 function renderOtherPlayers(players){document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());players.forEach(p=>{if(!p.current_spot)return;const spotEl=document.getElementById(`spot-${p.current_spot}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===p.current_spot);const wrap=document.createElement('div');wrap.className='other-player-wrapper';wrap.dataset.playerId=p.id;Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});const shActive=p.shield_until&&new Date(p.shield_until)>new Date();if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}const nm=document.createElement('div');nm.className='other-player-name';nm.textContent=esc(p.name)||'?';wrap.appendChild(nm);const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');av.src=p.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);if(p.is_eliminated){const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);}else{wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});if(p.is_hunting&&spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);}spotEl.appendChild(wrap);});}
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
-function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=fmtTime(localSecondsLeft);}
+function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=isPvpOnly?fmtTime(pvpOnlySecondsLeft):fmtTime(localSecondsLeft);}
 function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);}
 function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;}
+
+// ── TIMER PvP PURO (15 min) ───────────────────────────────
+function startPvpOnlyTimer(){
+    clearInterval(pvpOnlyTimerInterval);
+    pvpOnlySecondsLeft=900;updateTimerDisplay();
+    pvpOnlyTimerInterval=setInterval(()=>{
+        if(!isPvpOnly){clearInterval(pvpOnlyTimerInterval);return;}
+        if(pvpOnlySecondsLeft<=0){clearInterval(pvpOnlyTimerInterval);exitPvpOnlyMode();return;}
+        pvpOnlySecondsLeft--;updateTimerDisplay();
+    },1000);
+}
+function stopPvpOnlyTimer(){clearInterval(pvpOnlyTimerInterval);pvpOnlyTimerInterval=null;}
+function resetPvpOnlyTimer(){
+    // Chamado após vitória em PvP — renova os 15 min
+    clearTimeout(pvpOnlyExitTimer);
+    pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+    startPvpOnlyTimer();
+    // Atualiza pvp_only_entered_at no servidor (fire and forget)
+    supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:currentSpotId}).catch(()=>{});
+}
 
 function updateHuntingHUD(){
     const hud=document.getElementById('huntingHud'),status=document.getElementById('huntStatus'),pauseBtn=document.getElementById('pauseHuntBtn');
@@ -625,16 +645,19 @@ async function handleSpotClick(spot){
 
     // Tempo de caça esgotado — oferecer modo PvP puro
     if(localSecondsLeft<=0&&!isPvpOnly){
-        const ok=await showConfirm('⚔️ Modo PvP',
-            `Seu tempo de caça terminou.<br>Você ainda pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para atacar outros jogadores.`);
+        const ok=await showConfirm('⚔️ Modo PvP Puro',
+            `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você terá <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;
         // Entra no modo PvP puro (sem RPC start_hunt — tempo já acabou)
         clearTimeout(pvpOnlyExitTimer);
         isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
         setActivityHunting(spot.id); // bloqueia mineração
-        renderPlayerOnSpot(spot.id);updateHuntingHUD();
-        // Auto-exit após SPOT_LOCK_MS
+        renderPlayerOnSpot(spot.id);
+        startPvpOnlyTimer();
         pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+        // Registra no servidor para outros jogadores verem e para o filtro de 15 min
+        supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id}).catch(()=>{});
+        updateHuntingHUD();
         return;
     }
 
@@ -650,7 +673,9 @@ async function handleSpotClick(spot){
         currentSpotId=spot.id;
         setActivityHunting(spot.id);
         renderPlayerOnSpot(spot.id);updateHuntingHUD();
+        startPvpOnlyTimer();
         pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
+        supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id}).catch(()=>{});
         return;
     }
 
@@ -689,6 +714,7 @@ async function handleSpotClick(spot){
 function exitPvpOnlyMode(){
     isPvpOnly=false;currentSpotId=null;
     clearTimeout(pvpOnlyExitTimer);
+    stopPvpOnlyTimer();
     clearActivity();removePlayerFromSpot();updateHuntingHUD();
 }
 
@@ -801,6 +827,7 @@ async function handleAttackPlayer(target){
         renderOtherPlayers(otherPlayers);
         // Reseta lock de 15 min
         if(currentSpotId)setActivityHunting(currentSpotId, true);
+        if(isPvpOnly)resetPvpOnlyTimer();
     } else {
         // DERROTA — fica morto 3 min (banner já disparado pelo syncGlobalPvpEvents)
         isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();

@@ -796,26 +796,35 @@ async function handleAttackPlayer(target){
     const myName=playerData?.name||'Você';
     const regionNameDisplay=REGION_NAME;
     if(pvpData.combat?.winner_id===userId){
-        // Vitória — eliminação otimista
+        // VITÓRIA — eliminação otimista + banner formato 1
         otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
         renderOtherPlayers(otherPlayers);
-        // Conta total de eliminações do dia (simplificado: incrementa contador local)
-        const totalElimKey=`hunt_elim_count_${userId}_${new Date().toISOString().slice(0,10)}`;
-        const totalElim=(parseInt(localStorage.getItem(totalElimKey)||'0')+1);
-        localStorage.setItem(totalElimKey,totalElim);
-        pushKillNotif(`<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar <span style="color:#f88">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span>, eliminando um total de <span style="color:#ff8">${totalElim}</span> hoje!`);
+        const totalKills = pvpData.attacker_daily_kills || 1;
+        pushKillNotif(
+            `<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar `+
+            `<span style="color:#f88">${esc(target.name)}</span> em `+
+            `<span style="color:#8ff">${esc(regionNameDisplay)}</span>, `+
+            `eliminando um total de <span style="color:#ff8">${totalKills}</span> hoje!`
+        );
         // Reseta lock de 15 min ao atacar (impede saída imediata após o kill)
         if(currentSpotId)setActivityHunting(currentSpotId, true);
     } else {
-        // Derrota — fica morto 3 min
+        // DERROTA — fica morto 3 min + banner formato 2
         isHunting=false;isPvpOnly=false;stopLocalTimer();removePlayerFromSpot();
         clearTimeout(pvpOnlyExitTimer);
-        // Reseta lock antes de limpar activity (setPlayerDead vai sobrescrever com pvp_dead)
         if(currentSpotId)setActivityHunting(currentSpotId, true);
         currentSpotId=null;
         clearActivity();updateHuntingHUD();
         setPlayerDead();
-        pushKillNotif(`<span style="color:#f88">${esc(myName)}</span> tentou atacar <span style="color:#ff8">${esc(target.name)}</span> em <span style="color:#8ff">${esc(regionNameDisplay)}</span> e perdeu!`);
+        const defKills = pvpData.defender_daily_kills || 0;
+        const defKillsTxt = defKills > 0
+            ? `. <span style="color:#8ff">${esc(target.name)}</span> já eliminou <span style="color:#ff8">${defKills}</span> hoje!`
+            : '.';
+        pushKillNotif(
+            `<span style="color:#f88">${esc(myName)}</span> tentou atacar `+
+            `<span style="color:#ff8">${esc(target.name)}</span> em `+
+            `<span style="color:#8ff">${esc(regionNameDisplay)}</span> e perdeu${defKillsTxt}`
+        );
     }
     syncOtherPlayers();
 }
@@ -920,48 +929,50 @@ async function syncOtherPlayers(){
         const{data,error}=await supabase.rpc('get_hunting_players',{p_player_id:userId,p_region_id:REGION_ID});
         if(error||!data)return;
         const newPlayers=data.players||[];
-        // Detecta novas eliminações → banner
+
+        // Detecta novas eliminações → banner formato 1
         newPlayers.forEach(np=>{
             const old=otherPlayers.find(op=>op.id===np.id);
             if(np.is_eliminated&&old&&!old.is_eliminated&&np.eliminated_by_name){
+                const kCount=np.daily_kills||'';
+                const kTxt=kCount?`, eliminando um total de <span style="color:#ff8">${kCount}</span> hoje!`:'!';
                 pushKillNotif(
-                    '<span style="color:#ff8">'+esc(np.eliminated_by_name)+'</span> acabou de eliminar '+
-                    '<span style="color:#f88">'+esc(np.name)+'</span> em '+
-                    '<span style="color:#8ff">'+esc(REGION_NAME)+'</span>!'
+                    `<span style="color:#ff8">${esc(np.eliminated_by_name)}</span> acabou de eliminar `+
+                    `<span style="color:#f88">${esc(np.name)}</span> em `+
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span>${kTxt}`
                 );
             }
         });
-        // Detecta jogadores que SUMIRAM do spot (saíram ou foram derrotados)
+        // Detecta jogadores que saíram do spot
         otherPlayers.forEach(old=>{
-            if(old.is_eliminated)return; // já estava eliminado, sem banner extra
+            if(old.is_eliminated)return;
             const stillHere=newPlayers.find(np=>np.id===old.id);
             if(!stillHere&&old.is_hunting){
-                // Estava caçando ativamente e sumiu — provavelmente foi derrotado ou pausou
-                pushKillNotif(
-                    '<span style="color:#ff8">'+esc(old.name)+'</span> deixou o spot em '+
-                    '<span style="color:#8ff">'+esc(REGION_NAME)+'</span>.'
-                );
+                pushKillNotif(`<span style="color:#ff8">${esc(old.name)}</span> deixou o spot em <span style="color:#8ff">${esc(REGION_NAME)}</span>.`);
             }
         });
         otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
+
         if(data.i_was_eliminated){
             if(isHunting){isHunting=false;stopLocalTimer();removePlayerFromSpot();updateHuntingHUD();}
-            currentSpotId=null; // limpa spot para permitir re-entrada após modal
-            // Banner de derrota para o próprio jogador
-            const killerName=data.eliminated_by||'alguém';
-            pushKillNotif(`<span style="color:#f88">Você</span> foi eliminado por <span style="color:#ff8">${esc(killerName)}</span> em <span style="color:#8ff">${esc(REGION_NAME)}</span>!`);
-            document.getElementById('eliminatedByName').textContent=killerName;
+            currentSpotId=null;
+            document.getElementById('eliminatedByName').textContent=data.eliminated_by||'alguém';
             document.getElementById('eliminatedModal').style.display='flex';
         }
-        // Banner de "foi atacado e o atacante perdeu" via sync
-        if(data.last_attacker_name&&data.last_attacked_at){
-            const attackedMs=new Date(data.last_attacked_at).getTime();
-            const seenAttackKey=`hunt_atk_seen_${userId}_${data.last_attacked_at}`;
-            if(Date.now()-attackedMs < 5*60*1000 && !localStorage.getItem(seenAttackKey)){
-                localStorage.setItem(seenAttackKey,'1');
+        // Banner formato 2 via sync: alguém tentou atacar o próprio jogador e perdeu
+        if(data.last_attacker_name&&data.last_failed_attack_at){
+            const attackedMs=new Date(data.last_failed_attack_at).getTime();
+            const seenKey=`hunt_fatk_${userId}_${data.last_failed_attack_at}`;
+            if(Date.now()-attackedMs<5*60*1000&&!localStorage.getItem(seenKey)){
+                localStorage.setItem(seenKey,'1');
+                const myKills=data.my_daily_kills||0;
+                const myKillsTxt=myKills>0
+                    ?`. <span style="color:#8ff">${esc(playerData?.name||'Você')}</span> já eliminou <span style="color:#ff8">${myKills}</span> hoje!`
+                    :'.';
                 pushKillNotif(
-                    `<span style="color:#ff8">${esc(data.last_attacker_name)}</span> tentou te atacar em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e <span style="color:#4f4">perdeu</span>!`
+                    `<span style="color:#f88">${esc(data.last_attacker_name)}</span> tentou atacar `+
+                    `<span style="color:#ff8">${esc(playerData?.name||'você')}</span> em `+
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e perdeu${myKillsTxt}`
                 );
             }
         }
@@ -1026,41 +1037,46 @@ async function boot(){
             // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated){
-                // Banner de derrota no boot
-                const killerName=currentSession.eliminated_by_name||'um inimigo';
-                pushKillNotif(`<span style="color:#f88">Você</span> foi eliminado por <span style="color:#ff8">${esc(killerName)}</span> em <span style="color:#8ff">${esc(REGION_NAME)}</span>!`);
-                document.getElementById('eliminatedByName').textContent=killerName;
+                // Modal de eliminação no boot
+                document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';
             }
         }
 
         updateHuntingHUD();renderOtherPlayers(otherPlayers);
 
-        // Exibe banners de kill para jogadores já eliminados (evita repetir na mesma sessão)
+        // Banners de eliminações já acontecidas ao carregar a página (formato 1)
         const _seenKey=`hunt_elim_seen_${userId}_${new Date().toISOString().slice(0,10)}`;
         let _seenElim;
         try{_seenElim=new Set(JSON.parse(sessionStorage.getItem(_seenKey)||'[]'));}catch{_seenElim=new Set();}
         otherPlayers.forEach(p=>{
             if(p.is_eliminated&&p.eliminated_by_name&&!_seenElim.has(p.id)){
+                const kCount=p.daily_kills||'';
+                const kTxt=kCount?`, eliminando um total de <span style="color:#ff8">${kCount}</span> hoje!`:'!';
                 pushKillNotif(
-                    `<span style="color:#ff8">${esc(p.eliminated_by_name)}</span> eliminou `+
+                    `<span style="color:#ff8">${esc(p.eliminated_by_name)}</span> acabou de eliminar `+
                     `<span style="color:#f88">${esc(p.name)}</span> em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span>!`
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span>${kTxt}`
                 );
                 _seenElim.add(p.id);
             }
         });
         try{sessionStorage.setItem(_seenKey,JSON.stringify([..._seenElim]));}catch{}
 
-        // Banner de "foi atacado e o atacante perdeu" — recente (últimos 5 min)
-        if(currentSession?.last_attacker_name&&currentSession?.last_attacked_at){
-            const attackedMs=new Date(currentSession.last_attacked_at).getTime();
-            const seenAttackKey=`hunt_atk_seen_${userId}_${currentSession.last_attacked_at}`;
-            if(Date.now()-attackedMs < 5*60*1000 && !localStorage.getItem(seenAttackKey)){
-                localStorage.setItem(seenAttackKey,'1');
+        // Banner formato 2 no boot: alguém tentou atacar o próprio jogador e perdeu
+        if(currentSession?.last_attacker_name&&currentSession?.last_failed_attack_at){
+            const attackedMs=new Date(currentSession.last_failed_attack_at).getTime();
+            const seenKey=`hunt_fatk_${userId}_${currentSession.last_failed_attack_at}`;
+            if(Date.now()-attackedMs<5*60*1000&&!localStorage.getItem(seenKey)){
+                localStorage.setItem(seenKey,'1');
+                const myKills=currentSession.daily_kills||0;
+                const myKillsTxt=myKills>0
+                    ?`. <span style="color:#8ff">${esc(playerData?.name||'Você')}</span> já eliminou <span style="color:#ff8">${myKills}</span> hoje!`
+                    :'.';
                 pushKillNotif(
-                    `<span style="color:#ff8">${esc(currentSession.last_attacker_name)}</span> tentou te atacar em `+
-                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e <span style="color:#4f4">perdeu</span>!`
+                    `<span style="color:#f88">${esc(currentSession.last_attacker_name)}</span> tentou atacar `+
+                    `<span style="color:#ff8">${esc(playerData?.name||'você')}</span> em `+
+                    `<span style="color:#8ff">${esc(REGION_NAME)}</span> e perdeu${myKillsTxt}`
                 );
             }
         }

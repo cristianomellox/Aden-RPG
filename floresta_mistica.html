@@ -507,6 +507,53 @@ let shieldUntil=null, cachedShieldQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null;
 let otherPlayers=[], wanderTimers=[];
 
+// ── GUILD NAME CACHE (localStorage, TTL 48h) ──────────────────
+// Resolve guild_id (UUID) → guild name sem RPC repetida.
+// Chave separada para não misturar com owners_store (que só tem UUID).
+const _GUILD_CACHE_KEY = 'aden_guild_names_cache';
+const _GUILD_CACHE_TTL = 48 * 60 * 60 * 1000; // 48h
+
+function _guildCacheLoad(){
+    try{
+        const raw=localStorage.getItem(_GUILD_CACHE_KEY);
+        if(!raw)return{};
+        const obj=JSON.parse(raw);
+        const now=Date.now();
+        // Filtra entradas expiradas ao carregar
+        const valid={};
+        Object.entries(obj).forEach(([id,entry])=>{
+            if(entry.ts&&(now-entry.ts)<_GUILD_CACHE_TTL)valid[id]=entry;
+        });
+        return valid;
+    }catch{return{};}
+}
+function _guildCacheSave(map){
+    try{localStorage.setItem(_GUILD_CACHE_KEY,JSON.stringify(map));}catch{}
+}
+function _guildCacheGet(guildId){
+    return _guildNamesCache[guildId]?.name||null;
+}
+
+let _guildNamesCache = _guildCacheLoad(); // { [guildId]: {name, ts} }
+
+// Resolve em batch os guild_ids que ainda não têm nome em cache.
+// Chamado de forma lazy após render — não bloqueia UI.
+async function _resolveGuildNames(guildIds){
+    if(!guildIds||!guildIds.length)return;
+    const missing=guildIds.filter(id=>id&&!_guildNamesCache[id]);
+    if(!missing.length)return;
+    try{
+        const{data,error}=await supabase.from('guilds').select('id,name').in('id',missing);
+        if(error||!data)return;
+        const now=Date.now();
+        data.forEach(g=>{_guildNamesCache[g.id]={name:g.name,ts:now};});
+        _guildCacheSave(_guildNamesCache);
+        // Re-renderiza apenas se houver jogadores visíveis com essas guilds
+        const affected=otherPlayers.filter(p=>_ownersMap[p.id]?.guild_id&&missing.includes(_ownersMap[p.id].guild_id));
+        if(affected.length)renderOtherPlayers(otherPlayers);
+    }catch(e){console.warn('[floresta] guild resolve',e);}
+}
+
 // ── OWNERS MAP (em memória, populado do IDB no boot) ──────────
 let _ownersMap = {}; // { [playerId]: {name, avatar_url, guild_id} }
 
@@ -699,37 +746,54 @@ function renderOtherPlayers(players){
     stopAllOtherCombatLoops();
     _otherCombatBusy.clear();
     document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());
+
+    const guildIdsToResolve=[];
+
     players.forEach(p=>{
         if(!p.current_spot)return;
         const spotEl=document.getElementById(`spot-${p.current_spot}`);
         if(!spotEl)return;
         const spot=SPOTS.find(s=>s.id===p.current_spot);
 
-        // Enriquece com IDB (guild, avatar, nome)
+        // Enriquece com IDB
         const cached=_ownersMap[p.id];
-        const displayName = p.name || cached?.name || '?';
-        const displayAvatar = p.avatar_url || cached?.avatar_url || DEFAULT_AVATAR;
-        const guildId = cached?.guild_id || null;
+        const displayName   = p.name        || cached?.name       || '?';
+        const displayAvatar = p.avatar_url  || cached?.avatar_url || DEFAULT_AVATAR;
+        const guildId       = cached?.guild_id || null;
+        const guildName     = guildId ? _guildCacheGet(guildId) : null;
+
+        // Se tem guild_id mas ainda não resolvemos o nome, agenda para batch
+        if(guildId&&!guildName)guildIdsToResolve.push(guildId);
 
         const wrap=document.createElement('div');
         wrap.className='other-player-wrapper';
         wrap.dataset.playerId=p.id;
         Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});
+
         const shActive=p.shield_until&&new Date(p.shield_until)>new Date();
         if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}
-        const nm=document.createElement('div');nm.className='other-player-name';
+
+        // Nome do jogador
+        const nm=document.createElement('div');
+        nm.className='other-player-name';
+        nm.style.fontSize='0.9em'; // ← TAMANHO DO NOME — altere aqui
         nm.textContent=esc(displayName);
         wrap.appendChild(nm);
-        // Guild badge (só visível se IDB tiver a info)
-        if(guildId){
+
+        // Nome da guilda (azul claro, abaixo do nome)
+        if(guildName){
             const gb=document.createElement('div');
             gb.className='other-player-name';
-            gb.style.cssText='font-size:.48em;color:#a8d0ff;margin-top:-2px;';
-            gb.textContent=`[${esc(guildId)}]`;
+            gb.style.cssText='font-size:0.75em;color:#a8d0ff;margin-top:-3px;'; // ← TAMANHO DA GUILDA — altere aqui
+            gb.textContent=`[${esc(guildName)}]`;
             wrap.appendChild(gb);
         }
-        const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');
-        av.src=displayAvatar;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
+
+        const av=document.createElement('img');
+        av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');
+        av.src=displayAvatar;av.onerror=()=>{av.src=DEFAULT_AVATAR;};
+        wrap.appendChild(av);
+
         if(p.is_eliminated){
             const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);
         }else{
@@ -738,7 +802,13 @@ function renderOtherPlayers(players){
         }
         spotEl.appendChild(wrap);
     });
+
     if(players.some(p=>!p.is_eliminated&&p.current_spot)){_ensureOtherCombatInterval();}
+
+    // Resolve guild names em batch (lazy, não bloqueia render)
+    if(guildIdsToResolve.length){
+        _resolveGuildNames([...new Set(guildIdsToResolve)]).catch(()=>{});
+    }
 }
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
@@ -1243,9 +1313,12 @@ async function syncOtherPlayers(){
         const toSave=newPlayers.filter(p=>p.id&&p.name).map(p=>({id:p.id,name:p.name,avatar_url:p.avatar_url||''}));
         if(toSave.length){
             _idbSaveOwners(toSave).catch(()=>{});
-            // Atualiza mapa em memória
             toSave.forEach(o=>{if(!_ownersMap[o.id]||changed)_ownersMap[o.id]={...(_ownersMap[o.id]||{}),...o};});
         }
+
+        // Resolve guild names para todos os jogadores presentes (lazy, post-render)
+        const guildIds=newPlayers.map(p=>_ownersMap[p.id]?.guild_id).filter(Boolean);
+        if(guildIds.length)_resolveGuildNames([...new Set(guildIds)]).catch(()=>{});
 
         // Banners de saída de spot
         otherPlayers.forEach(old=>{
@@ -1285,7 +1358,12 @@ async function boot(){
         userId=await getUserId();if(!userId){location.href='index.html';return;}
 
         // ── Pré-carrega IDB owners (zero egress, melhora render imediato) ──
-        _idbGetAllOwners().then(map=>{_ownersMap=map;}).catch(()=>{});
+        _idbGetAllOwners().then(map=>{
+            _ownersMap=map;
+            // Resolve guild names em batch para quem já está no IDB
+            const gIds=[...new Set(Object.values(map).map(o=>o.guild_id).filter(Boolean))];
+            if(gIds.length)_resolveGuildNames(gIds).catch(()=>{});
+        }).catch(()=>{});
 
         playerData=await getPlayerData();
 
@@ -1340,6 +1418,9 @@ async function boot(){
         if(playersToCache.length){
             _idbSaveOwners(playersToCache).catch(()=>{});
             playersToCache.forEach(o=>{_ownersMap[o.id]={...(_ownersMap[o.id]||{}),...o};});
+            // Resolve guild names em batch (fire-and-forget, re-renderiza se necessário)
+            const gIds=[...new Set(playersToCache.map(o=>_ownersMap[o.id]?.guild_id).filter(Boolean))];
+            if(gIds.length)_resolveGuildNames(gIds).catch(()=>{});
         }
 
         if(currentSession){

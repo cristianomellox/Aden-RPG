@@ -1259,7 +1259,7 @@ async function _otherCombatGlobalTick(){
     const pid = playerWrap.dataset.playerId;
     _otherCombatBusy.add(pid);
 
-    await _runAttackSequence(playerWrap, spotEl, spot, 0.35, () => !!playerWrap.parentElement);
+    await _runAttackSequence(playerWrap, spotEl, spot, 0.25, () => !!playerWrap.parentElement);
 
     // Rest period before this player can be picked again (2.5–5s)
     setTimeout(() => _otherCombatBusy.delete(pid), 100 + Math.random() * 500);

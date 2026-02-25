@@ -104,6 +104,18 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px) rotate(-3deg)}40%{transform:translateX(8px) rotate(3deg)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
 .shake-animation{animation:shake .35s cubic-bezier(.36,.07,.19,.97) both!important;backface-visibility:hidden;}
 
+/* ── MOB COMBAT ANIMATIONS ─── */
+@keyframes mob-death-fade{0%{opacity:1;transform:scale(1);}60%{opacity:.3;transform:scale(0.7) translateY(8px);}100%{opacity:0;transform:scale(0.4) translateY(18px);}}
+@keyframes mob-respawn{0%{opacity:0;transform:scale(0.3) translateY(-14px);}60%{opacity:.9;transform:scale(1.12) translateY(-3px);}100%{opacity:1;transform:scale(1) translateY(0);}}
+@keyframes player-lunge{0%{transform:scale(1);}40%{transform:scale(1.18) rotate(-6deg);}70%{transform:scale(1.08) rotate(3deg);}100%{transform:scale(1) rotate(0deg);}}
+@keyframes mob-impact-flash{0%,100%{filter:brightness(1);}35%{filter:brightness(2.4) saturate(0.2);}}
+.mob-dying .mob-avatar{animation:mob-death-fade 0.85s ease-out forwards!important;}
+.mob-dying .mob-name{animation:mob-death-fade 0.65s ease-out forwards!important;}
+.mob-respawning .mob-avatar{animation:mob-respawn 0.7s cubic-bezier(.22,1,.36,1) forwards!important;}
+.mob-respawning .mob-name{animation:mob-respawn 0.55s cubic-bezier(.22,1,.36,1) forwards!important;}
+.player-lunging .player-spot-avatar{animation:player-lunge 0.45s ease-out!important;}
+.mob-impact-flash .mob-avatar{animation:mob-impact-flash 0.28s ease-out!important;}
+
 /* ── KILL BANNER ─── */
 #huntKillBanner{position:fixed;top:58px;right:0;background:linear-gradient(90deg,rgba(180,30,0,.92),rgba(180,80,0,.92));color:#fff;padding:9px 22px;border-radius:6px 0 0 6px;z-index:25000;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;box-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:translateX(100%);transition:opacity .3s;}
 #huntKillBanner.show{opacity:1;animation:huntBannerSlide 26s linear forwards;}
@@ -564,15 +576,15 @@ function renderSpots(){const map=document.getElementById('map');map.querySelecto
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());if(!spotId||!playerData)return;const spotEl=document.getElementById(`spot-${spotId}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===spotId);const wrap=document.createElement('div');wrap.className='player-avatar-wrapper';Object.assign(wrap.style,{right:'10px',bottom:'10px',left:'auto',top:'auto'});const si=document.createElement('img');si.id='myShieldIcon';si.className='player-shield-icon';si.src=SHIELD_IMG;si.style.display=isShieldActive()?'block':'none';wrap.appendChild(si);const nm=document.createElement('div');nm.className='player-name-label';nm.textContent=playerData.name||'Você';wrap.appendChild(nm);const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);spotEl.appendChild(wrap);if(spot)startWander(wrap,spot.width,spot.height,800);}
-function removePlayerFromSpot(){document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
+function removePlayerFromSpot(){stopCombatLoop();document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
 
 // ── OUTROS JOGADORES ─────────────────────────────────────────
 function renderOtherPlayers(players){document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());players.forEach(p=>{if(!p.current_spot)return;const spotEl=document.getElementById(`spot-${p.current_spot}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===p.current_spot);const wrap=document.createElement('div');wrap.className='other-player-wrapper';wrap.dataset.playerId=p.id;Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});const shActive=p.shield_until&&new Date(p.shield_until)>new Date();if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}const nm=document.createElement('div');nm.className='other-player-name';nm.textContent=esc(p.name)||'?';wrap.appendChild(nm);const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');av.src=p.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);if(p.is_eliminated){const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);}else{wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});if((p.is_hunting||p.pvp_only_entered_at)&&spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);}spotEl.appendChild(wrap);});}
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
 function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=isPvpOnly?fmtTime(pvpOnlySecondsLeft):fmtTime(localSecondsLeft);}
-function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);}
-function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;}
+function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);startCombatLoop();}
+function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;stopCombatLoop();}
 
 // ── TIMER PvP PURO (15 min) ───────────────────────────────
 function startPvpOnlyTimer(resetToFull=true){
@@ -896,7 +908,7 @@ async function runPvpAnimation(data){
     updBars();modal.style.display='flex';cntdn.style.display='block';
     // Música de combate (estilo mina)
     try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}
-    if(pvpBgMusic){pvpBgMusic.currentTime=0;pvpBgMusic.volume=0.12;pvpBgMusic.play().catch(()=>{});}
+    if(pvpBgMusic){pvpBgMusic.currentTime=0;pvpBgMusic.volume=0.13;pvpBgMusic.play().catch(()=>{});}
     for(let i=3;i>0;i--){cntdn.textContent='A batalha começa em '+i+'...';await new Promise(r=>setTimeout(r,1000));}
     cntdn.style.display='none';
     for(const turn of log){
@@ -1115,7 +1127,187 @@ async function boot(){
     finally{hideLoading();}
 }
 
-// ── DOM READY ────────────────────────────────────────────────
+// ── COMBAT LOOP (mob attack animation — apenas caça normal, não pvp puro) ──────
+let _combatLoopActive = false;
+let _combatLoopTimeout = null;
+let _combatPlayerOriginLeft = null;
+let _combatPlayerOriginTop = null;
+
+function startCombatLoop(){
+    if(_combatLoopActive)return;
+    _combatLoopActive = true;
+    // Initial delay so player settles into spot first
+    _combatLoopTimeout = setTimeout(_combatTick, 2800 + Math.random()*1800);
+}
+
+function stopCombatLoop(){
+    _combatLoopActive = false;
+    clearTimeout(_combatLoopTimeout);
+    _combatLoopTimeout = null;
+    // Snap player back to resting corner gracefully
+    const pw = document.querySelector('.player-avatar-wrapper');
+    if(pw){
+        pw.classList.remove('player-lunging');
+        pw.style.transition = 'left 0.7s ease, top 0.7s ease, right 0.5s, bottom 0.5s';
+        pw.style.right = '10px'; pw.style.bottom = '10px';
+        pw.style.left = 'auto'; pw.style.top = 'auto';
+    }
+}
+
+async function _combatTick(){
+    // Gate: only run during genuine hunting (not pvp-only, not paused)
+    if(!_combatLoopActive || !isHunting || isPvpOnly || !currentSpotId){ _combatLoopActive=false; return; }
+
+    const spotEl = document.getElementById(`spot-${currentSpotId}`);
+    const playerWrap = spotEl?.querySelector('.player-avatar-wrapper');
+    if(!spotEl || !playerWrap){ _scheduleNextCombat(); return; }
+
+    const spot = SPOTS.find(s=>s.id===currentSpotId);
+    if(!spot){ _scheduleNextCombat(); return; }
+
+    // Pick a living mob in this spot
+    const mobs = [...spotEl.querySelectorAll('.mob-wrapper')].filter(m=>!m.classList.contains('mob-dying'));
+    if(mobs.length === 0){ _scheduleNextCombat(); return; }
+
+    const targetMob = mobs[Math.floor(Math.random() * mobs.length)];
+
+    // Compute target position: place player adjacent to mob
+    const mobL = parseFloat(targetMob.style.left) || targetMob.offsetLeft;
+    const mobT = parseFloat(targetMob.style.top)  || targetMob.offsetTop;
+    const pW = 70, pH = 90; // approx player wrapper size
+
+    // Aim slightly left of mob (attacking from the side)
+    const rawLeft = mobL - pW - 4 + (Math.random()*16 - 8);
+    const rawTop  = mobT + (Math.random()*18 - 9);
+    const destLeft = Math.max(4, Math.min(spot.width  - pW - 4, rawLeft));
+    const destTop  = Math.max(4, Math.min(spot.height - pH - 4, rawTop));
+
+    // Store current position for return trip
+    const curLeft = parseFloat(playerWrap.style.left);
+    const curTop  = parseFloat(playerWrap.style.top);
+    _combatPlayerOriginLeft = isNaN(curLeft) ? (spot.width - pW - 10) : curLeft;
+    _combatPlayerOriginTop  = isNaN(curTop)  ? (spot.height - pH - 10) : curTop;
+
+    // Convert from right/bottom if still using those
+    if(playerWrap.style.right && playerWrap.style.right !== 'auto'){
+        _combatPlayerOriginLeft = spot.width  - pW - 10;
+        _combatPlayerOriginTop  = spot.height - pH - 10;
+    }
+
+    // Move player toward mob
+    playerWrap.style.transition = 'left 0.55s cubic-bezier(0.22,1,0.36,1), top 0.55s cubic-bezier(0.22,1,0.36,1), right 0.1s, bottom 0.1s';
+    playerWrap.style.right  = 'auto';
+    playerWrap.style.bottom = 'auto';
+    playerWrap.style.left   = destLeft + 'px';
+    playerWrap.style.top    = destTop  + 'px';
+
+    await _delay(580);
+    if(!_combatLoopActive || !isHunting || isPvpOnly) return;
+
+    // Lunge animation on player avatar
+    playerWrap.classList.remove('player-lunging');
+    void playerWrap.offsetWidth;
+    playerWrap.classList.add('player-lunging');
+    setTimeout(()=>playerWrap.classList.remove('player-lunging'), 500);
+
+    // Generate hit stats
+    const isCrit  = Math.random() < 0.18;
+    const isEvade = !isCrit && Math.random() < 0.10;
+    const dmg     = isEvade ? 0 : Math.floor(isCrit ? 180+Math.random()*620 : 40+Math.random()*280);
+
+    // Flash mob on impact
+    targetMob.classList.remove('mob-impact-flash');
+    void targetMob.offsetWidth;
+    targetMob.classList.add('mob-impact-flash');
+    setTimeout(()=>targetMob.classList.remove('mob-impact-flash'), 320);
+
+    // Show damage number on mob
+    _showMobDmgNumber(targetMob, dmg, isCrit, isEvade);
+
+    // Play hit sound
+    if(isEvade) playSound('evade');
+    else if(isCrit) playSound('critical');
+    else playSound('normal');
+
+    // Shake mob avatar
+    const mobAv = targetMob.querySelector('.mob-avatar');
+    if(mobAv && !isEvade){
+        mobAv.classList.remove('shake-animation');
+        void mobAv.offsetWidth;
+        mobAv.classList.add('shake-animation');
+        setTimeout(()=>mobAv.classList.remove('shake-animation'), 400);
+    }
+
+    await _delay(750);
+    if(!_combatLoopActive || !isHunting || isPvpOnly) return;
+
+    // Occasionally kill the mob (22% chance, not if already dying)
+    if(!isEvade && !targetMob.classList.contains('mob-dying') && Math.random() < 0.40){
+        _triggerMobDeath(targetMob, spot);
+    }
+
+    // Drift player back toward original resting corner (smooth return)
+    await _delay(300);
+    if(!_combatLoopActive || !isHunting || isPvpOnly) return;
+
+    const returnLeft = spot.width  - pW - 10 + (Math.random()*24 - 12);
+    const returnTop  = spot.height - pH - 10 + (Math.random()*24 - 12);
+    playerWrap.style.transition = 'left 1.1s ease-in-out, top 1.1s ease-in-out';
+    playerWrap.style.left = Math.max(4, Math.min(spot.width - pW - 4, returnLeft)) + 'px';
+    playerWrap.style.top  = Math.max(4, Math.min(spot.height - pH - 4, returnTop)) + 'px';
+
+    _scheduleNextCombat();
+}
+
+function _scheduleNextCombat(){
+    if(!_combatLoopActive) return;
+    // 2.5 – 5s between attacks to feel natural, not robotic
+    const wait = 2500 + Math.random() * 2500;
+    _combatLoopTimeout = setTimeout(_combatTick, wait);
+}
+
+function _delay(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+function _showMobDmgNumber(mobEl, dmg, crit, evaded){
+    const el = document.createElement('div');
+    if(evaded){ el.textContent = 'Desviou'; el.className = 'evade-text'; }
+    else { el.textContent = Number(dmg).toLocaleString(); el.className = crit ? 'crit-damage-number' : 'damage-number'; }
+    // Position relative to mob wrapper
+    mobEl.style.position = 'absolute'; // already is, but ensure
+    el.style.position = 'absolute';
+    el.style.top  = '10px';
+    el.style.left = '50%';
+    el.style.transform = 'translateX(-50%)';
+    el.style.zIndex = '20';
+    el.style.pointerEvents = 'none';
+    mobEl.appendChild(el);
+    el.addEventListener('animationend', ()=>el.remove(), {once:true});
+}
+
+function _triggerMobDeath(mobEl, spot){
+    if(mobEl.classList.contains('mob-dying') || mobEl.classList.contains('mob-respawning')) return;
+    mobEl.classList.add('mob-dying');
+
+    setTimeout(()=>{
+        if(!mobEl.parentElement) return;
+        // Teleport to a new random position within the spot before fading back in
+        const newL = 8 + Math.random() * Math.max(10, spot.width  - 80);
+        const newT = 8 + Math.random() * Math.max(10, spot.height - 95);
+        // Suppress wander transition during teleport
+        mobEl.style.transition = 'none';
+        mobEl.style.left = newL + 'px';
+        mobEl.style.top  = newT + 'px';
+
+        mobEl.classList.remove('mob-dying');
+        mobEl.classList.add('mob-respawning');
+
+        // Force reflow so the animation applies after position reset
+        void mobEl.offsetWidth;
+
+        setTimeout(()=>{ mobEl.classList.remove('mob-respawning'); }, 800);
+    }, 3000); // start respawn after death anim completes
+}
+
 document.addEventListener('DOMContentLoaded',async()=>{
     enableMapInteraction();
     document.getElementById('pauseHuntBtn').addEventListener('click',handlePauseHunt);

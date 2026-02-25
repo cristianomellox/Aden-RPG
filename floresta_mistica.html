@@ -365,8 +365,98 @@ const SHIELD_ITEM_ID = 85;
 const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
 const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
 const DAILY_LIMIT    = 10800; // 3h globais — mesmo valor do SQL
-const SYNC_MS        = 60 * 1000; // 1 minuto — mais responsivo para PvP
 const SPOT_LOCK_MS   = 15 * 60 * 1000; // 15 minutos de lock por spot
+
+// ── ADAPTIVE POLLING ───────────────────────────────────────────
+const POLL_BASE = {
+    hunting_with_others : 30_000,
+    hunting_alone       : 90_000,
+    paused_with_others  : 120_000,
+    paused_alone        : 300_000,
+    pvp_only            : 30_000,
+};
+const POLL_STEP     = 30_000;
+const POLL_MAX_3MIN = 180_000;
+const POLL_MAX_5MIN = 300_000;
+
+// ── HUNT STATE BOOT CACHE (180s) ───────────────────────────────
+const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
+const HUNT_CACHE_TTL  = 180_000;
+
+// ── STATS CACHE (mesma chave do mines.js e afk_page.js) ───────
+const STATS_CACHE_KEY       = () => `player_combat_stats_${userId}`;
+const STATS_CACHE_DURATION  = 72 * 60 * 60 * 1000; // 72h
+
+// ── GLOBAL IDB (mesmo banco do mines.js — owners_store) ───────
+const _GDBNAME    = 'aden_global_db';
+const _GDBVER     = 6;
+const _OWN_STORE  = 'owners_store';
+const _OWNERS_TTL = 24 * 60 * 60 * 1000; // 24h
+
+let _gdb = null;
+async function _openGlobalDb(){
+    if(_gdb) return _gdb;
+    return new Promise((res,rej)=>{
+        const req=indexedDB.open(_GDBNAME,_GDBVER);
+        req.onerror=()=>rej(req.error);
+        req.onsuccess=e=>{_gdb=e.target.result;res(_gdb);};
+        req.onupgradeneeded=e=>{
+            const db=e.target.result;
+            if(!db.objectStoreNames.contains(_OWN_STORE))
+                db.createObjectStore(_OWN_STORE,{keyPath:'id'});
+        };
+    });
+}
+async function _idbGetAllOwners(){
+    try{
+        const db=await _openGlobalDb();
+        return new Promise(res=>{
+            const tx=db.transaction(_OWN_STORE,'readonly');
+            const req=tx.objectStore(_OWN_STORE).getAll();
+            req.onsuccess=()=>{
+                const now=Date.now(),map={};
+                (req.result||[]).forEach(o=>{
+                    if(o.id&&o.timestamp&&(now-o.timestamp)<_OWNERS_TTL)map[o.id]=o;
+                });
+                res(map);
+            };
+            req.onerror=()=>res({});
+        });
+    }catch{return{};}
+}
+async function _idbSaveOwners(list){
+    if(!list||!list.length)return;
+    try{
+        const db=await _openGlobalDb();
+        // Faz merge: lê o registro existente antes de sobrescrever
+        // para nunca destruir guild_id que a mina já gravou.
+        const now=Date.now();
+        for(const o of list){
+            const id=o.id||o.i;
+            if(!id)continue;
+            await new Promise(res=>{
+                const txR=db.transaction(_OWN_STORE,'readonly');
+                const req=txR.objectStore(_OWN_STORE).get(id);
+                req.onsuccess=()=>{
+                    const existing=req.result||{};
+                    const merged={
+                        id,
+                        name       : o.name||o.n||existing.name||'',
+                        avatar_url : o.avatar_url||o.a||existing.avatar_url||'',
+                        // Preserva guild_id existente se o novo não trouxer
+                        guild_id   : o.guild_id||o.g||existing.guild_id||null,
+                        timestamp  : now,
+                    };
+                    const txW=db.transaction(_OWN_STORE,'readwrite');
+                    txW.objectStore(_OWN_STORE).put(merged);
+                    txW.oncomplete=()=>res();
+                    txW.onerror=()=>res();
+                };
+                req.onerror=()=>res();
+            });
+        }
+    }catch(e){console.warn('[floresta] idb save',e);}
+}
 const ACTIVITY_KEY   = 'aden_activity_state';
 
 // ── ACTIVITY STATE (cache local compartilhado com mines.js) ─
@@ -414,8 +504,21 @@ function isEliminationAcknowledged(huntDate){try{return localStorage.getItem(_el
 function setEliminationAcknowledged(huntDate){try{localStorage.setItem(_elimAckKey(huntDate),'1');}catch{}eliminationModalShown=true;}
 function clearEliminationAcknowledged(huntDate){try{localStorage.removeItem(_elimAckKey(huntDate));}catch{}eliminationModalShown=false;}
 let shieldUntil=null, cachedShieldQty=0;
-let huntTimerInterval=null, shieldTimerInterval=null, syncInterval=null;
+let huntTimerInterval=null, shieldTimerInterval=null;
 let otherPlayers=[], wanderTimers=[];
+
+// ── OWNERS MAP (em memória, populado do IDB no boot) ──────────
+let _ownersMap = {}; // { [playerId]: {name, avatar_url, guild_id} }
+
+// ── ADAPTIVE POLLING STATE ────────────────────────────────────
+let _syncTimeout     = null;
+let _currentPollMs   = 30_000;
+let _lastPlayersHash = '';
+
+// ── INACTIVITY GUARD ─────────────────────────────────────────
+let _lastActivityMs    = Date.now();
+let _inactivityCheckId = null;
+let _inactivityPaused  = false;
 
 // ── DEAD STATE (derrota em PvP — 3 minutos) ──────────────
 let deadUntil=null; // timestamp ms
@@ -518,7 +621,20 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 
 // ── AUTH ────────────────────────────────────────────────────
 async function getUserId(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('sb-')&&k.endsWith('-auth-token')){const s=JSON.parse(localStorage.getItem(k));if(s?.user?.id)return s.user.id;}}}catch{}try{const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data?.id)return p.data.id;}}catch{}try{const{data}=await supabase.auth.getSession();return data?.session?.user?.id||null;}catch{return null;}}
-async function getPlayerData(){try{if(window.currentPlayerData?.id)return window.currentPlayerData;const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data)return p.data;}}catch{}return null;}
+async function getPlayerData(){
+    // 1. Contexto global (index.html popula)
+    try{if(window.currentPlayerData?.id)return window.currentPlayerData;}catch{}
+    // 2. player_data_cache
+    try{const c=localStorage.getItem('player_data_cache');if(c){const p=JSON.parse(c);if(p?.data)return p.data;}}catch{}
+    // 3. Fallback: combat stats cache (mesma chave do mines.js/afk) — tem name + avatar_url
+    try{
+        if(userId){
+            const raw=localStorage.getItem(STATS_CACHE_KEY());
+            if(raw){const parsed=JSON.parse(raw);if(parsed?.data?.name)return parsed.data;}
+        }
+    }catch{}
+    return null;
+}
 
 // ── HELPERS ─────────────────────────────────────────────────
 function fmtTime(s){s=Math.max(0,Math.floor(s));return`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;}
@@ -588,26 +704,41 @@ function renderOtherPlayers(players){
         const spotEl=document.getElementById(`spot-${p.current_spot}`);
         if(!spotEl)return;
         const spot=SPOTS.find(s=>s.id===p.current_spot);
+
+        // Enriquece com IDB (guild, avatar, nome)
+        const cached=_ownersMap[p.id];
+        const displayName = p.name || cached?.name || '?';
+        const displayAvatar = p.avatar_url || cached?.avatar_url || DEFAULT_AVATAR;
+        const guildId = cached?.guild_id || null;
+
         const wrap=document.createElement('div');
         wrap.className='other-player-wrapper';
         wrap.dataset.playerId=p.id;
         Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});
         const shActive=p.shield_until&&new Date(p.shield_until)>new Date();
         if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}
-        const nm=document.createElement('div');nm.className='other-player-name';nm.textContent=esc(p.name)||'?';wrap.appendChild(nm);
-        const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');av.src=p.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
+        const nm=document.createElement('div');nm.className='other-player-name';
+        nm.textContent=esc(displayName);
+        wrap.appendChild(nm);
+        // Guild badge (só visível se IDB tiver a info)
+        if(guildId){
+            const gb=document.createElement('div');
+            gb.className='other-player-name';
+            gb.style.cssText='font-size:.48em;color:#a8d0ff;margin-top:-2px;';
+            gb.textContent=`[${esc(guildId)}]`;
+            wrap.appendChild(gb);
+        }
+        const av=document.createElement('img');av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');
+        av.src=displayAvatar;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
         if(p.is_eliminated){
             const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);
         }else{
             wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});
-            if(spot) startWander(wrap,spot.width,spot.height,Math.random()*4000);
+            if(spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);
         }
         spotEl.appendChild(wrap);
     });
-    // Start global combat interval for all other players
-    if(players.some(p=>!p.is_eliminated && p.current_spot)){
-        _ensureOtherCombatInterval();
-    }
+    if(players.some(p=>!p.is_eliminated&&p.current_spot)){_ensureOtherCombatInterval();}
 }
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
@@ -711,6 +842,7 @@ async function handleSpotClick(spot){
             startPvpOnlyTimer();
             pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
             updateHuntingHUD();
+            _resetPollInterval();scheduleNextSync();
         }catch(e){await showAlert('Erro: '+(e.message||''));}
         finally{hideLoading();}
         return;
@@ -764,6 +896,7 @@ async function handleSpotClick(spot){
         currentSession.current_region=REGION_ID;currentSession.current_spot=spot.id;
         setActivityHunting(spot.id);
         renderPlayerOnSpot(spot.id);updateHuntingHUD();startLocalTimer();amb.play().catch(()=>{});
+        _resetPollInterval();scheduleNextSync();
     }catch(e){await showAlert('Erro: '+(e.message||''));}
     finally{hideLoading();}
 }
@@ -808,6 +941,7 @@ async function handlePauseHunt(){
         currentSpotId=null; // permite re-entrar no mesmo spot após pausar
         clearActivity();
         removePlayerFromSpot();updateHuntingHUD();
+        _resetPollInterval();scheduleNextSync();
     }catch(e){await showAlert('Erro ao pausar.');}
     finally{hideLoading();}
 }
@@ -1005,72 +1139,142 @@ function showRewardsModal(data){
 
 // ── BANNERS GLOBAIS DE PVP ────────────────────────────────────
 async function syncGlobalPvpEvents(){
-    if(!userId)return;
+    if(!userId)return false;
+    let changed=false;
     try{
         const{data,error}=await supabase.rpc('get_hunt_pvp_events',{p_since_minutes:5});
-        if(error||!data)return;
+        if(error||!data)return false;
         const seenKey=`hunt_pvp_seen_${userId}`;
-        let seen;
-        try{seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));}catch{seen=new Set();}
-        let changed=false;
+        let seen;try{seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));}catch{seen=new Set();}
         (data||[]).forEach(ev=>{
             if(seen.has(ev.id))return;
             seen.add(ev.id);changed=true;
             const regionLabel=`<span style="color:#8ff">${esc(ev.region_name)}</span>`;
             if(ev.attacker_won){
                 const kTxt=ev.attacker_kills>0?`, eliminando um total de <span style="color:#ff8">${ev.attacker_kills}</span> hoje!`:'!';
-                pushKillNotif(
-                    `<span style="color:#ff8">${esc(ev.attacker_name)}</span> acabou de eliminar `+
-                    `<span style="color:#f88">${esc(ev.defender_name)}</span> em `+
-                    `${regionLabel}${kTxt}`
-                );
-            } else {
-                const dkTxt=ev.defender_kills>0
-                    ?`. <span style="color:#8ff">${esc(ev.defender_name)}</span> já eliminou <span style="color:#ff8">${ev.defender_kills}</span> hoje!`
-                    :'.';
-                pushKillNotif(
-                    `<span style="color:#f88">${esc(ev.attacker_name)}</span> tentou atacar `+
-                    `<span style="color:#ff8">${esc(ev.defender_name)}</span> em `+
-                    `${regionLabel} e perdeu${dkTxt}`
-                );
+                pushKillNotif(`<span style="color:#ff8">${esc(ev.attacker_name)}</span> acabou de eliminar <span style="color:#f88">${esc(ev.defender_name)}</span> em ${regionLabel}${kTxt}`);
+            }else{
+                const dkTxt=ev.defender_kills>0?`. <span style="color:#8ff">${esc(ev.defender_name)}</span> já eliminou <span style="color:#ff8">${ev.defender_kills}</span> hoje!`:'.';
+                pushKillNotif(`<span style="color:#f88">${esc(ev.attacker_name)}</span> tentou atacar <span style="color:#ff8">${esc(ev.defender_name)}</span> em ${regionLabel} e perdeu${dkTxt}`);
             }
         });
-        if(changed){
-            // Mantém apenas os últimos 200 IDs para não inflar o localStorage
-            const arr=[...seen].slice(-200);
-            try{localStorage.setItem(seenKey,JSON.stringify(arr));}catch{}
-        }
+        if(changed){try{localStorage.setItem(seenKey,JSON.stringify([...seen].slice(-200)));}catch{}}
     }catch(e){console.warn('[floresta] pvp events error',e);}
+    return changed;
+}
+
+// ── ADAPTIVE POLL SCHEDULER ───────────────────────────────────
+function _getBaseInterval(){
+    const hasOthers=otherPlayers.some(p=>!p.is_eliminated&&
+        (p.is_hunting||(p.pvp_only_entered_at&&new Date(p.pvp_only_entered_at)>new Date(Date.now()-15*60*1000))));
+    if(isPvpOnly)              return POLL_BASE.pvp_only;
+    if(isHunting&&hasOthers)   return POLL_BASE.hunting_with_others;
+    if(isHunting&&!hasOthers)  return POLL_BASE.hunting_alone;
+    if(!isHunting&&hasOthers)  return POLL_BASE.paused_with_others;
+    return POLL_BASE.paused_alone;
+}
+function _getMaxInterval(){
+    if(isPvpOnly)return POLL_MAX_3MIN;
+    if(isHunting&&otherPlayers.some(p=>!p.is_eliminated))return POLL_MAX_3MIN;
+    return POLL_MAX_5MIN;
+}
+function _resetPollInterval(){_currentPollMs=_getBaseInterval();}
+function _stepBackoff(changed){
+    if(changed){_currentPollMs=_getBaseInterval();}
+    else{_currentPollMs=Math.min(_currentPollMs+POLL_STEP,_getMaxInterval());}
+}
+
+function scheduleNextSync(){
+    clearTimeout(_syncTimeout);
+    if(_inactivityPaused||document.visibilityState==='hidden')return;
+    _syncTimeout=setTimeout(async()=>{
+        const[playersChanged,pvpChanged]=await Promise.all([syncOtherPlayers(),syncGlobalPvpEvents()]);
+        _stepBackoff(playersChanged||pvpChanged);
+        scheduleNextSync();
+    },_currentPollMs);
+}
+function stopAllPolling(){clearTimeout(_syncTimeout);_syncTimeout=null;}
+
+// ── PAGE VISIBILITY ───────────────────────────────────────────
+document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden'){stopAllPolling();}
+    else if(!_inactivityPaused&&userId){
+        _currentPollMs=_getBaseInterval();
+        Promise.all([syncOtherPlayers(),syncGlobalPvpEvents()]).then(()=>scheduleNextSync()).catch(()=>scheduleNextSync());
+    }
+});
+
+// ── INACTIVITY GUARD ──────────────────────────────────────────
+const _INACTIVITY_MS       = 3 * 60 * 1000;
+const _INACTIVITY_CHECK_MS = 20_000;
+function _resetActivity(){_lastActivityMs=Date.now();}
+['touchstart','click','mousemove','keydown','scroll','pointerdown'].forEach(ev=>{
+    document.addEventListener(ev,_resetActivity,{passive:true,capture:true});
+});
+function _startInactivityGuard(){
+    clearInterval(_inactivityCheckId);
+    _inactivityCheckId=setInterval(()=>{
+        if(_inactivityPaused)return;
+        if(Date.now()-_lastActivityMs>=_INACTIVITY_MS)_showInactivityModal();
+    },_INACTIVITY_CHECK_MS);
+}
+function _showInactivityModal(){
+    _inactivityPaused=true;stopAllPolling();
+    const m=document.getElementById('inactivityModal');if(m)m.style.display='flex';
 }
 
 // ── SYNC ─────────────────────────────────────────────────────
+// get_hunting_state faz UPDATE last_seen (heartbeat) + retorna estado completo.
+// Retorna true se houve mudança (para o backoff saber que deve resetar).
 async function syncOtherPlayers(){
-    if(!userId)return;
+    if(!userId)return false;
+    let changed=false;
     try{
-        const{data,error}=await supabase.rpc('get_hunting_players',{p_player_id:userId,p_region_id:REGION_ID});
-        if(error||!data)return;
-        const newPlayers=data.players||[];
+        const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
+        if(error||!data)return false;
+        const own=data.own_session||{};
+        const newPlayers=data.other_players||[];
 
-        // Detecta jogadores que saíram do spot (estado local) — sem banner, o global já cobre
+        // Detecta mudança
+        const newHash=newPlayers.map(p=>`${p.id}:${p.current_spot}:${p.is_hunting?1:0}:${p.is_eliminated?1:0}`).sort().join('|');
+        if(newHash!==_lastPlayersHash){changed=true;_lastPlayersHash=newHash;}
+
+        // Persiste jogadores no IDB owners (beneficia mines.js e outras páginas)
+        const toSave=newPlayers.filter(p=>p.id&&p.name).map(p=>({id:p.id,name:p.name,avatar_url:p.avatar_url||''}));
+        if(toSave.length){
+            _idbSaveOwners(toSave).catch(()=>{});
+            // Atualiza mapa em memória
+            toSave.forEach(o=>{if(!_ownersMap[o.id]||changed)_ownersMap[o.id]={...(_ownersMap[o.id]||{}),...o};});
+        }
+
+        // Banners de saída de spot
         otherPlayers.forEach(old=>{
             if(old.is_eliminated)return;
             const stillHere=newPlayers.find(np=>np.id===old.id);
-            if(!stillHere&&old.is_hunting){
-                pushKillNotif(`<span style="color:#ff8">${esc(old.name)}</span> deixou o spot em <span style="color:#8ff">${esc(REGION_NAME)}</span>.`);
-            }
+            if(!stillHere&&old.is_hunting)
+                pushKillNotif(`<span style="color:#ff8">${esc(old.name||_ownersMap[old.id]?.name||'?')}</span> deixou o spot em <span style="color:#8ff">${esc(REGION_NAME)}</span>.`);
         });
         otherPlayers=newPlayers;renderOtherPlayers(otherPlayers);
 
-        if(data.i_was_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date)){
+        // Eliminação detectada via own_session
+        if(own.is_eliminated&&!isEliminationAcknowledged(currentSession?.hunt_date||own.hunt_date)){
             isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
             clearTimeout(pvpOnlyExitTimer);
-            removePlayerFromSpot();
-            currentSpotId=null;
-            updateHuntingHUD();
-            document.getElementById('eliminatedByName').textContent=data.eliminated_by||'alguém';
+            removePlayerFromSpot();currentSpotId=null;updateHuntingHUD();
+            document.getElementById('eliminatedByName').textContent=own.eliminated_by_name||'alguém';
             document.getElementById('eliminatedModal').style.display='flex';
         }
+
+        // Atualiza escudo se mudou no servidor
+        if(own.shield_until){
+            const srv=new Date(own.shield_until);
+            if(!shieldUntil||Math.abs(srv.getTime()-shieldUntil.getTime())>2000){shieldUntil=srv;if(isShieldActive())startShieldTimer();}
+        }
+
+        // Persiste snapshot no boot cache
+        try{localStorage.setItem(HUNT_CACHE_KEY(),JSON.stringify({ts:Date.now(),data}));}catch{}
     }catch(e){console.warn('[floresta] sync error',e);}
+    return changed;
 }
 
 // ── BOOT ─────────────────────────────────────────────────────
@@ -1079,11 +1283,24 @@ async function boot(){
     createKillBannerUI();
     try{
         userId=await getUserId();if(!userId){location.href='index.html';return;}
+
+        // ── Pré-carrega IDB owners (zero egress, melhora render imediato) ──
+        _idbGetAllOwners().then(map=>{_ownersMap=map;}).catch(()=>{});
+
         playerData=await getPlayerData();
+
+        // Se ainda sem dados (primeiríssima sessão), tenta combat stats cache como last resort
+        if(!playerData){
+            try{
+                const raw=localStorage.getItem(STATS_CACHE_KEY());
+                if(raw){const p=JSON.parse(raw);if(p?.data?.name)playerData=p.data;}
+            }catch{}
+        }
+
         preload('normal');preload('critical');preload('evade');
         await initShieldFromCache();
 
-        // Restaura dead state se o player recarregou enquanto morto
+        // Restaura dead state
         const savedAct=getActivity();
         if(savedAct?.pvp_dead&&savedAct?.dead_until&&savedAct.dead_until>Date.now()){
             deadUntil=savedAct.dead_until;
@@ -1093,39 +1310,54 @@ async function boot(){
                 deadUntil=null;if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
                 clearActivity();updateHuntingHUD();
             },remaining);
-            // Restaura overlay de penalidade
             _startDeadOverlay();
         }
+
         // Lazy cleanup
         (async()=>{try{await supabase.rpc('cleanup_old_hunting_sessions');}catch{}})();
         renderSpots();
 
-        // 1 RPC de boot — retorna estado global + progresso nesta região
-        const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
-        if(error)throw error;
+        // ── Boot cache (90s TTL) — restaura UI sem RPC após reloads frequentes ──
+        let huntData=null;
+        let bootFromCache=false;
+        try{
+            const raw=localStorage.getItem(HUNT_CACHE_KEY());
+            if(raw){const cached=JSON.parse(raw);if(cached?.ts&&(Date.now()-cached.ts)<HUNT_CACHE_TTL&&cached.data){huntData=cached.data;bootFromCache=true;}}
+        }catch{}
 
-        currentSession=data?.own_session||null;
-        otherPlayers=data?.other_players||[];
+        if(!bootFromCache){
+            const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
+            if(error)throw error;
+            huntData=data;
+            try{localStorage.setItem(HUNT_CACHE_KEY(),JSON.stringify({ts:Date.now(),data:huntData}));}catch{}
+        }
+
+        currentSession=huntData?.own_session||null;
+        otherPlayers=huntData?.other_players||[];
+
+        // Salva outros jogadores no IDB (enrichment cross-page)
+        const playersToCache=(otherPlayers||[]).filter(p=>p.id&&p.name).map(p=>({id:p.id,name:p.name,avatar_url:p.avatar_url||''}));
+        if(playersToCache.length){
+            _idbSaveOwners(playersToCache).catch(()=>{});
+            playersToCache.forEach(o=>{_ownersMap[o.id]={...(_ownersMap[o.id]||{}),...o};});
+        }
 
         if(currentSession){
             const srvTotal=currentSession.total_seconds||0;
             let localTotal=srvTotal;
-            // Projeta tempo decorrido offline se estava caçando NESTA região
             if(currentSession.is_hunting&&currentSession.hunt_started_at&&currentSession.current_region===REGION_ID){
                 const elapsed=Math.floor((Date.now()-new Date(currentSession.hunt_started_at).getTime())/1000);
                 localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
             }
             localSecondsLeft=Math.max(0,DAILY_LIMIT-localTotal);
-            // Spot ativo só se for DESTA região e não estiver eliminado
             currentSpotId=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
-            if(currentSession.is_eliminated)currentSpotId=null; // garante que pode re-entrar no spot
+            if(currentSession.is_eliminated)currentSpotId=null;
             isHunting=currentSession.is_hunting
                 &&currentSession.current_region===REGION_ID
                 &&localSecondsLeft>0
                 &&!currentSession.is_eliminated
                 &&!currentSession.rewards_claimed;
 
-            // Restaura modo PvP puro se ainda dentro dos 15 min
             if(!isHunting&&currentSession.pvp_only_entered_at&&currentSession.current_region===REGION_ID&&!currentSession.is_eliminated){
                 const pvpEnteredAt=new Date(currentSession.pvp_only_entered_at);
                 const pvpElapsed=Math.floor((Date.now()-pvpEnteredAt.getTime())/1000);
@@ -1137,21 +1369,21 @@ async function boot(){
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
             if(isPvpOnly&&currentSpotId){renderPlayerOnSpot(currentSpotId);startPvpOnlyTimer(false);}
 
-            // Timer zerou offline
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
-                // Modal de eliminação no boot — ack só gravado ao clicar Entendido
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';
             }
         }
 
         updateHuntingHUD();renderOtherPlayers(otherPlayers);
-
-        // Banners globais de PvP (inclui eventos recentes do boot)
         await syncGlobalPvpEvents();
 
-        syncInterval=setInterval(()=>{syncOtherPlayers();syncGlobalPvpEvents();},SYNC_MS);
+        // Inicia polling adaptativo + inactivity guard
+        _currentPollMs=_getBaseInterval();
+        scheduleNextSync();
+        _startInactivityGuard();
+
     }catch(e){console.error('[floresta] boot error',e);await showAlert('Erro ao carregar. Recarregue a página.');}
     finally{hideLoading();}
 }
@@ -1409,9 +1641,22 @@ document.addEventListener('DOMContentLoaded',async()=>{
         updateHuntingHUD();
     });
     document.getElementById('rewardsCloseBtn').addEventListener('click',()=>{document.getElementById('rewardsModal').style.display='none';});
+    document.getElementById('inactivityOkBtn').addEventListener('click',()=>{location.reload();});
     await boot();
 });
 </script>
+
+<!-- Modal de inatividade -->
+<div id="inactivityModal" class="modal-container">
+    <div class="modal-content">
+        <h2>👋 Você está aí?</h2>
+        <p style="color:#cdc;font-size:.85em;line-height:1.6;">
+            Você não precisa ficar nesta tela para <strong>continuar caçando</strong>. O tempo acumula automaticamente enquanto o spot estiver ativo.<br><br>
+            Caso não queira ser incomodado por outros jogadores, você pode comprar um <strong>🛡 Escudo de Caça</strong> com o Mercador em alguma cidade!
+        </p>
+        <div class="modal-btn-row"><button id="inactivityOkBtn" class="modal-btn">Entendi</button></div>
+    </div>
+</div>
 
 <div id="google_translate_element"></div>
 <script src="auto_translate.js"></script>

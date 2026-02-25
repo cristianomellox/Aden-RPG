@@ -776,7 +776,7 @@ function renderOtherPlayers(players){
         // Nome do jogador
         const nm=document.createElement('div');
         nm.className='other-player-name';
-        nm.style.fontSize='0.9em'; // ← TAMANHO DO NOME — altere aqui
+        nm.style.fontSize='0.75em'; // ← TAMANHO DO NOME — altere aqui
         nm.textContent=esc(displayName);
         wrap.appendChild(nm);
 
@@ -784,7 +784,7 @@ function renderOtherPlayers(players){
         if(guildName){
             const gb=document.createElement('div');
             gb.className='other-player-name';
-            gb.style.cssText='font-size:0.75em;color:#a8d0ff;margin-top:-3px;'; // ← TAMANHO DA GUILDA — altere aqui
+            gb.style.cssText='font-size:0.65em;color:#a8d0ff;margin-top:-3px;'; // ← TAMANHO DA GUILDA — altere aqui
             gb.textContent=`[${esc(guildName)}]`;
             wrap.appendChild(gb);
         }

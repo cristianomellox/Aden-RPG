@@ -39,7 +39,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}
-.player-name-label{font-size:.75em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.player-name-label{font-size:0.75em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .player-spot-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #fc0;object-fit:cover;background:#222;}
 
 .other-player-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:9;cursor:pointer;}
@@ -554,7 +554,33 @@ async function _resolveGuildNames(guildIds){
     }catch(e){console.warn('[floresta] guild resolve',e);}
 }
 
-// ── OWNERS MAP (em memória, populado do IDB no boot) ──────────
+// Busca guild_id de jogadores que ainda não têm no _ownersMap
+// (ex: nunca foram donos de mina). Atualiza IDB + cache em memória.
+async function _fetchMissingGuildIds(playerIds){
+    if(!playerIds||!playerIds.length)return;
+    // Filtra apenas quem não tem guild_id no mapa
+    const missing=playerIds.filter(id=>id&&_ownersMap[id]!==undefined&&!_ownersMap[id]?.guild_id);
+    if(!missing.length)return;
+    try{
+        const{data,error}=await supabase.from('players').select('id,guild_id').in('id',missing);
+        if(error||!data)return;
+        let needsRerender=false;
+        const toSave=[];
+        data.forEach(row=>{
+            if(!row.guild_id)return; // sem guilda, não há o que salvar
+            if(!_ownersMap[row.id])_ownersMap[row.id]={id:row.id};
+            _ownersMap[row.id].guild_id=row.guild_id;
+            toSave.push({id:row.id,guild_id:row.guild_id});
+            needsRerender=true;
+        });
+        // Persiste no IDB com merge (preserva name/avatar)
+        if(toSave.length)_idbSaveOwners(toSave).catch(()=>{});
+        // Dispara _resolveGuildNames para os UUIDs recém obtidos
+        const newGuildIds=[...new Set(toSave.map(o=>o.guild_id))];
+        if(newGuildIds.length)await _resolveGuildNames(newGuildIds);
+        // Re-render já é chamado dentro de _resolveGuildNames se houver nomes novos
+    }catch(e){console.warn('[floresta] fetch guild_ids',e);}
+}
 let _ownersMap = {}; // { [playerId]: {name, avatar_url, guild_id} }
 
 // ── ADAPTIVE POLLING STATE ────────────────────────────────────
@@ -738,16 +764,46 @@ function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s 
 function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.src=spot.mobImg;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
-function renderPlayerOnSpot(spotId){document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());if(!spotId||!playerData)return;const spotEl=document.getElementById(`spot-${spotId}`);if(!spotEl)return;const spot=SPOTS.find(s=>s.id===spotId);const wrap=document.createElement('div');wrap.className='player-avatar-wrapper';Object.assign(wrap.style,{right:'10px',bottom:'10px',left:'auto',top:'auto'});const si=document.createElement('img');si.id='myShieldIcon';si.className='player-shield-icon';si.src=SHIELD_IMG;si.style.display=isShieldActive()?'block':'none';wrap.appendChild(si);const nm=document.createElement('div');nm.className='player-name-label';nm.textContent=playerData.name||'Você';wrap.appendChild(nm);const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);spotEl.appendChild(wrap);if(spot)startWander(wrap,spot.width,spot.height,800);}
+function renderPlayerOnSpot(spotId){
+    document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());
+    if(!spotId||!playerData)return;
+    const spotEl=document.getElementById(`spot-${spotId}`);if(!spotEl)return;
+    const spot=SPOTS.find(s=>s.id===spotId);
+    const wrap=document.createElement('div');wrap.className='player-avatar-wrapper';
+    Object.assign(wrap.style,{right:'10px',bottom:'10px',left:'auto',top:'auto'});
+    const si=document.createElement('img');si.id='myShieldIcon';si.className='player-shield-icon';si.src=SHIELD_IMG;si.style.display=isShieldActive()?'block':'none';wrap.appendChild(si);
+    const nm=document.createElement('div');nm.className='player-name-label';nm.textContent=playerData.name||'Você';wrap.appendChild(nm);
+    // Guild do próprio jogador (silver, 0.65em)
+    const myGuildId=_ownersMap[userId]?.guild_id||null;
+    const myGuildName=myGuildId?_guildCacheGet(myGuildId):null;
+    if(myGuildName){
+        const gb=document.createElement('div');
+        gb.className='player-name-label';
+        gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
+        gb.textContent=esc(myGuildName);
+        wrap.appendChild(gb);
+    }
+    const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
+    spotEl.appendChild(wrap);
+    if(spot)startWander(wrap,spot.width,spot.height,800);
+}
 function removePlayerFromSpot(){stopCombatLoop();document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
 
 // ── OUTROS JOGADORES ─────────────────────────────────────────
+// Estado "morto" (perdeu PvP, penalidade 3 min):
+//   is_hunting === false  AND  current_spot SET  AND  pvp_only_entered_at NULL  AND  NOT is_eliminated
+// Estado "PvP puro":  is_hunting === false AND pvp_only_entered_at SET
+// Estado "pausado":   current_spot === null
+function _isDeadPenalty(p){
+    return !p.is_hunting && p.current_spot && !p.pvp_only_entered_at && !p.is_eliminated;
+}
 function renderOtherPlayers(players){
     stopAllOtherCombatLoops();
     _otherCombatBusy.clear();
     document.querySelectorAll('.other-player-wrapper').forEach(e=>e.remove());
 
     const guildIdsToResolve=[];
+    const playerIdsWithoutGuild=[];
 
     players.forEach(p=>{
         if(!p.current_spot)return;
@@ -755,60 +811,74 @@ function renderOtherPlayers(players){
         if(!spotEl)return;
         const spot=SPOTS.find(s=>s.id===p.current_spot);
 
-        // Enriquece com IDB
-        const cached=_ownersMap[p.id];
-        const displayName   = p.name        || cached?.name       || '?';
-        const displayAvatar = p.avatar_url  || cached?.avatar_url || DEFAULT_AVATAR;
-        const guildId       = cached?.guild_id || null;
-        const guildName     = guildId ? _guildCacheGet(guildId) : null;
+        const cached      = _ownersMap[p.id];
+        const displayName = p.name       || cached?.name       || '?';
+        const displayAvatar= p.avatar_url|| cached?.avatar_url || DEFAULT_AVATAR;
+        const guildId     = cached?.guild_id || null;
+        const guildName   = guildId ? _guildCacheGet(guildId) : null;
+        const isDead      = _isDeadPenalty(p);
 
-        // Se tem guild_id mas ainda não resolvemos o nome, agenda para batch
-        if(guildId&&!guildName)guildIdsToResolve.push(guildId);
+        // Agenda resoluções lazy
+        if(guildId && !guildName)          guildIdsToResolve.push(guildId);
+        if(cached && !cached.guild_id)     playerIdsWithoutGuild.push(p.id);
+        if(!cached)                        playerIdsWithoutGuild.push(p.id);
 
         const wrap=document.createElement('div');
         wrap.className='other-player-wrapper';
         wrap.dataset.playerId=p.id;
-        Object.assign(wrap.style,{left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',top:(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px'});
+        Object.assign(wrap.style,{
+            left:(10+Math.random()*Math.max(10,(spot?.width||120)-80))+'px',
+            top :(10+Math.random()*Math.max(10,(spot?.height||120)-90))+'px',
+        });
 
+        // Escudo
         const shActive=p.shield_until&&new Date(p.shield_until)>new Date();
         if(shActive){const si=document.createElement('img');si.className='other-player-shield';si.src=SHIELD_IMG;wrap.appendChild(si);}
 
-        // Nome do jogador
+        // Nome — 0.75em  ← TAMANHO DO NOME: altere aqui
         const nm=document.createElement('div');
         nm.className='other-player-name';
-        nm.style.fontSize='0.75em'; // ← TAMANHO DO NOME — altere aqui
+        nm.style.fontSize='0.75em';
         nm.textContent=esc(displayName);
         wrap.appendChild(nm);
 
-        // Nome da guilda (azul claro, abaixo do nome)
+        // Nome da guilda — 0.65em, silver, sem colchetes  ← TAMANHO DA GUILDA: altere aqui
         if(guildName){
             const gb=document.createElement('div');
             gb.className='other-player-name';
-            gb.style.cssText='font-size:0.65em;color:#a8d0ff;margin-top:-3px;'; // ← TAMANHO DA GUILDA — altere aqui
-            gb.textContent=`[${esc(guildName)}]`;
+            gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;';
+            gb.textContent=esc(guildName);
             wrap.appendChild(gb);
         }
 
+        // Avatar
         const av=document.createElement('img');
-        av.className='other-player-avatar'+(p.is_eliminated?' eliminated':'');
-        av.src=displayAvatar;av.onerror=()=>{av.src=DEFAULT_AVATAR;};
+        av.className='other-player-avatar';
+        if(p.is_eliminated||isDead) av.classList.add('eliminated');
+        av.src=displayAvatar;
+        av.onerror=()=>{av.src=DEFAULT_AVATAR;};
         wrap.appendChild(av);
 
         if(p.is_eliminated){
+            // Eliminado permanentemente hoje
             const lbl=document.createElement('div');lbl.className='other-eliminated-label';lbl.textContent='Eliminado';wrap.appendChild(lbl);
-        }else{
+        } else if(isDead){
+            // Penalidade de derrota: mostra caveira, sem clique de ataque
+            const lbl=document.createElement('div');lbl.className='other-eliminated-label';
+            lbl.textContent='💀 Derrota';lbl.style.color='#f88';wrap.appendChild(lbl);
+        } else {
             wrap.addEventListener('click',e=>{e.stopPropagation();handleAttackPlayer(p);});
             if(spot)startWander(wrap,spot.width,spot.height,Math.random()*4000);
         }
+
         spotEl.appendChild(wrap);
     });
 
-    if(players.some(p=>!p.is_eliminated&&p.current_spot)){_ensureOtherCombatInterval();}
+    if(players.some(p=>!p.is_eliminated&&!_isDeadPenalty(p)&&p.current_spot)){_ensureOtherCombatInterval();}
 
-    // Resolve guild names em batch (lazy, não bloqueia render)
-    if(guildIdsToResolve.length){
-        _resolveGuildNames([...new Set(guildIdsToResolve)]).catch(()=>{});
-    }
+    // Resoluções lazy (não bloqueiam o render)
+    if(guildIdsToResolve.length)_resolveGuildNames([...new Set(guildIdsToResolve)]).catch(()=>{});
+    if(playerIdsWithoutGuild.length)_fetchMissingGuildIds([...new Set(playerIdsWithoutGuild)]).catch(()=>{});
 }
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
@@ -1027,6 +1097,10 @@ async function handleAttackPlayer(target){
         });
         return;
     }
+    // Bloqueia ataque em jogador que está em penalidade de derrota
+    if(_isDeadPenalty(target)){
+        await showAlert(`💀 <strong>${esc(target.name)}</strong> está derrotado. Aguarde ele se recuperar.`);return;
+    }
     // Verifica mineração em outra aba
     const activity=getActivity();
     if(activity?.type==='mining'){
@@ -1043,6 +1117,19 @@ async function handleAttackPlayer(target){
     if(target.is_eliminated){
         await showAlert(`💀 <strong>${esc(target.name)}</strong> já foi eliminado.`);return;
     }
+    // ── Sync pré-ataque (fix: evita falso "não está caçando" por last_seen stale) ──
+    // Atualiza nossa lista local antes de confirmar o ataque.
+    await syncOtherPlayers().catch(()=>{});
+    // Reavalia alvo após sync — pode ter saído do spot entre o clique e agora
+    const freshTarget = otherPlayers.find(p=>p.id===target.id);
+    if(!freshTarget){
+        await showAlert(`⚔️ <strong>${esc(target.name)}</strong> não está mais neste spot.`);return;
+    }
+    if(_isDeadPenalty(freshTarget)){
+        await showAlert(`💀 <strong>${esc(target.name)}</strong> está derrotado. Aguarde ele se recuperar.`);return;
+    }
+    // Usa objeto atualizado daqui em diante
+    target = freshTarget;
     // Escudo do atacante: avisar que perderá proteção
     if(isShieldActive()){
         const okShield=await showConfirm('⚠️ Escudo Ativo',
@@ -1319,6 +1406,9 @@ async function syncOtherPlayers(){
         // Resolve guild names para todos os jogadores presentes (lazy, post-render)
         const guildIds=newPlayers.map(p=>_ownersMap[p.id]?.guild_id).filter(Boolean);
         if(guildIds.length)_resolveGuildNames([...new Set(guildIds)]).catch(()=>{});
+        // Busca guild_id de jogadores que não têm no IDB (ex: nunca mineraram)
+        const needsGuild=newPlayers.filter(p=>p.id&&(!_ownersMap[p.id]||!_ownersMap[p.id]?.guild_id)).map(p=>p.id);
+        if(needsGuild.length)_fetchMissingGuildIds(needsGuild).catch(()=>{});
 
         // Banners de saída de spot
         otherPlayers.forEach(old=>{
@@ -1358,11 +1448,26 @@ async function boot(){
         userId=await getUserId();if(!userId){location.href='index.html';return;}
 
         // ── Pré-carrega IDB owners (zero egress, melhora render imediato) ──
-        _idbGetAllOwners().then(map=>{
+        _idbGetAllOwners().then(async map=>{
             _ownersMap=map;
             // Resolve guild names em batch para quem já está no IDB
             const gIds=[...new Set(Object.values(map).map(o=>o.guild_id).filter(Boolean))];
             if(gIds.length)_resolveGuildNames(gIds).catch(()=>{});
+            // Garante que o próprio jogador está no mapa (para guild no próprio avatar)
+            if(userId&&!_ownersMap[userId]?.guild_id){
+                supabase.from('players').select('id,guild_id').eq('id',userId).single()
+                    .then(({data})=>{
+                        if(data?.guild_id){
+                            if(!_ownersMap[userId])_ownersMap[userId]={id:userId};
+                            _ownersMap[userId].guild_id=data.guild_id;
+                            _idbSaveOwners([{id:userId,guild_id:data.guild_id}]).catch(()=>{});
+                            _resolveGuildNames([data.guild_id]).then(()=>{
+                                // Re-renderiza o próprio avatar com a guilda
+                                if(currentSpotId)renderPlayerOnSpot(currentSpotId);
+                            }).catch(()=>{});
+                        }
+                    }).catch(()=>{});
+            }
         }).catch(()=>{});
 
         playerData=await getPlayerData();

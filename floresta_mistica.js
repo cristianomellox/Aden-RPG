@@ -51,9 +51,9 @@ const POLL_STEP     = 30_000;
 const POLL_MAX_3MIN = 180_000;
 const POLL_MAX_5MIN = 300_000;
 
-// ── HUNT STATE BOOT CACHE (180s) ───────────────────────────────
+// ── HUNT STATE BOOT CACHE (120s) ───────────────────────────────
 const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
-const HUNT_CACHE_TTL  = 180_000;
+const HUNT_CACHE_TTL  = 120_000;
 
 // ── STATS CACHE (mesma chave do mines.js e afk_page.js) ───────
 const STATS_CACHE_KEY       = () => `player_combat_stats_${userId}`;
@@ -676,6 +676,15 @@ async function onHuntComplete(){
 // ── CLICK NO SPOT ────────────────────────────────────────────
 async function handleSpotClick(spot){
 
+    // Guard de mineração — deve ser o PRIMEIRO check, antes de qualquer entrada em spot.
+    // Cobre: caça normal, PvP puro por tempo esgotado, troca de spot em PvP.
+    // (a mina seta type:'mining' ao conquistar via PvP também)
+    const activity=getActivity();
+    if(activity?.type==='mining'){
+        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está com uma mina ativa.<br>Aguarde o término da sessão de mineração.');
+        return;
+    }
+
     // Bloqueado por morte em PvP
     if(isPlayerDead()){
         await showLiveCountdownAlert(()=>{
@@ -730,13 +739,6 @@ async function handleSpotClick(spot){
         pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
         supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id}).catch(()=>{});
         updateHuntingHUD();
-        return;
-    }
-
-    // Verifica se está minerando em outra página
-    const activity=getActivity();
-    if(activity?.type==='mining'){
-        await showAlert('⛏️ <strong>Você não é onipresente...</strong><br>No momento você está minerando.<br>Aguarde o término da mineração.');
         return;
     }
 
@@ -1347,7 +1349,10 @@ async function boot(){
                 if(_staleAct&&_staleAct.type==='hunting')clearActivity();
             }
 
-            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
+            // Usa localTotal (srvTotal + elapsed) porque o servidor só persiste total_seconds
+            // no pause/finish — se o jogador saiu enquanto caçava, srvTotal ainda está abaixo
+            // de DAILY_LIMIT mesmo que o tempo real já tenha esgotado.
+            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';

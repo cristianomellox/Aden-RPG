@@ -379,9 +379,9 @@ const POLL_STEP     = 30_000;
 const POLL_MAX_3MIN = 180_000;
 const POLL_MAX_5MIN = 300_000;
 
-// ── HUNT STATE BOOT CACHE (180s) ───────────────────────────────
+// ── HUNT STATE BOOT CACHE (90s) ───────────────────────────────
 const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
-const HUNT_CACHE_TTL  = 180_000;
+const HUNT_CACHE_TTL  = 90_000;
 
 // ── STATS CACHE (mesma chave do mines.js e afk_page.js) ───────
 const STATS_CACHE_KEY       = () => `player_combat_stats_${userId}`;
@@ -1356,6 +1356,8 @@ function stopAllPolling(){clearTimeout(_syncTimeout);_syncTimeout=null;}
 document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden'){stopAllPolling();}
     else if(!_inactivityPaused&&userId){
+        // Relê inventário — pode ter mudado em outra aba (ex: compra no mercador)
+        initShieldFromCache();
         _currentPollMs=_getBaseInterval();
         Promise.all([syncOtherPlayers(),syncGlobalPvpEvents()]).then(()=>scheduleNextSync()).catch(()=>scheduleNextSync());
     }
@@ -1536,7 +1538,9 @@ async function boot(){
                 localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
             }
             localSecondsLeft=Math.max(0,DAILY_LIMIT-localTotal);
-            currentSpotId=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
+            // currentSpotId só é restaurado se o jogador estiver ativamente caçando ou em PvP.
+            // Caso contrário (ex: morreu no PvP e recarregou), spot fica null para permitir re-entrada.
+            const _restoredSpot=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
             if(currentSession.is_eliminated)currentSpotId=null;
             isHunting=currentSession.is_hunting
                 &&currentSession.current_region===REGION_ID
@@ -1550,6 +1554,10 @@ async function boot(){
                 const pvpRemaining=900-pvpElapsed;
                 if(pvpRemaining>0){isPvpOnly=true;pvpOnlySecondsLeft=pvpRemaining;}
             }
+
+            // Só aplica currentSpotId se realmente vai usar o spot — evita "spot fantasma"
+            // quando jogador está morto (is_hunting=false, pvp_only=null, mas current_spot ainda setado no DB)
+            currentSpotId=(isHunting||isPvpOnly)?_restoredSpot:null;
 
             if(currentSession.shield_until){shieldUntil=new Date(currentSession.shield_until);if(isShieldActive())startShieldTimer();}
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}

@@ -245,61 +245,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── ACTIVITY STATE (cache local compartilhado com páginas de caça) ──
   const ACTIVITY_KEY = 'aden_activity_state';
-
-  // Sessões iniciam nas horas ímpares UTC (01:00, 03:00 ... 23:00) e duram 110 min.
-  // Retorna o Date de fim da sessão que estava ativa no timestamp fornecido.
-  function getSessionEndForTime(ts) {
-    const d = new Date(ts);
-    const totalMinutes = d.getUTCHours() * 60 + d.getUTCMinutes();
-    for (let oddH = 23; oddH >= 1; oddH -= 2) {
-      if (totalMinutes >= oddH * 60) {
-        const end = new Date(d);
-        end.setUTCHours(oddH, 0, 0, 0);
-        end.setTime(end.getTime() + 110 * 60 * 1000);
-        return end;
-      }
-    }
-    // Antes de 01:00 UTC — sessão de 23:00 do dia anterior
-    const end = new Date(d);
-    end.setUTCDate(end.getUTCDate() - 1);
-    end.setUTCHours(23, 0, 0, 0);
-    end.setTime(end.getTime() + 110 * 60 * 1000);
-    return end;
-  }
-
   function getActivity(){
     try{
         const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));
         if(!a)return null;
-        // Expira quando a sessão em que a atividade foi registrada terminar
-        if(a.started_at && Date.now() > getSessionEndForTime(a.started_at).getTime()){
-            localStorage.removeItem(ACTIVITY_KEY);
-            return null;
-        }
+        if(a.started_at&&(Date.now()-a.started_at)>6*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
         return a;
     }catch{return null;}
   }
   function setActivityMining(mineName){localStorage.setItem(ACTIVITY_KEY,JSON.stringify({type:'mining',mine_name:mineName,started_at:Date.now()}));}
   function clearActivity(){localStorage.removeItem(ACTIVITY_KEY);}
-
-  // Sincroniza o estado de atividade com a posse real de mina.
-  // Chamado sempre que myOwnedMineId é atualizado (após PvP, loadMines, boot).
-  // Não interfere em sessões PvE ativas (currentMineId preenchido).
-  function syncMiningActivity() {
-    if (currentMineId) return; // Em combate PvE ativo: não sobrescreve
-    if (myOwnedMineId) {
-      const current = getActivity();
-      if (!current || current.type !== 'mining') {
-        setActivityMining('Mina'); // Bloqueia caça enquanto for dono de mina
-      }
-    } else {
-      // Só limpa se a atividade for de mineração (não apaga caça)
-      const current = getActivity();
-      if (current && current.type === 'mining') {
-        clearActivity();
-      }
-    }
-  }
 
   // Timers de Combate
   let combatTimerInterval = null;
@@ -927,7 +882,6 @@ function formatTimeCombat(totalSeconds) {
         playerMineSpan.textContent = myMine ? myMine.name : 'Nenhuma';
     }
     myOwnedMineId = myMine ? myMine.id : null;
-    syncMiningActivity(); // Sincroniza o lock de caça com a posse real de mina
   }
 
   // =================================================================
@@ -1293,7 +1247,6 @@ function formatTimeCombat(totalSeconds) {
 
           if (mappedMine.owner_player_id === userId) myOwnedMineId = mappedMine.id;
           else if (myOwnedMineId === mappedMine.id) myOwnedMineId = null;
-          syncMiningActivity(); // Sincroniza o lock de caça com a posse real de mina
           
           return mappedMine;
 

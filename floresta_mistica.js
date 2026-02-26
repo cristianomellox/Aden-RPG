@@ -643,7 +643,20 @@ function updateHuntingHUD(){
         return;
     }
 
-    if(localSecondsLeft<=0&&!isHunting){hud.style.display='none';return;}
+    // Tempo esgotado com recompensas pendentes — mostra botão explícito.
+    // O click dispara handlePauseHunt que detecta esse estado e chama onHuntComplete.
+    if(localSecondsLeft<=0&&!isHunting){
+        if(currentSession&&!currentSession.rewards_claimed){
+            hud.style.display='flex';
+            status.textContent='🎁 Caçada concluída! Colete suas recompensas.';
+            pauseBtn.style.display='block';
+            pauseBtn.textContent='Coletar Recompensas';
+            pauseBtn.disabled=false;
+        } else {
+            hud.style.display='none';
+        }
+        return;
+    }
     hud.style.display='flex';pauseBtn.style.display='block';updateTimerDisplay();
     if(isHunting&&currentSpotId){status.textContent=`⚔️ Caçando: ${SPOTS.find(s=>s.id===currentSpotId)?.name||currentSpotId}`;pauseBtn.textContent='Pausar';pauseBtn.disabled=false;}
     else{status.textContent='⏸️ Pausado — clique num spot para continuar';pauseBtn.textContent='Pausado';pauseBtn.disabled=true;}
@@ -780,16 +793,20 @@ function exitPvpOnlyMode(){
     isPvpOnly=false;currentSpotId=null;
     clearTimeout(pvpOnlyExitTimer);
     stopPvpOnlyTimer();
-    clearActivity();removePlayerFromSpot();updateHuntingHUD();
-    // Se o tempo de caça esgotou e as recompensas ainda não foram coletadas,
-    // o modo PvP-only é o último estado antes do fim — dispara o modal de recompensas agora.
-    if(localSecondsLeft<=0&&currentSession&&!currentSession.rewards_claimed){
-        onHuntComplete(); // fire-and-forget intencional (chamadores são setTimeout/setInterval)
-    }
+    clearActivity();removePlayerFromSpot();
+    // updateHuntingHUD vai mostrar o botão "Coletar Recompensas" se localSecondsLeft=0
+    // e rewards ainda pendentes — o player clica explicitamente, evitando fire-and-forget
+    // que marcava rewards_claimed no banco sem o player ver o modal.
+    updateHuntingHUD();
 }
 
 // ── PAUSAR / SAIR ────────────────────────────────────────────
 async function handlePauseHunt(){
+    // Recompensas pendentes — botão "Coletar Recompensas" usa este mesmo handler
+    if(localSecondsLeft<=0&&!isHunting&&!isPvpOnly&&currentSession&&!currentSession.rewards_claimed){
+        await onHuntComplete();
+        return;
+    }
     // Modo PvP puro — "Sair" é apenas local
     if(isPvpOnly){
         if(!canSwitchSpot()){

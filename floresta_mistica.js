@@ -51,7 +51,7 @@ const POLL_STEP     = 30_000;
 const POLL_MAX_3MIN = 180_000;
 const POLL_MAX_5MIN = 300_000;
 
-// ── HUNT STATE BOOT CACHE (180s) ───────────────────────────────
+// ── HUNT STATE BOOT CACHE (120s) ───────────────────────────────
 const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
 const HUNT_CACHE_TTL  = 120_000;
 
@@ -695,9 +695,13 @@ async function handleSpotClick(spot){
         return;
     }
 
-    // Tempo de caça esgotado — oferecer modo PvP puro
-    // Bloqueia se recompensas já foram coletadas (evita reentrada após onHuntComplete)
-    if(localSecondsLeft<=0&&!isPvpOnly&&!currentSession?.rewards_claimed){
+    // Tempo de caça esgotado
+    if(localSecondsLeft<=0&&!isPvpOnly){
+        // Já coletou recompensas hoje — encerra sem permitir PvP nem caça
+        if(currentSession?.rewards_claimed){
+            await showAlert('✅ Você já coletou suas recompensas hoje.<br>Volte amanhã para continuar caçando!');
+            return;
+        }
         const ok=await showConfirm('⚔️ Modo PvP Puro',
             `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;

@@ -271,6 +271,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     try{
         const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));
         if(!a)return null;
+        // Penalidade de morte expirada: desbloqueia mineração automaticamente
+        // (cobre o caso de fechar o browser durante os 3 min de penalidade na floresta)
+        if(a.pvp_dead&&a.dead_until&&Date.now()>a.dead_until){
+            localStorage.removeItem(ACTIVITY_KEY);
+            return null;
+        }
         // Expira quando a sessão em que a atividade foi registrada terminar
         if(a.started_at && Date.now() > getSessionEndForTime(a.started_at).getTime()){
             localStorage.removeItem(ACTIVITY_KEY);

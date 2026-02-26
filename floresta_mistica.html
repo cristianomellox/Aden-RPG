@@ -47,7 +47,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 .other-player-name{font-size:0.75em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .other-player-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
 .other-player-avatar.eliminated{filter:grayscale(100%) brightness(.6);}
-.other-eliminated-label{font-size:.55em;color:#ffc3c3;font-weight:bold;text-shadow:1px 1px 2px #000;}
+.other-eliminated-label{font-size:.55em;color:#f44;font-weight:bold;text-shadow:1px 1px 2px #000;}
 
 #contentOverlay{position:fixed;top:50px;left:0;width:100%;display:flex;flex-direction:column;align-items:center;z-index:10;pointer-events:none;}
 #huntingHud{display:none;flex-direction:column;align-items:center;gap:5px;background:rgba(8,18,8,.9);border:1px solid #3a6c3a;border-radius:0 0 12px 12px;padding:8px 24px 12px;pointer-events:auto;min-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.6);}
@@ -379,9 +379,9 @@ const POLL_STEP     = 30_000;
 const POLL_MAX_3MIN = 180_000;
 const POLL_MAX_5MIN = 300_000;
 
-// ── HUNT STATE BOOT CACHE (180s) ───────────────────────────────
+// ── HUNT STATE BOOT CACHE (120s) ───────────────────────────────
 const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
-const HUNT_CACHE_TTL  = 180_000;
+const HUNT_CACHE_TTL  = 120_000;
 
 // ── STATS CACHE (mesma chave do mines.js e afk_page.js) ───────
 const STATS_CACHE_KEY       = () => `player_combat_stats_${userId}`;
@@ -458,6 +458,9 @@ async function _idbSaveOwners(list){
     }catch(e){console.warn('[floresta] idb save',e);}
 }
 const ACTIVITY_KEY   = 'aden_activity_state';
+// Chave dedicada ao lock de 15 min do spot — independente do ACTIVITY_KEY para
+// sobreviver a navegações que sobrescrevem ACTIVITY_KEY (mercador, cidade, mina, etc.)
+const SPOT_LOCK_KEY  = () => `hunt_spot_lock_${userId}`;
 
 // ── ACTIVITY STATE (cache local compartilhado com mines.js) ─
 function getActivity(){
@@ -471,24 +474,58 @@ function getActivity(){
 }
 function setActivityHunting(spotId, forceResetLock = false){
     const cur=getActivity()||{};
-    // forceResetLock=true (após ataque) sempre reinicia o timer de 15 min do spot
     const keepTimer = !forceResetLock && cur.type==='hunting' && cur.spot_id===spotId;
+    // Fallback: chave dedicada, sobrevive a ACTIVITY_KEY ser sobrescrita por outra página
+    const savedLockTs = (!forceResetLock && !keepTimer) ? _getSpotLockTs(spotId) : null;
+    const lockTs = keepTimer ? cur.spot_started_at : (savedLockTs ?? Date.now());
+    // Persiste na chave dedicada apenas quando o lock é novo (não sobrescreve um válido)
+    if(!keepTimer && !savedLockTs){
+        try{localStorage.setItem(SPOT_LOCK_KEY(),JSON.stringify({spot_id:spotId,locked_at:lockTs}));}catch{}
+    } else if(forceResetLock){
+        // Reset explícito (vitória em PvP) → grava novo timestamp
+        try{localStorage.setItem(SPOT_LOCK_KEY(),JSON.stringify({spot_id:spotId,locked_at:Date.now()}));}catch{}
+    }
     localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
         type:'hunting',region:REGION_NAME,spot_id:spotId,
-        spot_started_at: keepTimer ? cur.spot_started_at : Date.now(),
+        spot_started_at: lockTs,
         started_at:Date.now()
     }));
 }
-function clearActivity(){localStorage.removeItem(ACTIVITY_KEY);}
+function clearActivity(){
+    localStorage.removeItem(ACTIVITY_KEY);
+    try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
+}
+function _getSpotLockTs(spotId){
+    try{
+        const raw=localStorage.getItem(SPOT_LOCK_KEY());
+        if(!raw)return null;
+        const o=JSON.parse(raw);
+        return(o.spot_id===spotId&&o.locked_at)?o.locked_at:null;
+    }catch{return null;}
+}
 function canSwitchSpot(){
     const a=getActivity();
-    if(!a||a.type!=='hunting'||!a.spot_started_at)return true;
-    return(Date.now()-a.spot_started_at)>=SPOT_LOCK_MS;
+    // Fonte primária: ACTIVITY_KEY (mais atualizado quando o jogador está na floresta)
+    if(a&&a.type==='hunting'&&a.spot_started_at)return(Date.now()-a.spot_started_at)>=SPOT_LOCK_MS;
+    // Fallback: chave dedicada (sobrevive quando ACTIVITY_KEY foi sobrescrito por outra página)
+    try{
+        const raw=localStorage.getItem(SPOT_LOCK_KEY());
+        if(raw){const o=JSON.parse(raw);if(o.locked_at)return(Date.now()-o.locked_at)>=SPOT_LOCK_MS;}
+    }catch{}
+    return true;
 }
 function fmtLockTime(){
     const a=getActivity();
-    if(!a||!a.spot_started_at)return'0:00';
-    const ms=Math.max(0,SPOT_LOCK_MS-(Date.now()-a.spot_started_at));
+    let lockedAt=null;
+    if(a&&a.type==='hunting'&&a.spot_started_at)lockedAt=a.spot_started_at;
+    if(!lockedAt){
+        try{
+            const raw=localStorage.getItem(SPOT_LOCK_KEY());
+            if(raw){const o=JSON.parse(raw);if(o.locked_at)lockedAt=o.locked_at;}
+        }catch{}
+    }
+    if(!lockedAt)return'0:00';
+    const ms=Math.max(0,SPOT_LOCK_MS-(Date.now()-lockedAt));
     const total=Math.ceil(ms/1000);
     const m=Math.floor(total/60),s=total%60;
     return`${m}:${String(s).padStart(2,'0')}`;
@@ -579,7 +616,8 @@ async function _fetchMissingGuildIds(playerIds){
         // Dispara _resolveGuildNames para os UUIDs recém obtidos
         const newGuildIds=[...new Set(toSave.map(o=>o.guild_id))];
         if(newGuildIds.length)await _resolveGuildNames(newGuildIds);
-        // Re-render já é chamado dentro de _resolveGuildNames se houver nomes novos
+        // Re-render já é chamado dentro de _resolveGuildNames se houver nomes novos.
+        // Mas se nenhum guild_id foi encontrado (todos sem guilda), needsRerender=false. Correto.
     }catch(e){console.warn('[floresta] fetch guild_ids',e);}
 }
 let _ownersMap = {}; // { [playerId]: {name, avatar_url, guild_id} }
@@ -624,6 +662,8 @@ function _startDeadOverlay(){
 
 function setPlayerDead(){
     deadUntil=Date.now()+3*60*1000;
+    // Morte zera o lock de spot — limpa chave dedicada antes de sobrescrever ACTIVITY_KEY
+    try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
     localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
         type:'hunting',region:REGION_NAME,spot_id:currentSpotId||'__dead__',
         pvp_dead:true,dead_until:deadUntil,started_at:Date.now()
@@ -635,7 +675,7 @@ function setPlayerDead(){
         if(!isPvpOnly){
             if(currentSpotId){isHunting=false;stopLocalTimer();removePlayerFromSpot();currentSpotId=null;}
             clearTimeout(pvpOnlyExitTimer);
-            clearActivity();
+            clearActivity(); // já limpa SPOT_LOCK_KEY via clearActivity
         }
         updateHuntingHUD();
     },3*60*1000);
@@ -901,9 +941,10 @@ function startPvpOnlyTimer(resetToFull=true){
 function stopPvpOnlyTimer(){clearInterval(pvpOnlyTimerInterval);pvpOnlyTimerInterval=null;}
 function resetPvpOnlyTimer(){
     // Chamado após vitória em PvP — renova os 15 min
+    pvpOnlySecondsLeft=900; // garante que o valor está no topo antes dos timeouts
     clearTimeout(pvpOnlyExitTimer);
-    pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
-    startPvpOnlyTimer();
+    pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,pvpOnlySecondsLeft*1000);
+    startPvpOnlyTimer(); // resetToFull=true implicitamente (já setamos acima)
     // Atualiza pvp_only_entered_at no servidor (fire and forget)
     supabase.rpc('start_pvp_only',{p_player_id:userId,p_region_id:REGION_ID,p_spot:currentSpotId}).catch(()=>{});
 }
@@ -1460,6 +1501,13 @@ async function syncOtherPlayers(){
 
         // Persiste snapshot no boot cache
         try{localStorage.setItem(HUNT_CACHE_KEY(),JSON.stringify({ts:Date.now(),data}));}catch{}
+
+        // Resync do timer se o jogador não estiver caçando — corrige drift de
+        // sessões pausadas/finalizadas em outro dispositivo ou aba
+        if(!isHunting&&!isPvpOnly&&own.total_seconds!==undefined){
+            const srvLeft=Math.max(0,DAILY_LIMIT-(own.total_seconds||0));
+            if(Math.abs(srvLeft-localSecondsLeft)>5){localSecondsLeft=srvLeft;updateTimerDisplay();}
+        }
     }catch(e){console.warn('[floresta] sync error',e);}
     return changed;
 }
@@ -1537,7 +1585,7 @@ async function boot(){
         (async()=>{try{await supabase.rpc('cleanup_old_hunting_sessions');}catch{}})();
         renderSpots();
 
-        // ── Boot cache (90s TTL) — restaura UI sem RPC após reloads frequentes ──
+        // ── Boot cache (180s TTL) — restaura UI sem RPC após reloads frequentes ──
         let huntData=null;
         let bootFromCache=false;
         try{
@@ -1596,7 +1644,13 @@ async function boot(){
 
             if(currentSession.shield_until){shieldUntil=new Date(currentSession.shield_until);if(isShieldActive())startShieldTimer();}
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
-            if(isPvpOnly&&currentSpotId){renderPlayerOnSpot(currentSpotId);startPvpOnlyTimer(false);}
+            if(isPvpOnly&&currentSpotId){
+                renderPlayerOnSpot(currentSpotId);
+                startPvpOnlyTimer(false);
+                // Restaura o setTimeout de saída com o tempo restante real (evita reset para 15 min após kill)
+                clearTimeout(pvpOnlyExitTimer);
+                pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,pvpOnlySecondsLeft*1000);
+            }
 
             if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&srvTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
@@ -1848,7 +1902,7 @@ function _triggerMobDeath(mobEl, spot){
         mobEl.classList.add('mob-respawning');
         void mobEl.offsetWidth;
         setTimeout(()=>{ mobEl.classList.remove('mob-respawning'); }, 800);
-    }, 10000);
+    }, 3000);
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{

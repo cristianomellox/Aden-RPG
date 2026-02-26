@@ -708,13 +708,9 @@ async function handleSpotClick(spot){
         return;
     }
 
-    // Tempo de caça esgotado
+    // Tempo de caça esgotado — oferece modo PvP puro (independente de rewards_claimed,
+    // pois PvP é atividade separada das recompensas de caça)
     if(localSecondsLeft<=0&&!isPvpOnly){
-        // Já coletou recompensas hoje — encerra sem permitir PvP nem caça
-        if(currentSession?.rewards_claimed){
-            await showAlert('✅ Você já coletou suas recompensas hoje.<br>Volte amanhã para continuar caçando!');
-            return;
-        }
         const ok=await showConfirm('⚔️ Modo PvP Puro',
             `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;

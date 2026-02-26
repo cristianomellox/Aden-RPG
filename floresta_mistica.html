@@ -369,11 +369,11 @@ const SPOT_LOCK_MS   = 15 * 60 * 1000; // 15 minutos de lock por spot
 
 // ── ADAPTIVE POLLING ───────────────────────────────────────────
 const POLL_BASE = {
-    hunting_with_others : 30_000,
+    hunting_with_others : 60_000,
     hunting_alone       : 90_000,
     paused_with_others  : 120_000,
     paused_alone        : 300_000,
-    pvp_only            : 30_000,
+    pvp_only            : 60_000,
 };
 const POLL_STEP     = 30_000;
 const POLL_MAX_3MIN = 180_000;
@@ -559,7 +559,8 @@ async function _resolveGuildNames(guildIds){
 async function _fetchMissingGuildIds(playerIds){
     if(!playerIds||!playerIds.length)return;
     // Filtra apenas quem não tem guild_id no mapa
-    const missing=playerIds.filter(id=>id&&_ownersMap[id]!==undefined&&!_ownersMap[id]?.guild_id);
+    // Busca para qualquer jogador sem guild_id — inclusive os que ainda não estão no _ownersMap
+    const missing=playerIds.filter(id=>id&&(!_ownersMap[id]||!_ownersMap[id].guild_id));
     if(!missing.length)return;
     try{
         const{data,error}=await supabase.from('players').select('id,guild_id').in('id',missing);
@@ -679,7 +680,7 @@ function _processKillQueue(){
 // ── INDEXEDDB (mesmo do mercador.js) ───────────────────────
 const IDB_NAME='aden_inventory_db',IDB_STORE='inventory_store',IDB_VERSION=47;
 function openIdb(){return new Promise((res,rej)=>{const req=indexedDB.open(IDB_NAME,IDB_VERSION);req.onerror=()=>rej(req.error);req.onsuccess=e=>res(e.target.result);req.onupgradeneeded=()=>{};});}
-async function getItemQtyFromCache(id){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return 0;const tx=db.transaction(IDB_STORE,'readonly');const all=await new Promise((res,rej)=>{const r=tx.objectStore(IDB_STORE).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return all.filter(i=>i.items?.item_id===id).reduce((s,i)=>s+(i.quantity||0),0);}catch{return 0;}}
+async function getItemQtyFromCache(id){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return 0;const tx=db.transaction(IDB_STORE,'readonly');const all=await new Promise((res,rej)=>{const r=tx.objectStore(IDB_STORE).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return all.filter(i=>(i.items?.item_id===id)||(i.item_id===id)).reduce((s,i)=>s+(i.quantity||0),0);}catch{return 0;}}
 async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.objectStoreNames.contains(IDB_STORE))return;const tx=db.transaction(IDB_STORE,'readwrite'),store=tx.objectStore(IDB_STORE);const all=await new Promise((res,rej)=>{const r=store.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});const m=all.filter(i=>i.items?.item_id===id);if(!m.length)return;let rem=Math.abs(delta);if(delta<0){for(const item of m){if(rem<=0)break;if(item.quantity>=rem){item.quantity-=rem;rem=0;if(item.quantity<=0)store.delete(item.id);else store.put(item);}else{rem-=item.quantity;store.delete(item.id);}}}else{const item=m[0];item.quantity=(item.quantity||0)+delta;store.put(item);}}catch(e){console.warn('[floresta] IDB fail',e);}}
 
 // ── ÁUDIO ───────────────────────────────────────────────────
@@ -977,6 +978,8 @@ async function handleSpotClick(spot){
             clearTimeout(pvpOnlyExitTimer);
             isPvpOnly=true;currentSpotId=spot.id;isHunting=false;
             clearTimeout(deadTimer);deadTimer=null;
+            // Invalida boot cache para reloads dentro do TTL não carregarem estado desatualizado
+            try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
             setActivityHunting(spot.id);
             renderPlayerOnSpot(spot.id);
             startPvpOnlyTimer();
@@ -1034,6 +1037,8 @@ async function handleSpotClick(spot){
         currentSpotId=spot.id;isHunting=true;isPvpOnly=false;
         if(!currentSession)currentSession={};
         currentSession.current_region=REGION_ID;currentSession.current_spot=spot.id;
+        // Invalida boot cache — garante que reloads dentro de 180s não restaurem estado pré-caçada
+        try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
         setActivityHunting(spot.id);
         renderPlayerOnSpot(spot.id);updateHuntingHUD();startLocalTimer();amb.play().catch(()=>{});
         _resetPollInterval();scheduleNextSync();
@@ -1079,6 +1084,8 @@ async function handlePauseHunt(){
         isHunting=false;stopLocalTimer();
         if(data?.total_seconds!==undefined){localSecondsLeft=Math.max(0,DAILY_LIMIT-data.total_seconds);updateTimerDisplay();}
         currentSpotId=null; // permite re-entrar no mesmo spot após pausar
+        // Invalida boot cache para reloads dentro do TTL não restaurarem sessão ativa erroneamente
+        try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
         clearActivity();
         removePlayerFromSpot();updateHuntingHUD();
         _resetPollInterval();scheduleNextSync();
@@ -1356,8 +1363,23 @@ function stopAllPolling(){clearTimeout(_syncTimeout);_syncTimeout=null;}
 document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden'){stopAllPolling();}
     else if(!_inactivityPaused&&userId){
-        // Relê inventário — pode ter mudado em outra aba (ex: compra no mercador)
-        initShieldFromCache();
+        // Relê inventário — pode ter mudado em outra aba (ex: compra no mercador).
+        // Se o IDB retornar 0, consulta o servidor como fallback (garante que compras
+        // no mercador aparecem sem precisar visitar o inventário).
+        (async()=>{
+            await initShieldFromCache();
+            if(cachedShieldQty===0){
+                try{
+                    const{data}=await supabase.from('inventory_items')
+                        .select('quantity')
+                        .eq('player_id',userId)
+                        .eq('item_id',SHIELD_ITEM_ID)
+                        .is('equipped_slot',null);
+                    const srvQty=(data||[]).reduce((s,i)=>s+(i.quantity||0),0);
+                    if(srvQty>0){cachedShieldQty=srvQty;updateShieldBtn();}
+                }catch{}
+            }
+        })();
         _currentPollMs=_getBaseInterval();
         Promise.all([syncOtherPlayers(),syncGlobalPvpEvents()]).then(()=>scheduleNextSync()).catch(()=>scheduleNextSync());
     }
@@ -1484,6 +1506,19 @@ async function boot(){
 
         preload('normal');preload('critical');preload('evade');
         await initShieldFromCache();
+        // Fallback servidor para o escudo: se IDB retornar 0 (ex: compra recente no mercador
+        // que ainda não propagou para o IDB desta aba), consulta o banco uma vez.
+        if(cachedShieldQty===0){
+            try{
+                const{data}=await supabase.from('inventory_items')
+                    .select('quantity')
+                    .eq('player_id',userId)
+                    .eq('item_id',SHIELD_ITEM_ID)
+                    .is('equipped_slot',null);
+                const srvQty=(data||[]).reduce((s,i)=>s+(i.quantity||0),0);
+                if(srvQty>0){cachedShieldQty=srvQty;updateShieldBtn();}
+            }catch{}
+        }
 
         // Restaura dead state
         const savedAct=getActivity();

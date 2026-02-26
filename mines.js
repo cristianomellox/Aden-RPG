@@ -243,6 +243,64 @@ document.addEventListener("DOMContentLoaded", async () => {
   let nextAttackTime = null; 
   let cooldownInterval = null;
 
+  // ── ACTIVITY STATE (cache local compartilhado com páginas de caça) ──
+  const ACTIVITY_KEY = 'aden_activity_state';
+
+  // Sessões iniciam nas horas ímpares UTC (01:00, 03:00 ... 23:00) e duram 110 min.
+  // Retorna o Date de fim da sessão que estava ativa no timestamp fornecido.
+  function getSessionEndForTime(ts) {
+    const d = new Date(ts);
+    const totalMinutes = d.getUTCHours() * 60 + d.getUTCMinutes();
+    for (let oddH = 23; oddH >= 1; oddH -= 2) {
+      if (totalMinutes >= oddH * 60) {
+        const end = new Date(d);
+        end.setUTCHours(oddH, 0, 0, 0);
+        end.setTime(end.getTime() + 110 * 60 * 1000);
+        return end;
+      }
+    }
+    // Antes de 01:00 UTC — sessão de 23:00 do dia anterior
+    const end = new Date(d);
+    end.setUTCDate(end.getUTCDate() - 1);
+    end.setUTCHours(23, 0, 0, 0);
+    end.setTime(end.getTime() + 110 * 60 * 1000);
+    return end;
+  }
+
+  function getActivity(){
+    try{
+        const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));
+        if(!a)return null;
+        // Expira quando a sessão em que a atividade foi registrada terminar
+        if(a.started_at && Date.now() > getSessionEndForTime(a.started_at).getTime()){
+            localStorage.removeItem(ACTIVITY_KEY);
+            return null;
+        }
+        return a;
+    }catch{return null;}
+  }
+  function setActivityMining(mineName){localStorage.setItem(ACTIVITY_KEY,JSON.stringify({type:'mining',mine_name:mineName,started_at:Date.now()}));}
+  function clearActivity(){localStorage.removeItem(ACTIVITY_KEY);}
+
+  // Sincroniza o estado de atividade com a posse real de mina.
+  // Chamado sempre que myOwnedMineId é atualizado (após PvP, loadMines, boot).
+  // Não interfere em sessões PvE ativas (currentMineId preenchido).
+  function syncMiningActivity() {
+    if (currentMineId) return; // Em combate PvE ativo: não sobrescreve
+    if (myOwnedMineId) {
+      const current = getActivity();
+      if (!current || current.type !== 'mining') {
+        setActivityMining('Mina'); // Bloqueia caça enquanto for dono de mina
+      }
+    } else {
+      // Só limpa se a atividade for de mineração (não apaga caça)
+      const current = getActivity();
+      if (current && current.type === 'mining') {
+        clearActivity();
+      }
+    }
+  }
+
   // Timers de Combate
   let combatTimerInterval = null;
   let combatTimeLeft = 0;
@@ -869,6 +927,7 @@ function formatTimeCombat(totalSeconds) {
         playerMineSpan.textContent = myMine ? myMine.name : 'Nenhuma';
     }
     myOwnedMineId = myMine ? myMine.id : null;
+    syncMiningActivity(); // Sincroniza o lock de caça com a posse real de mina
   }
 
   // =================================================================
@@ -1234,6 +1293,7 @@ function formatTimeCombat(totalSeconds) {
 
           if (mappedMine.owner_player_id === userId) myOwnedMineId = mappedMine.id;
           else if (myOwnedMineId === mappedMine.id) myOwnedMineId = null;
+          syncMiningActivity(); // Sincroniza o lock de caça com a posse real de mina
           
           return mappedMine;
 
@@ -1324,6 +1384,15 @@ function formatTimeCombat(totalSeconds) {
     showLoading();
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
+
+    // Verifica se está caçando em outra página
+    const activity = getActivity();
+    if (activity?.type === 'hunting') {
+      const regionName = activity.region || 'uma região';
+      hideLoading();
+      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está caçando em <strong>${esc(regionName)}</strong>.<br>Pause a caçada para minerar.`);
+      return;
+    }
     
     knownParticipantCount = 1;
 
@@ -1354,6 +1423,7 @@ function formatTimeCombat(totalSeconds) {
       };
 
       currentMineId = mineId;
+      setActivityMining(cavern.name || 'Mina');
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
       
       currentMonsterHealthGlobal = cavern.monster_health;
@@ -1577,6 +1647,7 @@ function formatTimeCombat(totalSeconds) {
     
     clearOptimisticState();
     currentMineId = null;
+    clearActivity();
     
     if (combatTimerInterval) { clearInterval(combatTimerInterval); combatTimerInterval = null; }
     if (buyAttackBtn) { buyAttackBtn.disabled = true; }
@@ -1619,6 +1690,15 @@ function formatTimeCombat(totalSeconds) {
   async function challengeMine(targetMine, owner, allMines) {
     if (!userId) return;
     const ownerName = owner.name || "Desconhecido";
+
+    // Verifica se está caçando em outra página
+    const activity = getActivity();
+    if (activity?.type === 'hunting') {
+      const regionName = activity.region || 'uma região';
+      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está caçando em <strong>${esc(regionName)}</strong>.<br>Pause a caçada para minerar.`);
+      return;
+    }
+
     showLoading();
     try {
         // [OTIMIZADO]
@@ -1742,7 +1822,7 @@ function formatTimeCombat(totalSeconds) {
       if (!userId && typeof session !== 'undefined' && session) userId = session.user.id;
       
       if (!userId) { window.location.href = "index.html"; return; }
-      
+
       const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912", "37baa684-f4dc-4d80-93cb-9004a3cbe2b9", "1888d6d8-ca41-48cc-b92e-e48af088d643"];
 
       try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS }); } catch (e) {}

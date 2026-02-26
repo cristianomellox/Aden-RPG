@@ -51,7 +51,7 @@ const POLL_STEP     = 30_000;
 const POLL_MAX_3MIN = 180_000;
 const POLL_MAX_5MIN = 300_000;
 
-// ── HUNT STATE BOOT CACHE (120s) ───────────────────────────────
+// ── HUNT STATE BOOT CACHE (180s) ───────────────────────────────
 const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
 const HUNT_CACHE_TTL  = 120_000;
 
@@ -696,7 +696,8 @@ async function handleSpotClick(spot){
     }
 
     // Tempo de caça esgotado — oferecer modo PvP puro
-    if(localSecondsLeft<=0&&!isPvpOnly){
+    // Bloqueia se recompensas já foram coletadas (evita reentrada após onHuntComplete)
+    if(localSecondsLeft<=0&&!isPvpOnly&&!currentSession?.rewards_claimed){
         const ok=await showConfirm('⚔️ Modo PvP Puro',
             `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;
@@ -776,6 +777,11 @@ function exitPvpOnlyMode(){
     clearTimeout(pvpOnlyExitTimer);
     stopPvpOnlyTimer();
     clearActivity();removePlayerFromSpot();updateHuntingHUD();
+    // Se o tempo de caça esgotou e as recompensas ainda não foram coletadas,
+    // o modo PvP-only é o último estado antes do fim — dispara o modal de recompensas agora.
+    if(localSecondsLeft<=0&&currentSession&&!currentSession.rewards_claimed){
+        onHuntComplete(); // fire-and-forget intencional (chamadores são setTimeout/setInterval)
+    }
 }
 
 // ── PAUSAR / SAIR ────────────────────────────────────────────
@@ -1334,6 +1340,9 @@ async function boot(){
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
             if(isPvpOnly&&currentSpotId){
                 renderPlayerOnSpot(currentSpotId);
+                // Restaura ACTIVITY_KEY como type:hunting — garante que a mina detecta
+                // que o jogador está ativo, mesmo que outra página tenha sobrescrito a chave.
+                setActivityHunting(currentSpotId);
                 startPvpOnlyTimer(false);
                 // Restaura o setTimeout de saída com o tempo restante real (evita reset para 15 min após kill)
                 clearTimeout(pvpOnlyExitTimer);
@@ -1352,7 +1361,9 @@ async function boot(){
             // Usa localTotal (srvTotal + elapsed) porque o servidor só persiste total_seconds
             // no pause/finish — se o jogador saiu enquanto caçava, srvTotal ainda está abaixo
             // de DAILY_LIMIT mesmo que o tempo real já tenha esgotado.
-            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=DAILY_LIMIT){isHunting=false;await onHuntComplete();}
+            // Não chama onHuntComplete em PvP-only — recompensas são disparadas ao SAIR do
+            // modo PvP (exitPvpOnlyMode), não enquanto o jogador ainda está nele.
+            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=DAILY_LIMIT&&!isPvpOnly){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';

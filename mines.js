@@ -277,8 +277,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             localStorage.removeItem(ACTIVITY_KEY);
             return null;
         }
-        // Expira quando a sessão em que a atividade foi registrada terminar
-        if(a.started_at && Date.now() > getSessionEndForTime(a.started_at).getTime()){
+        // Atividades de caça (type:'hunting') são controladas exclusivamente pelo
+        // hunting.js via clearActivity() explícito — não devem expirar pelo
+        // fim-de-sessão de mineração, pois o started_at pode cair exatamente num
+        // boundary de sessão e expirar imediatamente.
+        // Aplica o TTL de sessão apenas para atividades de mineração.
+        if(a.type!=='hunting' && a.started_at && Date.now() > getSessionEndForTime(a.started_at).getTime()){
+            localStorage.removeItem(ACTIVITY_KEY);
+            return null;
+        }
+        // Atividades de caça: expiram após 6h sem interação (mesmo TTL do hunting.js)
+        if(a.type==='hunting' && a.started_at && (Date.now()-a.started_at)>6*60*60*1000){
             localStorage.removeItem(ACTIVITY_KEY);
             return null;
         }

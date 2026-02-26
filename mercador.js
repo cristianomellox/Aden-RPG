@@ -329,7 +329,7 @@ async function openMercadorModal() {
         <!-- SEÇÃO VENDA -->
         <div class="mercador-section-title">⚙ Venda</div>
         <div class="mercador-section mercador-venda" id="mercadorVenda">
-            ${renderVendaCard('pedra',    PEDRA_IMG,   'Pedra de Refundição', 3,  MOEDA_IMG, 'pedra')}
+            ${renderVendaCard('pedra',    PEDRA_IMG,   'Pedra de Refundição', 1,  MOEDA_IMG, 'pedra')}
             ${renderVendaCard('crystals', CRYSTAL_IMG, 'Cristais',            50, MOEDA_IMG, 'crystals')}
             ${renderVendaCard('escudo',   ESCUDO_IMG,  'Escudo de Caça',      1,  MOEDA_IMG, 'escudo', 150)}
         </div>
@@ -418,7 +418,7 @@ function renderEscamboCard(pair, idx) {
 function attachMercadorEvents(pairs) {
     // Venda: qty selectors
     // receiveBaseQty per type
-    const vendaReceiveBase = { pedra: 3, crystals: 50, escudo: 1 };
+    const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1 };
     const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150 };
     for (const type of ['pedra', 'crystals', 'escudo']) {
         const base = vendaReceiveBase[type];
@@ -528,8 +528,8 @@ async function buyVendaItem(type, quantity) {
         await updateCacheQty(MOEDA_ID, -totalCost);
 
         if (type === 'pedra') {
-            await updateCacheQty(PEDRA_ID, quantity * 3);
-            showMsg(`Você recebeu ${quantity * 3}x Pedra de Refundição!`);
+            await updateCacheQty(PEDRA_ID, quantity * 1);
+            showMsg(`Você recebeu ${quantity * 1}x Pedra de Refundição!`);
         } else if (type === 'escudo') {
             await updateCacheQty(ESCUDO_ID, quantity);
             showMsg(`Você recebeu ${quantity}x Escudo de Caça!`);

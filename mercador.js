@@ -245,9 +245,11 @@ function showMsg(msg) {
 // ─────────────────────────────────────────────────────────────────────────────
 const MOEDA_ID = 55;
 const PEDRA_ID = 20;
+const ESCUDO_ID = 85;
 const MOEDA_IMG = 'https://aden-rpg.pages.dev/assets/itens/moeda_runica.webp';
 const PEDRA_IMG = 'https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp';
 const CRYSTAL_IMG = 'https://aden-rpg.pages.dev/assets/cristais.webp';
+const ESCUDO_IMG = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
 
 // Quantidades em cache (atualizado ao abrir modal)
 let cachedMoedaQty = 0;
@@ -329,6 +331,7 @@ async function openMercadorModal() {
         <div class="mercador-section mercador-venda" id="mercadorVenda">
             ${renderVendaCard('pedra',    PEDRA_IMG,   'Pedra de Refundição', 3,  MOEDA_IMG, 'pedra')}
             ${renderVendaCard('crystals', CRYSTAL_IMG, 'Cristais',            50, MOEDA_IMG, 'crystals')}
+            ${renderVendaCard('escudo',   ESCUDO_IMG,  'Escudo de Caça',      1,  MOEDA_IMG, 'escudo', 150)}
         </div>
 
         <!-- SEÇÃO ESCAMBO -->
@@ -342,8 +345,9 @@ async function openMercadorModal() {
     attachMercadorEvents(pairs);
 }
 
-function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnType) {
-    // receiveBaseQty: 3 para pedra, 50 para crystals (por 1 moeda)
+function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnType, costPerPack = 1) {
+    // receiveBaseQty: 3 para pedra, 50 para crystals, 1 para escudo (por pacote)
+    // costPerPack: moedas gastas por pacote (1 para pedra/crystals, 150 para escudo)
     return `
     <div class="mercador-card" id="venda-card-${type}">
         <div class="mercador-card-header">
@@ -356,7 +360,7 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
                 <div class="mercador-arrow">⟵</div>
                 <div class="mercador-trade-side">
                     <img src="${costImg}" class="mercador-item-icon" alt="Moeda Rúnica">
-                    <span class="mercador-trade-qty" id="vcost-qty-${type}">x1</span>
+                    <span class="mercador-trade-qty" id="vcost-qty-${type}">x${costPerPack}</span>
                     <span class="mercador-item-name">Moeda Rúnica</span>
                 </div>
             </div>
@@ -368,7 +372,7 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
                 <button class="pm-qty-btn plus" data-vtype="${btnType}">+</button>
             </div>
             <div class="mercador-total">
-                Custo: <span id="vtot-moeda-${type}">1</span> Moeda(s)
+                Custo: <span id="vtot-moeda-${type}">${costPerPack}</span> Moeda(s)
                 → Recebe: <span id="vtot-receive-${type}">${receiveBaseQty}</span> ${itemLabel.replace(/ x\d+$/, '')}
             </div>
             <button class="pm-buy-btn" id="vbuy-${type}">Comprar</button>
@@ -414,9 +418,11 @@ function renderEscamboCard(pair, idx) {
 function attachMercadorEvents(pairs) {
     // Venda: qty selectors
     // receiveBaseQty per type
-    const vendaReceiveBase = { pedra: 3, crystals: 50 };
-    for (const type of ['pedra', 'crystals']) {
+    const vendaReceiveBase = { pedra: 3, crystals: 50, escudo: 1 };
+    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150 };
+    for (const type of ['pedra', 'crystals', 'escudo']) {
         const base = vendaReceiveBase[type];
+        const cost = vendaCostBase[type];
         const getQtyEl = () => document.getElementById(`vqty-${type}`);
         document.querySelector(`.pm-qty-btn.plus[data-vtype="${type}"]`)?.addEventListener('click', () => {
             const cur = parseInt(getQtyEl()?.textContent || 1);
@@ -426,10 +432,10 @@ function attachMercadorEvents(pairs) {
             const receiveEl = document.getElementById(`vtot-receive-${type}`);
             const receiveQtyLabel = document.getElementById(`vreceive-qty-${type}`);
             const costQtyLabel = document.getElementById(`vcost-qty-${type}`);
-            if (moedaEl) moedaEl.textContent = nv;
+            if (moedaEl) moedaEl.textContent = nv * cost;
             if (receiveEl) receiveEl.textContent = nv * base;
             if (receiveQtyLabel) receiveQtyLabel.textContent = `x${nv * base}`;
-            if (costQtyLabel) costQtyLabel.textContent = `x${nv}`;
+            if (costQtyLabel) costQtyLabel.textContent = `x${nv * cost}`;
         });
         document.querySelector(`.pm-qty-btn.minus[data-vtype="${type}"]`)?.addEventListener('click', () => {
             const cur = parseInt(getQtyEl()?.textContent || 1);
@@ -439,10 +445,10 @@ function attachMercadorEvents(pairs) {
             const receiveEl = document.getElementById(`vtot-receive-${type}`);
             const receiveQtyLabel = document.getElementById(`vreceive-qty-${type}`);
             const costQtyLabel = document.getElementById(`vcost-qty-${type}`);
-            if (moedaEl) moedaEl.textContent = nv;
+            if (moedaEl) moedaEl.textContent = nv * cost;
             if (receiveEl) receiveEl.textContent = nv * base;
             if (receiveQtyLabel) receiveQtyLabel.textContent = `x${nv * base}`;
-            if (costQtyLabel) costQtyLabel.textContent = `x${nv}`;
+            if (costQtyLabel) costQtyLabel.textContent = `x${nv * cost}`;
         });
         document.getElementById(`vbuy-${type}`)?.addEventListener('click', () => {
             const qty = parseInt(document.getElementById(`vqty-${type}`)?.textContent || 1);
@@ -489,7 +495,9 @@ async function buyVendaItem(type, quantity) {
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
-    const totalCost = quantity; // 1 moeda por pacote
+    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 150 };
+    const costPerPack   = vendaCostBase[type] ?? 1;
+    const totalCost     = quantity * costPerPack;
 
     // Só bloqueia localmente se cache tem valor > 0 e é insuficiente.
     // Se cache = 0 pode ser miss — deixa o RPC validar no servidor.
@@ -522,6 +530,9 @@ async function buyVendaItem(type, quantity) {
         if (type === 'pedra') {
             await updateCacheQty(PEDRA_ID, quantity * 3);
             showMsg(`Você recebeu ${quantity * 3}x Pedra de Refundição!`);
+        } else if (type === 'escudo') {
+            await updateCacheQty(ESCUDO_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Escudo de Caça!`);
         } else {
             try {
                 const cStr = localStorage.getItem('player_data_cache');

@@ -1279,7 +1279,7 @@ function rarityGradient(color) {
     const map = {
         '#3aaef5': 'linear-gradient(180deg, #3aaef5, #333, #3aaef5)',
         '#b23af5': 'linear-gradient(180deg, #b23af5, #333, #b23af5)',
-        '#f5d33a': 'linear-gradient(180deg, #f5d33a, #333, #f5d33a)'
+        '#f5d33a': 'linear-gradient(180deg, #f5d33a, gold, #f5d33a)'
     };
     return map[color] || color;
 }

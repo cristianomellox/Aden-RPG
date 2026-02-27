@@ -712,7 +712,7 @@ async function handleSpotClick(spot){
     // pois PvP é atividade separada das recompensas de caça)
     if(localSecondsLeft<=0&&!isPvpOnly){
         const ok=await showConfirm('⚔️ Modo PvP Puro',
-            `Seu tempo de caçada terminou, mas você pode entrar em <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
+            `Seu tempo de caçada terminou, mas você pode entrar no spot de <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;
         // Entra no modo PvP puro (sem RPC start_hunt — tempo já acabou)
         showLoading();
@@ -1630,7 +1630,7 @@ function _triggerMobDeath(mobEl, spot){
         mobEl.classList.add('mob-respawning');
         void mobEl.offsetWidth;
         setTimeout(()=>{ mobEl.classList.remove('mob-respawning'); }, 800);
-    }, 3000);
+    }, 9000);
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{

@@ -10,6 +10,7 @@ const REGION_NAME = 'Floresta Mística';
 // Adicione aqui as outras regiões conforme criar as páginas
 const ALL_REGIONS = {
     floresta_mistica: { name:'Floresta Mística' },
+    vale_arcano: { name:'Vale Arcano' },
     // montanhas: { name:'Montanhas' },
 };
 
@@ -19,18 +20,22 @@ const ALL_DROPS = {
     71: { name:'Lágrima de Fênix',    img:'https://aden-rpg.pages.dev/assets/itens/lagrima_de_fenix.webp'    },
     74: { name:'Galho Espiritual',    img:'https://aden-rpg.pages.dev/assets/itens/galho_espiritual.webp'    },
     67: { name:'Pele Animal',               img:'https://aden-rpg.pages.dev/assets/itens/pele_animal.webp'               },
+    58: { name:'Verniz',               img:'https://aden-rpg.pages.dev/assets/itens/verniz.webp'               },
+    63: { name:'Lubrificante',               img:'https://aden-rpg.pages.dev/assets/itens/lubrificante.webp'               },
+    72: { name:'Pedaço de Freixo',               img:'https://aden-rpg.pages.dev/assets/itens/pedaco_de_freixo.webp'               },
+    69: { name:'Lã',               img:'https://aden-rpg.pages.dev/assets/itens/la.webp'               },
     // adicione outros drops aqui
 };
 
 const SPOTS = [
     { id:'unicornio', name:'Unicórnio',  top:320, left:190,  width:450, height:450,
-      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/unicornio.webp', labelColor:'#ffccee' },
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/unicornio.webp', labelColor:'silver' },
     { id:'fenix',    name:'Fênix',       top:430, left:830, width:500, height:430,
-      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/fenix.webp',     labelColor:'#ffddaa' },
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/fenix.webp',     labelColor:'lightgreen' },
     { id:'satiro',   name:'Sátiro',      top:880, left:100, width:600, height:550,
-      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/satiro.webp',    labelColor:'#aaffaa' },
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/satiro.webp',    labelColor:'orange' },
     { id:'tigrenix', name:'Tigre Nix',   top:1120, left:850, width:500, height:360,
-      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tigre_nix.webp', labelColor:'#bbbbff' },
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tigre_nix.webp', labelColor:'gray' },
 ];
 
 const SHIELD_ITEM_ID = 85;

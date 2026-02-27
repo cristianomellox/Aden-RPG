@@ -271,10 +271,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     formattedValue += '%';
                 }
                 div.textContent = `${formattedName} +${formattedValue}`;
-                div.style.background = rarityGradient(r.color);
-                div.style.color = "black";
+                div.style.setProperty('background', rarityGradient(r.color));
+                div.style.color = "silver";
                 div.style.fontWeight = "bold";
-                div.style.textShadow = "0px 0px 2px rgba(255,255,255,0.5)";
+                div.style.textShadow = "1px 1px 2px black, -1px -1px 2px black, 1px -1px 2px black, -1px 1px 2px black, 0 0 2px black, 0 0 4px black";
             }, 500);
         });
     }
@@ -290,12 +290,12 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.marginBottom = "8px";
             
             if (slotData) {
+                const textStyle = `margin:0; font-size:1.1em; font-weight:bold; color:silver; text-shadow:1px 1px 2px black,-1px -1px 2px black,1px -1px 2px black,-1px 1px 2px black,0 0 2px black,0 0 4px black;`;
                 div.innerHTML = `
                     <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 40px; height: 40px;">
-                    <p style="margin:0; font-size:1.1em; font-weight:bold;">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>
+                    <p style="${textStyle}">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>
                 `;
-            div.style.background = rarityGradient(slotData.color);
-                div.style.color = "black";
+                div.style.setProperty('background', rarityGradient(slotData.color));
                 div.style.border = "1px solid rgba(0,0,0,0.3)";
             } else {
                 div.innerHTML = `<p style="margin:0; opacity:0.7;">${label}</p>`;

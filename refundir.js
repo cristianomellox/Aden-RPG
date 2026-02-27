@@ -241,6 +241,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Mapeia cor hex para gradiente de raridade
+    function rarityGradient(color) {
+        const map = {
+            '#3aaef5': 'linear-gradient(180deg, #3aaef5, #333, #3aaef5)',
+            '#b23af5': 'linear-gradient(180deg, #b23af5, #333, #b23af5)',
+            '#f5d33a': 'linear-gradient(180deg, #f5d33a, #333, #f5d33a)'
+        };
+        return map[color] || color;
+    }
+
     // Renderiza atributos sorteados no modal
     function showPendingRolls(rolls) {
         rolledContainer.innerHTML = '';
@@ -261,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     formattedValue += '%';
                 }
                 div.textContent = `${formattedName} +${formattedValue}`;
-                div.style.background = r.color;
+                div.style.background = rarityGradient(r.color);
                 div.style.color = "black";
                 div.style.fontWeight = "bold";
                 div.style.textShadow = "0px 0px 2px rgba(255,255,255,0.5)";
@@ -284,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 40px; height: 40px;">
                     <p style="margin:0; font-size:1.1em; font-weight:bold;">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>
                 `;
-                div.style.background = slotData.color;
+            div.style.background = rarityGradient(slotData.color);
                 div.style.color = "black";
                 div.style.border = "1px solid rgba(0,0,0,0.3)";
             } else {

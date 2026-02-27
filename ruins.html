@@ -178,7 +178,7 @@
                     Avançar na Névoa (1 AP)
                 </button>
                 <button id="btnProbe" class="nav-btn secondary" onclick="probeRooms()">
-                    Sondar (3 AP)
+                    Sondar (5 AP)
                 </button>
             </div>
 
@@ -441,8 +441,16 @@
             { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
             { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
             { 
-            name: "Áreas", 
+            name: "Áreas de Caça", 
             icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Floresta Mística", url: "floresta_mistica.html" }
+            ]
+        },
+        { 
+            name: "Masmorras", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
             isDropdown: true,
             subItems: [
                 { name: "Ruínas Ancestrais", url: "ruins.html" }

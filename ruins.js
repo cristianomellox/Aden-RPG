@@ -667,7 +667,7 @@ function startTurnPhase() {
     if (isOracle) {
         els.btnProbe.textContent = "Sondar (0 AP)";
     } else {
-        els.btnProbe.textContent = "Sondar (3 AP)";
+        els.btnProbe.textContent = "Sondar (5 AP)";
     }
 }
 
@@ -688,7 +688,7 @@ window.moveBlind = async () => {
 
 window.probeRooms = async () => {
     if (state.isProcessing) return;
-    const cost = state.myPlayer.class_id === 'oracle' ? 0 : 3; 
+    const cost = state.myPlayer.class_id === 'oracle' ? 0 : 5; 
     if (state.myPlayer.ap < cost) { logEvent(`Sem AP para sondar! (Custa ${cost})`, "empty"); return; }
 
     state.isProcessing = true;

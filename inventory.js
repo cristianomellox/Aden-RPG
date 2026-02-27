@@ -1015,9 +1015,9 @@ async function showItemDetails(item) {
                 const formattedName = formatAttrName(item.reforge_slot1.attr);
                 let formattedValue = item.reforge_slot1.value;
                 if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
-                refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:1.1em;">${formattedName} +${formattedValue}</p>`;
-                refineRow1.style.background = item.reforge_slot1.color;
-                refineRow1.style.color = "black";
+                const textStyle1 = `font-size:1.1em; margin:0; color:silver; font-weight:bold; text-shadow:1px 1px 2px black,-1px -1px 2px black,1px -1px 2px black,-1px 1px 2px black,0 0 2px black,0 0 4px black;`;
+                refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="${textStyle1}">${formattedName} +${formattedValue}</p>`;
+                refineRow1.style.setProperty('background', rarityGradient(item.reforge_slot1.color));
                 refineRow1.style.height = "15px";
             } else if (totalStars >= 4) {
                 refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.9em;">Liberado para Refundição</p>`;
@@ -1033,9 +1033,9 @@ async function showItemDetails(item) {
                 const formattedName = formatAttrName(item.reforge_slot2.attr);
                 let formattedValue = item.reforge_slot2.value;
                 if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
-                refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:1.1em;">${formattedName} +${formattedValue}</p>`;
-                refineRow2.style.background = item.reforge_slot2.color;
-                refineRow2.style.color = "black";
+                const textStyle2 = `font-size:1.1em; margin:0; color:silver; font-weight:bold; text-shadow:1px 1px 2px black,-1px -1px 2px black,1px -1px 2px black,-1px 1px 2px black,0 0 2px black,0 0 4px black;`;
+                refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="${textStyle2}">${formattedName} +${formattedValue}</p>`;
+                refineRow2.style.setProperty('background', rarityGradient(item.reforge_slot2.color));
                 refineRow2.style.height = "15px";
             } else if (totalStars >= 5) {
                 refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="font-size:0.9em;">Liberado para Refundição</p>`;
@@ -1274,6 +1274,14 @@ function getRefineCrystalsRequired(cap, rarity) {
         25: { 'R': 3200, 'SR': 6000,  'SSR': 12000 }
     };
     return table[cap]?.[rarity] || 0;
+}
+function rarityGradient(color) {
+    const map = {
+        '#3aaef5': 'linear-gradient(180deg, #3aaef5, #333, #3aaef5)',
+        '#b23af5': 'linear-gradient(180deg, #b23af5, #333, #b23af5)',
+        '#f5d33a': 'linear-gradient(180deg, #f5d33a, #333, #f5d33a)'
+    };
+    return map[color] || color;
 }
 function formatAttrName(attr) {
     switch (attr) {

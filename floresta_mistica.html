@@ -30,12 +30,14 @@ body{display:flex;flex-direction:column;align-items:center;background:#121212;mi
 /*border:2px dashed #0f0;*/
 border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 .hunt-spot:hover,.hunt-spot:focus,.hunt-spot:active{border-color:transparent;outline:none;}
-.spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;}
+.spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;display:none;}
 .hunt-spot.active-spot{cursor:default!important;}
 
 .mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
 .mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
-.mob-avatar{width:85px;height:100px;}
+.mob-avatar{width:85px;height:100px;animation:mob-breathe 3.2s ease-in-out infinite, mob-float 4.5s ease-in-out infinite;transform-origin:bottom center;}
+@keyframes mob-breathe{0%,100%{transform:scaleY(1) translateY(0);}40%{transform:scaleY(1.055) translateY(-2px);}60%{transform:scaleY(1.055) translateY(-2px);}}
+@keyframes mob-float{0%,100%{margin-top:0;}50%{margin-top:-2px;}}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}
@@ -47,7 +49,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 .other-player-name{font-size:0.75em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .other-player-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
 .other-player-avatar.eliminated{filter:grayscale(100%) brightness(.6);}
-.other-eliminated-label{font-size:.55em;color:#f44;font-weight:bold;text-shadow:1px 1px 2px #000;}
+.other-eliminated-label{font-size:.55em;color:#ffc3c3;font-weight:bold;text-shadow:1px 1px 2px #000;}
 
 #contentOverlay{position:fixed;top:50px;left:0;width:100%;display:flex;flex-direction:column;align-items:center;z-index:10;pointer-events:none;}
 #huntingHud{display:none;flex-direction:column;align-items:center;gap:5px;background:rgba(8,18,8,.9);border:1px solid #3a6c3a;border-radius:0 0 12px 12px;padding:8px 24px 12px;pointer-events:auto;min-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.6);}

@@ -997,7 +997,7 @@ async function runPvpAnimation(data){
     updBars();modal.style.display='flex';cntdn.style.display='block';
     // Música de combate (estilo mina)
     try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}
-    if(pvpBgMusic){pvpBgMusic.currentTime=0;pvpBgMusic.volume=0.12;pvpBgMusic.play().catch(()=>{});}
+    if(pvpBgMusic){pvpBgMusic.currentTime=0;pvpBgMusic.volume=0.06;pvpBgMusic.play().catch(()=>{});}
     for(let i=3;i>0;i--){cntdn.textContent='A batalha começa em '+i+'...';await new Promise(r=>setTimeout(r,1000));}
     cntdn.style.display='none';
     for(const turn of log){

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Penumbra Uivante - Aden RPG</title>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<style>
+.goog-te-banner-frame.skiptranslate,.skiptranslate{display:none!important;visibility:hidden!important;height:0!important;}
+body{top:0!important;margin-top:0!important;position:static!important;}
+.goog-te-balloon-frame,.goog-te-gadget{display:none!important;height:0!important;overflow:hidden!important;}
+font>font{background-color:transparent!important;box-shadow:none!important;position:static!important;}
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+body,p,span,div,button,label{font-family:'Cinzel',serif;}
+h1,h2,h3{font-family:'Cinzel',serif;color:#e0dccc;text-shadow:2px 2px 4px #000;}
+html,body{height:100%;margin:0;padding:0;box-sizing:border-box;}
+body{display:flex;flex-direction:column;align-items:center;background:#121212;min-height:100vh;overflow-x:hidden;}
+
+#playerTopBar{position:fixed;top:0;left:0;width:100%;height:50px;background:#1a1a1a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 12px;box-shadow:0 2px 8px rgba(0,0,0,.7);z-index:1000;box-sizing:border-box;}
+.top-bar-link{color:#fff;text-decoration:none;display:flex;align-items:center;}
+#pageTitle{color:#ffb3b3;font-size:1.2em;font-weight:bold;text-shadow:1px 1px 2px #000;}
+
+#mapContainer{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;z-index:1;background:#0d1a0d;}
+#map{background-image:url('https://aden-rpg.pages.dev/assets/penumbra_uivante.webp');background-size:contain;background-repeat:no-repeat;background-position:top left;width:1500px;height:1500px;position:absolute;cursor:grab;transform-origin:top left;transform:scale(1.1);user-select:none;}
+
+.hunt-spot{position:absolute;border:2px dashed transparent;
+/*border:2px dashed #0f0;*/
+border-radius:8px;cursor:default;overflow:visible;z-index:5;}
+.hunt-spot:hover,.hunt-spot:focus,.hunt-spot:active{border-color:transparent;outline:none;}
+.spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;display:none;}
+.hunt-spot.active-spot{cursor:default!important;}
+
+.mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
+.mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.mob-avatar{width:85px;height:100px;animation:mob-breathe 4.2s ease-in-out infinite, mob-float 4.5s ease-in-out infinite;transform-origin:bottom center;}
+@keyframes mob-breathe{0%,100%{transform:scaleY(1) translateY(0);}40%{transform:scaleY(1.015) translateY(-1px);}60%{transform:scaleY(1.015) translateY(-1px);}}
+@keyframes mob-float{0%,100%{margin-top:0;}50%{margin-top:-0px;}}
+
+.player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
+.player-shield-icon{width:30px;height:30px;object-fit:contain;}
+.player-name-label{font-size:0.75em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.player-spot-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #fc0;object-fit:cover;background:#222;}
+
+.other-player-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:9;cursor:pointer;}
+.other-player-shield{width:30px;height:30px;object-fit:contain;}
+.other-player-name{font-size:0.75em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.other-player-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
+.other-player-avatar.eliminated{filter:grayscale(100%) brightness(.6);}
+.other-eliminated-label{font-size:.55em;color:#ffc3c3;font-weight:bold;text-shadow:1px 1px 2px #000;}
+
+#contentOverlay{position:fixed;top:50px;left:0;width:100%;display:flex;flex-direction:column;align-items:center;z-index:10;pointer-events:none;}
+#huntingHud{display:none;flex-direction:column;align-items:center;gap:5px;background:rgba(8,18,8,.9);border:1px solid #3a6c3a;border-radius:0 0 12px 12px;padding:8px 24px 12px;pointer-events:auto;min-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.6);}
+#huntTimer {
+  font-size:1.9em;
+  font-weight:bold;
+  text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; 0 12px #4f4,1px 1px 2px #000;
+  letter-spacing:3px;
+  
+}
+#huntStatus{font-size:.7em;color:#b8d4b8;}
+#shieldHudRow{display:flex;align-items:center;gap:8px;font-size:.7em;color:#acf;}
+#shieldHudRow img{width:22px;height:22px;}
+#hudBtnRow{display:flex;gap:8px;margin-top:2px;}
+.hud-btn{background:rgba(255,255,255,.06);border:1px solid #455;color:#aca;padding:5px 14px;border-radius:5px;cursor:pointer;font-family:'Cinzel',serif;font-size:.65em;font-weight:bold;}
+.hud-btn:hover{background:rgba(255,255,255,.14);color:#efe;}
+.hud-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+#loadingOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:3000;justify-content:center;align-items:center;}
+.loading-spinner{border:4px solid #2a3a2a;border-top:4px solid #8f8;border-radius:50%;width:50px;height:50px;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.modal-container{display:none;position:fixed;z-index:9000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.88);justify-content:center;align-items:center;}
+.modal-content{background:#1b271b;padding:22px;border:2px solid #4a8c4a;border-radius:10px;width:92%;max-width:460px;position:relative;max-height:90vh;box-sizing:border-box;text-align:center;overflow-y:auto;}
+.modal-content h2,.modal-content h3{margin-top:0;color:#afa;text-shadow:0 0 8px #4f4,1px 1px 2px #000;font-size:1.05em;}
+.modal-content p{color:#cdc;font-size:.85em;line-height:1.6;}
+.modal-close{color:#787;position:absolute;top:8px;right:14px;font-size:26px;font-weight:bold;cursor:pointer;line-height:1;}
+.modal-close:hover{color:#afa;}
+.modal-btn-row{display:flex;gap:12px;justify-content:center;margin-top:14px;}
+.modal-btn{background-image:url('https://aden-rpg.pages.dev/assets/botao.webp');background-size:cover;background-position:center;background-color:transparent;border:none;color:#e0dccc;font-weight:bold;font-family:'Cinzel',serif;padding:12px 22px;cursor:pointer;font-size:.9em;text-shadow:1px 1px 2px #000;min-width:90px;}
+.modal-btn:hover{opacity:.9;}
+
+#pvpModal .modal-content{max-width:520px;background:#160f22;border-color:#74b;}
+#pvpModal h2{color:#daf;text-shadow:0 0 8px #a4f;}
+.pvp-arena{display:flex;justify-content:space-around;align-items:flex-start;gap:10px;margin:12px 0;}
+.pvp-fighter{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;max-width:160px;}
+.pvp-fighter-name{font-size:.7em;color:#ddd;font-weight:bold;}
+.pvp-fighter img{width:70px;height:70px;border-radius:50%;border:3px solid #85a;object-fit:cover;background:#222;}
+.pvp-vs{font-size:1.6em;color:#fa4;align-self:center;font-weight:bold;text-shadow:0 0 10px #f60;}
+.pvp-hp-bg{width:100%;height:14px;background:#333;border-radius:7px;overflow:hidden;}
+.pvp-hp-fill{height:100%;background:linear-gradient(90deg,#c24,#f46);border-radius:7px;transition:width .3s;}
+.pvp-hp-txt{font-size:.6em;color:#ccc;}
+#pvpCountdown{font-size:.95em;color:#fd8;margin:6px 0;font-weight:bold;}
+
+/* ── DAMAGE NUMBERS (estilo mina) ─── */
+.damage-number{font-family:Georgia,serif;font-size:23px;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;white-space:nowrap;animation:floating-damage 1.5s ease-out forwards;}
+.crit-damage-number{font-family:Georgia,serif;font-size:2.1em;color:red;text-shadow:-1px -1px 0 yellow,1px -1px 0 yellow,-1px 1px 0 yellow,1px 1px 0 yellow,-2px -2px 0 yellow,2px -2px 0 yellow,-2px 2px 0 yellow,2px 2px 0 yellow;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;white-space:nowrap;animation:floating-damage-crit 1.5s ease-out forwards;}
+.evade-text{font-size:1.4em;color:white;font-weight:bold;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;white-space:nowrap;text-shadow:1px 1px 2px #000,-1px -1px 2px #000;animation:floating-damage 2s ease-out forwards;}
+@keyframes floating-damage{0%{opacity:1;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-150%) scale(1.3);}}
+@keyframes floating-damage-crit{0%{opacity:1;transform:translate(-50%,-50%) scale(1);}50%{transform:translate(-50%,-80%) scale(1.4);}100%{opacity:0;transform:translate(-50%,-160%) scale(1.2);}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px) rotate(-3deg)}40%{transform:translateX(8px) rotate(3deg)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.shake-animation{animation:shake .35s cubic-bezier(.36,.07,.19,.97) both!important;backface-visibility:hidden;}
+
+/* ── MOB COMBAT ANIMATIONS ─── */
+@keyframes mob-death-fade{0%{opacity:1;transform:scale(1);}60%{opacity:.3;transform:scale(0.7) translateY(8px);}100%{opacity:0;transform:scale(0.4) translateY(18px);}}
+@keyframes mob-respawn{0%{opacity:0;transform:scale(0.3) translateY(-14px);}60%{opacity:.9;transform:scale(1.12) translateY(-3px);}100%{opacity:1;transform:scale(1) translateY(0);}}
+@keyframes player-lunge{0%{transform:scale(1);}40%{transform:scale(1.18) rotate(-6deg);}70%{transform:scale(1.08) rotate(3deg);}100%{transform:scale(1) rotate(0deg);}}
+@keyframes mob-impact-flash{0%,100%{filter:brightness(1);}35%{filter:brightness(2.4) saturate(0.2);}}
+.mob-dying .mob-avatar{animation:mob-death-fade 0.85s ease-out forwards!important;}
+.mob-dying .mob-name{animation:mob-death-fade 0.65s ease-out forwards!important;}
+.mob-respawning .mob-avatar{animation:mob-respawn 0.7s cubic-bezier(.22,1,.36,1) forwards!important;}
+.mob-respawning .mob-name{animation:mob-respawn 0.55s cubic-bezier(.22,1,.36,1) forwards!important;}
+.player-lunging .player-spot-avatar,.player-lunging .other-player-avatar{animation:player-lunge 0.45s ease-out!important;}
+.mob-impact-flash .mob-avatar{animation:mob-impact-flash 0.28s ease-out!important;}
+
+/* ── KILL BANNER ─── */
+#huntKillBanner{position:fixed;top:58px;right:0;background:linear-gradient(90deg,rgba(180,30,0,.92),rgba(180,80,0,.92));color:#fff;padding:9px 22px;border-radius:6px 0 0 6px;z-index:25000;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;box-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:translateX(100%);transition:opacity .3s;}
+#huntKillBanner.show{opacity:1;animation:huntBannerSlide 26s linear forwards;}
+@keyframes huntBannerSlide{0%{transform:translateX(100%);}100%{transform:translateX(calc(-100% - 5px));}}
+
+/* ── PVP FIGHTER (reposicionado) ─── */
+.pvp-fighter{position:relative;}
+.pvp-fighter img{width:70px;height:70px;border-radius:50%;border:3px solid #85a;object-fit:cover;background:#222;}
+
+#eliminatedModal .modal-content{border-color:#c22;background:#1a0808;}
+#eliminatedModal h2{color:#f66;text-shadow:0 0 8px #f00;}
+
+/* ── DEAD PENALTY OVERLAY ─── */
+#deadPenaltyOverlay{display:none;position:fixed;bottom:75px;left:50%;transform:translateX(-50%);z-index:1500;flex-direction:column;align-items:center;gap:4px;pointer-events:none;}
+#deadPenaltyAvatarWrap{position:relative;}
+#deadPenaltyAvatar{width:72px;height:72px;border-radius:50%;border:3px solid #c22;filter:grayscale(80%) brightness(0.45);object-fit:cover;display:block;}
+#deadPenaltyTimer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff6666;font-weight:bold;font-size:.82em;text-align:center;text-shadow:0 0 6px #000,1px 1px 2px #000;background:rgba(0,0,0,.62);border-radius:5px;padding:2px 5px;white-space:nowrap;letter-spacing:1px;}
+#deadPenaltyLabel{color:#f88;font-size:.58em;font-weight:bold;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,.65);border-radius:4px;padding:2px 8px;}
+@keyframes deadPulse{0%,100%{opacity:1}50%{opacity:.55}}
+#deadPenaltyOverlay.active{animation:deadPulse 1.6s ease-in-out infinite;}
+
+#rewardsModal .modal-content{border-color:#c92;background:#1c1808;max-width:460px;}
+#rewardsModal h2{color:#fd8;text-shadow:0 0 8px #fa0;}
+.region-rewards-block{margin:10px 0;text-align:left;}
+.region-rewards-title{color:#fc8;font-size:.8em;font-weight:bold;border-bottom:1px solid #432;padding-bottom:4px;margin-bottom:6px;}
+.reward-item-row{display:flex;align-items:center;gap:12px;margin:6px 0;background:rgba(255,255,255,.04);border:1px solid #432;border-radius:6px;padding:7px 10px;}
+.reward-item-row img{width:44px;height:44px;border-radius:6px;border:1px solid #653;background:#111;object-fit:cover;flex-shrink:0;}
+.reward-item-info{display:flex;flex-direction:column;gap:2px;}
+.reward-item-name{color:#eda;font-size:.75em;font-weight:bold;}
+.reward-item-qty{color:#fd8;font-size:1em;font-weight:bold;}
+.reward-xp-row{display:flex;align-items:center;gap:8px;margin:8px 0 4px;padding:8px 12px;background:rgba(100,200,100,.08);border:1px solid #2a4a2a;border-radius:6px;}
+.reward-xp-row span{color:#afa;font-size:.85em;}
+.reward-xp-row strong{color:#8f8;font-size:1.1em;}
+
+#playerTopBar {
+  display: flex;
+  align-items: flex-start;
+  background: linear-gradient(to bottom, #444, #222);
+  padding: 5px 5px;
+  width: 100%;
+  box-sizing: border-box;
+  color: #e0dccc;
+  font-family: 'Cinzel', serif;
+  border-bottom: 2px solid #555;
+  flex-wrap: wrap;
+  top: 0;
+}
+</style>
+<body>
+
+<div id="playerTopBar">
+    <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </a>
+    <span id="pageTitle" style="font-weight: bold; color: #ffc3c3;">Penumbra Uivante</span>
+    <img id="tutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="Tutorial" style="width:30px;height:30px;cursor:pointer;">
+</div>
+
+<div id="mapContainer"><div id="map"></div></div>
+
+<div id="contentOverlay">
+    <div id="huntingHud">
+        <div id="huntTimer">03:00:00</div>
+        <div id="huntStatus">⚔️ Escolha uma área para caçar</div>
+        <div id="shieldHudRow" style="display:none;">
+            <img src="https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp" alt="🛡">
+            <span id="shieldHudText"></span>
+        </div>
+        <div id="hudBtnRow">
+            <button class="hud-btn" id="pauseHuntBtn">Pausar</button>
+            <button class="hud-btn" id="activateShieldBtn">🛡 Ativar Escudo (x0)</button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<div id="loadingOverlay"><div class="loading-spinner"></div></div>
+
+<!-- Banner de kills/mortes globais -->
+<div id="huntKillBanner"></div>
+
+<!-- Overlay de penalidade de derrota PvP (cronômetro no avatar) -->
+<div id="deadPenaltyOverlay">
+    <div id="deadPenaltyAvatarWrap">
+        <img id="deadPenaltyAvatar" src="" alt="💀">
+        <div id="deadPenaltyTimer">03:00</div>
+    </div>
+    <div id="deadPenaltyLabel">💀 Penalidade de derrota</div>
+</div>
+
+<!-- Áudio de fundo PvP (mesma da mina) -->
+<audio id="pvpBgMusic" src="https://aden-rpg.pages.dev/assets/mina.mp3" loop preload="none"></audio>
+
+<div id="alertModal" class="modal-container">
+    <div class="modal-content">
+        <p id="alertMessage" style="font-size:.92em;color:#cec;margin:10px 0 16px;"></p>
+        <div class="modal-btn-row"><button id="alertOkBtn" class="modal-btn">OK</button></div>
+    </div>
+</div>
+
+<div id="confirmModal" class="modal-container">
+    <div class="modal-content">
+        <h3 id="confirmTitle">Confirmar</h3>
+        <p id="confirmMsg" style="color:#cdc;font-size:.88em;"></p>
+        <div class="modal-btn-row">
+            <button id="confirmNoBtn" class="modal-btn">Não</button>
+            <button id="confirmYesBtn" class="modal-btn">Sim</button>
+        </div>
+    </div>
+</div>
+
+<div id="pvpModal" class="modal-container">
+    <div class="modal-content">
+        <h2>⚔️ Batalha</h2>
+        <div id="pvpCountdown" style="display:none;"></div>
+        <div class="pvp-arena">
+            <div class="pvp-fighter" id="pvpAttackerSide">
+                <div class="pvp-fighter-name" id="pvpAttackerName">Atacante</div>
+                <img id="pvpAttackerAvatar" src="" alt="">
+                <div class="pvp-hp-bg"><div class="pvp-hp-fill" id="pvpAttackerHpFill" style="width:100%"></div></div>
+                <div class="pvp-hp-txt" id="pvpAttackerHpText">0/0</div>
+            </div>
+            <div class="pvp-vs">VS</div>
+            <div class="pvp-fighter" id="pvpDefenderSide">
+                <div class="pvp-fighter-name" id="pvpDefenderName">Defensor</div>
+                <img id="pvpDefenderAvatar" src="" alt="">
+                <div class="pvp-hp-bg"><div class="pvp-hp-fill" id="pvpDefenderHpFill" style="width:100%"></div></div>
+                <div class="pvp-hp-txt" id="pvpDefenderHpText">0/0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="eliminatedModal" class="modal-container">
+    <div class="modal-content">
+        <h2>💀 Eliminado!</h2>
+        <p>Você foi eliminado por <strong id="eliminatedByName">um inimigo</strong>.</p>
+        <p style="font-size:.78em;color:#c88;">Sua caça foi pausada. Clique em uma área para retomar.</p>
+        <div class="modal-btn-row"><button id="eliminatedCloseBtn" class="modal-btn">Entendido</button></div>
+    </div>
+</div>
+
+<!-- Modal de recompensas — agrupa por região -->
+<div id="rewardsModal" class="modal-container">
+    <div class="modal-content">
+        <h2>🎉 Dia de Caça Completo!</h2>
+        <div id="rewardsContent"></div>
+        <div class="modal-btn-row"><button id="rewardsCloseBtn" class="modal-btn">Coletar!</button></div>
+    </div>
+</div>
+
+<div id="huntInfoModal" class="modal-container">
+    <div class="modal-content">
+        <span class="modal-close" id="huntInfoClose">&times;</span>
+        <h2>Penumbra Uivante</h2>
+        <div style="text-align:left;color:#cdc;font-size:.82em;line-height:1.7;">
+            <p><strong style="color:#fcc;">Drops:</strong><br>
+            <strong>Unicórnio</strong> → Chifre de Unicórnio<br>
+            <strong>Fênix</strong> → Lágrima de Fênix<br>
+            <strong>Sátiro</strong> → Galho Espiritual<br>
+            <strong>Tigre Nix</strong> → Pele Animal</p>
+            <p><strong style="color:#fd8;">⏱ Tempo:</strong> O contador de <strong>3 horas</strong> é compartilhado entre todas as regiões do jogo. Você pode dividir o tempo como quiser.</p>
+            <p><strong style="color:#afa;">Recompensas:</strong>
+            <ul>
+            <li><strong>XP:</strong> 350.</li>
+            <li><strong>Itens:</strong> Distribuídos proporcionalmente ao tempo gasto em cada região/spot ao final das 3h.</li></ul></p>
+            <p><strong style="color:#acf;">🛡 Escudo:</strong> Protege de PvP por 1 hora por uso (máx. 3h).</p>
+            <p style="color:#fd8;font-size:.9em;">⚠️ PvP é livre nesta região!</p>
+            
+         <br>  <hr><br>
+    <center><h2>História</h2></center>
+    <p>Situada na periferia ocidental da lendária <strong>Selva de Éter</strong>, fazendo fronteira com as terras élficas de Elendor, a <strong>Floresta Mística</strong> não é uma criação natural, mas sim uma consequência geológica da magia. Durante dias sombrios e ameaças ao lar dos elfos, o Círculo dos Guardiões da Semente tomou uma medida desesperada: sobrecarregaram a "Teia Viva" — a rede neural mágica que conecta as Árvores-Mãe.</p>
+
+    <p>Para evitar que o núcleo de Elendor colapsasse sob o peso de tanta energia defensiva, o excesso de mana foi desviado e purgado para uma região de mata virgem adjacente. O solo, bombardeado por torrentes de energia vital bruta e desenfreada, sofreu uma mutação instantânea. A flora não apenas cresceu; ela evoluiu agressivamente, tornando-se um bioma senciente de cores vibrantes e perigos letais, onde a própria realidade parece vibrar em uma frequência diferente do restante de Aden.</p>
+
+   <center> <h2>O Fenômeno: A Saturação Prismática</h2></center>
+    <p>Diferente da harmonia cultivada em Elendor, a Floresta Mística é regida pelo caos da superabundância. O ar é denso, carregado de esporos luminosos que distorcem a percepção de distância e tempo. Ali, a vida não segue o ciclo natural de nascimento e morte, mas sim de transmutação constante. É um lugar onde a natureza não é passiva; ela é uma predadora voraz que busca consumir qualquer fonte externa de magia para continuar sua expansão.</p>
+
+    <p>Esta saturação de energia atraiu e alterou permanentemente a fauna local. As criaturas que habitam a Floresta Mística não são monstros das sombras, mas bestas de pura luz e fúria elemental, existindo em um estado perpétuo de superestimulação mágica.</p>
+
+    <center><h2>Os Habitantes: Guardiões da Luz Caótica</h2></center>
+    <p>As entidades que vagam por entre as árvores de casca prateada são manifestações físicas desse poder excedente.</p>
+
+    <p><strong>O Unicórnio Cintilante:</strong> Outrora um símbolo de pureza, na Floresta Mística ele é uma tempestade galopante. Seu chifre não é apenas osso, mas um para-raios de mana solidificado, capaz de canalizar a energia instável do ambiente para obliterar intrusos.</p>
+
+    <p><strong>A Fênix do Éter:</strong> Diferente de suas primas lendárias, esta ave não renasce das cinzas por escolha, mas por uma combustão interna incontrolável causada pelo excesso de magia em seu sangue. Suas lágrimas, procuradas por alquimistas, são a única substância capaz de resfriar seu núcleo ardente.</p>
+
+    <p><strong>Os Sátiros da Vinha Férrea:</strong> Corrompidos pela densidade da floresta, estes seres tornaram-se os jardineiros dementes do local. Eles não protegem a natureza por amor, mas por uma simbiose parasítica, utilizando galhos espirituais infundidos com a própria alma da floresta para esmagar forasteiros.</p>
+
+    <p><strong>O Tigre Nix:</strong> O predador alfa, cuja pele absorveu as propriedades camaleônicas da vegetação mutante, tornando-o um fantasma listrado que ataca com a força de um deslizamento de terra.</p>
+
+   <center> <h2>O Interesse Econômico</h2></center>
+    <p>Para os habitantes de Zion e os ferreiros de Mitrar, a Floresta Mística é uma mina de ouro a céu aberto, embora mortal. Os materiais colhidos ali — chifres carregados de estática, lágrimas cristalizadas de calor eterno e madeira que pulsa com vida própria — são os componentes essenciais para a criação de artefatos que exigem uma condutividade mágica superior.</p>
+
+    <p>Aventureiros não entram na Floresta para salvar o mundo ou combater o mal antigo; eles entram para colher o fruto do caos, enfrentando a beleza aterrorizante de uma natureza que recebeu poder demais e agora se recusa a ser domada.</p>
+            
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+    const t=document.createElement("div");t.style.cssText="position:absolute;visibility:hidden;font-size:1rem;line-height:1;";t.textContent="M";document.body.appendChild(t);
+    const r=t.getBoundingClientRect().height;document.body.removeChild(t);
+    const s=document.createElement("style");s.textContent=`html{font-size:${16*(16/r)}px!important;}body{font-size:1.3rem!important;}`;document.head.appendChild(s);
+});
+</script>
+
+<script type="module" src="penumbra_uivante.js"></script>
+
+<!-- Modal de inatividade -->
+<div id="inactivityModal" class="modal-container">
+    <div class="modal-content">
+        <h2>👋 Você está aí?</h2>
+        <p style="color:#cdc;font-size:.85em;line-height:1.6;">
+            Você não precisa ficar nesta tela para <strong>continuar caçando</strong>. O tempo acumula automaticamente enquanto o spot estiver ativo.<br><br>
+            Caso não queira ser incomodado por outros jogadores, você pode comprar um <strong>🛡 Escudo de Caça</strong> com o Mercador em alguma cidade!
+        </p>
+        <div class="modal-btn-row"><button id="inactivityOkBtn" class="modal-btn">Entendi</button></div>
+    </div>
+</div>
+
+<div id="google_translate_element"></div>
+<script src="auto_translate.js"></script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.1em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.2em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
+</body>
+</html>

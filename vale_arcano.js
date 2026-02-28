@@ -1374,9 +1374,19 @@ async function boot(){
             // penalidade de morte (deadUntil ainda ativo), o ACTIVITY_KEY deve ser limpo
             // para não bloquear a mineração. Cobre: pausa/fim de sessão feitos em outro
             // dispositivo, aba fechada sem pausar, sessão expirada naturalmente, etc.
+            // IMPORTANTE: NÃO apaga SPOT_LOCK_KEY se o lock ainda está dentro dos 15 min
+            // — o jogador pode ter vindo de outra região e o lock precisa sobreviver à navegação.
             if(!isHunting&&!isPvpOnly&&!isPlayerDead()){
                 const _staleAct=getActivity();
-                if(_staleAct&&_staleAct.type==='hunting')clearActivity();
+                if(_staleAct&&_staleAct.type==='hunting'){
+                    let _lockStillActive=false;
+                    try{
+                        const _lockRaw=localStorage.getItem(SPOT_LOCK_KEY());
+                        if(_lockRaw){const _lo=JSON.parse(_lockRaw);if(_lo.locked_at&&(Date.now()-_lo.locked_at)<SPOT_LOCK_MS)_lockStillActive=true;}
+                    }catch{}
+                    localStorage.removeItem(ACTIVITY_KEY);
+                    if(!_lockStillActive){try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}}
+                }
             }
 
             // Usa localTotal (srvTotal + elapsed) porque o servidor só persiste total_seconds

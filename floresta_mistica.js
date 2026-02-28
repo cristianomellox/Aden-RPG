@@ -762,11 +762,10 @@ async function handleSpotClick(spot){
     }
 
     // Regra: lock de 15 minutos antes de trocar de spot
-    if(isHunting&&currentSpotId&&currentSpotId!==spot.id){
-        if(!canSwitchSpot()){
-            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
-            return;
-        }
+    // (inclui vir de outra região — SPOT_LOCK_KEY persiste no localStorage entre páginas)
+    if(!canSwitchSpot()){
+        await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
+        return;
     }
 
     const ok=await showConfirm('Área de Caça',`Caçar na área de <strong>${esc(spot.name)}</strong>?`);

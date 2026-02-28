@@ -8,10 +8,10 @@ const REGION_NAME = 'Vale Arcano';
 
 // Catálogo de TODAS as regiões (para o modal de recompensas)
 // Adicione aqui as outras regiões conforme criar as páginas
-const ALL_REGIONS = {
-    floresta_mistica: { name:'Floresta Mística' },
+const ALL_REGIONS = {floresta_mistica: { name:'Floresta Mística' },
     vale_arcano: { name:'Vale Arcano' },
-    // montanhas: { name:'Montanhas' },
+    penumbra_uivante: { name:'Penumbra Uivante' },
+    
 };
 
 // Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
@@ -24,6 +24,10 @@ const ALL_DROPS = {
     63: { name:'Lubrificante',               img:'https://aden-rpg.pages.dev/assets/itens/lubrificante.webp'               },
     72: { name:'Pedaço de Freixo',               img:'https://aden-rpg.pages.dev/assets/itens/pedaco_de_freixo.webp'               },
     69: { name:'Lã',               img:'https://aden-rpg.pages.dev/assets/itens/la.webp'               },
+    76: { name:'Pó Ósseo',               img:'https://aden-rpg.pages.dev/assets/itens/po_osseo.webp'               },
+    70: { name:'Sal de Cobalto',               img:'https://aden-rpg.pages.dev/assets/itens/sal_de_cobalto.webp'               },
+    86: { name:'Asa de Morcego',               img:'https://aden-rpg.pages.dev/assets/itens/asa_de_morcego.webp'               },
+    87: { name:'Emblema Vampírico',               img:'https://aden-rpg.pages.dev/assets/itens/emblema_vampirico.webp'               },
     // adicione outros drops aqui
 };
 

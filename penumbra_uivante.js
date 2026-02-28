@@ -3,8 +3,8 @@ import { supabase } from './supabaseClient.js';
 // ═══════════════════════════════════════════════════════════
 // CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
 // ═══════════════════════════════════════════════════════════
-const REGION_ID = 'floresta_mistica';
-const REGION_NAME = 'Floresta Mística';
+const REGION_ID = 'penumbra_uivante';
+const REGION_NAME = 'Penumbra Uivante';
 
 // Catálogo de TODAS as regiões (para o modal de recompensas)
 // Adicione aqui as outras regiões conforme criar as páginas
@@ -32,14 +32,14 @@ const ALL_DROPS = {
 };
 
 const SPOTS = [
-    { id:'unicornio', name:'Unicórnio',  top:320, left:190,  width:450, height:450,
-      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/unicornio.webp', labelColor:'silver' },
-    { id:'fenix',    name:'Fênix',       top:430, left:830, width:500, height:430,
-      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/fenix.webp',     labelColor:'lightgreen' },
-    { id:'satiro',   name:'Sátiro',      top:880, left:100, width:600, height:550,
-      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/satiro.webp',    labelColor:'orange' },
-    { id:'tigrenix', name:'Tigre Nix',   top:1120, left:850, width:500, height:360,
-      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tigre_nix.webp', labelColor:'gray' },
+    { id:'caveira', name:'Caveira',  top:320, left:190,  width:450, height:450,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/caveira.webp', labelColor:'silver' },
+    { id:'zumbi',    name:'Zumbi',       top:430, left:830, width:500, height:430,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/zumbi.webp',     labelColor:'lightgreen' },
+    { id:'morcego',   name:'Morcego',      top:880, left:100, width:600, height:550,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/morcego.webp',    labelColor:'orange' },
+    { id:'vampiro', name:'Vampiro',   top:1120, left:850, width:500, height:360,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/vampiro.webp', labelColor:'gray' },
 ];
 
 const SHIELD_ITEM_ID = 85;
@@ -414,7 +414,7 @@ async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.obje
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 const audioBufs={};
-const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/floresta.mp3'};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/penumbra.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
 const amb=new Audio(SRC.ambient);amb.volume=0.12;amb.loop=true;

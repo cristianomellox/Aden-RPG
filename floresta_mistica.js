@@ -34,11 +34,11 @@ const ALL_DROPS = {
 const SPOTS = [
     { id:'unicornio', name:'Unicórnio',  top:320, left:190,  width:450, height:450,
       itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/unicornio.webp', labelColor:'silver' },
-    { id:'fenix',    name:'Fênix',       top:430, left:830, width:500, height:430,
+    { id:'fenix',    name:'Fênix',       top:460, left:830, width:500, height:430,
       itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/fenix.webp',     labelColor:'lightgreen' },
-    { id:'satiro',   name:'Sátiro',      top:880, left:100, width:600, height:550,
+    { id:'satiro',   name:'Sátiro',      top:800, left:100, width:600, height:480,
       itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/satiro.webp',    labelColor:'orange' },
-    { id:'tigrenix', name:'Tigre Nix',   top:1120, left:850, width:500, height:360,
+    { id:'tigrenix', name:'Tigre Nix',   top:1050, left:890, width:440, height:360,
       itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tigre_nix.webp', labelColor:'gray' },
 ];
 

@@ -1224,8 +1224,14 @@ async function syncOtherPlayers(){
         // Resync do timer se o jogador não estiver caçando — corrige drift de
         // sessões pausadas/finalizadas em outro dispositivo ou aba
         if(!isHunting&&!isPvpOnly&&own.total_seconds!==undefined){
-            const srvLeft=Math.max(0,DAILY_LIMIT-(own.total_seconds||0));
+            let _srvTotal=own.total_seconds||0;
+            if(own.is_hunting&&own.hunt_started_at){
+                const _el=Math.floor((Date.now()-new Date(own.hunt_started_at).getTime())/1000);
+                _srvTotal=Math.min(DAILY_LIMIT,_srvTotal+_el);
+            }
+            const srvLeft=Math.max(0,DAILY_LIMIT-_srvTotal);
             if(Math.abs(srvLeft-localSecondsLeft)>5){localSecondsLeft=srvLeft;updateTimerDisplay();}
+            if(srvLeft<=0&&!own.rewards_claimed&&!isPvpOnly){updateHuntingHUD();}
         }
     }catch(e){console.warn('[floresta] sync error',e);}
     return changed;
@@ -1335,7 +1341,7 @@ async function boot(){
         if(currentSession){
             const srvTotal=currentSession.total_seconds||0;
             let localTotal=srvTotal;
-            if(currentSession.is_hunting&&currentSession.hunt_started_at&&currentSession.current_region===REGION_ID){
+            if(currentSession.is_hunting&&currentSession.hunt_started_at){
                 const elapsed=Math.floor((Date.now()-new Date(currentSession.hunt_started_at).getTime())/1000);
                 localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
             }

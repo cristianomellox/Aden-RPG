@@ -35,9 +35,9 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 
 .mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
 .mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
-.mob-avatar{width:85px;height:100px;animation:mob-breathe 3.2s ease-in-out infinite, mob-float 4.5s ease-in-out infinite;transform-origin:bottom center;}
-@keyframes mob-breathe{0%,100%{transform:scaleY(1) translateY(0);}40%{transform:scaleY(1.055) translateY(-2px);}60%{transform:scaleY(1.055) translateY(-2px);}}
-@keyframes mob-float{0%,100%{margin-top:0;}50%{margin-top:-2px;}}
+.mob-avatar{width:85px;height:100px;animation:mob-breathe 4.2s ease-in-out infinite, mob-float 4.5s ease-in-out infinite;transform-origin:bottom center;}
+@keyframes mob-breathe{0%,100%{transform:scaleY(1) translateY(0);}40%{transform:scaleY(1.015) translateY(-1px);}60%{transform:scaleY(1.015) translateY(-1px);}}
+@keyframes mob-float{0%,100%{margin-top:0;}50%{margin-top:-0px;}}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}

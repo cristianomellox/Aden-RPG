@@ -160,7 +160,7 @@ function getActivity(){
         return a;
     }catch{return null;}
 }
-function setActivityHunting(spotId, forceResetLock = false){
+function setActivityHunting(spotId, forceResetLock = false, pvpOnly = false){
     const cur=getActivity()||{};
     const keepTimer = !forceResetLock && cur.type==='hunting' && cur.spot_id===spotId;
     // Fallback: chave dedicada, sobrevive a ACTIVITY_KEY ser sobrescrita por outra página
@@ -175,6 +175,7 @@ function setActivityHunting(spotId, forceResetLock = false){
     }
     localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
         type:'hunting',region:REGION_NAME,spot_id:spotId,
+        pvp_only: pvpOnly,   // true = PvP puro (is_hunting=false no servidor — não limpar como stale)
         spot_started_at: lockTs,
         started_at:Date.now()
     }));
@@ -720,12 +721,6 @@ async function handleSpotClick(spot){
     // Tempo de caça esgotado — oferece modo PvP puro (independente de rewards_claimed,
     // pois PvP é atividade separada das recompensas de caça)
     if(localSecondsLeft<=0&&!isPvpOnly){
-        // Lock de 15 min respeita o spot MESMO vindo de outra região — SPOT_LOCK_KEY
-        // persiste no localStorage entre páginas e canSwitchSpot() lê essa chave.
-        if(!canSwitchSpot()){
-            await showLiveCountdownAlert(()=>`⏳ Você precisa aguardar mais <strong>${fmtLockTime()}</strong> antes de trocar de spot.`);
-            return;
-        }
         const ok=await showConfirm('⚔️ Modo PvP Puro',
             `Seu tempo de caçada terminou, mas você pode entrar no spot de <strong>${esc(spot.name)}</strong> exclusivamente para PvP.<br><small style="color:#fd8;">⏱ Você precisará ficar no spot por <strong>15 minutos</strong>. Vencer um ataque renova o tempo.</small>`);
         if(!ok)return;
@@ -741,7 +736,7 @@ async function handleSpotClick(spot){
             clearTimeout(deadTimer);deadTimer=null;
             // Invalida boot cache para reloads dentro do TTL não carregarem estado desatualizado
             try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
-            setActivityHunting(spot.id);
+            setActivityHunting(spot.id, false, true); // pvpOnly=true → mina não limpa como stale
             renderPlayerOnSpot(spot.id);
             startPvpOnlyTimer();
             pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
@@ -762,7 +757,7 @@ async function handleSpotClick(spot){
         }
         clearTimeout(pvpOnlyExitTimer);
         currentSpotId=spot.id;
-        setActivityHunting(spot.id);
+        setActivityHunting(spot.id, false, true); // pvpOnly=true
         renderPlayerOnSpot(spot.id);updateHuntingHUD();
         startPvpOnlyTimer();
         pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,SPOT_LOCK_MS);
@@ -953,8 +948,8 @@ async function handleAttackPlayer(target){
         }
         otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
         renderOtherPlayers(otherPlayers);
-        // Reseta lock de 15 min
-        if(currentSpotId)setActivityHunting(currentSpotId, true);
+        // Reseta lock de 15 min — preserva pvp_only se estiver nesse modo
+        if(currentSpotId)setActivityHunting(currentSpotId, true, isPvpOnly);
         if(isPvpOnly)resetPvpOnlyTimer();
     } else {
         // DERROTA — fica morto 3 min
@@ -1371,9 +1366,8 @@ async function boot(){
             if(isHunting&&currentSpotId){renderPlayerOnSpot(currentSpotId);startLocalTimer();amb.play().catch(()=>{});setActivityHunting(currentSpotId);}
             if(isPvpOnly&&currentSpotId){
                 renderPlayerOnSpot(currentSpotId);
-                // Restaura ACTIVITY_KEY como type:hunting — garante que a mina detecta
-                // que o jogador está ativo, mesmo que outra página tenha sobrescrito a chave.
-                setActivityHunting(currentSpotId);
+                // pvpOnly=true — garante que mina e outras páginas não limpam como stale
+                setActivityHunting(currentSpotId, false, true);
                 startPvpOnlyTimer(false);
                 // Restaura o setTimeout de saída com o tempo restante real (evita reset para 15 min após kill)
                 clearTimeout(pvpOnlyExitTimer);
@@ -1386,7 +1380,10 @@ async function boot(){
             // dispositivo, aba fechada sem pausar, sessão expirada naturalmente, etc.
             // IMPORTANTE: NÃO apaga SPOT_LOCK_KEY se o lock ainda está dentro dos 15 min
             // — o jogador pode ter vindo de outra região e o lock precisa sobreviver à navegação.
-            if(!isHunting&&!isPvpOnly&&!isPlayerDead()){
+            // NÃO limpa se pvp_only_entered_at estiver ativo NO SERVIDOR (qualquer região):
+            // o jogador pode ter ido de outra região de PvP direto para cá sem passar pela mina,
+            // e o ACTIVITY_KEY deve permanecer para bloquear mineração.
+            if(!isHunting&&!isPvpOnly&&!isPlayerDead()&&!currentSession.pvp_only_entered_at){
                 const _staleAct=getActivity();
                 if(_staleAct&&_staleAct.type==='hunting'){
                     let _lockStillActive=false;
@@ -1404,10 +1401,7 @@ async function boot(){
             // de DAILY_LIMIT mesmo que o tempo real já tenha esgotado.
             // Não chama onHuntComplete em PvP-only — recompensas são disparadas ao SAIR do
             // modo PvP (exitPvpOnlyMode), não enquanto o jogador ainda está nele.
-            // Não chama onHuntComplete se pvp_only_entered_at estiver ativo em QUALQUER região:
-            // o jogador ainda está em modo PvP puro (possivelmente em outra área) e as
-            // recompensas só devem ser coletadas explicitamente após sair desse modo.
-            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=DAILY_LIMIT&&!isPvpOnly&&!currentSession.pvp_only_entered_at){isHunting=false;await onHuntComplete();}
+            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=DAILY_LIMIT&&!isPvpOnly){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';

@@ -334,7 +334,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const BATCH_THRESHOLD_SOLO = 5;   
   
   const DEBOUNCE_TIME_MULTI = 10000;  
-  const DEBOUNCE_TIME_SOLO = 300000;  
+  const DEBOUNCE_TIME_SOLO = 45000;  
   
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; 
   
@@ -1400,12 +1400,13 @@ function formatTimeCombat(totalSeconds) {
     hasAttackedOnce = false;
     isFirstAttackSequence = true;
 
-    // Verifica se está caçando em outra página
+    // Verifica se está caçando em outra página (caça normal OU modo PvP puro)
     const activity = getActivity();
     if (activity?.type === 'hunting') {
       const regionName = activity.region || 'uma região';
+      const modeLabel = activity.pvp_only ? 'em modo PvP puro em' : 'caçando em';
       hideLoading();
-      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está caçando em <strong>${esc(regionName)}</strong>.<br>Pause a caçada para minerar.`);
+      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está ${modeLabel} <strong>${esc(regionName)}</strong>.<br>Aguarde o fim do modo para minerar.`);
       return;
     }
     
@@ -1706,11 +1707,12 @@ function formatTimeCombat(totalSeconds) {
     if (!userId) return;
     const ownerName = owner.name || "Desconhecido";
 
-    // Verifica se está caçando em outra página
+    // Verifica se está caçando em outra página (caça normal OU modo PvP puro)
     const activity = getActivity();
     if (activity?.type === 'hunting') {
       const regionName = activity.region || 'uma região';
-      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está caçando em <strong>${esc(regionName)}</strong>.<br>Pause a caçada para minerar.`);
+      const modeLabel = activity.pvp_only ? 'em modo PvP puro em' : 'caçando em';
+      showModalAlert(`<strong>Você não é onipresente...</strong><br>No momento você está ${modeLabel} <strong>${esc(regionName)}</strong>.<br>Aguarde o fim do modo para minerar.`);
       return;
     }
 

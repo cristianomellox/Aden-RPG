@@ -32,13 +32,13 @@ const ALL_DROPS = {
 };
 
 const SPOTS = [
-    { id:'caveira', name:'Caveira',  top:320, left:190,  width:450, height:450,
+    { id:'caveira', name:'Caveira',  top:360, left:550,  width:390, height:360,
       itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/caveira.webp', labelColor:'silver' },
-    { id:'zumbi',    name:'Zumbi',       top:430, left:830, width:500, height:430,
+    { id:'zumbi',    name:'Zumbi',       top:700, left:850, width:380, height:350,
       itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/zumbi.webp',     labelColor:'lightgreen' },
-    { id:'morcego',   name:'Morcego',      top:880, left:100, width:600, height:550,
+    { id:'morcego',   name:'Morcego',      top:880, left:90, width:570, height:500,
       itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/morcego.webp',    labelColor:'orange' },
-    { id:'vampiro', name:'Vampiro',   top:1120, left:850, width:500, height:360,
+    { id:'vampiro', name:'Vampiro',   top:1080, left:920, width:470, height:360,
       itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/vampiro.webp', labelColor:'gray' },
 ];
 
@@ -1224,8 +1224,14 @@ async function syncOtherPlayers(){
         // Resync do timer se o jogador não estiver caçando — corrige drift de
         // sessões pausadas/finalizadas em outro dispositivo ou aba
         if(!isHunting&&!isPvpOnly&&own.total_seconds!==undefined){
-            const srvLeft=Math.max(0,DAILY_LIMIT-(own.total_seconds||0));
+            let _srvTotal=own.total_seconds||0;
+            if(own.is_hunting&&own.hunt_started_at){
+                const _el=Math.floor((Date.now()-new Date(own.hunt_started_at).getTime())/1000);
+                _srvTotal=Math.min(DAILY_LIMIT,_srvTotal+_el);
+            }
+            const srvLeft=Math.max(0,DAILY_LIMIT-_srvTotal);
             if(Math.abs(srvLeft-localSecondsLeft)>5){localSecondsLeft=srvLeft;updateTimerDisplay();}
+            if(srvLeft<=0&&!own.rewards_claimed&&!isPvpOnly){updateHuntingHUD();}
         }
     }catch(e){console.warn('[floresta] sync error',e);}
     return changed;
@@ -1335,7 +1341,7 @@ async function boot(){
         if(currentSession){
             const srvTotal=currentSession.total_seconds||0;
             let localTotal=srvTotal;
-            if(currentSession.is_hunting&&currentSession.hunt_started_at&&currentSession.current_region===REGION_ID){
+            if(currentSession.is_hunting&&currentSession.hunt_started_at){
                 const elapsed=Math.floor((Date.now()-new Date(currentSession.hunt_started_at).getTime())/1000);
                 localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
             }

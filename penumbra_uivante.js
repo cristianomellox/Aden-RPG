@@ -927,6 +927,11 @@ async function handleAttackPlayer(target){
                 await showAlert(`💀 <strong>${esc(target.name)}</strong> já havia sido eliminado por <strong>${esc(data.eliminated_by_name||'alguém')}</strong>.`);
                 return;
             }
+            // [FIX 1] Jogador não está mais no spot — remove do mapa imediatamente
+            if(data?.remove_from_map){
+                otherPlayers=otherPlayers.filter(p=>p.id!==target.id);
+                renderOtherPlayers(otherPlayers);
+            }
             await showAlert(data?.message||'Erro no PvP.');return;
         }
         pvpData=data;
@@ -938,6 +943,11 @@ async function handleAttackPlayer(target){
 
     const myName=playerData?.name||'Você';
     const regionNameDisplay=REGION_NAME;
+    // [FIX 3] Exibe buff de guilda ativo na defesa, se houver
+    if(pvpData.guild_allies_in_spot>0){
+        const reduction=Math.round((pvpData.guild_damage_reduction||0)*100);
+        pushKillNotif(`🛡️ <span style="color:#adf">${esc(pvpData.defender_name)}</span> tinha <strong>${pvpData.guild_allies_in_spot}</strong> aliado(s) de guilda no spot — bônus de defesa de <strong>${reduction}%</strong> aplicado!`);
+    }
     if(pvpData.combat?.winner_id===userId){
         // VITÓRIA — banner otimista imediato (não espera o sync global)
         const kTxt=pvpData.attacker_daily_kills>0?`, eliminando um total de <span style="color:#ff8">${pvpData.attacker_daily_kills}</span> hoje!`:'!';

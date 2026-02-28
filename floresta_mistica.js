@@ -415,7 +415,7 @@ async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.obje
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 const audioBufs={};
-const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/floresta.mp3'};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/floresta2.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
 const amb=new Audio(SRC.ambient);amb.volume=0.04;amb.loop=true;
@@ -927,6 +927,11 @@ async function handleAttackPlayer(target){
                 await showAlert(`💀 <strong>${esc(target.name)}</strong> já havia sido eliminado por <strong>${esc(data.eliminated_by_name||'alguém')}</strong>.`);
                 return;
             }
+            // [FIX 1] Jogador não está mais no spot — remove do mapa imediatamente
+            if(data?.remove_from_map){
+                otherPlayers=otherPlayers.filter(p=>p.id!==target.id);
+                renderOtherPlayers(otherPlayers);
+            }
             await showAlert(data?.message||'Erro no PvP.');return;
         }
         pvpData=data;
@@ -938,6 +943,11 @@ async function handleAttackPlayer(target){
 
     const myName=playerData?.name||'Você';
     const regionNameDisplay=REGION_NAME;
+    // [FIX 3] Exibe buff de guilda ativo na defesa, se houver
+    if(pvpData.guild_allies_in_spot>0){
+        const reduction=Math.round((pvpData.guild_damage_reduction||0)*100);
+        pushKillNotif(`🛡️ <span style="color:#adf">${esc(pvpData.defender_name)}</span> tinha <strong>${pvpData.guild_allies_in_spot}</strong> aliado(s) de guilda no spot — bônus de defesa de <strong>${reduction}%</strong> aplicado!`);
+    }
     if(pvpData.combat?.winner_id===userId){
         // VITÓRIA — banner otimista imediato (não espera o sync global)
         const kTxt=pvpData.attacker_daily_kills>0?`, eliminando um total de <span style="color:#ff8">${pvpData.attacker_daily_kills}</span> hoje!`:'!';

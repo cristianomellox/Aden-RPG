@@ -165,6 +165,48 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
   flex-wrap: wrap;
   top: 0;
 }
+
+.level-up-balloon {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    color: #000;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 20px;
+    font-weight: bold;
+    width: 80%;
+    z-index: 30000;
+    background-image: url('https://aden-rpg.pages.dev/assets/aventura.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: contain;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    box-sizing: border-box;
+    margin: 0;
+    animation: fadeInOut 6s ease-in-out forwards;
+    pointer-events: none;
+}
+.level-up-balloon h1 {
+    margin: 0;
+    font-size: 1.5em;
+    color: silver;
+    text-shadow: none;
+}
+@keyframes fadeInOut {
+    0%   { opacity: 0; transform: translate(-50%, -20px); }
+    10%  { opacity: 1; transform: translate(-50%, 0); }
+    90%  { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -20px); }
+}
 </style>
 <body>
 
@@ -275,16 +317,25 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
         <span class="modal-close" id="huntInfoClose">&times;</span>
         <h2>Floresta Mística</h2>
         <div style="text-align:left;color:#cdc;font-size:.82em;line-height:1.7;">
-            <p><strong style="color:#fcc;">Drops:</strong><br>
-            <strong>Unicórnio</strong> → Chifre de Unicórnio<br>
+            <h2>Drops</h2>
+            <p><strong>Unicórnio</strong> → Chifre de Unicórnio<br>
             <strong>Fênix</strong> → Lágrima de Fênix<br>
             <strong>Sátiro</strong> → Galho Espiritual<br>
             <strong>Tigre Nix</strong> → Pele Animal</p>
-            <p><strong style="color:#fd8;">⏱ Tempo:</strong> O contador de <strong>3 horas</strong> é compartilhado entre todas as regiões do jogo. Você pode dividir o tempo como quiser.</p>
-            <p><strong style="color:#afa;">Recompensas:</strong>
-            <ul>
+            <h2>⏱ Tempo</h2> 
+            <p>O contador de <strong>3 horas</strong> é compartilhado entre todas as regiões do jogo. Você pode dividir o tempo como quiser.</p>
+            <h2>Recompensas</h2>
+            <p><ul>
             <li><strong>XP:</strong> 350.</li>
             <li><strong>Itens:</strong> Distribuídos proporcionalmente ao tempo gasto em cada região/spot ao final das 3h.</li></ul></p>
+            <h2>Caçando com a guilda</h2>
+            <p>Se você estiver no mesmo spot com outtos membros de sua guilda, vocês ganharão um buff de redução de dano contra outros jogadores:
+            <ul>
+              <li><strong>Você + 1 membro:</strong> 5% de redução.</li>
+              <li><strong>Você + 2 membros:</strong> 10% de redução.</li>
+              <li><strong>Você + 3 membros:</strong> 15% de redução.</li>
+              <li><strong>Você + 4 membros ou mais:</strong> 20% de redução.</li>
+            </ul></p>
             <p><strong style="color:#acf;">🛡 Escudo:</strong> Protege de PvP por 1 hora por uso (máx. 3h).</p>
             <p style="color:#fd8;font-size:.9em;">⚠️ PvP é livre nesta região!</p>
             
@@ -469,5 +520,10 @@ document.addEventListener("DOMContentLoaded",()=>{
 
 })();
 </script>
+<div id="levelUpBalloon" class="level-up-balloon" style="display:none;">
+    <br>
+    <h1>Nível</h1>
+    <h1 id="levelUpBalloonText"></h1>
+</div>
 </body>
 </html>

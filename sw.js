@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v12'; // Versão atualizada para forçar atualização
+const CACHE_NAME = 'aden-rpg-assets-v13'; // Versão atualizada para forçar atualização
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições

@@ -2051,12 +2051,12 @@ button, .btn {
 .hotspot-label {
     font-weight: bold;
     text-shadow:
-        1px 1px 4px black,
-        -1px -1px 4px black,
-        1px -1px 4px black,
-        -1px 1px 4px black, 
-        0 0 4px black,
-        0 0 4px black;
+        1px 1px 6px black,
+        -1px -1px 6px black,
+        1px -1px 6px black,
+        -1px 1px 6px black, 
+        0 0 10px black,
+        0 0 10px black;
     font-family: 'Cinzel', cursive, sans-serif; /* Ou outra fonte do seu jogo */
     text-align: center;
     pointer-events: none; /* Garante que o clique passe para o link <a> */

@@ -485,7 +485,7 @@ async function handleActivateShield(){
 function updateMyShieldIcon(active){const el=document.getElementById('myShieldIcon');if(el)el.style.display=active?'block':'none';}
 
 // ── DRAG DO MAPA ─────────────────────────────────────────────
-function enableMapInteraction(){const cont=document.getElementById('mapContainer'),map=document.getElementById('map');if(!map||!cont)return;let drag=false,sx,sy,cx=0,cy=0,vx=0,vy=0,lt=0,aId=null;const limits=()=>{const cr=cont.getBoundingClientRect(),m=map.style.transform.match(/scale\(([^)]+)\)/),sc=m?parseFloat(m[1]):1.1;return{minX:Math.min(0,cr.width-1500*sc),maxX:0,minY:Math.min(0,cr.height-1500*sc),maxY:0};};const setPos=(x,y)=>{const L=limits();cx=Math.max(L.minX,Math.min(x,L.maxX));cy=Math.max(L.minY,Math.min(y,L.maxY));const m=map.style.transform.match(/scale\(([^)]+)\)/);map.style.transform=`translate(${cx}px,${cy}px) ${m?`scale(${m[1]})`:'scale(1.1)'}`;};const inertia=()=>{cancelAnimationFrame(aId);if(drag)return;vx*=0.94;vy*=0.94;setPos(cx+vx,cy+vy);if(Math.abs(vx)>0.4||Math.abs(vy)>0.4)aId=requestAnimationFrame(inertia);};const startDrag=e=>{if(e.touches?.length>1)return;drag=true;map.style.cursor='grabbing';sx=e.clientX??e.touches[0].clientX;sy=e.clientY??e.touches[0].clientY;vx=vy=0;lt=performance.now();cancelAnimationFrame(aId);};const onDrag=e=>{if(!drag)return;e.preventDefault();const nx=e.clientX??e.touches[0].clientX,ny=e.clientY??e.touches[0].clientY,dt=performance.now()-lt;if(dt>0){vx=(nx-sx)/dt;vy=(ny-sy)/dt;}setPos(cx+(nx-sx),cy+(ny-sy));sx=nx;sy=ny;lt=performance.now();};const endDrag=()=>{drag=false;map.style.cursor='grab';if(Math.abs(vx)>0.2||Math.abs(vy)>0.2){vx*=10;vy*=10;inertia();}};map.addEventListener('mousedown',startDrag,{passive:true});window.addEventListener('mousemove',onDrag,{passive:false});window.addEventListener('mouseup',endDrag,{passive:true});map.addEventListener('touchstart',startDrag,{passive:true});window.addEventListener('touchmove',onDrag,{passive:false});window.addEventListener('touchend',endDrag,{passive:true});map.style.cursor='grab';}
+function enableMapInteraction(){const cont=document.getElementById('mapContainer'),map=document.getElementById('map');if(!map||!cont)return;let drag=false,sx,sy,cx=0,cy=0,vx=0,vy=0,lt=0,aId=null;const limits=()=>{const cr=cont.getBoundingClientRect(),m=map.style.transform.match(/scale\(([^)]+)\)/),sc=m?parseFloat(m[1]):1.1;return{minX:Math.min(0,cr.width-1500*sc),maxX:0,minY:Math.min(0,cr.height-1500*sc),maxY:0};};const setPos=(x,y)=>{const L=limits();cx=Math.max(L.minX,Math.min(x,L.maxX));cy=Math.max(L.minY,Math.min(y,L.maxY));const m=map.style.transform.match(/scale\(([^)]+)\)/);map.style.transform=`translate(${cx}px,${cy}px) ${m?`scale(${m[1]})`:'scale(1.1)'}`;};const inertia=()=>{cancelAnimationFrame(aId);if(drag)return;vx*=0.94;vy*=0.94;setPos(cx+vx,cy+vy);if(Math.abs(vx)>0.4||Math.abs(vy)>0.4)aId=requestAnimationFrame(inertia);};const startDrag=e=>{if(e.touches?.length>1)return;drag=true;try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});map.style.cursor='grabbing';sx=e.clientX??e.touches[0].clientX;sy=e.clientY??e.touches[0].clientY;vx=vy=0;lt=performance.now();cancelAnimationFrame(aId);};const onDrag=e=>{if(!drag)return;e.preventDefault();const nx=e.clientX??e.touches[0].clientX,ny=e.clientY??e.touches[0].clientY,dt=performance.now()-lt;if(dt>0){vx=(nx-sx)/dt;vy=(ny-sy)/dt;}setPos(cx+(nx-sx),cy+(ny-sy));sx=nx;sy=ny;lt=performance.now();};const endDrag=()=>{drag=false;map.style.cursor='grab';if(Math.abs(vx)>0.2||Math.abs(vy)>0.2){vx*=10;vy*=10;inertia();}};map.addEventListener('mousedown',startDrag,{passive:true});window.addEventListener('mousemove',onDrag,{passive:false});window.addEventListener('mouseup',endDrag,{passive:true});map.addEventListener('touchstart',startDrag,{passive:true});window.addEventListener('touchmove',onDrag,{passive:false});window.addEventListener('touchend',endDrag,{passive:true});map.style.cursor='grab';}
 
 // ── WANDER ───────────────────────────────────────────────────
 function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=Math.max(0,Math.random()*(w-70))+'px';el.style.top=Math.max(0,Math.random()*(h-90))+'px';wanderTimers.push(setTimeout(pause,3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,5000+Math.random()*2000));};wanderTimers.push(setTimeout(move,delay));}
@@ -899,10 +899,25 @@ async function handleAttackPlayer(target){
     }
     // Usa objeto atualizado daqui em diante
     target = freshTarget;
+    // Calcula aliados de guilda do defensor no mesmo spot (para aviso pré-ataque)
+    const targetGuildId = _ownersMap[target.id]?.guild_id || null;
+    let guildAlliesCount = 0;
+    if(targetGuildId && target.current_spot){
+        guildAlliesCount = otherPlayers.filter(p =>
+            p.id !== target.id &&
+            !p.is_eliminated &&
+            p.current_spot === target.current_spot &&
+            (_ownersMap[p.id]?.guild_id === targetGuildId)
+        ).length;
+    }
+    const guildReductionPct = Math.min(20, guildAlliesCount * 5);
+    const guildWarning = guildAlliesCount > 0
+        ? `<br><small style="color:#adf;">🛡️ <strong>${esc(target.name)}</strong> está acompanhado de <strong>${guildAlliesCount}</strong> companheiro(s) de guilda — isso reduzirá <strong>${guildReductionPct}%</strong> do seu dano. Atacar mesmo assim?</small>`
+        : '';
     // Escudo do atacante: avisar que perderá proteção
     if(isShieldActive()){
         const okShield=await showConfirm('⚠️ Escudo Ativo',
-            `Tem certeza que deseja atacar <strong>${esc(target.name)}</strong>?<br><small style="color:#f88;">Essa ação fará você perder o Escudo de Caça.</small>`);
+            `Tem certeza que deseja atacar <strong>${esc(target.name)}</strong>?<br><small style="color:#f88;">Essa ação fará você perder o Escudo de Caça.</small>${guildWarning}`);
         if(!okShield)return;
         // Remove escudo localmente
         shieldUntil=null;
@@ -910,7 +925,7 @@ async function handleAttackPlayer(target){
         document.getElementById('shieldHudRow').style.display='none';
         updateMyShieldIcon(false);
     } else {
-        const ok=await showConfirm('PvP',`Deseja atacar <strong>${esc(target.name)}</strong>?`);if(!ok)return;
+        const ok=await showConfirm('PvP',`Deseja atacar <strong>${esc(target.name)}</strong>?${guildWarning}`);if(!ok)return;
     }
     showLoading();
     let pvpData=null;

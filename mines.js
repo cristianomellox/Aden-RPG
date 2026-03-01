@@ -277,24 +277,50 @@ document.addEventListener("DOMContentLoaded", async () => {
             localStorage.removeItem(ACTIVITY_KEY);
             return null;
         }
-        // Atividades de caça (type:'hunting') são controladas exclusivamente pelo
-        // hunting.js via clearActivity() explícito — não devem expirar pelo
-        // fim-de-sessão de mineração, pois o started_at pode cair exatamente num
-        // boundary de sessão e expirar imediatamente.
-        // Aplica o TTL de sessão apenas para atividades de mineração.
-        if(a.type!=='hunting' && a.started_at && Date.now() > getSessionEndForTime(a.started_at).getTime()){
-            localStorage.removeItem(ACTIVITY_KEY);
-            return null;
-        }
-        // Atividades de caça: expiram após 6h sem interação (mesmo TTL do hunting.js)
-        if(a.type==='hunting' && a.started_at && (Date.now()-a.started_at)>6*60*60*1000){
-            localStorage.removeItem(ACTIVITY_KEY);
-            return null;
+        if(a.type==='hunting'){
+            // PvP puro: libera quando o timer de 15 min expira (timestamp preciso)
+            if(a.pvp_only && a.pvp_only_expires_at && Date.now() > a.pvp_only_expires_at){
+                localStorage.removeItem(ACTIVITY_KEY);
+                return null;
+            }
+            // Caça normal: libera quando o tempo diário se esgota (timestamp preciso).
+            // O jogador pode minerar assim que o tempo acaba — coleta de recompensas
+            // é apenas um botão e não requer lock de atividade.
+            if(!a.pvp_only && a.hunt_ends_at && Date.now() > a.hunt_ends_at){
+                localStorage.removeItem(ACTIVITY_KEY);
+                return null;
+            }
+            // Fallback para entradas antigas sem timestamps precisos: 6h sem interação
+            if(!a.hunt_ends_at && !a.pvp_only_expires_at && a.started_at && (Date.now()-a.started_at)>6*60*60*1000){
+                localStorage.removeItem(ACTIVITY_KEY);
+                return null;
+            }
+        } else {
+            // Mineração: expira na hora ímpar UTC de fim de sessão
+            // Prefere session_ends_at (gravado explicitamente) — fallback: calcula do started_at
+            const miningEndsAt = a.session_ends_at
+                ? a.session_ends_at
+                : (a.started_at ? getSessionEndForTime(a.started_at).getTime() : null);
+            if(miningEndsAt && Date.now() > miningEndsAt){
+                localStorage.removeItem(ACTIVITY_KEY);
+                return null;
+            }
         }
         return a;
     }catch{return null;}
   }
-  function setActivityMining(mineName){localStorage.setItem(ACTIVITY_KEY,JSON.stringify({type:'mining',mine_name:mineName,started_at:Date.now()}));}
+  function setActivityMining(mineName){
+    // session_ends_at: timestamp exato de fim da sessão de mineração (hora ímpar UTC + 110 min).
+    // Gravado explicitamente para que as páginas de caça saibam exatamente quando a mina libera,
+    // sem precisar recalcular via getSessionEndForTime.
+    const session_ends_at = getSessionEndForTime(Date.now()).getTime();
+    localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
+        type:'mining',
+        mine_name: mineName,
+        started_at: Date.now(),
+        session_ends_at
+    }));
+  }
   function clearActivity(){localStorage.removeItem(ACTIVITY_KEY);}
 
   // Sincroniza o estado de atividade com a posse real de mina.

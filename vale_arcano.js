@@ -173,11 +173,19 @@ function setActivityHunting(spotId, forceResetLock = false, pvpOnly = false){
         // Reset explícito (vitória em PvP) → grava novo timestamp
         try{localStorage.setItem(SPOT_LOCK_KEY(),JSON.stringify({spot_id:spotId,locked_at:Date.now()}));}catch{}
     }
+    // Timestamps precisos de expiração — permitem que mines.js libere o lock
+    // sem precisar que o jogador retorne à página de caça.
+    // hunt_ends_at:        quando as 3h diárias se esgotam (caça normal)
+    // pvp_only_expires_at: quando os 15 min de PvP puro expiram
+    const hunt_ends_at         = pvpOnly ? null : Date.now() + (localSecondsLeft * 1000);
+    const pvp_only_expires_at  = pvpOnly ? Date.now() + (pvpOnlySecondsLeft * 1000) : null;
     localStorage.setItem(ACTIVITY_KEY,JSON.stringify({
         type:'hunting',region:REGION_NAME,spot_id:spotId,
         pvp_only: pvpOnly,
         spot_started_at: lockTs,
-        started_at:Date.now()
+        started_at: Date.now(),
+        hunt_ends_at,
+        pvp_only_expires_at
     }));
 }
 function clearActivity(){
@@ -978,9 +986,10 @@ async function handleAttackPlayer(target){
         }
         otherPlayers=otherPlayers.map(p=>p.id===target.id?{...p,is_eliminated:true,eliminated_by_name:myName}:p);
         renderOtherPlayers(otherPlayers);
+        // Garante pvpOnlySecondsLeft=900 ANTES de gravar o pvp_only_expires_at na activity
+        if(isPvpOnly)resetPvpOnlyTimer();
         // Reseta lock de 15 min — preserva pvp_only se estiver nesse modo
         if(currentSpotId)setActivityHunting(currentSpotId, true, isPvpOnly);
-        if(isPvpOnly)resetPvpOnlyTimer();
     } else {
         // DERROTA — fica morto 3 min
         isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();removePlayerFromSpot();

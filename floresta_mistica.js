@@ -155,8 +155,16 @@ function getActivity(){
             try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
             return null;
         }
-        // Expira após 6 horas sem interação (previne bloqueio por crash)
-        if(a.started_at&&(Date.now()-a.started_at)>6*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        // Mineração: expira quando a sessão termina (hora ímpar UTC + 110 min).
+        // session_ends_at é gravado explicitamente por mines.js; se ausente (entradas antigas),
+        // usa fallback de 2h (máximo teórico de uma sessão de mina).
+        if(a.type==='mining'){
+            const miningEndsAt=a.session_ends_at||null;
+            if(miningEndsAt&&Date.now()>miningEndsAt){localStorage.removeItem(ACTIVITY_KEY);return null;}
+            if(!miningEndsAt&&a.started_at&&(Date.now()-a.started_at)>2*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        }
+        // Caça: expira após 6 horas sem interação (previne bloqueio por crash)
+        if(a.type==='hunting'&&a.started_at&&(Date.now()-a.started_at)>6*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
         return a;
     }catch{return null;}
 }

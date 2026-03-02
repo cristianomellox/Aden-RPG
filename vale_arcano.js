@@ -434,6 +434,48 @@ const audioBufs={};
 const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/floresta2.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
+
+// ── MOB HIT SOUNDS ───────────────────────────────────────────
+const MOB_SOUND_URLS = {
+    quar:   'https://aden-rpg.pages.dev/assets/quar.mp3',
+    duende: 'https://aden-rpg.pages.dev/assets/duende.mp3',
+    limut:  'https://aden-rpg.pages.dev/assets/limut.mp3',
+    pixie:  'https://aden-rpg.pages.dev/assets/pixie.mp3',
+};
+async function preloadUrl(name, url) {
+    try {
+        const r = await fetch(url, {cache:'force-cache'});
+        if (!r.ok) return;
+        const ab = await r.arrayBuffer();
+        audioBufs[name] = await new Promise((res, rej) => audioCtx.decodeAudioData(ab, res, rej));
+    } catch {}
+}
+
+// ── VOLUME ADAPTATIVO — baseado na posição VISUAL da câmera no mapa ──────────
+function _getViewportCenter() {
+    const map  = document.getElementById('map');
+    const cont = document.getElementById('mapContainer');
+    if (!map || !cont) return null;
+    const t  = map.style.transform || '';
+    const tm = t.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+    const sm = t.match(/scale\(([^)]+)\)/);
+    const tx = tm ? parseFloat(tm[1]) : 0;
+    const ty = tm ? parseFloat(tm[2]) : 0;
+    const sc = sm ? parseFloat(sm[1]) : 1.1;
+    const cw = cont.clientWidth  || window.innerWidth;
+    const ch = cont.clientHeight || window.innerHeight;
+    return { x: (cw / 2 - tx) / sc, y: (ch / 2 - ty) / sc };
+}
+function _spotVolume(spotId) {
+    const vc   = _getViewportCenter();
+    const spot = SPOTS.find(s => s.id === spotId);
+    if (!vc || !spot) return 0.5;
+    const cx   = spot.left + spot.width  / 2;
+    const cy   = spot.top  + spot.height / 2;
+    const dist = Math.hypot(vc.x - cx, vc.y - cy);
+    return Math.max(0.02, Math.exp(-dist / 300));
+}
+
 const amb=new Audio(SRC.ambient);amb.volume=0.04;amb.loop=true;
 document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
@@ -504,7 +546,7 @@ function updateMyShieldIcon(active){const el=document.getElementById('myShieldIc
 function enableMapInteraction(){const cont=document.getElementById('mapContainer'),map=document.getElementById('map');if(!map||!cont)return;let drag=false,sx,sy,cx=0,cy=0,vx=0,vy=0,lt=0,aId=null;const limits=()=>{const cr=cont.getBoundingClientRect(),m=map.style.transform.match(/scale\(([^)]+)\)/),sc=m?parseFloat(m[1]):1.1;return{minX:Math.min(0,cr.width-1500*sc),maxX:0,minY:Math.min(0,cr.height-1500*sc),maxY:0};};const setPos=(x,y)=>{const L=limits();cx=Math.max(L.minX,Math.min(x,L.maxX));cy=Math.max(L.minY,Math.min(y,L.maxY));const m=map.style.transform.match(/scale\(([^)]+)\)/);map.style.transform=`translate(${cx}px,${cy}px) ${m?`scale(${m[1]})`:'scale(1.1)'}`;};const inertia=()=>{cancelAnimationFrame(aId);if(drag)return;vx*=0.94;vy*=0.94;setPos(cx+vx,cy+vy);if(Math.abs(vx)>0.4||Math.abs(vy)>0.4)aId=requestAnimationFrame(inertia);};const startDrag=e=>{if(e.touches?.length>1)return;drag=true;try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});map.style.cursor='grabbing';sx=e.clientX??e.touches[0].clientX;sy=e.clientY??e.touches[0].clientY;vx=vy=0;lt=performance.now();cancelAnimationFrame(aId);};const onDrag=e=>{if(!drag)return;e.preventDefault();const nx=e.clientX??e.touches[0].clientX,ny=e.clientY??e.touches[0].clientY,dt=performance.now()-lt;if(dt>0){vx=(nx-sx)/dt;vy=(ny-sy)/dt;}setPos(cx+(nx-sx),cy+(ny-sy));sx=nx;sy=ny;lt=performance.now();};const endDrag=()=>{drag=false;map.style.cursor='grab';if(Math.abs(vx)>0.2||Math.abs(vy)>0.2){vx*=10;vy*=10;inertia();}};map.addEventListener('mousedown',startDrag,{passive:true});window.addEventListener('mousemove',onDrag,{passive:false});window.addEventListener('mouseup',endDrag,{passive:true});map.addEventListener('touchstart',startDrag,{passive:true});window.addEventListener('touchmove',onDrag,{passive:false});window.addEventListener('touchend',endDrag,{passive:true});map.style.cursor='grab';}
 
 // ── WANDER ───────────────────────────────────────────────────
-function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=Math.max(0,Math.random()*(w-70))+'px';el.style.top=Math.max(0,Math.random()*(h-90))+'px';wanderTimers.push(setTimeout(pause,3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,5000+Math.random()*2000));};wanderTimers.push(setTimeout(move,delay));}
+function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=Math.max(0,Math.random()*(w-70))+'px';el.style.top=Math.max(0,Math.random()*(h-90))+'px';wanderTimers.push(setTimeout(pause,3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
 function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.src=spot.mobImg;av.onerror=()=>{av.src=DEFAULT_AVATAR;};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
@@ -1326,6 +1368,7 @@ async function boot(){
         }
 
         preload('normal');preload('critical');preload('evade');
+        Object.entries(MOB_SOUND_URLS).forEach(([id, url]) => preloadUrl('mob_' + id, url));
         await initShieldFromCache();
         // Fallback servidor para o escudo: se IDB retornar 0 (ex: compra recente no mercador
         // que ainda não propagou para o IDB desta aba), consulta o banco uma vez.
@@ -1626,10 +1669,11 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     // Damage number suppressed in spot animation — sounds and shake only
     // _showMobDmgNumber(targetMob, dmg, isCrit, isEvade);
 
-    // Sound — own player uses full volume, others use 0.005
+    // Som de ataque primeiro, depois som do mob com delay
     const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
-    if(soundVolume === null) playSound(sndName);
-    else playSoundAt(sndName, soundVolume);
+    const _vf = _spotVolume(spot.id);
+    playSoundAt(sndName, (sndName === 'critical' ? 0.07 : 1.0) * _vf);
+    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.6 * _vf), 500); }
 
     // Shake mob avatar
     const mobAv = targetMob.querySelector('.mob-avatar');

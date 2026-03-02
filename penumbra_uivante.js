@@ -1492,7 +1492,8 @@ async function boot(){
             // dispositivo, aba fechada sem pausar, sessão expirada naturalmente, etc.
             // IMPORTANTE: NÃO apaga SPOT_LOCK_KEY se o lock ainda está dentro dos 15 min
             // — o jogador pode ter vindo de outra região e o lock precisa sobreviver à navegação.
-            if(!isHunting&&!isPvpOnly&&!isPlayerDead()&&!currentSession.pvp_only_entered_at){
+            // [FIX] isHuntingElsewhere adicionado: não apagar ACTIVITY_KEY quando há sessão ativa em outra região
+            if(!isHunting&&!isPvpOnly&&!isHuntingElsewhere&&!isPlayerDead()&&!currentSession.pvp_only_entered_at){
                 const _staleAct=getActivity();
                 if(_staleAct&&_staleAct.type==='hunting'){
                     let _lockStillActive=false;

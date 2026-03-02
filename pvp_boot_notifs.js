@@ -8,7 +8,7 @@
         style.id = '_pvpBootBannerStyle';
         style.textContent = [
             '#huntKillBanner{position:fixed;top:48px;right:0;background:linear-gradient(90deg,rgba(180,30,0,.92),rgba(180,80,0,.92));color:#fff;padding:9px 22px;border-radius:6px 0 0 6px;z-index:25000;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;box-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:translateX(100%);transition:opacity .3s; font-size: 1.2em;}',
-            '#huntKillBanner.show{opacity:1;animation:huntBannerSlide 46s linear forwards;}',
+            '#huntKillBanner.show{opacity:1;animation:huntBannerSlide 35s linear forwards;}',
             '@keyframes huntBannerSlide{0%{transform:translateX(100%);}100%{transform:translateX(calc(-100% - 5px));}}'
         ].join('');
         document.head.appendChild(style);

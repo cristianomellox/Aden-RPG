@@ -67,7 +67,7 @@
 
         let events;
         try {
-            const { data, error } = await supabaseClient.rpc('get_hunt_pvp_events', { p_since_minutes: 5 });
+            const { data, error } = await supabaseClient.rpc('get_hunt_pvp_events', { p_since_minutes: 180 });
             if (error || !data) return;
             events = data;
         } catch (e) {

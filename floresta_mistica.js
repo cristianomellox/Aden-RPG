@@ -239,6 +239,7 @@ function fmtLockTime(){
 // ── ESTADO ─────────────────────────────────────────────────
 let userId=null, playerData=null, currentSession=null;
 let isHunting=false, isPvpOnly=false, currentSpotId=null, localSecondsLeft=DAILY_LIMIT;
+let isHuntingElsewhere=false; // sessão ativa em outra região — timer roda, mas sem animações/RPC locais
 let pvpOnlyExitTimer=null, pvpOnlySecondsLeft=900, pvpOnlyTimerInterval=null;
 let eliminationModalShown=false;
 function _elimAckKey(huntDate){return `elim_ack_${userId}_${huntDate||'today'}`;}
@@ -673,7 +674,7 @@ function renderOtherPlayers(players){
 
 // ── TIMER GLOBAL ─────────────────────────────────────────────
 function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=isPvpOnly?fmtTime(pvpOnlySecondsLeft):fmtTime(localSecondsLeft);}
-function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);startCombatLoop();}
+function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting&&!isHuntingElsewhere)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();if(isHunting)onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);if(isHunting)startCombatLoop();}
 function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;stopCombatLoop();}
 
 // ── TIMER PvP PURO (15 min) ───────────────────────────────
@@ -1324,6 +1325,13 @@ async function syncOtherPlayers(){
             const srvLeft=Math.max(0,DAILY_LIMIT-_srvTotal);
             if(Math.abs(srvLeft-localSecondsLeft)>5){localSecondsLeft=srvLeft;updateTimerDisplay();}
             if(srvLeft<=0&&!own.rewards_claimed&&!isPvpOnly){updateHuntingHUD();}
+            // [FIX] Mantém isHuntingElsewhere sincronizado com o estado real do servidor
+            const _newElsewhere=!!(own.is_hunting&&own.current_region!==REGION_ID&&!own.is_eliminated&&!own.rewards_claimed&&srvLeft>0);
+            if(_newElsewhere!==isHuntingElsewhere){
+                isHuntingElsewhere=_newElsewhere;
+                if(isHuntingElsewhere&&!huntTimerInterval)startLocalTimer();
+                else if(!isHuntingElsewhere&&huntTimerInterval){clearInterval(huntTimerInterval);huntTimerInterval=null;}
+            }
         }
     }catch(e){console.warn('[floresta] sync error',e);}
     return changed;
@@ -1449,6 +1457,14 @@ async function boot(){
                 &&!currentSession.is_eliminated
                 &&!currentSession.rewards_claimed;
 
+            // [FIX] Timer conta regressivamente mesmo quando a sessão ativa é em outra região
+            isHuntingElsewhere=!isHunting
+                &&currentSession.is_hunting===true
+                &&currentSession.current_region!==REGION_ID
+                &&localSecondsLeft>0
+                &&!currentSession.is_eliminated
+                &&!currentSession.rewards_claimed;
+
             if(!isHunting&&currentSession.pvp_only_entered_at&&currentSession.current_region===REGION_ID&&!currentSession.is_eliminated){
                 const pvpEnteredAt=new Date(currentSession.pvp_only_entered_at);
                 const pvpElapsed=Math.floor((Date.now()-pvpEnteredAt.getTime())/1000);
@@ -1471,6 +1487,8 @@ async function boot(){
                 clearTimeout(pvpOnlyExitTimer);
                 pvpOnlyExitTimer=setTimeout(exitPvpOnlyMode,pvpOnlySecondsLeft*1000);
             }
+            // [FIX] Sessão ativa em outra região: timer decrementando (sem animações nesta página)
+            if(!isHunting&&!isPvpOnly&&isHuntingElsewhere)startLocalTimer();
             // ── Limpeza de atividade obsoleta no boot ──────────────────────────────────
             // Se o servidor confirma que não está caçando nem em PvP puro E não está na
             // penalidade de morte (deadUntil ainda ativo), o ACTIVITY_KEY deve ser limpo
@@ -1508,6 +1526,9 @@ async function boot(){
 
         // Inicia polling adaptativo + inactivity guard
         _currentPollMs=_getBaseInterval();
+        // [FIX] Boot do cache: sync imediato em background para não mostrar jogadores obsoletos.
+        // Cobre o caso em que outro jogador trocou de spot dentro do TTL de 120s do cache.
+        if(bootFromCache)syncOtherPlayers().catch(()=>{});
         scheduleNextSync();
         _startInactivityGuard();
 

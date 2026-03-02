@@ -1158,7 +1158,7 @@ async function syncGlobalPvpEvents(){
     if(!userId)return false;
     let changed=false;
     try{
-        const{data,error}=await supabase.rpc('get_hunt_pvp_events',{p_since_minutes:5});
+        const{data,error}=await supabase.rpc('get_hunt_pvp_events',{p_since_minutes:18});
         if(error||!data)return false;
         const seenKey=`hunt_pvp_seen_${userId}`;
         let seen;try{seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));}catch{seen=new Set();}

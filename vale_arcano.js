@@ -1571,7 +1571,7 @@ async function _combatTick_own(){
 
 function _scheduleOwn(){
     if(!_combatLoopActive) return;
-    _combatLoopTimeout = setTimeout(()=>_combatTick_own(), 2500 + Math.random()*2500);
+    _combatLoopTimeout = setTimeout(()=>_combatTick_own(), 2500 + Math.random()*1000);
 }
 
 // ── Other-players global combat interval ──────────────────────
@@ -1591,7 +1591,7 @@ function stopAllOtherCombatLoops(){
 // Kick global interval whenever renderOtherPlayers runs
 function _ensureOtherCombatInterval(){
     if(_otherCombatInterval) return;
-    _otherCombatInterval = setInterval(_otherCombatGlobalTick, 1800 + Math.random()*1200);
+    _otherCombatInterval = setInterval(_otherCombatGlobalTick, 2500 + Math.random()*1000);
 }
 
 // One tick: pick a random non-busy other-player-wrapper and run one attack

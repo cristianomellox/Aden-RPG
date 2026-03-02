@@ -1593,7 +1593,7 @@ function stopAllOtherCombatLoops(){
 // Kick global interval whenever renderOtherPlayers runs
 function _ensureOtherCombatInterval(){
     if(_otherCombatInterval) return;
-    _otherCombatInterval = setInterval(_otherCombatGlobalTick, 2500 + Math.random()*1000);
+    _otherCombatInterval = setInterval(_otherCombatGlobalTick, 4000 + Math.random()*1000);
 }
 
 // One tick: pick a random non-busy other-player-wrapper and run one attack

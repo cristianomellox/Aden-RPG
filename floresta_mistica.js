@@ -751,7 +751,10 @@ async function onHuntComplete(){
     try{
         const{data,error}=await supabase.rpc('finish_daily_hunt',{p_player_id:userId});
         if(error)throw error;
-        if(data?.success){showRewardsModal(data);if(data.leveled_up)showLevelUpBalloon(data.new_level);} // showRewardsModal também chama clearActivity (redundante mas seguro)
+        if(data?.success){
+            // Invalida cache de 15min do index para refletir XP/level up
+            localStorage.removeItem('aden_player_last_fetch_ts');
+            showRewardsModal(data);if(data.leveled_up)showLevelUpBalloon(data.new_level);} // showRewardsModal também chama clearActivity (redundante mas seguro)
         else await showAlert(data?.message||'Erro ao finalizar.');
     }catch(e){await showAlert('Erro ao finalizar. Tente novamente.');}
     finally{hideLoading();}

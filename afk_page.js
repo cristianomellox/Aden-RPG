@@ -459,6 +459,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 await saveToCache(playerAfkData);
                 renderPlayerData();
 
+                // Invalida cache de 15min do index para refletir XP/level up
+                localStorage.removeItem('aden_player_last_fetch_ts');
+
                 resultText.textContent = `Você coletou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro!`;
                 resultModal.style.display = "block";
             } else {
@@ -511,6 +514,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         await saveToCache(playerAfkData);
         renderPlayerData();
+
+        // Invalida cache de 15min do index para refletir XP/level up
+        localStorage.removeItem('aden_player_last_fetch_ts');
 
         const combatDataObject = {
             venceu: didWin,

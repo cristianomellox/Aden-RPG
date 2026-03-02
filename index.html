@@ -176,10 +176,26 @@
   <div onclick="window.location.href = 'mines.html'" class="footer-submenu-btn">
     <img src="https://aden-rpg.pages.dev/assets/recursos.webp" class="submenu-icon">Mineração
   </div>
+  
+  <div id="btnCacaToggle" class="footer-submenu-btn" style="cursor: pointer; justify-content: space-between;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <img src="https://aden-rpg.pages.dev/assets/mapicon.webp" class="submenu-icon">Áreas de Caça
+    </div>
+    <svg id="cacaArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s;">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </div>
+
+  <div id="cacaDropdownContent" style="display: none; flex-direction: column; background-color: rgba(0,0,0,0.3); border-radius: 4px; margin-bottom: 5px;">
+    <!-- ADICIONADO ID btnRuins AQUI -->
+    <div id="btnFlom" onclick="window.location.href = 'floresta_mistica.html'" class="footer-submenu-btn" style="border: none; background: transparent; padding-left: 25px; justify-content: flex-start;">
+      <span style="font-size: 0.9em; color: #ccc;">↳ Floresta Mística</span>
+    </div>
+  </div>
 
   <div id="btnAreasToggle" class="footer-submenu-btn" style="cursor: pointer; justify-content: space-between;">
     <div style="display:flex; align-items:center; gap:10px;">
-      <img src="https://aden-rpg.pages.dev/assets/mapicon.webp" class="submenu-icon">Áreas
+      <img src="https://aden-rpg.pages.dev/assets/dgs.webp" class="submenu-icon">Masmorras
     </div>
     <svg id="areasArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s;">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -1064,29 +1080,43 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // Lógica para o Dropdown "Áreas" no Footer
+    // Lógica para o Dropdown "Masmorras" (Áreas)
     const btnAreasToggle = document.getElementById('btnAreasToggle');
     const areasDropdownContent = document.getElementById('areasDropdownContent');
     const areasArrow = document.getElementById('areasArrow');
 
     if(btnAreasToggle && areasDropdownContent) {
         btnAreasToggle.addEventListener('click', (e) => {
-            // Impede que o clique propague e feche o menu "Iniciar" principal
             e.stopPropagation(); 
-            
             const isHidden = areasDropdownContent.style.display === 'none';
-            
-            // Alterna visibilidade
             areasDropdownContent.style.display = isHidden ? 'flex' : 'none';
             
-            // Gira a seta
             if(areasArrow) {
                 areasArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
                 areasArrow.style.color = isHidden ? 'gold' : 'inherit';
             }
         });
     }
+
+    // Lógica para o Dropdown "Áreas de Caça"
+    const btnCacaToggle = document.getElementById('btnCacaToggle');
+    const cacaDropdownContent = document.getElementById('cacaDropdownContent');
+    const cacaArrow = document.getElementById('cacaArrow');
+
+    if(btnCacaToggle && cacaDropdownContent) {
+        btnCacaToggle.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            const isHidden = cacaDropdownContent.style.display === 'none';
+            cacaDropdownContent.style.display = isHidden ? 'flex' : 'none';
+            
+            if(cacaArrow) {
+                cacaArrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                cacaArrow.style.color = isHidden ? 'gold' : 'inherit';
+            }
+        });
+    }
 });
 </script>
+<script src="pvp_boot_notifs.js"></script>
 </body>
 </html>

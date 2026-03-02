@@ -1,9 +1,3 @@
-// =======================================================================
-// PVP BOOT NOTIFICATIONS — pvp_boot_notifs.js
-// Exibe banners de eventos PvP de caça no boot do index.
-// CSS, animação, fila e chave de localStorage idênticos às regiões de caça.
-// Eventos vistos aqui NÃO se repetirão nas regiões (mesma chave hunt_pvp_seen_<uid>).
-// =======================================================================
 
 (function () {
 
@@ -13,8 +7,8 @@
         const style = document.createElement('style');
         style.id = '_pvpBootBannerStyle';
         style.textContent = [
-            '#huntKillBanner{position:fixed;top:58px;right:0;background:linear-gradient(90deg,rgba(180,30,0,.92),rgba(180,80,0,.92));color:#fff;padding:9px 22px;border-radius:6px 0 0 6px;z-index:25000;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;box-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:translateX(100%);transition:opacity .3s;}',
-            '#huntKillBanner.show{opacity:1;animation:huntBannerSlide 26s linear forwards;}',
+            '#huntKillBanner{position:fixed;top:48px;right:0;background:linear-gradient(90deg,rgba(180,30,0,.92),rgba(180,80,0,.92));color:#fff;padding:9px 22px;border-radius:6px 0 0 6px;z-index:25000;font-weight:bold;white-space:nowrap;text-shadow:1px 1px 2px #000;box-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:translateX(100%);transition:opacity .3s; font-size: 1.1em;}',
+            '#huntKillBanner.show{opacity:1;animation:huntBannerSlide 36s linear forwards;}',
             '@keyframes huntBannerSlide{0%{transform:translateX(100%);}100%{transform:translateX(calc(-100% - 5px));}}'
         ].join('');
         document.head.appendChild(style);

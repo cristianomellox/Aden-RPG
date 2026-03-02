@@ -55,7 +55,7 @@ async function getLocalUserId() {
 const BOSS_ATTACK_INTERVAL = 45000; 
 const ATTACK_REGEN_MS = 60000;      
 const MAX_ATTACKS = 3;
-const REVIVE_TIME_MS = 29000;       
+const REVIVE_TIME_MS = 60000;       
 const CACHE_KEY_PREFIX = "aden_solo_boss_";
 
 const VIDEO_INTRO = "https://aden-rpg.pages.dev/assets/karintro.mp4";

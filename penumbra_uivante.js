@@ -470,14 +470,14 @@ function _getViewportCenter() {
 function _spotVolume(spotId) {
     const vc   = _getViewportCenter();
     const spot = SPOTS.find(s => s.id === spotId);
-    if (!vc || !spot) return 0.5;
+    if (!vc || !spot) return 0.8;
     const cx   = spot.left + spot.width  / 2;
     const cy   = spot.top  + spot.height / 2;
     const dist = Math.hypot(vc.x - cx, vc.y - cy);
-    return Math.max(0.02, Math.exp(-dist / 300));
+    return Math.max(0.08, Math.exp(-dist / 300));
 }
 
-const amb=new Audio(SRC.ambient);amb.volume=0.007;amb.loop=true;
+const amb=new Audio(SRC.ambient);amb.volume=0.009;amb.loop=true;
 document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
 
@@ -1695,7 +1695,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     // Som de ataque primeiro, depois som do mob com delay
     const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
     const _vf = _spotVolume(spot.id);
-    playSoundAt(sndName, (sndName === 'critical' ? 0.07 : 1.0) * _vf);
+    playSoundAt(sndName, (sndName === 'critical' ? 0.15 : 1.0) * _vf);
     if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.6 * _vf), 500); }
 
     // Shake mob avatar

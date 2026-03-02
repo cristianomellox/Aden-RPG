@@ -3,16 +3,16 @@ import { supabase } from './supabaseClient.js';
 // ═══════════════════════════════════════════════════════════
 // CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
 // ═══════════════════════════════════════════════════════════
-const REGION_ID = 'vale_arcano';
-const REGION_NAME = 'Vale Arcano';
+const REGION_ID = 'razar';
+const REGION_NAME = 'Razar';
 
 // Catálogo de TODAS as regiões (para o modal de recompensas)
 // Adicione aqui as outras regiões conforme criar as páginas
-const ALL_REGIONS = {floresta_mistica: { name:'Floresta Mística' },
+const ALL_REGIONS = {
+    floresta_mistica: { name:'Floresta Mística' },
     vale_arcano: { name:'Vale Arcano' },
     penumbra_uivante: { name:'Penumbra Uivante' },
     razar: { name:'Razar' },
-    
 };
 
 // Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
@@ -37,14 +37,14 @@ const ALL_DROPS = {
 };
 
 const SPOTS = [
-    { id:'quar', name:'Quar',  top:260, left:190,  width:500, height:380,
-      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/quar.webp', labelColor:'silver' },
-    { id:'limut',    name:'Limut',       top:430, left:960, width:490, height:400,
-      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/limut.webp',     labelColor:'lightgreen' },
-    { id:'duende',   name:'Duende',      top:1050, left:30, width:480, height:390,
-      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/duende.webp',    labelColor:'orange' },
-    { id:'pixie', name:'Pixie',   top:1070, left:1080, width:380, height:370,
-      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/pixie.webp', labelColor:'gray' },
+    { id:'golem_de_gelo', name:'Golem de Gelo',  top:120, left:150,  width:450, height:450,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/golem_de_gelo.webp', labelColor:'silver' },
+    { id:'aranha_artica',    name:'Aranha Ártica',       top:280, left:840, width:470, height:380,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/aranha_artica.webp',     labelColor:'lightgreen' },
+    { id:'fenrir_montanhes',   name:'Fenrir Montanhês',      top:880, left:80, width:500, height:430,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/fenrir_montanhes.webp',    labelColor:'orange' },
+    { id:'yeti', name:'Yeti',   top:980, left:920, width:480, height:390,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/yeti.webp', labelColor:'gray' },
 ];
 
 const SHIELD_ITEM_ID = 85;
@@ -437,16 +437,16 @@ async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.obje
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 const audioBufs={};
-const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/floresta2.mp3'};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/razar.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
 
 // ── MOB HIT SOUNDS ───────────────────────────────────────────
 const MOB_SOUND_URLS = {
-    quar:   'https://aden-rpg.pages.dev/assets/quar.mp3',
-    duende: 'https://aden-rpg.pages.dev/assets/duende.mp3',
-    limut:  'https://aden-rpg.pages.dev/assets/limut.mp3',
-    pixie:  'https://aden-rpg.pages.dev/assets/pixie.mp3',
+    golem_de_gelo: 'https://aden-rpg.pages.dev/assets/quar.mp3',
+    aranha_artica:    'https://aden-rpg.pages.dev/assets/morcego.mp3',
+    yeti:     'https://aden-rpg.pages.dev/assets/limut.mp3',
+    fenrir_montanhes:  'https://aden-rpg.pages.dev/assets/tigre.mp3',
 };
 async function preloadUrl(name, url) {
     try {
@@ -458,6 +458,7 @@ async function preloadUrl(name, url) {
 }
 
 // ── VOLUME ADAPTATIVO — baseado na posição VISUAL da câmera no mapa ──────────
+// Retorna 0..1: 1.0 quando a tela está centrada sobre o spot, cai com a distância.
 function _getViewportCenter() {
     const map  = document.getElementById('map');
     const cont = document.getElementById('mapContainer');
@@ -479,6 +480,7 @@ function _spotVolume(spotId) {
     const cx   = spot.left + spot.width  / 2;
     const cy   = spot.top  + spot.height / 2;
     const dist = Math.hypot(vc.x - cx, vc.y - cy);
+    // 100% no centro do spot; ~37% a 450px; ~4% a 1400px
     return Math.max(0.08, Math.exp(-dist / 300));
 }
 

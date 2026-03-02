@@ -12,6 +12,7 @@ const ALL_REGIONS = {
     floresta_mistica: { name:'Floresta Mística' },
     vale_arcano: { name:'Vale Arcano' },
     penumbra_uivante: { name:'Penumbra Uivante' },
+    razar: { name:'Razar' },
 };
 
 // Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
@@ -28,6 +29,10 @@ const ALL_DROPS = {
     70: { name:'Sal de Cobalto',               img:'https://aden-rpg.pages.dev/assets/itens/sal_de_cobalto.webp'               },
     86: { name:'Asa de Morcego',               img:'https://aden-rpg.pages.dev/assets/itens/asa_de_morcego.webp'               },
     87: { name:'Emblema Vampírico',               img:'https://aden-rpg.pages.dev/assets/itens/emblema_vampirico.webp'               },
+    75: { name:'Minério de Mithril',               img:'https://aden-rpg.pages.dev/assets/itens/minerio_de_mithril.webp'               },
+    79: { name:'Mithril Temperado',               img:'https://aden-rpg.pages.dev/assets/itens/mithril_temperado.webp'               },
+    81: { name:'Minério de Ferro',               img:'https://aden-rpg.pages.dev/assets/itens/minerio_de_ferro.webp'               },
+    80: { name:'Carvão',               img:'https://aden-rpg.pages.dev/assets/itens/carvao.webp'               },
     // adicione outros drops aqui
 };
 
@@ -1031,7 +1036,7 @@ async function handleAttackPlayer(target){
         // VITÓRIA — banner otimista imediato (não espera o sync global)
         const kTxt=pvpData.attacker_daily_kills>0?`, eliminando um total de <span style="color:#ff8">${pvpData.attacker_daily_kills}</span> hoje!`:'!';
         pushKillNotif(
-            `<span style="color:#ff8">${esc(myName)}</span> acabou de eliminar `+
+            `<span style="color:#ff8">${esc(myName)}</span> eliminou `+
             `<span style="color:#f88">${esc(pvpData.defender_name)}</span> em `+
             `<span style="color:#8ff">${esc(regionNameDisplay)}</span>${kTxt}`
         );
@@ -1168,7 +1173,7 @@ async function syncGlobalPvpEvents(){
             const regionLabel=`<span style="color:#8ff">${esc(ev.region_name)}</span>`;
             if(ev.attacker_won){
                 const kTxt=ev.attacker_kills>0?`, eliminando um total de <span style="color:#ff8">${ev.attacker_kills}</span> hoje!`:'!';
-                pushKillNotif(`<span style="color:#ff8">${esc(ev.attacker_name)}</span> acabou de eliminar <span style="color:#f88">${esc(ev.defender_name)}</span> em ${regionLabel}${kTxt}`);
+                pushKillNotif(`<span style="color:#ff8">${esc(ev.attacker_name)}</span> eliminou <span style="color:#f88">${esc(ev.defender_name)}</span> em ${regionLabel}${kTxt}`);
             }else{
                 const dkTxt=ev.defender_kills>0?`. <span style="color:#8ff">${esc(ev.defender_name)}</span> já eliminou <span style="color:#ff8">${ev.defender_kills}</span> hoje!`:'.';
                 pushKillNotif(`<span style="color:#f88">${esc(ev.attacker_name)}</span> tentou atacar <span style="color:#ff8">${esc(ev.defender_name)}</span> em ${regionLabel} e perdeu${dkTxt}`);

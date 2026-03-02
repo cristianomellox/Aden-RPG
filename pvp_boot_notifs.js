@@ -92,7 +92,7 @@
                     ? `, eliminando um total de <span style="color:#ff8">${ev.attacker_kills}</span> hoje!`
                     : '!';
                 pushKillNotif(
-                    `<span style="color:#ff8">${esc(ev.attacker_name)}</span> acabou de eliminar ` +
+                    `<span style="color:#ff8">${esc(ev.attacker_name)}</span> eliminou ` +
                     `<span style="color:#f88">${esc(ev.defender_name)}</span> em ${regionLabel}${kTxt}`
                 );
             } else {

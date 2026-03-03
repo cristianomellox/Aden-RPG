@@ -34,7 +34,7 @@ const TRADE_ITEMS = [
     { id: 58,  name: 'Verniz',             img: 'verniz.webp'           },
     { id: 59,  name: 'Safira',             img: 'safira.webp'           },
     { id: 60,  name: 'Pétala Orium',       img: 'petala_orium.webp'     },
-    { id: 61,  name: 'Lápis Lazúli',       img: 'lapis_luzuli.webp'     },
+    { id: 61,  name: 'Lápis-lazúli',       img: 'lapis_lazuli.webp'     },
     { id: 62,  name: 'Essência de Anjo',   img: 'essencia_de_anjo.webp' },
     { id: 63,  name: 'Lubrificante',       img: 'lubrificante.webp'     },
     { id: 64,  name: 'Garra de Dragão',    img: 'garra_de_dragao.webp'  },

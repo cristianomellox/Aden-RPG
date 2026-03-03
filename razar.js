@@ -34,7 +34,7 @@ const ALL_DROPS = {
     79: { name:'Mithril Temperado',               img:'https://aden-rpg.pages.dev/assets/itens/mithril_temperado.webp'               },
     81: { name:'Minério de Ferro',               img:'https://aden-rpg.pages.dev/assets/itens/minerio_de_ferro.webp'               },
     80: { name:'Carvão',               img:'https://aden-rpg.pages.dev/assets/itens/carvao.webp'               },
-    61: { name:'Lápis-Luzúli',               img:'https://aden-rpg.pages.dev/assets/itens/lapis_luzuli.webp'               },
+    61: { name:'Lápis-Lazúli',               img:'https://aden-rpg.pages.dev/assets/itens/lapis_lazuli.webp'               },
     56: { name:'Porífero',               img:'https://aden-rpg.pages.dev/assets/itens/porifero.webp'               },
     60: { name:'Pétala Orium',               img:'https://aden-rpg.pages.dev/assets/itens/petala_orium.webp'               },
     68: { name:'Pena de Harpia',               img:'https://aden-rpg.pages.dev/assets/itens/pena_de_harpia.webp'               },

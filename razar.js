@@ -135,7 +135,10 @@ async function _idbSaveOwners(list){
                         name       : o.name||o.n||existing.name||'',
                         avatar_url : o.avatar_url||o.a||existing.avatar_url||'',
                         // Preserva guild_id existente se o novo não trouxer
-                        guild_id   : o.guild_id||o.g||existing.guild_id||null,
+                        // FIX: usa "in" para distinguir "campo ausente" (preserva existente) de
+                        // "null explícito" (jogador saiu de guilda → deve sobrescrever o cache).
+                        // O operador || fazia null || existing.guild_id = old_guild, imortalizado pelo timestamp renovado.
+                        guild_id   : (('guild_id' in o)||('g' in o)) ? (o.guild_id??o.g??null) : (existing.guild_id??null),
                         timestamp  : now,
                     };
                     const txW=db.transaction(_OWN_STORE,'readwrite');

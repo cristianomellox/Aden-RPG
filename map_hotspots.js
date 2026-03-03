@@ -8,6 +8,7 @@
         { id: 'vale_arcano', name: 'Vale Arcano', top: 465, left: 340, width: 190, height: 120, url: '/vale_arcano.html', color: '#ffc3c3' },
         { id: 'penumbra_uivante', name: 'Penumbra Uivante', top: 325, left: 490, width: 190, height: 110, url: '/penumbra_uivante.html', color: '#ffc3c3' },
         { id: 'razar', name: 'Razar', top: 890, left: 530, width: 130, height: 60, url: '/razar.html', color: '#ffc3c3' },
+        { id: 'queda_fontana', name: 'Queda Fontana', top: 700, left: 1055, width: 130, height: 60, url: '/queda_fontana.html', color: '#ffc3c3' },
         { id: 'duratar', name: 'Duratar', top: 260, left: 1180, width: 150, height: 100, url: '/duratar.html', color: '#84e000' },
         { id: 'astrax', name: 'Astrax', top: 1160, left: 1100, width: 150, height: 100, url: '/astrax.html', color: '#84e000' },
         { id: 'tandra', name: 'Tandra', top: 1090, left: 575, width: 150, height: 100, url: '/tandra.html', color: '#84e000' },

@@ -3,17 +3,17 @@ import { supabase } from './supabaseClient.js';
 // ═══════════════════════════════════════════════════════════
 // CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
 // ═══════════════════════════════════════════════════════════
-const REGION_ID = 'penumbra_uivante';
-const REGION_NAME = 'Penumbra Uivante';
+const REGION_ID = 'queda_fontana';
+const REGION_NAME = 'Queda Fontana';
 
 // Catálogo de TODAS as regiões (para o modal de recompensas)
 // Adicione aqui as outras regiões conforme criar as páginas
-const ALL_REGIONS = {
-    floresta_mistica: { name:'Floresta Mística' },
+const ALL_REGIONS = {floresta_mistica: { name:'Floresta Mística' },
     vale_arcano: { name:'Vale Arcano' },
     penumbra_uivante: { name:'Penumbra Uivante' },
     razar: { name:'Razar' },
     queda_fontana: { name:'Queda Fontana' },
+    
 };
 
 // Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
@@ -42,14 +42,14 @@ const ALL_DROPS = {
 };
 
 const SPOTS = [
-    { id:'caveira', name:'Caveira',  top:360, left:550,  width:390, height:360,
-      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/caveira.webp', labelColor:'silver' },
-    { id:'zumbi',    name:'Zumbi',       top:700, left:850, width:380, height:350,
-      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/zumbi.webp',     labelColor:'lightgreen' },
-    { id:'morcego',   name:'Morcego',      top:880, left:90, width:570, height:500,
-      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/morcego.webp',    labelColor:'orange' },
-    { id:'vampiro', name:'Vampiro',   top:1080, left:920, width:470, height:360,
-      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/vampiro.webp', labelColor:'gray' },
+    { id:'harpia', name:'Harpia',  top:300, left:10,  width:390, height:560,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/harpia.webp', labelColor:'silver' },
+    { id:'naga',    name:'Naga',       top:710, left:800, width:460, height:350,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/naga.webp',     labelColor:'lightgreen' },
+    { id:'orium',   name:'Orium',      top:1090, left:30, width:530, height:390,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/orium.webp',    labelColor:'orange' },
+    { id:'lider_porifero', name:'Líder Porífero',   top:1240, left:710, width:580, height:230,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/lider_porifero.webp', labelColor:'gray' },
 ];
 
 const SHIELD_ITEM_ID = 85;
@@ -442,16 +442,16 @@ async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.obje
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 const audioBufs={};
-const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/penumbra.mp3'};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/fontana.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
 
 // ── MOB HIT SOUNDS ───────────────────────────────────────────
 const MOB_SOUND_URLS = {
-    caveira: 'https://aden-rpg.pages.dev/assets/caveira.mp3',
-    morcego: 'https://aden-rpg.pages.dev/assets/morcego.mp3',
-    zumbi:   'https://aden-rpg.pages.dev/assets/zumbi.mp3',
-    vampiro: 'https://aden-rpg.pages.dev/assets/vampiro.mp3',
+    harpia:   'https://aden-rpg.pages.dev/assets/fenix.mp3',
+    orium: 'https://aden-rpg.pages.dev/assets/duende.mp3',
+    naga:  'https://aden-rpg.pages.dev/assets/zumbi.mp3',
+    lider_porifero:  'https://aden-rpg.pages.dev/assets/quar.mp3',
 };
 async function preloadUrl(name, url) {
     try {
@@ -487,7 +487,7 @@ function _spotVolume(spotId) {
     return Math.max(0.08, Math.exp(-dist / 300));
 }
 
-const amb=new Audio(SRC.ambient);amb.volume=0.007;amb.loop=true;
+const amb=new Audio(SRC.ambient);amb.volume=0.02;amb.loop=true;
 document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
 
@@ -1039,7 +1039,7 @@ async function handleAttackPlayer(target){
         // VITÓRIA — banner otimista imediato (não espera o sync global)
         const kTxt=pvpData.attacker_daily_kills>0?`, eliminando um total de <span style="color:#ff8">${pvpData.attacker_daily_kills}</span> hoje!`:'!';
         pushKillNotif(
-            `<span style="color:#ff8">${esc(myName)}</span> de eliminou `+
+            `<span style="color:#ff8">${esc(myName)}</span> eliminou `+
             `<span style="color:#f88">${esc(pvpData.defender_name)}</span> em `+
             `<span style="color:#8ff">${esc(regionNameDisplay)}</span>${kTxt}`
         );
@@ -1475,6 +1475,7 @@ async function boot(){
                 &&localSecondsLeft>0
                 &&!currentSession.is_eliminated
                 &&!currentSession.rewards_claimed;
+
             if(!isHunting&&currentSession.pvp_only_entered_at&&currentSession.current_region===REGION_ID&&!currentSession.is_eliminated){
                 const pvpEnteredAt=new Date(currentSession.pvp_only_entered_at);
                 const pvpElapsed=Math.floor((Date.now()-pvpEnteredAt.getTime())/1000);
@@ -1499,6 +1500,7 @@ async function boot(){
             }
             // [FIX] Sessão ativa em outra região: timer decrementando (sem animações nesta página)
             if(!isHunting&&!isPvpOnly&&isHuntingElsewhere)startLocalTimer();
+            // ── Limpeza de atividade obsoleta no boot ──────────────────────────────────
             // Se o servidor confirma que não está caçando nem em PvP puro E não está na
             // penalidade de morte (deadUntil ainda ativo), o ACTIVITY_KEY deve ser limpo
             // para não bloquear a mineração. Cobre: pausa/fim de sessão feitos em outro

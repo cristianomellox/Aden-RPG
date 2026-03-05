@@ -14,6 +14,9 @@ const ALL_REGIONS = {
     penumbra_uivante: { name:'Penumbra Uivante' },
     razar: { name:'Razar' },
     queda_fontana: { name:'Queda Fontana' },
+    covil_de_kelts: { name:'Covil de Kelts' },
+    enclave_etereo: { name:'Enclave Etéreo' },
+    desfiladeiro: { name:'Desfiladeiro do Sol Poente' },
 };
 
 // Catálogo de TODOS os itens de drop de todas as regiões (para exibir no modal)
@@ -38,6 +41,18 @@ const ALL_DROPS = {
     56: { name:'Porífero',               img:'https://aden-rpg.pages.dev/assets/itens/porifero.webp'               },
     60: { name:'Pétala Orium',               img:'https://aden-rpg.pages.dev/assets/itens/petala_orium.webp'               },
     68: { name:'Pena de Harpia',               img:'https://aden-rpg.pages.dev/assets/itens/pena_de_harpia.webp'               },
+    65: { name:'Reagente Ômega',               img:'https://aden-rpg.pages.dev/assets/itens/reagente_omega.webp'               },
+    73: { name:'Presa de Kelts',               img:'https://aden-rpg.pages.dev/assets/itens/presa_de_kelts.webp'               },
+    82: { name:'Fios de Fibra',               img:'https://aden-rpg.pages.dev/assets/itens/fios_de_fibra.webp'               },
+    60: { name:'Quitina',               img:'https://aden-rpg.pages.dev/assets/itens/quitina.webp'               },
+    57: { name:'Tecido Alfa',               img:'https://aden-rpg.pages.dev/assets/itens/tecido_alfa.webp'               },
+    59: { name:'Safira',               img:'https://aden-rpg.pages.dev/assets/itens/safira.webp'               },
+    62: { name:'Essência de Anjo',               img:'https://aden-rpg.pages.dev/assets/itens/essencia_de_anjo.webp'               },
+    78: { name:'Linha Mágica',               img:'https://aden-rpg.pages.dev/assets/itens/linha_magica.webp'               },
+    64: { name:'Garra de Dragão',               img:'https://aden-rpg.pages.dev/assets/itens/garra_de_dragao.webp'               },
+    83: { name:'Escama de Drgão',               img:'https://aden-rpg.pages.dev/assets/itens/escama_de_dragao.webp'               },
+    66: { name:'Núcleo de Dragão',               img:'https://aden-rpg.pages.dev/assets/itens/nucleo_de_dragao.webp'               },
+    89: { name:'Pedra Âmbar',               img:'https://aden-rpg.pages.dev/assets/itens/pedra_ambar.webp'               },
     // adicione outros drops aqui
 };
 

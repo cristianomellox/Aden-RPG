@@ -3,12 +3,13 @@ import { supabase } from './supabaseClient.js';
 // ═══════════════════════════════════════════════════════════
 // CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
 // ═══════════════════════════════════════════════════════════
-const REGION_ID = 'queda_fontana';
-const REGION_NAME = 'Queda Fontana';
+const REGION_ID = 'desfiladeiro';
+const REGION_NAME = 'Desfiladeiro do Sol Poente';
 
 // Catálogo de TODAS as regiões (para o modal de recompensas)
 // Adicione aqui as outras regiões conforme criar as páginas
-const ALL_REGIONS = {floresta_mistica: { name:'Floresta Mística' },
+const ALL_REGIONS = {
+  floresta_mistica: { name:'Floresta Mística' },
     vale_arcano: { name:'Vale Arcano' },
     penumbra_uivante: { name:'Penumbra Uivante' },
     razar: { name:'Razar' },
@@ -57,14 +58,14 @@ const ALL_DROPS = {
 };
 
 const SPOTS = [
-    { id:'harpia', name:'Harpia',  top:300, left:10,  width:390, height:560,
-      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/harpia.webp', labelColor:'silver' },
-    { id:'naga',    name:'Naga',       top:710, left:800, width:460, height:350,
-      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/naga.webp',     labelColor:'lightgreen' },
-    { id:'orium',   name:'Orium',      top:1090, left:30, width:530, height:390,
-      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/orium.webp',    labelColor:'orange' },
-    { id:'lider_porifero', name:'Líder Porífero',   top:1240, left:710, width:580, height:230,
-      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/lider_porifero.webp', labelColor:'gray' },
+    { id:'daz_momu', name:'Daz-Momu',  top:230, left:120,  width:550, height:650,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/daz_momu.webp', labelColor:'silver' },
+    { id:'daz_ignis',    name:'Daz-Ignis',       top:300, left:1150, width:330, height:500,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/daz_ignis.webp',     labelColor:'lightgreen' },
+    { id:'daz_kiton',   name:'Daz-Kiton',      top:1000, left:70, width:590, height:420,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/daz_kiton.webp',    labelColor:'orange' },
+    { id:'daz_fandra', name:'Daz-Fandra',   top:1060, left:950, width:500, height:410,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/daz_fandra.webp', labelColor:'gray' },
 ];
 
 const SHIELD_ITEM_ID = 85;
@@ -460,16 +461,16 @@ async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.obje
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 const audioBufs={};
-const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/fontana.mp3'};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/desfiladeiro.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
 
 // ── MOB HIT SOUNDS ───────────────────────────────────────────
 const MOB_SOUND_URLS = {
-    harpia:   'https://aden-rpg.pages.dev/assets/fenix.mp3',
-    orium: 'https://aden-rpg.pages.dev/assets/duende.mp3',
-    naga:  'https://aden-rpg.pages.dev/assets/zumbi.mp3',
-    lider_porifero:  'https://aden-rpg.pages.dev/assets/quar.mp3',
+    daz_momu:   'https://aden-rpg.pages.dev/assets/limut.mp3',
+    daz_ignis: 'https://aden-rpg.pages.dev/assets/tigre.mp3',
+    daz_kiton:  'https://aden-rpg.pages.dev/assets/daz_kiton.mp3',
+    daz_fandra:  'https://aden-rpg.pages.dev/assets/daz_fandra.mp3',
 };
 async function preloadUrl(name, url) {
     try {
@@ -505,7 +506,7 @@ function _spotVolume(spotId) {
     return Math.max(0.08, Math.exp(-dist / 300));
 }
 
-const amb=new Audio(SRC.ambient);amb.volume=0.01;amb.loop=true;
+const amb=new Audio(SRC.ambient);amb.volume=0.02;amb.loop=true;
 document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
 

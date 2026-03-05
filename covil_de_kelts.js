@@ -3,8 +3,8 @@ import { supabase } from './supabaseClient.js';
 // ═══════════════════════════════════════════════════════════
 // CONFIGURAÇÃO DA REGIÃO — altere aqui para cada nova página
 // ═══════════════════════════════════════════════════════════
-const REGION_ID = 'queda_fontana';
-const REGION_NAME = 'Queda Fontana';
+const REGION_ID = 'covil_de_kelts';
+const REGION_NAME = 'Covil de Kelts';
 
 // Catálogo de TODAS as regiões (para o modal de recompensas)
 // Adicione aqui as outras regiões conforme criar as páginas
@@ -16,6 +16,7 @@ const ALL_REGIONS = {floresta_mistica: { name:'Floresta Mística' },
     covil_de_kelts: { name:'Covil de Kelts' },
     enclave_etereo: { name:'Enclave Etéreo' },
     desfiladeiro: { name:'Desfiladeiro do Sol Poente' },
+  
     
 };
 
@@ -57,14 +58,14 @@ const ALL_DROPS = {
 };
 
 const SPOTS = [
-    { id:'harpia', name:'Harpia',  top:300, left:10,  width:390, height:560,
-      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/harpia.webp', labelColor:'silver' },
-    { id:'naga',    name:'Naga',       top:710, left:800, width:460, height:350,
-      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/naga.webp',     labelColor:'lightgreen' },
-    { id:'orium',   name:'Orium',      top:1090, left:30, width:530, height:390,
-      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/orium.webp',    labelColor:'orange' },
-    { id:'lider_porifero', name:'Líder Porífero',   top:1240, left:710, width:580, height:230,
-      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/lider_porifero.webp', labelColor:'gray' },
+    { id:'larva_kelt', name:'Larva Kelt',  top:200, left:80,  width:390, height:560,
+      itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/larva_kelt.webp', labelColor:'silver' },
+    { id:'rainha_kelt',    name:'Rainha Kelt',       top:210, left:900, width:460, height:450,
+      itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/rainha_kelt.webp',     labelColor:'lightgreen' },
+    { id:'soldado_kelt',   name:'Soldado Kelt',      top:1000, left:70, width:590, height:420,
+      itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/soldado_kelt.webp',    labelColor:'orange' },
+    { id:'tenente_kelt', name:'Tenente Kelt',   top:900, left:800, width:600, height:450,
+      itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/tenente_kelt.webp', labelColor:'gray' },
 ];
 
 const SHIELD_ITEM_ID = 85;
@@ -460,16 +461,16 @@ async function updateCacheQty(id,delta){try{const db=await openIdb();if(!db.obje
 // ── ÁUDIO ───────────────────────────────────────────────────
 const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 const audioBufs={};
-const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/fontana.mp3'};
+const SRC={normal:'https://aden-rpg.pages.dev/assets/normal_hit.mp3',critical:'https://aden-rpg.pages.dev/assets/critical_hit.mp3',evade:'https://aden-rpg.pages.dev/assets/evade.mp3',ambient:'https://aden-rpg.pages.dev/assets/kelts.mp3'};
 async function preload(n){try{const r=await fetch(SRC[n],{cache:'force-cache'});if(!r.ok)return;const ab=await r.arrayBuffer();audioBufs[n]=await new Promise((res,rej)=>audioCtx.decodeAudioData(ab,res,rej));}catch{}}
 function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}const buf=audioBufs[n];if(!buf)return;try{const gain=audioCtx.createGain();gain.gain.value=(n==='critical'?0.07:1);gain.connect(audioCtx.destination);const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(0);s.onended=()=>{try{s.disconnect();gain.disconnect();}catch{}};}catch{}}
 
 // ── MOB HIT SOUNDS ───────────────────────────────────────────
 const MOB_SOUND_URLS = {
-    harpia:   'https://aden-rpg.pages.dev/assets/fenix.mp3',
-    orium: 'https://aden-rpg.pages.dev/assets/duende.mp3',
-    naga:  'https://aden-rpg.pages.dev/assets/zumbi.mp3',
-    lider_porifero:  'https://aden-rpg.pages.dev/assets/quar.mp3',
+    larva_kelt:   'https://aden-rpg.pages.dev/assets/morcego.mp3',
+    soldado_kelt: 'https://aden-rpg.pages.dev/assets/limut.mp3',
+    tenente_kelt:  'https://aden-rpg.pages.dev/assets/caveira.mp3',
+    rainha_kelt:  'https://aden-rpg.pages.dev/assets/unicornio.mp3',
 };
 async function preloadUrl(name, url) {
     try {
@@ -505,7 +506,7 @@ function _spotVolume(spotId) {
     return Math.max(0.08, Math.exp(-dist / 300));
 }
 
-const amb=new Audio(SRC.ambient);amb.volume=0.01;amb.loop=true;
+const amb=new Audio(SRC.ambient);amb.volume=0.1;amb.loop=true;
 document.addEventListener('click',()=>{try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});},{once:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(!amb.paused){amb.pause();amb._was=true;}}else{if(amb._was){amb.play().catch(()=>{});amb._was=false;}}});
 

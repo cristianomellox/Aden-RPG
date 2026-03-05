@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="robots" content="noindex, nofollow">
-    <title>Floresta Mística - Aden RPG</title>
+    <title>Covil de Kelts - Aden RPG</title>
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
     <style>
@@ -30,7 +30,7 @@ body{display:flex;flex-direction:column;align-items:center;background:#121212;mi
 #pageTitle{color:#ffb3b3;font-size:1.2em;font-weight:bold;text-shadow:1px 1px 2px #000;}
 
 #mapContainer{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;z-index:1;background:#0d1a0d;}
-#map{background-image:url('https://aden-rpg.pages.dev/assets/floresta_mistica.webp');background-size:contain;background-repeat:no-repeat;background-position:top left;width:1500px;height:1500px;position:absolute;cursor:grab;transform-origin:top left;transform:scale(1.1);user-select:none;}
+#map{background-image:url('https://aden-rpg.pages.dev/assets/ninho_de_kelts.webp');background-size:contain;background-repeat:no-repeat;background-position:top left;width:1500px;height:1500px;position:absolute;cursor:grab;transform-origin:top left;transform:scale(1.1);user-select:none;}
 
 .hunt-spot{position:absolute;border:2px dashed transparent;
 /*border:2px dashed #0f0;*/
@@ -220,7 +220,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
     <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
     </a>
-    <span id="pageTitle" style="font-weight: bold; color: #ffc3c3;">Floresta Mística</span>
+    <span id="pageTitle" style="font-weight: bold; color: #ffc3c3;">Covil de Kelts</span>
     <img id="tutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="Tutorial" style="width:30px;height:30px;cursor:pointer;">
 </div>
 
@@ -321,13 +321,13 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 <div id="huntInfoModal" class="modal-container">
     <div class="modal-content">
         <span class="modal-close" id="huntInfoClose">&times;</span>
-        <h2>Floresta Mística</h2>
+        <h2>Covil de Kelts</h2>
         <div style="text-align:left;color:#cdc;font-size:.82em;line-height:1.7;">
             <h2>Drops</h2>
-            <p><strong>Unicórnio</strong> → Chifre de Unicórnio<br>
-            <strong>Fênix</strong> → Lágrima de Fênix<br>
-            <strong>Sátiro</strong> → Galho Espiritual<br>
-            <strong>Tigre Nix</strong> → Pele Animal</p>
+            <p><strong>Larva Kelt</strong> → Reagente Ômega<br>
+            <strong>Soldado Kelt</strong> → Presa de Kelts<br>
+            <strong>Tenente Kelt</strong> → Fios de Fibra<br>
+            <strong>Rainha Kelt</strong> → Quitina</p>
             <h2>⏱ Tempo</h2> 
             <p>O contador de <strong>3 horas</strong> é compartilhado entre todas as regiões do jogo. Você pode dividir o tempo como quiser.</p>
             <h2>Recompensas</h2>
@@ -345,32 +345,26 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
             <p><strong style="color:#acf;">🛡 Escudo:</strong> Protege de PvP por 1 hora por uso (máx. 3h).</p>
             <p style="color:#fd8;font-size:.9em;">⚠️ PvP é livre nesta região!</p>
             
-         <br>  <hr><br>
+         <hr><br>
     <center><h2>História</h2></center>
-    <p>Situada na periferia ocidental da lendária <strong>Selva de Éter</strong>, fazendo fronteira com as terras élficas de Elendor, a <strong>Floresta Mística</strong> não é uma criação natural, mas sim uma consequência geológica da magia. Durante dias sombrios e ameaças ao lar dos elfos, o Círculo dos Guardiões da Semente tomou uma medida desesperada: sobrecarregaram a "Teia Viva" — a rede neural mágica que conecta as Árvores-Mãe.</p>
+    
+    <p>Nas entranhas da terra, muito abaixo das raízes das montanhas, pulsa o <strong>Covil de Kelts</strong>. Não é uma caverna natural, mas uma megaestrutura biológica escavada e cimentada pela saliva e resina de uma raça insetoide ancestral. O ar aqui é quente, úmido e cheira a ácido e feromônios. As paredes parecem respirar, cobertas por fungos bioluminescentes que iluminam os corredores onde o enxame nunca dorme.</p>
+    
+    <p>Os Kelts operam sob uma mente coletiva implacável. Eles não buscam riqueza ou território por ganância, mas por uma necessidade biológica de expansão infinita. O covil é um labirinto vivo, repleto de câmaras de incubação onde o futuro da espécie é cultivado em segredo.</p>
 
-    <p>Para evitar que o núcleo de Elendor colapsasse sob o peso de tanta energia defensiva, o excesso de mana foi desviado e purgado para uma região de mata virgem adjacente. O solo, bombardeado por torrentes de energia vital bruta e desenfreada, sofreu uma mutação instantânea. A flora não apenas cresceu; ela evoluiu agressivamente, tornando-se um bioma senciente de cores vibrantes e perigos letais, onde a própria realidade parece vibrar em uma frequência diferente do restante de Aden.</p>
+    <center><h2>A Hierarquia do Enxame</h2></center>
+    <p>A sociedade Kelt é dividida em castas rígidas, cada uma evoluída geneticamente para uma função específica dentro da colônia.</p>
 
-   <center> <h2>O Fenômeno: A Saturação Prismática</h2></center>
-    <p>Diferente da harmonia cultivada em Elendor, a Floresta Mística é regida pelo caos da superabundância. O ar é denso, carregado de esporos luminosos que distorcem a percepção de distância e tempo. Ali, a vida não segue o ciclo natural de nascimento e morte, mas sim de transmutação constante. É um lugar onde a natureza não é passiva; ela é uma predadora voraz que busca consumir qualquer fonte externa de magia para continuar sua expansão.</p>
+    <p><strong>Larva Kelt:</strong> O estágio inicial e mais protegido do enxame. Mantidas nas câmaras de nutrição, essas criaturas gordas e segmentadas consomem vorazmente geleia real e minerais. Seus corpos estão em constante mutação, gerando o instável <strong>Reagente Ômega</strong>, um fluido biológico capaz de catalisar transformações alquímicas poderosas.</p>
 
-    <p>Esta saturação de energia atraiu e alterou permanentemente a fauna local. As criaturas que habitam a Floresta Mística não são monstros das sombras, mas bestas de pura luz e fúria elemental, existindo em um estado perpétuo de superestimulação mágica.</p>
+    <p><strong>Soldado Kelt:</strong> A infantaria brutal. Com quatro braços e carapaças endurecidas, eles não conhecem o medo, apenas ordens. Suas mandíbulas são fortes o suficiente para triturar rocha sólida. Caçadores buscam suas mandíbulas, a <strong>Presa de Kelts</strong>, para forjar adagas serrilhadas e pontas de lança perfurantes.</p>
 
-    <center><h2>Os Habitantes: Guardiões da Luz Caótica</h2></center>
-    <p>As entidades que vagam por entre as árvores de casca prateada são manifestações físicas desse poder excedente.</p>
+    <p><strong>Tenente Kelt:</strong> A casta de comando. Diferente dos soldados irracionais, os Tenentes possuem intelecto e capacidade mágica, coordenando ataques e defesas. Eles secretam uma substância sedosa e extremamente resistente para reforçar as estruturas do covil. Esses <strong>Fios de Fibra</strong> são colhidos para a confecção de tecidos leves e indestrutíveis.</p>
 
-    <p><strong>O Unicórnio Cintilante:</strong> Outrora um símbolo de pureza, na Floresta Mística ele é uma tempestade galopante. Seu chifre não é apenas osso, mas um para-raios de mana solidificado, capaz de canalizar a energia instável do ambiente para obliterar intrusos.</p>
+    <p><strong>Rainha Kelt:</strong> O coração pulsante do covil. Uma gigante blindada que detém o controle psíquico sobre todos os seus súditos. Ela raramente se move, mas quando o faz, é uma força da natureza. Sua carapaça externa é composta de <strong>Quitina</strong> pura, um material mais leve que o aço e mais duro que o diamante, cobiçado pelos maiores armeiros de Aden.</p>
 
-    <p><strong>A Fênix do Éter:</strong> Diferente de suas primas lendárias, esta ave não renasce das cinzas por escolha, mas por uma combustão interna incontrolável causada pelo excesso de magia em seu sangue. Suas lágrimas, procuradas por alquimistas, são a única substância capaz de resfriar seu núcleo ardente.</p>
-
-    <p><strong>Os Sátiros da Vinha Férrea:</strong> Corrompidos pela densidade da floresta, estes seres tornaram-se os jardineiros dementes do local. Eles não protegem a natureza por amor, mas por uma simbiose parasítica, utilizando galhos espirituais infundidos com a própria alma da floresta para esmagar forasteiros.</p>
-
-    <p><strong>O Tigre Nix:</strong> O predador alfa, cuja pele absorveu as propriedades camaleônicas da vegetação mutante, tornando-o um fantasma listrado que ataca com a força de um deslizamento de terra.</p>
-
-   <center> <h2>O Interesse Econômico</h2></center>
-    <p>Para os habitantes de Zion e os ferreiros de Mitrar, a Floresta Mística é uma mina de ouro a céu aberto, embora mortal. Os materiais colhidos ali — chifres carregados de estática, lágrimas cristalizadas de calor eterno e madeira que pulsa com vida própria — são os componentes essenciais para a criação de artefatos que exigem uma condutividade mágica superior.</p>
-
-    <p>Aventureiros não entram na Floresta para salvar o mundo ou combater o mal antigo; eles entram para colher o fruto do caos, enfrentando a beleza aterrorizante de uma natureza que recebeu poder demais e agora se recusa a ser domada.</p>
+    <center><h2>A Infestação Silenciosa</h2></center>
+    <p>Entrar no Covil de Kelts é declarar guerra a um organismo único e gigantesco. O menor ruído alerta a colmeia inteira. Aventureiros descem a este abismo em busca dos materiais exóticos que os insetos produzem, mas muitos acabam servindo apenas como alimento para a próxima geração de Larvas.</p>
             
         </div>
     </div>
@@ -384,7 +378,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 </script>
 
-<script type="module" src="floresta_mistica.js"></script>
+<script type="module" src="covil_de_kelts.js"></script>
 
 <!-- Modal de inatividade -->
 <div id="inactivityModal" class="modal-container">

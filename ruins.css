@@ -1009,7 +1009,7 @@ body {
     gap: 4px;
     max-height: 76px; /* ~2 linhas de 30px + gap + respiro */
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     padding-bottom: 2px;
     scrollbar-width: thin;
     scrollbar-color: #555 transparent;

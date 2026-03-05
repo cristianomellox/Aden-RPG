@@ -982,9 +982,9 @@ body {
     text-transform: uppercase;
 }
 
-/* Metade Superior: Logs */
+/* Logs - altura reduzida para abrir espaço ao painel de salas */
 #sidebarLogsArea {
-    flex: 1; /* Ocupa 50% ou o espaço restante */
+    flex: 0 0 28%;
     overflow-y: auto;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid #333;
@@ -992,7 +992,66 @@ body {
     padding: 5px;
     font-size: 0.8em;
     display: flex;
-    flex-direction: column-reverse; /* Logs novos no topo se preferir, ou tire para padrão */
+    flex-direction: column-reverse;
+}
+
+/* Painel de Salas Ativas */
+#sidebarRoomsArea {
+    flex: 0 0 auto;
+    padding: 4px 6px 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid #333;
+}
+
+#sidebarRoomsScroll {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 76px; /* ~2 linhas de 30px + gap + respiro */
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: #555 transparent;
+}
+
+#sidebarRoomsScroll::-webkit-scrollbar {
+    height: 4px;
+}
+#sidebarRoomsScroll::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 2px;
+}
+
+.room-chip {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e1e1e;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 0.65em;
+    color: #ccc;
+    font-weight: bold;
+    cursor: default;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.room-chip.current-room {
+    background: rgba(255, 215, 0, 0.15);
+    border-color: gold;
+    color: gold;
+    box-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
+}
+
+.room-chip.relic-room {
+    background: rgba(0, 255, 255, 0.1);
+    border-color: cyan;
+    color: cyan;
+    box-shadow: 0 0 4px rgba(0,255,255,0.3);
 }
 
 .sidebar-log-entry {

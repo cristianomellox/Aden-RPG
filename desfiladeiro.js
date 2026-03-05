@@ -467,8 +467,8 @@ function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}cat
 
 // ── MOB HIT SOUNDS ───────────────────────────────────────────
 const MOB_SOUND_URLS = {
-    daz_momu:   'https://aden-rpg.pages.dev/assets/limut.mp3',
-    daz_ignis: 'https://aden-rpg.pages.dev/assets/tigre.mp3',
+    daz_momu:   'https://aden-rpg.pages.dev/assets/daz_kiton.mp3',
+    daz_ignis: 'https://aden-rpg.pages.dev/assets/daz_kiton.mp3',
     daz_kiton:  'https://aden-rpg.pages.dev/assets/daz_kiton.mp3',
     daz_fandra:  'https://aden-rpg.pages.dev/assets/daz_fandra.mp3',
 };
@@ -1727,7 +1727,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
     const _vf = _spotVolume(spot.id);
     playSoundAt(sndName, (sndName === 'critical' ? 0.15 : 1.0) * _vf);
-    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 2 * _vf), 500); }
+    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.8 * _vf), 500); }
 
     // Shake mob avatar
     const mobAv = targetMob.querySelector('.mob-avatar');

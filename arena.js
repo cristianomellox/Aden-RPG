@@ -534,19 +534,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         calculateDamage(attacker, defender) {
-            let dmg = (parseInt(attacker.stats.min_attack) || 0) + this.random(0, 5);
+            // Base de dano: range completo entre min_attack e attack (espelhando simulate_pvp_battle)
+            const atkMin = parseInt(attacker.stats.min_attack) || 0;
+            const atkMax = parseInt(attacker.stats.attack) || atkMin;
+            let dmg = Math.floor(Math.random() * (atkMax - atkMin + 1)) + atkMin;
+
+            // Poção de Ataque: +5% (R, id 49) ou +10% (SR, id 50)
             let mult = 1.0;
             if (this.hasBuff(attacker, 'ATK')) mult += (this.getBuffId(attacker, 'ATK') === 49 ? 0.05 : 0.10);
             dmg = Math.floor(dmg * mult);
 
-            let critChance = (parseInt(attacker.stats.crit_chance) || 5);
+            // Subtrai defesa do defensor (mínimo 1 de dano)
+            const def = parseInt(defender.stats.defense) || 0;
+            dmg = Math.max(1, dmg - def);
+
+            // Poção de Destreza: +5% chance de crítico (R, id 47) ou +10% (SR, id 48)
+            let critChance = (parseFloat(attacker.stats.crit_chance) || 5);
             if (this.hasBuff(attacker, 'DEX')) critChance += (this.getBuffId(attacker, 'DEX') === 47 ? 5 : 10);
 
-            let critMult = 1.5;
-            if (this.hasBuff(attacker, 'FURY')) critMult = (this.getBuffId(attacker, 'FURY') === 45 ? 2.0 : 2.5);
+            // Multiplicador de crítico baseado no stat real de crit_damage do jogador
+            // crit_damage = 240 → critMult = 1 + 240/100 = 3.4x
+            let critMult = 1 + ((parseFloat(attacker.stats.crit_damage) || 50) / 100);
+
+            // Poção de Fúria: soma +50% ao dano crítico (R, id 45) ou +100% (SR, id 46)
+            if (this.hasBuff(attacker, 'FURY')) critMult += (this.getBuffId(attacker, 'FURY') === 45 ? 0.5 : 1.0);
 
             let isCrit = false;
-            if (this.random(0, 100) < critChance) {
+            if (Math.random() * 100 < critChance) {
                 dmg = Math.floor(dmg * critMult);
                 isCrit = true;
             }

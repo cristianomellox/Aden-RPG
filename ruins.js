@@ -153,6 +153,7 @@ let state = {
     relicRoomId: null, 
     isSpectating: false,
     destroyedCount: 0,
+    destroyedRooms: [],
 
     // Cache de participantes (avatar + nome por player_id)
     // Populado na entrada do jogo, nunca re-baixado enquanto a sessão existe.
@@ -312,6 +313,25 @@ function updateLogSidebar() {
         div.innerHTML = `<span class="time">[${time}]</span> ${entry}`;
         container.appendChild(div);
     });
+}
+
+function renderRoomsPanel() {
+    const scroll = document.getElementById('sidebarRoomsScroll');
+    if (!scroll) return;
+    scroll.innerHTML = '';
+    const destroyed = new Set(state.destroyedRooms || []);
+    const myRoom = state.myPlayer ? state.myPlayer.current_room_id : null;
+    const relicRoom = state.relicHolderId ? null : state.relicRoomId; // só mostra se relíquia estiver no chão
+    for (let i = 1; i <= 50; i++) {
+        if (destroyed.has(i)) continue;
+        const chip = document.createElement('div');
+        chip.className = 'room-chip';
+        chip.textContent = i;
+        chip.title = 'Sala ' + i;
+        if (i === myRoom) chip.classList.add('current-room');
+        else if (i === relicRoom) chip.classList.add('relic-room');
+        scroll.appendChild(chip);
+    }
 }
 
 function updateParticipantsSidebar(list, relicHolderId, relicRoomId) {
@@ -585,6 +605,8 @@ async function enterGame() {
     state.battleEndsAt = new Date(data.battle_ends_at);
     state.logHistory = []; 
     state.participantDeadCount = -1; // força 1ª renderização completa da sidebar
+    state.destroyedRooms = []; // reseta salas destruídas
+    renderRoomsPanel(); // popula painel com todas as 50 salas
     state.potionCache = null;        // invalida cache de poções ao iniciar nova partida
     
     // Reseta estatísticas da partida
@@ -736,6 +758,7 @@ async function executeMove(roomId) {
     state.myPlayer.ap = data.ap;
     state.myPlayer.current_room_id = data.room_id;
     updateHUD();
+    renderRoomsPanel(); // atualiza destaque da sala atual
     
     renderRoom(data);
 
@@ -1342,6 +1365,10 @@ async function runHeartbeat() {
 
     if (data.destroyed_count !== undefined) {
         state.destroyedCount = data.destroyed_count;
+    }
+    if (data.destroyed_rooms !== undefined) {
+        state.destroyedRooms = data.destroyed_rooms;
+        renderRoomsPanel();
     }
 
     if (data.status === 'finished') {

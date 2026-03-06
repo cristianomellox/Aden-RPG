@@ -17,6 +17,7 @@ const ALL_REGIONS = {
     covil_de_kelts: { name:'Covil de Kelts' },
     enclave_etereo: { name:'Enclave Etéreo' },
     desfiladeiro: { name:'Desfiladeiro do Sol Poente' },
+    pantano: { name:'Pântano de Molinar' },
     
 };
 
@@ -54,6 +55,10 @@ const ALL_DROPS = {
     83: { name:'Escama de Drgão',               img:'https://aden-rpg.pages.dev/assets/itens/escama_de_dragao.webp'               },
     66: { name:'Núcleo de Dragão',               img:'https://aden-rpg.pages.dev/assets/itens/nucleo_de_dragao.webp'               },
     89: { name:'Pedra Âmbar',               img:'https://aden-rpg.pages.dev/assets/itens/pedra_ambar.webp'               },
+    77: { name:'Couro Animal',               img:'https://aden-rpg.pages.dev/assets/itens/couro_animal.webp'               },
+    90: { name:'Lodo Mágico',               img:'https://aden-rpg.pages.dev/assets/itens/lodo_magico.webp'               },
+    92: { name:'Totem Reptiliano',               img:'https://aden-rpg.pages.dev/assets/itens/totem_reptiliano.webp'               },
+    91: { name:'Núcleo de Vinha',               img:'https://aden-rpg.pages.dev/assets/itens/nucleo_de_vinha.webp'               },
     // adicione outros drops aqui
 };
 
@@ -1727,7 +1732,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
     const _vf = _spotVolume(spot.id);
     playSoundAt(sndName, (sndName === 'critical' ? 0.15 : 1.0) * _vf);
-    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.8 * _vf), 500); }
+    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.8 * _vf), 300); }
 
     // Shake mob avatar
     const mobAv = targetMob.querySelector('.mob-avatar');

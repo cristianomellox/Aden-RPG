@@ -92,7 +92,7 @@ const POLL_MAX_3MIN = 180_000;
 const POLL_MAX_5MIN = 300_000;
 
 // ── HUNT STATE BOOT CACHE (120s) ───────────────────────────────
-const HUNT_CACHE_KEY  = () => `hunt_state_${userId}`;
+const HUNT_CACHE_KEY  = () => `hunt_state_${userId}_${REGION_ID}`;
 const HUNT_CACHE_TTL  = 120_000;
 
 // ── STATS CACHE (mesma chave do mines.js e afk_page.js) ───────

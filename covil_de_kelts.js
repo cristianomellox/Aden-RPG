@@ -17,7 +17,7 @@ const ALL_REGIONS = {floresta_mistica: { name:'Floresta Mística' },
     enclave_etereo: { name:'Enclave Etéreo' },
     desfiladeiro: { name:'Desfiladeiro do Sol Poente' },
     pantano: { name:'Pântano de Molinar' },
-  
+  erbaria: { name:'Erbária' },
     
 };
 
@@ -59,6 +59,10 @@ const ALL_DROPS = {
     90: { name:'Lodo Mágico',               img:'https://aden-rpg.pages.dev/assets/itens/lodo_magico.webp'               },
     92: { name:'Totem Reptiliano',               img:'https://aden-rpg.pages.dev/assets/itens/totem_reptiliano.webp'               },
     91: { name:'Núcleo de Vinha',               img:'https://aden-rpg.pages.dev/assets/itens/nucleo_de_vinha.webp'               },
+    51: { name:'Elora',               img:'https://aden-rpg.pages.dev/assets/itens/elora.webp'               },
+    52: { name:'Lumina',               img:'https://aden-rpg.pages.dev/assets/itens/lumina.webp'               },
+    54: { name:'Galdra',               img:'https://aden-rpg.pages.dev/assets/itens/galdra.webp'               },
+    53: { name:'Rutus',               img:'https://aden-rpg.pages.dev/assets/itens/rutus.webp'               },
     // adicione outros drops aqui
 };
 

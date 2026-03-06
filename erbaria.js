@@ -477,7 +477,7 @@ function playSound(n){try{if(audioCtx.state==='suspended')audioCtx.resume();}cat
 
 // ── MOB HIT SOUNDS ───────────────────────────────────────────
 const MOB_SOUND_URLS = {
-    guardiao_elora:   'https://aden-rpg.pages.dev/assets/quar.mp3',
+    guardiao_elora:   'https://aden-rpg.pages.dev/assets/unicornio.mp3',
     guardiao_lumina: 'https://aden-rpg.pages.dev/assets/satiro.mp3',
     guardiao_galdra:  'https://aden-rpg.pages.dev/assets/quar.mp3',
     guardiao_rutus:  'https://aden-rpg.pages.dev/assets/satiro.mp3',

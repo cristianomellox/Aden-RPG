@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
+        // Áreas de Caça (Toggle pai + filhos via container)
+        { id: 'btnCacaToggle', key: 'caca', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         // Menu Loja (Side Menu & Modal)
         { id: 'btnShopVideoTab', key: 'shop_video', type: 'daily', isSubmenu: true, parentGroup: 'loja' }
     ];
@@ -69,6 +71,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         });
+
+        // 1b. Lógica especial para Áreas de Caça (dots nos filhos do dropdown)
+        const cacaDropdown = document.getElementById('cacaDropdownContent');
+        if (cacaDropdown) {
+            const cacaChildren = cacaDropdown.querySelectorAll('.footer-submenu-btn');
+            cacaChildren.forEach(child => {
+                if (status['caca'] === true) {
+                    addDotToElement(child, 'submenu-notification-dot');
+                } else {
+                    removeDotFromElement(child);
+                }
+            });
+        }
 
         // 2. Lógica das Ruínas Ancestrais (Baseada em horário, não some com clique)
         const isRuinsActive = checkRuinsEvent();
@@ -208,6 +223,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
     
+    // Listener para qualquer filho do dropdown Áreas de Caça
+    const cacaDropdownContent = document.getElementById('cacaDropdownContent');
+    if (cacaDropdownContent) {
+        cacaDropdownContent.addEventListener('click', () => handleActionClick('caca'));
+    }
+
     // Listener específico para o botão da Guilda
     const guildBtn = document.getElementById('guildBtn');
     if (guildBtn) {

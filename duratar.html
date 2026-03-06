@@ -1635,8 +1635,25 @@ document.addEventListener("DOMContentLoaded", () => {
         { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
         { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
         { 
-            name: "Áreas", 
+            name: "Áreas de Caça", 
             icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbário", url: "erbario.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Masmorras", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
             isDropdown: true,
             subItems: [
                 { name: "Ruínas Ancestrais", url: "ruins.html" }

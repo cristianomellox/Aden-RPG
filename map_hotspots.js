@@ -12,6 +12,7 @@
         { id: 'covil_de_kelts', name: 'Covil de Kelts', top: 410, left: 855, width: 130, height: 100, url: '/covil_de_kelts.html', color: '#ffc3c3' },
         { id: 'queda_fontana', name: 'Queda Fontana', top: 700, left: 1055, width: 130, height: 60, url: '/queda_fontana.html', color: '#ffc3c3' },
         { id: 'enclave_etereo', name: 'Enclave Etéreo', top: 810, left: 1295, width: 130, height: 100, url: '/enclave_etereo.html', color: '#ffc3c3' },
+        { id: 'pantano', name: 'Pântano de Molinar', top: 400, left: 1250, width: 160, height: 120, url: '/pantano_de_molinar.html', color: '#ffc3c3' },
         { id: 'duratar', name: 'Duratar', top: 260, left: 1180, width: 150, height: 100, url: '/duratar.html', color: '#84e000' },
         { id: 'astrax', name: 'Astrax', top: 1160, left: 1100, width: 150, height: 100, url: '/astrax.html', color: '#84e000' },
         { id: 'tandra', name: 'Tandra', top: 1090, left: 575, width: 150, height: 100, url: '/tandra.html', color: '#84e000' },

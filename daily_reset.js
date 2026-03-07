@@ -9,8 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
         { id: 'btnAfk', key: 'afk', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnArena', key: 'arena', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
         { id: 'btnBoss', key: 'boss', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
-        // Áreas de Caça (Toggle pai + filhos via container)
-        { id: 'btnCacaToggle', key: 'caca', type: 'daily', isSubmenu: true, parentGroup: 'recursos' },
+        // Áreas de Caça (apenas filhos via container disparam a ação)
+        // btnCacaToggle só expande o menu, não marca como concluído
         // Menu Loja (Side Menu & Modal)
         { id: 'btnShopVideoTab', key: 'shop_video', type: 'daily', isSubmenu: true, parentGroup: 'loja' }
     ];
@@ -72,7 +72,17 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // 1b. Lógica especial para Áreas de Caça (dots nos filhos do dropdown)
+        // 1b. Lógica especial para Áreas de Caça (dots no toggle pai + filhos do dropdown)
+        const btnCacaToggle = document.getElementById('btnCacaToggle');
+        if (btnCacaToggle) {
+            if (status['caca'] === true) {
+                pendingRecursos = true;
+                addDotToElement(btnCacaToggle, 'submenu-notification-dot');
+            } else {
+                removeDotFromElement(btnCacaToggle);
+            }
+        }
+
         const cacaDropdown = document.getElementById('cacaDropdownContent');
         if (cacaDropdown) {
             const cacaChildren = cacaDropdown.querySelectorAll('.footer-submenu-btn');

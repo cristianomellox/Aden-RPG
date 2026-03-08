@@ -29,6 +29,8 @@ document.addEventListener("DOMContentLoaded", () => {
             targets.forEach(t => {
                 currentStatus[t.key] = true;
             });
+            // 'caca' é tratado separadamente dos targets, mas também é diário
+            currentStatus['caca'] = true;
             
             localStorage.setItem(STORAGE_KEY_DATE, todayStr);
             localStorage.setItem(STORAGE_KEY_ACTIONS, JSON.stringify(currentStatus));

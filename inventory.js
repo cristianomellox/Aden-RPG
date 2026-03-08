@@ -1000,7 +1000,7 @@ async function showItemDetails(item) {
             if ((item.items.crit_chance || 0) > 0) { itemStats.innerHTML += `<p>CRIT Base: ${item.items.crit_chance}%</p>`; }
             if ((item.items.crit_damage || 0) > 0) { itemStats.innerHTML += `<p>DANO CRIT Base: +${item.items.crit_damage}%</p>`; }
             if ((item.items.evasion || 0) > 0) { itemStats.innerHTML += `<p>EVASÃO Base: +${item.items.evasion}%</p>`; }
-            if ((item.items.crit_reduction || 0) > 0) { itemStats.innerHTML += `<p>RED. CRIT Base: +${item.items.crit_reduction}%</p>`; }
+            if ((item.items.crit_reduction || 0) > 0) { itemStats.innerHTML += `<p>REDUÇÃO CRIT Base: +${item.items.crit_reduction}%</p>`; }
             
             if ((item.attack_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus ATK: +${item.attack_bonus}</p>`;
             if ((item.defense_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DEF: +${item.defense_bonus}</p>`;
@@ -1008,7 +1008,7 @@ async function showItemDetails(item) {
             if ((item.crit_chance_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus TAXA CRIT: +${item.crit_chance_bonus}%</p>`;
             if ((item.crit_damage_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DANO CRIT: +${item.crit_damage_bonus}%</p>`;
             if ((item.evasion_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus EVASÃO: +${item.evasion_bonus}%</p>`;
-            if ((item.crit_reduction_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus RED. CRIT: +${item.crit_reduction_bonus}%</p>`;
+            if ((item.crit_reduction_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus REDUÇÃO CRIT: +${item.crit_reduction_bonus}%</p>`;
         }
     
         const refineRow1 = document.getElementById('refineRow1');
@@ -1295,7 +1295,7 @@ function formatAttrName(attr) {
         case "crit_chance_bonus": return "TAXA CRIT";
         case "crit_damage_bonus": return "DANO CRIT";
         case "evasion_bonus": return "EVASÃO";
-        case "crit_reduction_bonus": return "RED. CRIT";
+        case "crit_reduction_bonus": return "REDUÇÃO CRIT";
         default: return attr;
     }
 }

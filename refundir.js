@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.classList.remove('shimmer');
                 let formattedValue = r.value;
                 const formattedName = formatAttrName(r.attr);
-                if (['TAXA CRIT', 'DANO CRIT', 'EVASÃO', 'RED. CRIT'].includes(formattedName)) {
+                if (['TAXA CRIT', 'DANO CRIT', 'EVASÃO', 'REDUÇÃO CRIT'].includes(formattedName)) {
                     formattedValue += '%';
                 }
                 div.textContent = `${formattedName} +${formattedValue}`;
@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const textStyle = `margin:0; font-size:1.1em; font-weight:bold; color:silver; text-shadow:1px 1px 2px black,-1px -1px 2px black,1px -1px 2px black,-1px 1px 2px black,0 0 2px black,0 0 4px black;`;
                 div.innerHTML = `
                     <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 40px; height: 40px;">
-                    <p style="${textStyle}">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO', 'RED. CRIT'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>
+                    <p style="${textStyle}">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO', 'REDUÇÃO CRIT'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>
                 `;
                 div.style.setProperty('background', rarityGradient(slotData.color));
                 div.style.border = "1px solid rgba(0,0,0,0.3)";
@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case "crit_chance_bonus": return "TAXA CRIT";
             case "crit_damage_bonus": return "DANO CRIT";
             case "evasion_bonus": return "EVASÃO";
-            case "crit_reduction_bonus": return "RED. CRIT";
+            case "crit_reduction_bonus": return "REDUÇÃO CRIT";
             default: return attr;
         }
     }

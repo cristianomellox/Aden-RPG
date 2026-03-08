@@ -544,7 +544,7 @@ function renderUI() {
 function updateStatsUI(stats) {
     if (!stats) return;
 
-    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
+    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion','playerCritReduction']
         .forEach(id => document.getElementById(id)?.classList.remove('shimmer'));
 
     const avatarEl = document.getElementById('playerAvatarEquip');
@@ -556,6 +556,7 @@ function updateStatsUI(stats) {
     const ccSpan  = document.getElementById('playerCritChance');
     const cdSpan  = document.getElementById('playerCritDamage');
     const evSpan  = document.getElementById('playerEvasion');
+    const crSpan  = document.getElementById('playerCritReduction');
 
     if (atkSpan) atkSpan.textContent = `${Math.floor(stats.min_attack || 0)} - ${Math.floor(stats.attack || 0)}`;
     if (defSpan) defSpan.textContent = `${Math.floor(stats.defense || 0)}`;
@@ -564,6 +565,7 @@ function updateStatsUI(stats) {
     if (ccSpan)  ccSpan.textContent  = `${Math.floor(stats.crit_chance || 0)}%`;
     if (cdSpan)  cdSpan.textContent  = `${Math.floor(stats.crit_damage || 0)}%`;
     if (evSpan)  evSpan.textContent  = `${Math.floor(stats.evasion || 0)}%`;
+    if (crSpan)  crSpan.textContent  = `${Math.floor(stats.crit_reduction || 0)}%`;
 }
 
 function calculatePlayerStats() {
@@ -948,7 +950,7 @@ async function showItemDetails(item) {
     if (!item.items.description || item.items.attack === undefined) {
         descEl.textContent = "Carregando detalhes...";
         const { data } = await supabase.from('items')
-            .select('description, attack, defense, health, crit_chance, crit_damage, evasion, min_attack')
+            .select('description, attack, defense, health, crit_chance, crit_damage, evasion, crit_reduction, min_attack')
             .eq('item_id', item.item_id).single();
         if (data) {
             Object.assign(item.items, data);
@@ -998,6 +1000,7 @@ async function showItemDetails(item) {
             if ((item.items.crit_chance || 0) > 0) { itemStats.innerHTML += `<p>CRIT Base: ${item.items.crit_chance}%</p>`; }
             if ((item.items.crit_damage || 0) > 0) { itemStats.innerHTML += `<p>DANO CRIT Base: +${item.items.crit_damage}%</p>`; }
             if ((item.items.evasion || 0) > 0) { itemStats.innerHTML += `<p>EVASÃO Base: +${item.items.evasion}%</p>`; }
+            if ((item.items.crit_reduction || 0) > 0) { itemStats.innerHTML += `<p>RED. CRIT Base: +${item.items.crit_reduction}%</p>`; }
             
             if ((item.attack_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus ATK: +${item.attack_bonus}</p>`;
             if ((item.defense_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DEF: +${item.defense_bonus}</p>`;
@@ -1005,6 +1008,7 @@ async function showItemDetails(item) {
             if ((item.crit_chance_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus TAXA CRIT: +${item.crit_chance_bonus}%</p>`;
             if ((item.crit_damage_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DANO CRIT: +${item.crit_damage_bonus}%</p>`;
             if ((item.evasion_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus EVASÃO: +${item.evasion_bonus}%</p>`;
+            if ((item.crit_reduction_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus RED. CRIT: +${item.crit_reduction_bonus}%</p>`;
         }
     
         const refineRow1 = document.getElementById('refineRow1');
@@ -1291,6 +1295,7 @@ function formatAttrName(attr) {
         case "crit_chance_bonus": return "TAXA CRIT";
         case "crit_damage_bonus": return "DANO CRIT";
         case "evasion_bonus": return "EVASÃO";
+        case "crit_reduction_bonus": return "RED. CRIT";
         default: return attr;
     }
 }
@@ -1300,7 +1305,7 @@ function formatAttrName(attr) {
 // ===============================
 (function applyInitialShimmer(){
   function addShimmer(){
-    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion']
+    ['playerAttack','playerDefense','playerHealth','playerCritChance','playerCritDamage','playerEvasion','playerCritReduction']
       .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('shimmer'); });
   }
   if (document.readyState === 'loading') {

@@ -387,6 +387,7 @@
         <div class="stat-line"><span>Evasão</span><span id="playerEvasion" class="shimmer"></span></div>
         <div class="stat-line"><span>Taxa Crítica</span><span id="playerCritChance" class="shimmer"></span></div>
         <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
+        <div class="stat-line"><span>Red. Crítico</span><span id="playerCritReduction" class="shimmer"></span></div>
       </div>
       
       <a id="sendmp" href="#" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 10px;">
@@ -692,7 +693,8 @@
                 health: safeNum(serverStats.health),
                 evasion: safeNum(serverStats.evasion),
                 crit_chance: safeNum(serverStats.crit_chance),
-                crit_damage: safeNum(serverStats.crit_damage)
+                crit_damage: safeNum(serverStats.crit_damage),
+                crit_reduction: safeNum(serverStats.crit_reduction)
             };
             
             const fullPlayerData = {
@@ -746,7 +748,8 @@
             'playerHealth': stats.health,
             'playerEvasion': stats.evasion,
             'playerCritChance': stats.crit_chance + '%',
-            'playerCritDamage': stats.crit_damage + '%'
+            'playerCritDamage': stats.crit_damage + '%',
+            'playerCritReduction': stats.crit_reduction + '%'
         };
         for (const [id, val] of Object.entries(statMap)) {
             const el = document.getElementById(id);
@@ -776,7 +779,7 @@
 
     function resetModalUI() {
         const shimmers = ['playerName', 'playerLevel', 'playerGuildName', 'playerCombatPower', 'playerAvatarEquip',
-                          'playerAttack', 'playerDefense', 'playerHealth', 'playerEvasion', 'playerCritChance', 'playerCritDamage'];
+                          'playerAttack', 'playerDefense', 'playerHealth', 'playerEvasion', 'playerCritChance', 'playerCritDamage', 'playerCritReduction'];
         shimmers.forEach(id => {
             const el = document.getElementById(id);
             if(el) {

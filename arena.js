@@ -554,7 +554,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // Multiplicador de crítico baseado no stat real de crit_damage do jogador
             // crit_damage = 240 → critMult = 1 + 240/100 = 3.4x
-            let critMult = 1 + ((parseFloat(attacker.stats.crit_damage) || 50) / 100);
+            // Redução de crítico do defensor é subtraída do crit_damage do atacante (mínimo 0)
+            const rawCritDmg = parseFloat(attacker.stats.crit_damage) || 50;
+            const critReduction = parseFloat(defender.stats.crit_reduction) || 0;
+            const effectiveCritDmg = Math.max(0, rawCritDmg - critReduction);
+            let critMult = 1 + (effectiveCritDmg / 100);
 
             // Poção de Fúria: soma +50% ao dano crítico (R, id 45) ou +100% (SR, id 46)
             if (this.hasBuff(attacker, 'FURY')) critMult += (this.getBuffId(attacker, 'FURY') === 45 ? 0.5 : 1.0);

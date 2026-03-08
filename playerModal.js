@@ -156,7 +156,8 @@ document.addEventListener("DOMContentLoaded", () => {
             hp: document.getElementById('playerHealth'),
             critChance: document.getElementById('playerCritChance'),
             critDmg: document.getElementById('playerCritDamage'),
-            evasion: document.getElementById('playerEvasion')
+            evasion: document.getElementById('playerEvasion'),
+            critReduction: document.getElementById('playerCritReduction')
         }
     };
     const sendMpButton = document.getElementById('sendmp');
@@ -228,6 +229,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 crit_chance: cachedStats.crit_chance || player.crit_chance || 0,
                 crit_damage: cachedStats.crit_damage || player.crit_damage || 0,
                 evasion: cachedStats.evasion || player.evasion || 0,
+                crit_reduction: cachedStats.crit_reduction || player.crit_reduction || 0,
                 avatar_url: player.avatar_url || cachedStats.avatar_url
             };
 
@@ -251,6 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if(ui.stats.critChance) ui.stats.critChance.textContent = `${stats.crit_chance}%`;
             if(ui.stats.critDmg) ui.stats.critDmg.textContent = `${stats.crit_damage}%`;
             if(ui.stats.evasion) ui.stats.evasion.textContent = `${stats.evasion}%`;
+            if(ui.stats.critReduction) ui.stats.critReduction.textContent = `${stats.crit_reduction}%`;
 
             if(ui.cp) ui.cp.textContent = formatNumberCompact(Number(player.combat_power || 0));
 

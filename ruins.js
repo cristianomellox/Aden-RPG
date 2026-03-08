@@ -149,8 +149,10 @@ let state = {
     collapseStartAt: null,
     isProcessing: false,
     cooldownInterval: null,
+    spectatorSyncInterval: null,
     relicHolderId: null,
-    relicRoomId: null, 
+    relicRoomId: null,
+    matchWinnerId: null,
     isSpectating: false,
     destroyedCount: 0,
     destroyedRooms: [],
@@ -852,6 +854,42 @@ async function executeMove(roomId) {
     startCooldownTimer(cooldownTime);
 }
 
+// --- Timer do Modo Espectador ---
+function startSpectatorSyncTimer(totalSeconds) {
+    // Cancela ciclo anterior se existir
+    if (state.spectatorSyncInterval) {
+        clearInterval(state.spectatorSyncInterval);
+        state.spectatorSyncInterval = null;
+    }
+
+    const container = document.getElementById('spectatorSyncContainer');
+    const fill      = document.getElementById('spectatorSyncFill');
+    const text      = document.getElementById('spectatorSyncText');
+    if (!container) return;
+
+    let timeLeft = totalSeconds;
+    text.textContent = `Próxima atualização: ${timeLeft}s`;
+    container.style.display = 'block';
+
+    // Barra desliza de 100% → 0% ao longo de totalSeconds (direita para esquerda)
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    void fill.offsetWidth; // força reflow para reiniciar a transição
+    fill.style.transition = `width ${totalSeconds}s linear`;
+    fill.style.width = '0%';
+
+    state.spectatorSyncInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+            text.textContent = `Próxima atualização: ${timeLeft}s`;
+        } else {
+            text.textContent = 'Atualizando...';
+            clearInterval(state.spectatorSyncInterval);
+            state.spectatorSyncInterval = null;
+        }
+    }, 1000);
+}
+
 // --- Lógica de Descanso e Poções ---
 async function startCooldownTimer(seconds) {
     els.cooldownContainer.style.display = 'block';
@@ -1335,6 +1373,7 @@ function scheduleNextHeartbeat() {
     // Espectadores recebem metade das chamadas — mesmos dados com o dobro do intervalo.
     const interval = state.isSpectating ? POLLING_INTERVAL_SPECTATE : POLLING_INTERVAL_ACTIVE;
     heartbeatInterval = setTimeout(runHeartbeat, interval);
+    if (state.isSpectating) startSpectatorSyncTimer(interval / 1000);
 }
 
 async function runHeartbeat() {
@@ -1372,6 +1411,7 @@ async function runHeartbeat() {
     }
 
     if (data.status === 'finished') {
+        if (data.winner_id) state.matchWinnerId = data.winner_id;
         if (data.winner) {
             endGame({ win: true, message: "VITÓRIA! Você é o último sobrevivente.\n+50 Moedas Rúnicas!" });
         } else {
@@ -1459,6 +1499,7 @@ function endGame(data) {
             els.navMsg.textContent = "Modo Espectador";
             els.actionButtons.style.display = 'none';
             els.probeGrid.style.display = 'none';
+            startSpectatorSyncTimer(POLLING_INTERVAL_SPECTATE / 1000);
             scheduleNextHeartbeat();
         };
         modal.style.display = 'flex';
@@ -1468,6 +1509,8 @@ function endGame(data) {
     // Partida encerrada (vitória ou fim com espectador) → modal detalhado
     if(heartbeatInterval) clearTimeout(heartbeatInterval);
     if(state.cooldownInterval) clearInterval(state.cooldownInterval);
+    if(state.spectatorSyncInterval) { clearInterval(state.spectatorSyncInterval); state.spectatorSyncInterval = null; }
+    document.getElementById('spectatorSyncContainer').style.display = 'none';
     showDetailedEndModal(data);
 }
 
@@ -1483,8 +1526,10 @@ function showDetailedEndModal(data) {
     // Monta lista de participantes para o ranking da partida
     const participants = Object.values(state.participantCache).map(p => {
         const kills = state.participantKillsByName[p.name] || 0;
-        const coins  = kills * 5;
-        const isMe   = (p.name === state.myPlayer?.name);
+        const isMe      = (p.name === state.myPlayer?.name);
+        // O vencedor recebe +50: pode ser eu (isWin) ou outro jogador identificado pelo winner_id
+        const isWinner  = isMe ? isWin : (!!(state.matchWinnerId && p.id === state.matchWinnerId));
+        const coins     = kills * 5 + (isWinner ? 50 : 0);
         return { ...p, kills: isMe ? state.matchKills : kills, coins: isMe ? totalCoins : coins };
     });
 

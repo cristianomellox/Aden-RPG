@@ -236,7 +236,9 @@ function setActivityHunting(spotId, forceResetLock = false, pvpOnly = false){
     }));
 }
 function clearActivity(){
-    localStorage.removeItem(ACTIVITY_KEY);
+    // Não remove atividade de mineração — pode ter sido gravada pela página de minas
+    // enquanto as recompensas de caça ainda estavam pendentes de coleta.
+    try{const a=JSON.parse(localStorage.getItem(ACTIVITY_KEY));if(!a||a.type!=='mining')localStorage.removeItem(ACTIVITY_KEY);}catch{localStorage.removeItem(ACTIVITY_KEY);}
     try{localStorage.removeItem(SPOT_LOCK_KEY());}catch{}
 }
 function _getSpotLockTs(spotId){

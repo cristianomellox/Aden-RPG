@@ -58,6 +58,13 @@ const TRADE_ITEMS = [
     { id: 82,  name: 'Fios de Fibra',      img: 'fios_de_fibra.webp'    },
     { id: 83,  name: 'Escama de Dragão',   img: 'escama_de_dragao.webp' },
     { id: 84,  name: 'Chifre de Unicórnio',img: 'chifre_de_unicornio.webp'},
+    { id: 86,  name: 'Asa de Morcego',     img: 'asa_de_morcego.webp'    },
+    { id: 87,  name: 'Emblema Vampírico',  img: 'emblema_vampirico.webp' },
+    { id: 88,  name: 'Quitina',            img: 'quitina.webp'           },
+    { id: 89,  name: 'Pedra Âmbar',        img: 'pedra_ambar.webp'       },
+    { id: 90,  name: 'Lodo Mágico',        img: 'lodo_magico.webp'       },
+    { id: 91,  name: 'Núcleo de Vinha',    img: 'nucleo_de_vinha.webp'   },
+    { id: 92,  name: 'Totem Reptiliano',   img: 'totem_reptiliano.webp'  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

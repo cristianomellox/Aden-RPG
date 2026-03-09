@@ -1089,7 +1089,33 @@ async function signIn() {
     }
 }
 
-async function signUp() {
+// ── Whitelist de domínios de e-mail permitidos ──────────────────────────────
+const ALLOWED_EMAIL_DOMAINS = [
+    // Google
+    'gmail.com',
+    // Microsoft
+    'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
+    // Apple
+    'icloud.com', 'me.com', 'mac.com',
+    // Yahoo
+    'yahoo.com', 'yahoo.com.br',
+    // Clássicos Brasileiros
+    'uol.com.br', 'bol.com.br', 'ig.com.br', 'terra.com.br',
+    // Outros provedores confiáveis
+    'protonmail.com', 'proton.me',
+    'zoho.com',
+    'aol.com',
+];
+
+function isEmailDomainAllowed(email) {
+    const parts = email.trim().toLowerCase().split('@');
+    if (parts.length !== 2) return false;
+    const domain = parts[1];
+    return ALLOWED_EMAIL_DOMAINS.includes(domain);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _executeSignUp() {
     const email = emailInput.value;
     const password = passwordInput.value;
     authMessage.textContent = 'Enviando código de confirmação...';
@@ -1111,6 +1137,49 @@ async function signUp() {
         otpInputContainer.style.display = 'block';
     }
 }
+
+function signUp() {
+    const email = emailInput.value.trim();
+
+    if (!email) {
+        authMessage.textContent = 'Por favor, insira seu e-mail.';
+        return;
+    }
+
+    if (!isEmailDomainAllowed(email)) {
+        authMessage.textContent = '❌ E-mail não permitido. Use um provedor confiável (Gmail, Outlook, iCloud, Yahoo, etc.).';
+        return;
+    }
+
+    // Abre o modal de confirmação
+    const modal = document.getElementById('signUpConfirmModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+// Listeners do modal de confirmação de registro
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmModal = document.getElementById('signUpConfirmModal');
+    const btnNo  = document.getElementById('signUpConfirmNo');
+    const btnYes = document.getElementById('signUpConfirmYes');
+
+    if (btnNo) {
+        btnNo.addEventListener('click', () => {
+            if (confirmModal) confirmModal.style.display = 'none';
+        });
+    }
+    if (btnYes) {
+        btnYes.addEventListener('click', () => {
+            if (confirmModal) confirmModal.style.display = 'none';
+            _executeSignUp();
+        });
+    }
+    // Fecha ao clicar fora
+    if (confirmModal) {
+        confirmModal.addEventListener('click', (e) => {
+            if (e.target === confirmModal) confirmModal.style.display = 'none';
+        });
+    }
+});
 
 async function verifyOtp() {
     const email = emailInput.value;

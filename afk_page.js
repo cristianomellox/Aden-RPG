@@ -441,12 +441,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             if (data && Array.isArray(data) && data[0] === 1) {
-                const xpGained = data[1];
+                const xpGained  = data[1];
                 const goldGained = data[2];
-                const newLevel = data[3]; 
+                const newLevel  = data[3]; 
                 const isLevelUp = data[4] === 1;
+                const bonusXp   = data[5] || 0;  // Bônus da asa afk
 
-                if (xpGained) playerAfkData.xp = (playerAfkData.xp || 0) + xpGained;
+                if (xpGained || bonusXp) playerAfkData.xp = (playerAfkData.xp || 0) + xpGained + bonusXp;
                 if (goldGained) playerAfkData.gold = (playerAfkData.gold || 0) + goldGained;
                 
                 playerAfkData.last_afk_start_time = new Date().toISOString();
@@ -462,7 +463,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // Invalida cache de 15min do index para refletir XP/level up
                 localStorage.removeItem('aden_player_last_fetch_ts');
 
-                resultText.textContent = `Você coletou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro!`;
+                let collectMsg = `Você coletou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro!`;
+                if (bonusXp > 0) {
+                    collectMsg += `\n✨ Bônus da Asa: +${formatNumberCompact(bonusXp)} XP`;
+                }
+                resultText.textContent = collectMsg;
                 resultModal.style.display = "block";
             } else {
                 collectBtn.disabled = false;

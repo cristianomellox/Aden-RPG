@@ -290,7 +290,10 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.marginBottom = "8px";
             
             if (slotData) {
-                const textStyle = `margin:0; font-size:1.1em; font-weight:bold; color:silver; text-shadow:1px 1px 2px black,-1px -1px 2px black,1px -1px 2px black,-1px 1px 2px black,0 0 2px black,0 0 4px black;`;
+                const textStyle = `margin:0; font-size:1.8em; font-weight:bold; color:silver; text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;`;
                 div.innerHTML = `
                     <img src="https://aden-rpg.pages.dev/assets/refund.webp" alt="Reforjado" class="refine-icon" style="width: 40px; height: 40px;">
                     <p style="${textStyle}">${formatAttrName(slotData.attr)} +${slotData.value}${['TAXA CRIT', 'DANO CRIT', 'EVASÃO', 'REDUÇÃO CRIT'].includes(formatAttrName(slotData.attr)) ? '%' : ''}</p>

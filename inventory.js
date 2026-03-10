@@ -950,7 +950,7 @@ async function showItemDetails(item) {
     if (!item.items.description || item.items.attack === undefined) {
         descEl.textContent = "Carregando detalhes...";
         const { data } = await supabase.from('items')
-            .select('description, attack, defense, health, crit_chance, crit_damage, evasion, crit_reduction, min_attack')
+            .select('description, attack, defense, health, crit_chance, crit_damage, evasion, crit_reduction, min_attack, afk_xp')
             .eq('item_id', item.item_id).single();
         if (data) {
             Object.assign(item.items, data);
@@ -1001,6 +1001,8 @@ async function showItemDetails(item) {
             if ((item.items.crit_damage || 0) > 0) { itemStats.innerHTML += `<p>DANO CRIT Base: +${item.items.crit_damage}%</p>`; }
             if ((item.items.evasion || 0) > 0) { itemStats.innerHTML += `<p>EVASÃO Base: +${item.items.evasion}%</p>`; }
             if ((item.items.crit_reduction || 0) > 0) { itemStats.innerHTML += `<p>REDUÇÃO CRIT Base: +${item.items.crit_reduction}%</p>`; }
+            // Asa de XP AFK: exibe base e bônus acumulado
+            if ((item.items.afk_xp || 0) > 0) { itemStats.innerHTML += `<p>XP AFK Base: +${item.items.afk_xp}%</p>`; }
             
             if ((item.attack_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus ATK: +${item.attack_bonus}</p>`;
             if ((item.defense_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DEF: +${item.defense_bonus}</p>`;
@@ -1009,6 +1011,8 @@ async function showItemDetails(item) {
             if ((item.crit_damage_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus DANO CRIT: +${item.crit_damage_bonus}%</p>`;
             if ((item.evasion_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus EVASÃO: +${item.evasion_bonus}%</p>`;
             if ((item.crit_reduction_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus REDUÇÃO CRIT: +${item.crit_reduction_bonus}%</p>`;
+            // Bônus acumulado de XP AFK (escala com nível e refino)
+            if ((item.afk_xp_bonus || 0) > 0) itemStats.innerHTML += `<p class="bonus-stat">Bônus XP AFK: +${item.afk_xp_bonus.toFixed(1)}%</p>`;
         }
     
         const refineRow1 = document.getElementById('refineRow1');

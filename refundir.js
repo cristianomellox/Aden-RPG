@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (slotData) {
                 const textStyle = `margin:0; font-size:1.3em; font-weight:bold; color:silver; text-shadow: none;
-  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  background: linear-gradient(to bottom, orange 0%, red 50%, orange 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;`;
                 div.innerHTML = `

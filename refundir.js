@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.style.marginBottom = "8px";
             
             if (slotData) {
-                const textStyle = `margin:0; font-size:1.6em; font-weight:bold; color:silver; text-shadow: none;
+                const textStyle = `margin:0; font-size:1.3em; font-weight:bold; color:silver; text-shadow: none;
   background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;`;

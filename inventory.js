@@ -778,13 +778,24 @@ async function handleRefineMulti(item, selections, crystalCost) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
             showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
             
+            // Calcula afk_xp_bonus localmente após refino (mesma fórmula do SQL)
+            const baseAfkXp = item.items?.afk_xp || 0;
+            const currentLevel = item.level || 0;
+            const newRefinedAfkXpBonus = baseAfkXp > 0
+                ? (baseAfkXp * currentLevel * 2) + (baseAfkXp * data.new_refine_level * 2)
+                : undefined;
+
             // ATUALIZAÇÃO LOCAL
             await updateLocalInventoryState({
                 updatedItemId: item.id,
-                newItemData: { refine_level: data.new_refine_level, xp_progress: 0 }, // Reset xp usually happens
+                newItemData: {
+                    refine_level: data.new_refine_level,
+                    xp_progress: 0,
+                    ...(newRefinedAfkXpBonus !== undefined && { afk_xp_bonus: newRefinedAfkXpBonus })
+                },
                 usedFragments: data.used_fragments,
                 usedCrystals: data.used_crystals,
-                newStats: data.player_stats // Recebe stats atualizados
+                newStats: data.player_stats
             });
             
             document.getElementById('itemDetailsModal').style.display = 'none';
@@ -817,12 +828,22 @@ async function handleLevelUpMulti(item, selections) {
         } else if (data && data.success) {
             showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
             
+            // Calcula afk_xp_bonus localmente (mesma fórmula do SQL)
+            const baseAfkXp = item.items?.afk_xp || 0;
+            const newAfkXpBonus = baseAfkXp > 0
+                ? (baseAfkXp * data.new_level * 2) + (baseAfkXp * (item.refine_level || 0) * 2)
+                : undefined;
+
             // ATUALIZAÇÃO LOCAL
             await updateLocalInventoryState({
                 updatedItemId: item.id,
-                newItemData: { level: data.new_level, xp_progress: data.new_xp },
+                newItemData: {
+                    level: data.new_level,
+                    xp_progress: data.new_xp,
+                    ...(newAfkXpBonus !== undefined && { afk_xp_bonus: newAfkXpBonus })
+                },
                 usedFragments: data.used_fragments,
-                newStats: data.player_stats // Recebe stats atualizados
+                newStats: data.player_stats
             });
 
             document.getElementById('itemDetailsModal').style.display = 'none';

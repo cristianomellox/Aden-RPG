@@ -1044,7 +1044,7 @@ async function showItemDetails(item) {
                 const formattedName = formatAttrName(item.reforge_slot1.attr);
                 let formattedValue = item.reforge_slot1.value;
                 if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
-                const textStyle1 = `font-size:1.5em; margin:0; color:silver; font-weight:bold; text-shadow: none;
+                const textStyle1 = `font-size:1.3em; margin:0; color:silver; font-weight:bold; text-shadow: none;
   background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;`;
@@ -1065,7 +1065,10 @@ async function showItemDetails(item) {
                 const formattedName = formatAttrName(item.reforge_slot2.attr);
                 let formattedValue = item.reforge_slot2.value;
                 if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
-                const textStyle2 = `font-size:1.1em; margin:0; color:silver; font-weight:bold; text-shadow:1px 1px 2px black,-1px -1px 2px black,1px -1px 2px black,-1px 1px 2px black,0 0 2px black,0 0 4px black;`;
+                const textStyle2 = `font-size:1.3em; margin:0; color:silver; font-weight:bold; text-shadow: none;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;`;
                 refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="${textStyle2}">${formattedName} +${formattedValue}</p>`;
                 refineRow2.style.setProperty('background', rarityGradient(item.reforge_slot2.color));
                 refineRow2.style.height = "15px";

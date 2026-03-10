@@ -945,10 +945,10 @@ body {
 /* --- SIDEBAR LATERAL --- */
 #ruinsSidebar {
     position: fixed;
-    top: 0;
+    top: 50px;
     right: -320px; /* Escondido por padrão */
     width: 300px;
-    height: 100%;
+    height: calc(100% - 50px);
     background-color: rgba(10, 10, 10, 0.95);
     border-left: 2px solid #444;
     box-shadow: -5px 0 15px rgba(0,0,0,0.8);

@@ -603,29 +603,139 @@ function formatTimeCombat(totalSeconds) {
     const c = Math.max(0, Number(current || 0));
     const m = Math.max(1, Number(max || 1));
     const pct = Math.max(0, Math.min(100, (c / m) * 100));
-    if (element) element.style.width = `${pct}%`;
+    if (element) {
+      element.style.width = `${pct}%`;
+      if      (pct > 60) element.style.background = 'linear-gradient(90deg,#127a22,#1ec938)';
+      else if (pct > 30) element.style.background = 'linear-gradient(90deg,#a05e00,#e08800)';
+      else               element.style.background = 'linear-gradient(90deg,#7a1212,#cc2828)';
+    }
     if (textElement) textElement.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
   }
 
   function displayDamageNumber(damage, isCrit, isEvaded, targetElement) {
     if (!targetElement) return;
-    const el = document.createElement("div");
+    const el = document.createElement('div');
     if (isEvaded) {
-        el.textContent = "Desviou";
-        el.className = "evade-text";
-        playSound('evade', { volume: 0.3 });
+      el.textContent = 'Desviou!';
+      el.className = 'mine-evade-text';
+      try { playSound('evade', { volume: 0.3 }); } catch(_) {}
+    } else if (isCrit) {
+      el.innerHTML = '⚡ ' + Number(damage).toLocaleString() + ' ⚡';
+      el.className = 'mine-crit-damage-number';
+      const lbl = document.createElement('div');
+      lbl.className = 'mine-crit-label';
+      lbl.textContent = '✦ CRÍTICO! ✦';
+      targetElement.appendChild(lbl);
+      lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+      try { playSound('critical', { volume: 0.1 }); } catch(_) {}
     } else {
-        el.textContent = Number(damage).toLocaleString();
-        el.className = isCrit ? "crit-damage-number" : "damage-number";
-        try { isCrit ? playSound('critical', { volume: 0.1 }) : playSound('normal', { volume: 0.5 }); } catch(_) {}
+      el.textContent = Number(damage).toLocaleString();
+      el.className = 'mine-damage-number';
+      try { playSound('normal', { volume: 0.5 }); } catch(_) {}
     }
-    el.style.position = "absolute";
-    el.style.top = `50%`;
-    el.style.left = `50%`;
-    el.style.transform = "translate(-50%, -50%)";
-    el.style.zIndex = "10";
     targetElement.appendChild(el);
-    el.addEventListener("animationend", () => el.remove());
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+
+  // ── PvE helpers ────────────────────────────────────────
+  let _minesCssInjected = false;
+  function _injectMinesEpicStyles() {
+    if (_minesCssInjected) return;
+    _minesCssInjected = true;
+    const s = document.createElement('style');
+    s.id = 'mines-epic-styles';
+    s.textContent = `
+      /* ── PvE: damage numbers ── */
+      @keyframes mine-float-dmg  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.55);} 12%{transform:translateX(-50%) translateY(-8px) scale(1.18);} 100%{opacity:0;transform:translateX(-50%) translateY(-62px) scale(0.95);} }
+      @keyframes mine-float-crit { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.3) rotate(-5deg);} 10%{transform:translateX(-50%) translateY(-12px) scale(1.4) rotate(4deg);} 22%{transform:translateX(-50%) translateY(-22px) scale(1.18) rotate(-1deg);} 100%{opacity:0;transform:translateX(-50%) translateY(-75px) scale(0.9) rotate(0);} }
+      @keyframes mine-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);} 100%{opacity:0;transform:translateX(-50%) translateY(-55px) scale(1.1);} }
+      @keyframes mine-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 18%{opacity:1;transform:translateX(-50%) scale(1.28);} 65%{opacity:1;transform:translateX(-50%) scale(1.0);} 100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
+
+      .mine-damage-number      { font-family:'Cinzel',Georgia,serif; font-size:1.6em; font-weight:bold; color:#fff; text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.6); position:absolute; left:50%; top:38%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:mine-float-dmg 1.3s ease-out forwards; }
+      .mine-crit-damage-number { font-family:'Cinzel',Georgia,serif; font-size:2.2em; font-weight:bold; color:#ffdd00; text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400; position:absolute; left:50%; top:28%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:mine-float-crit 1.55s ease-out forwards; }
+      .mine-evade-text         { font-family:'Cinzel',Georgia,serif; font-size:1.2em; font-weight:bold; color:#88ddff; text-shadow:0 0 10px #0af,1px 1px 2px #000; position:absolute; left:50%; top:38%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:mine-float-evd 1.3s ease-out forwards; }
+      .mine-crit-label         { font-family:'Cinzel',serif; font-size:0.75em; font-weight:bold; color:#ffdd00; text-shadow:0 0 8px #f80,1px 1px 2px #000; position:absolute; left:50%; top:16%; transform:translateX(-50%); z-index:16; white-space:nowrap; pointer-events:none; animation:mine-crit-lbl 0.95s ease-out forwards; }
+
+      /* ── PvE: monster impact ── */
+      @keyframes mine-monster-hit  { 0%,100%{filter:brightness(1) saturate(1);} 20%{filter:brightness(3.5) saturate(0.1);} 50%{filter:brightness(2) saturate(0.5);} }
+      @keyframes mine-monster-crit { 0%{filter:brightness(1);} 10%{filter:brightness(5) saturate(0) sepia(1) hue-rotate(10deg);} 35%{filter:brightness(2.5) saturate(0.3) sepia(0.4);} 100%{filter:brightness(1);} }
+      @keyframes mine-screen-edge  { 0%{opacity:1;} 100%{opacity:0;} }
+      @keyframes mine-ring-expand  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.9;border-width:4px;} 100%{transform:translate(-50%,-50%) scale(2.6);opacity:0;border-width:1px;} }
+      @keyframes mine-ring2-expand { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.55;border-width:3px;} 100%{transform:translate(-50%,-50%) scale(1.85);opacity:0;border-width:1px;} }
+      @keyframes mine-spark        { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+
+      #mine-screen-flash { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:8888;opacity:0;transition:opacity 0.07s; }
+      .mine-impact-ring  { position:absolute;width:70px;height:70px;border-radius:50%;border:3px solid rgba(255,160,40,0.9);top:42%;left:50%;pointer-events:none;z-index:12;animation:mine-ring-expand 0.48s ease-out forwards; }
+      .mine-impact-ring2 { position:absolute;width:70px;height:70px;border-radius:50%;border:2px solid rgba(255,220,100,0.5);top:42%;left:50%;pointer-events:none;z-index:12;animation:mine-ring2-expand 0.65s ease-out 0.07s forwards; }
+      .mine-impact-ring.crit  { border-color:rgba(255,220,0,0.95);box-shadow:0 0 12px rgba(255,200,0,0.6); }
+      .mine-impact-ring2.crit { border-color:rgba(255,180,0,0.65); }
+      .mine-spark { position:absolute;border-radius:50%;top:42%;left:50%;pointer-events:none;animation:mine-spark 0.42s ease-out forwards;z-index:13; }
+
+      /* ── PvP modal epic ── */
+      #pvpCombatModal .modal-content {
+        background: radial-gradient(ellipse at 50% 15%, #1e0a35 0%, #0e0620 55%, #060310 100%) !important;
+        border: 1px solid rgba(150,70,255,0.4) !important;
+        box-shadow: 0 0 55px rgba(120,0,255,0.4), 0 0 110px rgba(80,0,200,0.18), inset 0 0 60px rgba(0,0,0,0.75) !important;
+        position: relative !important; overflow: hidden !important;
+      }
+      #pvpCombatModal .modal-content::before {
+        content:''; position:absolute; top:-50%;left:-50%;width:200%;height:200%;
+        background:radial-gradient(ellipse at center,transparent 40%,rgba(100,0,200,0.06) 100%);
+        animation:pvp-bg-pulse 4s ease-in-out infinite; pointer-events:none; z-index:0;
+      }
+      #pvpCombatModal .modal-content > * { position:relative; z-index:1; }
+      @keyframes pvp-bg-pulse { 0%,100%{opacity:0.5;transform:scale(1);}50%{opacity:1;transform:scale(1.04);} }
+
+      #pvpArena { margin-top: 8% !important; }
+      .player-side { transition: filter 0.7s ease, transform 0.7s ease, opacity 0.7s ease !important; }
+      .player-name-pvp { text-shadow: 0 0 10px rgba(180,100,255,0.8) !important; color:#e0d0ff !important; }
+      .player-avatar-pvp { box-shadow: 0 0 18px rgba(120,0,255,0.5), 0 0 36px rgba(100,0,200,0.22) !important; }
+      .vs-separator {
+        font-size: 2em !important; color: #ff8800 !important;
+        text-shadow: 0 0 12px #ff4400,0 0 28px #ff2200,0 0 4px #ffaa00 !important;
+        animation: pvp-vs-pulse 1.8s ease-in-out infinite !important;
+      }
+      @keyframes pvp-vs-pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.18);text-shadow:0 0 22px #f60,0 0 50px #f30,0 0 80px #f10;} }
+      .player-hp-bar { height:24px !important; border:1px solid rgba(255,255,255,0.15) !important; box-shadow:inset 0 2px 4px rgba(0,0,0,0.55) !important; }
+      .player-hp-fill::after { content:''; position:absolute; top:0;left:0;right:0;height:45%; background:linear-gradient(180deg,rgba(255,255,255,0.22) 0%,transparent 100%); border-radius:4px 4px 0 0; pointer-events:none; }
+      .hp-text-overlay { font-size:0.62em !important; text-shadow:1px 1px 2px #000,-1px -1px 2px #000,0 0 5px rgba(0,0,0,0.9) !important; letter-spacing:0.3px !important; }
+      #pvpCountdown { color:#ffcc44 !important; text-shadow:0 0 10px #f80,0 0 22px #f40 !important; animation:pvp-cntdn-p 0.9s ease-in-out infinite !important; }
+      @keyframes pvp-cntdn-p { 0%,100%{transform:scale(1);}50%{transform:scale(1.1);} }
+
+      @keyframes pvp-lunge-l  { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(34px) scale(1.12) rotate(4deg);}65%{transform:translateX(14px) scale(1.05) rotate(1deg);}100%{transform:translateX(0) scale(1) rotate(0);} }
+      @keyframes pvp-lunge-r  { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(-34px) scale(1.12) rotate(-4deg);}65%{transform:translateX(-14px) scale(1.05) rotate(-1deg);}100%{transform:translateX(0) scale(1) rotate(0);} }
+      @keyframes pvp-dodge-r  { 0%{transform:translateX(0) rotate(0);}25%{transform:translateX(20px) rotate(8deg);}60%{transform:translateX(10px) rotate(3deg);}100%{transform:translateX(0) rotate(0);} }
+      @keyframes pvp-dodge-l  { 0%{transform:translateX(0) rotate(0);}25%{transform:translateX(-20px) rotate(-8deg);}60%{transform:translateX(-10px) rotate(-3deg);}100%{transform:translateX(0) rotate(0);} }
+      @keyframes pvp-hit-f    { 0%,100%{filter:brightness(1) saturate(1);}20%{filter:brightness(3.2) saturate(0.1);}45%{filter:brightness(1.9) saturate(0.5);} }
+      @keyframes pvp-crit-f   { 0%{filter:brightness(1);}12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);}30%{filter:brightness(2.8) saturate(0.3) sepia(0.4);}100%{filter:brightness(1);} }
+      @keyframes pvp-shake    { 0%,100%{transform:translateX(0)}20%{transform:translateX(-8px) rotate(-3deg)}40%{transform:translateX(8px) rotate(3deg)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)} }
+      @keyframes pvp-sl-l     { 0%{transform:translateX(-90px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+      @keyframes pvp-sl-r     { 0%{transform:translateX(90px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+      @keyframes pvp-sw       { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.95;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;border-width:1px;} }
+      @keyframes pvp-sw2      { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.6;border-width:3px;}100%{transform:translate(-50%,-50%) scale(2.2);opacity:0;border-width:1px;} }
+      @keyframes pvp-sp       { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+      @keyframes pvp-fdmg     { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.5);}12%{transform:translateX(-50%) translateY(-6px) scale(1.15);}100%{opacity:0;transform:translateX(-50%) translateY(-55px) scale(0.9);} }
+      @keyframes pvp-fcrit    { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.3) rotate(-6deg);}10%{transform:translateX(-50%) translateY(-10px) scale(1.35) rotate(4deg);}22%{transform:translateX(-50%) translateY(-20px) scale(1.15) rotate(-1deg);}100%{opacity:0;transform:translateX(-50%) translateY(-70px) scale(0.95) rotate(0);} }
+      @keyframes pvp-clbl     { 0%{opacity:0;transform:translateX(-50%) scale(0.4);}18%{opacity:1;transform:translateX(-50%) scale(1.25);}65%{opacity:1;transform:translateX(-50%) scale(1.0);}100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
+      @keyframes pvp-w-pulse  { 0%,100%{box-shadow:0 0 22px rgba(255,215,0,0.9),0 0 44px rgba(255,150,0,0.55);}50%{box-shadow:0 0 38px rgba(255,215,0,1),0 0 75px rgba(255,150,0,0.75),0 0 110px rgba(255,100,0,0.45);} }
+
+      #pvp-screen-flash   { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:19999;opacity:0;transition:opacity 0.08s; }
+      .pvp-shockwave      { position:absolute;width:80px;height:80px;border-radius:50%;border:3px solid rgba(255,180,80,0.85);top:40%;left:50%;pointer-events:none;animation:pvp-sw 0.52s ease-out forwards;z-index:10; }
+      .pvp-shockwave2     { position:absolute;width:80px;height:80px;border-radius:50%;border:2px solid rgba(255,220,100,0.5);top:40%;left:50%;pointer-events:none;animation:pvp-sw2 0.7s ease-out 0.08s forwards;z-index:10; }
+      .pvp-shockwave.crit { border-color:rgba(255,230,0,0.95);box-shadow:0 0 12px rgba(255,200,0,0.6); }
+      .pvp-shockwave2.crit{ border-color:rgba(255,180,0,0.65); }
+      .pvp-spark-m        { position:absolute;border-radius:50%;top:40%;left:50%;pointer-events:none;animation:pvp-sp 0.45s ease-out forwards;z-index:11; }
+
+      .pvp-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:1.6em;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000,0 0 12px rgba(255,100,0,0.6);position:absolute;left:50%;top:22%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:pvp-fdmg 1.4s ease-out forwards; }
+      .pvp-crit-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#ffdd00;text-shadow:-1px -1px 0 #b30000,1px -1px 0 #b30000,-1px 1px 0 #b30000,1px 1px 0 #b30000,0 0 12px #ff8800,0 0 24px #ff4400;position:absolute;left:50%;top:12%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:pvp-fcrit 1.6s ease-out forwards; }
+      .pvp-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.15em;font-weight:bold;color:#88ddff;text-shadow:0 0 10px #0af,1px 1px 2px #000;position:absolute;left:50%;top:22%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:pvp-fdmg 1.4s ease-out forwards; }
+      .pvp-crit-lbl { font-family:'Cinzel',serif;font-size:0.7em;font-weight:bold;color:#ffdd00;text-shadow:0 0 8px #f80,1px 1px 2px #000;position:absolute;top:2px;left:50%;transform:translateX(-50%);z-index:16;white-space:nowrap;pointer-events:none;animation:pvp-clbl 0.95s ease-out forwards; }
+      .pvp-winner .player-avatar-pvp { border-color:#ffd700 !important;box-shadow:0 0 22px rgba(255,215,0,0.9),0 0 44px rgba(255,150,0,0.55),0 0 70px rgba(255,100,0,0.3) !important;animation:pvp-w-pulse 1.1s ease-in-out infinite !important; }
+      .pvp-loser  { filter:grayscale(88%) brightness(0.38) !important;transform:scale(0.86) translateY(8px) !important;opacity:0.48 !important; }
+      .pvp-intro-l { animation:pvp-sl-l 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+      .pvp-intro-r { animation:pvp-sl-r 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+    `;
+    document.head.appendChild(s);
   }
 
   function showModalAlert(message) {
@@ -1618,16 +1728,44 @@ function formatTimeCombat(totalSeconds) {
 
     const { damage, isCrit } = calculateLocalDamage(cachedCombatStats, currentMonsterHealthGlobal);
     
+    _injectMinesEpicStyles();
     currentMonsterHealthGlobal = Math.max(0, currentMonsterHealthGlobal - damage);
     updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
     displayDamageNumber(damage, isCrit, false, monsterArea);
     if (!hasAttackedOnce) hasAttackedOnce = true;
-    const mImg = document.getElementById("monsterImage");
+    const mImg = document.getElementById('monsterImage');
     if (mImg) {
-        mImg.classList.remove('shake-animation');
-        void mImg.offsetWidth;
-        mImg.classList.add('shake-animation');
-        setTimeout(() => mImg.classList.remove('shake-animation'), 300);
+      // Flash no monstro
+      mImg.style.animation = isCrit ? 'mine-monster-crit 0.55s ease-out' : 'mine-monster-hit 0.38s ease-out';
+      setTimeout(() => { mImg.style.animation = ''; }, isCrit ? 560 : 400);
+      // Shake
+      mImg.classList.remove('shake-animation');
+      void mImg.offsetWidth;
+      mImg.classList.add('shake-animation');
+      setTimeout(() => mImg.classList.remove('shake-animation'), 320);
+    }
+    // Screen edge flash
+    let _msf = document.getElementById('mine-screen-flash');
+    if (!_msf) { _msf = document.createElement('div'); _msf.id = 'mine-screen-flash'; document.body.appendChild(_msf); }
+    _msf.style.boxShadow = isCrit ? 'inset 0 0 90px rgba(255,200,0,0.45)' : 'inset 0 0 70px rgba(210,25,25,0.35)';
+    _msf.style.opacity = '1';
+    setTimeout(() => { _msf.style.opacity = '0'; }, isCrit ? 420 : 260);
+    // Impact ring
+    if (monsterArea) {
+      const r1 = document.createElement('div'); r1.className = 'mine-impact-ring' + (isCrit ? ' crit' : ''); monsterArea.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+      const r2 = document.createElement('div'); r2.className = 'mine-impact-ring2' + (isCrit ? ' crit' : ''); monsterArea.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+      // Sparks
+      const cols = isCrit ? ['#ffdd00','#ff8800','#fff','#ffaa00'] : ['#fff','#ff8888','#ffbb55'];
+      const n = isCrit ? 12 : 6;
+      for (let _i = 0; _i < n; _i++) {
+        const sp = document.createElement('div'); sp.className = 'mine-spark';
+        const ang = (_i / n) * 360 + Math.random() * 28, dist = 30 + Math.random() * 48, sz = (isCrit ? 5 : 3) + Math.random() * 3;
+        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.background = cols[Math.floor(Math.random() * cols.length)];
+        sp.style.animationDelay = (Math.random() * 0.07) + 's';
+        monsterArea.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+      }
     }
     
     pendingBatch++;
@@ -1800,11 +1938,28 @@ function formatTimeCombat(totalSeconds) {
         challengerAvatar.src = challengerAvatarUrl;
         defenderAvatar.src = ownerAvatar || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
         
+        _injectMinesEpicStyles();
         updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
         updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
 
+        // Reset visual state
+        challengerSide.classList.remove('pvp-winner','pvp-loser','pvp-intro-l','pvp-intro-r');
+        defenderSide.classList.remove('pvp-winner','pvp-loser','pvp-intro-l','pvp-intro-r');
+        challengerSide.style.filter = defenderSide.style.filter = '';
+        challengerSide.style.transform = defenderSide.style.transform = '';
+        challengerSide.style.opacity = defenderSide.style.opacity = '';
+
         pvpCombatModal.style.display = 'flex';
         ambientMusic.play();
+
+        // Screen flash element
+        let _pvpSF = document.getElementById('pvp-screen-flash');
+        if (!_pvpSF) { _pvpSF = document.createElement('div'); _pvpSF.id = 'pvp-screen-flash'; document.body.appendChild(_pvpSF); }
+
+        // Intro slide-in
+        void challengerSide.offsetWidth; void defenderSide.offsetWidth;
+        challengerSide.classList.add('pvp-intro-l');
+        defenderSide.classList.add('pvp-intro-r');
 
         pvpCountdown.style.display = 'block';
         for (let i = 4; i > 0; i--) {
@@ -1813,30 +1968,101 @@ function formatTimeCombat(totalSeconds) {
         }
         pvpCountdown.style.display = 'none';
 
+        // ── Helpers (scoped) ──
+        const _spawnPvpSW = (side, crit) => {
+          const r1 = document.createElement('div'); r1.className = 'pvp-shockwave' + (crit ? ' crit' : ''); side.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+          const r2 = document.createElement('div'); r2.className = 'pvp-shockwave2' + (crit ? ' crit' : ''); side.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+        };
+        const _spawnPvpSparks = (side, count, crit) => {
+          const cols = crit ? ['#ffdd00','#ff8800','#fff','#ffaa00','#ffcc44'] : ['#fff','#ff7777','#ffbb55'];
+          for (let _k = 0; _k < count; _k++) {
+            const sp = document.createElement('div'); sp.className = 'pvp-spark-m';
+            const ang = (_k / count) * 360 + Math.random() * 28, dist = 28 + Math.random() * 44, sz = (crit ? 5 : 3) + Math.random() * 3;
+            sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+            sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+            sp.style.background = cols[Math.floor(Math.random() * cols.length)];
+            sp.style.animationDelay = (Math.random() * 0.08) + 's';
+            side.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+          }
+        };
+        const _showPvpDmg = (dmg, crit, evaded, side) => {
+          const el = document.createElement('div');
+          if (evaded) { el.textContent = 'Desviou!'; el.className = 'pvp-evd-txt'; }
+          else if (crit) {
+            el.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡'; el.className = 'pvp-crit-num';
+            const lbl = document.createElement('div'); lbl.className = 'pvp-crit-lbl'; lbl.textContent = '✦ CRÍTICO! ✦';
+            side.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+          } else { el.textContent = Number(dmg).toLocaleString(); el.className = 'pvp-dmg-num'; }
+          side.appendChild(el); el.addEventListener('animationend', () => el.remove(), { once: true });
+        };
+
         for (const turn of combatLog) {
-            const targetElement = turn.attacker_id === ownerId ? challengerSide : defenderSide;
-            if (turn.attacker_id === ownerId) {
+            const isOwnerAtk = turn.attacker_id === ownerId;
+            const srcSide = isOwnerAtk ? defenderSide : challengerSide;
+            const tgtSide = isOwnerAtk ? challengerSide : defenderSide;
+            const srcAv   = isOwnerAtk ? defenderAvatar : challengerAvatar;
+            const tgtAv   = isOwnerAtk ? challengerAvatar : defenderAvatar;
+
+            if (isOwnerAtk) {
                 challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(turn.damage));
                 updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
             } else {
                 defenderCurrentHp = Math.max(0, defenderCurrentHp - Number(turn.damage));
                 updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);
             }
-            displayDamageNumber(turn.damage, turn.critical, turn.evaded, targetElement);
-            const victimAvatarId = turn.attacker_id === ownerId ? "challengerAvatar" : "defenderAvatar";
-            const vImg = document.getElementById(victimAvatarId);
-            
-            if (vImg) {
-                vImg.classList.remove('shake-animation');
-                void vImg.offsetWidth;
-                vImg.classList.add('shake-animation');
-                setTimeout(() => vImg.classList.remove('shake-animation'), 300);
+
+            if (turn.evaded) {
+              tgtAv.style.animation = isOwnerAtk ? 'pvp-dodge-r 0.4s ease-out' : 'pvp-dodge-l 0.4s ease-out';
+              setTimeout(() => { tgtAv.style.animation = ''; }, 420);
+              await new Promise(r => setTimeout(r, 200));
+              _showPvpDmg(0, false, true, tgtSide);
+              try { playSound('evade'); } catch(_) {}
+            } else {
+              // Lunge
+              srcAv.style.animation = isOwnerAtk ? 'pvp-lunge-r 0.48s ease-out' : 'pvp-lunge-l 0.48s ease-out';
+              setTimeout(() => { srcAv.style.animation = ''; }, 480);
+              await new Promise(r => setTimeout(r, 200));
+              // Flash on target
+              tgtAv.style.animation = turn.critical ? 'pvp-crit-f 0.55s ease-out' : 'pvp-hit-f 0.38s ease-out';
+              setTimeout(() => { tgtAv.style.animation = ''; }, turn.critical ? 560 : 400);
+              // Screen edge
+              _pvpSF.style.boxShadow = turn.critical ? 'inset 0 0 90px rgba(255,200,0,0.45)' : 'inset 0 0 70px rgba(210,25,25,0.32)';
+              _pvpSF.style.opacity = '1'; setTimeout(() => { _pvpSF.style.opacity = '0'; }, turn.critical ? 420 : 270);
+              // Shockwave + sparks
+              _spawnPvpSW(tgtSide, turn.critical);
+              _spawnPvpSparks(tgtSide, turn.critical ? 14 : 7, turn.critical);
+              _showPvpDmg(turn.damage, turn.critical, false, tgtSide);
+              // Shake
+              if (turn.critical) {
+                tgtSide.style.animation = 'pvp-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                setTimeout(() => { tgtSide.style.animation = ''; }, 460);
+              } else {
+                tgtAv.classList.remove('shake-animation'); void tgtAv.offsetWidth; tgtAv.classList.add('shake-animation');
+                setTimeout(() => tgtAv.classList.remove('shake-animation'), 320);
+              }
+              try { turn.critical ? playSound('critical') : playSound('normal'); } catch(_) {}
             }
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 950));
         }
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 350));
 
         const winnerId = data.combat?.winner_id;
+        // Victory / defeat state
+        if (winnerId === userId) {
+          challengerSide.classList.add('pvp-winner'); defenderSide.classList.add('pvp-loser');
+          // Victory particles
+          const vcols = ['#ffd700','#ffaa00','#fff','#ffcc44'];
+          for (let _vi = 0; _vi < 20; _vi++) setTimeout(() => {
+            const vp = document.createElement('div'); const vsz = 4 + Math.random() * 5;
+            vp.style.cssText = `position:absolute;width:${vsz}px;height:${vsz}px;border-radius:50%;background:${vcols[Math.floor(Math.random()*vcols.length)]};top:${15+Math.random()*65}%;left:${15+Math.random()*65}%;pointer-events:none;z-index:12;animation:pvp-sp 0.9s ease-out forwards;`;
+            vp.style.setProperty('--a', Math.random()*360+'deg'); vp.style.setProperty('--d', 45+Math.random()*65+'px');
+            challengerSide.appendChild(vp); vp.addEventListener('animationend', () => vp.remove(), { once: true });
+          }, _vi * 55);
+        } else {
+          defenderSide.classList.add('pvp-winner'); challengerSide.classList.add('pvp-loser');
+        }
+        await new Promise(r => setTimeout(r, 1200));
+
         if (winnerId === userId) showModalAlert(`VITÓRIA! Mina conquistada.`);
         else showModalAlert(`DERROTA. O dono defendeu a mina.`);
 

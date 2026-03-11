@@ -574,7 +574,7 @@ body {
     color: #ffdd00;
     text-shadow: -1px -1px 0 #900, 1px -1px 0 #900, -1px 1px 0 #900, 1px 1px 0 #900,
                  0 0 14px #ff8800, 0 0 28px #ff4400;
-    animation: floatCrit 1.6s ease-out forwards;
+    animation: floatCrit 3s ease-out forwards;
 }
 
 .evade-text {

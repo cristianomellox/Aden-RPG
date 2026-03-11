@@ -1175,7 +1175,7 @@ function animateHit(targetEl, dmg, isCrit) {
     _injectRuinsEpicStyles();
 
     // Volume 0.3 para crítico conforme solicitado
-    if (isCrit) playSound('critical', 0.3); else playSound('normal', 0.8);
+    if (isCrit) playSound('critical', 0.03); else playSound('normal', 0.8);
 
     const parent = targetEl.parentElement; // .combat-side
 

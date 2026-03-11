@@ -1116,6 +1116,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 
         renderBattlePotions(defenderSide, state.defender_potions, 'right', false); 
         
+        // Intro slide animations
+        _injectArenaEpicStyles();
+        [challengerSide, defenderSide].forEach(s => {
+            s.classList.remove('ar-intro-l','ar-intro-r','ar-winner','ar-loser');
+            s.style.filter = s.style.opacity = s.style.transform = '';
+        });
+        void challengerSide.offsetWidth;
+        challengerSide.classList.add('ar-intro-l');
+        defenderSide.classList.add('ar-intro-r');
+
         if (skipBtn) {
             skipBtn.disabled = true;
             skipBtn.style.opacity = "0.5";
@@ -1206,8 +1216,36 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (type === 'ATTACK') {
                 const dmgDealt = playerResult.dmg || 0;
                 await new Promise(r => setTimeout(r, 400));
-                
+
+                // ── Epic hit on defender ──
                 if (dmgDealt > 0 || (newState.finished && newState.win)) {
+                    const defAv = defenderSide.querySelector('.player-avatar-pvp');
+                    if (defAv) {
+                        defAv.style.animation = playerResult.crit ? 'ar-crit-f 0.55s ease-out' : 'ar-hit-f 0.38s ease-out';
+                        setTimeout(() => { defAv.style.animation = ''; }, playerResult.crit ? 560 : 400);
+                    }
+                    const _asf = document.getElementById('arena-screen-flash');
+                    if (_asf) {
+                        _asf.style.boxShadow = playerResult.crit ? 'inset 0 0 90px rgba(255,200,0,0.4)' : 'inset 0 0 70px rgba(200,20,20,0.3)';
+                        _asf.style.opacity = '1'; setTimeout(() => { _asf.style.opacity = '0'; }, playerResult.crit ? 420 : 260);
+                    }
+                    const r1 = document.createElement('div'); r1.className = 'ar-ring'  + (playerResult.crit ? ' crit' : ''); defenderSide.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+                    const r2 = document.createElement('div'); r2.className = 'ar-ring2' + (playerResult.crit ? ' crit' : ''); defenderSide.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+                    const spCols = playerResult.crit ? ['#ffdd00','#ff8800','#fff','#ffcc44'] : ['#fff','#ff8888','#ffbb55'];
+                    const spN = playerResult.crit ? 12 : 6;
+                    for (let _si = 0; _si < spN; _si++) {
+                        const sp = document.createElement('div'); sp.className = 'ar-spark';
+                        const ang = (_si / spN) * 360 + Math.random() * 28, dist = 28 + Math.random() * 42, sz = (playerResult.crit ? 5 : 3) + Math.random() * 3;
+                        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+                        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+                        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+                        sp.style.animationDelay = (Math.random() * 0.07) + 's';
+                        defenderSide.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+                    }
+                    if (playerResult.crit) {
+                        defenderSide.style.animation = 'ar-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                        setTimeout(() => { defenderSide.style.animation = ''; }, 460);
+                    }
                     displayDamageNumber(dmgDealt, playerResult.crit, false, defenderSide);
                     updatePvpHpBar(defenderHpFill, defenderHpText, newState.defender_hp, preState.defender_max_hp);
                 }
@@ -1231,8 +1269,36 @@ document.addEventListener("DOMContentLoaded", async () => {
                         }
                         else if (action.type === 'ATTACK') {
                             animateActorMove(defenderSide);
-                            await new Promise(r => setTimeout(r, 300));
+                            await new Promise(r => setTimeout(r, 260));
                             const dmgReceived = action.dmg || 0;
+                            // Epic hit on challenger
+                            const chAv = challengerSide.querySelector('.player-avatar-pvp');
+                            if (chAv) {
+                                chAv.style.animation = action.crit ? 'ar-crit-f 0.55s ease-out' : 'ar-hit-f 0.38s ease-out';
+                                setTimeout(() => { chAv.style.animation = ''; }, action.crit ? 560 : 400);
+                            }
+                            const _asf2 = document.getElementById('arena-screen-flash');
+                            if (_asf2) {
+                                _asf2.style.boxShadow = action.crit ? 'inset 0 0 90px rgba(200,50,255,0.35)' : 'inset 0 0 70px rgba(200,20,20,0.28)';
+                                _asf2.style.opacity = '1'; setTimeout(() => { _asf2.style.opacity = '0'; }, action.crit ? 420 : 260);
+                            }
+                            const r1b = document.createElement('div'); r1b.className = 'ar-ring'  + (action.crit ? ' crit' : ''); challengerSide.appendChild(r1b); r1b.addEventListener('animationend', () => r1b.remove(), { once: true });
+                            const r2b = document.createElement('div'); r2b.className = 'ar-ring2' + (action.crit ? ' crit' : ''); challengerSide.appendChild(r2b); r2b.addEventListener('animationend', () => r2b.remove(), { once: true });
+                            const spN2 = action.crit ? 10 : 5;
+                            const spC2 = action.crit ? ['#ffdd00','#ff8800','#fff'] : ['#fff','#ff7777','#ffbb55'];
+                            for (let _si2 = 0; _si2 < spN2; _si2++) {
+                                const sp2 = document.createElement('div'); sp2.className = 'ar-spark';
+                                const a2 = (_si2 / spN2) * 360 + Math.random() * 28, d2 = 24 + Math.random() * 38, s2 = (action.crit ? 4 : 2.5) + Math.random() * 3;
+                                sp2.style.setProperty('--a', a2 + 'deg'); sp2.style.setProperty('--d', d2 + 'px');
+                                sp2.style.width = s2 + 'px'; sp2.style.height = s2 + 'px';
+                                sp2.style.background = spC2[Math.floor(Math.random() * spC2.length)];
+                                sp2.style.animationDelay = (Math.random() * 0.07) + 's';
+                                challengerSide.appendChild(sp2); sp2.addEventListener('animationend', () => sp2.remove(), { once: true });
+                            }
+                            if (action.crit) {
+                                challengerSide.style.animation = 'ar-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                                setTimeout(() => { challengerSide.style.animation = ''; }, 460);
+                            }
                             displayDamageNumber(dmgReceived, action.crit, false, challengerSide);
                             updatePvpHpBar(challengerHpFill, challengerHpText, newState.attacker_hp, preState.attacker_max_hp);
                         }
@@ -1281,12 +1347,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         localStorage.setItem('arena_session_v1', JSON.stringify(currentSession));
         currentOpponentIndex++;
 
+        // Winner / loser visuals
+        _injectArenaEpicStyles();
+        if (finalState.win) {
+            challengerSide.classList.add('ar-winner'); defenderSide.classList.add('ar-loser');
+            // Victory particles
+            const vcols = ['#ffd700','#ffaa00','#fff','#ffcc44'];
+            for (let _vi = 0; _vi < 18; _vi++) setTimeout(() => {
+                const vp = document.createElement('div'); const vsz = 4 + Math.random() * 5;
+                vp.style.cssText = `position:absolute;width:${vsz}px;height:${vsz}px;border-radius:50%;background:${vcols[Math.floor(Math.random()*vcols.length)]};top:${15+Math.random()*65}%;left:${15+Math.random()*65}%;pointer-events:none;z-index:12;animation:ar-sp 0.9s ease-out forwards;`;
+                vp.style.setProperty('--a', Math.random()*360+'deg'); vp.style.setProperty('--d', 42+Math.random()*60+'px');
+                challengerSide.appendChild(vp); vp.addEventListener('animationend', () => vp.remove(), { once: true });
+            }, _vi * 55);
+        } else {
+            defenderSide.classList.add('ar-winner'); challengerSide.classList.add('ar-loser');
+        }
+
+        setTimeout(() => {
         showModalAlert(
             finalState.win ? 
             `<strong style="color:#4CAF50;">Vitória!</strong><br>Prepare-se para a próxima luta.` : 
             `<strong style="color:#f44336;">Derrota!</strong><br>Prepare-se para a próxima luta.`,
             "Resultado da Luta"
         );
+        }, finalState.win ? 900 : 500);
 
         const nextBtn = confirmActionBtn;
         if (currentOpponentIndex >= currentSession.opponents.length) {
@@ -1462,40 +1546,152 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!el) return;
         const pct = Math.max(0, Math.min(100, (cur / (max || 1)) * 100));
         el.style.width = pct + '%';
+        if      (pct > 60) el.style.background = 'linear-gradient(90deg,#127a22,#1ec938)';
+        else if (pct > 30) el.style.background = 'linear-gradient(90deg,#a05e00,#e08800)';
+        else               el.style.background = 'linear-gradient(90deg,#7a1212,#cc2828)';
         if (txt) txt.textContent = `${Math.floor(cur).toLocaleString()} / ${max.toLocaleString()}`;
+    }
+
+    let _arenaStylesInjected = false;
+    function _injectArenaEpicStyles() {
+        if (_arenaStylesInjected) return;
+        _arenaStylesInjected = true;
+        const s = document.createElement('style');
+        s.id = 'arena-epic-styles';
+        s.textContent = `
+            /* ── Damage numbers ── */
+            @keyframes ar-float-dmg  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.55);} 12%{transform:translateX(-50%) translateY(-8px) scale(1.18);} 100%{opacity:0;transform:translateX(-50%) translateY(-65px) scale(0.95);} }
+            @keyframes ar-float-crit { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.3) rotate(-5deg);} 10%{transform:translateX(-50%) translateY(-12px) scale(1.4) rotate(4deg);} 22%{transform:translateX(-50%) translateY(-22px) scale(1.18) rotate(-1deg);} 100%{opacity:0;transform:translateX(-50%) translateY(-80px) scale(0.9) rotate(0);} }
+            @keyframes ar-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);} 100%{opacity:0;transform:translateX(-50%) translateY(-55px) scale(1.1);} }
+            @keyframes ar-float-heal { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.5);} 12%{transform:translateX(-50%) translateY(-6px) scale(1.2);} 100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(0.9);} }
+            @keyframes ar-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 18%{opacity:1;transform:translateX(-50%) scale(1.28);} 65%{opacity:1;transform:translateX(-50%) scale(1.0);} 100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
+
+            .ar-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:1.6em;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.55);position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-dmg 1.35s ease-out forwards; }
+            .ar-crit-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#ffdd00;text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400;position:absolute;left:50%;top:26%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-crit 1.6s ease-out forwards; }
+            .ar-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.2em;font-weight:bold;color:#88ddff;text-shadow:0 0 10px #0af,1px 1px 2px #000;position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-evd 1.35s ease-out forwards; }
+            .ar-heal-num { font-family:'Cinzel',Georgia,serif;font-size:1.5em;font-weight:bold;color:#44ff88;text-shadow:0 0 10px rgba(50,255,100,0.7),1px 1px 2px #000;position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:15;white-space:nowrap;pointer-events:none;animation:ar-float-heal 1.35s ease-out forwards; }
+            .ar-crit-lbl { font-family:'Cinzel',serif;font-size:0.72em;font-weight:bold;color:#ffdd00;text-shadow:0 0 8px #f80,1px 1px 2px #000;position:absolute;left:50%;top:14%;transform:translateX(-50%);z-index:16;white-space:nowrap;pointer-events:none;animation:ar-crit-lbl 0.95s ease-out forwards; }
+
+            /* ── Hit & lunge ── */
+            @keyframes ar-lunge-l  { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(32px) scale(1.12) rotate(3deg);}65%{transform:translateX(12px) scale(1.05) rotate(1deg);}100%{transform:translateX(0) scale(1) rotate(0);} }
+            @keyframes ar-lunge-r  { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(-32px) scale(1.12) rotate(-3deg);}65%{transform:translateX(-12px) scale(1.05) rotate(-1deg);}100%{transform:translateX(0) scale(1) rotate(0);} }
+            @keyframes ar-hit-f    { 0%,100%{filter:brightness(1) saturate(1);}20%{filter:brightness(3.2) saturate(0.1);}45%{filter:brightness(1.9) saturate(0.5);} }
+            @keyframes ar-crit-f   { 0%{filter:brightness(1);}12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);}30%{filter:brightness(2.8) saturate(0.3) sepia(0.4);}100%{filter:brightness(1);} }
+            @keyframes ar-shake    { 0%,100%{transform:translateX(0);}20%{transform:translateX(-8px) rotate(-3deg);}40%{transform:translateX(8px) rotate(3deg);}60%{transform:translateX(-5px);}80%{transform:translateX(5px);} }
+
+            /* ── Shockwave & sparks ── */
+            @keyframes ar-sw   { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.9;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.0);opacity:0;border-width:1px;} }
+            @keyframes ar-sw2  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.55;border-width:3px;}100%{transform:translate(-50%,-50%) scale(2.0);opacity:0;border-width:1px;} }
+            @keyframes ar-sp   { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+
+            .ar-ring  { position:absolute;width:65px;height:65px;border-radius:50%;border:3px solid rgba(255,175,50,0.88);top:38%;left:50%;pointer-events:none;z-index:12;animation:ar-sw 0.48s ease-out forwards; }
+            .ar-ring2 { position:absolute;width:65px;height:65px;border-radius:50%;border:2px solid rgba(255,220,100,0.48);top:38%;left:50%;pointer-events:none;z-index:12;animation:ar-sw2 0.65s ease-out 0.07s forwards; }
+            .ar-ring.crit  { border-color:rgba(255,220,0,0.95);box-shadow:0 0 10px rgba(255,200,0,0.55); }
+            .ar-ring2.crit { border-color:rgba(255,180,0,0.62); }
+            .ar-spark { position:absolute;border-radius:50%;top:38%;left:50%;pointer-events:none;animation:ar-sp 0.42s ease-out forwards;z-index:13; }
+
+            /* ── Potion float ── */
+            @keyframes ar-pot-float { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.4);} 18%{opacity:1;transform:translate(-50%,-65px) scale(1.25);} 100%{opacity:0;transform:translate(-50%,-100px) scale(0.9);} }
+            .ar-pot-flash { position:absolute;top:50%;left:50%;width:52px;height:52px;z-index:25;pointer-events:none;object-fit:contain;animation:ar-pot-float 1.1s ease-out forwards; filter:drop-shadow(0 0 8px rgba(255,220,50,0.8)); }
+
+            /* ── VS separator ── */
+            .vs-separator { animation: ar-vs-pulse 1.9s ease-in-out infinite !important; }
+            @keyframes ar-vs-pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.22);text-shadow:0 0 22px gold,0 0 48px rgba(255,200,0,0.5);} }
+
+            /* ── HP bar sheen ── */
+            .player-hp-fill { position:relative !important; transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease !important; }
+            .player-hp-fill::after { content:''; position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,0.2) 0%,transparent 100%);border-radius:6px 6px 0 0;pointer-events:none; }
+
+            /* ── Avatar glow (battle) ── */
+            .player-avatar-pvp { transition: filter 0.5s ease, transform 0.5s ease, opacity 0.5s ease !important; }
+
+            /* ── Winner / Loser ── */
+            @keyframes ar-w-pulse { 0%,100%{box-shadow:0 0 20px rgba(255,215,0,0.9),0 0 40px rgba(255,150,0,0.5);}50%{box-shadow:0 0 36px rgba(255,215,0,1),0 0 70px rgba(255,150,0,0.7);} }
+            .ar-winner .player-avatar-pvp { border-color:#ffd700 !important; animation:ar-w-pulse 1.0s ease-in-out infinite !important; }
+            .ar-loser  { filter:grayscale(88%) brightness(0.38) !important; transform:scale(0.87) translateY(8px) !important; opacity:0.45 !important; }
+
+            /* ── Intro slide ── */
+            @keyframes ar-sl-l { 0%{transform:translateX(-85px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+            @keyframes ar-sl-r { 0%{transform:translateX(85px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+            .ar-intro-l { animation:ar-sl-l 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+            .ar-intro-r { animation:ar-sl-r 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+            /* ── pvpCountdown epic text ── */
+            #pvpCountdown { color:#ffcc44 !important; text-shadow:0 0 10px #f80,0 0 22px #f40 !important; animation:ar-cntdn 0.9s ease-in-out infinite; }
+            @keyframes ar-cntdn { 0%,100%{transform:scale(1);}50%{transform:scale(1.08);} }
+
+            /* ── Combat modal content: subtle glass, no dark bg ── */
+            #pvpCombatModal .modal-content {
+                background: rgba(0,0,0,0.12) !important;
+                backdrop-filter: blur(1px);
+                -webkit-backdrop-filter: blur(1px);
+            }
+        `;
+        document.head.appendChild(s);
+
+        // Ensure screen flash element exists
+        if (!document.getElementById('arena-screen-flash')) {
+            const f = document.createElement('div');
+            f.id = 'arena-screen-flash';
+            f.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:8888;opacity:0;transition:opacity 0.07s;';
+            document.body.appendChild(f);
+        }
     }
 
     function displayDamageNumber(dmg, crit, evd, target) {
         if (!target) return;
-        const el = document.createElement("div");
+        _injectArenaEpicStyles();
+        const isHeal = typeof dmg === 'string' && String(dmg).startsWith('+');
+        const el = document.createElement('div');
         if (evd) {
-            el.textContent = "Desviou"; el.className = "evade-text"; playSound('evade', { volume: 0.3 });
+            el.className = 'ar-evd-txt';
+            el.textContent = 'Desviou!';
+            try { playSound('evade', { volume: 0.3 }); } catch(_) {}
+        } else if (isHeal) {
+            el.className = 'ar-heal-num';
+            el.textContent = dmg;
+        } else if (crit) {
+            el.className = 'ar-crit-num';
+            el.innerHTML = '⚡ ' + (typeof dmg === 'number' ? dmg.toLocaleString() : dmg) + ' ⚡';
+            const lbl = document.createElement('div');
+            lbl.className = 'ar-crit-lbl'; lbl.textContent = '✦ CRÍTICO! ✦';
+            target.appendChild(lbl);
+            lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+            try { playSound('critical', { volume: 0.1 }); } catch(_) {}
         } else {
-            const val = (typeof dmg === 'number') ? dmg.toLocaleString() : dmg;
-            el.textContent = val;
-            el.className = crit ? "crit-damage-number" : "damage-number";
-            if(typeof dmg === 'number' || !String(dmg).includes('+')) playSound(crit ? 'critical' : 'normal', { volume: crit ? 0.1 : 0.5 });
+            el.className = 'ar-dmg-num';
+            el.textContent = (typeof dmg === 'number') ? dmg.toLocaleString() : dmg;
+            try { playSound('normal', { volume: 0.5 }); } catch(_) {}
         }
         target.appendChild(el);
-        el.addEventListener("animationend", () => el.remove());
+        el.addEventListener('animationend', () => el.remove(), { once: true });
         setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
     }
 
     function flashPotionIcon(itemId, sideElement) {
-        const img = document.createElement("img");
+        _injectArenaEpicStyles();
+        const img = document.createElement('img');
         const iId = parseInt(itemId);
-        // USA CACHE LOCAL
-        const itemName = getItemName(iId); 
-        img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`; 
-        img.style.cssText = "position:absolute; top:50%; left:50%; width:50px; height:50px; z-index:25; animation: floatUpPotion 1s ease-out forwards;";
+        const itemName = getItemName(iId);
+        img.src = `https://aden-rpg.pages.dev/assets/itens/${itemName}.webp`;
+        img.className = 'ar-pot-flash';
         sideElement.appendChild(img);
-        setTimeout(() => img.remove(), 1000);
+        img.addEventListener('animationend', () => img.remove(), { once: true });
+        setTimeout(() => { if (img.parentNode) img.remove(); }, 1200);
     }
     
     function animateActorMove(element) {
-        element.style.transition = "transform 0.1s";
-        element.style.transform = "scale(1.1) translateY(-10px)";
-        setTimeout(() => { element.style.transform = "scale(1) translateY(0)"; }, 150);
+        _injectArenaEpicStyles();
+        const isLeft = element === challengerSide;
+        const av = element.querySelector('.player-avatar-pvp');
+        if (av) {
+            av.style.animation = isLeft ? 'ar-lunge-l 0.46s ease-out' : 'ar-lunge-r 0.46s ease-out';
+            setTimeout(() => { av.style.animation = ''; }, 480);
+        } else {
+            element.style.transition = 'transform 0.1s';
+            element.style.transform = 'scale(1.1) translateY(-10px)';
+            setTimeout(() => { element.style.transform = 'scale(1) translateY(0)'; }, 160);
+        }
     }
 
     // =======================================================================

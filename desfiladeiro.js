@@ -1098,63 +1098,402 @@ async function handleAttackPlayer(target){
     syncOtherPlayers();
 }
 
-async function runPvpAnimation(data){
-    const modal=document.getElementById('pvpModal'),combat=data.combat||{},log=combat.battle_log||[];
-    const pvpBgMusic=document.getElementById('pvpBgMusic');
-    document.getElementById('pvpAttackerName').textContent=data.attacker_name||'Atacante';
-    document.getElementById('pvpDefenderName').textContent=data.defender_name||'Defensor';
-    const atkAv=document.getElementById('pvpAttackerAvatar'),defAv=document.getElementById('pvpDefenderAvatar');
-    atkAv.src=data.attacker_avatar||playerData?.avatar_url||DEFAULT_AVATAR;defAv.src=data.defender_avatar||DEFAULT_AVATAR;
-    atkAv.onerror=()=>{atkAv.src=DEFAULT_AVATAR;};defAv.onerror=()=>{defAv.src=DEFAULT_AVATAR;};
-    const atkFill=document.getElementById('pvpAttackerHpFill'),defFill=document.getElementById('pvpDefenderHpFill');
-    const atkTxt=document.getElementById('pvpAttackerHpText'),defTxt=document.getElementById('pvpDefenderHpText');
-    const atkSide=document.getElementById('pvpAttackerSide'),defSide=document.getElementById('pvpDefenderSide');
-    const cntdn=document.getElementById('pvpCountdown');
-    const atkId=combat.attacker_id,defId=combat.defender_id;
-    const dmgToDef=log.filter(t=>t.attacker_id===atkId).reduce((s,t)=>s+(t.damage||0),0);
-    const dmgToAtk=log.filter(t=>t.attacker_id===defId).reduce((s,t)=>s+(t.damage||0),0);
-    const defMaxHp=Math.max(1,(combat.defender_health_left||0)+dmgToDef);
-    const atkMaxHp=Math.max(1,(combat.attacker_health_left||0)+dmgToAtk);
-    let curAtk=atkMaxHp,curDef=defMaxHp;
-    function updBars(){
-        atkFill.style.width=Math.max(0,curAtk/atkMaxHp*100)+'%';
-        defFill.style.width=Math.max(0,curDef/defMaxHp*100)+'%';
-        atkTxt.textContent=Math.max(0,curAtk)+'/'+atkMaxHp;
-        defTxt.textContent=Math.max(0,curDef)+'/'+defMaxHp;
-    }
-    updBars();modal.style.display='flex';cntdn.style.display='block';
-    // Música de combate (estilo mina)
-    try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}
-    if(pvpBgMusic){pvpBgMusic.currentTime=0;pvpBgMusic.volume=0.15;pvpBgMusic.play().catch(()=>{});}
-    for(let i=3;i>0;i--){cntdn.textContent='A batalha começa em '+i+'...';await new Promise(r=>setTimeout(r,1000));}
-    cntdn.style.display='none';
-    for(const turn of log){
-        const isAtk=turn.attacker_id===atkId;
-        const tgtSide=isAtk?defSide:atkSide,tgtAv=isAtk?defAv:atkAv;
-        if(isAtk)curDef=Math.max(0,curDef-(turn.damage||0));
-        else curAtk=Math.max(0,curAtk-(turn.damage||0));
-        updBars();
-        _showDmgOnSide(turn.damage,turn.critical,turn.evaded,tgtSide);
-        if(turn.evaded)playSound('evade');
-        else if(turn.critical)playSound('critical');
-        else playSound('normal');
-        tgtAv.classList.remove('shake-animation');void tgtAv.offsetWidth;tgtAv.classList.add('shake-animation');
-        setTimeout(()=>tgtAv.classList.remove('shake-animation'),400);
-        await new Promise(r=>setTimeout(r,1000));
-    }
-    await new Promise(r=>setTimeout(r,600));
-    if(pvpBgMusic){pvpBgMusic.pause();pvpBgMusic.currentTime=0;}
-    modal.style.display='none';
-    if(combat.winner_id===userId)await showAlert('⚔️ <strong>VITÓRIA!</strong><br>'+esc(data.defender_name)+' foi eliminado!');
-    else await showAlert('⚔️ <strong>DERROTA.</strong><br>'+esc(data.defender_name)+' sobreviveu!');
+// ── EPIC PVP SYSTEM ─────────────────────────────────────────────────────────
+
+let _pvpCssInjected = false;
+function _injectPvpStyles() {
+    if (_pvpCssInjected) return;
+    _pvpCssInjected = true;
+    const s = document.createElement('style');
+    s.id = 'epic-pvp-styles';
+    s.textContent = `
+        #pvpModal .modal-content {
+            background: radial-gradient(ellipse at 50% 20%, #1e0a35 0%, #0e0620 55%, #060310 100%) !important;
+            border: 1px solid rgba(150,70,255,0.4) !important;
+            box-shadow: 0 0 60px rgba(120,0,255,0.35), 0 0 120px rgba(80,0,200,0.15), inset 0 0 80px rgba(0,0,0,0.7) !important;
+            overflow: hidden !important;
+            position: relative !important;
+        }
+        #pvpModal .modal-content::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(100,0,200,0.05) 100%);
+            animation: pvp-bg-pulse 4s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        #pvpModal .modal-content > * { position: relative; z-index: 1; }
+        @keyframes pvp-bg-pulse {
+            0%,100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.04); }
+        }
+        .pvp-arena { align-items: center !important; }
+        .pvp-fighter { position: relative !important; max-width: 150px !important; transition: filter 0.7s ease, transform 0.7s ease, opacity 0.7s ease !important; }
+        .pvp-fighter-name { font-size: 0.68em !important; color: #e0d0ff !important; text-shadow: 0 0 10px rgba(180,100,255,0.8) !important; letter-spacing: 0.5px !important; }
+        .pvp-fighter img {
+            width: 90px !important; height: 90px !important;
+            border: 2px solid rgba(160,80,255,0.75) !important;
+            box-shadow: 0 0 18px rgba(120,0,255,0.45), 0 0 36px rgba(100,0,200,0.2) !important;
+        }
+        .pvp-vs {
+            font-size: 2em !important;
+            color: #ff8800 !important;
+            text-shadow: 0 0 12px #ff4400, 0 0 28px #ff2200, 0 0 4px #ffaa00 !important;
+            animation: pvp-vs-pulse 1.8s ease-in-out infinite !important;
+        }
+        @keyframes pvp-vs-pulse {
+            0%,100% { transform: scale(1); }
+            50% { transform: scale(1.18); text-shadow: 0 0 22px #ff6600, 0 0 50px #ff3300, 0 0 80px #ff1100; }
+        }
+        .pvp-hp-bg {
+            height: 24px !important;
+            position: relative !important;
+            border-radius: 5px !important;
+            border: 1px solid rgba(255,255,255,0.13) !important;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.55) !important;
+            overflow: hidden !important;
+        }
+        .pvp-hp-fill {
+            border-radius: 4px !important;
+            transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease !important;
+            position: relative !important;
+            height: 100% !important;
+        }
+        .pvp-hp-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 45%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%);
+            border-radius: 4px 4px 0 0;
+            pointer-events: none;
+        }
+        .pvp-hp-txt {
+            position: absolute !important;
+            top: 50% !important; left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            color: #fff !important;
+            font-size: 0.62em !important;
+            font-weight: bold !important;
+            text-shadow: 1px 1px 2px #000, -1px -1px 2px #000, 0 0 5px rgba(0,0,0,0.9) !important;
+            white-space: nowrap !important;
+            z-index: 3 !important;
+            pointer-events: none !important;
+            letter-spacing: 0.3px !important;
+        }
+        #pvpCountdown {
+            font-size: 1.05em !important; color: #ffcc44 !important;
+            text-shadow: 0 0 10px #ff8800, 0 0 22px #ff4400 !important;
+            animation: pvp-cntdn-pulse 0.9s ease-in-out infinite !important;
+        }
+        @keyframes pvp-cntdn-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+        @keyframes pvp-lunge-left  { 0%{transform:translateX(0) scale(1);} 30%{transform:translateX(32px) scale(1.12) rotate(4deg);} 65%{transform:translateX(14px) scale(1.05) rotate(1deg);} 100%{transform:translateX(0) scale(1) rotate(0);} }
+        @keyframes pvp-lunge-right { 0%{transform:translateX(0) scale(1);} 30%{transform:translateX(-32px) scale(1.12) rotate(-4deg);} 65%{transform:translateX(-14px) scale(1.05) rotate(-1deg);} 100%{transform:translateX(0) scale(1) rotate(0);} }
+        @keyframes pvp-dodge-right { 0%{transform:translateX(0) rotate(0);} 25%{transform:translateX(20px) rotate(8deg);} 60%{transform:translateX(10px) rotate(3deg);} 100%{transform:translateX(0) rotate(0);} }
+        @keyframes pvp-dodge-left  { 0%{transform:translateX(0) rotate(0);} 25%{transform:translateX(-20px) rotate(-8deg);} 60%{transform:translateX(-10px) rotate(-3deg);} 100%{transform:translateX(0) rotate(0);} }
+
+        @keyframes pvp-hit-flash  { 0%,100%{filter:brightness(1) saturate(1);} 20%{filter:brightness(3.2) saturate(0.1);} 45%{filter:brightness(1.9) saturate(0.5);} }
+        @keyframes pvp-crit-flash { 0%{filter:brightness(1);} 12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);} 30%{filter:brightness(2.8) saturate(0.3) sepia(0.4);} 100%{filter:brightness(1);} }
+
+        #pvp-screen-flash { position:fixed; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:19999; opacity:0; transition:opacity 0.08s; }
+
+        @keyframes pvp-shockwave { 0%{transform:translate(-50%,-50%) scale(0); opacity:0.95; border-width:4px;} 100%{transform:translate(-50%,-50%) scale(3.2); opacity:0; border-width:1px;} }
+        @keyframes pvp-shockwave2 { 0%{transform:translate(-50%,-50%) scale(0); opacity:0.6; border-width:3px;} 100%{transform:translate(-50%,-50%) scale(2.2); opacity:0; border-width:1px;} }
+        .pvp-shockwave       { position:absolute; width:80px; height:80px; border-radius:50%; border:3px solid rgba(255,180,80,0.85); top:42%; left:50%; pointer-events:none; animation:pvp-shockwave 0.52s ease-out forwards; z-index:10; }
+        .pvp-shockwave2      { position:absolute; width:80px; height:80px; border-radius:50%; border:2px solid rgba(255,220,100,0.5); top:42%; left:50%; pointer-events:none; animation:pvp-shockwave2 0.7s ease-out 0.08s forwards; z-index:10; }
+        .pvp-shockwave-crit  { border-color:rgba(255,230,0,0.95); box-shadow:0 0 12px rgba(255,200,0,0.6); }
+        .pvp-shockwave2-crit { border-color:rgba(255,180,0,0.65); }
+
+        @keyframes pvp-spark { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1); opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1); opacity:0;} }
+        .pvp-spark { position:absolute; border-radius:50%; top:42%; left:50%; pointer-events:none; animation:pvp-spark 0.45s ease-out forwards; z-index:11; }
+
+        @keyframes pvp-float-dmg  { 0%{opacity:1; transform:translateX(-50%) translateY(0) scale(0.5);} 12%{transform:translateX(-50%) translateY(-6px) scale(1.15);} 100%{opacity:0; transform:translateX(-50%) translateY(-55px) scale(0.9);} }
+        @keyframes pvp-float-crit { 0%{opacity:1; transform:translateX(-50%) translateY(0) scale(0.3) rotate(-6deg);} 10%{transform:translateX(-50%) translateY(-10px) scale(1.35) rotate(4deg);} 22%{transform:translateX(-50%) translateY(-20px) scale(1.15) rotate(-1deg);} 100%{opacity:0; transform:translateX(-50%) translateY(-70px) scale(0.95) rotate(0);} }
+
+        .pvp-damage-number      { font-family:'Cinzel',Georgia,serif; font-size:1.6em; font-weight:bold; color:#fff; text-shadow:2px 2px 4px #000, 0 0 12px rgba(255,100,0,0.6); position:absolute; left:50%; top:28%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:pvp-float-dmg 1.4s ease-out forwards; }
+        .pvp-crit-damage-number { font-family:'Cinzel',Georgia,serif; font-size:2.2em; font-weight:bold; color:#ffdd00; text-shadow:-1px -1px 0 #b30000,1px -1px 0 #b30000,-1px 1px 0 #b30000,1px 1px 0 #b30000, 0 0 12px #ff8800, 0 0 24px #ff4400; position:absolute; left:50%; top:18%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:pvp-float-crit 1.6s ease-out forwards; }
+        .pvp-evade-text         { font-family:'Cinzel',Georgia,serif; font-size:1.15em; font-weight:bold; color:#88ddff; text-shadow:0 0 10px #0088ff, 1px 1px 2px #000; position:absolute; left:50%; top:28%; transform:translateX(-50%); z-index:15; white-space:nowrap; pointer-events:none; animation:pvp-float-dmg 1.4s ease-out forwards; }
+
+        @keyframes pvp-crit-label { 0%{opacity:0; transform:translateX(-50%) scale(0.4);} 18%{opacity:1; transform:translateX(-50%) scale(1.25);} 65%{opacity:1; transform:translateX(-50%) scale(1.0);} 100%{opacity:0; transform:translateX(-50%) scale(0.85);} }
+        .pvp-crit-label { position:absolute; top:4px; left:50%; transform:translateX(-50%); font-family:'Cinzel',serif; font-size:0.7em; font-weight:bold; color:#ffdd00; text-shadow:0 0 8px #ff8800, 1px 1px 2px #000; z-index:16; pointer-events:none; white-space:nowrap; animation:pvp-crit-label 0.95s ease-out forwards; }
+
+        .pvp-fighter-winner img { border-color:#ffd700 !important; box-shadow:0 0 22px rgba(255,215,0,0.9), 0 0 44px rgba(255,150,0,0.55), 0 0 70px rgba(255,100,0,0.3) !important; animation:pvp-winner-pulse 1.1s ease-in-out infinite !important; }
+        @keyframes pvp-winner-pulse { 0%,100%{box-shadow:0 0 22px rgba(255,215,0,0.9),0 0 44px rgba(255,150,0,0.55);} 50%{box-shadow:0 0 38px rgba(255,215,0,1),0 0 75px rgba(255,150,0,0.75),0 0 110px rgba(255,100,0,0.45);} }
+        .pvp-fighter-loser  { filter:grayscale(88%) brightness(0.38) !important; transform:scale(0.86) translateY(8px) !important; opacity:0.48 !important; }
+
+        @keyframes pvp-slide-in-left  { 0%{transform:translateX(-90px); opacity:0;} 100%{transform:translateX(0); opacity:1;} }
+        @keyframes pvp-slide-in-right { 0%{transform:translateX(90px); opacity:0;} 100%{transform:translateX(0); opacity:1;} }
+        #pvpAttackerSide.pvp-intro { animation:pvp-slide-in-left  0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+        #pvpDefenderSide.pvp-intro { animation:pvp-slide-in-right 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+    `;
+    document.head.appendChild(s);
 }
-function _showDmgOnSide(dmg,crit,evaded,sideEl){
-    const el=document.createElement('div');
-    if(evaded){el.textContent='Desviou';el.className='evade-text';}
-    else{el.textContent=Number(dmg).toLocaleString();el.className=crit?'crit-damage-number':'damage-number';}
-    sideEl.style.position='relative';
+
+async function runPvpAnimation(data) {
+    _injectPvpStyles();
+
+    const modal      = document.getElementById('pvpModal');
+    const combat     = data.combat || {};
+    const log        = combat.battle_log || [];
+    const pvpBgMusic = document.getElementById('pvpBgMusic');
+
+    document.getElementById('pvpAttackerName').textContent = data.attacker_name || 'Atacante';
+    document.getElementById('pvpDefenderName').textContent = data.defender_name || 'Defensor';
+
+    const atkAv  = document.getElementById('pvpAttackerAvatar');
+    const defAv  = document.getElementById('pvpDefenderAvatar');
+    atkAv.src    = data.attacker_avatar || playerData?.avatar_url || DEFAULT_AVATAR;
+    defAv.src    = data.defender_avatar || DEFAULT_AVATAR;
+    atkAv.onerror = () => { atkAv.src = DEFAULT_AVATAR; };
+    defAv.onerror = () => { defAv.src = DEFAULT_AVATAR; };
+
+    const atkFill = document.getElementById('pvpAttackerHpFill');
+    const defFill = document.getElementById('pvpDefenderHpFill');
+    const atkTxt  = document.getElementById('pvpAttackerHpText');
+    const defTxt  = document.getElementById('pvpDefenderHpText');
+    const atkSide = document.getElementById('pvpAttackerSide');
+    const defSide = document.getElementById('pvpDefenderSide');
+    const cntdn   = document.getElementById('pvpCountdown');
+    const atkId   = combat.attacker_id;
+    const defId   = combat.defender_id;
+
+    // ── FIX: Move texto do HP para dentro da barra ──────────────
+    const atkBg = atkFill.parentElement;
+    const defBg = defFill.parentElement;
+    if (!atkBg.contains(atkTxt)) atkBg.appendChild(atkTxt);
+    if (!defBg.contains(defTxt)) defBg.appendChild(defTxt);
+
+    // ── Screen flash element ────────────────────────────────────
+    let screenFlash = document.getElementById('pvp-screen-flash');
+    if (!screenFlash) {
+        screenFlash = document.createElement('div');
+        screenFlash.id = 'pvp-screen-flash';
+        document.body.appendChild(screenFlash);
+    }
+
+    // ── HP Calculations ─────────────────────────────────────────
+    const dmgToDef = log.filter(t => t.attacker_id === atkId).reduce((s, t) => s + (t.damage || 0), 0);
+    const dmgToAtk = log.filter(t => t.attacker_id === defId).reduce((s, t) => s + (t.damage || 0), 0);
+    const defMaxHp = Math.max(1, (combat.defender_health_left || 0) + dmgToDef);
+    const atkMaxHp = Math.max(1, (combat.attacker_health_left || 0) + dmgToAtk);
+    let curAtk = atkMaxHp, curDef = defMaxHp;
+
+    function getHpColor(pct) {
+        if (pct > 0.6) return 'linear-gradient(90deg,#127a22,#1ec938)';
+        if (pct > 0.3) return 'linear-gradient(90deg,#a05e00,#e08800)';
+        return 'linear-gradient(90deg,#7a1212,#cc2828)';
+    }
+    function updBars() {
+        const ap = Math.max(0, curAtk / atkMaxHp);
+        const dp = Math.max(0, curDef / defMaxHp);
+        atkFill.style.width      = (ap * 100) + '%';
+        defFill.style.width      = (dp * 100) + '%';
+        atkFill.style.background = getHpColor(ap);
+        defFill.style.background = getHpColor(dp);
+        atkTxt.textContent       = Math.max(0, curAtk) + '/' + atkMaxHp;
+        defTxt.textContent       = Math.max(0, curDef) + '/' + defMaxHp;
+    }
+
+    // ── Reset from previous battle ──────────────────────────────
+    atkSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+    defSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+    atkSide.style.filter = defSide.style.filter = '';
+    atkSide.style.transform = defSide.style.transform = '';
+    atkSide.style.opacity   = defSide.style.opacity   = '';
+
+    updBars();
+    modal.style.display = 'flex';
+    cntdn.style.display = 'block';
+
+    // ── Intro slide-in ─────────────────────────────────────────
+    void atkSide.offsetWidth;
+    void defSide.offsetWidth;
+    atkSide.classList.add('pvp-intro');
+    defSide.classList.add('pvp-intro');
+
+    // ── Music ────────────────────────────────────────────────────
+    try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {}
+    if (pvpBgMusic) { pvpBgMusic.currentTime = 0; pvpBgMusic.volume = 0.15; pvpBgMusic.play().catch(() => {}); }
+
+    // ── Countdown ───────────────────────────────────────────────
+    for (let i = 3; i > 0; i--) {
+        cntdn.textContent = 'A batalha começa em ' + i + '...';
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    cntdn.style.display = 'none';
+
+    // ── Battle Loop ─────────────────────────────────────────────
+    for (const turn of log) {
+        const isAtk  = turn.attacker_id === atkId;
+        const srcSide = isAtk ? atkSide : defSide;
+        const tgtSide = isAtk ? defSide : atkSide;
+        const srcAv   = isAtk ? atkAv   : defAv;
+        const tgtAv   = isAtk ? defAv   : atkAv;
+
+        if (isAtk) curDef = Math.max(0, curDef - (turn.damage || 0));
+        else        curAtk = Math.max(0, curAtk - (turn.damage || 0));
+
+        if (turn.evaded) {
+            // Esquiva
+            tgtAv.style.animation = isAtk ? 'pvp-dodge-right 0.4s ease-out' : 'pvp-dodge-left 0.4s ease-out';
+            setTimeout(() => { tgtAv.style.animation = ''; }, 420);
+            await new Promise(r => setTimeout(r, 200));
+            _showDmgOnSide(0, false, true, tgtSide);
+            playSound('evade');
+        } else {
+            // Lunge do atacante
+            srcAv.style.animation = isAtk ? 'pvp-lunge-left 0.48s ease-out' : 'pvp-lunge-right 0.48s ease-out';
+            setTimeout(() => { srcAv.style.animation = ''; }, 480);
+
+            // Impacto após 200ms
+            await new Promise(r => setTimeout(r, 200));
+
+            // Flash no alvo
+            tgtAv.style.animation = turn.critical ? 'pvp-crit-flash 0.55s ease-out' : 'pvp-hit-flash 0.38s ease-out';
+            setTimeout(() => { tgtAv.style.animation = ''; }, turn.critical ? 560 : 400);
+
+            // Screen edge glow
+            screenFlash.style.boxShadow = turn.critical
+                ? 'inset 0 0 90px rgba(255,200,0,0.45)'
+                : 'inset 0 0 70px rgba(210,25,25,0.32)';
+            screenFlash.style.opacity = '1';
+            setTimeout(() => { screenFlash.style.opacity = '0'; }, turn.critical ? 420 : 270);
+
+            // Shockwave ring(s)
+            _pvpSpawnShockwave(tgtSide, turn.critical);
+
+            // Sparks
+            _pvpSpawnSparks(tgtSide, turn.critical ? 14 : 7, turn.critical);
+
+            // Damage number
+            _showDmgOnSide(turn.damage, turn.critical, false, tgtSide);
+
+            // Sound
+            if (turn.critical) playSound('critical');
+            else playSound('normal');
+
+            updBars();
+
+            // Shake
+            if (turn.critical) {
+                tgtSide.style.animation = 'shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+                setTimeout(() => { tgtSide.style.animation = ''; }, 450);
+            } else {
+                tgtAv.classList.remove('shake-animation');
+                void tgtAv.offsetWidth;
+                tgtAv.classList.add('shake-animation');
+                setTimeout(() => tgtAv.classList.remove('shake-animation'), 400);
+            }
+        }
+
+        await new Promise(r => setTimeout(r, 950));
+    }
+
+    // ── End State ────────────────────────────────────────────────
+    await new Promise(r => setTimeout(r, 350));
+
+    const winnerId   = combat.winner_id;
+    const atkIsWinner = winnerId === atkId;
+
+    if (atkIsWinner) {
+        atkSide.classList.add('pvp-fighter-winner');
+        defSide.classList.add('pvp-fighter-loser');
+        _pvpSpawnVictoryParticles(atkSide);
+    } else {
+        defSide.classList.add('pvp-fighter-winner');
+        atkSide.classList.add('pvp-fighter-loser');
+        _pvpSpawnVictoryParticles(defSide);
+    }
+
+    await new Promise(r => setTimeout(r, 1300));
+    if (pvpBgMusic) { pvpBgMusic.pause(); pvpBgMusic.currentTime = 0; }
+    modal.style.display = 'none';
+
+    // Cleanup
+    atkSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+    defSide.classList.remove('pvp-fighter-winner', 'pvp-fighter-loser', 'pvp-intro');
+
+    if (combat.winner_id === userId) await showAlert('⚔️ <strong>VITÓRIA!</strong><br>' + esc(data.defender_name) + ' foi eliminado!');
+    else await showAlert('⚔️ <strong>DERROTA.</strong><br>' + esc(data.defender_name) + ' sobreviveu!');
+}
+
+function _pvpSpawnShockwave(sideEl, isCrit) {
+    const r1 = document.createElement('div');
+    r1.className = 'pvp-shockwave' + (isCrit ? ' pvp-shockwave-crit' : '');
+    sideEl.appendChild(r1);
+    r1.addEventListener('animationend', () => r1.remove(), { once: true });
+    const r2 = document.createElement('div');
+    r2.className = 'pvp-shockwave2' + (isCrit ? ' pvp-shockwave2-crit' : '');
+    sideEl.appendChild(r2);
+    r2.addEventListener('animationend', () => r2.remove(), { once: true });
+}
+
+function _pvpSpawnSparks(sideEl, count, isCrit) {
+    const colors = isCrit
+        ? ['#ffdd00','#ff8800','#ffffff','#ffaa00','#ffcc44']
+        : ['#ffffff','#ff7777','#ffbb55'];
+    for (let i = 0; i < count; i++) {
+        const spark = document.createElement('div');
+        spark.className = 'pvp-spark';
+        const angle = (i / count) * 360 + Math.random() * 28;
+        const dist  = 28 + Math.random() * 44;
+        const sz    = (isCrit ? 5 : 3) + Math.random() * 3;
+        spark.style.setProperty('--a', angle + 'deg');
+        spark.style.setProperty('--d', dist + 'px');
+        spark.style.width  = sz + 'px';
+        spark.style.height = sz + 'px';
+        spark.style.background = colors[Math.floor(Math.random() * colors.length)];
+        spark.style.animationDelay = (Math.random() * 0.08) + 's';
+        sideEl.appendChild(spark);
+        spark.addEventListener('animationend', () => spark.remove(), { once: true });
+    }
+}
+
+function _pvpSpawnVictoryParticles(sideEl) {
+    const cols = ['#ffd700','#ffaa00','#ffffff','#ffcc44','#ffe066'];
+    for (let i = 0; i < 22; i++) {
+        setTimeout(() => {
+            const p = document.createElement('div');
+            const sz = 4 + Math.random() * 5;
+            p.style.cssText = `
+                position:absolute; width:${sz}px; height:${sz}px; border-radius:50%;
+                background:${cols[Math.floor(Math.random() * cols.length)]};
+                top:${15 + Math.random() * 65}%; left:${15 + Math.random() * 65}%;
+                pointer-events:none; z-index:12;
+                animation:pvp-spark 0.9s ease-out forwards;
+            `;
+            const angle = Math.random() * 360;
+            const dist  = 45 + Math.random() * 65;
+            p.style.setProperty('--a', angle + 'deg');
+            p.style.setProperty('--d', dist + 'px');
+            sideEl.appendChild(p);
+            p.addEventListener('animationend', () => p.remove(), { once: true });
+        }, i * 55);
+    }
+}
+
+function _showDmgOnSide(dmg, crit, evaded, sideEl) {
+    const el = document.createElement('div');
+    if (evaded) {
+        el.textContent = 'Desviou!';
+        el.className   = 'pvp-evade-text';
+    } else if (crit) {
+        el.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡';
+        el.className = 'pvp-crit-damage-number';
+        const lbl = document.createElement('div');
+        lbl.textContent = '✦ CRÍTICO! ✦';
+        lbl.className   = 'pvp-crit-label';
+        sideEl.appendChild(lbl);
+        lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+    } else {
+        el.textContent = Number(dmg).toLocaleString();
+        el.className   = 'pvp-damage-number';
+    }
     sideEl.appendChild(el);
-    el.addEventListener('animationend',()=>el.remove(),{once:true});
+    el.addEventListener('animationend', () => el.remove(), { once: true });
 }
 
 // ── MODAL DE RECOMPENSAS — agrupa por região ─────────────────

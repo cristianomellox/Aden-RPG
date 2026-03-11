@@ -489,250 +489,19 @@ function startFloorMusic() {
     }
 }
 
-let _raidStylesInjected = false;
-function _injectRaidEpicStyles() {
-    if (_raidStylesInjected) return;
-    _raidStylesInjected = true;
-    const s = document.createElement('style');
-    s.id = 'raid-epic-styles';
-    s.textContent = `
-        /* ── Floating numbers ── */
-        @keyframes raid-float-dmg  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.4);}12%{transform:translateX(-50%) translateY(-22px) scale(1.35);}100%{opacity:0;transform:translateX(-50%) translateY(-90px) scale(0.95);} }
-        @keyframes raid-float-crit { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.25) rotate(-6deg);}10%{transform:translateX(-50%) translateY(-28px) scale(1.7) rotate(5deg);}22%{transform:translateX(-50%) translateY(-42px) scale(1.4) rotate(-1deg);}100%{opacity:0;transform:translateX(-50%) translateY(-115px) scale(0.9) rotate(0);} }
-        @keyframes raid-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);}100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(1.15);} }
-        @keyframes raid-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);}18%{opacity:1;transform:translateX(-50%) scale(1.5);}65%{opacity:1;transform:translateX(-50%) scale(1.05);}100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
-
-        .raid-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:2.4em;font-weight:bold;color:#fff;text-shadow:2px 2px 5px #000,0 0 22px rgba(255,100,0,0.75);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-dmg 1.5s ease-out forwards; }
-        .raid-crit-num { font-family:'Cinzel',Georgia,serif;font-size:3.2em;font-weight:bold;color:#ffdd00;text-shadow:-2px -2px 0 #900,2px -2px 0 #900,-2px 2px 0 #900,2px 2px 0 #900,0 0 22px #ff8800,0 0 44px #ff4400;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-crit 1.9s ease-out forwards; }
-        .raid-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.8em;font-weight:bold;color:cyan;text-shadow:0 0 12px cyan,1px 1px 2px #000;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-evd 1.2s ease-out forwards; }
-        .raid-crit-lbl { font-family:'Cinzel',serif;font-size:1.05em;font-weight:bold;color:#ffdd00;text-shadow:0 0 12px #f80,1px 1px 2px #000;position:absolute;left:50%;z-index:1000;white-space:nowrap;pointer-events:none;animation:raid-crit-lbl 1.2s ease-out forwards; }
-
-        /* ── Monster flash ── */
-        @keyframes raid-monster-hit  { 0%,100%{filter:drop-shadow(0 0 0 transparent);}15%{filter:brightness(4) saturate(0.05) drop-shadow(0 0 28px white);}45%{filter:brightness(2.2) saturate(0.35);}80%{filter:brightness(1.5);} }
-        @keyframes raid-monster-crit { 0%{filter:brightness(1);}8%{filter:brightness(6) saturate(0) sepia(1) hue-rotate(12deg) drop-shadow(0 0 40px gold);}28%{filter:brightness(3.5) saturate(0.25) sepia(0.4) drop-shadow(0 0 25px orange);}65%{filter:brightness(2);}100%{filter:brightness(1);} }
-
-        /* ── Player avatar flash ── */
-        @keyframes raid-player-hit  { 0%,100%{filter:brightness(1);}16%{filter:brightness(4.5) saturate(0) drop-shadow(0 0 24px red);}48%{filter:brightness(2.5) saturate(0.25);}82%{filter:brightness(1.6);} }
-        @keyframes raid-player-crit { 0%{filter:brightness(1);}8%{filter:brightness(6.5) saturate(0) sepia(1) hue-rotate(325deg) drop-shadow(0 0 36px gold);}26%{filter:brightness(3.5) saturate(0.4) drop-shadow(0 0 24px orange);}100%{filter:brightness(1);} }
-
-        /* ── Camera shake (boss crit) ── */
-        @keyframes raid-cam-shake { 0%,100%{transform:translate(0,0) rotate(0);}12%{transform:translate(-10px,5px) rotate(-1.2deg);}24%{transform:translate(10px,-5px) rotate(1.2deg);}36%{transform:translate(-7px,7px) rotate(-0.7deg);}50%{transform:translate(7px,-7px) rotate(0.7deg);}68%{transform:translate(-4px,3px);}82%{transform:translate(4px,-3px);} }
-        .raid-cam-shake { animation:raid-cam-shake 0.55s cubic-bezier(.36,.07,.19,.97) both !important; }
-
-        /* ── Shockwave rings ── */
-        @keyframes raid-sw  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.92;border-width:5px;}100%{transform:translate(-50%,-50%) scale(4.5);opacity:0;border-width:1px;} }
-        @keyframes raid-sw2 { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.56;border-width:3px;}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;border-width:1px;} }
-        @keyframes raid-sp  { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
-
-        .raid-ring  { position:absolute;width:100px;height:100px;border-radius:50%;border:5px solid rgba(255,160,40,0.92);pointer-events:none;z-index:997;animation:raid-sw 0.58s ease-out forwards; }
-        .raid-ring2 { position:absolute;width:100px;height:100px;border-radius:50%;border:2px solid rgba(255,220,80,0.52);pointer-events:none;z-index:997;animation:raid-sw2 0.75s ease-out 0.09s forwards; }
-        .raid-ring.crit   { border-color:rgba(255,218,0,0.96);box-shadow:0 0 18px rgba(255,200,0,0.65); }
-        .raid-ring2.crit  { border-color:rgba(255,180,0,0.72); }
-        .raid-ring.boss   { border-color:rgba(255,55,55,0.92); }
-        .raid-ring2.boss  { border-color:rgba(220,20,20,0.56); }
-        .raid-ring.boss-crit  { border-color:rgba(255,218,0,0.96);box-shadow:0 0 22px rgba(255,200,0,0.85); }
-        .raid-ring2.boss-crit { border-color:rgba(255,170,0,0.72); }
-        .raid-spark { position:absolute;border-radius:50%;pointer-events:none;animation:raid-sp 0.5s ease-out forwards;z-index:998; }
-
-        /* ── Screen edge flash ── */
-        #raid-screen-flash { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:11999;opacity:0;transition:opacity 0.07s; }
-
-        /* ── Player avatar persistent glow ── */
-        #raidPlayerAvatarWrap { box-shadow:0 0 10px rgba(100,200,255,0.35),0 0 22px rgba(0,100,200,0.15) !important; border-radius:50% !important; transition:box-shadow 0.4s ease !important; }
-        #raidPlayerAvatarWrap.boss-hit { box-shadow:0 0 22px rgba(255,50,50,0.7),0 0 50px rgba(200,0,0,0.45) !important; }
-        #raidPlayerAvatarWrap.boss-crit-hit { box-shadow:0 0 30px rgba(255,200,0,0.85),0 0 65px rgba(255,100,0,0.6) !important; }
-    \`;
-    document.head.appendChild(s);
-    if (!document.getElementById('raid-screen-flash')) {
-        const f = document.createElement('div'); f.id = 'raid-screen-flash';
-        document.body.appendChild(f);
-    }
-}
-
-// ── Epic player-attacks-monster ──────────────────────────
-function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
-    targetEl.style.position = targetEl.style.position || 'relative';
-
-    // Flash on monster image (restore floatY animation after)
-    const monsterImg = document.getElementById('raidMonsterImage');
-    if (monsterImg) {
-        monsterImg.style.animation = isCrit
-            ? 'raid-monster-crit 0.65s ease-out, floatY 3s ease-in-out infinite'
-            : 'raid-monster-hit 0.42s ease-out, floatY 3s ease-in-out infinite';
-        setTimeout(() => { if (monsterImg) monsterImg.style.animation = 'floatY 3s ease-in-out infinite'; }, isCrit ? 680 : 460);
-    }
-
-    // Screen edge flash (player perspective - orange/gold glow on attack)
-    const sf = document.getElementById('raid-screen-flash');
-    if (sf) {
-        sf.style.boxShadow = isCrit
-            ? 'inset 0 0 140px rgba(255,200,0,0.38)'
-            : 'inset 0 0 100px rgba(255,90,0,0.28)';
-        sf.style.opacity = '1';
-        setTimeout(() => { sf.style.opacity = '0'; }, isCrit ? 460 : 290);
-    }
-
-    // Shockwave rings (centered on monster, upper portion of area)
-    const rTop = '38%', rLeft = '50%';
-    const r1 = document.createElement('div'); r1.className = 'raid-ring' + (isCrit ? ' crit' : '');
-    r1.style.top = rTop; r1.style.left = rLeft;
-    targetEl.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
-    const r2 = document.createElement('div'); r2.className = 'raid-ring2' + (isCrit ? ' crit' : '');
-    r2.style.top = rTop; r2.style.left = rLeft;
-    targetEl.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
-
-    // Sparks radiating from monster impact point
-    const spN = isCrit ? 18 : 9;
-    const spCols = isCrit ? ['#ffdd00','#ff8800','#fff','#ffcc44','#ff4400'] : ['#fff','#ffbb55','#ff8833'];
-    for (let i = 0; i < spN; i++) {
-        const sp = document.createElement('div'); sp.className = 'raid-spark';
-        const ang = (i / spN) * 360 + Math.random() * 20;
-        const dist = 50 + Math.random() * 85;
-        const sz = (isCrit ? 7 : 4) + Math.random() * 4;
-        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
-        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-        sp.style.top = rTop; sp.style.left = rLeft;
-        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
-        sp.style.animationDelay = (Math.random() * 0.09) + 's';
-        targetEl.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
-    }
-
-    // Monster shake on crit
-    if (isCrit && monsterImg) {
-        monsterImg.classList.add('shake-animation');
-        setTimeout(() => monsterImg.classList.remove('shake-animation'), 750);
-    }
-
-    // Damage number
-    const dmgEl = document.createElement('div');
-    const topPos = isCrit ? '26%' : '31%';
-    if (isCrit) {
-        dmgEl.className = 'raid-crit-num';
-        dmgEl.innerHTML = '⚡ ' + Number(dmg).toLocaleString() + ' ⚡';
-        dmgEl.style.top = topPos;
-        const lbl = document.createElement('div'); lbl.className = 'raid-crit-lbl';
-        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = '19%';
-        targetEl.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
-    } else {
-        dmgEl.className = 'raid-dmg-num';
-        dmgEl.textContent = Number(dmg).toLocaleString();
-        dmgEl.style.top = topPos;
-    }
-    targetEl.appendChild(dmgEl);
-    dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
-    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 2600);
-}
-
-// ── Epic boss-attacks-player ──────────────────────────────
-function _epicRaidBossAttack(targetEl, val, isCrit, isEvade) {
-    targetEl.style.position = targetEl.style.position || 'relative';
-    const playerAvatar = document.getElementById('raidPlayerAvatar');
-    const avatarWrap   = document.getElementById('raidPlayerAvatarWrap');
-
-    if (isEvade) {
-        const evdEl = document.createElement('div'); evdEl.className = 'raid-evd-txt';
-        evdEl.textContent = 'Errou!'; evdEl.style.top = '18%';
-        targetEl.appendChild(evdEl); evdEl.addEventListener('animationend', () => evdEl.remove(), { once: true });
-        return;
-    }
-
-    // Flash on player avatar
-    if (playerAvatar) {
-        playerAvatar.style.animation = isCrit ? 'raid-player-crit 0.65s ease-out' : 'raid-player-hit 0.48s ease-out';
-        setTimeout(() => { if (playerAvatar) playerAvatar.style.animation = ''; }, isCrit ? 680 : 520);
-    }
-
-    // Avatar wrap glow burst then fade
-    if (avatarWrap) {
-        avatarWrap.classList.remove('boss-hit', 'boss-crit-hit');
-        void avatarWrap.offsetWidth;
-        avatarWrap.classList.add(isCrit ? 'boss-crit-hit' : 'boss-hit');
-        setTimeout(() => avatarWrap.classList.remove('boss-hit', 'boss-crit-hit'), isCrit ? 1400 : 900);
-    }
-
-    // Screen edge flash — big and dramatic for boss hit
-    const sf = document.getElementById('raid-screen-flash');
-    if (sf) {
-        sf.style.boxShadow = isCrit
-            ? 'inset 0 0 200px rgba(255,180,0,0.6)'
-            : 'inset 0 0 160px rgba(220,0,0,0.5)';
-        sf.style.opacity = '1';
-        setTimeout(() => { sf.style.opacity = '0'; }, isCrit ? 600 : 420);
-    }
-
-    // Camera shake on boss crit
-    if (isCrit) {
-        const modal = document.getElementById('raidCombatModal');
-        if (modal) {
-            modal.classList.remove('raid-cam-shake'); void modal.offsetWidth;
-            modal.classList.add('raid-cam-shake');
-            setTimeout(() => modal.classList.remove('raid-cam-shake'), 600);
-        }
-    }
-
-    // Player avatar shake
-    if (playerAvatar) {
-        playerAvatar.classList.add('shake-animation');
-        setTimeout(() => playerAvatar.classList.remove('shake-animation'), isCrit ? 1200 : 800);
-    }
-
-    // Rings around player avatar
-    const ringHost = avatarWrap || targetEl;
-    ringHost.style.position = ringHost.style.position || 'relative';
-    const r1 = document.createElement('div');
-    r1.className = 'raid-ring ' + (isCrit ? 'boss-crit' : 'boss');
-    r1.style.top = '50%'; r1.style.left = '50%'; r1.style.width = '64px'; r1.style.height = '64px';
-    ringHost.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
-    const r2 = document.createElement('div');
-    r2.className = 'raid-ring2 ' + (isCrit ? 'boss-crit' : 'boss');
-    r2.style.top = '50%'; r2.style.left = '50%'; r2.style.width = '64px'; r2.style.height = '64px';
-    ringHost.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
-
-    // Sparks around player avatar
-    const spN = isCrit ? 16 : 8;
-    const spCols = isCrit ? ['#ffdd00','#ff4444','#fff','#ff8800'] : ['#ff4444','#ff8888','#fff','#ff6666'];
-    for (let i = 0; i < spN; i++) {
-        const sp = document.createElement('div'); sp.className = 'raid-spark';
-        const ang = (i / spN) * 360 + Math.random() * 22;
-        const dist = 30 + Math.random() * 55;
-        const sz = (isCrit ? 5 : 3) + Math.random() * 3;
-        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
-        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
-        sp.style.top = '50%'; sp.style.left = '50%';
-        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
-        sp.style.animationDelay = (Math.random() * 0.07) + 's';
-        ringHost.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
-    }
-
-    // Damage number
-    const dmgEl = document.createElement('div');
-    if (isCrit) {
-        dmgEl.className = 'raid-crit-num';
-        dmgEl.innerHTML = '⚡ ' + Number(val).toLocaleString() + ' ⚡';
-        dmgEl.style.top = '10%';
-        const lbl = document.createElement('div'); lbl.className = 'raid-crit-lbl';
-        lbl.textContent = '✦ CRÍTICO! ✦'; lbl.style.top = '3%';
-        targetEl.appendChild(lbl); lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
-    } else {
-        dmgEl.className = 'raid-dmg-num';
-        dmgEl.textContent = Number(val).toLocaleString();
-        dmgEl.style.top = '12%';
-    }
-    targetEl.appendChild(dmgEl);
-    dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
-    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 2600);
-}
-
 function displayFloatingDamageOver(targetEl, val, isCrit) {
-    if (!targetEl) return;
-    _injectRaidEpicStyles();
-    const isPlayerTarget = targetEl.id === 'raidPlayerArea';
-    const isEvade = (String(val) === 'Errou!');
-    if (isPlayerTarget) {
-        _epicRaidBossAttack(targetEl, val, isCrit, isEvade);
-    } else {
-        _epicRaidPlayerAttack(targetEl, val, isCrit);
-    }
+  if (!targetEl) return;
+  const el = document.createElement("div");
+  el.textContent = isCrit ? `${Number(val).toLocaleString()}` : String(val);
+  el.className = isCrit ? "crit-damage-number" : "damage-number";
+  el.style.position = "absolute";
+  el.style.left = "50%";
+  el.style.top = "30%";
+  el.style.transform = "translate(-50%,-50%)";
+  el.style.zIndex = "999";
+  targetEl.style.position = targetEl.style.position || "relative";
+  targetEl.appendChild(el);
+  el.addEventListener("animationend", () => el.remove());
 }
 
 function ensurePlayerHpUi() {
@@ -832,12 +601,7 @@ function updatePlayerHpUi(cur, max) {
   const c = Math.max(0, Number(cur === null ? max : cur));
   const m = Math.max(1, Number(max || 1));
   const pct = Math.max(0, Math.min(100, (c / m) * 100));
-  if (fill) {
-    fill.style.width = `${pct}%`;
-    if (pct > 60) fill.style.background = 'linear-gradient(90deg,#005500,#00aa00,#55ff55)';
-    else if (pct > 30) fill.style.background = 'linear-gradient(90deg,#aa6600,#ffaa00,#ffdd44)';
-    else fill.style.background = 'linear-gradient(90deg,#880000,#cc2200,#ff5555)';
-  }
+  if (fill) fill.style.width = `${pct}%`;
   if (text) text.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
   if (c <= 0) {
     if (avatar) avatar.style.filter = "grayscale(80%)";
@@ -867,12 +631,7 @@ function updateHpBar(cur, max) {
   const c = Math.max(0, Number(cur || 0));
   const m = Math.max(1, Number(max || 1));
   const pct = Math.max(0, Math.min(100, (c / m) * 100));
-  if (fill) {
-    fill.style.width = `${pct}%`;
-    if (pct > 60) fill.style.background = 'linear-gradient(90deg,#850000,#cc0000,#ff4444)';
-    else if (pct > 30) fill.style.background = 'linear-gradient(90deg,#996600,#cc9900,#ffcc22)';
-    else fill.style.background = 'linear-gradient(90deg,#550000,#990000,#ff2200)';
-  }
+  if (fill) fill.style.width = `${pct}%`;
   if (text) {
     text.textContent = `${c.toLocaleString()} / ${m.toLocaleString()}`;
     text.style.position = "absolute";
@@ -1524,6 +1283,12 @@ async function performAttackOptimistic() {
     const currentMonsterHp = Number($id("raidMonsterHpText").textContent.split('/')[0].replace(/[^\d]/g, ''));
     const newVisualHp = Math.max(0, currentMonsterHp - damage);
     updateHpBar(newVisualHp, maxMonsterHealth);
+    
+    const monsterImg = $id("raidMonsterImage");
+    if (monsterImg) {
+        monsterImg.classList.add('shake-animation');
+        setTimeout(() => monsterImg.classList.remove('shake-animation'), 300);
+    }
 
     pendingAttacksQueue++;
     localDamageDealtInBatch += damage;
@@ -1849,6 +1614,12 @@ async function simulateLocalBossAttackLogic() {
              updatePlayerHpUi(localPlayerHp, playerMaxHealth);
              displayFloatingDamageOver($id("raidPlayerArea"), finalDmg, isCrit);
              playHitSound(isCrit);
+             
+             const playerAvatar = $id("raidPlayerAvatar");
+             if (playerAvatar) {
+                playerAvatar.classList.add('shake-animation');
+                setTimeout(() => playerAvatar.classList.remove('shake-animation'), 1000);
+             }
 
              if (localPlayerHp <= 0) {
                  handleOptimisticDeath();

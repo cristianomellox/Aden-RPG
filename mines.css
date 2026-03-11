@@ -329,7 +329,7 @@ p {
         2px 2px 0 yellow;
     position: absolute;
     left: 50%;
-    animation: floating-damage-crit 1.5s ease-out forwards;
+    animation: floating-damage-crit 3s ease-out forwards;
 }
 
 @keyframes floating-damage {

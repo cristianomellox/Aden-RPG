@@ -208,14 +208,18 @@ async function preloadAudio() {
     }
 }
 
-function playSound(name) {
+function playSound(name, volume = 1.0) {
     if (audioContext.state === 'suspended') audioContext.resume().catch(()=>{});
     const buf = audioBuffers[name];
     if (buf) {
-        const src = audioContext.createBufferSource();
-        src.buffer = buf;
-        src.connect(audioContext.destination);
-        src.start(0);
+        try {
+            const src  = audioContext.createBufferSource();
+            const gain = audioContext.createGain();
+            src.buffer = buf;
+            gain.gain.value = Math.min(1, Math.max(0, volume));
+            src.connect(gain).connect(audioContext.destination);
+            src.start(0);
+        } catch(e) {}
     }
 }
 
@@ -845,8 +849,10 @@ async function executeMove(roomId) {
     let cooldownTime = 10; 
     
     const gotRelic = data.message && (data.message.includes("PEGOU A RELÍQUIA") || data.message.includes("TOMOU A RELÍQUIA") || data.message.includes("ROUBOU A RELÍQUIA"));
+    const _isScout = (state.myPlayer && state.myPlayer.class_id === 'scout');
     
-    if (gotRelic || state.relicHolderId === state.playerId) {
+    // Batedor (scout) nunca sofre a punição de 30s com a relíquia — continua 10s
+    if (!_isScout && (gotRelic || state.relicHolderId === state.playerId)) {
         cooldownTime = 30;
         if(gotRelic) showCenterNotification("PENALIDADE DA RELÍQUIA: 30s DE DESCANSO!");
     }
@@ -1023,23 +1029,61 @@ async function runCombatSequence(data, finalMessage) {
     countdownEl.style.display = 'none';
     arenaEl.style.display = 'flex';
 
+    // Intro slide-in para os dois lados
+    _injectRuinsEpicStyles();
+    const _mySide  = document.querySelector('.combat-side.left');
+    const _oppSide = document.querySelector('.combat-side.right');
+    if (_mySide)  { _mySide.classList.remove('ru-intro-l','ru-intro-r','ru-winner-av','ru-loser-side');  void _mySide.offsetWidth;  _mySide.classList.add('ru-intro-l'); }
+    if (_oppSide) { _oppSide.classList.remove('ru-intro-l','ru-intro-r','ru-winner-av','ru-loser-side'); void _oppSide.offsetWidth; _oppSide.classList.add('ru-intro-r'); }
+    await new Promise(r => setTimeout(r, 600));
+
     const logs = data.combat_log || [];
+    let playerDealtDamage = false;
+    let oppDealtDamage = false;
     for (const turn of logs) {
         if (turn.player_dmg > 0) {
+            playerDealtDamage = true;
             animateHit(oppAvatar, turn.player_dmg, turn.is_crit);
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 1100));
         }
         
         if (turn.opp_dmg > 0) {
+            oppDealtDamage = true;
             animateHit(myAvatar, turn.opp_dmg, false);
             state.myPlayer.hp = Math.max(0, state.myPlayer.hp - turn.opp_dmg);
             updateHUD();
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 1100));
         }
     }
 
-    await new Promise(r => setTimeout(r, 1000));
+    // Winner / Loser final state
+    await new Promise(r => setTimeout(r, 600));
+    const _playerWon = data.dead === false || (data.hp > 0);
+    if (_mySide && _oppSide) {
+        const myAv  = _mySide.querySelector('.combat-avatar');
+        const oppAv = _oppSide.querySelector('.combat-avatar');
+        if (_playerWon) {
+            if (myAv)  myAv.classList.add('ru-winner-av');
+            _oppSide.classList.add('ru-loser-side');
+            // Victory particles
+            const _vcols = ['#ffd700','#ffaa00','#fff','#ffcc44'];
+            for (let _vi = 0; _vi < 16; _vi++) setTimeout(() => {
+                const vp = document.createElement('div'); const _vsz = 4 + Math.random() * 5;
+                vp.style.cssText = `position:absolute;width:${_vsz}px;height:${_vsz}px;border-radius:50%;background:${_vcols[Math.floor(Math.random()*_vcols.length)]};top:${10+Math.random()*70}%;left:${10+Math.random()*70}%;pointer-events:none;z-index:64;animation:ru-sp 0.9s ease-out forwards;`;
+                vp.style.setProperty('--a', Math.random()*360+'deg'); vp.style.setProperty('--d', 40+Math.random()*55+'px');
+                _mySide.appendChild(vp); vp.addEventListener('animationend', () => vp.remove(), { once: true });
+            }, _vi * 55);
+        } else {
+            if (oppAv) oppAv.classList.add('ru-winner-av');
+            _mySide.classList.add('ru-loser-side');
+        }
+    }
+    await new Promise(r => setTimeout(r, 900));
+
     overlay.style.display = 'none';
+    // Limpa classes de winner/loser
+    if (_mySide)  { const av = _mySide.querySelector('.combat-avatar');  if (av) av.classList.remove('ru-winner-av'); _mySide.classList.remove('ru-loser-side','ru-intro-l'); }
+    if (_oppSide) { const av = _oppSide.querySelector('.combat-avatar'); if (av) av.classList.remove('ru-winner-av'); _oppSide.classList.remove('ru-loser-side','ru-intro-r'); }
     
     const entityDiv = document.querySelector('.room-entity');
     if(entityDiv) {
@@ -1059,17 +1103,150 @@ function showCenterNotification(msg) {
     setTimeout(() => div.remove(), 3000);
 }
 
-function animateHit(targetEl, dmg, isCrit) {
-    if (isCrit) playSound('critical'); else playSound('normal');
-    targetEl.classList.remove('shake-hit');
-    void targetEl.offsetWidth;
-    targetEl.classList.add('shake-hit');
+let _ruinsStylesInjected = false;
+function _injectRuinsEpicStyles() {
+    if (_ruinsStylesInjected) return;
+    _ruinsStylesInjected = true;
+    const s = document.createElement('style');
+    s.id = 'ruins-epic-styles';
+    s.textContent = `
+        /* ── Floating damage ── */
+        @keyframes ru-float-dmg  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.5);} 12%{transform:translateX(-50%) translateY(-10px) scale(1.2);} 100%{opacity:0;transform:translateX(-50%) translateY(-65px) scale(0.95);} }
+        @keyframes ru-float-crit { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.3) rotate(-5deg);} 10%{transform:translateX(-50%) translateY(-14px) scale(1.45) rotate(4deg);} 22%{transform:translateX(-50%) translateY(-24px) scale(1.2) rotate(-1deg);} 100%{opacity:0;transform:translateX(-50%) translateY(-85px) scale(0.9) rotate(0);} }
+        @keyframes ru-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 18%{opacity:1;transform:translateX(-50%) scale(1.3);} 65%{opacity:1;transform:translateX(-50%) scale(1.0);} 100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
 
+        .ru-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:1.6em;font-weight:bold;color:#fff;text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.55);position:absolute;left:50%;top:26%;transform:translateX(-50%);z-index:65;white-space:nowrap;pointer-events:none;animation:ru-float-dmg 1.35s ease-out forwards; }
+        .ru-crit-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#ffdd00;text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400;position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:65;white-space:nowrap;pointer-events:none;animation:ru-float-crit 1.6s ease-out forwards; }
+        .ru-crit-lbl { font-family:'Cinzel',serif;font-size:0.72em;font-weight:bold;color:#ffdd00;text-shadow:0 0 8px #f80,1px 1px 2px #000;position:absolute;left:50%;top:6%;transform:translateX(-50%);z-index:66;white-space:nowrap;pointer-events:none;animation:ru-crit-lbl 0.95s ease-out forwards; }
+
+        /* ── Avatar flash ── */
+        @keyframes ru-hit-f  { 0%,100%{filter:brightness(1) saturate(1);}22%{filter:brightness(3.2) saturate(0.1);}50%{filter:brightness(1.9) saturate(0.5);} }
+        @keyframes ru-crit-f { 0%{filter:brightness(1);}12%{filter:brightness(4.5) saturate(0) sepia(1) hue-rotate(8deg);}32%{filter:brightness(2.8) saturate(0.3) sepia(0.4);}100%{filter:brightness(1);} }
+        @keyframes ru-shake  { 0%,100%{transform:translate(0,0);}20%{transform:translate(-8px,0) rotate(-3deg);}40%{transform:translate(8px,0) rotate(3deg);}60%{transform:translate(-5px,0);}80%{transform:translate(5px,0);} }
+
+        /* ── Lunge ── */
+        @keyframes ru-lunge-l { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(36px) scale(1.14) rotate(4deg);}70%{transform:translateX(14px) scale(1.06);}100%{transform:translateX(0) scale(1) rotate(0);} }
+        @keyframes ru-lunge-r { 0%{transform:translateX(0) scale(1);}30%{transform:translateX(-36px) scale(1.14) rotate(-4deg);}70%{transform:translateX(-14px) scale(1.06);}100%{transform:translateX(0) scale(1) rotate(0);} }
+
+        /* ── Shockwave + sparks ── */
+        @keyframes ru-sw  { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.9;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;border-width:1px;} }
+        @keyframes ru-sw2 { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.55;border-width:3px;}100%{transform:translate(-50%,-50%) scale(2.1);opacity:0;border-width:1px;} }
+        @keyframes ru-sp  { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d)) scale(0.1);opacity:0;} }
+
+        .ru-ring  { position:absolute;width:70px;height:70px;border-radius:50%;border:3px solid rgba(255,175,50,0.88);top:30%;left:50%;pointer-events:none;z-index:62;animation:ru-sw 0.5s ease-out forwards; }
+        .ru-ring2 { position:absolute;width:70px;height:70px;border-radius:50%;border:2px solid rgba(255,220,100,0.48);top:30%;left:50%;pointer-events:none;z-index:62;animation:ru-sw2 0.68s ease-out 0.07s forwards; }
+        .ru-ring.crit  { border-color:rgba(255,220,0,0.95);box-shadow:0 0 10px rgba(255,200,0,0.55); }
+        .ru-ring2.crit { border-color:rgba(255,180,0,0.62); }
+        .ru-spark { position:absolute;border-radius:50%;top:35%;left:50%;pointer-events:none;animation:ru-sp 0.44s ease-out forwards;z-index:63; }
+
+        /* ── Screen edge flash ── */
+        #ruins-screen-flash { position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:8888;opacity:0;transition:opacity 0.06s; }
+
+        /* ── Intro slide ── */
+        @keyframes ru-sl-l { 0%{transform:translateX(-90px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+        @keyframes ru-sl-r { 0%{transform:translateX(90px);opacity:0;}100%{transform:translateX(0);opacity:1;} }
+        .ru-intro-l { animation:ru-sl-l 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+        .ru-intro-r { animation:ru-sl-r 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+        /* ── Winner / Loser ── */
+        @keyframes ru-w-pulse { 0%,100%{box-shadow:0 0 20px rgba(255,215,0,0.9),0 0 40px rgba(255,150,0,0.5);}50%{box-shadow:0 0 36px rgba(255,215,0,1),0 0 70px rgba(255,150,0,0.7);} }
+        .ru-winner-av { border-color:#ffd700 !important; animation:ru-w-pulse 1.0s ease-in-out infinite !important; }
+        .ru-loser-side { filter:grayscale(85%) brightness(0.4) !important; transform:scale(0.88) !important; opacity:0.45 !important; transition:all 0.5s ease !important; }
+
+        /* ── VS pulse ── */
+        .combat-vs { animation:ru-vs-pulse 1.9s ease-in-out infinite !important; }
+        @keyframes ru-vs-pulse { 0%,100%{transform:scale(1);}50%{transform:scale(1.22);text-shadow:0 0 22px gold,0 0 48px rgba(255,200,0,0.5);} }
+
+        /* ── Countdown ── */
+        .combat-countdown { animation:ru-cntdn 0.9s ease-in-out infinite !important; }
+        @keyframes ru-cntdn { 0%,100%{transform:scale(1) rotate(-1deg);}50%{transform:scale(1.12) rotate(1deg);} }
+    `;
+    document.head.appendChild(s);
+
+    // Screen flash div
+    if (!document.getElementById('ruins-screen-flash')) {
+        const f = document.createElement('div');
+        f.id = 'ruins-screen-flash';
+        document.body.appendChild(f);
+    }
+}
+
+function animateHit(targetEl, dmg, isCrit) {
+    _injectRuinsEpicStyles();
+
+    // Volume 0.3 para crítico conforme solicitado
+    if (isCrit) playSound('critical', 0.3); else playSound('normal', 0.8);
+
+    const parent = targetEl.parentElement; // .combat-side
+
+    // Lunge do atacante (o oposto de quem leva o dano)
+    const mySide  = document.querySelector('.combat-side.left');
+    const oppSide = document.querySelector('.combat-side.right');
+    const attackerSide = (targetEl === document.getElementById('combatMyAvatar')) ? oppSide : mySide;
+    const isAttackerLeft = attackerSide && attackerSide.classList.contains('left');
+    if (attackerSide) {
+        const attAv = attackerSide.querySelector('.combat-avatar');
+        if (attAv) {
+            attAv.style.animation = isAttackerLeft ? 'ru-lunge-l 0.46s ease-out' : 'ru-lunge-r 0.46s ease-out';
+            setTimeout(() => { attAv.style.animation = ''; }, 480);
+        }
+    }
+
+    // Flash no avatar atingido
+    targetEl.style.animation = isCrit ? 'ru-crit-f 0.55s ease-out' : 'ru-hit-f 0.38s ease-out';
+    setTimeout(() => { targetEl.style.animation = ''; }, isCrit ? 560 : 400);
+
+    // Screen edge flash
+    const _sf = document.getElementById('ruins-screen-flash');
+    if (_sf) {
+        _sf.style.boxShadow = isCrit ? 'inset 0 0 90px rgba(255,200,0,0.38)' : 'inset 0 0 70px rgba(200,20,20,0.28)';
+        _sf.style.opacity = '1';
+        setTimeout(() => { _sf.style.opacity = '0'; }, isCrit ? 420 : 260);
+    }
+
+    // Shake do lado atingido
+    if (isCrit) {
+        parent.style.animation = 'ru-shake 0.42s cubic-bezier(.36,.07,.19,.97)';
+        setTimeout(() => { parent.style.animation = ''; }, 460);
+    } else {
+        targetEl.classList.remove('shake-hit');
+        void targetEl.offsetWidth;
+        targetEl.classList.add('shake-hit');
+    }
+
+    // Shockwave rings
+    const r1 = document.createElement('div'); r1.className = 'ru-ring' + (isCrit ? ' crit' : ''); parent.appendChild(r1); r1.addEventListener('animationend', () => r1.remove(), { once: true });
+    const r2 = document.createElement('div'); r2.className = 'ru-ring2' + (isCrit ? ' crit' : ''); parent.appendChild(r2); r2.addEventListener('animationend', () => r2.remove(), { once: true });
+
+    // Sparks
+    const spN = isCrit ? 12 : 6;
+    const spCols = isCrit ? ['#ffdd00','#ff8800','#fff','#ffcc44'] : ['#fff','#ff8888','#ffbb55'];
+    for (let i = 0; i < spN; i++) {
+        const sp = document.createElement('div'); sp.className = 'ru-spark';
+        const ang = (i / spN) * 360 + Math.random() * 28, dist = 26 + Math.random() * 42, sz = (isCrit ? 5 : 3) + Math.random() * 3;
+        sp.style.setProperty('--a', ang + 'deg'); sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.animationDelay = (Math.random() * 0.07) + 's';
+        parent.appendChild(sp); sp.addEventListener('animationend', () => sp.remove(), { once: true });
+    }
+
+    // Damage number
     const dmgEl = document.createElement('div');
-    dmgEl.textContent = dmg;
-    dmgEl.className = isCrit ? 'crit-damage-number' : 'damage-number';
-    targetEl.parentElement.appendChild(dmgEl);
-    setTimeout(() => dmgEl.remove(), 1000);
+    if (isCrit) {
+        dmgEl.className = 'ru-crit-num';
+        dmgEl.innerHTML = '⚡ ' + dmg + ' ⚡';
+        const lbl = document.createElement('div');
+        lbl.className = 'ru-crit-lbl'; lbl.textContent = '✦ CRÍTICO! ✦';
+        parent.appendChild(lbl);
+        lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
+    } else {
+        dmgEl.className = 'ru-dmg-num';
+        dmgEl.textContent = dmg;
+    }
+    parent.appendChild(dmgEl);
+    dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
+    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 2200);
 }
 
 function renderRoom(data) {

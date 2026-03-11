@@ -143,9 +143,20 @@ body {
 
 .bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #c00, #f00);
+    background: linear-gradient(90deg, #850000, #cc0000, #ff4444);
     width: 100%;
-    transition: width 0.3s;
+    transition: width 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative;
+    box-shadow: 0 0 8px rgba(200,0,0,0.5);
+}
+.bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 45%;
+    background: linear-gradient(180deg,rgba(255,255,255,0.18) 0%,transparent 100%);
+    border-radius: 2px 2px 0 0;
+    pointer-events: none;
 }
 
 #hudHpText {
@@ -245,32 +256,35 @@ body {
 
 #entityName {
     margin-top: 10px;
-    background: rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.85);
     padding: 5px 15px;
     border-radius: 15px;
-    border: 1px solid #555;
+    border: 1px solid rgba(255,80,80,0.45);
     font-weight: bold;
     color: #ff5555;
     font-size: 1.2em;
+    text-shadow: 0 0 12px rgba(255,60,60,0.6), 1px 1px 2px #000;
+    box-shadow: 0 0 10px rgba(200,0,0,0.25);
 }
 
 /* Balão Central de Notificação (Pós-Combate) */
 .center-notification {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.92);
     border: 2px solid gold;
-    padding: 15px 25px;
-    border-radius: 10px;
+    padding: 16px 28px;
+    border-radius: 12px;
     color: white;
     font-weight: bold;
     font-size: 1.2em;
     text-align: center;
-    z-index: 100;
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
-    animation: popIn 0.3s ease-out;
+    z-index: 9999;
+    box-shadow: 0 0 28px rgba(255,215,0,0.55), 0 4px 20px rgba(0,0,0,0.8);
+    animation: popIn 0.3s cubic-bezier(0.22,1,0.36,1);
+    text-shadow: 1px 1px 2px #000;
 }
 
 @keyframes popIn {
@@ -523,8 +537,8 @@ body {
     object-fit: cover;
 }
 
-.combat-side.left .combat-avatar { border-color: lime; }
-.combat-side.right .combat-avatar { border-color: red; }
+.combat-side.left  .combat-avatar { border-color: lime; box-shadow: 0 0 14px rgba(0,255,100,0.35), 0 0 30px rgba(0,200,80,0.12); transition: filter 0.5s ease, border-color 0.5s ease; }
+.combat-side.right .combat-avatar { border-color: red;  box-shadow: 0 0 14px rgba(255,60,60,0.35),  0 0 30px rgba(200,20,20,0.12); transition: filter 0.5s ease, border-color 0.5s ease; }
 
 .combat-vs {
     font-size: 2em;
@@ -547,18 +561,20 @@ body {
 }
 
 .damage-number {
-    font-family: Georgia, serif;
-    font-size: 24px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 1.6em;
     color: #fff;
-    animation: floatDmg 1s forwards;
+    text-shadow: 2px 2px 4px #000, 0 0 12px rgba(255,120,0,0.5);
+    animation: floatDmg 1.35s ease-out forwards;
 }
 
 .crit-damage-number {
-    font-family: Georgia, serif;
-    font-size: 32px;
-    color: red;
-    text-shadow: -1px -1px 0 yellow, 1px -1px 0 yellow, -1px 1px 0 yellow, 1px 1px 0 yellow;
-    animation: floatCrit 1s forwards;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 2.2em;
+    color: #ffdd00;
+    text-shadow: -1px -1px 0 #900, 1px -1px 0 #900, -1px 1px 0 #900, 1px 1px 0 #900,
+                 0 0 14px #ff8800, 0 0 28px #ff4400;
+    animation: floatCrit 1.6s ease-out forwards;
 }
 
 .evade-text {
@@ -568,14 +584,16 @@ body {
 }
 
 @keyframes floatDmg {
-    0% { opacity: 1; transform: translate(-50%, -50%); }
-    100% { opacity: 0; transform: translate(-50%, -100px); }
+    0%   { opacity:1; transform:translate(-50%,-50%) scale(0.6); }
+    12%  { transform:translate(-50%,-60px) scale(1.18); }
+    100% { opacity:0; transform:translate(-50%,-80px) scale(0.95); }
 }
 
 @keyframes floatCrit {
-    0% { transform: translate(-50%, -50%) scale(1); }
-    50% { transform: translate(-50%, -80px) scale(1.2); }
-    100% { opacity: 0; transform: translate(-50%, -120px) scale(1); }
+    0%   { opacity:1; transform:translate(-50%,-50%) scale(0.3) rotate(-5deg); }
+    10%  { transform:translate(-50%,-68px) scale(1.45) rotate(4deg); }
+    22%  { transform:translate(-50%,-80px) scale(1.2) rotate(-1deg); }
+    100% { opacity:0; transform:translate(-50%,-110px) scale(0.9) rotate(0); }
 }
 
 @keyframes pulse {
@@ -589,11 +607,11 @@ body {
 }
 
 @keyframes shake {
-    0% { transform: translate(0,0); }
-    25% { transform: translate(-5px, 5px); }
-    50% { transform: translate(5px, -5px); }
-    75% { transform: translate(-5px, 5px); }
-    100% { transform: translate(0,0); }
+    0%,100% { transform: translate(0,0) rotate(0); }
+    20% { transform: translate(-7px,4px) rotate(-2deg); }
+    40% { transform: translate(7px,-4px) rotate(2deg); }
+    60% { transform: translate(-5px,3px) rotate(-1deg); }
+    80% { transform: translate(5px,-3px) rotate(1deg); }
 }
 
 @keyframes fadeIn {

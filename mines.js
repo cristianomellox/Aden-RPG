@@ -627,7 +627,7 @@ function formatTimeCombat(totalSeconds) {
       lbl.textContent = '✦ CRÍTICO! ✦';
       targetElement.appendChild(lbl);
       lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
-      try { playSound('critical', { volume: 0.1 }); } catch(_) {}
+      try { playSound('critical', { volume: 0.03 }); } catch(_) {}
     } else {
       el.textContent = Number(damage).toLocaleString();
       el.className = 'mine-damage-number';

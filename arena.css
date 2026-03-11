@@ -288,7 +288,7 @@ body, html {
     color: #ffdd00;
     text-shadow: -1px -1px 0 #900, 1px -1px 0 #900, -1px 1px 0 #900, 1px 1px 0 #900,
                  0 0 14px #ff8800, 0 0 28px #ff4400;
-    animation: floating-damage-crit 1.6s ease-out forwards;
+    animation: floating-damage-crit 3s ease-out forwards;
 }
 @keyframes floating-damage {
     0%   { opacity:1; transform:translate(-50%,-50%) scale(0.6); }

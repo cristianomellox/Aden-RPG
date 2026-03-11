@@ -976,37 +976,67 @@ body {
 #raidMonsterHpBar {
   width: 90%;
   max-width: 400px;
-  background: #333;
+  background: linear-gradient(180deg,#1a0000,#2d0000);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   margin: 10px auto;
-  height: 24px;
+  height: 28px;
   position: relative;
-  border: 1px solid #777!important;
+  border: 1px solid rgba(255,80,0,0.55) !important;
+  box-shadow: 0 0 12px rgba(200,0,0,0.35), inset 0 1px 3px rgba(0,0,0,0.8);
 }
 #raidMonsterHpFill {
   height: 100%;
   width: 100%;
-  background: linear-gradient(to right, #ff4433, red);
-  transition: width 0.3s ease;
-  border: 1px solid yellow!important;
+  background: linear-gradient(90deg,#850000,#cc0000,#ff4444);
+  transition: width 0.4s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+  border: none !important;
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 0 10px rgba(200,0,0,0.5);
+  overflow: hidden;
+}
+#raidMonsterHpFill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 45%;
+  background: linear-gradient(180deg,rgba(255,255,255,0.18) 0%,transparent 100%);
+  border-radius: 12px 12px 0 0;
+  pointer-events: none;
 }
 
 #raidPlayerHpBar {
-  border: 1px solid #777!important;
+  border: 1px solid rgba(100,200,255,0.4) !important;
+  background: linear-gradient(180deg,#001a00,#002800) !important;
+  box-shadow: 0 0 10px rgba(0,180,100,0.25), inset 0 1px 2px rgba(0,0,0,0.8) !important;
+  overflow: visible !important;
 }
 
 #raidPlayerHpFill {
-  background: linear-gradient(90deg, #6bff6b, #86ffb8);
+  background: linear-gradient(90deg,#005500,#00aa00,#55ff55);
   height: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;   /* centraliza o texto */
+  justify-content: center;
   font-weight: bold;
   font-size: 0.9em;
   color: white;
-  transition: width 0.3s ease;
-  border: 1px solid yellow!important;
+  transition: width 0.4s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+  border: none !important;
+  border-radius: 12px;
+  position: relative;
+  box-shadow: 0 0 8px rgba(0,180,80,0.45);
+  overflow: hidden;
+}
+#raidPlayerHpFill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 45%;
+  background: linear-gradient(180deg,rgba(255,255,255,0.16) 0%,transparent 100%);
+  border-radius: 12px 12px 0 0;
+  pointer-events: none;
 }
 
 #raidPlayerHpText {
@@ -1174,14 +1204,19 @@ hr {
   height: 4px;
 }
 #raidMonsterImage {
-  position: absolute!important;
+  position: absolute !important;
   top: -2px;
-  z-index: 0!important;
-  width: 370px!important;
-  height: 440px!important;
+  z-index: 0 !important;
+  width: 370px !important;
+  height: 440px !important;
+  filter: drop-shadow(0 0 8px rgba(200,50,50,0.22));
+  transition: filter 0.45s ease;
 }
 .crit-damage-number, .damage-number {
-  font-size: 1.8em!important;
+  font-family: 'Cinzel', Georgia, serif !important;
+  font-size: 2em !important;
+  font-weight: bold !important;
+  text-shadow: 2px 2px 4px #000, 0 0 16px rgba(255,100,0,0.6) !important;
 }
 #buyModal .modal {
   background: none;
@@ -1210,9 +1245,14 @@ hr {
 
 /* Efeito de tremer para o monstro da raid */
 @keyframes shake-monster {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
-  20%, 40%, 60%, 80% { transform: translateX(6px); }
+  0%,100% { transform: translate(0,0) rotate(0); }
+  10% { transform: translate(-9px,5px) rotate(-2deg); }
+  20% { transform: translate(9px,-5px) rotate(2deg); }
+  30% { transform: translate(-7px,7px) rotate(-1.5deg); }
+  40% { transform: translate(7px,-7px) rotate(1.5deg); }
+  55% { transform: translate(-5px,3px) rotate(-1deg); }
+  70% { transform: translate(5px,-3px) rotate(1deg); }
+  85% { transform: translate(-3px,2px); }
 }
 
 /* --- CORREÇÃO: Classe genérica para ser usada em qualquer elemento --- */

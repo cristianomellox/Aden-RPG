@@ -210,19 +210,29 @@
 
 #monsterHpBar {
     width: 100%;
-    height: 30px;
-    background-color: #333;
+    height: 34px;
+    background: linear-gradient(180deg,#1a0000 0%,#2d0000 100%);
     border-radius: 10px;
-    
     overflow: hidden;
-    border: 1px solid #777;
+    border: 1px solid rgba(255,100,0,0.5);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.7), 0 0 8px rgba(255,50,0,0.2);
+    position: relative;
 }
 
 #monsterHpFill {
     height: 100%;
-    background: linear-gradient(to right, #ff4433, red);
-  transition: width 0.3s ease;
-  border: 1px solid yellow!important;
+    background: linear-gradient(90deg, #8b0000 0%, #cc2200 40%, #ff4433 80%, #ff6644 100%);
+    transition: width 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+    position: relative;
+}
+#monsterHpFill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 42%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 100%);
+    border-radius: 10px 10px 0 0;
+    pointer-events: none;
 }
 
 #damageLog {
@@ -530,9 +540,9 @@ p {
     justify-content: space-around;
     align-items: center;
     width: 97%;
-    height: 400px;
-    margin: 20px 0;
-    margin-top: 30%;
+    height: auto;
+    margin: 12px 0 8px;
+    gap: 6px;
 }
 
 .player-side {
@@ -604,22 +614,29 @@ p {
 
 /* --- Adicione essas classes em 'mines.css' --- */
 
-.player-hp-bar {position: relative;
+.player-hp-bar {
+    position: relative;
     width: 135px;
-    height: 20px;
-    background-color: #333;
-    border: 1px solid #777;
-    border-radius: 8px;
+    height: 24px;
+    background: linear-gradient(180deg,#111 0%,#1e1e1e 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
     margin-top: 10px;
     overflow: hidden;
-    
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
 }
 
 .player-hp-fill {
     height: 100%;
-    background: linear-gradient(90deg, #6bff6b, #86ffb8);
-  transition: width 0.3s ease;
-  border: 1px solid yellow!important;
+    background: linear-gradient(90deg, #127a22, #1ec938);
+    transition: width 0.45s cubic-bezier(0.25,0.46,0.45,0.94), background 0.5s ease;
+    position: relative;
+}
+.player-hp-fill::after {
+    content:'';
+    position:absolute;top:0;left:0;right:0;height:45%;
+    background:linear-gradient(180deg,rgba(255,255,255,0.22) 0%,transparent 100%);
+    border-radius:4px 4px 0 0;pointer-events:none;
 }
 
 /* Você pode adicionar mais estilos se quiser, como a cor da borda, etc. */

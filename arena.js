@@ -1364,22 +1364,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         setTimeout(() => {
-        showModalAlert(
-            finalState.win ? 
-            `<strong style="color:#4CAF50;">Vitória!</strong><br>Prepare-se para a próxima luta.` : 
-            `<strong style="color:#f44336;">Derrota!</strong><br>Prepare-se para a próxima luta.`,
-            "Resultado da Luta"
-        );
+            // showModalAlert clones confirmActionBtn internally — capture AFTER the clone
+            showModalAlert(
+                finalState.win ? 
+                `<strong style="color:#4CAF50;">Vitória!</strong><br>Prepare-se para a próxima luta.` : 
+                `<strong style="color:#f44336;">Derrota!</strong><br>Prepare-se para a próxima luta.`,
+                "Resultado da Luta"
+            );
+            // confirmActionBtn now points to the fresh clone — set onclick here
+            if (currentOpponentIndex >= currentSession.opponents.length) {
+                confirmActionBtn.textContent = "Ver Resultados Finais";
+                confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; commitSession(); };
+            } else {
+                confirmActionBtn.textContent = "Próxima Luta >>";
+                confirmActionBtn.onclick = () => { confirmModal.style.display = 'none'; startNextFight(); };
+            }
         }, finalState.win ? 900 : 500);
-
-        const nextBtn = confirmActionBtn;
-        if (currentOpponentIndex >= currentSession.opponents.length) {
-            nextBtn.textContent = "Ver Resultados Finais";
-            nextBtn.onclick = () => { confirmModal.style.display = 'none'; commitSession(); };
-        } else {
-            nextBtn.textContent = "Próxima Luta >>";
-            nextBtn.onclick = () => { confirmModal.style.display = 'none'; startNextFight(); };
-        }
     }
 
     async function commitSession() {

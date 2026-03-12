@@ -7,9 +7,85 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="titulos.css">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
     .menu-link {
       font-size: 1em;
     }
+
+    /* ═══ TUTORIAL MODAL (estilo AFK/Minas) ════════════════════════ */
+    #tutorialModal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.88);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 10000;
+    }
+    #tutorialModal .tut-content {
+      background: #111;
+      padding: 22px 20px;
+      border: 2px solid #d4af37;
+      border-radius: 12px;
+      width: 90%; max-width: 430px;
+      position: relative;
+      box-shadow: 0 0 30px rgba(212,175,55,0.2), 0 0 60px rgba(100,70,0,0.15);
+      color: #e0dccc;
+      font-family: 'Cinzel', serif;
+      max-height: 88vh; overflow-y: auto;
+      text-shadow: none;
+      box-sizing: border-box;
+    }
+    #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
+    #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
+    #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+    .tut-title {
+      text-align: center; color: #d4af37; margin: 0 0 6px;
+      font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
+      text-shadow: 0 0 12px rgba(212,175,55,0.5); font-family: 'Cinzel', serif;
+    }
+    .tut-subtitle {
+      text-align: center; color: #888; font-size: 0.78em;
+      margin: 0 0 16px; padding-bottom: 12px;
+      border-bottom: 1px solid #333; font-style: italic;
+    }
+    .tut-section {
+      margin-bottom: 14px; padding: 12px 14px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+    }
+    .tut-section-title {
+      margin: 0 0 8px; font-size: 0.88em; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 1px;
+      padding-bottom: 6px; border-bottom: 1px solid;
+      font-family: 'Cinzel', serif;
+    }
+    .tut-section p { margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6; }
+    .tut-section p:last-child { margin-bottom: 0; }
+    .tut-info-box {
+      background: rgba(0,0,0,0.3); border-radius: 6px;
+      padding: 10px 12px; font-size: 0.82em;
+      border: 1px solid rgba(255,255,255,0.08); margin-top: 8px;
+    }
+    .tut-info-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 7px; }
+    .tut-info-box li { color: #ccc; line-height: 1.5; }
+    .tut-title-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 10px; border-radius: 6px;
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .tut-title-icon { font-size: 1.5em; flex-shrink: 0; line-height: 1.2; }
+    .tut-title-text { display: flex; flex-direction: column; gap: 2px; }
+    .tut-title-name { color: #d4af37; font-weight: bold; font-size: 0.83em; font-family: 'Cinzel', serif; }
+    .tut-title-desc { color: #bbb; font-size: 0.78em; line-height: 1.4; }
+    .tut-confirm-btn {
+      display: block; width: 100%; max-width: 240px; margin: 18px auto 0;
+      padding: 11px 16px; font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+      background: linear-gradient(135deg, #1a1000, #0d0800);
+      border: 1px solid #d4af37; border-radius: 8px; color: #d4af37;
+      cursor: pointer; text-align: center; transition: all 0.2s; letter-spacing: 1px;
+    }
+    .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a1e00, #1a1200); box-shadow: 0 0 14px rgba(212,175,55,0.3); }
   </style>
 </head>
 <body>
@@ -55,72 +131,105 @@
     </div>
   </div>
   
-  <div id="tutorialModal" class="modal-overlay2" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h1>Títulos</h1>
+  <div id="tutorialModal">
+    <div class="tut-content" style="position:relative;">
+      <button id="closeTutorialBtn" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:26px;font-weight:bold;color:#888;cursor:pointer;line-height:1;z-index:10;padding:0;font-family:sans-serif;"
+        onmouseover="this.style.color='#d4af37'" onmouseout="this.style.color='#888'">&times;</button>
+
+      <h2 class="tut-title">👑 Títulos Reais</h2>
+      <p class="tut-subtitle">"Os líderes das guildas vitoriosas nomeiam a realeza de Aden."</p>
+
+      <!-- 1. O que são -->
+      <div class="tut-section">
+        <h4 class="tut-section-title" style="color:#d4af37; border-color:#d4af37;">1. O que são os Títulos?</h4>
+        <p>Títulos são honrarias concedidas pelos <strong style="color:#d4af37">líderes das guildas</strong> que dominam territórios. Cada cidade possui um conjunto de cargos que podem ser atribuídos a membros da guilda vencedora.</p>
+      </div>
+
+      <!-- 2. Capital -->
+      <div class="tut-section">
+        <h4 class="tut-section-title" style="color:#ffd700; border-color:#ffd700;">2. Títulos da Capital</h4>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+          <div class="tut-title-row">
+            <span class="tut-title-icon">👑</span>
+            <div class="tut-title-text">
+              <span class="tut-title-name">Rei / Rainha Consorte</span>
+              <span class="tut-title-desc">Reinará ao lado do novo monarca de Aden. O título mais nobre da Capital.</span>
+            </div>
+          </div>
+          <div class="tut-title-row">
+            <span class="tut-title-icon">⚜️</span>
+            <div class="tut-title-text">
+              <span class="tut-title-name">Príncipe / Princesa</span>
+              <span class="tut-title-desc">Duas vagas reservadas para os herdeiros do trono.</span>
+            </div>
+          </div>
+          <div class="tut-title-row">
+            <span class="tut-title-icon">🤡</span>
+            <div class="tut-title-text">
+              <span class="tut-title-name">Bobo(a) da Corte</span>
+              <span class="tut-title-desc">A piada de Aden. Uma honra à sua maneira.</span>
+            </div>
+          </div>
         </div>
-        <p>Bem-vindo(a), aventureiro(a)! Aqui você poderá conhecer a realeza de Aden!</p>
-        <hr>
-        <h2>O que são e como são dados os títulos reais?</h2>
-        <p>Os títulos são distribuídos pelos líderes das guildas que vencem a batalha por territórios (guilda > batalhas).</p>
-        <hr>
-   <h2>Capital</h2>     
-        <ul>
-            <li><strong>👑 Rei / Rainha Consorte</strong>: Título especial para quem reinará ao lado do novo Rei (ou nova Rainha) de Aden.</li>
-            <li><strong>⚜️ Príncipe / Princesa</strong>: Duas vagas para os herdeiros..</li>
-            <li><strong>🤡 Bobo(a) da Corte</strong>: A piada de Aden.</li>
-        </ul>
+      </div>
 
-<h2>Outras Cidades</h2>     
-        <ul>
-            <li><strong>🔰 Lord / Lady Consorte</strong>: Título especial para quem estará ao lado do novo Lord (ou nova Lady) de Aden.</li>
-            <li><strong>🛡️ Nobre</strong>: Uma vaga para o nobre.</li>
-        </ul>
-        <hr>
-        <h2>Nomeação</h2>
-        <p>Ao nomear um jogador, os líderes só poderão trocar no próximo reset (todos os dias à meia-noite UTC). Também há a opção de "Exonerar" que remove o título de um jogador.<br>
-Jogadores que já possuem título não podem ser nomeados.<br>
-O líder não pode nomear a si mesmo com outro título.</p>
+      <!-- 3. Outras Cidades -->
+      <div class="tut-section">
+        <h4 class="tut-section-title" style="color:#00bfff; border-color:#00bfff;">3. Títulos de Outras Cidades</h4>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+          <div class="tut-title-row">
+            <span class="tut-title-icon">🔰</span>
+            <div class="tut-title-text">
+              <span class="tut-title-name">Lord / Lady Consorte</span>
+              <span class="tut-title-desc">Acompanha o(a) governante da cidade. Um dos títulos mais cobiçados fora da Capital.</span>
+            </div>
+          </div>
+          <div class="tut-title-row">
+            <span class="tut-title-icon">🛡️</span>
+            <div class="tut-title-text">
+              <span class="tut-title-name">Nobre</span>
+              <span class="tut-title-desc">Uma vaga por cidade para o nobre local, guardião das tradições.</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-<h2>Como nomear</h2>
-<p>Para nomear um jogador, o líder deve digitar o nome do jogador exatamente como está em seu perfil, respeitando letras maiúsculas, minúsculas e pontos.</p>
-        <hr>
-        <button class="close-btn" id="closeTutorialBtn">Fechar</button>
-        <br><br><br>
+      <!-- 4. Nomeação -->
+      <div class="tut-section">
+        <h4 class="tut-section-title" style="color:#8ecf8e; border-color:#8ecf8e;">4. Como Nomear</h4>
+        <p>O líder deve digitar o nome do jogador <strong style="color:#d4af37">exatamente</strong> como está no perfil — respeitando maiúsculas, minúsculas e pontos.</p>
+        <div class="tut-info-box">
+          <ul>
+            <li>🔁 Após nomear, só é possível trocar no próximo <strong style="color:#d4af37">reset (meia-noite UTC)</strong></li>
+            <li>❌ Use <strong style="color:#ff8888">Exonerar</strong> para remover o título de um jogador</li>
+            <li>🚫 Jogadores que já possuem título <strong style="color:#d4af37">não podem ser nomeados</strong></li>
+            <li>🚫 O líder <strong style="color:#d4af37">não pode se nomear</strong> para outro título</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+        <button class="tut-confirm-btn" id="closeTutorialBtn2">ENTENDI</button>
+      </div>
     </div>
-</div>
+  </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('tutorialModal');
         const openBtn = document.getElementById('openTutorialBtn');
         const closeBtn = document.getElementById('closeTutorialBtn');
+        const closeBtn2 = document.getElementById('closeTutorialBtn2');
 
-        // Função para abrir o modal
-        function openModal() {
-            modal.style.display = 'flex';
-        }
+        const openModal = () => { modal.style.display = 'flex'; };
+        const closeModal = () => { modal.style.display = 'none'; };
 
-        // Função para fechar o modal
-        function closeModal() {
-            modal.style.display = 'none';
-        }
+        if (openBtn) openBtn.addEventListener('click', openModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
 
-        // Adiciona os eventos de clique
-        if (openBtn) {
-            openBtn.addEventListener('click', openModal);
-        }
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeModal);
-        }
-
-        // Opcional: Fechar o modal clicando fora dele
         window.addEventListener('click', (event) => {
-            if (event.target === modal) {
-                closeModal();
-            }
+            if (event.target === modal) closeModal();
         });
     });
 </script>

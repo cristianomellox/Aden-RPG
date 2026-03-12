@@ -28,22 +28,21 @@
         border: 2px solid #ffd700;
         border-radius: 12px;
         width: 90%; max-width: 440px;
-        position: relative;
+        position: relative !important;
         box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
         color: #e0dccc;
         font-family: 'Cinzel', serif;
         max-height: 88vh; overflow-y: auto;
         text-shadow: none;
+        box-sizing: border-box;
       }
       #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
       #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
       #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
-
       .tut-title {
         text-align: center; color: #ffd700; margin: 0 0 6px;
         font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
-        text-shadow: 0 0 12px rgba(255,215,0,0.5);
-        font-family: 'Cinzel', serif;
+        text-shadow: 0 0 12px rgba(255,215,0,0.5); font-family: 'Cinzel', serif;
       }
       .tut-subtitle {
         text-align: center; color: #888; font-size: 0.78em;
@@ -51,70 +50,45 @@
         border-bottom: 1px solid #333; font-style: italic;
       }
       .tut-section {
-        margin-bottom: 14px;
-        padding: 12px 14px;
+        margin-bottom: 14px; padding: 12px 14px;
         background: rgba(255,255,255,0.03);
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
       }
       .tut-section-title {
-        margin: 0 0 8px;
-        font-size: 0.88em; font-weight: bold; text-transform: uppercase;
-        letter-spacing: 1px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid;
+        margin: 0 0 8px; font-size: 0.88em; font-weight: bold;
+        text-transform: uppercase; letter-spacing: 1px;
+        padding-bottom: 6px; border-bottom: 1px solid;
         font-family: 'Cinzel', serif;
-        display: flex; align-items: center; gap: 7px;
       }
-      .tut-section p {
-        margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6;
-      }
+      .tut-section p { margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6; }
       .tut-section p:last-child { margin-bottom: 0; }
       .tut-info-box {
-        background: rgba(0,0,0,0.3);
-        border-radius: 6px;
-        padding: 10px 12px;
-        font-size: 0.82em;
-        border: 1px solid rgba(255,255,255,0.08);
-        margin-top: 8px;
+        background: rgba(0,0,0,0.3); border-radius: 6px;
+        padding: 10px 12px; font-size: 0.82em;
+        border: 1px solid rgba(255,255,255,0.08); margin-top: 8px;
       }
-      .tut-info-box ul {
-        list-style: none; padding: 0; margin: 0;
-        display: flex; flex-direction: column; gap: 6px;
-      }
+      .tut-info-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
       .tut-info-box li { color: #ccc; line-height: 1.5; }
       .tut-subsection-title {
         color: #ffd700; font-size: 0.8em; font-weight: bold;
         font-family: 'Cinzel', serif; letter-spacing: 1px;
         margin: 10px 0 4px; text-transform: uppercase;
       }
-      .tut-close-btn {
-        position: absolute; top: 10px; right: 14px;
-        font-size: 26px; font-weight: bold; color: #888;
-        cursor: pointer; line-height: 1; background: none; border: none;
-        font-family: sans-serif;
-      }
-      .tut-close-btn:hover { color: #ffd700; }
-      .tut-confirm-btn {
-        display: block; width: 100%; max-width: 240px;
-        margin: 18px auto 0;
-        padding: 11px 16px;
-        font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
-        background: linear-gradient(135deg, #1a1000, #0d0800);
-        border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
-        cursor: pointer; text-align: center; transition: all 0.2s;
-        letter-spacing: 1px;
-      }
-      .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
-
-      .tut-rarity-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
-      .tut-rarity-row { display: flex; align-items: center; gap: 8px; font-size: 0.82em; color: #ccc; }
       .tut-rarity-badge {
         padding: 2px 8px; border-radius: 4px; font-size: 0.75em;
         font-weight: bold; font-family: 'Cinzel', serif;
-        letter-spacing: 1px; white-space: nowrap; flex-shrink: 0;
-        border: 1px solid;
+        letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; border: 1px solid;
       }
+      .tut-rarity-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+      .tut-rarity-row { display: flex; align-items: center; gap: 8px; font-size: 0.82em; color: #ccc; }
+      .tut-confirm-btn {
+        display: block; width: 100%; max-width: 240px; margin: 18px auto 0;
+        padding: 11px 16px; font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+        background: linear-gradient(135deg, #1a1000, #0d0800);
+        border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
+        cursor: pointer; text-align: center; transition: all 0.2s; letter-spacing: 1px;
+      }
+      .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
 
       /* Pequenos ajustes úteis para seleção múltipla */
       #fragmentList, #refineFragmentList {
@@ -489,19 +463,21 @@
     
 
 <div id="tutorialModal">
-    <div class="tut-content">
-        <button class="tut-close-btn" id="closeTutorialBtn">&times;</button>
+    <div class="tut-content" style="position:relative;">
+        <button id="closeTutorialBtn" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:26px;font-weight:bold;color:#888;cursor:pointer;line-height:1;z-index:10;padding:0;"
+            onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+
         <h2 class="tut-title">🎒 Guia da Bolsa</h2>
         <p class="tut-subtitle">"Gerencie seus equipamentos, evolua seus itens e domine Aden."</p>
 
-        <!-- 1. Inventário -->
+        <!-- 1. Visão Geral -->
         <div class="tut-section">
             <h4 class="tut-section-title" style="color:#00bfff; border-color:#00bfff;">1. Visão Geral</h4>
-            <p>A Bolsa é o centro de gestão do seu personagem. Aqui você equipa itens, consulta seus atributos e acessa todos os seus materiais.</p>
+            <p>A Bolsa é o centro de gestão do seu personagem. Aqui você equipa itens, consulta atributos e acessa todos os seus materiais.</p>
             <div class="tut-info-box">
                 <ul>
-                    <li>🗡️ <strong style="color:#ffd700">Itens Equipados</strong> — exibidos nos slots ao redor do avatar; afetam diretamente seu poder</li>
-                    <li>📊 <strong style="color:#ffd700">Atributos</strong> — ATK, HP, Defesa, Crítico e Evasão são calculados automaticamente</li>
+                    <li>🗡️ <strong style="color:#ffd700">Itens Equipados</strong> — slots ao redor do avatar; afetam diretamente seu poder</li>
+                    <li>📊 <strong style="color:#ffd700">Atributos</strong> — ATK, HP, Defesa, Crítico e Evasão calculados automaticamente</li>
                     <li>📦 <strong style="color:#ffd700">Lista de Itens</strong> — use as abas para filtrar por Equips., Fragmentos ou Outros</li>
                 </ul>
             </div>
@@ -514,7 +490,7 @@
             <div class="tut-info-box">
                 <ul>
                     <li>🔒 Cada slot aceita <strong style="color:#ffd700">apenas um item</strong> — equipar um novo desequipa o anterior automaticamente</li>
-                    <li>✨ Slots disponíveis: <strong style="color:#ffd700">Arma, Anel, Elmo, Amuleto, Asa, Armadura</strong> e 2 especiais</li>
+                    <li>✨ Slots: <strong style="color:#ffd700">Arma, Anel, Elmo, Amuleto, Asa, Armadura</strong> e 2 especiais</li>
                 </ul>
             </div>
         </div>
@@ -523,21 +499,21 @@
         <div class="tut-section">
             <h4 class="tut-section-title" style="color:#ffd700; border-color:#ffd700;">3. Evoluir &amp; Refinar</h4>
             <p class="tut-subsection-title">⬆ Evoluir</p>
-            <p>Use <strong style="color:#ffd700">fragmentos</strong> como experiência para aumentar o nível do item e ampliar seus bônus de atributo.</p>
+            <p>Use <strong style="color:#ffd700">fragmentos</strong> como experiência para aumentar o nível do item e ampliar seus bônus.</p>
             <p class="tut-subsection-title">⭐ Refinar</p>
-            <p>Aumenta a <strong style="color:#ffd700">raridade (estrelas)</strong> do item, destravando novos bônus. Requer fragmentos da mesma raridade e cristais.</p>
+            <p>Aumenta a <strong style="color:#ffd700">raridade (estrelas)</strong> do item. Requer fragmentos da mesma raridade e cristais.</p>
             <div class="tut-info-box">
                 <div class="tut-rarity-grid">
                     <div class="tut-rarity-row">
-                        <span class="tut-rarity-badge" style="color:#aaa; border-color:#555; background:rgba(80,80,80,0.3);">R</span>
+                        <span class="tut-rarity-badge" style="color:#aaa;border-color:#555;background:rgba(80,80,80,0.3);">R</span>
                         <span>Comum — custo base de cristais</span>
                     </div>
                     <div class="tut-rarity-row">
-                        <span class="tut-rarity-badge" style="color:#60c0ff; border-color:#2a6a9a; background:rgba(30,80,140,0.3);">SR</span>
+                        <span class="tut-rarity-badge" style="color:#60c0ff;border-color:#2a6a9a;background:rgba(30,80,140,0.3);">SR</span>
                         <span>Raro — maior poder e custo</span>
                     </div>
                     <div class="tut-rarity-row">
-                        <span class="tut-rarity-badge" style="color:#ffd700; border-color:#a07800; background:rgba(120,80,0,0.3);">SSR</span>
+                        <span class="tut-rarity-badge" style="color:#ffd700;border-color:#a07800;background:rgba(120,80,0,0.3);">SSR</span>
                         <span>Super Raro — potência máxima</span>
                     </div>
                 </div>
@@ -548,7 +524,7 @@
         <div class="tut-section">
             <h4 class="tut-section-title" style="color:#ff9800; border-color:#ff9800;">4. Criar &amp; Desconstruir</h4>
             <p class="tut-subsection-title">🔨 Criar Itens</p>
-            <p>Construa equipamentos gastando <strong style="color:#ffd700">30 fragmentos</strong> + cristais conforme a raridade:</p>
+            <p>Construa equipamentos com <strong style="color:#ffd700">30 fragmentos</strong> + cristais conforme a raridade:</p>
             <div class="tut-info-box">
                 <ul>
                     <li><span class="tut-rarity-badge" style="color:#aaa;border-color:#555;background:rgba(80,80,80,0.3);">R</span> → <strong style="color:#ffd700">100 cristais</strong></li>
@@ -557,7 +533,7 @@
                 </ul>
             </div>
             <p class="tut-subsection-title" style="margin-top:10px;">💥 Desconstruir</p>
-            <p>Destrói o item e recupera parte dos recursos investidos. Custa <strong style="color:#ff6b6b">400 cristais</strong> — você pode ver uma <strong style="color:#ffd700">prévia do retorno</strong> antes de confirmar.</p>
+            <p>Destrói o item e recupera parte dos recursos. Custa <strong style="color:#ff6b6b">400 cristais</strong> — veja a <strong style="color:#ffd700">prévia do retorno</strong> antes de confirmar.</p>
         </div>
 
         <!-- 5. Refundição -->

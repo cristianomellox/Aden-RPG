@@ -13,6 +13,74 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
 
+        /* ═══ TUTORIAL MODAL (estilo AFK) ══════════════════════════════ */
+        #tutorialModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 10000;
+        }
+        #tutorialModal .tut-content {
+            background: #111;
+            padding: 22px 20px;
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            width: 90%; max-width: 420px;
+            position: relative !important;
+            box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
+            color: #e0dccc;
+            font-family: 'Cinzel', serif;
+            max-height: 88vh; overflow-y: auto;
+            text-shadow: none;
+            box-sizing: border-box;
+        }
+        #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
+        #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
+        #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+        .tut-title {
+            text-align: center; color: #ffd700; margin: 0 0 6px;
+            font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(255,215,0,0.5);
+            font-family: 'Cinzel', serif;
+        }
+        .tut-subtitle {
+            text-align: center; color: #888; font-size: 0.78em;
+            margin: 0 0 16px; padding-bottom: 12px;
+            border-bottom: 1px solid #333; font-style: italic;
+        }
+        .tut-section {
+            margin-bottom: 14px; padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .tut-section-title {
+            margin: 0 0 8px; font-size: 0.88em; font-weight: bold;
+            text-transform: uppercase; letter-spacing: 1px;
+            padding-bottom: 6px; border-bottom: 1px solid;
+            font-family: 'Cinzel', serif;
+        }
+        .tut-section p { margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6; }
+        .tut-info-box {
+            background: rgba(0,0,0,0.3); border-radius: 6px;
+            padding: 10px 12px; font-size: 0.82em;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tut-info-box ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+        .tut-info-box li { color: #ccc; line-height: 1.5; }
+        .tut-status-grid { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+        .tut-status-row { display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: #ccc; }
+        .tut-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; border: 2px solid; }
+        .tut-confirm-btn {
+            display: block; width: 100%; max-width: 240px; margin: 18px auto 0;
+            padding: 11px 16px; font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+            background: linear-gradient(135deg, #1a1000, #0d0800);
+            border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
+            cursor: pointer; text-align: center; transition: all 0.2s; letter-spacing: 1px;
+        }
+        .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
+
         .history-button-container {
             position: relative;
         }
@@ -29,98 +97,6 @@
             padding: 2px 5px;
             display: none;
             z-index: 10;
-        }
-
-        /* ═══ TUTORIAL MODAL (estilo AFK) ══════════════════════════════ */
-        #tutorialModal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.88);
-            backdrop-filter: blur(4px);
-            display: none;
-            align-items: center; justify-content: center;
-            z-index: 10000;
-        }
-        #tutorialModal .tut-content {
-            background: #111;
-            padding: 22px 20px;
-            border: 2px solid #ffd700;
-            border-radius: 12px;
-            width: 90%; max-width: 420px;
-            position: relative;
-            box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
-            color: #e0dccc;
-            font-family: 'Cinzel', serif;
-            max-height: 88vh; overflow-y: auto;
-            text-shadow: none;
-        }
-        #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
-        #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
-        #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
-
-        .tut-title {
-            text-align: center; color: #ffd700; margin: 0 0 6px;
-            font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
-            text-shadow: 0 0 12px rgba(255,215,0,0.5);
-            font-family: 'Cinzel', serif;
-        }
-        .tut-subtitle {
-            text-align: center; color: #888; font-size: 0.78em;
-            margin: 0 0 16px; padding-bottom: 12px;
-            border-bottom: 1px solid #333; font-style: italic;
-        }
-        .tut-section {
-            margin-bottom: 16px;
-            padding: 12px 14px;
-            background: rgba(255,255,255,0.03);
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.06);
-        }
-        .tut-section-title {
-            margin: 0 0 8px;
-            font-size: 0.9em; font-weight: bold; text-transform: uppercase;
-            letter-spacing: 1px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid;
-            font-family: 'Cinzel', serif;
-        }
-        .tut-section p {
-            margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6;
-        }
-        .tut-info-box {
-            background: rgba(0,0,0,0.3);
-            border-radius: 6px;
-            padding: 10px 12px;
-            font-size: 0.82em;
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-        .tut-info-box ul {
-            list-style: none; padding: 0; margin: 0;
-            display: flex; flex-direction: column; gap: 6px;
-        }
-        .tut-info-box li { color: #ccc; line-height: 1.5; }
-        .tut-close-btn {
-            position: absolute; top: 10px; right: 14px;
-            font-size: 26px; font-weight: bold; color: #888;
-            cursor: pointer; line-height: 1; background: none; border: none;
-        }
-        .tut-close-btn:hover { color: #ffd700; }
-        .tut-confirm-btn {
-            display: block; width: 100%; max-width: 240px;
-            margin: 18px auto 0;
-            padding: 11px 16px;
-            font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
-            background: linear-gradient(135deg, #1a1000, #0d0800);
-            border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
-            cursor: pointer; text-align: center; transition: all 0.2s;
-            letter-spacing: 1px;
-        }
-        .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
-
-        .tut-status-grid { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
-        .tut-status-row { display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: #ccc; }
-        .tut-dot {
-            width: 20px; height: 20px; border-radius: 50%;
-            flex-shrink: 0; border: 2px solid;
         }
     </style>
 </head>
@@ -297,8 +273,10 @@
     </div>
 
     <div id="tutorialModal">
-        <div class="tut-content">
-            <button class="tut-close-btn" id="closeTutorialBtn">&times;</button>
+        <div class="tut-content" style="position:relative;">
+            <button id="closeTutorialBtn" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:26px;font-weight:bold;color:#888;cursor:pointer;line-height:1;z-index:10;padding:0;"
+                onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+
             <h2 class="tut-title">⛏ Guia de Mineração</h2>
             <p class="tut-subtitle">"Conquiste minas, derrote monstros e colete cristais para sua guilda."</p>
 
@@ -347,7 +325,7 @@
                 <div class="tut-info-box">
                     <ul>
                         <li>🛡️ O <strong style="color:#ffd700">dono ataca primeiro</strong>, seguido pelo desafiante</li>
-                        <li>💀 A batalha termina quando um dos lados chega a <strong style="color:#ff6b6b">zero de vida</strong></li>
+                        <li>💀 A batalha termina quando um lado chega a <strong style="color:#ff6b6b">zero de vida</strong></li>
                         <li>🏅 Se o desafiante vencer, ele se torna o <strong style="color:#ffd700">novo dono</strong></li>
                         <li>📜 O dono pode ver o <strong style="color:#ffd700">histórico</strong> de todos os ataques recebidos</li>
                         <li>🎟️ Cada desafio consome <strong style="color:#ffd700">1 tentativa PvP</strong> (comprável com ouro, reseta diariamente)</li>

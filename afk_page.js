@@ -88,8 +88,8 @@ function mapLoadData(arr, uid) {
 // MAP LAYOUT CONSTANTS
 // =======================================================================
 const STAGES_PER_ROW  = 20;
-const MAP_LEFT_X      = 50;
-const MAP_RIGHT_X     = 1450;
+const MAP_LEFT_X      = 70;
+const MAP_RIGHT_X     = 1429;
 const MAP_ROW_START_Y = 120;
 const MAP_ROW_STEP_Y  = 100;
 const MAX_STAGES      = 100; // 5 rows × 20

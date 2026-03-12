@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="mines.css" />
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
         .history-button-container {
             position: relative;
         }
@@ -27,6 +29,98 @@
             padding: 2px 5px;
             display: none;
             z-index: 10;
+        }
+
+        /* ═══ TUTORIAL MODAL (estilo AFK) ══════════════════════════════ */
+        #tutorialModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 10000;
+        }
+        #tutorialModal .tut-content {
+            background: #111;
+            padding: 22px 20px;
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            width: 90%; max-width: 420px;
+            position: relative;
+            box-shadow: 0 0 30px rgba(255,215,0,0.2), 0 0 60px rgba(100,60,0,0.15);
+            color: #e0dccc;
+            font-family: 'Cinzel', serif;
+            max-height: 88vh; overflow-y: auto;
+            text-shadow: none;
+        }
+        #tutorialModal .tut-content::-webkit-scrollbar { width: 4px; }
+        #tutorialModal .tut-content::-webkit-scrollbar-track { background: #111; }
+        #tutorialModal .tut-content::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+        .tut-title {
+            text-align: center; color: #ffd700; margin: 0 0 6px;
+            font-size: 1.15em; text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(255,215,0,0.5);
+            font-family: 'Cinzel', serif;
+        }
+        .tut-subtitle {
+            text-align: center; color: #888; font-size: 0.78em;
+            margin: 0 0 16px; padding-bottom: 12px;
+            border-bottom: 1px solid #333; font-style: italic;
+        }
+        .tut-section {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .tut-section-title {
+            margin: 0 0 8px;
+            font-size: 0.9em; font-weight: bold; text-transform: uppercase;
+            letter-spacing: 1px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid;
+            font-family: 'Cinzel', serif;
+        }
+        .tut-section p {
+            margin: 0 0 8px; font-size: 0.82em; color: #ccc; line-height: 1.6;
+        }
+        .tut-info-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 0.82em;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tut-info-box ul {
+            list-style: none; padding: 0; margin: 0;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .tut-info-box li { color: #ccc; line-height: 1.5; }
+        .tut-close-btn {
+            position: absolute; top: 10px; right: 14px;
+            font-size: 26px; font-weight: bold; color: #888;
+            cursor: pointer; line-height: 1; background: none; border: none;
+        }
+        .tut-close-btn:hover { color: #ffd700; }
+        .tut-confirm-btn {
+            display: block; width: 100%; max-width: 240px;
+            margin: 18px auto 0;
+            padding: 11px 16px;
+            font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+            background: linear-gradient(135deg, #1a1000, #0d0800);
+            border: 1px solid #ffd700; border-radius: 8px; color: #ffd700;
+            cursor: pointer; text-align: center; transition: all 0.2s;
+            letter-spacing: 1px;
+        }
+        .tut-confirm-btn:hover { background: linear-gradient(135deg, #2a2000, #1a1200); box-shadow: 0 0 14px rgba(255,215,0,0.3); }
+
+        .tut-status-grid { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+        .tut-status-row { display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: #ccc; }
+        .tut-dot {
+            width: 20px; height: 20px; border-radius: 50%;
+            flex-shrink: 0; border: 2px solid;
         }
     </style>
 </head>
@@ -202,41 +296,87 @@
       </div>
     </div>
 
-    <div id="tutorialModal" class="modal-overlay2" style="display: none; background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%);">
-        <div class="modal-content" style="background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); text-align: left;">
-           <center><h3>Guia de Mineração</h3></center>
-            <p>Aqui você encontrará todas as informações para dominar o sistema de mineração.</p>
-            <hr>
+    <div id="tutorialModal">
+        <div class="tut-content">
+            <button class="tut-close-btn" id="closeTutorialBtn">&times;</button>
+            <h2 class="tut-title">⛏ Guia de Mineração</h2>
+            <p class="tut-subtitle">"Conquiste minas, derrote monstros e colete cristais para sua guilda."</p>
 
-          <center>  <h4>Capturando uma Mina: Combate contra Monstros</h4></center>
-            <p>Esta é a forma principal de obter uma mina que não tem dono.</p>
-            <ul>
-                <li><strong>Iniciando o Combate:</strong> Para começar a disputar uma mina, você precisa iniciar um combate contra o monstro que a protege. Um jogador <strong>não pode</strong> iniciar um combate se já for dono de uma mina. O status da mina muda de <strong>"aberta"</strong> para <strong>"disputando"</strong> quando o combate começa.</li>
-                <li><strong>Atacando o Monstro:</strong> O ataque é um processo contínuo, onde o dano que você causa é registrado. O sistema mantém um ranking de dano para cada mina em disputa, crucial para determinar o novo dono.</li>
-                <li><strong>Finalizando a Sessão:</strong> Quando a vida do monstro chega a zero ou quando o tempo termina, o sistema verifica o ranking de dano para encontrar um novo dono. O jogador com o maior dano elegível se torna o novo proprietário. Após a captura, o ranking é zerado e a mina muda para <strong>"ocupada"</strong>. Se ninguém for elegível, a mina é resetada.</li>
-            </ul>
-            <hr>
+            <!-- 1. Status das Minas -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#00bfff; border-color:#00bfff;">1. Status das Minas</h4>
+                <p>Cada mina exibe um estado que indica se ela pode ser disputada:</p>
+                <div class="tut-status-grid">
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#0d1a0d; border-color:#4CAF50;"></div>
+                        <span><strong style="color:#4CAF50">Aberta</strong> — sem dono, disponível para capturar</span>
+                    </div>
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#1a1200; border-color:#FFC107;"></div>
+                        <span><strong style="color:#FFC107">Ocupada</strong> — já possui um dono, desafie via PvP</span>
+                    </div>
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#001a1a; border-color:#2196F3;"></div>
+                        <span><strong style="color:#2196F3">Disputando</strong> — combate em andamento contra o monstro</span>
+                    </div>
+                    <div class="tut-status-row">
+                        <div class="tut-dot" style="background:#1a0808; border-color:#f44336;"></div>
+                        <span><strong style="color:#f44336">Esgotada</strong> — aguardando a próxima sessão</span>
+                    </div>
+                </div>
+            </div>
 
-         <center>  <h4>Capturando uma Mina: Combate PvP</h4></center>
-            <p>Depois que uma mina é capturada por um jogador, ela pode ser disputada através de um combate PvP.</p>
-            <ul>
-                <li><strong>Desafiando o Dono:</strong> Qualquer jogador pode desafiar o dono de uma mina. Você não pode desafiar a si mesmo. O combate PvP consome uma tentativa, que pode ser comprada com ouro. Essas tentativas também são resetadas todos os dias.</li>
-                <li><strong>Batalha:</strong> O dono da mina ataca primeiro, seguido pelo desafiante. A batalha continua até que um dos jogadores chegue a zero de vida.</li>
-                <li><strong>Consequências da Batalha:</strong> Se o desafiante vencer, ele se torna o novo dono. Se o dono atual defender, ele mantém a mina. O histórico de ataques à mina fica disponível para o dono ver.</li>
-            </ul>
-            <hr>
+            <!-- 2. Capturando via Monstro -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#ff6b6b; border-color:#ff6b6b;">2. Captura: Combate contra Monstro</h4>
+                <p>Esta é a forma principal de obter uma mina <strong style="color:#ffd700">sem dono</strong>.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>⚔️ Você <strong style="color:#ffd700">não pode</strong> iniciar combate se já for dono de uma mina</li>
+                        <li>📊 O sistema registra um <strong style="color:#ffd700">ranking de dano</strong> — quem causar mais dano vence</li>
+                        <li>🏆 Quando o monstro morre ou o tempo acaba, o jogador com <strong style="color:#ffd700">maior dano elegível</strong> torna-se o novo dono</li>
+                        <li>🔄 Se ninguém for elegível, a mina é <strong style="color:#ff9060">resetada</strong></li>
+                    </ul>
+                </div>
+            </div>
 
-         <center>  <h4>Sessões e Recompensas</h4></center>
-            <ul>
-                <li><strong>Sessão:</strong> O sistema de mineração possui sessões que duram 2 horas. Um cronômetro na interface mostra quando a próxima sessão começa (em toda hora par).</li>
-                <li><strong>Recompensas:</strong> Ao conquistar uma mina, você passa a coletar cristais passivamente. O máximo de cristais que você pode coletar é de 1500, equivalente ao tempo da sessão. Se um jogador capturar sua mina, você receberá os cristais coletados até aquele momento.</li>
-            </ul>
-            <hr>
+            <!-- 3. Combate PvP -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#c084fc; border-color:#c084fc;">3. Captura: Combate PvP</h4>
+                <p>Minas <strong style="color:#FFC107">ocupadas</strong> podem ser roubadas via PvP.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>🛡️ O <strong style="color:#ffd700">dono ataca primeiro</strong>, seguido pelo desafiante</li>
+                        <li>💀 A batalha termina quando um dos lados chega a <strong style="color:#ff6b6b">zero de vida</strong></li>
+                        <li>🏅 Se o desafiante vencer, ele se torna o <strong style="color:#ffd700">novo dono</strong></li>
+                        <li>📜 O dono pode ver o <strong style="color:#ffd700">histórico</strong> de todos os ataques recebidos</li>
+                        <li>🎟️ Cada desafio consome <strong style="color:#ffd700">1 tentativa PvP</strong> (comprável com ouro, reseta diariamente)</li>
+                    </ul>
+                </div>
+            </div>
 
-         <center>  <h4>Guilda Dominante</h4></center>
-            <p>A guilda que tiver mais membros como donos de mina, aparecerá no topo como <strong>Guilda Dominante.</strong></p>
-            
-          <center> <button id="closeTutorialBtn" class="action-btn">Fechar</button></center>
+            <!-- 4. Sessões e Recompensas -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#ffd700; border-color:#ffd700;">4. Sessões e Recompensas</h4>
+                <p>O sistema opera em ciclos de <strong style="color:#ffd700">2 horas</strong>. Um cronômetro na tela indica quando a próxima sessão começa.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>💎 Donos de mina coletam <strong style="color:#ffd700">cristais</strong> passivamente durante a sessão</li>
+                        <li>📦 Máximo de <strong style="color:#ffd700">1500 cristais</strong> por sessão</li>
+                        <li>⚠️ Se sua mina for capturada, você recebe os cristais acumulados <strong style="color:#ffd700">até aquele momento</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 5. Guilda Dominante -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#8ecf8e; border-color:#8ecf8e;">5. Guilda Dominante</h4>
+                <p>A guilda com <strong style="color:#ffd700">mais membros donos de mina</strong> ao mesmo tempo é exibida no topo da página como <strong style="color:#ffd700">Guilda Dominante</strong>. Coordene com sua guilda para dominar o mapa!</p>
+            </div>
+
+            <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+                <button class="tut-confirm-btn" id="closeTutorialBtn2">ENTENDI</button>
+            </div>
         </div>
     </div>
 
@@ -245,24 +385,18 @@
             const minatutoImg = document.getElementById("minatuto");
             const tutorialModal = document.getElementById("tutorialModal");
             const closeTutorialBtn = document.getElementById("closeTutorialBtn");
+            const closeTutorialBtn2 = document.getElementById("closeTutorialBtn2");
 
-            if (minatutoImg) {
-                minatutoImg.addEventListener("click", () => {
-                    tutorialModal.style.display = "flex";
-                });
-            }
+            const openTutorial = () => { tutorialModal.style.display = "flex"; };
+            const closeTutorial = () => { tutorialModal.style.display = "none"; };
 
-            if (closeTutorialBtn) {
-                closeTutorialBtn.addEventListener("click", () => {
-                    tutorialModal.style.display = "none";
-                });
-            }
+            if (minatutoImg) minatutoImg.addEventListener("click", openTutorial);
+            if (closeTutorialBtn) closeTutorialBtn.addEventListener("click", closeTutorial);
+            if (closeTutorialBtn2) closeTutorialBtn2.addEventListener("click", closeTutorial);
 
             if (tutorialModal) {
-                window.addEventListener("click", (event) => {
-                    if (event.target === tutorialModal) {
-                        tutorialModal.style.display = "none";
-                    }
+                tutorialModal.addEventListener("click", (event) => {
+                    if (event.target === tutorialModal) closeTutorial();
                 });
             }
         });

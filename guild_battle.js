@@ -594,16 +594,28 @@ function renderPlayerFooter(playerState, playerGarrison) {
         if (objective) {
             objName = objective.objective_type === 'nexus' ? 'Nexus' : `Ponto ${objective.objective_index}`;
         } else {
-            // Se o objetivo não está em memória, força um sync rápido
             setTimeout(pollBattleState, 1500); 
         }
-        battle.garrisonStatus.textContent = `Guarnecendo: ${objName}`;
+
+        // Barra de HP individual da guarnição
+        const remainingHp = parseInt(playerGarrison.remaining_hp || playerGarrison.player_hp || 0);
+        const maxHp = parseInt(playerGarrison.player_hp || remainingHp);
+        const pct = maxHp > 0 ? Math.round((remainingHp / maxHp) * 100) : 0;
+        const barColor = pct > 50 ? '#4caf50' : pct > 25 ? '#ff9800' : '#f44336';
+
+        battle.garrisonStatus.innerHTML = `
+            <span>Guarnecendo: <strong>${objName}</strong></span>
+            <div class="garrison-personal-hp-bar">
+                <div class="garrison-personal-hp-fill" style="width:${pct}%;background:${barColor};"></div>
+                <span class="garrison-personal-hp-text">${kFormatter(remainingHp)} / ${kFormatter(maxHp)} HP</span>
+            </div>
+        `;
         battle.garrisonStatus.className = 'garrisoned';
     } else if (playerState.last_garrison_leave_at) {
         const lastLeave = new Date(playerState.last_garrison_leave_at);
         const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
-        if (timeSinceLeave < 30) {
-            const timeLeft = 30 - timeSinceLeave;
+        if (timeSinceLeave < 60) {
+            const timeLeft = 60 - timeSinceLeave;
             battle.garrisonStatus.textContent = `Guarnição CD: ${timeLeft}s`;
             battle.garrisonStatus.className = 'cooldown';
         } else {
@@ -917,11 +929,20 @@ function handleObjectiveClick(objective) {
     const isAlreadyGarrisoningThis = currentBattleState.player_garrison && 
                                      currentBattleState.player_garrison.objective_id === fullObjective.id;
 
+    // Checa se o jogador foi EXPULSO deste objetivo (HP zerou)
+    const expelledPlayers = fullObjective.expelled_players || [];
+    const isExpelled = isOwned && expelledPlayers.includes(userId);
+
     if (isAlreadyGarrisoningThis) {
         modals.objectiveGarrisonBtn.disabled = true;
         modals.objectiveGarrisonBtn.style.filter = 'grayscale(1)';
         modals.objectiveGarrisonBtn.style.opacity = '0.6';
         modals.objectiveGarrisonBtn.title = 'Você já está guarnecendo este objetivo';
+    } else if (isExpelled) {
+        modals.objectiveGarrisonBtn.disabled = true;
+        modals.objectiveGarrisonBtn.style.filter = 'grayscale(1)';
+        modals.objectiveGarrisonBtn.style.opacity = '0.6';
+        modals.objectiveGarrisonBtn.title = 'Expulso — aguarde a guilda perder e recuperar este ponto';
     } else {
         modals.objectiveGarrisonBtn.disabled = false;
         modals.objectiveGarrisonBtn.style.filter = '';
@@ -931,9 +952,28 @@ function handleObjectiveClick(objective) {
 
     const isGarrisonedElsewhere = currentBattleState.player_garrison && 
                                   !isAlreadyGarrisoningThis;
-                                  
-    modals.objectiveGarrisonWarning.style.display = isGarrisonedElsewhere ? 'block' : 'none';
-    modals.objectiveGarrisonWarning.textContent = "Atenção: Esta ação removerá você da sua guarnição atual.";
+
+    // Mensagens de aviso / regras da guarnição
+    let warningMsg = '';
+    let warningColor = '#ffc107';
+    if (isExpelled) {
+        warningMsg = '⛔ Você foi expulso desta guarnição (HP zerou). Só poderá retornar se a guilda perder e reconquistar este objetivo.';
+        warningColor = '#f44336';
+    } else if (isGarrisonedElsewhere) {
+        const hasReducedHp = currentBattleState.player_garrison &&
+                             currentBattleState.player_garrison.remaining_hp < currentBattleState.player_garrison.player_hp;
+        warningMsg = `⚠️ Você será removido da sua guarnição atual (CD: 60s).`;
+        if (hasReducedHp) {
+            warningMsg += ` Você re-entrará neste ponto com apenas ${kFormatter(currentBattleState.player_garrison.remaining_hp)} HP restante.`;
+        }
+    } else if (isOwned && !isAlreadyGarrisoningThis && !isExpelled) {
+        warningMsg = `ℹ️ Guarnição consome 1 ação e adiciona seu HP ao ponto. Se seu HP na guarnição zerar, você é expulso e não pode retornar enquanto a guilda dominar.`;
+        warningColor = '#aaa';
+    }
+
+    modals.objectiveGarrisonWarning.style.display = warningMsg ? 'block' : 'none';
+    modals.objectiveGarrisonWarning.textContent = warningMsg;
+    modals.objectiveGarrisonWarning.style.color = warningColor;
 
     modals.objective.style.display = 'flex';
 }
@@ -1045,15 +1085,15 @@ async function pollBattleState() {
                 return;
             }
 
-            // Histórico de capturas
+            // Histórico de capturas: marca como processadas mas NÃO toca sons (já ocorreram)
             processedCaptureTimestamps.clear();
             const captures = (data.instance && data.instance.recent_captures) ? data.instance.recent_captures : [];
             if (captures.length > 0) {
                 captures.forEach(c => processedCaptureTimestamps.add(c.timestamp));
                 lastCaptureTimestamp = captures[captures.length - 1].timestamp; 
                 
-                // GARANTIA: Banner no Boot - processa capturas recentes
-                handleNewCaptures(captures);
+                // skipSounds = true: eventos históricos, não reproduz áudio
+                handleNewCaptures(captures, true);
             } else {
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
@@ -1096,7 +1136,8 @@ async function pollBattleState() {
     }
 }
 
-async function handleNewCaptures(newCaptures) {
+// skipSounds = true quando chamado no boot/re-poll para não repetir sons históricos
+async function handleNewCaptures(newCaptures, skipSounds = false) {
     if (!newCaptures || newCaptures.length === 0) return;
 
     const playerIdsToFetch = [...new Set(
@@ -1128,8 +1169,11 @@ async function handleNewCaptures(newCaptures) {
 
         captureNotificationQueue.push({ playerName, guildName, objectiveName });
         
-        const isAlly = c.guild_id === userGuildId;
-        playCaptureSound(c.objective_type, c.objective_index, isAlly);
+        // Sons são omitidos no boot/re-poll — esses eventos já ocorreram
+        if (!skipSounds) {
+            const isAlly = c.guild_id === userGuildId;
+            playCaptureSound(c.objective_type, c.objective_index, isAlly);
+        }
     });
 
     processCaptureNotificationQueue();
@@ -1172,6 +1216,7 @@ function processHeartbeat(data) {
                     fullObj.current_hp = heartbeatObj.current_hp;
                     fullObj.garrison_hp = heartbeatObj.garrison_hp;
                     fullObj.owner_guild_id = heartbeatObj.owner_guild_id;
+                    fullObj.expelled_players = heartbeatObj.expelled_players || [];
                 }
             });
 
@@ -1365,6 +1410,47 @@ function startGlobalUITimer() {
 // FUNÇÃO DE INICIALIZAÇÃO
 // =================================================================
 
+function injectGarrisonHpBarStyles() {
+    if (document.getElementById('garrisonHpBarStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'garrisonHpBarStyles';
+    style.textContent = `
+        #garrison-status.garrisoned {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        .garrison-personal-hp-bar {
+            position: relative;
+            width: 160px;
+            height: 12px;
+            background: #222;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+        .garrison-personal-hp-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.4s ease, background 0.4s ease;
+        }
+        .garrison-personal-hp-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.65em;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px #000;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 function setupDOMElements() {
     screens = {
         loading: $('loadingScreen'),
@@ -1460,6 +1546,7 @@ async function init() {
     userId = session.user.id; 
 
     createCaptureNotificationUI();
+    injectGarrisonHpBarStyles();
     document.body.addEventListener('click', unlockBattleAudio, { once: true });
 
 
@@ -1626,9 +1713,9 @@ async function init() {
                 const lastLeave = new Date(currentBattleState.player_state.last_garrison_leave_at);
                 const timeSinceLeave = Math.floor((new Date() - lastLeave) / 1000);
                 
-                if (timeSinceLeave < 30) {
-                    const timeLeft = 30 - timeSinceLeave;
-                    showAlert(`Aguarde 30 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
+                if (timeSinceLeave < 60) {
+                    const timeLeft = 60 - timeSinceLeave;
+                    showAlert(`Aguarde 60 segundos para guarnecer novamente. (Faltam ${timeLeft}s)`);
                     return;
                 }
             }
@@ -1652,22 +1739,35 @@ async function init() {
                         if (currentBattleState.player_garrison && userPlayerStats) {
                             const oldObj = currentBattleState.objectives.find(o => o.id === currentBattleState.player_garrison.objective_id);
                             if (oldObj) {
-                                oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - parseInt(userPlayerStats.health, 10));
+                                const oldRemaining = currentBattleState.player_garrison.remaining_hp || parseInt(userPlayerStats.health, 10);
+                                oldObj.garrison_hp = Math.max(0, (oldObj.garrison_hp || 0) - oldRemaining);
                             }
                             currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                            currentBattleState.player_state.last_garrison_remaining_hp = currentBattleState.player_garrison.remaining_hp;
+                            currentBattleState.player_state.last_garrison_objective_id = currentBattleState.player_garrison.objective_id;
                         }
                         
                         optimisticUpdatePlayerActions(1);
                         
+                        // Determina HP a adicionar (restante ou cheio)
+                        const playerHpFull = parseInt(userPlayerStats.health, 10);
+                        const lastRemaining = currentBattleState.player_state.last_garrison_remaining_hp;
+                        const lastObjId = currentBattleState.player_state.last_garrison_objective_id;
+                        const hpToAdd = (lastObjId === selectedObjective.id && lastRemaining > 0)
+                            ? lastRemaining
+                            : playerHpFull;
+
                         currentBattleState.player_garrison = {
                             objective_id: selectedObjective.id,
+                            player_hp: playerHpFull,
+                            remaining_hp: hpToAdd,
                             started_at: new Date().toISOString()
                         };
                         
                         if (userPlayerStats) {
                             const newObj = currentBattleState.objectives.find(o => o.id === selectedObjective.id);
                             if (newObj) {
-                                 newObj.garrison_hp = (newObj.garrison_hp || 0) + parseInt(userPlayerStats.health, 10);
+                                 newObj.garrison_hp = (newObj.garrison_hp || 0) + hpToAdd;
                             }
                         }
                         

@@ -51,6 +51,189 @@ async function getLocalUserId() {
     return data?.session?.user?.id || null;
 }
 
+
+// =======================================================================
+// EPIC COMBAT EFFECTS
+// =======================================================================
+function _injectBossEpicStyles() {
+    if (document.getElementById('sb-epic-styles')) return;
+    const css = `
+    @keyframes sb-boss-flash  { 0%{filter:brightness(1) drop-shadow(0 0 16px #f80);} 35%{filter:brightness(3.8) drop-shadow(0 0 30px #fff);} 100%{filter:brightness(1) drop-shadow(0 0 8px rgba(255,80,0,.4));} }
+    @keyframes sb-boss-crit   { 0%{filter:sepia(1) saturate(4) brightness(1) drop-shadow(0 0 16px #fa0);} 35%{filter:sepia(1) saturate(7) brightness(3.5) drop-shadow(0 0 40px #ffd700);} 100%{filter:brightness(1) drop-shadow(0 0 8px rgba(255,80,0,.4));} }
+    @keyframes sb-boss-float  { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-20px);} }
+    @keyframes sb-ring        { 0%{transform:translate(-50%,-50%) scale(0.1);opacity:.95;} 100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;} }
+    @keyframes sb-ring2       { 0%{transform:translate(-50%,-50%) scale(0.1);opacity:.85;} 100%{transform:translate(-50%,-50%) scale(2.8);opacity:0;} }
+    @keyframes sb-spark       { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0);opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d));opacity:0;} }
+    @keyframes sb-edge-flash  { 0%,100%{opacity:0;} 25%{opacity:1;} }
+    @keyframes sb-shake-cont  { 0%{transform:translate(0,0);} 10%{transform:translate(-5px,-4px);} 20%{transform:translate(6px,3px);} 30%{transform:translate(-6px,4px);} 40%{transform:translate(5px,-3px);} 50%{transform:translate(-4px,5px);} 60%{transform:translate(6px,-4px);} 70%{transform:translate(-5px,3px);} 80%{transform:translate(4px,-5px);} 90%{transform:translate(-3px,4px);} 100%{transform:translate(0,0);} }
+    @keyframes sb-player-flash{ 0%{filter:brightness(1);} 30%{filter:brightness(2.5) saturate(0);} 100%{filter:brightness(1);} }
+    @keyframes sb-crit-label  { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 15%{opacity:1;transform:translateX(-50%) scale(1.15);} 80%{opacity:1;} 100%{opacity:0;transform:translateX(-50%) translateY(-22px);} }
+    .sb-ring  { position:absolute; border-radius:50%; pointer-events:none; z-index:20; transform:translate(-50%,-50%); animation:sb-ring  0.65s ease-out forwards; }
+    .sb-ring2 { position:absolute; border-radius:50%; pointer-events:none; z-index:20; transform:translate(-50%,-50%); animation:sb-ring2 0.8s  ease-out 0.07s forwards; }
+    .sb-spark { position:absolute; border-radius:50%; pointer-events:none; z-index:21; transform:translate(-50%,-50%); animation:sb-spark 0.55s ease-out forwards; }
+    .sb-crit-label { font-family:'Cinzel',Georgia,serif; font-size:1.1em; font-weight:bold; color:#ffd700;
+        text-shadow:0 0 10px #ff8800,2px 2px 3px #000; position:absolute; left:50%;
+        transform:translateX(-50%); z-index:22; pointer-events:none; white-space:nowrap;
+        animation:sb-crit-label 1.2s ease-out forwards; }
+    `;
+    const s = document.createElement('style');
+    s.id = 'sb-epic-styles';
+    s.textContent = css;
+    document.head.appendChild(s);
+}
+
+// Called when the PLAYER attacks the BOSS
+function _epicPlayerAttack(isCrit) {
+    _injectBossEpicStyles();
+    const bossEl  = document.getElementById('bossImage');
+    const container = document.getElementById('sbContainer');
+    const flash   = document.getElementById('sb-screen-flash');
+    if (!bossEl || !container) return;
+
+    // Boss image flash
+    bossEl.style.animation = 'none';
+    void bossEl.offsetWidth;
+    bossEl.style.animation = isCrit
+        ? 'sb-boss-crit 0.6s ease-out forwards, sb-boss-float 5s ease-in-out infinite 0.61s'
+        : 'sb-boss-flash 0.42s ease-out forwards, sb-boss-float 5s ease-in-out infinite 0.43s';
+
+    // Screen flash
+    if (flash) {
+        flash.style.background = isCrit
+            ? 'radial-gradient(ellipse at center, transparent 40%, rgba(255,200,0,.28) 100%)'
+            : 'radial-gradient(ellipse at center, transparent 50%, rgba(255,80,0,.18) 100%)';
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, isCrit ? 450 : 280);
+    }
+
+    // Container shake on crit
+    if (isCrit) {
+        container.style.animation = 'none';
+        void container.offsetWidth;
+        container.style.animation = 'sb-shake-cont 0.6s cubic-bezier(.36,.07,.19,.97) both';
+        setTimeout(() => { container.style.animation = ''; }, 620);
+    }
+
+    // Spawn rings & sparks positioned on boss image center
+    const bossRect = bossEl.getBoundingClientRect();
+    const cRect    = container.getBoundingClientRect();
+    const cx = bossRect.left - cRect.left + bossRect.width  / 2;
+    const cy = bossRect.top  - cRect.top  + bossRect.height / 2;
+
+    const ringCount = isCrit ? 2 : 1;
+    for (let r = 0; r < ringCount; r++) {
+        const ring = document.createElement('div');
+        ring.className = r === 0 ? 'sb-ring' : 'sb-ring2';
+        const sz = isCrit ? 110 : 85;
+        ring.style.cssText = `left:${cx}px;top:${cy}px;width:${sz}px;height:${sz}px;`
+            + (isCrit ? 'border:4px solid rgba(255,215,0,.9);box-shadow:0 0 18px rgba(255,215,0,.6);'
+                      : 'border:3px solid rgba(255,140,0,.85);box-shadow:0 0 12px rgba(255,100,0,.45);');
+        container.appendChild(ring);
+        ring.addEventListener('animationend', () => ring.remove());
+    }
+
+    const nSparks = isCrit ? 18 : 10;
+    const spCols  = isCrit ? ['#ffd700','#ffaa00','#fff','#ffcc44'] : ['#fff','#ff9900','#ffcc55'];
+    for (let i = 0; i < nSparks; i++) {
+        const sp = document.createElement('div');
+        sp.className = 'sb-spark';
+        const angle = (360 / nSparks) * i + (Math.random() - 0.5) * 22;
+        const dist  = 70 + Math.random() * 90;
+        const sz    = isCrit ? (5 + Math.random() * 6) : (3 + Math.random() * 5);
+        sp.style.cssText = `left:${cx}px;top:${cy}px;width:${sz}px;height:${sz}px;`
+            + `background:${spCols[Math.floor(Math.random() * spCols.length)]};`
+            + `--a:${angle}deg;--d:${dist}px;animation-delay:${Math.random() * 0.08}s;`
+            + `box-shadow:0 0 5px ${isCrit ? '#ffa000' : '#ff7000'};`;
+        container.appendChild(sp);
+        sp.addEventListener('animationend', () => sp.remove());
+    }
+
+    if (isCrit) {
+        const lbl = document.createElement('div');
+        lbl.className = 'sb-crit-label';
+        lbl.style.cssText = `left:${cx}px;top:${cy - 80}px;`;
+        lbl.textContent = '✦ CRÍTICO! ✦';
+        container.appendChild(lbl);
+        lbl.addEventListener('animationend', () => lbl.remove());
+    }
+}
+
+// Called when the BOSS attacks the PLAYER
+function _epicBossAttack(evaded) {
+    _injectBossEpicStyles();
+    const flash     = document.getElementById('sb-screen-flash');
+    const playerEl  = document.getElementById('playerAvatar');
+    const container = document.getElementById('sbContainer');
+    if (!container) return;
+
+    if (evaded) return; // no effects for miss
+
+    // Red edge flash
+    if (flash) {
+        flash.style.background = 'radial-gradient(ellipse at center, transparent 30%, rgba(220,20,20,.45) 100%)';
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 380);
+    }
+
+    // Player avatar flash
+    if (playerEl) {
+        playerEl.style.animation = 'none';
+        void playerEl.offsetWidth;
+        playerEl.style.animation = 'sb-player-flash 0.45s ease-out forwards';
+        setTimeout(() => { playerEl.style.animation = ''; }, 460);
+    }
+
+    // Spawn sparks on player UI area
+    const playerRow = document.getElementById('playerInfoRow');
+    if (playerRow) {
+        const prRect = playerRow.getBoundingClientRect();
+        const cRect  = container.getBoundingClientRect();
+        const px = prRect.left - cRect.left + prRect.width  / 2;
+        const py = prRect.top  - cRect.top  + prRect.height / 2;
+
+        // Ring
+        const ring = document.createElement('div');
+        ring.className = 'sb-ring';
+        ring.style.cssText = `left:${px}px;top:${py}px;width:60px;height:60px;`
+            + 'border:3px solid rgba(220,50,50,.9);box-shadow:0 0 12px rgba(220,0,0,.5);';
+        container.appendChild(ring);
+        ring.addEventListener('animationend', () => ring.remove());
+
+        // Sparks
+        for (let i = 0; i < 8; i++) {
+            const sp = document.createElement('div');
+            sp.className = 'sb-spark';
+            const angle = (360 / 8) * i + (Math.random() - 0.5) * 20;
+            const dist  = 35 + Math.random() * 45;
+            const sz    = 3 + Math.random() * 3;
+            sp.style.cssText = `left:${px}px;top:${py}px;width:${sz}px;height:${sz}px;`
+                + `background:#ff4444;--a:${angle}deg;--d:${dist}px;`
+                + `animation-delay:${Math.random() * 0.06}s;`
+                + `box-shadow:0 0 4px #ff0000;`;
+            container.appendChild(sp);
+            sp.addEventListener('animationend', () => sp.remove());
+        }
+    }
+}
+
+// Dynamic HP bar color (boss: green → yellow → red)
+function _updateBossHpBarColor(pct) {
+    const fill = document.getElementById('bossHpFill');
+    if (!fill) return;
+    if (pct > 50)       fill.style.background = 'linear-gradient(to right, #28a028, #40c040)';
+    else if (pct > 25)  fill.style.background = 'linear-gradient(to right, #c08000, #e0a000)';
+    else                fill.style.background = 'linear-gradient(to right, #dc2020, #ff5a00)';
+}
+
+// Dynamic HP bar color (player: orange/gold → yellow → red)
+function _updatePlayerHpBarColor(pct) {
+    const fill = document.getElementById('playerHpFill');
+    if (!fill) return;
+    if (pct > 50)       fill.style.background = 'linear-gradient(to right, #28a028, #40c040)';
+    else if (pct > 25)  fill.style.background = 'linear-gradient(to right, #c08000, #e0a000)';
+    else                fill.style.background = 'linear-gradient(to right, #c02020, #e03030)';
+}
+
 // ================= CONFIGURAÇÕES =================
 const BOSS_ATTACK_INTERVAL = 45000; 
 const ATTACK_REGEN_MS = 60000;      
@@ -579,6 +762,7 @@ function playerAttack() {
     state.totalHits++; 
 
     triggerShake('bossImage'); 
+    _epicPlayerAttack(isCrit);
     createFloatingText(dmg, isCrit ? 'crit' : 'normal', 'bossImage');
     
     const aud = isCrit ? AUDIO_CRIT : AUDIO_HIT;
@@ -587,6 +771,7 @@ function playerAttack() {
 
     saveState();
     updateBars();
+    _updateBossHpBarColor((state.bossHp / state.maxBossHp) * 100);
 
     if (state.bossHp <= 0) {
         finishBattle(true);
@@ -603,12 +788,14 @@ function performBossAttack() {
         const evaded = (Math.random() * 100) < s.evasion;
 
         if (evaded) {
+            _epicBossAttack(true);
             createFloatingText("Errou!", "normal", "playerUiArea");
         } else {
             let baseDmg = Math.floor(state.maxPlayerHp * 0.15); 
             let dmg = Math.max(1, baseDmg - Math.floor(s.defense / 5));
             
             state.playerHp = Math.max(0, state.playerHp - dmg);
+            _epicBossAttack(false);
             createFloatingText(`-${dmg}`, "player-dmg", "playerAvatar");
             triggerShake('playerAvatar'); 
             
@@ -622,6 +809,7 @@ function performBossAttack() {
         }
         saveState();
         updateBars();
+        _updatePlayerHpBarColor((state.playerHp / state.maxPlayerHp) * 100);
     });
 }
 
@@ -771,10 +959,12 @@ function updateBars() {
     const bPct = (state.bossHp / state.maxBossHp) * 100;
     document.getElementById('bossHpFill').style.width = `${bPct}%`;
     document.getElementById('bossHpText').textContent = `${nFmt(state.bossHp)} / ${nFmt(state.maxBossHp)}`;
+    _updateBossHpBarColor(bPct);
     
     const pPct = (state.playerHp / state.maxPlayerHp) * 100;
     document.getElementById('playerHpFill').style.width = `${pPct}%`;
     document.getElementById('playerHpText').textContent = `${nFmt(state.playerHp)} / ${nFmt(state.maxPlayerHp)}`;
+    _updatePlayerHpBarColor(pPct);
 }
 
 function createFloatingText(text, className, targetId) {

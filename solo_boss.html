@@ -142,10 +142,17 @@ if ('serviceWorker' in navigator) {
         #bossHpFill {
             height: 100%;
             width: 100%;
-            background: linear-gradient(to right, #ff4433, red);
+            background: linear-gradient(to right, #dc2020, #ff5a00);
             border-right: 1px solid yellow;
-            transition: width 0.3s ease;
+            transition: width 0.35s ease-out, background 0.5s ease;
+            position: relative;
         }
+        #bossHpFill::after {
+            content:''; position:absolute; top:0; left:-40%; width:30%; height:100%;
+            background: linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);
+            animation: sb-hp-sheen 2.2s infinite;
+        }
+        @keyframes sb-hp-sheen { 0%{left:-40%} 100%{left:140%} }
         #bossHpText {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
@@ -200,10 +207,10 @@ if ('serviceWorker' in navigator) {
         }
         #playerHpFill {
             height: 100%;
-            background: linear-gradient(to right, orange, gold);
+            background: linear-gradient(to right, #28a028, #40c040);
             border-right: 1px solid yellow;
             width: 100%;
-            transition: width 0.3s ease;
+            transition: width 0.35s ease-out, background 0.5s ease;
         }
         #playerHpText {
             position: absolute; top: 50%; left: 50%;
@@ -413,6 +420,7 @@ font-size: 1em;
             <div id="sbTimer">15:00</div>
         </div>
 
+        <div id="sb-screen-flash" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:15;opacity:0;transition:opacity 0.08s;"></div>
         <div id="monsterVisualArea">
             <img id="bossImage" src="" alt="Boss">
         </div>

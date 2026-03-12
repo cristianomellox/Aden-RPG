@@ -815,6 +815,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+
+    // ── STYLED REWARD MESSAGE HELPER ──────────────────────────────
+    function styledRewardMsg(parts) {
+        // parts: array of {text, xp, gold, bonus_xp}
+        // Builds HTML with gradient spans for XP and gold values
+        return parts.map(p => {
+            if (p.type === 'xp') {
+                return `<span class="reward-xp-val">${p.val} XP</span>`;
+            } else if (p.type === 'gold') {
+                return `<span class="reward-gold-val">${p.val} Ouro</span>`;
+            } else {
+                return p.val;
+            }
+        }).join('');
+    }
+
     // ── COLLECT REWARDS ────────────────────────────────────────────
     if (collectBtn) {
         collectBtn.addEventListener("click", async () => {
@@ -840,9 +856,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 renderPlayerData();
                 localStorage.removeItem('aden_player_last_fetch_ts');
 
-                let msg = `Você coletou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro!`;
-                if (bonusXp > 0) msg += `\n✨ Bônus da Asa: +${formatNumberCompact(bonusXp)} XP`;
-                resultText.textContent = msg;
+                let msgParts = [
+                    { type: 'text', val: 'Você coletou ' },
+                    { type: 'xp', val: formatNumberCompact(xpGained) },
+                    { type: 'text', val: ' e ' },
+                    { type: 'gold', val: formatNumberCompact(goldGained) },
+                    { type: 'text', val: '!' },
+                ];
+                if (bonusXp > 0) {
+                    msgParts.push({ type: 'text', val: '<br>✨ Bônus da Asa: ' });
+                    msgParts.push({ type: 'xp', val: '+' + formatNumberCompact(bonusXp) });
+                }
+                resultText.innerHTML = styledRewardMsg(msgParts);
                 resultModal.style.display = "flex";
             } else {
                 collectBtn.disabled = false;
@@ -895,7 +920,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
 
         if (isFarming) {
-            resultText.textContent = `FARM CONCLUÍDO! Ganhou ${formatNumberCompact(xpGained)} XP e ${formatNumberCompact(goldGained)} Ouro! (Estágio mantido)`;
+            resultText.innerHTML = styledRewardMsg([
+                { type: 'text', val: 'FARM CONCLUÍDO! Ganhou ' },
+                { type: 'xp', val: formatNumberCompact(xpGained) },
+                { type: 'text', val: ' e ' },
+                { type: 'gold', val: formatNumberCompact(goldGained) },
+                { type: 'text', val: ' (Estágio mantido)' },
+            ]);
             resultModal.style.display = "flex";
             if (leveledUp) showLevelUpBalloon(newLevel);
         } else {
@@ -972,10 +1003,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                         setTimeout(animateAttack, 900);
                     } else {
                         // End of combat
-                        let message = data.venceu
-                            ? `⚔ VITÓRIA! Ganhou ${formatNumberCompact(data.xp_ganho)} XP, ${formatNumberCompact(data.gold_ganho)} Ouro e AVANÇOU de estágio!`
-                            : `💀 Você não derrotou o monstro. Melhore seus equipamentos e tente novamente!`;
-                        if (resultText)  resultText.textContent = message;
+                        if (data.venceu) {
+                            resultText.innerHTML = styledRewardMsg([
+                                { type: 'text', val: '⚔ VITÓRIA! Ganhou ' },
+                                { type: 'xp', val: formatNumberCompact(data.xp_ganho) },
+                                { type: 'text', val: ', ' },
+                                { type: 'gold', val: formatNumberCompact(data.gold_ganho) },
+                                { type: 'text', val: ' e AVANÇOU de estágio!' },
+                            ]);
+                        } else {
+                            resultText.innerHTML = '💀 Você não derrotou o monstro. Melhore seus equipamentos e tente novamente!';
+                        }
                         if (resultModal) resultModal.style.display = "flex";
                         if (data.leveled_up) showLevelUpBalloon(data.new_level);
                     }

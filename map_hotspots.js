@@ -58,8 +58,8 @@
                 z-index: 20;
                 pointer-events: all;
                 display: inline-flex;
-                flex-direction: column;
-                align-items: flex-start;
+                flex-direction: row;
+                align-items: center;
             }
 
             /* ── Botão colapsado: apenas o ícone GPS ── */
@@ -88,7 +88,7 @@
                 display: none;
                 align-items: center;
                 gap: 8px;
-                margin-top: 6px;
+                margin-left: 6px;
                 background: rgba(0, 0, 0, 0.82);
                 border: 1.5px solid rgba(255, 220, 0, 0.5);
                 border-radius: 9px;
@@ -101,8 +101,8 @@
                 display: flex;
             }
             @keyframes gps-panel-in {
-                from { opacity: 0; transform: translateY(-4px); }
-                to   { opacity: 1; transform: translateY(0); }
+                from { opacity: 0; transform: translateX(-6px); }
+                to   { opacity: 1; transform: translateX(0); }
             }
 
             /* ── Textos do painel ── */
@@ -232,7 +232,7 @@
         panel.className = 'gps-panel';
         panel.innerHTML =
             `<div class="gps-label">
-                <span class="gps-line1">Você está</span>
+                <span class="gps-line1">Você está em</span>
                 <span class="gps-line2">Caçando em ${regionName}</span>
             </div>
             <a class="gps-ir-btn" href="${url}">ir ›</a>`;

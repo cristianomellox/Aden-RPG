@@ -50,74 +50,140 @@
         const style = document.createElement('style');
         style.id = 'gps-badge-style';
         style.innerHTML = `
+            /* ── Wrapper posicionado no canto do mapa ── */
             #${GPS_BADGE_ID} {
                 position: absolute;
                 top: 12px;
                 left: 12px;
                 z-index: 20;
+                pointer-events: all;
+                display: inline-flex;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            /* ── Botão colapsado: apenas o ícone GPS ── */
+            #${GPS_BADGE_ID} .gps-icon-btn {
                 display: flex;
                 align-items: center;
-                gap: 6px;
-                background: rgba(0, 0, 0, 0.72);
-                border: 1px solid rgba(255, 195, 195, 0.5);
-                border-radius: 8px;
-                padding: 5px 10px 5px 6px;
-                text-decoration: none;
+                justify-content: center;
+                width: 38px;
+                height: 38px;
+                background: rgba(0, 0, 0, 0.70);
+                border: 1.5px solid rgba(255, 220, 0, 0.55);
+                border-radius: 10px;
                 cursor: pointer;
                 backdrop-filter: blur(4px);
-                transition: background 0.2s, border-color 0.2s;
-                pointer-events: all;
+                transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+                position: relative;
             }
-            #${GPS_BADGE_ID}:hover {
-                background: rgba(255, 195, 195, 0.18);
-                border-color: rgba(255, 195, 195, 0.9);
+            #${GPS_BADGE_ID} .gps-icon-btn:hover {
+                background: rgba(255, 220, 0, 0.15);
+                border-color: rgba(255, 220, 0, 0.9);
+                box-shadow: 0 0 8px rgba(255, 220, 0, 0.4);
             }
-            #${GPS_BADGE_ID} .gps-label {
-                color: #ffc3c3;
-                font-size: 11px;
-                font-weight: bold;
+
+            /* ── Painel expandido (oculto por padrão) ── */
+            #${GPS_BADGE_ID} .gps-panel {
+                display: none;
+                align-items: center;
+                gap: 8px;
+                margin-top: 6px;
+                background: rgba(0, 0, 0, 0.82);
+                border: 1.5px solid rgba(255, 220, 0, 0.5);
+                border-radius: 9px;
+                padding: 6px 10px 6px 8px;
+                backdrop-filter: blur(5px);
+                animation: gps-panel-in 0.18s ease-out;
                 white-space: nowrap;
-                pointer-events: none;
-                line-height: 1.2;
-                text-shadow: 0 1px 3px rgba(0,0,0,0.8);
             }
-            #${GPS_BADGE_ID} .gps-label span {
-                display: block;
+            #${GPS_BADGE_ID}.gps-open .gps-panel {
+                display: flex;
+            }
+            @keyframes gps-panel-in {
+                from { opacity: 0; transform: translateY(-4px); }
+                to   { opacity: 1; transform: translateY(0); }
+            }
+
+            /* ── Textos do painel ── */
+            #${GPS_BADGE_ID} .gps-label {
+                display: flex;
+                flex-direction: column;
+                pointer-events: none;
+                line-height: 1.25;
+                text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+            }
+            #${GPS_BADGE_ID} .gps-label .gps-line1 {
                 font-size: 9px;
                 font-weight: normal;
-                color: #ccc;
+                color: yellow;
                 text-transform: uppercase;
+                letter-spacing: 0.6px;
+            }
+            #${GPS_BADGE_ID} .gps-label .gps-line2 {
+                font-size: 11px;
+                font-weight: bold;
+                color: #ffc3c3;
+            }
+
+            /* ── Botão "ir" ── */
+            #${GPS_BADGE_ID} .gps-ir-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 3px 9px;
+                background: rgba(255, 220, 0, 0.18);
+                border: 1px solid rgba(255, 220, 0, 0.7);
+                border-radius: 6px;
+                color: yellow;
+                font-size: 11px;
+                font-weight: bold;
+                text-decoration: none;
+                cursor: pointer;
+                transition: background 0.15s, box-shadow 0.15s;
+                white-space: nowrap;
                 letter-spacing: 0.5px;
             }
+            #${GPS_BADGE_ID} .gps-ir-btn:hover {
+                background: rgba(255, 220, 0, 0.35);
+                box-shadow: 0 0 6px rgba(255, 220, 0, 0.5);
+            }
+
+            /* ── Animações do ícone GPS ── */
             @keyframes gps-pulse {
                 0%   { opacity: 1; transform: scale(1); }
-                50%  { opacity: 0.55; transform: scale(0.88); }
+                50%  { opacity: 0.45; transform: scale(0.82); }
                 100% { opacity: 1; transform: scale(1); }
             }
             #${GPS_BADGE_ID} .gps-dot {
-                animation: gps-pulse 1.6s ease-in-out infinite;
+                animation: gps-pulse 1.4s ease-in-out infinite;
+            }
+
+            /* Halo amarelo pulsando ao redor do botão de ícone */
+            @keyframes gps-halo {
+                0%   { box-shadow: 0 0 0px 0px rgba(255,220,0,0.55); }
+                60%  { box-shadow: 0 0 0px 6px rgba(255,220,0,0.0); }
+                100% { box-shadow: 0 0 0px 0px rgba(255,220,0,0.0); }
+            }
+            #${GPS_BADGE_ID} .gps-icon-btn {
+                animation: gps-halo 2s ease-out infinite;
             }
         `;
         document.head.appendChild(style);
     }
 
-    // ── SVG do ícone GPS (30×30 px) ──────────────────────────────────────────────
+    // ── SVG do ícone GPS (30×30 px) com pino e ponto amarelos ───────────────────
     function criarSvgGPS() {
         return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30" fill="none">
-            <!-- Sombra do pino -->
-            <ellipse cx="15" cy="26.5" rx="4" ry="1.5" fill="rgba(0,0,0,0.35)"/>
-            <!-- Corpo do pino -->
+            <ellipse cx="15" cy="26.5" rx="4" ry="1.5" fill="rgba(0,0,0,0.4)"/>
             <path d="M15 2C10.58 2 7 5.58 7 10c0 6.63 8 17 8 17s8-10.37 8-17C23 5.58 19.42 2 15 2z"
-                  fill="#ff6b6b" stroke="#ff9898" stroke-width="0.8"/>
-            <!-- Círculo interno branco (buraco do pino) -->
-            <circle cx="15" cy="10" r="3.2" fill="white" opacity="0.92"/>
-            <!-- Ponto pulsante no centro -->
-            <circle class="gps-dot" cx="15" cy="10" r="1.6" fill="#ff3b3b"/>
-            <!-- Cruz de GPS (linhas cardeais) -->
-            <line x1="15" y1="3" x2="15" y2="5.5" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
-            <line x1="15" y1="14.5" x2="15" y2="17" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
-            <line x1="8" y1="10" x2="10.5" y2="10" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
-            <line x1="19.5" y1="10" x2="22" y2="10" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+                  fill="#f5c800" stroke="#ffe55a" stroke-width="0.8"/>
+            <circle cx="15" cy="10" r="3.2" fill="#1a1400" opacity="0.88"/>
+            <circle class="gps-dot" cx="15" cy="10" r="1.7" fill="yellow"/>
+            <line x1="15" y1="2.5" x2="15" y2="5.5" stroke="white" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
+            <line x1="15" y1="14.5" x2="15" y2="17.5" stroke="white" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
+            <line x1="7.5" y1="10" x2="10.5" y2="10" stroke="white" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
+            <line x1="19.5" y1="10" x2="22.5" y2="10" stroke="white" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
         </svg>`;
     }
 
@@ -151,15 +217,41 @@
         const url = REGION_NAME_TO_URL[regionName];
         if (!url) return; // região desconhecida — não exibe
 
-        const badge = document.createElement('a');
+        // Wrapper principal (div — o redirect fica no botão "ir")
+        const badge = document.createElement('div');
         badge.id = GPS_BADGE_ID;
-        badge.href = url;
 
-        badge.innerHTML = criarSvgGPS() +
+        // Botão colapsado: apenas o ícone GPS
+        const iconBtn = document.createElement('div');
+        iconBtn.className = 'gps-icon-btn';
+        iconBtn.title = 'Caçando em ' + regionName;
+        iconBtn.innerHTML = criarSvgGPS();
+
+        // Painel expandido (oculto por padrão via CSS)
+        const panel = document.createElement('div');
+        panel.className = 'gps-panel';
+        panel.innerHTML =
             `<div class="gps-label">
-                <span>Você está</span>
-                Caçando em ${regionName}
-            </div>`;
+                <span class="gps-line1">Você está em</span>
+                <span class="gps-line2">Caçando em ${regionName}</span>
+            </div>
+            <a class="gps-ir-btn" href="${url}">ir ›</a>`;
+
+        badge.appendChild(iconBtn);
+        badge.appendChild(panel);
+
+        // Toggle ao clicar no ícone
+        iconBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            badge.classList.toggle('gps-open');
+        });
+
+        // Fechar ao clicar fora do badge
+        document.addEventListener('click', function fecharFora(e) {
+            if (!badge.contains(e.target)) {
+                badge.classList.remove('gps-open');
+            }
+        });
 
         mapImage.appendChild(badge);
     }

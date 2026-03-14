@@ -157,7 +157,7 @@
 
         badge.innerHTML = criarSvgGPS() +
             `<div class="gps-label">
-                <span>Você está em</span>
+                <span>Você está</span>
                 Caçando em ${regionName}
             </div>`;
 

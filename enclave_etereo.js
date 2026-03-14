@@ -584,7 +584,183 @@ async function handleActivateShield(){
 function updateMyShieldIcon(active){const el=document.getElementById('myShieldIcon');if(el)el.style.display=active?'block':'none';}
 
 // ── DRAG DO MAPA ─────────────────────────────────────────────
-function enableMapInteraction(){const cont=document.getElementById('mapContainer'),map=document.getElementById('map');if(!map||!cont)return;let drag=false,sx,sy,cx=0,cy=0,vx=0,vy=0,lt=0,aId=null;const limits=()=>{const cr=cont.getBoundingClientRect(),m=map.style.transform.match(/scale\(([^)]+)\)/),sc=m?parseFloat(m[1]):1.1;return{minX:Math.min(0,cr.width-1500*sc),maxX:0,minY:Math.min(0,cr.height-1500*sc),maxY:0};};const setPos=(x,y)=>{const L=limits();cx=Math.max(L.minX,Math.min(x,L.maxX));cy=Math.max(L.minY,Math.min(y,L.maxY));const m=map.style.transform.match(/scale\(([^)]+)\)/);map.style.transform=`translate(${cx}px,${cy}px) ${m?`scale(${m[1]})`:'scale(1.1)'}`;};const inertia=()=>{cancelAnimationFrame(aId);if(drag)return;vx*=0.94;vy*=0.94;setPos(cx+vx,cy+vy);if(Math.abs(vx)>0.4||Math.abs(vy)>0.4)aId=requestAnimationFrame(inertia);};const startDrag=e=>{if(e.touches?.length>1)return;drag=true;try{if(audioCtx.state==='suspended')audioCtx.resume();}catch{}amb.play().catch(()=>{});map.style.cursor='grabbing';sx=e.clientX??e.touches[0].clientX;sy=e.clientY??e.touches[0].clientY;vx=vy=0;lt=performance.now();cancelAnimationFrame(aId);};const onDrag=e=>{if(!drag)return;e.preventDefault();const nx=e.clientX??e.touches[0].clientX,ny=e.clientY??e.touches[0].clientY,dt=performance.now()-lt;if(dt>0){vx=(nx-sx)/dt;vy=(ny-sy)/dt;}setPos(cx+(nx-sx),cy+(ny-sy));sx=nx;sy=ny;lt=performance.now();};const endDrag=()=>{drag=false;map.style.cursor='grab';if(Math.abs(vx)>0.2||Math.abs(vy)>0.2){vx*=10;vy*=10;inertia();}};map.addEventListener('mousedown',startDrag,{passive:true});window.addEventListener('mousemove',onDrag,{passive:false});window.addEventListener('mouseup',endDrag,{passive:true});map.addEventListener('touchstart',startDrag,{passive:true});window.addEventListener('touchmove',onDrag,{passive:false});window.addEventListener('touchend',endDrag,{passive:true});map.style.cursor='grab';}
+function enableMapInteraction() {
+    const cont = document.getElementById('mapContainer');
+    const map  = document.getElementById('map');
+    if (!map || !cont) return;
+
+    // Guard contra dupla inicialização
+    if (map._interactionEnabled) return;
+    map._interactionEnabled = true;
+
+    // ── Estado de posição e escala ──────────────────────────────────────
+    // Lê a escala inicial que o CSS já definiu (ex: scale(1.1))
+    const cssScale = (() => {
+        const m = map.style.transform.match(/scale\(([^)]+)\)/);
+        return m ? parseFloat(m[1]) : 1.1;
+    })();
+    let cx = 0, cy = 0, currentScale = cssScale;
+    const MIN_SCALE = 0.5;   // zoom-out máximo
+    const MAX_SCALE = 3.0;   // zoom-in máximo
+
+    // ── Inércia ─────────────────────────────────────────────────────────
+    let vx = 0, vy = 0, lt = 0, aId = null;
+    const FRICTION = 0.94;
+
+    // ── Drag ────────────────────────────────────────────────────────────
+    let drag = false, sx = 0, sy = 0;
+
+    // ── Pinch ───────────────────────────────────────────────────────────
+    let isPinching = false;
+    let pinchStartDist = 0, pinchStartScale = 1;
+    let pinchFocalX = 0, pinchFocalY = 0;
+    let pinchStartTx = 0, pinchStartTy = 0;
+
+    // ── Limites dinâmicos ───────────────────────────────────────────────
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
+    function recalcLimits() {
+        const cr = cont.getBoundingClientRect();
+        minX = Math.min(0, cr.width  - 1500 * currentScale);
+        minY = Math.min(0, cr.height - 1500 * currentScale);
+        maxX = 0; maxY = 0;
+    }
+    recalcLimits();
+    window.addEventListener('resize', recalcLimits);
+
+    map.style.touchAction = 'none';
+    map.style.userSelect  = 'none';
+
+    // Aplica transform completo (pinch) — recalcula limites com nova escala
+    function applyTransform(x, y, s) {
+        s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+        const cr = cont.getBoundingClientRect();
+        const sw = 1500 * s, sh = 1500 * s;
+        x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
+        y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
+        cx = x; cy = y; currentScale = s;
+        map.style.transform = `translate(${x}px,${y}px) scale(${s})`;
+        recalcLimits();
+    }
+
+    // Aplica transform leve (drag/inércia) — usa limites já calculados
+    function setPos(x, y) {
+        cx = Math.max(minX, Math.min(maxX, x));
+        cy = Math.max(minY, Math.min(maxY, y));
+        map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
+    }
+
+    // ── Inércia ─────────────────────────────────────────────────────────
+    function inertia() {
+        cancelAnimationFrame(aId);
+        if (drag) return;
+        vx *= FRICTION; vy *= FRICTION;
+        setPos(cx + vx, cy + vy);
+        if (Math.abs(vx) > 0.4 || Math.abs(vy) > 0.4)
+            aId = requestAnimationFrame(inertia);
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+    function touchDist(e) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    function touchMid(e) {
+        return {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+    }
+
+    // ── Drag handlers ───────────────────────────────────────────────────
+    function startDrag(e) {
+        drag = true;
+        // Resume áudio (mantém lógica original)
+        try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {}
+        amb.play().catch(() => {});
+        map.style.cursor = 'grabbing';
+        sx = e.clientX ?? e.touches[0].clientX;
+        sy = e.clientY ?? e.touches[0].clientY;
+        vx = vy = 0;
+        lt = performance.now();
+        cancelAnimationFrame(aId);
+    }
+
+    function onDrag(e) {
+        if (!drag) return;
+        e.preventDefault();
+        const nx = e.clientX ?? e.touches[0].clientX;
+        const ny = e.clientY ?? e.touches[0].clientY;
+        const dt = performance.now() - lt;
+        if (dt > 0) { vx = (nx - sx) / dt; vy = (ny - sy) / dt; }
+        setPos(cx + (nx - sx), cy + (ny - sy));
+        sx = nx; sy = ny;
+        lt = performance.now();
+    }
+
+    function endDrag() {
+        drag = false;
+        map.style.cursor = 'grab';
+        if (Math.abs(vx) > 0.2 || Math.abs(vy) > 0.2) { vx *= 10; vy *= 10; inertia(); }
+    }
+
+    // ── Touch unificado (drag + pinch) ──────────────────────────────────
+    function onTouchStart(e) {
+        if (e.touches.length >= 2) {
+            isPinching = true;
+            drag = false;
+            cancelAnimationFrame(aId);
+            pinchStartDist  = touchDist(e);
+            pinchStartScale = currentScale;
+            const mid = touchMid(e);
+            const cr  = cont.getBoundingClientRect();
+            pinchFocalX = mid.x - cr.left;
+            pinchFocalY = mid.y - cr.top;
+            pinchStartTx = cx;
+            pinchStartTy = cy;
+        } else if (e.touches.length === 1 && !isPinching) {
+            startDrag(e);
+        }
+    }
+
+    function onTouchMove(e) {
+        if (e.touches.length >= 2 && isPinching) {
+            e.preventDefault();
+            const newScale  = pinchStartScale * (touchDist(e) / pinchStartDist);
+            const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
+            const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
+            applyTransform(
+                pinchFocalX - mapPointX * newScale,
+                pinchFocalY - mapPointY * newScale,
+                newScale
+            );
+        } else if (e.touches.length === 1 && !isPinching) {
+            onDrag(e);
+        }
+    }
+
+    function onTouchEnd(e) {
+        if (isPinching && e.touches.length < 2) {
+            isPinching = false;
+            vx = vy = 0;
+            recalcLimits();
+        }
+        if (e.touches.length === 0) endDrag();
+    }
+
+    // ── Mouse (desktop) ─────────────────────────────────────────────────
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag,    { passive: false });
+    window.addEventListener('mouseup',   endDrag,   { passive: true });
+
+    // ── Touch (mobile) ──────────────────────────────────────────────────
+    map.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
+
+    map.style.cursor = 'grab';
+}
 
 // ── WANDER ───────────────────────────────────────────────────
 function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=Math.max(0,Math.random()*(w-70))+'px';el.style.top=Math.max(0,Math.random()*(h-90))+'px';wanderTimers.push(setTimeout(pause,3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}

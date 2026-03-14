@@ -2678,37 +2678,51 @@ setTimeout(() => {
 }, 600);
 
 
-/* === MAP INTERACTION INSERTED BY CHATGPT === */
-// Cria a interação do mapa (arrastar com mouse/touch) com inércia. Não altera nenhuma outra lógica.
+/* === MAP INTERACTION: DRAG + INÉRCIA + PINCH-TO-ZOOM === */
+// Cria a interação do mapa (arrastar com mouse/touch) com inércia e pinch-to-zoom. Não altera nenhuma outra lógica.
 function enableMapInteraction() {
     const map = document.getElementById('mapImage');
     if (!map) return;
 
+    // Guarda contra dupla inicialização
+    if (map._interactionEnabled) return;
+    map._interactionEnabled = true;
+
+    // ── Estado de posição e escala ──────────────────────────────────────────
+    let currentX = 0, currentY = 0;
+    let currentScale = 1;
+    const MIN_SCALE = 0.45; // limite mínimo de zoom-out
+    const MAX_SCALE = 2.0;  // limite máximo de zoom-in
+
+    // ── Inércia ─────────────────────────────────────────────────────────────
+    let velocityX = 0, velocityY = 0;
+    let lastDragTime = 0, lastDragX = 0, lastDragY = 0;
+    let animationFrameId = null;
+    const FRICTION = 0.98;
+
+    // ── Drag ────────────────────────────────────────────────────────────────
     let isDragging = false;
     let startX = 0, startY = 0;
-    let currentX = 0, currentY = 0;
-    let minX, maxX, minY, maxY;
 
-    // NOVAS VARIÁVEIS PARA INÉRCIA
-    let velocityX = 0;
-    let velocityY = 0;
-    let lastDragTime = 0;
-    let lastDragX = 0;
-    let lastDragY = 0;
-    let animationFrameId = null;
-    const FRICTION = 0.98; // Fator de desaceleração (ajuste se quiser mais ou menos inércia)
+    // ── Pinch ───────────────────────────────────────────────────────────────
+    let isPinching = false;
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
+    let pinchFocalX = 0, pinchFocalY = 0;
+    let pinchStartTx = 0, pinchStartTy = 0;
 
-    // calcula limites para evitar o mapa ser arrastado completamente pra fora da viewport
+    // ── Limites dinâmicos (recalculados a cada mudança de escala) ───────────
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
     function recalcLimits() {
         const container = document.getElementById('mapContainer');
         if (!container) return;
-        const containerRect = container.getBoundingClientRect();
-        const mapWidth = map.offsetWidth || 3000;
-        const mapHeight = map.offsetHeight || 3000;
-
-        minX = Math.min(0, containerRect.width - mapWidth);
+        const cr = container.getBoundingClientRect();
+        const scaledW = (map.offsetWidth  || 1500) * currentScale;
+        const scaledH = (map.offsetHeight || 1600) * currentScale;
+        minX = Math.min(0, cr.width  - scaledW);
+        minY = Math.min(0, cr.height - scaledH);
         maxX = 0;
-        minY = Math.min(0, containerRect.height - mapHeight);
         maxY = 0;
     }
 
@@ -2716,117 +2730,164 @@ function enableMapInteraction() {
     window.addEventListener('resize', recalcLimits);
 
     map.style.touchAction = 'none';
-    map.style.userSelect = 'none';
+    map.style.userSelect  = 'none';
 
-    function setTransform(x, y) {
-        // aplica limites
-        if (typeof minX !== 'undefined') {
-            x = Math.max(minX, Math.min(maxX, x));
-            y = Math.max(minY, Math.min(maxY, y));
+    // ── Aplica transform com recálculo de limites (usado pelo pinch) ────────
+    function applyTransform(x, y, s) {
+        s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+        const container = document.getElementById('mapContainer');
+        if (container) {
+            const cr = container.getBoundingClientRect();
+            const sw = (map.offsetWidth  || 1500) * s;
+            const sh = (map.offsetHeight || 1600) * s;
+            x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
+            y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
         }
-        currentX = x; currentY = y;
-        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(1)`; // mantém o zoom reduzido
+        currentX = x; currentY = y; currentScale = s;
+        map.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+        recalcLimits();
     }
-    
+
+    // ── Aplica transform leve (usado pelo drag/inércia) ─────────────────────
+    function setTransform(x, y) {
+        x = Math.max(minX, Math.min(maxX, x));
+        y = Math.max(minY, Math.min(maxY, y));
+        currentX = x; currentY = y;
+        map.style.transform = `translate(${x}px, ${y}px) scale(${currentScale})`;
+    }
+
+    // ── Inércia ─────────────────────────────────────────────────────────────
     function inertiaAnimation() {
-        // Aplica atrito (desaceleração)
         velocityX *= FRICTION;
         velocityY *= FRICTION;
-
-        // Calcula a nova posição
-        const nextX = currentX + velocityX;
-        const nextY = currentY + velocityY;
-
-        setTransform(nextX, nextY);
-
-        // Verifica se a velocidade é insignificante para parar a animação
+        setTransform(currentX + velocityX, currentY + velocityY);
         if (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
             animationFrameId = requestAnimationFrame(inertiaAnimation);
         } else {
-            // Garante que a inércia para de vez
-            velocityX = 0;
-            velocityY = 0;
+            velocityX = 0; velocityY = 0;
             animationFrameId = null;
         }
     }
 
+    // ── Helpers ─────────────────────────────────────────────────────────────
     function getPoint(e) {
-        if (e.touches && e.touches.length) {
-            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        } else {
-            return { x: e.clientX, y: e.clientY };
-        }
+        return e.touches && e.touches.length
+            ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+            : { x: e.clientX, y: e.clientY };
     }
 
-    function startDrag(e) {
-        // Cancela qualquer animação de inércia anterior
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-        }
+    function touchDist(e) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
 
+    function touchMid(e) {
+        return {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+    }
+
+    // ── Drag handlers ───────────────────────────────────────────────────────
+    function startDrag(e) {
+        if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
         const p = getPoint(e);
         isDragging = true;
         startX = p.x - currentX;
         startY = p.y - currentY;
         map.style.cursor = 'grabbing';
-        
-        // Prepara para calcular a velocidade
-        lastDragX = p.x;
-        lastDragY = p.y;
+        lastDragX = p.x; lastDragY = p.y;
         lastDragTime = performance.now();
     }
 
-    function onDrag(e) {
+    function continueDrag(e) {
         if (!isDragging) return;
         e.preventDefault();
         const p = getPoint(e);
-        const nextX = p.x - startX;
-        const nextY = p.y - startY;
-        setTransform(nextX, nextY);
-        
-        // Calcula a velocidade (momentum)
-        const currentTime = performance.now();
-        const deltaTime = currentTime - lastDragTime;
-
-        if (deltaTime > 0) {
-            // Velocidade em pixels por milissegundo
-            velocityX = (p.x - lastDragX) / deltaTime;
-            velocityY = (p.y - lastDragY) / deltaTime;
+        setTransform(p.x - startX, p.y - startY);
+        const now = performance.now();
+        const dt  = now - lastDragTime;
+        if (dt > 0) {
+            velocityX = (p.x - lastDragX) / dt;
+            velocityY = (p.y - lastDragY) / dt;
         }
-
-        lastDragX = p.x;
-        lastDragY = p.y;
-        lastDragTime = currentTime;
+        lastDragX = p.x; lastDragY = p.y;
+        lastDragTime = now;
     }
 
     function endDrag() {
+        if (!isDragging) return;
         isDragging = false;
         map.style.cursor = 'grab';
-        
-        // Inicia a inércia se a velocidade for significativa
-        // O fator 10 é um ajuste para converter a velocidade (px/ms) em um deslocamento (px)
         if (Math.abs(velocityX * 10) > 2 || Math.abs(velocityY * 10) > 2) {
-            // Multiplicamos a velocidade para que o deslize inicial seja mais perceptível
-            velocityX *= 10; 
-            velocityY *= 10;
+            velocityX *= 10; velocityY *= 10;
             inertiaAnimation();
         } else {
-            velocityX = 0;
-            velocityY = 0;
+            velocityX = 0; velocityY = 0;
         }
     }
 
-    map.addEventListener('mousedown', startDrag, { passive: true });
-    window.addEventListener('mousemove', onDrag, { passive: false });
-    window.addEventListener('mouseup', endDrag, { passive: true });
+    // ── Touch unificado (drag + pinch) ──────────────────────────────────────
+    function onTouchStart(e) {
+        if (e.touches.length >= 2) {
+            isPinching = true;
+            isDragging  = false;
+            if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+            pinchStartDist  = touchDist(e);
+            pinchStartScale = currentScale;
+            const mid = touchMid(e);
+            const container = document.getElementById('mapContainer');
+            const cr = container ? container.getBoundingClientRect() : { left: 0, top: 0 };
+            pinchFocalX = mid.x - cr.left;
+            pinchFocalY = mid.y - cr.top;
+            pinchStartTx = currentX;
+            pinchStartTy = currentY;
+        } else if (e.touches.length === 1 && !isPinching) {
+            startDrag(e);
+        }
+    }
 
-    map.addEventListener('touchstart', startDrag, { passive: true });
-    window.addEventListener('touchmove', onDrag, { passive: false });
-    window.addEventListener('touchend', endDrag, { passive: true });
+    function onTouchMove(e) {
+        if (e.touches.length >= 2 && isPinching) {
+            e.preventDefault();
+            const newDist  = touchDist(e);
+            const newScale = pinchStartScale * (newDist / pinchStartDist);
+            // Mantém o ponto focal fixo durante o zoom
+            const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
+            const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
+            applyTransform(
+                pinchFocalX - mapPointX * newScale,
+                pinchFocalY - mapPointY * newScale,
+                newScale
+            );
+        } else if (e.touches.length === 1 && !isPinching) {
+            continueDrag(e);
+        }
+    }
+
+    function onTouchEnd(e) {
+        if (isPinching && e.touches.length < 2) {
+            isPinching = false;
+            velocityX = 0; velocityY = 0;
+            recalcLimits();
+        }
+        if (e.touches.length === 0) {
+            endDrag();
+        }
+    }
+
+    // ── Mouse (desktop) ─────────────────────────────────────────────────────
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', continueDrag, { passive: false });
+    window.addEventListener('mouseup',   endDrag,      { passive: true });
+
+    // ── Touch (mobile) ──────────────────────────────────────────────────────
+    map.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
 
     map.style.cursor = 'grab';
-
     setTimeout(recalcLimits, 100);
 }
 

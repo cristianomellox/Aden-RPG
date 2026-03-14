@@ -188,17 +188,42 @@
     }
 
     // ── Lê o estado de atividade do localStorage ─────────────────────────────────
+    // Espelha a mesma lógica de getActivity() dos arquivos de região para manter consistência.
     function lerAtividadeAtual() {
         try {
             const raw = localStorage.getItem(ACTIVITY_KEY);
             if (!raw) return null;
             const a = JSON.parse(raw);
-            // Valida: deve ser hunting e não ter expirado (6h máx, igual à lógica dos JS de região)
-            if (a && a.type === 'hunting' && a.region) {
-                const started = a.started_at || 0;
-                if (Date.now() - started > 6 * 60 * 60 * 1000) return null; // expirado
+            if (!a || a.type !== 'hunting' || !a.region) return null;
+
+            const now = Date.now();
+
+            // 1. Penalidade de morte: se pvp_dead e dead_until no futuro → ainda bloqueado,
+            //    mas não está "caçando" de verdade — não exibe badge.
+            if (a.pvp_dead) return null;
+
+            // 2. PvP puro: usa pvp_only_expires_at como expiração precisa.
+            //    Se expirou, a sessão acabou — limpa e não exibe.
+            if (a.pvp_only) {
+                if (!a.pvp_only_expires_at || now > a.pvp_only_expires_at) {
+                    try { localStorage.removeItem(ACTIVITY_KEY); } catch (e) {}
+                    return null;
+                }
                 return a;
             }
+
+            // 3. Caça normal: usa hunt_ends_at como expiração precisa.
+            //    Fallback de 6h se a entrada for antiga e não tiver o campo.
+            if (a.hunt_ends_at && now > a.hunt_ends_at) {
+                try { localStorage.removeItem(ACTIVITY_KEY); } catch (e) {}
+                return null;
+            }
+            if (!a.hunt_ends_at && a.started_at && (now - a.started_at) > 6 * 60 * 60 * 1000) {
+                try { localStorage.removeItem(ACTIVITY_KEY); } catch (e) {}
+                return null;
+            }
+
+            return a;
         } catch (e) {}
         return null;
     }
@@ -232,7 +257,7 @@
         panel.className = 'gps-panel';
         panel.innerHTML =
             `<div class="gps-label">
-                <span class="gps-line1">Você está em</span>
+                <span class="gps-line1">Você está</span>
                 <span class="gps-line2">Caçando em ${regionName}</span>
             </div>
             <a class="gps-ir-btn" href="${url}">ir ›</a>`;
@@ -319,4 +344,21 @@
     } else {
         document.addEventListener('DOMContentLoaded', adicionarHotspotsAoMapa);
     }
+
+    // ── Polling: reavalia o badge a cada 15s enquanto a página estiver aberta ──
+    // Garante que o badge suma quando o PvP puro ou a caça normal expirarem,
+    // sem precisar recarregar o Index.
+    setInterval(function() {
+        const mapImage = document.getElementById('mapImage');
+        if (!mapImage) return;
+        atualizarBadgeGPS(mapImage);
+    }, 15_000);
+
+    // Reavalia também quando o jogador volta para a aba (ex: veio da página de caça)
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState !== 'visible') return;
+        const mapImage = document.getElementById('mapImage');
+        if (!mapImage) return;
+        atualizarBadgeGPS(mapImage);
+    });
 })();

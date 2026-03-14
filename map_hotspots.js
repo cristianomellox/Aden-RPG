@@ -232,7 +232,7 @@
         panel.className = 'gps-panel';
         panel.innerHTML =
             `<div class="gps-label">
-                <span class="gps-line1">Você está em</span>
+                <span class="gps-line1">Você está</span>
                 <span class="gps-line2">Caçando em ${regionName}</span>
             </div>
             <a class="gps-ir-btn" href="${url}">ir ›</a>`;

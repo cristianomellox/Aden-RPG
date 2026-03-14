@@ -2507,7 +2507,8 @@ buyButtons.forEach(button => {
         purchaseHandler = async () => {
             purchaseConfirmModal.style.display = 'none'; // Esconde o modal de confirmação
             button.disabled = true;
-            shopMessage.textContent = 'Processando sua compra...';
+            shopMessage.textContent = ''; // Limpa mensagem antiga do modal
+            showFloatingMessage('Processando sua compra...');
 
             try {
                 // A RPC agora retorna JSONB com os dados
@@ -2516,7 +2517,7 @@ buyButtons.forEach(button => {
                 });
                 if (error) throw error;
 
-                shopMessage.textContent = data.message;
+                showFloatingMessage(data.message);
                 
                 // 1. Atualiza SALDO localmente sem refresh completo
                 if (data.new_gold !== undefined) {
@@ -2529,7 +2530,7 @@ buyButtons.forEach(button => {
                 }
 
             } catch (error) {
-                shopMessage.textContent = `Erro: ${error.message}`;
+                showFloatingMessage(`Erro: ${error.message}`);
             } finally {
                 button.disabled = false;
             }

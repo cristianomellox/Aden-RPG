@@ -631,7 +631,7 @@ function formatTimeCombat(totalSeconds) {
       lbl.textContent = '✦ CRÍTICO! ✦';
       targetElement.appendChild(lbl);
       lbl.addEventListener('animationend', () => lbl.remove(), { once: true });
-      try { playSound('critical', { volume: 0.03 }); } catch(_) {}
+      try { playSound('critical', { volume: 0.15 }); } catch(_) {}
     } else {
       el.textContent = Number(damage).toLocaleString();
       el.className = 'mine-damage-number';
@@ -2070,7 +2070,7 @@ function formatTimeCombat(totalSeconds) {
                 tgtAv.classList.remove('shake-animation'); void tgtAv.offsetWidth; tgtAv.classList.add('shake-animation');
                 setTimeout(() => tgtAv.classList.remove('shake-animation'), 320);
               }
-              try { turn.critical ? playSound('critical', { volume: 0.03 }) : playSound('normal', { volume: 0.5 }); } catch(_) {}
+              try { turn.critical ? playSound('critical', { volume: 0.15 }) : playSound('normal', { volume: 0.5 }); } catch(_) {}
             }
             await new Promise(r => setTimeout(r, 950));
         }

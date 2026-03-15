@@ -351,7 +351,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   let pendingBatch = 0;              
   let pendingDamageBatch = 0;        
   let batchFlushTimer = null;        
-  let currentMonsterHealthGlobal = 0; 
+  let currentMonsterHealthGlobal = 0;
+  // Último HP confirmado pelo servidor — usado para reverter o HP local
+  // quando um batch é rejeitado por falta de estamina (evita HP travado em 0 localmente
+  // enquanto o servidor ainda tem HP positivo).
+  let lastKnownServerHp = 0;
   
   // CONFIGURAÇÃO DE BATCH
   let knownParticipantCount = 0;     
@@ -1579,6 +1583,7 @@ function formatTimeCombat(totalSeconds) {
       maxMonsterHealth = Number(cavern.initial_monster_health || 1);
       
       currentMonsterHealthGlobal = cavern.monster_health;
+      lastKnownServerHp = cavern.monster_health; // ancora HP no valor real do servidor ao entrar
       updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
       
       await getOrUpdatePlayerStatsCache();
@@ -1656,6 +1661,29 @@ function formatTimeCombat(totalSeconds) {
 
           if (error) throw error;
           if (!data.success) {
+              // ── CASO ESPECIAL: sem estamina no servidor ─────────────────────────
+              // Não exibe modal de erro (confuso para o usuário) nem fecha o combate.
+              // Em vez disso: reverte o HP local para o último valor confirmado pelo
+              // servidor (o HP local pode ter ido a 0 de forma otimista enquanto o
+              // servidor ainda tinha HP positivo), sincroniza a estamina e mantém a
+              // tela de combate aberta para o jogador esperar a regeneração.
+              const isStaminaError = (typeof data.al === 'number' && data.al === 0)
+                  || (data.message && data.message.toLowerCase().includes('sem ataques'));
+
+              if (isStaminaError) {
+                  if (typeof data.al === 'number') {
+                      localAttacksLeft = data.al;
+                  }
+                  // Reverte o HP local para o último valor sólido vindo do servidor
+                  if (lastKnownServerHp > 0) {
+                      currentMonsterHealthGlobal = lastKnownServerHp;
+                      updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
+                  }
+                  updateAttacksDisplay();
+                  syncAttacksState(); // aciona o timer de regen para o jogador saber quando pode voltar
+                  return; // permanece no combate — sem modal, sem fechar a UI
+              }
+              // ── Outros erros: comportamento original ────────────────────────────
               console.warn("Erro no sync:", data.message);
               showModalAlert(data.message);
               syncAttacksState();
@@ -1673,10 +1701,12 @@ function formatTimeCombat(totalSeconds) {
                   currentMonsterHealthGlobal = data.hp;
                   updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
               }
+              lastKnownServerHp = data.hp; // ancora para reversão em caso de "Sem ataques"
           } else {
               currentMonsterHealthGlobal = data.hp;
               updateHpBar(currentMonsterHealthGlobal, maxMonsterHealth);
               localAttacksLeft = data.al;
+              lastKnownServerHp = data.hp; // ancora para reversão em caso de "Sem ataques"
           }
 
           updateAttacksDisplay();
@@ -2040,7 +2070,7 @@ function formatTimeCombat(totalSeconds) {
                 tgtAv.classList.remove('shake-animation'); void tgtAv.offsetWidth; tgtAv.classList.add('shake-animation');
                 setTimeout(() => tgtAv.classList.remove('shake-animation'), 320);
               }
-              try { turn.critical ? playSound('critical') : playSound('normal'); } catch(_) {}
+              try { turn.critical ? playSound('critical', { volume: 0.03 }) : playSound('normal', { volume: 0.5 }); } catch(_) {}
             }
             await new Promise(r => setTimeout(r, 950));
         }

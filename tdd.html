@@ -9,112 +9,717 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
-    <link rel="stylesheet" href="guild.css" /> 
+    <link rel="stylesheet" href="guild.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&display=swap" rel="stylesheet">
+
     <style>
-      /* Garante que o conteúdo do modal de vídeo TDD ocupe toda a altura da viewport */
-#tddStoryModal.modal-overlay2 .modal-content2 {
-    /* Força altura total da viewport (tela) */
-    width: 100vw !important;
-    height: 100vh !important; 
-    
-    /* Usa Flexbox para o conteúdo do modal (videoContainer + botão Fechar) */
-    display: flex;
-    flex-direction: column;
-    
-    /* Remove margens/preenchimentos que podem interferir no cálculo de 100vh */
-    padding: 0 !important; 
-    border-radius: 0 !important;
-    border: none !important;
-}
+        /* =============================================
+           BASE
+        ============================================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* O container do vídeo ocupa todo o espaço restante do modal */
-#tddStoryModal #videoContainer {
-    flex-grow: 1; /* Permite que ocupe o máximo de espaço possível */
-    width: 100%;
-    /* Altura será determinada pelo flex-grow, não precisa de 'height: 100%' ou 'height: 100vh' */
-}
+        body {
+            background-color: #0a0a0a;
+            background-image:
+                linear-gradient(to bottom,
+                    rgba(5,0,10,0.75) 0%,
+                    rgba(5,0,10,0.55) 40%,
+                    rgba(5,0,10,0.25) 100%
+                ),
+                url('https://aden-rpg.pages.dev/assets/tdd_andar.webp');
+            background-size: cover;
+            background-position: center top;
+            background-attachment: fixed;
+            color: #e0dccc;
+            font-family: 'Cinzel', serif;
+            overflow-x: hidden;
+            padding-bottom: 90px;
+        }
 
-/* Garante que o iframe use 100% da altura do seu pai (#videoContainer) */
-#tddStoryModal #videoContainer iframe {
-    height: 100%;
-    width: 100%;
-}
-/* Garante que o container do vídeo ocupe todo o espaço vertical restante */
-#videoContainer {
-    /* * Usa flex-grow: 1 para fazer este elemento 
-     * crescer e preencher o espaço restante no body (que é um flex-container vertical)
-     */
-    flex-grow: 1; 
-    
-    /* Configura este container como um flex-container para posicionar o iframe */
-    display: flex;
-    
-    /* Garante que ele ocupe 100% da largura horizontal */
-    width: 100%; 
-    
-    /* Opcional: Garante que o vídeo se centralize se sobrar espaço */
-    justify-content: center;
-    align-items: center; 
-}
+        /* =============================================
+           TOP BAR
+        ============================================= */
+        #playerTopBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 200;
+            background-color: #111;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+        }
 
-/* Garante que o iframe (o vídeo) use 100% da altura e largura do seu pai (#videoContainer) */
-#videoContainer iframe {
-    /* O iframe já tem width="100%" height="100%" no HTML, 
-       mas reforçamos aqui para a regra do CSS */
-    width: 100%;
-    height: 100%;
-}
-/* Correção para a página do vídeo TDD para que ele ocupe toda a altura */
+        .top-bar-link {
+            display: flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+        }
 
-/* 1. Zera o padding-bottom de 100px que está no body em style.css */
-/* Isso permite que o #videoContainer preencha toda a tela */
-body {
-    padding-bottom: 0px !important;
-}
+        #pageTitle {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 0.85em;
+            color: #c9a94a;
+            text-shadow: 0 0 10px rgba(201,169,74,0.5);
+            letter-spacing: 0.05em;
+        }
 
-/* 2. Garante que o container do vídeo ocupe todo o espaço vertical restante */
-#videoContainer {
-    /* Permite que ocupe o espaço restante no body */
-    flex-grow: 1; 
-    
-    /* Necessário para que o iframe dentro dele use 100% de sua altura */
-    display: flex;
-    width: 100%; 
-    
-    /* Garante que a altura mínima seja de 0 para evitar estouro em alguns navegadores */
-    min-height: 0; 
-}
+        /* Botão de vídeo no topo */
+        #openVideoBtn {
+            background: none;
+            border: 1px solid rgba(201,169,74,0.4);
+            border-radius: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #c9a94a;
+            font-family: 'Cinzel', serif;
+            font-size: 0.65em;
+            letter-spacing: 0.05em;
+            transition: background 0.2s, border-color 0.2s;
+        }
 
-/* 3. Garante que o iframe preencha 100% da altura do seu contêiner (#videoContainer) */
-#videoContainer iframe {
-    width: 100%;
-    height: 100vh;
-}
+        #openVideoBtn:active {
+            background: rgba(201,169,74,0.15);
+        }
+
+        /* =============================================
+           HERO BANNER
+        ============================================= */
+        #storyHero {
+            width: 100%;
+            min-height: 260px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 20px 16px 32px;
+            margin-top: 50px;
+            background:
+                linear-gradient(to bottom,
+                    rgba(5,0,10,0.1) 0%,
+                    rgba(10,0,20,0.3) 50%,
+                    rgba(10,10,10,0.85) 100%
+                );
+            overflow: hidden;
+        }
+
+        /* Partículas de chamas/sombra no hero */
+        #storyHero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 120%, rgba(120,0,0,0.35) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-eyebrow {
+            font-size: 0.6em;
+            letter-spacing: 0.25em;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .hero-title {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 1.55em;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1.3;
+            color: #e0dccc;
+            text-shadow:
+                0 0 30px rgba(180,30,30,0.8),
+                0 0 60px rgba(120,0,0,0.5),
+                2px 2px 4px #000;
+            position: relative;
+        }
+
+        /* SVG decorativo abaixo do título */
+        .hero-divider {
+            margin-top: 14px;
+            opacity: 0.8;
+            position: relative;
+        }
+
+        /* =============================================
+           SCROLL / CONTEÚDO
+        ============================================= */
+        #storyScroll {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 0 18px 20px;
+        }
+
+        /* ---- Capítulo ---- */
+        .chapter {
+            margin-bottom: 36px;
+            position: relative;
+        }
+
+        .chapter-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .chapter-icon {
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+
+        .chapter-label {
+            font-size: 0.55em;
+            letter-spacing: 0.3em;
+            color: #7a6a3a;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .chapter-title {
+            font-family: 'Cinzel', serif;
+            font-size: 0.9em;
+            font-weight: 700;
+            color: #c9a94a;
+            letter-spacing: 0.1em;
+            text-align: center;
+            text-shadow: 0 0 12px rgba(201,169,74,0.35);
+            text-transform: uppercase;
+        }
+
+        /* Separador de capítulo */
+        .chapter-sep {
+            display: block;
+            width: 100%;
+            margin: 10px 0 0;
+            opacity: 0.45;
+        }
+
+        /* ---- Parágrafos ---- */
+        .chapter p {
+            font-family: 'Cinzel', serif;
+            font-size: 0.8em;
+            line-height: 1.85;
+            color: #cec8b4;
+            text-align: justify;
+            margin-bottom: 14px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
+        /* ---- Fala/citação ---- */
+        .spoken-line {
+            display: block;
+            margin: 18px 0;
+            padding: 14px 18px;
+            border-left: 3px solid rgba(180,30,30,0.7);
+            background: linear-gradient(to right, rgba(120,0,0,0.15), transparent);
+            font-style: italic;
+            font-size: 0.82em;
+            color: #e8d0c0;
+            letter-spacing: 0.02em;
+            line-height: 1.7;
+            text-shadow: 0 0 8px rgba(200,60,60,0.25);
+        }
+
+        /* ---- Destaque de nome/lugar ---- */
+        .lore-name {
+            color: #c9a94a;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .lore-dark {
+            color: #b06060;
+            font-weight: 600;
+        }
+
+        /* ---- Separador entre capítulos ---- */
+        .big-sep {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0 28px;
+            opacity: 0.5;
+        }
+        .big-sep-line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #c9a94a, transparent);
+        }
+
+        /* ---- Box de conclusão / aviso ---- */
+        .lore-epilogue {
+            margin-top: 24px;
+            padding: 18px 16px;
+            border: 1px solid rgba(201,169,74,0.3);
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(20,16,10,0.9), rgba(30,20,12,0.95));
+            box-shadow: 0 0 18px rgba(201,169,74,0.1), inset 0 0 40px rgba(0,0,0,0.4);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .lore-epilogue::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 0%, rgba(180,20,20,0.12) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .lore-epilogue p {
+            font-size: 0.8em;
+            line-height: 1.8;
+            color: #cec8b4;
+            text-align: center;
+            position: relative;
+        }
+
+        .lore-epilogue .epilogue-name {
+            display: block;
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 1.1em;
+            color: #c9a94a;
+            margin-top: 14px;
+            letter-spacing: 0.08em;
+            text-shadow: 0 0 15px rgba(201,169,74,0.5);
+            position: relative;
+        }
+
+        /* =============================================
+           BOTÃO FLUTUANTE DE VÍDEO
+        ============================================= */
+        #floatingVideoBtn {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 150;
+            background: linear-gradient(135deg, #1a0505, #3a0808);
+            border: 1px solid rgba(200,50,50,0.5);
+            border-radius: 30px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(180,20,20,0.35), 0 4px 16px rgba(0,0,0,0.6);
+            font-family: 'Cinzel', serif;
+            font-size: 0.75em;
+            color: #e8c8c8;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            transition: box-shadow 0.2s, transform 0.15s;
+            animation: pulseBtn 3s ease-in-out infinite;
+        }
+
+        #floatingVideoBtn:active {
+            transform: translateX(-50%) scale(0.97);
+        }
+
+        @keyframes pulseBtn {
+            0%, 100% { box-shadow: 0 0 20px rgba(180,20,20,0.35), 0 4px 16px rgba(0,0,0,0.6); }
+            50% { box-shadow: 0 0 30px rgba(200,40,40,0.55), 0 4px 20px rgba(0,0,0,0.7); }
+        }
+
+        /* =============================================
+           MODAL DE VÍDEO
+        ============================================= */
+        #videoModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: #000;
+            flex-direction: column;
+        }
+
+        #videoModal.open {
+            display: flex;
+        }
+
+        #videoModalBar {
+            height: 50px;
+            background: #111;
+            border-bottom: 1px solid #222;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 14px;
+            flex-shrink: 0;
+        }
+
+        #videoModalTitle {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 0.75em;
+            color: #c9a94a;
+            letter-spacing: 0.06em;
+        }
+
+        #closeVideoBtn {
+            background: none;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 5px 10px;
+            cursor: pointer;
+            color: #aaa;
+            font-family: 'Cinzel', serif;
+            font-size: 0.7em;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        #closeVideoBtn:active { color: white; border-color: #888; }
+
+        #videoIframeWrapper {
+            flex: 1;
+            display: flex;
+            align-items: stretch;
+        }
+
+        #videoIframeWrapper iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* =============================================
+           ANIMAÇÃO DE ENTRADA DOS CAPÍTULOS
+        ============================================= */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .chapter {
+            animation: fadeUp 0.7s ease both;
+        }
+        .chapter:nth-child(1) { animation-delay: 0.05s; }
+        .chapter:nth-child(2) { animation-delay: 0.15s; }
+        .chapter:nth-child(3) { animation-delay: 0.25s; }
+        .chapter:nth-child(4) { animation-delay: 0.35s; }
+        .chapter:nth-child(5) { animation-delay: 0.45s; }
+
+        /* =============================================
+           GLOW VERMELHO INFERIOR (ambiência)
+        ============================================= */
+        #ambientGlow {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: linear-gradient(to top, rgba(100,0,0,0.12), transparent);
+            pointer-events: none;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
 
+    <!-- TOP BAR -->
     <div id="playerTopBar">
-        <a href="index.html?refresh=true" class="top-bar-link" style="color: white;" title="Voltar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+        <a href="index.html?refresh=true" class="top-bar-link" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="44" height="34" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
         </a>
-        <div><span style="font-weight: bold;" id="pageTitle">Torre da Desolação</span></div>
-        <img id="openRankingBtn" src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Ranking" style="width:30px; height:30px; cursor: pointer;">
+        <span id="pageTitle">Torre da Desolação</span>
+        <button id="openVideoBtn" onclick="openVideo()">
+            <!-- Ícone play SVG -->
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21"/>
+            </svg>
+            Assistir
+        </button>
     </div>
-<div id="videoContainer">
-            <iframe 
+
+    <!-- HERO BANNER -->
+    <div id="storyHero">
+        <span class="hero-eyebrow">Lore &middot; Aden RPG</span>
+        <h1 class="hero-title">Torre da<br>Desolação</h1>
+        <!-- Divisor ornamental SVG -->
+        <div class="hero-divider">
+            <svg width="200" height="18" viewBox="0 0 200 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <line x1="0" y1="9" x2="78" y2="9" stroke="#c9a94a" stroke-opacity="0.5" stroke-width="1"/>
+                <path d="M82 9 L88 3 L94 9 L88 15 Z" fill="#c9a94a" fill-opacity="0.7"/>
+                <rect x="96" y="7" width="8" height="4" fill="#c9a94a" fill-opacity="0.5"/>
+                <path d="M106 9 L112 3 L118 9 L112 15 Z" fill="#c9a94a" fill-opacity="0.7"/>
+                <line x1="122" y1="9" x2="200" y2="9" stroke="#c9a94a" stroke-opacity="0.5" stroke-width="1"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO DA HISTÓRIA -->
+    <div id="storyScroll">
+
+        <!-- ── CAPÍTULO I ── -->
+        <div class="chapter">
+            <div class="chapter-header">
+                <!-- Ícone de coroa/ascensão -->
+                <svg class="chapter-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 22 L8 10 L16 18 L24 6 L28 22 Z" stroke="#c9a94a" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+                    <line x1="4" y1="25" x2="28" y2="25" stroke="#c9a94a" stroke-width="1.5"/>
+                    <circle cx="16" cy="18" r="1.5" fill="#c9a94a"/>
+                    <circle cx="8" cy="10" r="1.5" fill="#c9a94a"/>
+                    <circle cx="24" cy="6" r="1.5" fill="#c9a94a"/>
+                </svg>
+                <span class="chapter-label">I &mdash; Origem</span>
+                <span class="chapter-title">Ascensão do Tirano</span>
+                <svg class="chapter-sep" height="8" viewBox="0 0 300 8" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0 4 Q75 0 150 4 Q225 8 300 4" stroke="#c9a94a" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+                </svg>
+            </div>
+
+            <p>No vibrante continente de <span class="lore-name">Aden</span>, o nome de <span class="lore-name">Veinur</span> era um trovão. Um guerreiro humano de coragem inquestionável e ambição sem limites, ele escalou as fileiras do poder com velocidade vertiginosa. Suas vitórias eram esmagadoras, e seus discursos, inflamados pelo fogo do supremacismo humano, ressoavam na alma de muitos.</p>
+
+            <p>Para Veinur, a humanidade era a raça superior, destinada a comandar cada palmo de Aden. Com uma mente estratégica afiada e uma ferocidade que rivalizava com dragões, transformou seu exército em uma força temida, multiplicando suas fileiras com a promessa de domínio total.</p>
+
+            <p>Região após região caía sob sua égide, e a matança de qualquer um que se opusesse ao seu ideal era impiedosa. Não demorou para que o guerreiro destemido se tornasse o lorde temido &mdash; e, em uma exibição de poder absoluto, ele se autoproclamou <span class="lore-name">Imperador de todo o continente Aden</span>.</p>
+        </div>
+
+        <!-- Separador entre capítulos -->
+        <div class="big-sep">
+            <div class="big-sep-line"></div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 1 L9.5 6 L15 6 L10.5 9.5 L12 15 L8 11.5 L4 15 L5.5 9.5 L1 6 L6.5 6 Z" stroke="#c9a94a" stroke-opacity="0.6" stroke-width="1" fill="none"/>
+            </svg>
+            <div class="big-sep-line"></div>
+        </div>
+
+        <!-- ── CAPÍTULO II ── -->
+        <div class="chapter">
+            <div class="chapter-header">
+                <!-- Ícone de espadas cruzadas -->
+                <svg class="chapter-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="4" y1="4" x2="28" y2="28" stroke="#c9a94a" stroke-width="1.8" stroke-linecap="round"/>
+                    <line x1="28" y1="4" x2="4" y2="28" stroke="#c9a94a" stroke-width="1.8" stroke-linecap="round"/>
+                    <line x1="10" y1="4" x2="4" y2="10" stroke="#c9a94a" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="22" y1="4" x2="28" y2="10" stroke="#c9a94a" stroke-width="1.2" stroke-linecap="round"/>
+                    <circle cx="16" cy="16" r="2" fill="#c9a94a" fill-opacity="0.5"/>
+                </svg>
+                <span class="chapter-label">II &mdash; Conflito</span>
+                <span class="chapter-title">A Grande Guerra e a Derrota</span>
+                <svg class="chapter-sep" height="8" viewBox="0 0 300 8" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0 4 Q75 0 150 4 Q225 8 300 4" stroke="#c9a94a" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+                </svg>
+            </div>
+
+            <p>Mas a tirania de Veinur era um peso que Aden não suportaria. <span class="lore-name">Elfos</span>, <span class="lore-name">Anões</span>, as misteriosas criaturas mágicas conhecidas como <span class="lore-name">Heteromorfos</span>, e até mesmo humanos que rejeitavam o ódio supremacista, uniram-se em uma coalizão desesperada.</p>
+
+            <p>A guerra que se seguiu foi longa, sangrenta e devastadora. Cidades foram incendiadas, florestas foram pisoteadas e o sangue correu como rios. Porém, a força da aliança, alimentada pela causa da liberdade e da igualdade, provou ser superior.</p>
+
+            <p>Em uma batalha final, o exército do <span class="lore-name">Imperador Veinur</span> foi estraçalhado. Derrotado e despojado de seu império, o tirano fugiu com apenas seus servos mais leais. O ódio pela derrota e a frustração da perda fervilhavam em seu peito &mdash; uma pulsação <span class="lore-dark">escura e venenosa</span>.</p>
+        </div>
+
+        <!-- Separador -->
+        <div class="big-sep">
+            <div class="big-sep-line"></div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 1 L9.5 6 L15 6 L10.5 9.5 L12 15 L8 11.5 L4 15 L5.5 9.5 L1 6 L6.5 6 Z" stroke="#c9a94a" stroke-opacity="0.6" stroke-width="1" fill="none"/>
+            </svg>
+            <div class="big-sep-line"></div>
+        </div>
+
+        <!-- ── CAPÍTULO III ── -->
+        <div class="chapter">
+            <div class="chapter-header">
+                <!-- Ícone de torre / chama -->
+                <svg class="chapter-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="14" width="12" height="16" stroke="#c9a94a" stroke-width="1.5" fill="none"/>
+                    <path d="M8 14 L10 14 M22 14 L24 14" stroke="#c9a94a" stroke-width="1.5"/>
+                    <path d="M8 14 L8 10 L12 10 M24 14 L24 10 L20 10" stroke="#c9a94a" stroke-width="1.5" fill="none"/>
+                    <path d="M14 8 Q16 2 18 5 Q19 1 20 4 Q22 0 16 6" stroke="#b06060" stroke-width="1.2" fill="none"/>
+                    <rect x="14" y="20" width="4" height="6" stroke="#c9a94a" stroke-width="1" fill="none"/>
+                </svg>
+                <span class="chapter-label">III &mdash; Clímax</span>
+                <span class="chapter-title">O Chamado Obscuro e a Torre</span>
+                <svg class="chapter-sep" height="8" viewBox="0 0 300 8" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0 4 Q75 0 150 4 Q225 8 300 4" stroke="#c9a94a" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+                </svg>
+            </div>
+
+            <p>Na profundidade de seu desespero e raiva, Veinur sentiu. Um chamado. <span class="lore-dark">Obscuro</span>, antigo e terrivelmente sedutor. Era a promessa de poder absoluto, um eco que parecia alimentar cada grama de ódio em seu coração.</p>
+
+            <p>O chamado o guiou, inevitavelmente, para uma estrutura que se erguia como uma cicatriz no horizonte: uma torre maciça e sombria, há muito tempo abandonada, que abrigava um poder que ninguém jamais fora capaz de dominar.</p>
+
+            <em class="spoken-line">"Você pode ter um poder avassalador, basta dominar &mdash; se tiver ódio o suficiente para aguentar."</em>
+
+            <p>Determinado a retomar seu destino a qualquer custo, Veinur e seus leais servos adentraram o negrume da torre. Lá, eles encontraram os ecos de um <span class="lore-dark">ritual proibido</span> &mdash; a matriz de uma força elemental das sombras.</p>
+        </div>
+
+        <!-- Separador -->
+        <div class="big-sep">
+            <div class="big-sep-line"></div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 1 L9.5 6 L15 6 L10.5 9.5 L12 15 L8 11.5 L4 15 L5.5 9.5 L1 6 L6.5 6 Z" stroke="#c9a94a" stroke-opacity="0.6" stroke-width="1" fill="none"/>
+            </svg>
+            <div class="big-sep-line"></div>
+        </div>
+
+        <!-- ── CAPÍTULO IV ── -->
+        <div class="chapter">
+            <div class="chapter-header">
+                <!-- Ícone de olho / sombra -->
+                <svg class="chapter-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 16 Q16 5 29 16 Q16 27 3 16 Z" stroke="#b06060" stroke-width="1.5" fill="none"/>
+                    <circle cx="16" cy="16" r="4" stroke="#b06060" stroke-width="1.2" fill="rgba(120,0,0,0.2)"/>
+                    <circle cx="16" cy="16" r="1.5" fill="#b06060"/>
+                    <path d="M16 2 L16 5 M16 27 L16 30" stroke="#c9a94a" stroke-width="1" stroke-opacity="0.4"/>
+                </svg>
+                <span class="chapter-label">IV &mdash; Transformação</span>
+                <span class="chapter-title">O Imperador das Sombras</span>
+                <svg class="chapter-sep" height="8" viewBox="0 0 300 8" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0 4 Q75 0 150 4 Q225 8 300 4" stroke="#c9a94a" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+                </svg>
+            </div>
+
+            <p>O que aconteceu em seguida foi um ato de pura vontade e escuridão. Veinur mergulhou seu ser no ritual, e seu ódio implacável serviu como o cadinho perfeito. O poder obscuro tentou consumi-lo, mas a determinação fria e a megalomania do Imperador eram um escudo potente. Ele não foi destruído &mdash; ele se fundiu com a sombra.</p>
+
+            <p>O <span class="lore-name">Imperador Veinur</span> emergiu transformado: uma criatura das sombras, um poderoso <span class="lore-dark">Feiticeiro da Penumbra</span>, cuja carne e espírito eram agora um com a escuridão ancestral. Imbuído de sua nova e terrível força, concedeu poder aos seus seguidores, que também se tornaram bestas e feiticeiros sombrios a seu serviço.</p>
+
+            <p>Veinur sentia-se invencível. O verdadeiro mestre da noite. Seu poder era, de fato, avassalador.</p>
+
+            <p>No entanto, algo deu <span class="lore-dark">terrivelmente errado</span>. A magia da torre não era um presente &mdash; era uma prisão. O poder que ele havia dominado o prendeu ao local. Uma maldição indestrutível o impedia de cruzar o limite da torre, acorrentando o novo mestre da escuridão ao seu trono sombrio.</p>
+        </div>
+
+        <!-- Separador final -->
+        <div class="big-sep">
+            <div class="big-sep-line"></div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 1 L9.5 6 L15 6 L10.5 9.5 L12 15 L8 11.5 L4 15 L5.5 9.5 L1 6 L6.5 6 Z" stroke="#c9a94a" stroke-opacity="0.6" stroke-width="1" fill="none"/>
+            </svg>
+            <div class="big-sep-line"></div>
+        </div>
+
+        <!-- ── EPÍLOGO ── -->
+        <div class="chapter">
+            <div class="chapter-header">
+                <svg class="chapter-icon" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Correntes quebradas -->
+                    <circle cx="10" cy="10" r="4" stroke="#c9a94a" stroke-width="1.4" fill="none"/>
+                    <circle cx="22" cy="22" r="4" stroke="#c9a94a" stroke-width="1.4" fill="none"/>
+                    <line x1="13.8" y1="13.8" x2="18.2" y2="18.2" stroke="#c9a94a" stroke-width="1.4"/>
+                    <line x1="16" y1="16" x2="13" y2="19" stroke="#b06060" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="chapter-label">Epílogo</span>
+                <span class="chapter-title">A Espera Eterna</span>
+                <svg class="chapter-sep" height="8" viewBox="0 0 300 8" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0 4 Q75 0 150 4 Q225 8 300 4" stroke="#c9a94a" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+                </svg>
+            </div>
+
+            <div class="lore-epilogue">
+                <!-- Ornamento superior -->
+                <svg width="80" height="14" viewBox="0 0 80 14" fill="none" style="margin-bottom:14px; opacity:0.6;">
+                    <line x1="0" y1="7" x2="30" y2="7" stroke="#c9a94a" stroke-width="1"/>
+                    <path d="M33 7 L37 3 L41 7 L37 11 Z" fill="#c9a94a"/>
+                    <line x1="44" y1="7" x2="80" y2="7" stroke="#c9a94a" stroke-width="1"/>
+                </svg>
+
+                <p>O lugar ficou para sempre conhecido como a</p>
+                <span class="epilogue-name">Torre da Desolação</span>
+
+                <p style="margin-top:16px;">Lá, o <span class="lore-name">Imperador Veinur</span> aguarda pacientemente &mdash; um tirano transformado em entidade sombria, observando o continente de Aden de sua prisão amaldiçoada.</p>
+
+                <p style="margin-top:12px;">Ele espera o dia, a rachadura no tempo, a oportunidade perfeita para quebrar as correntes e finalmente concretizar seu plano de dominar <em>todo o mundo</em>.</p>
+
+                <!-- Ornamento inferior -->
+                <svg width="80" height="14" viewBox="0 0 80 14" fill="none" style="margin-top:18px; opacity:0.6; display:block; margin-left:auto; margin-right:auto;">
+                    <line x1="0" y1="7" x2="30" y2="7" stroke="#c9a94a" stroke-width="1"/>
+                    <path d="M33 7 L37 3 L41 7 L37 11 Z" fill="#c9a94a"/>
+                    <line x1="44" y1="7" x2="80" y2="7" stroke="#c9a94a" stroke-width="1"/>
+                </svg>
+            </div>
+        </div>
+
+    </div><!-- /storyScroll -->
+
+    <!-- GLOW AMBIENTAL -->
+    <div id="ambientGlow"></div>
+
+    <!-- BOTÃO FLUTUANTE DE VÍDEO -->
+    <button id="floatingVideoBtn" onclick="openVideo()">
+        <!-- Ícone play circular SVG -->
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="11" cy="11" r="10" stroke="#b06060" stroke-width="1.2"/>
+            <polygon points="9,7 16,11 9,15" fill="#e8c8c8"/>
+        </svg>
+        Ver Cinemática
+    </button>
+
+    <!-- MODAL DE VÍDEO -->
+    <div id="videoModal">
+        <div id="videoModalBar">
+            <span id="videoModalTitle">Torre da Desolação &mdash; Cinemática</span>
+            <button id="closeVideoBtn" onclick="closeVideo()">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                    <line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.5"/>
+                    <line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                Fechar
+            </button>
+        </div>
+        <div id="videoIframeWrapper">
+            <iframe
                 id="tddStoryVideo"
-                width="100%" 
-                height="100%" 
-                src="https://www.youtube.com/embed/c7NZ7wrpTSM?autoplay=0&controls=1&modestbranding=1&rel=0" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture" 
+                width="100%"
+                height="100%"
+                src=""
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
                 allowfullscreen>
             </iframe>
         </div>
-        
-              
     </div>
-    
+
+    <script>
+        const VIDEO_SRC = "https://www.youtube.com/embed/c7NZ7wrpTSM?autoplay=1&controls=1&modestbranding=1&rel=0";
+
+        function openVideo() {
+            const modal = document.getElementById('videoModal');
+            const iframe = document.getElementById('tddStoryVideo');
+            iframe.src = VIDEO_SRC;
+            modal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeVideo() {
+            const modal = document.getElementById('videoModal');
+            const iframe = document.getElementById('tddStoryVideo');
+            iframe.src = '';
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        // Fecha modal ao pressionar voltar (Android)
+        window.addEventListener('popstate', function() {
+            const modal = document.getElementById('videoModal');
+            if (modal.classList.contains('open')) {
+                closeVideo();
+            }
+        });
+    </script>
+
 </body>
 </html>

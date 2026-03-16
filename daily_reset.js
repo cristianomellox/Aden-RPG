@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Configurações e Chaves de Armazenamento
     const STORAGE_KEY_DATE = 'aden_last_daily_reset_utc';
     const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+    const STORAGE_KEY_OWNERS_SUNDAY_RESET = 'aden_owners_sunday_reset_date';
     
     // Mapeamento dos botões (Apenas os que somem com clique/reset diário)
     const targets = [
@@ -224,9 +225,57 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    // --- RESET DOMINICAL DO CACHE DE DONOS DE MINAS (IDB) ---
+    const clearOwnersCacheIDB = () => {
+        return new Promise((resolve) => {
+            // Abre sem especificar versão para não disparar onupgradeneeded
+            const req = indexedDB.open('aden_global_db');
+            req.onsuccess = (e) => {
+                const db = e.target.result;
+                // Garante que a store existe antes de tentar limpar
+                if (!db.objectStoreNames.contains('owners_store')) {
+                    db.close();
+                    return resolve();
+                }
+                try {
+                    const tx = db.transaction('owners_store', 'readwrite');
+                    tx.objectStore('owners_store').clear();
+                    tx.oncomplete = () => {
+                        console.log('🗑️ [Reset System] Cache de donos de minas (IDB) limpo com sucesso (Domingo UTC).');
+                        db.close();
+                        resolve();
+                    };
+                    tx.onerror = () => { db.close(); resolve(); };
+                } catch (err) {
+                    console.warn('[Reset System] Erro ao limpar owners_store:', err);
+                    db.close();
+                    resolve();
+                }
+            };
+            // Silencioso se o IDB ainda não existir
+            req.onerror = () => resolve();
+        });
+    };
+
+    const checkSundayOwnersReset = async () => {
+        const now = new Date();
+        // Só executa aos domingos UTC (day === 0)
+        if (now.getUTCDay() !== 0) return;
+
+        const todayStr = getTodayUTC();
+        const lastReset = localStorage.getItem(STORAGE_KEY_OWNERS_SUNDAY_RESET);
+
+        // Já resetou hoje? Não faz nada.
+        if (lastReset === todayStr) return;
+
+        await clearOwnersCacheIDB();
+        localStorage.setItem(STORAGE_KEY_OWNERS_SUNDAY_RESET, todayStr);
+    };
+
     // Inicialização
     let currentStatus = checkReset();
     renderDots(currentStatus);
+    checkSundayOwnersReset();
 
     targets.forEach(t => {
         const btn = document.getElementById(t.id);
@@ -268,6 +317,9 @@ document.addEventListener("DOMContentLoaded", () => {
         // Chama renderDots a cada minuto para atualizar eventos baseados em horário (Ruínas e Guilda)
         // mesmo que o dia não tenha mudado.
         renderDots(currentStatus);
+
+        // Verifica reset dominical do cache de donos de minas (IDB)
+        checkSundayOwnersReset();
         
     }, 60000);
 });

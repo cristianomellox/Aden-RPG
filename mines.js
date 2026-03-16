@@ -2122,7 +2122,7 @@ function formatTimeCombat(totalSeconds) {
       
       if (!userId) { window.location.href = "index.html"; return; }
 
-      const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912", "37baa684-f4dc-4d80-93cb-9004a3cbe2b9", "1888d6d8-ca41-48cc-b92e-e48af088d643"];
+      const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912"];
 
       try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS }); } catch (e) {}
       try { await supabase.rpc('resolve_all_expired_mines'); } catch (e) {}

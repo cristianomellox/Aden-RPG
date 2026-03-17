@@ -592,8 +592,7 @@ async function initHourglassFromCache(){cachedHourglassQty=await getItemQtyFromC
 function updateHourglassBtn(){const btn=document.getElementById('activateHourglassBtn');if(!btn)return;btn.textContent=`⏳ Ampulheta (x${cachedHourglassQty})`;btn.disabled=cachedHourglassQty<=0;}
 async function handleActivateHourglass(){
     if(cachedHourglassQty<=0){await showAlert('Você não tem <strong>Ampulheta de Caça</strong> no inventário!');return;}
-    if(currentSession?.rewards_claimed){await showAlert('Suas recompensas de hoje já foram coletadas!');return;}
-    const ok=await showConfirm('⏳ Ampulheta de Caça',`Usar Ampulheta de Caça?<br><small style="color:#aab;">Estende a caçada em <strong>+3h</strong> e multiplica todos os itens coletados. Você tem <strong>${cachedHourglassQty}</strong>.</small>`);
+    const ok=await showConfirm('⏳ Ampulheta de Caça',`Usar Ampulheta de Caça?<br><small style="color:#aab;">Acrescenta <strong>+3h</strong> à sessão atual. Você tem <strong>${cachedHourglassQty}</strong>.</small>`);
     if(!ok)return;
     cachedHourglassQty--;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,-1);
     showLoading();
@@ -603,9 +602,20 @@ async function handleActivateHourglass(){
         if(!data?.success){cachedHourglassQty++;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,1);await showAlert(data?.message||'Erro.');return;}
         hourglassesUsed=data.hourglasses_used;
         updateHourglassBtn();
-        localSecondsLeft=Math.max(0,effectiveLimit()-(data.total_seconds||0));
+        if(data.was_reset){
+            // Sessão anterior já coletada — ampulheta inicia nova sessão limpa de 3h
+            if(currentSession){currentSession.rewards_claimed=false;currentSession.total_seconds=0;}
+            isHunting=false;isPvpOnly=false;stopLocalTimer();stopPvpOnlyTimer();
+            clearTimeout(pvpOnlyExitTimer);removePlayerFromSpot();currentSpotId=null;clearActivity();
+            localSecondsLeft=DAILY_LIMIT; // nova sessão de 3h base
+        } else {
+            // Mid-session: acrescenta exatamente +3h ao tempo restante atual
+            localSecondsLeft=Math.min(localSecondsLeft+DAILY_LIMIT, effectiveLimit());
+        }
+        try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
         updateTimerDisplay();updateHuntingHUD();
-        await showAlert(`⏳ <strong>Ampulheta ativada!</strong><br>Sua sessão agora dura <strong>${fmtTime(effectiveLimit())}</strong> no total.`);
+        const extraMsg=data.was_reset?'Nova sessão de <strong>3h</strong> liberada! Clique em um spot para começar.':'Sessão estendida em <strong>+3h</strong>.';
+        await showAlert(`⏳ <strong>Ampulheta ativada!</strong><br>${extraMsg}`);
     }catch(e){cachedHourglassQty++;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,1);await showAlert('Erro: '+(e.message||''));}
     finally{hideLoading();}
 }

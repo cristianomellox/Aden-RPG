@@ -79,6 +79,8 @@ const SPOTS = [
 
 const SHIELD_ITEM_ID = 85;
 const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
+const HOURGLASS_ITEM_ID = 99;
+const HOURGLASS_IMG     = 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp';
 const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/assets/default_avatar.png';
 const DAILY_LIMIT    = 10800; // 3h globais — mesmo valor do SQL
 const SPOT_LOCK_MS   = 15 * 60 * 1000; // 15 minutos de lock por spot
@@ -287,6 +289,7 @@ function isEliminationAcknowledged(huntDate){try{return localStorage.getItem(_el
 function setEliminationAcknowledged(huntDate){try{localStorage.setItem(_elimAckKey(huntDate),'1');}catch{}eliminationModalShown=true;}
 function clearEliminationAcknowledged(huntDate){try{localStorage.removeItem(_elimAckKey(huntDate));}catch{}eliminationModalShown=false;}
 let shieldUntil=null, cachedShieldQty=0;
+let hourglassesUsed=0, cachedHourglassQty=0;
 let huntTimerInterval=null, shieldTimerInterval=null;
 let otherPlayers=[], wanderTimers=[];
 
@@ -562,7 +565,7 @@ function showLiveCountdownAlert(msgFn){
 
 // ── ESCUDO (global — sem region_id) ─────────────────────────
 async function initShieldFromCache(){cachedShieldQty=await getItemQtyFromCache(SHIELD_ITEM_ID);updateShieldBtn();}
-function updateShieldBtn(){const btn=document.getElementById('activateShieldBtn');if(!btn)return;btn.textContent=`🛡 Ativar Escudo (x${cachedShieldQty})`;btn.disabled=cachedShieldQty<=0;}
+function updateShieldBtn(){const btn=document.getElementById('activateShieldBtn');if(!btn)return;btn.textContent=`🛡 Escudo (x${cachedShieldQty})`;btn.disabled=cachedShieldQty<=0;}
 function isShieldActive(){return shieldUntil&&shieldUntil>new Date();}
 function startShieldTimer(){clearInterval(shieldTimerInterval);const row=document.getElementById('shieldHudRow'),txt=document.getElementById('shieldHudText');if(!row||!txt)return;const tick=()=>{const diff=Math.max(0,Math.floor((shieldUntil-new Date())/1000));if(diff<=0){clearInterval(shieldTimerInterval);row.style.display='none';updateMyShieldIcon(false);return;}row.style.display='flex';txt.textContent=`Protegido por ${fmtTime(diff)}`;};tick();shieldTimerInterval=setInterval(tick,1000);}
 async function handleActivateShield(){
@@ -582,6 +585,28 @@ async function handleActivateShield(){
     finally{hideLoading();}
 }
 function updateMyShieldIcon(active){const el=document.getElementById('myShieldIcon');if(el)el.style.display=active?'block':'none';}
+// ── AMPULHETA (global — sem region_id) ──────────────────────────────────────
+async function initHourglassFromCache(){cachedHourglassQty=await getItemQtyFromCache(HOURGLASS_ITEM_ID);updateHourglassBtn();}
+function updateHourglassBtn(){const btn=document.getElementById('activateHourglassBtn');if(!btn)return;btn.textContent=`⏳ Ampulheta (x${cachedHourglassQty})`;btn.disabled=cachedHourglassQty<=0;}
+async function handleActivateHourglass(){
+    if(cachedHourglassQty<=0){await showAlert('Você não tem <strong>Ampulheta de Caça</strong> no inventário!');return;}
+    if(currentSession?.rewards_claimed){await showAlert('Suas recompensas de hoje já foram coletadas!');return;}
+    const ok=await showConfirm('⏳ Ampulheta de Caça',`Usar Ampulheta de Caça?<br><small style="color:#aab;">Estende a caçada em <strong>+3h</strong> e multiplica todos os itens coletados. Você tem <strong>${cachedHourglassQty}</strong>.</small>`);
+    if(!ok)return;
+    cachedHourglassQty--;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,-1);
+    showLoading();
+    try{
+        const{data,error}=await supabase.rpc('activate_hunt_hourglass',{p_player_id:userId});
+        if(error)throw error;
+        if(!data?.success){cachedHourglassQty++;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,1);await showAlert(data?.message||'Erro.');return;}
+        hourglassesUsed=data.hourglasses_used;
+        updateHourglassBtn();
+        localSecondsLeft=Math.max(0,effectiveLimit()-(data.total_seconds||0));
+        updateTimerDisplay();updateHuntingHUD();
+        await showAlert(`⏳ <strong>Ampulheta ativada!</strong><br>Sua sessão agora dura <strong>${fmtTime(effectiveLimit())}</strong> no total.`);
+    }catch(e){cachedHourglassQty++;updateHourglassBtn();await updateCacheQty(HOURGLASS_ITEM_ID,1);await showAlert('Erro: '+(e.message||''));}
+    finally{hideLoading();}
+}
 
 // ── DRAG DO MAPA ─────────────────────────────────────────────
 function enableMapInteraction() {
@@ -890,6 +915,7 @@ function renderOtherPlayers(players){
 function updateTimerDisplay(){const el=document.getElementById('huntTimer');if(el)el.textContent=isPvpOnly?fmtTime(pvpOnlySecondsLeft):fmtTime(localSecondsLeft);}
 function startLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=setInterval(()=>{if(!isHunting&&!isHuntingElsewhere)return;if(localSecondsLeft<=0){localSecondsLeft=0;clearInterval(huntTimerInterval);updateTimerDisplay();if(isHunting)onHuntComplete();return;}localSecondsLeft--;updateTimerDisplay();},1000);if(isHunting)startCombatLoop();}
 function stopLocalTimer(){clearInterval(huntTimerInterval);huntTimerInterval=null;stopCombatLoop();}
+function effectiveLimit(){return DAILY_LIMIT*(1+hourglassesUsed);}
 
 // ── TIMER PvP PURO (15 min) ───────────────────────────────
 function startPvpOnlyTimer(resetToFull=true){
@@ -1063,7 +1089,7 @@ async function handleSpotClick(spot){
         const{data,error}=await supabase.rpc('start_hunt',{p_player_id:userId,p_region_id:REGION_ID,p_spot:spot.id});
         if(error)throw error;
         if(!data?.success){await showAlert(data?.message||'Erro ao iniciar.');return;}
-        localSecondsLeft=Math.max(0,DAILY_LIMIT-(data.total_seconds||0));
+        localSecondsLeft=Math.max(0,effectiveLimit()-(data.total_seconds||0));
         clearEliminationAcknowledged(data.hunt_date); // ao entrar no spot, libera ack para próxima eliminação
         currentSpotId=spot.id;isHunting=true;isPvpOnly=false;
         if(!currentSession)currentSession={};
@@ -1122,7 +1148,7 @@ async function handlePauseHunt(){
         const{data,error}=await supabase.rpc('pause_hunt',{p_player_id:userId});
         if(error)throw error;
         isHunting=false;stopLocalTimer();
-        if(data?.total_seconds!==undefined){localSecondsLeft=Math.max(0,DAILY_LIMIT-data.total_seconds);updateTimerDisplay();}
+        if(data?.total_seconds!==undefined){localSecondsLeft=Math.max(0,effectiveLimit()-data.total_seconds);updateTimerDisplay();}
         currentSpotId=null; // permite re-entrar no mesmo spot após pausar
         // Invalida boot cache para reloads dentro do TTL não restaurarem sessão ativa erroneamente
         try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
@@ -1773,6 +1799,7 @@ document.addEventListener('visibilitychange',()=>{
         // no mercador aparecem sem precisar visitar o inventário).
         (async()=>{
             await initShieldFromCache();
+            await initHourglassFromCache();
             if(cachedShieldQty===0){
                 try{
                     const{data}=await supabase.from('inventory_items')
@@ -1819,6 +1846,7 @@ async function syncOtherPlayers(){
         const{data,error}=await supabase.rpc('get_hunting_state',{p_player_id:userId,p_region_id:REGION_ID});
         if(error||!data)return false;
         const own=data.own_session||{};
+        if(own.hourglasses_used!==undefined){hourglassesUsed=own.hourglasses_used;updateHourglassBtn();}
         const newPlayers=data.other_players||[];
 
         // Detecta mudança
@@ -1876,9 +1904,9 @@ async function syncOtherPlayers(){
             let _srvTotal=own.total_seconds||0;
             if(own.is_hunting&&own.hunt_started_at){
                 const _el=Math.floor((Date.now()-new Date(own.hunt_started_at).getTime())/1000);
-                _srvTotal=Math.min(DAILY_LIMIT,_srvTotal+_el);
+                _srvTotal=Math.min(effectiveLimit(),_srvTotal+_el);
             }
-            const srvLeft=Math.max(0,DAILY_LIMIT-_srvTotal);
+            const srvLeft=Math.max(0,effectiveLimit()-_srvTotal);
             if(Math.abs(srvLeft-localSecondsLeft)>5){localSecondsLeft=srvLeft;updateTimerDisplay();}
             if(srvLeft<=0&&!own.rewards_claimed&&!isPvpOnly){updateHuntingHUD();}
             // [FIX] Mantém isHuntingElsewhere sincronizado com o estado real do servidor
@@ -1950,6 +1978,8 @@ async function boot(){
             }catch{}
         }
 
+        await initHourglassFromCache();
+        if(cachedHourglassQty===0){try{const{data:hd}=await supabase.from('inventory_items').select('quantity').eq('player_id',userId).eq('item_id',HOURGLASS_ITEM_ID).is('equipped_slot',null);const hQty=(hd||[]).reduce((s,i)=>s+(i.quantity||0),0);if(hQty>0){cachedHourglassQty=hQty;updateHourglassBtn();}}catch{}}
         // Restaura dead state
         const savedAct=getActivity();
         if(savedAct?.pvp_dead&&savedAct?.dead_until&&savedAct.dead_until>Date.now()){
@@ -1996,13 +2026,14 @@ async function boot(){
         }
 
         if(currentSession){
+            hourglassesUsed=currentSession.hourglasses_used||0;
             const srvTotal=currentSession.total_seconds||0;
             let localTotal=srvTotal;
             if(currentSession.is_hunting&&currentSession.hunt_started_at){
                 const elapsed=Math.floor((Date.now()-new Date(currentSession.hunt_started_at).getTime())/1000);
-                localTotal=Math.min(DAILY_LIMIT,srvTotal+elapsed);
+                localTotal=Math.min(effectiveLimit(),srvTotal+elapsed);
             }
-            localSecondsLeft=Math.max(0,DAILY_LIMIT-localTotal);
+            localSecondsLeft=Math.max(0,effectiveLimit()-localTotal);
             // currentSpotId só é restaurado se o jogador estiver ativamente caçando ou em PvP.
             // Caso contrário (ex: morreu no PvP e recarregou), spot fica null para permitir re-entrada.
             const _restoredSpot=(currentSession.current_region===REGION_ID)?currentSession.current_spot:null;
@@ -2071,7 +2102,7 @@ async function boot(){
             // de DAILY_LIMIT mesmo que o tempo real já tenha esgotado.
             // Não chama onHuntComplete em PvP-only — recompensas são disparadas ao SAIR do
             // modo PvP (exitPvpOnlyMode), não enquanto o jogador ainda está nele.
-            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=DAILY_LIMIT&&!isPvpOnly&&!currentSession.pvp_only_entered_at){isHunting=false;await onHuntComplete();}
+            if(localSecondsLeft<=0&&!currentSession.rewards_claimed&&localTotal>=effectiveLimit()&&!isPvpOnly&&!currentSession.pvp_only_entered_at){isHunting=false;await onHuntComplete();}
             if(currentSession.is_eliminated&&!isEliminationAcknowledged(currentSession.hunt_date)){
                 document.getElementById('eliminatedByName').textContent=currentSession.eliminated_by_name||'um inimigo';
                 document.getElementById('eliminatedModal').style.display='flex';
@@ -2332,6 +2363,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     enableMapInteraction();
     document.getElementById('pauseHuntBtn').addEventListener('click',handlePauseHunt);
     document.getElementById('activateShieldBtn').addEventListener('click',handleActivateShield);
+    const _hbtn=document.getElementById('activateHourglassBtn');if(_hbtn)_hbtn.addEventListener('click',handleActivateHourglass);
     document.getElementById('tutorialBtn').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='flex';});
     document.getElementById('huntInfoClose').addEventListener('click',()=>{document.getElementById('huntInfoModal').style.display='none';});
     document.getElementById('huntInfoModal').addEventListener('click',e=>{if(e.target===document.getElementById('huntInfoModal'))document.getElementById('huntInfoModal').style.display='none';});

@@ -251,7 +251,7 @@ const PEDRA_IMG = 'https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.w
 const CRYSTAL_IMG = 'https://aden-rpg.pages.dev/assets/cristais.webp';
 const ESCUDO_IMG = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
 const AMPULHETA_IMG = 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp';
-const GOLD_IMG = 'https://aden-rpg.pages.dev/assets/itens/goldcoin.webp';
+const GOLD_IMG = 'https://aden-rpg.pages.dev/assets/goldcoin.webp';
 
 // Quantidades em cache (atualizado ao abrir modal)
 let cachedMoedaQty = 0;

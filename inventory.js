@@ -778,20 +778,21 @@ async function handleRefineMulti(item, selections, crystalCost) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
             showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
             
-            // Calcula afk_xp_bonus localmente após refino (mesma fórmula do SQL)
-            const baseAfkXp = item.items?.afk_xp || 0;
-            const currentLevel = item.level || 0;
-            const newRefinedAfkXpBonus = baseAfkXp > 0
-                ? (baseAfkXp * currentLevel * 2) + (baseAfkXp * data.new_refine_level * 2)
-                : undefined;
-
-            // ATUALIZAÇÃO LOCAL
+            // ATUALIZAÇÃO LOCAL — todos os bônus vêm do servidor
             await updateLocalInventoryState({
                 updatedItemId: item.id,
                 newItemData: {
-                    refine_level: data.new_refine_level,
-                    xp_progress: 0,
-                    ...(newRefinedAfkXpBonus !== undefined && { afk_xp_bonus: newRefinedAfkXpBonus })
+                    refine_level:          data.new_refine_level,
+                    xp_progress:           0,
+                    min_attack_bonus:      data.min_attack_bonus      ?? 0,
+                    attack_bonus:          data.attack_bonus          ?? 0,
+                    defense_bonus:         data.defense_bonus         ?? 0,
+                    health_bonus:          data.health_bonus          ?? 0,
+                    crit_chance_bonus:     data.crit_chance_bonus     ?? 0,
+                    crit_damage_bonus:     data.crit_damage_bonus     ?? 0,
+                    evasion_bonus:         data.evasion_bonus         ?? 0,
+                    crit_reduction_bonus:  data.crit_reduction_bonus  ?? 0,
+                    afk_xp_bonus:          data.afk_xp_bonus          ?? 0
                 },
                 usedFragments: data.used_fragments,
                 usedCrystals: data.used_crystals,
@@ -828,19 +829,21 @@ async function handleLevelUpMulti(item, selections) {
         } else if (data && data.success) {
             showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
             
-            // Calcula afk_xp_bonus localmente (mesma fórmula do SQL)
-            const baseAfkXp = item.items?.afk_xp || 0;
-            const newAfkXpBonus = baseAfkXp > 0
-                ? (baseAfkXp * data.new_level * 2) + (baseAfkXp * (item.refine_level || 0) * 2)
-                : undefined;
-
-            // ATUALIZAÇÃO LOCAL
+            // ATUALIZAÇÃO LOCAL — todos os bônus vêm do servidor
             await updateLocalInventoryState({
                 updatedItemId: item.id,
                 newItemData: {
-                    level: data.new_level,
-                    xp_progress: data.new_xp,
-                    ...(newAfkXpBonus !== undefined && { afk_xp_bonus: newAfkXpBonus })
+                    level:                 data.new_level,
+                    xp_progress:           data.new_xp,
+                    min_attack_bonus:      data.min_attack_bonus      ?? 0,
+                    attack_bonus:          data.attack_bonus          ?? 0,
+                    defense_bonus:         data.defense_bonus         ?? 0,
+                    health_bonus:          data.health_bonus          ?? 0,
+                    crit_chance_bonus:     data.crit_chance_bonus     ?? 0,
+                    crit_damage_bonus:     data.crit_damage_bonus     ?? 0,
+                    evasion_bonus:         data.evasion_bonus         ?? 0,
+                    crit_reduction_bonus:  data.crit_reduction_bonus  ?? 0,
+                    afk_xp_bonus:          data.afk_xp_bonus          ?? 0
                 },
                 usedFragments: data.used_fragments,
                 newStats: data.player_stats

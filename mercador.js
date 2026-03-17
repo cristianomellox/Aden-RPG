@@ -686,7 +686,7 @@ function injectStyles() {
 }
 /* ─── CARD ─── */
 .mercador-card {
-    background: linear-gradient(180deg, #2a2a2abf, #1a1a1abf);
+    background: linear-gradient(180deg, #2a2a2a, #1a1a1aA6);
     border: 1px solid #c9a94a; border-radius: 10px;
     padding: 12px; display: flex; flex-direction: column; gap: 10px;
     opacity: 0; animation: fadeCardIn 6s ease-out forwards;

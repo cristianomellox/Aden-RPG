@@ -642,9 +642,10 @@ async function enterGame() {
             const id = p.id || p.player_id;
             if (id) {
                 state.participantCache[id] = {
-                    name:   p.name,
-                    avatar: p.avatar || p.avatar_url,
-                    is_bot: p.is_bot
+                    name:     p.name,
+                    avatar:   p.avatar || p.avatar_url,
+                    is_bot:   p.is_bot,
+                    class_id: p.class_id
                 };
             }
         });
@@ -1175,7 +1176,7 @@ function animateHit(targetEl, dmg, isCrit) {
     _injectRuinsEpicStyles();
 
     // Volume 0.3 para crítico conforme solicitado
-    if (isCrit) playSound('critical', 0.03); else playSound('normal', 0.8);
+    if (isCrit) playSound('critical', 0.15); else playSound('normal', 0.8);
 
     const parent = targetEl.parentElement; // .combat-side
 

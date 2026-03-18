@@ -333,8 +333,8 @@ async function openMercadorModal() {
         <div class="mercador-section mercador-venda" id="mercadorVenda">
             ${renderVendaCard('pedra',      PEDRA_IMG,     'Pedra de Refundição', 1,  MOEDA_IMG, 'pedra')}
             ${renderVendaCard('crystals',   CRYSTAL_IMG,   'Cristais',            50, MOEDA_IMG, 'crystals')}
-            ${renderVendaCard('escudo',     ESCUDO_IMG,    'Escudo de Caça',      1,  MOEDA_IMG, 'escudo',     150)}
-            ${renderVendaCard('ampulheta',  AMPULHETA_IMG, 'Ampulheta de Caça',   1,  MOEDA_IMG, 'ampulheta',  150)}
+            ${renderVendaCard('escudo',     ESCUDO_IMG,    'Escudo de Caça',      1,  MOEDA_IMG, 'escudo',     100)}
+            ${renderVendaCard('ampulheta',  AMPULHETA_IMG, 'Ampulheta de Caça',   1,  MOEDA_IMG, 'ampulheta',  100)}
         </div>
 
         <!-- SEÇÃO ESCAMBO -->

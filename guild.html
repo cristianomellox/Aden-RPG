@@ -130,7 +130,7 @@ if ('serviceWorker' in navigator) {
     </svg>
 </button>
        <div> <span id="pageTitle">Guilda</span></div>
-        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px; opacity: 0;">
+        <img id="guildtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:30px; height:30px; margin-top: -2px; cursor:pointer;">
     </div>
 
     <div id="mainContainer">
@@ -812,6 +812,125 @@ if ('serviceWorker' in navigator) {
     </div>
 </div>
 
+
+<!-- ═══ TUTORIAL DE GUILDA ══════════════════════════════════════════════ -->
+<div id="guildTutorialModal" class="tut-modal">
+    <div class="tut-content" style="position:relative;">
+        <button id="closeGuildTutBtn" class="tut-x-btn" onmouseover="this.style.color='#ffd700'" onmouseout="this.style.color='#888'">&times;</button>
+
+        <h2 class="tut-h-title">🏰 Guia da Guilda</h2>
+        <p class="tut-h-subtitle">"Una-se, cresça e conquiste terras com seus aliados."</p>
+
+        <!-- 1. Criar ou entrar numa guilda -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ffd700; border-color:#ffd700;">1. Criar ou Entrar numa Guilda</h4>
+            <p>Para criar uma guilda você precisa de <strong style="color:#ffd700">Nível 7</strong> e <strong style="color:#ffd700">2000 Cristais</strong>. O nome pode ter até 12 caracteres (letras, números e espaços).</p>
+            <p>Para entrar numa guilda existente, use o botão <strong style="color:#ffd700">Buscar Guilda</strong>, encontre a que deseja e envie uma solicitação com uma mensagem. O líder ou co-líder precisará aceitar.</p>
+            <div class="tut-box">
+                <ul>
+                    <li>⏳ Ao sair, ser expulso ou ter a guilda deletada, você fica em <strong style="color:#ff9060">cooldown de 24 horas</strong> antes de criar ou entrar em outra guilda</li>
+                    <li>📛 O nome da guilda só pode ser alterado <strong style="color:#ffd700">uma vez a cada 30 dias</strong></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 2. Cargos e permissões -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#c084fc; border-color:#c084fc;">2. Cargos e Permissões</h4>
+            <p>Cada membro possui um cargo que define o que ele pode fazer na guilda:</p>
+            <div class="tut-box">
+                <ul>
+                    <li><strong style="color:#ffd700">Líder</strong> — controle total: editar guilda, promover/rebaixar co-líderes, expulsar qualquer membro, transferir liderança e deletar a guilda</li>
+                    <li><strong style="color:#c084fc">Co-Líder</strong> — pode aceitar solicitações de entrada, expulsar membros comuns e atualizar o quadro de avisos</li>
+                    <li> <strong style="color:#aaa">Membro</strong> — participa das atividades da guilda, mas sem poderes administrativos</li>
+                </ul>
+            </div>
+            <p style="margin-top:8px;">A liderança só pode ser transferida para um <strong style="color:#c084fc">co-líder</strong>. Ao transferir, o líder anterior passa a ser co-líder automaticamente.</p>
+        </div>
+
+        <!-- 3. Níveis, membros e co-líderes -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#4fc3f7; border-color:#4fc3f7;">3. Níveis, Membros e Co-Líderes</h4>
+            <p>Guildas evoluem ganhando <strong style="color:#ffd700">Experiência (XP)</strong> nas atividades coletivas. A cada nível, o limite de membros aumenta e novos co-líderes podem ser promovidos. O nível máximo é <strong style="color:#ffd700">11</strong>.</p>
+            <table class="tut-reward-table">
+                <thead>
+                    <tr>
+                        <th>Nível</th>
+                        <th>Membros</th>
+                        <th>Co-Líderes</th>
+                        <th>XP necessário</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>10</td><td>1</td><td>300</td></tr>
+                    <tr><td>2</td><td>12</td><td>1</td><td>848</td></tr>
+                    <tr><td>3</td><td>14</td><td>1</td><td>1.558</td></tr>
+                    <tr><td>4</td><td>16</td><td>1</td><td>2.400</td></tr>
+                    <tr><td style="color:#4fc3f7">5 ✦</td><td>18</td><td style="color:#c084fc"><strong>2</strong></td><td>3.354</td></tr>
+                    <tr><td>6</td><td>20</td><td style="color:#c084fc">2</td><td>4.409</td></tr>
+                    <tr><td>7</td><td>22</td><td style="color:#c084fc">2</td><td>5.556</td></tr>
+                    <tr><td style="color:#4fc3f7">8 ✦</td><td>24</td><td style="color:#ffd700"><strong>3</strong></td><td>6.788</td></tr>
+                    <tr><td>9</td><td>26</td><td style="color:#ffd700">3</td><td>8.100</td></tr>
+                    <tr><td>10</td><td>28</td><td style="color:#ffd700">3</td><td>9.486</td></tr>
+                    <tr><td style="color:#ff9060">11 ★</td><td>30</td><td style="color:#ffd700">3</td><td>—</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top:8px; font-size:0.78em; color:#888;">✦ Nível de desbloqueio de co-líder adicional &nbsp;|&nbsp; ★ Nível máximo</p>
+        </div>
+
+        <!-- 4. Quadro de avisos -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#8ecf8e; border-color:#8ecf8e;">4. Quadro de Avisos</h4>
+            <p>Líder e co-líderes podem publicar um aviso visível a todos os membros. O aviso tem limite de <strong style="color:#ffd700">150 caracteres</strong> e só pode ser atualizado <strong style="color:#ffd700">uma vez a cada 5 minutos</strong>.</p>
+        </div>
+
+        <!-- 5. Gerenciamento -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ff9060; border-color:#ff9060;">5. Gerenciamento da Guilda</h4>
+            <p>O ícone de configurações (⚙️) da guilda abre o painel de gestão, com as seguintes abas:</p>
+            <div class="tut-box">
+                <ul>
+                    <li>✏️ <strong style="color:#ffd700">Editar</strong> — altera nome (1x/30 dias), descrição e bandeira da guilda</li>
+                    <li>📬 <strong style="color:#ffd700">Solicitações</strong> — lista jogadores que pediram para entrar; líder e co-líderes podem aceitar ou recusar</li>
+                    <li>👥 <strong style="color:#ffd700">Gerenciar</strong> — promover membros a co-líder, rebaixar co-líderes e expulsar membros</li>
+                    <li>📋 <strong style="color:#ffd700">Quadro de Aviso</strong> — edita o aviso da guilda e consulta o registro de atividades</li>
+                    <li>📦 <strong style="color:#888">Baú</strong> — em breve</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 6. Ranking -->
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#ffd700; border-color:#ffd700;">6. Ranking de Guildas</h4>
+            <p>A aba <strong style="color:#ffd700">Ranking</strong> exibe as guildas ordenadas por <strong style="color:#ffd700">Poder de Combate</strong> — a soma do poder de todos os membros. O ranking é <strong style="color:#ffd700">atualizado toda segunda-feira</strong> à meia-noite (UTC).</p>
+        </div>
+
+        <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">
+            <button class="tut-ok-btn" id="closeGuildTutBtn2">ENTENDI</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const guildtutoImg    = document.getElementById("guildtuto");
+        const guildTutModal   = document.getElementById("guildTutorialModal");
+        const closeBtn1       = document.getElementById("closeGuildTutBtn");
+        const closeBtn2       = document.getElementById("closeGuildTutBtn2");
+
+        const openTut  = () => { guildTutModal.style.display = "flex"; };
+        const closeTut = () => { guildTutModal.style.display = "none"; };
+
+        if (guildtutoImg) guildtutoImg.addEventListener("click", openTut);
+        if (closeBtn1)    closeBtn1.addEventListener("click", closeTut);
+        if (closeBtn2)    closeBtn2.addEventListener("click", closeTut);
+        if (guildTutModal) {
+            guildTutModal.addEventListener("click", (e) => {
+                if (e.target === guildTutModal) closeTut();
+            });
+        }
+    });
+</script>
 
 <div id="maintenance-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); color: white; z-index: 99999; justify-content: center; align-items: center; text-align: center; flex-direction: column; font-family: Arial, sans-serif;">
     <img src="https://aden-rpg.pages.dev/assets/config.webp" alt="Manutenção" style="width: 120px; height: 120px; margin-bottom: 20px;">

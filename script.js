@@ -1120,10 +1120,19 @@ async function _executeSignUp() {
     const password = passwordInput.value;
     authMessage.textContent = 'Enviando código de confirmação...';
 
+    // Monta a data de nascimento a partir dos 3 seletores para enviar ao trigger
+    const day   = document.getElementById('birthDaySelect')   ? document.getElementById('birthDaySelect').value   : '';
+    const month = document.getElementById('birthMonthSelect') ? document.getElementById('birthMonthSelect').value : '';
+    const year  = document.getElementById('birthYearSelect')  ? document.getElementById('birthYearSelect').value  : '';
+    const birthDateStr = (year && month && day)
+        ? `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+        : null;
+
     const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: {
-            emailRedirectTo: window.location.origin
+            emailRedirectTo: window.location.origin,
+            data: { birth_date: birthDateStr }
         }
     });
 
@@ -1161,6 +1170,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmModal = document.getElementById('signUpConfirmModal');
     const btnNo  = document.getElementById('signUpConfirmNo');
     const btnYes = document.getElementById('signUpConfirmYes');
+    const daySelect   = document.getElementById('birthDaySelect');
+    const yearSelect  = document.getElementById('birthYearSelect');
+
+    // Popula dias (01–31)
+    if (daySelect) {
+        for (let d = 1; d <= 31; d++) {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = String(d).padStart(2, '0');
+            daySelect.appendChild(opt);
+        }
+    }
+
+    // Popula anos (ano atual descendo até 1950)
+    if (yearSelect) {
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear; y >= 1950; y--) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            yearSelect.appendChild(opt);
+        }
+    }
 
     if (btnNo) {
         btnNo.addEventListener('click', () => {
@@ -1169,6 +1201,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (btnYes) {
         btnYes.addEventListener('click', () => {
+            // --- Verificação de Idade (Lei 15.211/2025 - Lei Felca) ---
+            const ageMsg = document.getElementById('ageVerificationMessage');
+            const day   = daySelect   ? parseInt(daySelect.value)   : 0;
+            const month = document.getElementById('birthMonthSelect') ? parseInt(document.getElementById('birthMonthSelect').value) : 0;
+            const year  = yearSelect  ? parseInt(yearSelect.value)  : 0;
+
+            if (!day || !month || !year) {
+                if (ageMsg) ageMsg.textContent = '⚠️ Por favor, preencha sua data de nascimento completa.';
+                return;
+            }
+
+            const born  = new Date(year, month - 1, day);
+            const today = new Date();
+            let age = today.getFullYear() - born.getFullYear();
+            const monthDiff = today.getMonth() - born.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < born.getDate())) age--;
+
+            if (age < 18) {
+                if (ageMsg) ageMsg.textContent = '🔞 Acesso negado. Este jogo é destinado a maiores de 18 anos (Lei 15.211/2025).';
+                return;
+            }
+
+            if (ageMsg) ageMsg.textContent = '';
             if (confirmModal) confirmModal.style.display = 'none';
             _executeSignUp();
         });
@@ -1177,6 +1232,67 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmModal) {
         confirmModal.addEventListener('click', (e) => {
             if (e.target === confirmModal) confirmModal.style.display = 'none';
+        });
+    }
+
+    // --- Lógica do Modal de Chances do Espiral (Lei 15.211/2025) ---
+    const chancesData = {
+        common: {
+            title: 'Espiral Comum — Chances',
+            rows: [
+                { rarity: 'R',  label: 'Fragmento R',  chance: '95%', color: '#7ec8e3' },
+                { rarity: 'SR', label: 'Fragmento SR', chance: '5%',  color: '#f0c040' },
+            ]
+        },
+        advanced: {
+            title: 'Espiral Avançado — Chances',
+            rows: [
+                { rarity: 'SR', label: 'Fragmento SR', chance: '100%', color: '#f0c040' },
+            ]
+        }
+    };
+
+    function buildChancesContent(type) {
+        const data = chancesData[type];
+        let html = '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">';
+        html += '<tr style="color:#aaa; border-bottom:1px solid #444;"><th style="padding:6px 4px; text-align:left;">Tipo</th><th style="padding:6px 4px; text-align:left;">Item</th><th style="padding:6px 4px; text-align:right;">Chance</th></tr>';
+        data.rows.forEach(row => {
+            html += `<tr style="border-bottom:1px solid #333;">
+                <td style="padding:8px 4px;"><span style="font-weight:bold; color:${row.color}; background:rgba(0,0,0,0.4); padding:2px 7px; border-radius:4px; font-size:0.85em;">${row.rarity}</span></td>
+                <td style="padding:8px 4px; color:#ddd;">${row.label}</td>
+                <td style="padding:8px 4px; text-align:right; font-weight:bold; color:${row.color};">${row.chance}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        html += '<p style="font-size:0.75em; color:#888; margin-top:12px; line-height:1.4;">As probabilidades são por sorteio individual e independentes entre si. Informações divulgadas em conformidade com a Lei nº 15.211/2025.</p>';
+        return html;
+    }
+
+    const spiralChancesModal  = document.getElementById('spiralChancesModal');
+    const spiralChancesTitle  = document.getElementById('spiralChancesTitle');
+    const spiralChancesContent = document.getElementById('spiralChancesContent');
+    const closeSpiralChancesBtn = document.getElementById('closeSpiralChancesBtn');
+
+    ['Common', 'Advanced'].forEach(type => {
+        const btn = document.getElementById(`openChances${type}Btn`);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const t = type.toLowerCase();
+                if (spiralChancesTitle)  spiralChancesTitle.textContent  = chancesData[t].title;
+                if (spiralChancesContent) spiralChancesContent.innerHTML = buildChancesContent(t);
+                if (spiralChancesModal)  spiralChancesModal.style.display = 'flex';
+            });
+        }
+    });
+
+    if (closeSpiralChancesBtn) {
+        closeSpiralChancesBtn.addEventListener('click', () => {
+            if (spiralChancesModal) spiralChancesModal.style.display = 'none';
+        });
+    }
+    if (spiralChancesModal) {
+        spiralChancesModal.addEventListener('click', (e) => {
+            if (e.target === spiralChancesModal) spiralChancesModal.style.display = 'none';
         });
     }
 });

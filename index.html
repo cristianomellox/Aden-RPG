@@ -411,6 +411,14 @@
   margin-left: 6px; margin-left: -7px;">+</button>
       </div>
       <button id="drawCommonBtn" class="draw-btn">Sortear</button>
+      <button id="openChancesCommonBtn" class="spiral-chances-btn" data-type="common">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px; flex-shrink: 0;">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="8" stroke-width="3" stroke-linecap="round"/>
+          <line x1="12" y1="12" x2="12" y2="17"/>
+        </svg>
+        Chances
+      </button>
     </div>
 
     <div id="advanced-spiral" class="spiral-content" style="display:none;">
@@ -422,9 +430,27 @@
         <span id="advancedCardCount" style="margin-left: -10px;">x 0</span>
       </div>
       <button id="drawAdvancedBtn" class="draw-btn">Sortear</button>
+      <button id="openChancesAdvancedBtn" class="spiral-chances-btn" data-type="advanced">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 5px; flex-shrink: 0;">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="8" stroke-width="3" stroke-linecap="round"/>
+          <line x1="12" y1="12" x2="12" y2="17"/>
+        </svg>
+        Chances
+      </button>
     </div>
     
     <button class="close-spiral-modal">Fechar</button>
+  </div>
+</div>
+
+<!-- Modal de Probabilidades do Espiral (Lei 15.211/2025) -->
+<div id="spiralChancesModal" class="modal-container" style="display:none;">
+  <div class="modal-content" style="text-align: center; max-width: 340px;">
+    <h2 id="spiralChancesTitle" style="color: #FFD700; margin-bottom: 12px;"></h2>
+    <p style="font-size: 0.8em; color: #aaa; margin-bottom: 14px; line-height: 1.4;">Probabilidades por sorteio, conforme exigido pela Lei nº 15.211/2025.</p>
+    <div id="spiralChancesContent" style="text-align: left;"></div>
+    <button id="closeSpiralChancesBtn" style="margin-top: 16px; width: 100%; padding: 10px; background: #444; border: 1px solid #666; color: white; border-radius: 6px; cursor: pointer; font-size: 1em;">Fechar</button>
   </div>
 </div>
 
@@ -488,33 +514,6 @@
         <div id="shop-main" class="shop-content">
             <h2>Loja</h2>
             <p>Aproveite as promoções e adquira seus itens.</p>
-
-            <div class="shop-item">
-                <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" alt="Cartão Comum" class="shop-item-img">
-                <div class="shop-item-details">
-                    <h3>Cartão de Espiral Comum <strong>x15</strong></h3>
-                    <p>Use no Espiral para sortear fragmentos de equipamentos.</p>
-                    <div class="shop-item-cost">
-                        <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
-                        <span>250</span>
-                    </div>
-                   <button class="shop-buy-btn" data-package="common_card_pack" data-name="Cartão de Espiral Comum x15" data-cost="250">Comprar</button>
-                </div>
-            </div>
-
-            <div class="shop-item">
-                <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" alt="Cartão Avançado" class="shop-item-img">
-                <div class="shop-item-details">
-                    <h3>Pacote Avançado</h3>
-                    <p>Contém: Cartão Avançado <strong>x20</strong> e Cartão Comum <strong>x10</strong>.</p>
-                    <div class="shop-item-cost">
-                        <img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" alt="Ouro">
-                        <span>560</span>
-                    </div>
-                    
-<button class="shop-buy-btn" data-package="advanced_card_pack" data-name="Pacote Avançado" data-cost="560">Comprar</button>
-                </div>
-            </div>
 
             <div class="shop-item">
                 <img src="https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp" alt="Pedra de Refundição" class="shop-item-img" style="width: 130px; height: 100px; margin-left: 30px;">
@@ -728,6 +727,40 @@
 <div id="signUpConfirmModal" class="modal-container" style="display:none;">
     <div class="modal-content" style="text-align: center;">
         <h2>✉️ Confirmar Registro</h2>
+
+        <!-- Verificação de Idade (Lei 15.211/2025 - Lei Felca) -->
+        <div id="ageVerificationSection" style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid #555;">
+            <p style="font-size: 0.9em; color: #FFD700; margin: 0 0 8px 0; font-weight: bold;">🔞 Verificação de Idade Obrigatória</p>
+            <p style="font-size: 0.82em; color: #ccc; margin: 0 0 10px 0; line-height: 1.4;">
+                Este jogo contém loot boxes e é destinado a maiores de 18 anos (Lei 15.211/2025).
+            </p>
+            <label style="font-size: 0.85em; color: #aaa; display: block; margin-bottom: 8px;">Sua data de nascimento:</label>
+            <div style="display: flex; gap: 6px; justify-content: center;">
+                <select id="birthDaySelect" style="flex: 1; padding: 8px 4px; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px; font-size: 0.95em;">
+                    <option value="">Dia</option>
+                </select>
+                <select id="birthMonthSelect" style="flex: 2; padding: 8px 4px; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px; font-size: 0.95em;">
+                    <option value="">Mês</option>
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7">Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10">Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
+                <select id="birthYearSelect" style="flex: 2; padding: 8px 4px; background: #1a1a1a; color: white; border: 1px solid #555; border-radius: 6px; font-size: 0.95em;">
+                    <option value="">Ano</option>
+                </select>
+            </div>
+            <p id="ageVerificationMessage" style="font-size: 0.82em; color: #ff6b6b; margin: 6px 0 0 0; min-height: 16px;"></p>
+        </div>
+
         <p style="font-size: 1em; line-height: 1.6; margin-bottom: 18px;">
             Um código de confirmação será enviado para o email que você forneceu.<br>
             Verifique atentamente a <strong style="color: #FFD700;">caixa de spam do seu email</strong>.<br><br>

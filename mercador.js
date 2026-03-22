@@ -337,7 +337,7 @@ async function openMercadorModal() {
             ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   50, MOEDA_IMG, 'crystals')}
             ${renderVendaCard('escudo',        ESCUDO_IMG,       'Escudo de Caça',                             1,  MOEDA_IMG, 'escudo',        100)}
             ${renderVendaCard('ampulheta',     AMPULHETA_IMG,    'Ampulheta de Caça',                          1,  MOEDA_IMG, 'ampulheta',     100)}
-            ${renderVendaCard('receita_foice', RECEITA_FOICE_IMG,'Rec. Fragmentos Foice da Noite Eterna (60%)', 1,  MOEDA_IMG, 'receita_foice', 500)}
+            ${renderVendaCard('receita_foice', RECEITA_FOICE_IMG,'Receita Fragmentos Foice da Noite Eterna (60%)', 1,  MOEDA_IMG, 'receita_foice', 500)}
         </div>
 
         <!-- SEÇÃO ESCAMBO -->
@@ -543,7 +543,7 @@ async function buyVendaItem(type, quantity) {
             showMsg(`Você recebeu ${quantity}x Ampulheta de Caça!`);
         } else if (type === 'receita_foice') {
             await updateCacheQty(RECEITA_FOICE_ID, quantity);
-            showMsg(`Você recebeu ${quantity}x Rec. Fragmentos Foice da Noite Eterna (60%)!`);
+            showMsg(`Você recebeu ${quantity}x Receita Fragmentos Foice da Noite Eterna (60%)!`);
         } else {
             try {
                 const cStr = localStorage.getItem('player_data_cache');

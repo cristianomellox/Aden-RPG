@@ -45,35 +45,82 @@ const RECIPES = [
             name:  'Foice da Noite Eterna',
             img:   BASE + 'foice_da_noite_eterna.webp',
             stats: [
-                { label: 'ATK',       value: '50'  },
-                { label: 'Evasão',    value: '6%'  },
-                { label: 'Red. CRIT', value: '80%' },
+                { label: 'ATK',          value: '50'  },
+                { label: 'Evasão',       value: '6%'  },
+                { label: 'Redução CRIT', value: '80%' },
             ],
         },
         materials: [
-            { id: 100, name: 'Receita de Fragmentos de Foice da Noite Eterna', qty: 1,
+            { id: 100, name: 'Receita de Fragmentos de Foice da Noite Eterna (60%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_foice_da_noite_eterna_60.webp',
-              source: 'Comprando com o Mercador Ambulante em alguma cidade.' },
+              source: '• Chance de drop no Chefe Mundial.\n• Comprando com o Mercador em alguma cidade.' },
             { id: 86,  name: 'Asa de Morcego',     qty: 67, img: BASE + 'asa_de_morcego.webp',
-              source: 'Caçando Morcego em Penumbra Uivante.' },
+              source: '• Caçando Morcego em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 70,  name: 'Sal de Cobalto',      qty: 58, img: BASE + 'sal_de_cobalto.webp',
-              source: 'Caçando Zumbi em Penumbra Uivante.' },
+              source: '• Caçando Zumbi em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 76,  name: 'Pó Ósseo',            qty: 49, img: BASE + 'po_osseo.webp',
-              source: 'Caçando Caveira em Penumbra Uivante.' },
+              source: '• Caçando Caveira em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 87,  name: 'Emblema Vampírico',   qty: 43, img: BASE + 'emblema_vampirico.webp',
-              source: 'Caçando Vampiro em Penumbra Uivante.' },
+              source: '• Caçando Vampiro em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 80,  name: 'Carvão',              qty: 36, img: BASE + 'carvao.webp',
-              source: 'Caçando Yeti em Razar.' },
+              source: '• Caçando Yeti em Razar.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 81,  name: 'Minério de Ferro',    qty: 29, img: BASE + 'minerio_de_ferro.webp',
-              source: 'Caçando Fenrir Montanhês em Razar.' },
+              source: '• Caçando Fenrir Montanhês em Razar.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 75,  name: 'Minério de Mithril',  qty: 24, img: BASE + 'minerio_de_mithril.webp',
-              source: 'Caçando Aranha Ártica em Razar.' },
+              source: '• Caçando Aranha Ártica em Razar.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 65,  name: 'Reagente Ômega',      qty: 18, img: BASE + 'reagente_omega.webp',
-              source: 'Caçando Larva Kelt em Ninho de Kelts.' },
+              source: '• Caçando Larva Kelt em Ninho de Kelts.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 63,  name: 'Lubrificante',        qty: 15, img: BASE + 'lubrificante.webp',
-              source: 'Caçando Pixie em Vale Arcano.' },
+              source: '• Caçando Pixie em Vale Arcano.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 74,  name: 'Galho Espiritual',    qty: 11, img: BASE + 'galho_espiritual.webp',
-              source: 'Caçando Sátiro em Floresta Mística.' },
+              source: '• Caçando Sátiro em Floresta Mística.\n• Comércio entre jogadores (por mensagem privada).' },
+        ],
+    },
+    {
+        id:     101,
+        name:   'Receita: Foice da Noite Eterna (100%)',
+        type:   'arma',
+        chance: 100,
+        img:    BASE + 'receita_de_fragmentos_de_foice_da_noite_eterna_100.webp',
+        output: {
+            id:   98,
+            name: 'Fragmento de Foice da Noite Eterna',
+            qty:  30,
+            img:  BASE + 'fragmento_de_foice_da_noite_eterna.webp',
+        },
+        finalItem: {
+            name:  'Foice da Noite Eterna',
+            img:   BASE + 'foice_da_noite_eterna.webp',
+            stats: [
+                { label: 'ATK',          value: '50'  },
+                { label: 'Evasão',       value: '6%'  },
+                { label: 'Redução CRIT', value: '80%' },
+            ],
+        },
+        materials: [
+            { id: 101, name: 'Receita de Fragmentos de Foice da Noite Eterna (100%)', qty: 11,
+              img: BASE + 'receita_de_fragmentos_de_foice_da_noite_eterna_100.webp',
+              source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 86,  name: 'Asa de Morcego',     qty: 77, img: BASE + 'asa_de_morcego.webp',
+              source: '• Caçando Morcego em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 70,  name: 'Sal de Cobalto',      qty: 68, img: BASE + 'sal_de_cobalto.webp',
+              source: '• Caçando Zumbi em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 76,  name: 'Pó Ósseo',            qty: 59, img: BASE + 'po_osseo.webp',
+              source: '• Caçando Caveira em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 87,  name: 'Emblema Vampírico',   qty: 53, img: BASE + 'emblema_vampirico.webp',
+              source: '• Caçando Vampiro em Penumbra Uivante.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 80,  name: 'Carvão',              qty: 46, img: BASE + 'carvao.webp',
+              source: '• Caçando Yeti em Razar.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 81,  name: 'Minério de Ferro',    qty: 39, img: BASE + 'minerio_de_ferro.webp',
+              source: '• Caçando Fenrir Montanhês em Razar.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 75,  name: 'Minério de Mithril',  qty: 34, img: BASE + 'minerio_de_mithril.webp',
+              source: '• Caçando Aranha Ártica em Razar.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 65,  name: 'Reagente Ômega',      qty: 28, img: BASE + 'reagente_omega.webp',
+              source: '• Caçando Larva Kelt em Ninho de Kelts.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 63,  name: 'Lubrificante',        qty: 25, img: BASE + 'lubrificante.webp',
+              source: '• Caçando Pixie em Vale Arcano.\n• Comércio entre jogadores (por mensagem privada).' },
+            { id: 74,  name: 'Galho Espiritual',    qty: 21, img: BASE + 'galho_espiritual.webp',
+              source: '• Caçando Sátiro em Floresta Mística.\n• Comércio entre jogadores (por mensagem privada).' },
         ],
     },
 ];
@@ -85,7 +132,7 @@ const ENCOURAGING = [
     'As chamas ainda guardam segredos para você. Tente novamente!',
     'A lâmina não cedeu desta vez, mas cada golpe te aproxima do sucesso.',
     'Os espíritos do metal não cooperaram... desta vez. Continue firme!',
-    'Falhou, mas não fraquejou. A Foice aguarda quem persiste.',
+    'Falhou, mas não fraquejou. O sucesso aguarda quem persiste.',
     'Nem os maiores artesãos do reino venceram na primeira tentativa. Sua hora chegará!',
 ];
 
@@ -430,7 +477,10 @@ function openRecipeDetail(recipe) {
 
     overlay.style.display = 'flex';
     document.getElementById('closeDetailOverlay').onclick = function() { overlay.style.display = 'none'; };
-    document.getElementById('oficinaBtnCriar').onclick    = function() { openConfirmModal(recipe); };
+    document.getElementById('oficinaBtnCriar').onclick    = function() {
+        if (recipe.chance === 100) { openMaterialsModal(recipe); }
+        else { openConfirmModal(recipe); }
+    };
 
     // Clique nos materiais do preview → onde obter
     overlay.querySelectorAll('.oficina-mat-preview-item').forEach(function(item) {
@@ -565,7 +615,7 @@ function openItemInfoModal(info) {
                 '<img src="' + info.img + '" class="oficina-iteminfo-img" alt="' + info.name + '">' +
                 '<h4 class="oficina-iteminfo-title">' + info.name + '</h4>' +
                 '<p class="oficina-iteminfo-label">Como Obter</p>' +
-                '<p class="oficina-iteminfo-text">' + info.source + '</p>' +
+                '<p class="oficina-iteminfo-text">' + info.source.replace(/\n/g, '<br>') + '</p>' +
             '</div>' +
         '</div>';
     modal.style.display = 'flex';

@@ -31,7 +31,7 @@ const BASE = 'https://aden-rpg.pages.dev/assets/itens/';
 const RECIPES = [
     {
         id:     100,
-        name:   'Receita: Foice da Noite Eterna',
+        name:   'Receita: Foice da Noite Eterna (60%)',
         type:   'arma',
         chance: 60,
         img:    BASE + 'receita_de_fragmentos_de_foice_da_noite_eterna_60.webp',

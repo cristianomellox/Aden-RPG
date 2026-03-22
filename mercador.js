@@ -251,6 +251,8 @@ const PEDRA_IMG = 'https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.w
 const CRYSTAL_IMG = 'https://aden-rpg.pages.dev/assets/cristais.webp';
 const ESCUDO_IMG = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
 const AMPULHETA_IMG = 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp';
+const RECEITA_FOICE_ID = 100;
+const RECEITA_FOICE_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_foice_da_noite_eterna_60.webp';
 const GOLD_IMG = 'https://aden-rpg.pages.dev/assets/goldcoin.webp';
 
 // Quantidades em cache (atualizado ao abrir modal)
@@ -302,7 +304,7 @@ async function openMercadorModal() {
     content.innerHTML = `<div class="mercador-loading">Carregando ofertas...</div>`;
     startCountdown(state.nextSlot);
 
-    const allIds = [MOEDA_ID, PEDRA_ID, AMPULHETA_ID, ...TRADE_ITEMS.map(i => i.id)];
+    const allIds = [MOEDA_ID, PEDRA_ID, AMPULHETA_ID, RECEITA_FOICE_ID, ...TRADE_ITEMS.map(i => i.id)];
     const qtys = await getAllItemsQtyFromCache(allIds);
     cachedMoedaQty = qtys[MOEDA_ID] || 0;
     cachedTradeQtys = qtys;
@@ -331,10 +333,11 @@ async function openMercadorModal() {
         <!-- SEÇÃO VENDA -->
         <div class="mercador-section-title">⚙ Venda</div>
         <div class="mercador-section mercador-venda" id="mercadorVenda">
-            ${renderVendaCard('pedra',      PEDRA_IMG,     'Pedra de Refundição', 1,  MOEDA_IMG, 'pedra')}
-            ${renderVendaCard('crystals',   CRYSTAL_IMG,   'Cristais',            50, MOEDA_IMG, 'crystals')}
-            ${renderVendaCard('escudo',     ESCUDO_IMG,    'Escudo de Caça',      1,  MOEDA_IMG, 'escudo',     100)}
-            ${renderVendaCard('ampulheta',  AMPULHETA_IMG, 'Ampulheta de Caça',   1,  MOEDA_IMG, 'ampulheta',  100)}
+            ${renderVendaCard('pedra',         PEDRA_IMG,        'Pedra de Refundição',                        1,  MOEDA_IMG, 'pedra')}
+            ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   50, MOEDA_IMG, 'crystals')}
+            ${renderVendaCard('escudo',        ESCUDO_IMG,       'Escudo de Caça',                             1,  MOEDA_IMG, 'escudo',        100)}
+            ${renderVendaCard('ampulheta',     AMPULHETA_IMG,    'Ampulheta de Caça',                          1,  MOEDA_IMG, 'ampulheta',     100)}
+            ${renderVendaCard('receita_foice', RECEITA_FOICE_IMG,'Rec. Fragmentos Foice da Noite Eterna (60%)', 1,  MOEDA_IMG, 'receita_foice', 500)}
         </div>
 
         <!-- SEÇÃO ESCAMBO -->
@@ -420,9 +423,9 @@ function renderEscamboCard(pair, idx) {
 function attachMercadorEvents(pairs) {
     // Venda: qty selectors
     // receiveBaseQty per type
-    const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1 };
-    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150, ampulheta: 150 };
-    for (const type of ['pedra', 'crystals', 'escudo', 'ampulheta']) {
+    const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1 };
+    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150, ampulheta: 150, receita_foice: 500 };
+    for (const type of ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice']) {
         const base = vendaReceiveBase[type];
         const cost = vendaCostBase[type];
         const getQtyEl = () => document.getElementById(`vqty-${type}`);
@@ -497,7 +500,7 @@ async function buyVendaItem(type, quantity) {
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
-    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 150, ampulheta: 150 };
+    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 150, ampulheta: 150, receita_foice: 500 };
     const costPerPack   = vendaCostBase[type] ?? 1;
     const totalCost     = quantity * costPerPack;
 
@@ -538,6 +541,9 @@ async function buyVendaItem(type, quantity) {
         } else if (type === 'ampulheta') {
             await updateCacheQty(AMPULHETA_ID, quantity);
             showMsg(`Você recebeu ${quantity}x Ampulheta de Caça!`);
+        } else if (type === 'receita_foice') {
+            await updateCacheQty(RECEITA_FOICE_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Rec. Fragmentos Foice da Noite Eterna (60%)!`);
         } else {
             try {
                 const cStr = localStorage.getItem('player_data_cache');

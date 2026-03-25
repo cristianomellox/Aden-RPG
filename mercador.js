@@ -439,7 +439,7 @@ function attachMercadorEvents(pairs) {
     // Venda: qty selectors
     // receiveBaseQty per type
     const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
-    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150, ampulheta: 150, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
+    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
     for (const type of ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice', 'receita_armadura', 'receita_colar', 'receita_anel', 'receita_asa', 'receita_elmo']) {
         const base = vendaReceiveBase[type];
         const cost = vendaCostBase[type];

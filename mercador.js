@@ -253,6 +253,16 @@ const ESCUDO_IMG = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp'
 const AMPULHETA_IMG = 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp';
 const RECEITA_FOICE_ID = 100;
 const RECEITA_FOICE_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_foice_da_noite_eterna_60.webp';
+const RECEITA_ARMADURA_ID = 104;
+const RECEITA_ARMADURA_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_armadura_da_noite_eterna_60.webp';
+const RECEITA_COLAR_ID = 112;
+const RECEITA_COLAR_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_colar_da_noite_eterna_60.webp';
+const RECEITA_ANEL_ID = 108;
+const RECEITA_ANEL_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_anel_da_noite_eterna_60.webp';
+const RECEITA_ASA_ID = 120;
+const RECEITA_ASA_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_asa_da_noite_eterna_60.webp';
+const RECEITA_ELMO_ID = 116;
+const RECEITA_ELMO_IMG = 'https://aden-rpg.pages.dev/assets/itens/receita_de_fragmentos_de_elmo_da_noite_eterna_60.webp';
 const GOLD_IMG = 'https://aden-rpg.pages.dev/assets/goldcoin.webp';
 
 // Quantidades em cache (atualizado ao abrir modal)
@@ -304,7 +314,7 @@ async function openMercadorModal() {
     content.innerHTML = `<div class="mercador-loading">Carregando ofertas...</div>`;
     startCountdown(state.nextSlot);
 
-    const allIds = [MOEDA_ID, PEDRA_ID, AMPULHETA_ID, RECEITA_FOICE_ID, ...TRADE_ITEMS.map(i => i.id)];
+    const allIds = [MOEDA_ID, PEDRA_ID, AMPULHETA_ID, RECEITA_FOICE_ID, RECEITA_ARMADURA_ID, RECEITA_COLAR_ID, RECEITA_ANEL_ID, RECEITA_ASA_ID, RECEITA_ELMO_ID, ...TRADE_ITEMS.map(i => i.id)];
     const qtys = await getAllItemsQtyFromCache(allIds);
     cachedMoedaQty = qtys[MOEDA_ID] || 0;
     cachedTradeQtys = qtys;
@@ -337,7 +347,12 @@ async function openMercadorModal() {
             ${renderVendaCard('crystals',      CRYSTAL_IMG,      'Cristais',                                   50, MOEDA_IMG, 'crystals')}
             ${renderVendaCard('escudo',        ESCUDO_IMG,       'Escudo de Caça',                             1,  MOEDA_IMG, 'escudo',        100)}
             ${renderVendaCard('ampulheta',     AMPULHETA_IMG,    'Ampulheta de Caça',                          1,  MOEDA_IMG, 'ampulheta',     100)}
-            ${renderVendaCard('receita_foice', RECEITA_FOICE_IMG,'Receita Fragmentos Foice da Noite Eterna (60%)', 1,  MOEDA_IMG, 'receita_foice', 500)}
+            ${renderVendaCard('receita_foice',    RECEITA_FOICE_IMG,    'Receita Fragmentos Foice da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_foice',    500)}
+            ${renderVendaCard('receita_armadura', RECEITA_ARMADURA_IMG, 'Receita Fragmentos Armadura da Noite Eterna (60%)', 1, MOEDA_IMG, 'receita_armadura', 500)}
+            ${renderVendaCard('receita_colar',    RECEITA_COLAR_IMG,    'Receita Fragmentos Colar da Noite Eterna (60%)',    1, MOEDA_IMG, 'receita_colar',    500)}
+            ${renderVendaCard('receita_anel',     RECEITA_ANEL_IMG,     'Receita Fragmentos Anel da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_anel',     500)}
+            ${renderVendaCard('receita_asa',      RECEITA_ASA_IMG,      'Receita Fragmentos Asa da Noite Eterna (60%)',      1, MOEDA_IMG, 'receita_asa',      500)}
+            ${renderVendaCard('receita_elmo',     RECEITA_ELMO_IMG,     'Receita Fragmentos Elmo da Noite Eterna (60%)',     1, MOEDA_IMG, 'receita_elmo',     500)}
         </div>
 
         <!-- SEÇÃO ESCAMBO -->
@@ -423,9 +438,9 @@ function renderEscamboCard(pair, idx) {
 function attachMercadorEvents(pairs) {
     // Venda: qty selectors
     // receiveBaseQty per type
-    const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1 };
-    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150, ampulheta: 150, receita_foice: 500 };
-    for (const type of ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice']) {
+    const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
+    const vendaCostBase    = { pedra: 1, crystals:  1, escudo: 150, ampulheta: 150, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
+    for (const type of ['pedra', 'crystals', 'escudo', 'ampulheta', 'receita_foice', 'receita_armadura', 'receita_colar', 'receita_anel', 'receita_asa', 'receita_elmo']) {
         const base = vendaReceiveBase[type];
         const cost = vendaCostBase[type];
         const getQtyEl = () => document.getElementById(`vqty-${type}`);
@@ -500,7 +515,7 @@ async function buyVendaItem(type, quantity) {
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
-    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 150, ampulheta: 150, receita_foice: 500 };
+    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 150, ampulheta: 150, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
     const costPerPack   = vendaCostBase[type] ?? 1;
     const totalCost     = quantity * costPerPack;
 
@@ -544,6 +559,21 @@ async function buyVendaItem(type, quantity) {
         } else if (type === 'receita_foice') {
             await updateCacheQty(RECEITA_FOICE_ID, quantity);
             showMsg(`Você recebeu ${quantity}x Receita Fragmentos Foice da Noite Eterna (60%)!`);
+        } else if (type === 'receita_armadura') {
+            await updateCacheQty(RECEITA_ARMADURA_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Receita Fragmentos Armadura da Noite Eterna (60%)!`);
+        } else if (type === 'receita_colar') {
+            await updateCacheQty(RECEITA_COLAR_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Receita Fragmentos Colar da Noite Eterna (60%)!`);
+        } else if (type === 'receita_anel') {
+            await updateCacheQty(RECEITA_ANEL_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Receita Fragmentos Anel da Noite Eterna (60%)!`);
+        } else if (type === 'receita_asa') {
+            await updateCacheQty(RECEITA_ASA_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Receita Fragmentos Asa da Noite Eterna (60%)!`);
+        } else if (type === 'receita_elmo') {
+            await updateCacheQty(RECEITA_ELMO_ID, quantity);
+            showMsg(`Você recebeu ${quantity}x Receita Fragmentos Elmo da Noite Eterna (60%)!`);
         } else {
             try {
                 const cStr = localStorage.getItem('player_data_cache');

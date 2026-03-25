@@ -515,7 +515,7 @@ async function buyVendaItem(type, quantity) {
     const btn = document.getElementById(`vbuy-${type}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Comprando...'; }
 
-    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 150, ampulheta: 150, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
+    const vendaCostBase = { pedra: 1, crystals: 1, escudo: 100, ampulheta: 100, receita_foice: 500, receita_armadura: 500, receita_colar: 500, receita_anel: 500, receita_asa: 500, receita_elmo: 500 };
     const costPerPack   = vendaCostBase[type] ?? 1;
     const totalCost     = quantity * costPerPack;
 

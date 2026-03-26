@@ -212,13 +212,13 @@
                 return a;
             }
 
-            // 3. Caça normal: usa hunt_ends_at como expiração precisa.
-            //    Fallback de 6h se a entrada for antiga e não tiver o campo.
+            // 3. Caça normal: usa hunt_ends_at como expiração precisa (atualizado a cada ampulheta).
+            //    Fallback de 9h (máximo com 2 ampulhetas) para entradas antigas sem o campo.
             if (a.hunt_ends_at && now > a.hunt_ends_at) {
                 try { localStorage.removeItem(ACTIVITY_KEY); } catch (e) {}
                 return null;
             }
-            if (!a.hunt_ends_at && a.started_at && (now - a.started_at) > 6 * 60 * 60 * 1000) {
+            if (!a.hunt_ends_at && a.started_at && (now - a.started_at) > 9 * 60 * 60 * 1000) {
                 try { localStorage.removeItem(ACTIVITY_KEY); } catch (e) {}
                 return null;
             }

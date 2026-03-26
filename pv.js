@@ -204,7 +204,9 @@ function injectTradeStyles() {
     transition: opacity .2s, transform .2s;
 }
 #pv-trade-btn:hover { opacity: 1; transform: scale(1.1); }
-#pv-trade-btn img   { width: 30px; height: 30px; display: block; }
+#pv-trade-btn img   { width: 45px; height: 45px; display: block;
+margin-top: 8px;
+}
 
 /* ── MODAL DE SELEÇÃO DE ITENS ── */
 #pvTradeModal {
@@ -304,6 +306,8 @@ function injectTradeStyles() {
 /* ── MENSAGEM DE TRADE NO CHAT ── */
 .pv-trade-msg {
     width: 100%; max-width: 300px;
+    min-width: 0;
+    box-sizing: border-box;
     background: linear-gradient(140deg, #1a0d2e, #0e0720);
     border: 1px solid #5a3090;
     border-radius: 12px; overflow: hidden;
@@ -347,24 +351,28 @@ function injectTradeStyles() {
 .pv-trade-msg-footer {
     padding: 6px 12px 10px;
     display: flex; flex-direction: column; gap: 6px;
+    box-sizing: border-box; width: 100%;
 }
 .pv-trade-msg-expiry {
     color: #7a5caa; font-size: .72em; text-align: center;
 }
 .pv-trade-msg-status {
     text-align: center; font-weight: bold; font-size: .82em;
-    padding: 5px; border-radius: 6px;
+    padding: 5px; border-radius: 6px; box-sizing: border-box; width: 100%;
 }
 .pv-trade-msg-status.status-accepted  { background: rgba(30,120,60,.3);  color: #60e090; border: 1px solid rgba(40,160,80,.3);  }
 .pv-trade-msg-status.status-cancelled { background: rgba(120,30,30,.3);  color: #e06060; border: 1px solid rgba(180,40,40,.3);  }
 .pv-trade-msg-status.status-declined  { background: rgba(120,60,20,.3);  color: #e09060; border: 1px solid rgba(180,80,30,.3);  }
 .pv-trade-msg-status.status-expired   { background: rgba(60,60,60,.3);   color: #909090; border: 1px solid rgba(90,90,90,.3);   }
 .pv-trade-msg-status.status-pending   { background: rgba(80,40,140,.25); color: #b090e0; border: 1px solid rgba(120,60,200,.3); }
-.pv-trade-msg-actions { display: flex; gap: 8px; }
+.pv-trade-msg-actions { display: flex; gap: 8px; width: 100%; box-sizing: border-box; }
 .pv-trade-action-btn {
-    flex: 1; padding: 7px; border: none; border-radius: 7px;
+    flex: 1 1 0; min-width: 0;
+    padding: 7px 4px; border: none; border-radius: 7px;
     font-size: .8em; font-weight: bold; cursor: pointer;
     transition: opacity .15s, transform .1s;
+    box-sizing: border-box; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pv-trade-action-btn:active { transform: scale(.96); }
 .pv-trade-action-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -494,7 +502,7 @@ document.addEventListener("DOMContentLoaded", () => {
         wrap.innerHTML = `
 <div id="pvTradeBox">
   <h3>
-    <img src="https://aden-rpg.pages.dev/assets/transferlider.webp" style="width:20px;height:20px;">
+    <img src="https://aden-rpg.pages.dev/assets/tradep.webp" style="width:20px;height:20px;">
     Comércio com Jogador
     <span class="pv-trade-close" id="pvTradeCloseBtn">&times;</span>
   </h3>

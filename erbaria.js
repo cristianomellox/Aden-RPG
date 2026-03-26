@@ -204,8 +204,12 @@ function getActivity(){
             if(miningEndsAt&&Date.now()>miningEndsAt){localStorage.removeItem(ACTIVITY_KEY);return null;}
             if(!miningEndsAt&&a.started_at&&(Date.now()-a.started_at)>2*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
         }
-        // Caça: expira após 6 horas sem interação (previne bloqueio por crash)
-        if(a.type==='hunting'&&a.started_at&&(Date.now()-a.started_at)>6*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        // Caça: usa hunt_ends_at se disponível (atualizado a cada ampulheta ativada).
+        // Fallback para entradas antigas sem hunt_ends_at: 9h (máximo com 2 ampulhetas).
+        if(a.type==='hunting'){
+            if(a.hunt_ends_at&&Date.now()>a.hunt_ends_at){localStorage.removeItem(ACTIVITY_KEY);return null;}
+            if(!a.hunt_ends_at&&a.started_at&&(Date.now()-a.started_at)>9*60*60*1000){localStorage.removeItem(ACTIVITY_KEY);return null;}
+        }
         return a;
     }catch{return null;}
 }
@@ -610,6 +614,9 @@ async function handleActivateHourglass(){
         } else {
             // Mid-session: acrescenta exatamente +3h ao tempo restante atual
             localSecondsLeft=Math.min(localSecondsLeft+DAILY_LIMIT, effectiveLimit());
+            // FIX: regrava hunt_ends_at no localStorage com o novo tempo restante,
+            // garantindo que o badge do mapa (map_hotspots.js) não expire prematuramente.
+            if(currentSpotId) setActivityHunting(currentSpotId, false, isPvpOnly);
         }
         try{localStorage.removeItem(HUNT_CACHE_KEY());}catch{}
         updateTimerDisplay();updateHuntingHUD();

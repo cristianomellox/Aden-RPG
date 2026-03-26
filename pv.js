@@ -367,12 +367,13 @@ margin-top: 8px;
 .pv-trade-msg-status.status-pending   { background: rgba(80,40,140,.25); color: #b090e0; border: 1px solid rgba(120,60,200,.3); }
 .pv-trade-msg-actions { display: flex; gap: 8px; width: 100%; box-sizing: border-box; }
 .pv-trade-action-btn {
-    flex: 1 1 0; min-width: 0;
-    padding: 7px 4px; border: none; border-radius: 7px;
-    font-size: .8em; font-weight: bold; cursor: pointer;
+    flex: 1 1 0;
+    padding: 8px 6px; border: none; border-radius: 7px;
+    font-size: .82em; font-weight: bold; cursor: pointer;
     transition: opacity .15s, transform .1s;
     box-sizing: border-box; text-align: center;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: normal; word-break: break-word;
+    line-height: 1.2;
 }
 .pv-trade-action-btn:active { transform: scale(.96); }
 .pv-trade-action-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -1070,7 +1071,7 @@ document.addEventListener("DOMContentLoaded", () => {
         tradeBtnEl = document.createElement('div');
         tradeBtnEl.id = 'pv-trade-btn';
         tradeBtnEl.title = 'Comércio entre jogadores';
-        tradeBtnEl.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/transferlider.webp" alt="Comércio">`;
+        tradeBtnEl.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/tradep.webp" alt="Comércio">`;
         tradeBtnEl.addEventListener('click', openTradePanel);
 
         // Insere antes do botão de deletar
@@ -1178,7 +1179,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return `
 <div class="pv-trade-msg">
   <div class="pv-trade-msg-header">
-    <img src="https://aden-rpg.pages.dev/assets/transferlider.webp" alt="">
+    <img src="https://aden-rpg.pages.dev/assets/tradep.webp" alt="">
     Oferta de Comércio
   </div>
   <div class="pv-trade-msg-body">

@@ -519,8 +519,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <input type="number" id="pvTradeQtyInput" min="1" max="9999" value="1" placeholder="Ex: 10">
       </div>
       <div class="pv-trade-input-group">
-        <label>Ouro por item</label>
-        <input type="number" id="pvTradeGoldInput" min="1" value="1" placeholder="Ex: 5">
+        <label>Ouro total</label>
+        <input type="number" id="pvTradeGoldInput" min="1" value="1" placeholder="Ex: 50">
       </div>
     </div>
     <div class="pv-trade-hint" id="pvTradeHint"></div>
@@ -607,7 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
         goldInput.min  = item.minGold;
         goldInput.value = item.minGold;
 
-        hint.textContent = `Mínimo de ${item.minGold} ouro${item.minGold >= 50 ? ' para este item especial' : ''}.`;
+        hint.textContent = `Mínimo de ${item.minGold} ouro total${item.minGold >= 50 ? ' para este item especial' : ''}.`;
         validateTradeInputs();
     }
 
@@ -638,11 +638,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const goldInput = document.getElementById('pvTradeGoldInput');
         const offerBtn  = document.getElementById('pvTradeOfferBtn');
 
-        const qty      = parseInt(qtyInput.value);
-        const goldEach = parseInt(goldInput.value);
-        const totalGold = qty * goldEach;
+        const qty       = parseInt(qtyInput.value);
+        const goldTotal = parseInt(goldInput.value);
 
-        if (!qty || !goldEach || qty < 1 || goldEach < selectedTradeItem.minGold) {
+        if (!qty || !goldTotal || qty < 1 || goldTotal < selectedTradeItem.minGold) {
             showFloatingMessage('Verifique a quantidade e o preço.');
             return;
         }
@@ -656,7 +655,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 p_buyer_id:        currentOtherPlayerId,
                 p_item_id:         selectedTradeItem.id,
                 p_quantity:        qty,
-                p_gold_price:      totalGold
+                p_gold_price:      goldTotal
             });
 
             if (error) throw error;
@@ -857,7 +856,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!currentPlayer) return;
 
         const PV_SYNC_KEY  = `pv_meta_sync_time_${currentPlayer.id}`;
-        const TTL_PV = 2 * 60 * 60 * 1000;
+        const TTL_PV = 15 * 60 * 1000;
         const now    = Date.now();
         const lastSync = parseInt(localStorage.getItem(PV_SYNC_KEY) || '0');
 

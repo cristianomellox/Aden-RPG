@@ -471,41 +471,51 @@ function processOfflineEvents(savedState) {
             savedState.reviveUntil = null;
             savedState.playerHp = savedState.maxPlayerHp; // Reviveu full
             console.log("[Offline] Jogador reviveu enquanto estava fora.");
+            // Continua para processar ataques que possam ter ocorrido após o revive
         } else {
-            // Ainda está morto, não toma dano novo
-            return savedState; 
+            // Ainda está dentro do cooldown de revive — não toma dano novo
+            return savedState;
         }
     }
 
-    // Se o Boss deveria ter atacado enquanto estava fora
+    // Se o Boss deveria ter atacado enquanto estava fora, processa um ataque por vez
+    // para identificar o timestamp EXATO da morte e carregar o cooldown corretamente.
     if (savedState.nextBossAttack < now) {
-        const timeOverdue = now - savedState.nextBossAttack;
-        // O primeiro ataque perdido + quantos ciclos de 45s cabem no tempo extra
-        const attacksMissed = 1 + Math.floor(timeOverdue / BOSS_ATTACK_INTERVAL);
-        
-        console.log(`[Offline] O Boss atacou ${attacksMissed} vezes.`);
-
-        // Recalcula próximo ataque para o futuro
-        savedState.nextBossAttack += (attacksMissed * BOSS_ATTACK_INTERVAL);
-        // Garante que não fique no passado por lag de milissegundos
-        if(savedState.nextBossAttack < now) savedState.nextBossAttack = now + BOSS_ATTACK_INTERVAL;
-
-        // Calcula Dano (Simples, assumindo acerto)
         const s = savedState.playerStats;
         const baseDmg = Math.floor(savedState.maxPlayerHp * 0.15);
         const dmgPerHit = Math.max(1, baseDmg - Math.floor(s.defense / 5));
-        
-        const totalDamage = dmgPerHit * attacksMissed;
-        
-        savedState.playerHp -= totalDamage;
 
-        // Checa Morte Offline
-        if (savedState.playerHp <= 0) {
-            savedState.playerHp = 0;
-            // Define o revive para começar a partir de agora
-            savedState.reviveUntil = now + REVIVE_TIME_MS;
-            console.log("[Offline] O Jogador morreu devido aos ataques acumulados.");
+        let attackCount = 0;
+        while (savedState.nextBossAttack < now) {
+            const attackTimestamp = savedState.nextBossAttack; // Momento real deste ataque
+            savedState.nextBossAttack = attackTimestamp + BOSS_ATTACK_INTERVAL;
+            attackCount++;
+
+            savedState.playerHp -= dmgPerHit;
+            console.log(`[Offline] Boss atacou (ataque ${attackCount}) em ${new Date(attackTimestamp).toISOString()}. HP restante: ${savedState.playerHp}`);
+
+            if (savedState.playerHp <= 0) {
+                savedState.playerHp = 0;
+                // CORREÇÃO: cooldown começa a partir do momento REAL do golpe fatal,
+                // não do instante em que o jogador voltou à página.
+                savedState.reviveUntil = attackTimestamp + REVIVE_TIME_MS;
+                console.log(`[Offline] Jogador morreu em ${new Date(attackTimestamp).toISOString()}. Revive em ${new Date(savedState.reviveUntil).toISOString()}.`);
+
+                // Se o cooldown já passou enquanto estava fora, auto-revive e continua
+                if (now >= savedState.reviveUntil) {
+                    console.log("[Offline] Cooldown de revive já expirou. Jogador reviveu automaticamente.");
+                    savedState.reviveUntil = null;
+                    savedState.playerHp = savedState.maxPlayerHp;
+                    // Continua o loop para processar ataques após o revive
+                } else {
+                    // Ainda dentro do cooldown — para de processar
+                    break;
+                }
+            }
         }
+
+        // Garante que o próximo ataque fique no futuro (evita drift por lag)
+        if (savedState.nextBossAttack < now) savedState.nextBossAttack = now + BOSS_ATTACK_INTERVAL;
     }
 
     return savedState;

@@ -642,6 +642,7 @@ async function enterGame() {
             const id = p.id || p.player_id;
             if (id) {
                 state.participantCache[id] = {
+                    id,                              // Bug 3 fix: necessário para isWinner no modal de resultado
                     name:     p.name,
                     avatar:   p.avatar || p.avatar_url,
                     is_bot:   p.is_bot,
@@ -1015,7 +1016,14 @@ async function runCombatSequence(data, finalMessage) {
     else {
         oppAvatar.src = data.opponent_avatar || "https://aden-rpg.pages.dev/avatar01.webp";
         els.combatOppName.textContent = data.opponent_name || "Inimigo";
-        els.combatOppClass.textContent = getClassName(data.opponent_class);
+
+        // Bug 1 fix: se opponent_class vier vazio/nulo do servidor, busca no cache de participantes pelo nome
+        let resolvedClass = data.opponent_class;
+        if (!resolvedClass || resolvedClass === '') {
+            const cacheEntry = Object.values(state.participantCache).find(p => p.name === data.opponent_name);
+            if (cacheEntry) resolvedClass = cacheEntry.class_id;
+        }
+        els.combatOppClass.textContent = getClassName(resolvedClass);
     }
 
     overlay.style.display = 'flex';

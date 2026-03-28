@@ -604,10 +604,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         qtyInput.max   = item.qty;
         qtyInput.value = 1;
-        goldInput.min  = item.minGold;
+        goldInput.min  = item.minGold;   // qty 1 × minGold unitário
         goldInput.value = item.minGold;
 
-        hint.textContent = `Mínimo de ${item.minGold} ouro total${item.minGold >= 50 ? ' para este item especial' : ''}.`;
+        hint.textContent = `Mínimo: ${item.minGold} ouro (1 × ${item.minGold})${item.minGold >= 50 ? ' ✦' : ''}.`;
         validateTradeInputs();
     }
 
@@ -615,19 +615,36 @@ document.addEventListener("DOMContentLoaded", () => {
         const offerBtn  = document.getElementById('pvTradeOfferBtn');
         const qtyInput  = document.getElementById('pvTradeQtyInput');
         const goldInput = document.getElementById('pvTradeGoldInput');
+        const hint      = document.getElementById('pvTradeHint');
         if (!offerBtn || !selectedTradeItem) return;
 
-        const qty  = parseInt(qtyInput.value);
-        const gold = parseInt(goldInput.value);
+        // Garantir que gold seja inteiro (sem decimais) antes de calcular
+        if (goldInput.value.includes('.') || goldInput.value.includes(',')) {
+            goldInput.value = Math.floor(parseFloat(goldInput.value.replace(',', '.'))) || 1;
+        }
 
-        const qtyOk  = qty  >= 1 && qty  <= selectedTradeItem.qty;
-        const goldOk = gold >= selectedTradeItem.minGold && Number.isInteger(gold);
+        const qty  = parseInt(qtyInput.value)  || 1;
+        const gold = parseInt(goldInput.value) || 0;
+
+        // Mínimo total = quantidade × preço unitário mínimo do item
+        const minGoldTotal = qty * selectedTradeItem.minGold;
+
+        // Atualiza o atributo min e trava o valor se ficar abaixo do mínimo
+        goldInput.min = minGoldTotal;
+        if (gold < minGoldTotal) {
+            goldInput.value = minGoldTotal;
+        }
+
+        const goldFinal = parseInt(goldInput.value);
+        const qtyOk  = qty >= 1 && qty <= selectedTradeItem.qty;
+        const goldOk = goldFinal >= minGoldTotal;
 
         offerBtn.disabled = !(qtyOk && goldOk);
 
-        // Garantir que gold seja inteiro (sem decimais)
-        if (goldInput.value.includes('.') || goldInput.value.includes(',')) {
-            goldInput.value = Math.floor(parseFloat(goldInput.value.replace(',', '.'))) || selectedTradeItem.minGold;
+        // Atualiza hint dinamicamente com o mínimo calculado
+        if (hint) {
+            const isSpecial = selectedTradeItem.minGold >= 50;
+            hint.textContent = `Mínimo: ${minGoldTotal} ouro (${qty} × ${selectedTradeItem.minGold})${isSpecial ? ' ✦' : ''}.`;
         }
     }
 
@@ -641,7 +658,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const qty       = parseInt(qtyInput.value);
         const goldTotal = parseInt(goldInput.value);
 
-        if (!qty || !goldTotal || qty < 1 || goldTotal < selectedTradeItem.minGold) {
+        if (!qty || !goldTotal || qty < 1 || goldTotal < qty * selectedTradeItem.minGold) {
             showFloatingMessage('Verifique a quantidade e o preço.');
             return;
         }

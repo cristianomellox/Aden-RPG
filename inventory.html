@@ -210,6 +210,11 @@
           <video autoplay muted loop playsinline id="background-video">
     <source src="https://aden-rpg.pages.dev/assets/divbolsa.webm" type="video/webm">
   </video>
+          <!-- SKIN: Botão de gerenciamento de skins (canto superior esquerdo do vídeo) -->
+          <button id="skinConfigBtn" title="Gerenciar Skins">
+              <img src="https://aden-rpg.pages.dev/assets/config.webp" width="30" height="30" alt="Skins">
+          </button>
+
             <div class="equipment-column">
                 <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_espada.webp'); background-size: cover;" id="weapon-slot" class="equipment-slot" data-slot="weapon"></div>
                 <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_anel.webp'); background-size: cover;" id="ring-slot" class="equipment-slot" data-slot="ring"></div>
@@ -217,8 +222,13 @@
                 <div style="background-image: url('https://aden-rpg.pages.dev/assets/icon_mais.webp'); background-size: cover;" id="special1-slot" class="equipment-slot" data-slot="special1"></div>
             </div>
 
+            <!-- SKIN: Wrapper do avatar com suporte à moldura sobreposta -->
             <div id="playerAvatarEquipContainer">
-                <img id="playerAvatarEquip" src="caminho/para/avatar_padrao.webp" alt="Avatar do Jogador">
+                <div id="avatarFrameWrapper">
+                    <img id="playerAvatarEquip" src="caminho/para/avatar_padrao.webp" alt="Avatar do Jogador">
+                    <!-- Moldura da skin: fica por cima do avatar via position:absolute (CSS em inventory.css) -->
+                    <img id="avatarFrameOverlay" src="" alt="" style="display:none;">
+                </div>
             </div>
 
             <div class="equipment-column">
@@ -292,6 +302,8 @@
                 </div>
             </div>
  <div id="itemDescription"></div>
+            <!-- SKIN: exibição do tempo de expiração (visível apenas para skins) -->
+            <p id="skinExpiryInfo" style="display:none;"></p>
             <div id="itemInfoSection">
                 <div id="itemLevelPower">
                     <p id="detailItemLevel">Nv. 1</p>
@@ -331,6 +343,8 @@
 >
     Desconstruir
 </button>
+                <!-- SKIN: botão de ativação (visível apenas para skins) -->
+                <button id="activateSkinBtn" class="action-btn" style="display:none;">Ativar</button>
             </div>
         </div>
     </div>
@@ -447,6 +461,33 @@
     </div>
   </div>
 </div>
+
+<!-- ══ MODAL: GERENCIADOR DE SKINS ════════════════════════════════════ -->
+<div id="skinManagerModal" class="modal-overlay">
+    <div id="skinManagerContent" class="modal-content">
+        <span id="closeSkinManagerModal" class="btn">x</span>
+
+        <h3>✦ Skins</h3>
+        <p style="font-size:0.75em; color:#888; text-align:center; margin:0 0 10px;">
+            Gerencie suas skins de perfil
+        </p>
+
+        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 6px;">Skin ativa:</p>
+        <div id="skinManagerActiveSkin"></div>
+
+        <div id="skinManagerDeactivateBtn" style="display:none; text-align:center; margin:8px 0;">
+            <button id="deactivateSkinBtn" class="custom-alert-btn">
+                🔄 Voltar ao Visual Padrão
+            </button>
+        </div>
+
+        <hr style="border:none; border-top:1px solid #333; margin:12px 0;">
+
+        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 8px;">Suas skins:</p>
+        <div id="skinManagerList"></div>
+    </div>
+</div>
+
 <div id="loading-overlay">
   <div id="loading-container">
     <h2>Carregando...</h2>
@@ -460,7 +501,8 @@
 <script type="module" src="inventory.js"></script>
     <script src="desconstruir.js"></script>
     <script src="refundir.js"></script>
-    
+    <!-- SKIN: módulo do sistema de skins (carregado após inventory.js) -->
+    <script type="module" src="skin_system.js"></script>
 
 <div id="tutorialModal">
     <div class="tut-content" style="position:relative;">

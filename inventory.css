@@ -670,3 +670,220 @@
     align-items: center;
     z-index: 1000;
 }
+
+/* Wrapper do avatar: 160×160 para acomodar a moldura */
+#avatarFrameWrapper {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Moldura animada sobreposta ao avatar (z-index acima) */
+#avatarFrameOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 160px;
+    height: 160px;
+    pointer-events: none;
+    z-index: 2;
+    object-fit: contain;
+}
+
+/* Botão de configuração no canto do vídeo */
+#skinConfigBtn {
+    position: absolute;
+    top: 5px;
+    right: 25%;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 3px 4px;
+    cursor: pointer;
+    z-index: 10;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.9;
+}
+#skinConfigBtn:hover { background: rgba(0, 0, 0, 0.8); }
+
+/* Badge de expiração no item da bolsa (canto superior esquerdo) */
+.skin-expiry-badge {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    background: rgba(130, 0, 180, 0.88);
+    color: #fff;
+    font-size: 0.68em;
+    font-weight: bold;
+    padding: 1px 5px;
+    border-radius: 3px;
+    z-index: 2;
+    pointer-events: none;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.5px;
+}
+
+/* Expiração no modal de detalhes */
+#skinExpiryInfo {
+    font-size: 0.85em;
+    color: #bb86fc;
+    margin: 6px 0 10px;
+    font-family: 'Cinzel', serif;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Botão Ativar Skin */
+#activateSkinBtn {
+    background: linear-gradient(135deg, #3d006b, #7b00d4);
+    color: #fff;
+    border: 1px solid #bb86fc;
+    border-radius: 5px;
+    padding: 10px 0;
+    font-size: 0.9em;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    flex: 1 1 45%;
+    min-width: 120px;
+}
+#activateSkinBtn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5a0099, #9c00ff);
+    box-shadow: 0 0 14px rgba(187, 134, 252, 0.45);
+}
+#activateSkinBtn:disabled { opacity: 0.6; cursor: default; }
+
+/* ── Modal Gerenciador ───────────────────────── */
+#skinManagerModal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.88);
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+}
+
+#skinManagerContent {
+    background: linear-gradient(180deg, #1a0030 0%, #0d001a 55%, #1a0030 100%);
+    border: 2px solid #7b00d4;
+    border-radius: 12px;
+    padding: 20px;
+    width: 90%;
+    max-width: 380px;
+    max-height: 82vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 0 32px rgba(123, 0, 212, 0.45);
+    color: #e0dccc;
+    font-family: 'Cinzel', serif;
+}
+
+#skinManagerContent h3 {
+    margin: 0 0 4px;
+    color: #bb86fc;
+    font-size: 1.1em;
+    text-align: center;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(187, 134, 252, 0.5);
+}
+
+.skin-manager-empty {
+    color: #666;
+    font-size: 0.82em;
+    text-align: center;
+    padding: 10px 0;
+    font-family: 'Cinzel', serif;
+    font-style: italic;
+}
+
+.skin-manager-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.03);
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+}
+.skin-manager-item--active {
+    border-color: #bb86fc;
+    background: rgba(187, 134, 252, 0.07);
+}
+
+.skin-manager-thumb {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+}
+
+.skin-manager-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 3px;
+    min-width: 0;
+}
+
+.skin-manager-name {
+    font-size: 0.82em;
+    font-weight: bold;
+    color: #e0dccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.skin-manager-expiry {
+    font-size: 0.7em;
+    color: #777;
+    font-style: italic;
+}
+
+.skin-active-badge {
+    font-size: 0.65em;
+    background: #7b00d4;
+    color: #fff;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-weight: bold;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+
+.skin-select-btn {
+    background: none;
+    border: 1px solid #7b00d4;
+    color: #bb86fc;
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 0.75em;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.skin-select-btn:hover { background: rgba(123, 0, 212, 0.3); }
+
+#skinManagerDeactivateBtn button {
+    font-size: 0.82em;
+    padding: 8px 16px;
+    border-radius: 6px;
+}

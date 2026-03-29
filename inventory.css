@@ -696,7 +696,7 @@
 /* Botão de configuração no canto do vídeo */
 #skinConfigBtn {
     position: absolute;
-    top: 5px;
+    top: -1px;
     right: 25%;
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.15);

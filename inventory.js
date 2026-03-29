@@ -197,12 +197,12 @@ async function ensureDefinitionsLoaded() {
     // 3. ÚLTIMO RECURSO: Baixa agora se não existir em lugar nenhum
     console.log("⚠️ [Inventory] Definições ausentes. Baixando definições 'Lite'...");
     
-    // OTIMIZAÇÃO: Removemos description e stats de combate do load inicial.
+    // PATCH SKIN: Adicionados skin_frame_url e skin_video_url ao select
     const { data, error } = await supabase
         .from('items')
         .select(`
             item_id, name, display_name, rarity, item_type, stars,
-            crafts_item_id
+            crafts_item_id, skin_frame_url, skin_video_url
         `);
 
     if (!error && data) {
@@ -292,6 +292,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Inicia carregamento do inventário
     await loadPlayerAndItems();
+
+    // === SKIN: Inicializa sistema de skins após carregar inventário ===
+    window.skinSystem?.init();
 
     document.getElementById('refreshBtn')?.addEventListener('click', async (e) => {
         e.preventDefault();
@@ -523,6 +526,9 @@ async function fullDownload() {
 
     renderUI();
 
+    // === SKIN: Reconcilia estado local com o que o servidor retornou ===
+    window.skinSystem?.reconcileWithServer(playerData.active_skin_inventory_id ?? null);
+
     try {
         await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
         console.log('💾 Cache completo salvo com sucesso.');
@@ -581,7 +587,8 @@ function renderEquippedItems() {
 
     equippedItems.forEach(invItem => {
         const item = invItem.items;
-        if (item && invItem.equipped_slot) {
+        // Pula skins — elas têm equipped_slot='skin' mas não ocupam um slot de equipamento visual
+        if (item && invItem.equipped_slot && invItem.equipped_slot !== 'skin') {
             const slotDiv = document.getElementById(`${invItem.equipped_slot}-slot`);
             if (slotDiv) {
                 const totalStars = (invItem.items?.stars || 0) + (invItem.refine_level || 0);
@@ -612,12 +619,14 @@ async function loadItems(tab = 'all', itemsList = null) {
 
     const filteredItems = items.filter(item => {
         // Agora verificamos item.items para garantir que a hidratação funcionou
+        // Skins no gerenciador (equipped_slot='skin') não aparecem na bolsa
         if (!item.items || item.equipped_slot !== null || item.quantity <= 0) return false;
         
         if (tab === 'all') return true;
-        if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros') return true;
+        if (tab === 'equipment' && item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.items.item_type !== 'skin') return true;
         if (tab === 'fragments' && item.items.item_type === 'fragmento') return true;
-        if (tab === 'others' && item.items.item_type === 'outros') return true;
+        // PATCH SKIN: skins aparecem na aba "Outros"
+        if (tab === 'others' && (item.items.item_type === 'outros' || item.items.item_type === 'skin')) return true;
         return false;
     });
 
@@ -637,7 +646,8 @@ async function loadItems(tab = 'all', itemsList = null) {
         let imgSrc;
         if (item.items.name === 'unknown' || !item.items.name) {
              imgSrc = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
-        } else if (item.items.item_type === 'fragmento') {
+        } else if (item.items.item_type === 'fragmento' || item.items.item_type === 'skin') {
+            // PATCH SKIN: skins usam nome sem sufixo de estrelas, igual fragmentos
             imgSrc = `https://aden-rpg.pages.dev/assets/itens/${item.items.name}.webp`;
         } else {
             const totalStars = (item.items?.stars || 0) + (item.refine_level || 0);
@@ -649,7 +659,21 @@ async function loadItems(tab = 'all', itemsList = null) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.level && item.level >= 1) {
+        // PATCH SKIN: badge de expiração no canto superior esquerdo (apenas para skins com prazo)
+        if (item.items.item_type === 'skin') {
+            const isPermanent = item.is_permanent !== false;
+            if (!isPermanent && item.expires_at) {
+                const timeStr = window.skinSystem?.formatExpiryTime(item.expires_at);
+                if (timeStr) {
+                    const badge = document.createElement('span');
+                    badge.className   = 'skin-expiry-badge';
+                    badge.textContent = timeStr;
+                    itemDiv.appendChild(badge);
+                }
+            }
+        }
+
+        if (item.items.item_type !== 'fragmento' && item.items.item_type !== 'outros' && item.items.item_type !== 'skin' && item.level && item.level >= 1) {
             const levelElement = document.createElement('div');
             levelElement.className = 'item-level';
             levelElement.textContent = `Lv. ${item.level}`;
@@ -729,8 +753,10 @@ async function updateLocalInventoryState(args) {
         const idx = allInventoryItems.findIndex(i => i.id === itemId);
         if (idx > -1) {
             if (isEquipping) {
-                // Remove de outros itens do mesmo slot
-                allInventoryItems.forEach(i => { if (i.equipped_slot === slot) i.equipped_slot = null; });
+                // Remove de outros itens do mesmo slot (exceto skins — múltiplas podem coexistir no gerenciador)
+                if (slot !== 'skin') {
+                    allInventoryItems.forEach(i => { if (i.equipped_slot === slot) i.equipped_slot = null; });
+                }
                 allInventoryItems[idx].equipped_slot = slot;
             } else {
                 allInventoryItems[idx].equipped_slot = null;
@@ -952,6 +978,12 @@ async function handleEquipUnequip(item, isEquipped) {
 async function showItemDetails(item) {
     if (!item.items) item = hydrateItem(item);
     selectedItem = item;
+
+    // === PATCH SKIN: Delega para o sistema de skins ===
+    if (item.items?.item_type?.toLowerCase() === 'skin') {
+        window.skinSystem?.showSkinDetails(item);
+        return;
+    }
     
     const modal = document.getElementById('itemDetailsModal');
     if (!modal) return;
@@ -968,6 +1000,12 @@ async function showItemDetails(item) {
 
     document.getElementById('detailItemName').textContent = item.items.display_name;
     document.getElementById('detailItemRarity').textContent = item.items.rarity;
+
+    // Garante que o skinExpiryInfo e activateSkinBtn ficam ocultos para itens normais
+    const skinExpiryEl = document.getElementById('skinExpiryInfo');
+    if (skinExpiryEl) skinExpiryEl.style.display = 'none';
+    const activateSkinBtn = document.getElementById('activateSkinBtn');
+    if (activateSkinBtn) activateSkinBtn.style.display = 'none';
     
     // OTIMIZAÇÃO: Lazy Load de descrição e stats se necessário
     const descEl = document.getElementById('itemDescription');
@@ -1363,5 +1401,9 @@ window.removeCacheItem = removeCacheItem;
 window.updateLocalInventoryState = updateLocalInventoryState; 
 window.showCustomAlert = showCustomAlert;
 window.openRefineFragmentModal = openRefineFragmentModal;
+// PATCH SKIN: expõe funções internas necessárias para skin_system.js
+window.saveCache = saveCache;
+window.renderUI = renderUI;
+window.loadPlayerAndItems = loadPlayerAndItems;
 
 if (!window.handleDeconstruct) window.handleDeconstruct = () => {};

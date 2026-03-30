@@ -10,8 +10,7 @@ import { supabase } from './supabaseClient.js';
 const SKIN_CACHE_KEY     = 'aden_skin_cache_v2';
 const DEFAULT_VIDEO      = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
 const DEFAULT_VIDEO_TYPE = 'video/webm';
-const VIDEO_FADE_MS      = 500;   // duração do fade out antes de trocar o src
-const VIDEO_TARGET_OPACITY = '0.9'; // opacidade final do vídeo (igual ao CSS original)
+const VIDEO_TARGET_OPACITY = '0.9'; // opacidade final do vídeo
 
 // ─── Cache Local (localStorage — < 1 KB) ────────────────────────────
 
@@ -83,15 +82,19 @@ function isExpiredData(skinData) {
 
 // ─── Fade de Vídeo ───────────────────────────────────────────────────
 
+const FADE_OUT_MS = 400;   // duração do fade-out (deve ser <= setTimeout abaixo)
+const FADE_IN_MS  = 1500;  // duração do fade-in
+
 /**
  * Troca o src do vídeo com fade-out → troca → fade-in.
- * skipFadeOut=true: vídeo já está em opacity 0 (boot ou primeiro load),
- *   pula o delay de fade-out e vai direto para o carregamento + fade-in.
+ * skipFadeOut=true: vídeo já está em opacity 0 (boot),
+ *   vai direto para o carregamento + fade-in.
  */
 function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
     if (!videoEl) return;
 
     const doLoad = () => {
+        // Vídeo já invisível — troca src
         const source = videoEl.querySelector('source');
         if (source) {
             source.src  = newSrc;
@@ -99,7 +102,11 @@ function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
         }
         videoEl.load();
 
-        const fadeIn = () => { videoEl.style.opacity = VIDEO_TARGET_OPACITY; };
+        // Fade-in lento após o browser ter frames suficientes
+        const fadeIn = () => {
+            videoEl.style.transition = `opacity ${FADE_IN_MS}ms ease-in`;
+            videoEl.style.opacity    = VIDEO_TARGET_OPACITY;
+        };
         if (videoEl.readyState >= 3) {
             fadeIn();
         } else {
@@ -110,12 +117,14 @@ function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
     };
 
     if (skipFadeOut) {
-        // Vídeo já invisível — carrega direto sem delay
+        // Boot: vídeo já em opacity 0 pelo CSS, vai direto ao load
         doLoad();
     } else {
-        // Fade-out, depois troca
-        videoEl.style.opacity = '0';
-        setTimeout(doLoad, VIDEO_FADE_MS);
+        // Fade-out rápido primeiro, garantindo que esteja 100% invisível
+        // antes de trocar o src (elimina o flash do placeholder cinza)
+        videoEl.style.transition = `opacity ${FADE_OUT_MS}ms ease-out`;
+        videoEl.style.opacity    = '0';
+        setTimeout(doLoad, FADE_OUT_MS + 30); // +30ms de margem de segurança
     }
 }
 

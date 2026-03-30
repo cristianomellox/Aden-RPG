@@ -197,12 +197,12 @@ async function ensureDefinitionsLoaded() {
     // 3. ÚLTIMO RECURSO: Baixa agora se não existir em lugar nenhum
     console.log("⚠️ [Inventory] Definições ausentes. Baixando definições 'Lite'...");
     
-    // PATCH SKIN: Adicionados skin_frame_url e skin_video_url ao select
+    // PATCH SKIN: skin_frame_url, skin_video_url e skin_duration_hours incluídos
     const { data, error } = await supabase
         .from('items')
         .select(`
             item_id, name, display_name, rarity, item_type, stars,
-            crafts_item_id, skin_frame_url, skin_video_url
+            crafts_item_id, skin_frame_url, skin_video_url, skin_duration_hours
         `);
 
     if (!error && data) {
@@ -509,6 +509,9 @@ async function loadPlayerAndItems(forceRefresh = false) {
         await saveCache(allInventoryItems, playerBaseStats, deltaData.last_inventory_update);
         console.log('💾 Cache local sincronizado e salvo.');
 
+        // === SKIN: Inicia timers de skins recebidas e ainda não iniciadas ===
+        await initPendingSkinTimers();
+
     } catch (e) {
         console.error("Erro ao processar Delta Sync:", e);
         await fullDownload();
@@ -540,6 +543,9 @@ async function fullDownload() {
 
     // === SKIN: Reconcilia estado local com o que o servidor retornou ===
     window.skinSystem?.reconcileWithServer(playerData.active_skin_inventory_id ?? null);
+
+    // === SKIN: Inicia timers de skins recebidas e ainda não iniciadas ===
+    await initPendingSkinTimers();
 
     try {
         await saveCache(allInventoryItems, playerBaseStats, playerData.last_inventory_update);
@@ -704,8 +710,45 @@ async function loadItems(tab = 'all', itemsList = null) {
 }
 
 // -------------------------------------------------------------
-// FUNÇÃO MÁGICA DE ATUALIZAÇÃO LOCAL (Sem baixar tudo de novo)
+// SKIN: Inicia timers de skins recebidas mas ainda não iniciadas
+// (expires_at NULL + skin_duration_hours > 0 na definição do item)
+// Chamada após cada carregamento — zero egress quando não há nada a fazer.
 // -------------------------------------------------------------
+async function initPendingSkinTimers() {
+    if (!globalUser) return;
+
+    const pending = (window.allInventoryItems || []).filter(i =>
+        i.items?.item_type?.toLowerCase() === 'skin' &&
+        i.expires_at == null &&
+        (i.items?.skin_duration_hours ?? 0) > 0 &&
+        i.equipped_slot !== 'skin'   // só na bolsa, não no gerenciador
+    );
+
+    if (pending.length === 0) return;
+
+    console.log(`[Skin] ${pending.length} skin(s) sem timer — iniciando...`);
+
+    for (const skinItem of pending) {
+        const { data } = await supabase.rpc('start_skin_expiry', {
+            p_inventory_item_id: skinItem.id,
+            p_player_id        : globalUser.id
+        });
+
+        if (data?.success && data.expires_at) {
+            // Atualiza localmente sem precisar rebaixar tudo
+            const idx = window.allInventoryItems.findIndex(i => i.id === skinItem.id);
+            if (idx > -1) {
+                window.allInventoryItems[idx].expires_at = data.expires_at;
+            }
+        }
+    }
+
+    // Persiste o estado atualizado no IDB e re-renderiza a bolsa
+    await saveCache(window.allInventoryItems, window.playerBaseStats, new Date().toISOString());
+    loadItems(document.querySelector('.tab-button.active')?.id.replace('tab-', '') || 'all');
+}
+
+
 async function updateLocalInventoryState(args) {
     const { updatedItemId, newItemData, usedFragments, usedCrystals, newStats, equipUpdate } = args;
     let needsSort = false;

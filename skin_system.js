@@ -1,25 +1,25 @@
 // =====================================================================
-// skin_system.js — Sistema de Skins, Aden RPG
-// Adicione no HTML APÓS inventory.js:
+// skin_system.js — Sistema de Skins, Aden RPG (v2)
+// Carregue APÓS inventory.js no HTML:
 //   <script type="module" src="skin_system.js"></script>
 // =====================================================================
 
 import { supabase } from './supabaseClient.js';
 
 // ─── Constantes ──────────────────────────────────────────────────────
-const SKIN_CACHE_KEY  = 'aden_skin_cache_v1';
-const DEFAULT_VIDEO   = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+const SKIN_CACHE_KEY     = 'aden_skin_cache_v2';
+const DEFAULT_VIDEO      = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
 const DEFAULT_VIDEO_TYPE = 'video/webm';
+const VIDEO_FADE_MS      = 500;   // duração do fade out antes de trocar o src
+const VIDEO_TARGET_OPACITY = '0.9'; // opacidade final do vídeo (igual ao CSS original)
 
-// ─── Cache Local (localStorage) ──────────────────────────────────────
-// Salva: { active_skin_inventory_id, active_skin: {...}, cache_time }
-// É pequeno o suficiente para localStorage (< 1 KB).
+// ─── Cache Local (localStorage — < 1 KB) ────────────────────────────
 
 function saveSkinCache(data) {
     try {
         localStorage.setItem(SKIN_CACHE_KEY, JSON.stringify({ ...data, cache_time: Date.now() }));
     } catch (e) {
-        console.warn('[Skin] Erro ao salvar cache de skin:', e);
+        console.warn('[Skin] Erro ao salvar cache:', e);
     }
 }
 
@@ -27,9 +27,7 @@ function loadSkinCache() {
     try {
         const raw = localStorage.getItem(SKIN_CACHE_KEY);
         return raw ? JSON.parse(raw) : null;
-    } catch {
-        return null;
-    }
+    } catch { return null; }
 }
 
 function clearSkinCache() {
@@ -39,26 +37,26 @@ function clearSkinCache() {
 // ─── Helpers de Tempo ────────────────────────────────────────────────
 
 /**
- * Formato compacto para o badge da bolsa: "7d", "23h", "45m", "Expirado"
- * Exportado para inventory.js usar no badge do item.
+ * Badge compacto para a bolsa: "7d" / "23h" / "45m" / "Expirado"
+ * Retorna null para skins permanentes (expires_at === null).
+ * Exportado via window.skinSystem para inventory.js.
  */
 function formatExpiryTime(expiresAt) {
-    if (!expiresAt) return null;
+    if (!expiresAt) return null;                       // permanente
     const diffMs = new Date(expiresAt) - Date.now();
     if (diffMs <= 0) return 'Expirado';
-    const mins  = Math.floor(diffMs / 60000);
-    const hrs   = Math.floor(mins / 60);
-    const days  = Math.floor(hrs / 24);
-    if (days >= 1)  return `${days}d`;
-    if (hrs  >= 1)  return `${hrs}h`;
+    const mins = Math.floor(diffMs / 60000);
+    const hrs  = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    if (days >= 1) return `${days}d`;
+    if (hrs  >= 1) return `${hrs}h`;
     return `${mins}m`;
 }
 
 /**
- * Formato completo para modais: "⏰ Expira em: 3 dias e 5h"
+ * Texto longo para modais: "⏰ Expira em: 3 dias e 5h" ou "✨ Permanente"
  */
-function formatExpiryFull(expiresAt, isPermanent) {
-    if (isPermanent !== false) return '✨ Permanente';
+function formatExpiryFull(expiresAt) {
     if (!expiresAt) return '✨ Permanente';
     const diffMs = new Date(expiresAt) - Date.now();
     if (diffMs <= 0) return '❌ Expirada';
@@ -76,11 +74,42 @@ function formatExpiryFull(expiresAt, isPermanent) {
     return `⏰ Expira em: ${parts.join(' e ')}`;
 }
 
+/** Verifica se a skin no cache local já expirou */
 function isExpiredData(skinData) {
     if (!skinData) return true;
-    if (skinData.is_permanent !== false) return false;
-    if (!skinData.expires_at) return false;
+    if (!skinData.expires_at) return false;           // permanente
     return new Date(skinData.expires_at) <= Date.now();
+}
+
+// ─── Fade de Vídeo ───────────────────────────────────────────────────
+
+/**
+ * Faz fade-out, troca src, depois fade-in quando o vídeo estiver pronto.
+ * Idêntico ao comportamento do boss (solo_boss.js).
+ */
+function _swapVideo(videoEl, newSrc, newType) {
+    if (!videoEl) return;
+
+    // Fade out
+    videoEl.style.opacity = '0';
+
+    setTimeout(() => {
+        const source = videoEl.querySelector('source');
+        if (source) {
+            source.src  = newSrc;
+            source.type = newType || DEFAULT_VIDEO_TYPE;
+        }
+        videoEl.load();
+
+        const fadeIn = () => { videoEl.style.opacity = VIDEO_TARGET_OPACITY; };
+        if (videoEl.readyState >= 3) {
+            fadeIn();
+        } else {
+            videoEl.addEventListener('canplay',      fadeIn, { once: true });
+            videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
+        }
+        videoEl.play().catch(() => {});
+    }, VIDEO_FADE_MS);
 }
 
 // ─── Aplicar / Remover Visual da Skin ────────────────────────────────
@@ -90,20 +119,16 @@ function applySkinUI(skinData) {
     const videoEl  = document.getElementById('background-video');
     const avatarEl = document.getElementById('playerAvatarEquip');
 
+    // Moldura
     if (skinData?.frame_url && frameEl) {
-        frameEl.src          = skinData.frame_url;
+        frameEl.src           = skinData.frame_url;
         frameEl.style.display = 'block';
         if (avatarEl) avatarEl.style.border = 'none';
     }
 
+    // Vídeo com fade
     if (skinData?.video_url && videoEl) {
-        const source = videoEl.querySelector('source');
-        if (source) {
-            source.src  = skinData.video_url;
-            source.type = DEFAULT_VIDEO_TYPE;
-        }
-        videoEl.load();
-        videoEl.play().catch(() => {});
+        _swapVideo(videoEl, skinData.video_url, DEFAULT_VIDEO_TYPE);
     }
 }
 
@@ -112,25 +137,24 @@ function removeSkinUI() {
     const videoEl  = document.getElementById('background-video');
     const avatarEl = document.getElementById('playerAvatarEquip');
 
+    // Remove moldura
     if (frameEl) { frameEl.src = ''; frameEl.style.display = 'none'; }
     if (avatarEl) avatarEl.style.border = '3px solid gold';
 
+    // Vídeo padrão com fade
     if (videoEl) {
-        const source = videoEl.querySelector('source');
-        if (source) { source.src = DEFAULT_VIDEO; source.type = DEFAULT_VIDEO_TYPE; }
-        videoEl.load();
-        videoEl.play().catch(() => {});
+        _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE);
     }
 }
 
-// ─── Verificação e Limpeza de Expiração ──────────────────────────────
+// ─── Expiração ───────────────────────────────────────────────────────
 
 function checkAndHandleExpiry() {
     const skinCache = loadSkinCache();
     if (!skinCache?.active_skin) return;
     if (!isExpiredData(skinCache.active_skin)) return;
 
-    console.log('[Skin] Skin expirou. Removendo visual e limpando cache...');
+    console.log('[Skin] Skin expirou. Removendo visual...');
     clearSkinCache();
     removeSkinUI();
 
@@ -138,55 +162,42 @@ function checkAndHandleExpiry() {
     if (user) {
         supabase
             .rpc('cleanup_expired_skins', { p_player_id: user.id })
-            .then(() => {
-                // Força reload do inventário para remover o item expirado da IDB/UI
-                window.loadPlayerAndItems?.(true);
-            });
+            .then(() => window.loadPlayerAndItems?.(true));
     }
 }
 
-let _expiryInterval = null;
-
-function startExpiryChecker() {
-    if (_expiryInterval) clearInterval(_expiryInterval);
-    _expiryInterval = setInterval(checkAndHandleExpiry, 60_000); // verifica a cada 1 minuto
-}
+// Sem polling — verificação ocorre apenas no boot (init).
+// A expiração é puramente local (lê localStorage), mas não há
+// necessidade de checar com a página aberta: o timer do badge
+// é visual e o servidor sempre valida na próxima ação.
 
 // ─── Reconciliação com Servidor ───────────────────────────────────────
-// Chamada após fullDownload para garantir que o estado local bate com o servidor.
 
 function reconcileWithServer(serverActiveSkinId) {
-    const skinCache          = loadSkinCache();
-    const localActiveSkinId  = skinCache?.active_skin_inventory_id ?? null;
+    const skinCache         = loadSkinCache();
+    const localActiveSkinId = skinCache?.active_skin_inventory_id ?? null;
 
-    // Já em sincronia
     if (serverActiveSkinId === localActiveSkinId) return;
 
     if (!serverActiveSkinId) {
-        // Servidor diz "sem skin ativa" — limpa tudo localmente
         clearSkinCache();
         removeSkinUI();
         return;
     }
 
-    // Servidor tem uma skin ativa diferente da que está no cache.
-    // Tenta encontrá-la nos itens já carregados em memória.
     const items    = window.allInventoryItems || [];
     const skinItem = items.find(i => i.id === serverActiveSkinId);
-    if (!skinItem) return;
+    if (!skinItem?.items) return;
 
-    const def = skinItem.items;
-    if (!def) return;
-
+    const def      = skinItem.items;
     const newCache = {
         active_skin_inventory_id: serverActiveSkinId,
         active_skin: {
             inventory_item_id : serverActiveSkinId,
-            frame_url         : def.skin_frame_url  || null,
-            video_url         : def.skin_video_url  || null,
-            expires_at        : skinItem.expires_at  || null,
-            is_permanent      : skinItem.is_permanent !== false,
-            display_name      : def.display_name     || 'Skin'
+            frame_url         : def.skin_frame_url || null,
+            video_url         : def.skin_video_url || null,
+            expires_at        : skinItem.expires_at || null,   // null = permanente
+            display_name      : def.display_name    || 'Skin'
         }
     };
 
@@ -194,11 +205,12 @@ function reconcileWithServer(serverActiveSkinId) {
     applySkinUI(newCache.active_skin);
 }
 
-// ─── Handlers de Ação ─────────────────────────────────────────────────
+// ─── Handlers ─────────────────────────────────────────────────────────
 
 /**
- * Ativa a skin: move da bolsa → gerenciador + define como ativa.
- * Chamado pelo botão "Ativar" no modal de detalhes do item.
+ * Ativa a skin da bolsa.
+ * Com stacking: se mesma skin já estiver no gerenciador, soma a duração
+ * e deleta o token ativado. O resultado_id pode ser diferente do ativado.
  */
 async function handleActivateSkin(item) {
     const user = window.globalUser;
@@ -212,31 +224,39 @@ async function handleActivateSkin(item) {
     if (error) { window.showCustomAlert?.('Erro ao ativar skin: ' + error.message); return; }
     if (data?.error) { window.showCustomAlert?.(data.error); return; }
 
-    // ── Atualiza IDB local: move equipped_slot para 'skin' ──
-    // NOTA: manipulamos allInventoryItems diretamente porque updateLocalInventoryState
-    // limparia TODOS os outros itens com equipped_slot='skin', o que removeria
-    // outras skins do gerenciador. Para skins, o comportamento é diferente: 
-    // múltiplas skins podem coexistir no gerenciador ao mesmo tempo.
+    // ── Atualiza IDB local ──────────────────────────────────────────
     const items = window.allInventoryItems || [];
-    const idx   = items.findIndex(i => i.id === item.id);
-    if (idx > -1) {
-        items[idx].equipped_slot = 'skin';
-        window.allInventoryItems = items;
+
+    if (data.stacked) {
+        // Stacking: token ativado foi consumido (deletar do IDB)
+        const consumedIdx = items.findIndex(i => i.id === item.id);
+        if (consumedIdx > -1) items.splice(consumedIdx, 1);
+
+        // Atualiza expires_at da skin existente no gerenciador
+        const existingIdx = items.findIndex(i => i.id === data.inventory_item_id);
+        if (existingIdx > -1) {
+            items[existingIdx].expires_at = data.expires_at;
+        }
+    } else {
+        // Primeira ativação: move para gerenciador
+        const idx = items.findIndex(i => i.id === item.id);
+        if (idx > -1) {
+            items[idx].equipped_slot = 'skin';
+            items[idx].expires_at    = data.expires_at;   // timer resetado
+        }
     }
 
-    // Salva IDB
-    const stats = window.playerBaseStats || {};
-    await window.saveCache?.(items, stats, new Date().toISOString());
+    window.allInventoryItems = items;
+    await window.saveCache?.(items, window.playerBaseStats || {}, new Date().toISOString());
 
-    // Salva skin no localStorage
+    // ── Cache de skin ───────────────────────────────────────────────
     saveSkinCache({
-        active_skin_inventory_id: item.id,
+        active_skin_inventory_id: data.inventory_item_id,
         active_skin: {
-            inventory_item_id : item.id,
-            frame_url         : data.frame_url   || null,
-            video_url         : data.video_url   || null,
-            expires_at        : data.expires_at  || null,
-            is_permanent      : data.is_permanent !== false,
+            inventory_item_id : data.inventory_item_id,
+            frame_url         : data.frame_url  || null,
+            video_url         : data.video_url  || null,
+            expires_at        : data.expires_at || null,   // null = permanente
             display_name      : data.display_name || item.items?.display_name || 'Skin'
         }
     });
@@ -245,13 +265,14 @@ async function handleActivateSkin(item) {
     window.renderUI?.();
 
     document.getElementById('itemDetailsModal').style.display = 'none';
-    window.showCustomAlert?.('✨ Skin ativada com sucesso!');
+
+    const msg = data.stacked
+        ? `✨ Duração acumulada! Novo prazo: ${formatExpiryFull(data.expires_at)}`
+        : '✨ Skin ativada com sucesso!';
+    window.showCustomAlert?.(msg);
 }
 
-/**
- * Remove o visual ativo (restaura padrão).
- * Skin permanece no gerenciador e pode ser reativada.
- */
+/** Remove o visual ativo; skin continua no gerenciador. */
 async function handleDeactivateSkin() {
     const user = window.globalUser;
     if (!user) return;
@@ -265,10 +286,7 @@ async function handleDeactivateSkin() {
     window.showCustomAlert?.('Visual padrão restaurado.');
 }
 
-/**
- * Seleciona uma skin já no gerenciador como a ativa.
- * Chamado pelo botão "Selecionar" dentro do modal gerenciador.
- */
+/** Seleciona uma skin já no gerenciador como a visualmente ativa. */
 async function handleSelectSkin(inventoryItemId) {
     const user = window.globalUser;
     if (!user) return;
@@ -284,20 +302,18 @@ async function handleSelectSkin(inventoryItemId) {
         active_skin_inventory_id: inventoryItemId,
         active_skin: {
             inventory_item_id : inventoryItemId,
-            frame_url         : data.frame_url   || null,
-            video_url         : data.video_url   || null,
-            expires_at        : data.expires_at  || null,
-            is_permanent      : data.is_permanent !== false,
+            frame_url         : data.frame_url  || null,
+            video_url         : data.video_url  || null,
+            expires_at        : data.expires_at || null,
             display_name      : data.display_name || 'Skin'
         }
     });
 
     applySkinUI(data);
-    openSkinManagerModal(); // atualiza o modal visualmente
+    openSkinManagerModal(); // re-renderiza o modal com dados atualizados
 }
 
-// ─── Modal de Detalhes do Item (tipo 'skin') ─────────────────────────
-// Chamado por inventory.js → showItemDetails quando item_type === 'skin'
+// ─── Modal de Detalhes (tipo 'skin') ──────────────────────────────────
 
 function showSkinDetails(item) {
     const modal = document.getElementById('itemDetailsModal');
@@ -305,31 +321,25 @@ function showSkinDetails(item) {
 
     const def = item.items || {};
 
-    // Imagem (thumbnail da skin, sem sufixo de estrelas)
     const imgEl = document.getElementById('detailItemImage');
     if (imgEl) {
         imgEl.src = `https://aden-rpg.pages.dev/assets/itens/${def.name || 'unknown'}.webp`;
         imgEl.onerror = () => { imgEl.src = 'https://aden-rpg.pages.dev/assets/itens/unknown.webp'; };
     }
 
-    const nameEl = document.getElementById('detailItemName');
+    const nameEl   = document.getElementById('detailItemName');
     const rarityEl = document.getElementById('detailItemRarity');
-    if (nameEl) nameEl.textContent = def.display_name || 'Skin';
+    if (nameEl)   nameEl.textContent   = def.display_name || 'Skin';
     if (rarityEl) rarityEl.textContent = def.rarity || '';
 
-    // Descrição
-    const descEl = document.getElementById('itemDescription');
-    if (descEl) descEl.textContent = def.description || 'Skin especial para personalizar seu visual.';
-
-    // Expiração
+    // Expiração: expires_at null = permanente
     const expiryEl = document.getElementById('skinExpiryInfo');
     if (expiryEl) {
-        const isPermanent = item.is_permanent !== false;
-        expiryEl.textContent = formatExpiryFull(item.expires_at, isPermanent);
+        expiryEl.textContent = formatExpiryFull(item.expires_at);
         expiryEl.style.display = 'block';
     }
 
-    // Oculta seções exclusivas de equipamentos
+    // Oculta seções de equipamentos
     document.querySelector('.progress-bar-container')?.style.setProperty('display', 'none');
     document.getElementById('levelUpBtn')?.style.setProperty('display', 'none');
     document.getElementById('refineBtn')?.style.setProperty('display', 'none');
@@ -341,7 +351,6 @@ function showSkinDetails(item) {
     document.getElementById('itemRefineSection')?.style.setProperty('display', 'none');
     document.getElementById('equipBtnModal')?.style.setProperty('display', 'none');
 
-    // Mostra #itemActions apenas com o botão Ativar
     const actionsDiv = document.getElementById('itemActions');
     if (actionsDiv) actionsDiv.style.display = 'flex';
 
@@ -354,6 +363,33 @@ function showSkinDetails(item) {
         activateBtn.textContent   = isActive ? '✅ Já está Ativa' : 'Ativar';
         activateBtn.disabled      = isActive;
         activateBtn.onclick       = isActive ? null : () => handleActivateSkin(item);
+    }
+
+    // Descrição: lazy-load (não está no select "lite" de definições)
+    // skin_duration_hours também é carregado aqui para exibir duração correta
+    const descEl = document.getElementById('itemDescription');
+    if (descEl) {
+        if (def.description) {
+            descEl.textContent = def.description;
+        } else {
+            descEl.textContent = 'Carregando...';
+            supabase
+                .from('items')
+                .select('description, skin_duration_hours')
+                .eq('item_id', item.item_id)
+                .single()
+                .then(({ data }) => {
+                    if (data) {
+                        def.description          = data.description;
+                        def.skin_duration_hours  = data.skin_duration_hours;
+                        // Persiste no mapa de definições para não buscar de novo
+                        if (window.itemDefinitions) {
+                            window.itemDefinitions.set(item.item_id, def);
+                        }
+                        descEl.textContent = data.description || '';
+                    }
+                });
+        }
     }
 
     modal.style.display = 'flex';
@@ -369,13 +405,11 @@ function openSkinManagerModal() {
     const activeSkinId = skinCache?.active_skin_inventory_id ?? null;
     const items        = window.allInventoryItems || [];
 
-    // Skins no gerenciador (equipped_slot = 'skin')
     const ownedSkins = items.filter(i =>
         i.equipped_slot === 'skin' &&
         i.items?.item_type?.toLowerCase() === 'skin'
     );
 
-    // ── Seção "skin ativa atualmente" ──
     const activeContainer = document.getElementById('skinManagerActiveSkin');
     const deactivateBtn   = document.getElementById('skinManagerDeactivateBtn');
 
@@ -384,10 +418,9 @@ function openSkinManagerModal() {
             '<p class="skin-manager-empty">Nenhuma skin ativa. Visual padrão.</p>';
         if (deactivateBtn) deactivateBtn.style.display = 'none';
     } else {
-        const activeSkin  = skinCache.active_skin;
-        const skinItem    = ownedSkins.find(i => i.id === activeSkinId);
-        const imgName     = skinItem?.items?.name || 'unknown';
-        const expiryText  = formatExpiryFull(activeSkin.expires_at, activeSkin.is_permanent !== false);
+        const activeSkin = skinCache.active_skin;
+        const skinItem   = ownedSkins.find(i => i.id === activeSkinId);
+        const imgName    = skinItem?.items?.name || 'unknown';
 
         if (activeContainer) {
             activeContainer.innerHTML = `
@@ -397,7 +430,7 @@ function openSkinManagerModal() {
                          class="skin-manager-thumb">
                     <div class="skin-manager-info">
                         <span class="skin-manager-name">${activeSkin.display_name || 'Skin'}</span>
-                        <span class="skin-manager-expiry">${expiryText}</span>
+                        <span class="skin-manager-expiry">${formatExpiryFull(activeSkin.expires_at)}</span>
                     </div>
                     <span class="skin-active-badge">ATIVA</span>
                 </div>
@@ -406,7 +439,6 @@ function openSkinManagerModal() {
         if (deactivateBtn) deactivateBtn.style.display = 'block';
     }
 
-    // ── Lista de todas as skins do gerenciador ──
     const listEl = document.getElementById('skinManagerList');
     if (!listEl) { modal.style.display = 'flex'; return; }
 
@@ -415,10 +447,8 @@ function openSkinManagerModal() {
     } else {
         listEl.innerHTML = '';
         ownedSkins.forEach(skinItem => {
-            const def        = skinItem.items || {};
-            const isActive   = skinItem.id === activeSkinId;
-            const isPermanent = skinItem.is_permanent !== false;
-            const expiryText = formatExpiryFull(skinItem.expires_at, isPermanent);
+            const def      = skinItem.items || {};
+            const isActive = skinItem.id === activeSkinId;
 
             const el = document.createElement('div');
             el.className = `skin-manager-item ${isActive ? 'skin-manager-item--active' : ''}`;
@@ -428,7 +458,7 @@ function openSkinManagerModal() {
                      class="skin-manager-thumb">
                 <div class="skin-manager-info">
                     <span class="skin-manager-name">${def.display_name || 'Skin'}</span>
-                    <span class="skin-manager-expiry">${expiryText}</span>
+                    <span class="skin-manager-expiry">${formatExpiryFull(skinItem.expires_at)}</span>
                 </div>
                 ${isActive
                     ? '<span class="skin-active-badge">ATIVA</span>'
@@ -439,9 +469,9 @@ function openSkinManagerModal() {
         });
 
         listEl.querySelectorAll('.skin-select-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                handleSelectSkin(parseInt(btn.dataset.id, 10));
-            });
+            btn.addEventListener('click', () =>
+                handleSelectSkin(parseInt(btn.dataset.id, 10))
+            );
         });
     }
 
@@ -455,7 +485,7 @@ function closeSkinManagerModal() {
 // ─── Inicialização ────────────────────────────────────────────────────
 
 function init() {
-    // 1. Aplica skin do cache imediatamente (antes do server sync)
+    // 1. Verifica expiração e aplica skin do cache (sem egress)
     checkAndHandleExpiry();
 
     const skinCache = loadSkinCache();
@@ -463,10 +493,7 @@ function init() {
         applySkinUI(skinCache.active_skin);
     }
 
-    // 2. Inicia verificação periódica de expiração
-    startExpiryChecker();
-
-    // 3. Liga eventos dos botões da UI
+    // 2. Eventos dos botões
     document.getElementById('skinConfigBtn')
         ?.addEventListener('click', openSkinManagerModal);
     document.getElementById('closeSkinManagerModal')
@@ -475,15 +502,13 @@ function init() {
         ?.addEventListener('click', handleDeactivateSkin);
 }
 
-// ─── Exportações Globais ──────────────────────────────────────────────
-// inventory.js acessa via window.skinSystem.*
-
+// ─── Exportações ──────────────────────────────────────────────────────
 window.skinSystem = {
     init,
     applySkinUI,
     removeSkinUI,
     showSkinDetails,
     reconcileWithServer,
-    formatExpiryTime,
+    formatExpiryTime,   // usado pelo badge da bolsa em inventory.js
     openSkinManagerModal
 };

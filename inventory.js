@@ -270,17 +270,8 @@ function hydrateItem(rawItem) {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
     
-    // Fade-in do vídeo de fundo (igual ao boss — começa opacity:0 no CSS)
-    const bgVid = document.getElementById('background-video');
-    if (bgVid) {
-        const fadeInBg = () => { bgVid.style.opacity = '0.9'; };
-        if (bgVid.readyState >= 3) {
-            fadeInBg();
-        } else {
-            bgVid.addEventListener('canplaythrough', fadeInBg, { once: true });
-            bgVid.addEventListener('canplay',        fadeInBg, { once: true });
-        }
-    }
+    // Nota: o fade-in do vídeo de fundo é gerenciado pelo skin_system.init()
+    // que conhece imediatamente qual src usar (padrão ou skin ativa).
 
     // Auth Otimista
     const localId = getLocalUserId();

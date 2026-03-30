@@ -183,8 +183,9 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0;                      /* começa invisível; JS faz fade-in no canplay */
+  opacity: 0;                        /* começa invisível; skin_system faz fade-in no canplay */
   transition: opacity 1.5s ease-in;
+  background-color: black;           /* elimina o placeholder cinza nativo do browser */
   z-index: -1;
 }
     </style>
@@ -468,7 +469,7 @@
     <div id="skinManagerContent" class="modal-content">
         <span id="closeSkinManagerModal" class="btn">x</span>
 
-        <h3>✦ Skins</h3>
+        <h3>✦ Skins ✦</h3>
         <p style="font-size:0.75em; color:#888; text-align:center; margin:0 0 10px;">
             Gerencie suas skins de perfil
         </p>

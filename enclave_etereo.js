@@ -2301,7 +2301,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
     const _vf = _spotVolume(spot.id);
     playSoundAt(sndName, (sndName === 'critical' ? 0.15 : 1.0) * _vf);
-    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 2 * _vf), 300); }
+    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.5 * _vf), 300); }
 
     // Shake mob avatar
     const mobAv = targetMob.querySelector('.mob-avatar');

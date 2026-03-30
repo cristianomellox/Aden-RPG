@@ -183,9 +183,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0;                        /* começa invisível; skin_system faz fade-in no canplay */
-  transition: opacity 1.5s ease-in;
-  background-color: black;           /* elimina o placeholder cinza nativo do browser */
+  opacity: 0;               /* começa invisível; skin_system.js controla o fade via style inline */
+  background-color: black;  /* elimina placeholder cinza nativo do browser */
   z-index: -1;
 }
     </style>

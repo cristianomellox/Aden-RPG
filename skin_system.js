@@ -84,16 +84,14 @@ function isExpiredData(skinData) {
 // ─── Fade de Vídeo ───────────────────────────────────────────────────
 
 /**
- * Faz fade-out, troca src, depois fade-in quando o vídeo estiver pronto.
- * Idêntico ao comportamento do boss (solo_boss.js).
+ * Troca o src do vídeo com fade-out → troca → fade-in.
+ * skipFadeOut=true: vídeo já está em opacity 0 (boot ou primeiro load),
+ *   pula o delay de fade-out e vai direto para o carregamento + fade-in.
  */
-function _swapVideo(videoEl, newSrc, newType) {
+function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
     if (!videoEl) return;
 
-    // Fade out
-    videoEl.style.opacity = '0';
-
-    setTimeout(() => {
+    const doLoad = () => {
         const source = videoEl.querySelector('source');
         if (source) {
             source.src  = newSrc;
@@ -105,16 +103,25 @@ function _swapVideo(videoEl, newSrc, newType) {
         if (videoEl.readyState >= 3) {
             fadeIn();
         } else {
-            videoEl.addEventListener('canplay',      fadeIn, { once: true });
+            videoEl.addEventListener('canplay',        fadeIn, { once: true });
             videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
         }
         videoEl.play().catch(() => {});
-    }, VIDEO_FADE_MS);
+    };
+
+    if (skipFadeOut) {
+        // Vídeo já invisível — carrega direto sem delay
+        doLoad();
+    } else {
+        // Fade-out, depois troca
+        videoEl.style.opacity = '0';
+        setTimeout(doLoad, VIDEO_FADE_MS);
+    }
 }
 
 // ─── Aplicar / Remover Visual da Skin ────────────────────────────────
 
-function applySkinUI(skinData) {
+function applySkinUI(skinData, skipFadeOut) {
     const frameEl  = document.getElementById('avatarFrameOverlay');
     const videoEl  = document.getElementById('background-video');
     const avatarEl = document.getElementById('playerAvatarEquip');
@@ -126,24 +133,22 @@ function applySkinUI(skinData) {
         if (avatarEl) avatarEl.style.border = 'none';
     }
 
-    // Vídeo com fade
+    // Vídeo com fade (skipFadeOut=true no boot — vídeo já está em opacity 0)
     if (skinData?.video_url && videoEl) {
-        _swapVideo(videoEl, skinData.video_url, DEFAULT_VIDEO_TYPE);
+        _swapVideo(videoEl, skinData.video_url, DEFAULT_VIDEO_TYPE, skipFadeOut);
     }
 }
 
-function removeSkinUI() {
+function removeSkinUI(skipFadeOut) {
     const frameEl  = document.getElementById('avatarFrameOverlay');
     const videoEl  = document.getElementById('background-video');
     const avatarEl = document.getElementById('playerAvatarEquip');
 
-    // Remove moldura
     if (frameEl) { frameEl.src = ''; frameEl.style.display = 'none'; }
     if (avatarEl) avatarEl.style.border = '3px solid gold';
 
-    // Vídeo padrão com fade
     if (videoEl) {
-        _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE);
+        _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, skipFadeOut);
     }
 }
 
@@ -485,15 +490,32 @@ function closeSkinManagerModal() {
 // ─── Inicialização ────────────────────────────────────────────────────
 
 function init() {
-    // 1. Verifica expiração e aplica skin do cache (sem egress)
+    // 1. Verifica expiração no cache local
     checkAndHandleExpiry();
 
-    const skinCache = loadSkinCache();
-    if (skinCache?.active_skin && !isExpiredData(skinCache.active_skin)) {
-        applySkinUI(skinCache.active_skin);
+    const skinCache  = loadSkinCache();
+    const activeSkin = (skinCache?.active_skin && !isExpiredData(skinCache.active_skin))
+        ? skinCache.active_skin
+        : null;
+
+    // 2. Inicializa o vídeo de fundo com o src correto ANTES do browser
+    //    carregar o <source> padrão — evita load duplo e flash cinza.
+    //    O vídeo está em opacity:0 (CSS), skipFadeOut=true → vai direto ao fade-in.
+    const videoEl = document.getElementById('background-video');
+    if (videoEl) {
+        const targetSrc = activeSkin?.video_url || DEFAULT_VIDEO;
+        _swapVideo(videoEl, targetSrc, DEFAULT_VIDEO_TYPE, /* skipFadeOut */ true);
     }
 
-    // 2. Eventos dos botões
+    // 3. Aplica moldura se houver skin ativa (vídeo já tratado acima)
+    if (activeSkin?.frame_url) {
+        const frameEl  = document.getElementById('avatarFrameOverlay');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        if (frameEl) { frameEl.src = activeSkin.frame_url; frameEl.style.display = 'block'; }
+        if (avatarEl) avatarEl.style.border = 'none';
+    }
+
+    // 4. Eventos dos botões
     document.getElementById('skinConfigBtn')
         ?.addEventListener('click', openSkinManagerModal);
     document.getElementById('closeSkinManagerModal')

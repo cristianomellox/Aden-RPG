@@ -34,7 +34,7 @@
             justify-content: space-around;
             align-items: center;
             padding: 20px;
-            background-color: linear-gradient(to bottom, #2e2e2e, #1a1a1a);
+          
             border-bottom: 2px solid #555;
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
             border-radius: 8px;

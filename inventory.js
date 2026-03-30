@@ -270,6 +270,18 @@ function hydrateItem(rawItem) {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM carregado. Iniciando script inventory.js...');
     
+    // Fade-in do vídeo de fundo (igual ao boss — começa opacity:0 no CSS)
+    const bgVid = document.getElementById('background-video');
+    if (bgVid) {
+        const fadeInBg = () => { bgVid.style.opacity = '0.9'; };
+        if (bgVid.readyState >= 3) {
+            fadeInBg();
+        } else {
+            bgVid.addEventListener('canplaythrough', fadeInBg, { once: true });
+            bgVid.addEventListener('canplay',        fadeInBg, { once: true });
+        }
+    }
+
     // Auth Otimista
     const localId = getLocalUserId();
     if (localId) {
@@ -659,17 +671,15 @@ async function loadItems(tab = 'all', itemsList = null) {
             itemDiv.innerHTML += `<span class="item-quantity">${item.quantity}</span>`;
         }
 
-        // PATCH SKIN: badge de expiração no canto superior esquerdo (apenas para skins com prazo)
-        if (item.items.item_type === 'skin') {
-            const isPermanent = item.is_permanent !== false;
-            if (!isPermanent && item.expires_at) {
-                const timeStr = window.skinSystem?.formatExpiryTime(item.expires_at);
-                if (timeStr) {
-                    const badge = document.createElement('span');
-                    badge.className   = 'skin-expiry-badge';
-                    badge.textContent = timeStr;
-                    itemDiv.appendChild(badge);
-                }
+        // PATCH SKIN: badge de expiração no canto superior esquerdo
+        // expires_at null = permanente (sem badge); valor = temporária (exibe contagem)
+        if (item.items.item_type === 'skin' && item.expires_at) {
+            const timeStr = window.skinSystem?.formatExpiryTime(item.expires_at);
+            if (timeStr) {
+                const badge = document.createElement('span');
+                badge.className   = 'skin-expiry-badge';
+                badge.textContent = timeStr;
+                itemDiv.appendChild(badge);
             }
         }
 

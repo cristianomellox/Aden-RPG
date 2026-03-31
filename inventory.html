@@ -187,6 +187,61 @@
   background-color: black;  /* elimina placeholder cinza nativo do browser */
   z-index: -1;
 }
+
+/* ── Efeito sheen/shimmer sobre a moldura do avatar ─────────────────
+   Posicionado acima do #avatarFrameOverlay (z-index 3 vs 2).
+   mix-blend-mode: screen faz o brilho prateado realçar os pixels
+   decorativos da moldura sem cobrir ou alterar sua arte.
+   overflow: hidden + border-radius: 50% clipa o sweep ao círculo.    */
+#avatarFrameSheen {
+    position: absolute;
+    top: -5px;        /* igual ao top do #avatarFrameOverlay */
+    left: 0;
+    width: 195px;
+    height: 195px;
+    border-radius: 50%;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 3;
+    mix-blend-mode: screen;
+    display: none;    /* mostrado pelo JS quando há moldura ativa */
+}
+#avatarFrameSheen::after {
+    content: '';
+    position: absolute;
+    top: -25%;
+    left: -85%;
+    width: 48%;
+    height: 150%;
+    background: linear-gradient(
+        108deg,
+        transparent          0%,
+        rgba(180,195,255,.08) 30%,
+        rgba(210,220,255,.22) 42%,
+        rgba(255,255,255,.58) 50%,
+        rgba(210,220,255,.22) 58%,
+        rgba(180,195,255,.08) 70%,
+        transparent          100%
+    );
+    animation: avatar-frame-sheen 4.2s ease-in-out infinite;
+}
+@keyframes avatar-frame-sheen {
+    0%   { left: -85%; opacity: 0; }
+    6%   { opacity: 1; }
+    44%  { left: 135%; opacity: 1; }
+    52%  { opacity: 0; left: 135%; }
+    100% { left: 135%; opacity: 0; }
+}
+
+/* Listas do gerenciador de skins com scroll independente */
+.skin-manager-section {
+    max-height: 180px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #7b00d4 transparent;
+}
+.skin-manager-section::-webkit-scrollbar { width: 3px; }
+.skin-manager-section::-webkit-scrollbar-thumb { background: #7b00d4; border-radius: 2px; }
     </style>
 </head>
 <body>
@@ -227,8 +282,10 @@
             <div id="playerAvatarEquipContainer">
                 <div id="avatarFrameWrapper">
                     <img id="playerAvatarEquip" src="caminho/para/avatar_padrao.webp" alt="Avatar do Jogador">
-                    <!-- Moldura da skin: fica por cima do avatar via position:absolute (CSS em inventory.css) -->
+                    <!-- Moldura da skin (position:absolute, z-index 2, CSS em inventory.css) -->
                     <img id="avatarFrameOverlay" src="" alt="" style="display:none;">
+                    <!-- Sheen: brilho prateado que varre a moldura (z-index 3) -->
+                    <div id="avatarFrameSheen"></div>
                 </div>
             </div>
 
@@ -468,24 +525,32 @@
     <div id="skinManagerContent" class="modal-content">
         <span id="closeSkinManagerModal" class="btn">x</span>
 
-        <h3>✦ Skins ✦</h3>
-        <p style="font-size:0.75em; color:#888; text-align:center; margin:0 0 10px;">
-            Gerencie suas skins de perfil
+        <h3>✦ Skins</h3>
+        <p style="font-size:0.75em; color:#888; text-align:center; margin:0 0 12px;">
+            Gerencie moldura e fundo de forma independente
         </p>
 
-        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 6px;">Skin ativa:</p>
-        <div id="skinManagerActiveSkin"></div>
-
-        <div id="skinManagerDeactivateBtn" style="display:none; text-align:center; margin:8px 0;">
-            <button id="deactivateSkinBtn" class="custom-alert-btn">
-                Remover Visual
+        <!-- ── Seção: Moldura ──────────────────────────── -->
+        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 5px; text-transform:uppercase; letter-spacing:1px;">🖼️ Moldura ativa</p>
+        <div id="skinManagerActiveFrame"></div>
+        <div id="skinManagerFrameDeactivateBtn" style="display:none; text-align:center; margin:6px 0;">
+            <button id="deactivateFrameBtn" class="custom-alert-btn" style="font-size:0.78em; padding:7px 14px;">
+                🔄 Remover Moldura
             </button>
         </div>
+        <div id="skinManagerFrameList" class="skin-manager-section"></div>
 
-        <hr style="border:none; border-top:1px solid #333; margin:12px 0;">
+        <hr style="border:none; border-top:1px solid #2a2a2a; margin:12px 0;">
 
-        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 8px;">Suas skins:</p>
-        <div id="skinManagerList"></div>
+        <!-- ── Seção: Fundo ────────────────────────────── -->
+        <p style="font-size:0.8em; color:#bb86fc; margin:0 0 5px; text-transform:uppercase; letter-spacing:1px;">🎬 Fundo ativo</p>
+        <div id="skinManagerActiveVideo"></div>
+        <div id="skinManagerVideoDeactivateBtn" style="display:none; text-align:center; margin:6px 0;">
+            <button id="deactivateVideoBtn" class="custom-alert-btn" style="font-size:0.78em; padding:7px 14px;">
+                🔄 Restaurar Fundo Padrão
+            </button>
+        </div>
+        <div id="skinManagerVideoList" class="skin-manager-section"></div>
     </div>
 </div>
 

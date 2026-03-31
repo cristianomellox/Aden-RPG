@@ -674,8 +674,8 @@
 /* Wrapper do avatar: 160×160 para acomodar a moldura */
 #avatarFrameWrapper {
     position: relative;
-    width: 160px;
-    height: 160px;
+    width: 195px;
+    height: 195px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -684,10 +684,10 @@
 /* Moldura animada sobreposta ao avatar (z-index acima) */
 #avatarFrameOverlay {
     position: absolute;
-    top: 0;
+    top: -5px;
     left: 0;
-    width: 160px;
-    height: 160px;
+    width: 195px;
+    height: 195px;
     pointer-events: none;
     z-index: 2;
     object-fit: contain;

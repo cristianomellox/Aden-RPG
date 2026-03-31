@@ -126,32 +126,132 @@
     #playerGuildFlag { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; }
     #playerGuildName { font-size: 1.4em; color: lightblue; }
     #playerLevel { font-size: 1.2em; color: #ccc; font-weight: bold; }
-    .player-visuals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    #playerAvatarEquip { width: 85px; height: 85px; border-radius: 50%; border: 4px solid #c9a94a; object-fit: cover; box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
-    #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
-    .equipment-slots-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 250px; margin: 0 auto; }
-    
-    /* Configuração Crítica dos Slots para Manter Visual Original */
-    .equipment-slot { 
-        background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; 
-        display: flex; align-items: center; justify-content: center; position: relative; 
-        overflow: visible; /* Importante para o nível sair um pouco pra fora se necessário */
-        border-radius: 5px; 
+    /* === PLAYER VISUALS: container relativo para o vídeo de fundo === */
+    .player-visuals {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        position: relative;
+        overflow: hidden;
+        border-radius: 8px;
+        padding: 14px 8px;
+        background: #111;
+        min-height: 230px;
+    }
+    /* Garante que tudo dentro fique acima do vídeo */
+    .player-visuals > * { position: relative; z-index: 1; }
+
+    /* === VÍDEO DE FUNDO DA SKIN (modal) === */
+    #modal-background-video {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        opacity: 0;                  /* começa invisível; JS controla fade */
+        background-color: black;     /* elimina placeholder cinza nativo */
+        z-index: 0;
+        border-radius: 8px;
+        pointer-events: none;
+    }
+
+    /* === EQUIPMENT SLOTS: coluna vertical (igual ao inventário) === */
+    .equipment-slots-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .equipment-slot {
+        background-color: #383838;
+        border: 1px dashed #555;
+        height: 55px; width: 55px;
+        display: flex; align-items: center; justify-content: center;
+        position: relative;
+        overflow: visible;
+        border-radius: 5px;
+        flex-shrink: 0;
     }
     .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-    
-    /* Estilo do Nível do Item (Restaurado) */
+
     .item-level {
         position: absolute;
-        bottom: -10px;
-        right: 7px;
+        bottom: -10px; right: 7px;
         background-color: rgba(0, 0, 0, 0.7);
-        color: #fff;
-        font-size: 0.6em;
-        padding: 0 3px;
-        border-radius: 4px;
+        color: #fff; font-size: 0.6em;
+        padding: 0 3px; border-radius: 4px;
         z-index: 99999;
     }
+
+    /* === AVATAR + MOLDURA (modal) — igual ao inventário === */
+    #modal-avatarFrameWrapper {
+        position: relative;
+        width: 160px; height: 160px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        z-index: 1;
+    }
+    #playerAvatarEquip {
+        width: 100px; height: 100px;
+        border-radius: 50%;
+        border: 4px solid #c9a94a;
+        object-fit: cover;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+    }
+    #modal-avatarFrameOverlay {
+        position: absolute;
+        top: -5px; left: 0;
+        width: 160px; height: 160px;
+        pointer-events: none;
+        z-index: 2;
+        object-fit: contain;
+        display: none;
+    }
+
+    /* Sheen (brilho que varre a moldura) */
+    #modal-avatarFrameSheen {
+        position: absolute;
+        top: -5px; left: 0;
+        width: 160px; height: 160px;
+        pointer-events: none;
+        z-index: 3;
+        display: none;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        overflow: hidden;
+    }
+    #modal-avatarFrameSheen::after {
+        content: '';
+        position: absolute;
+        top: -20%; left: -130%;
+        width: 55%; height: 140%;
+        background: linear-gradient(
+            108deg,
+            transparent           0%,
+            rgba(255,255,255,.04) 28%,
+            rgba(255,255,255,.18) 42%,
+            rgba(255,255,255,.52) 50%,
+            rgba(255,255,255,.18) 58%,
+            rgba(255,255,255,.04) 72%,
+            transparent           100%
+        );
+        animation: modal-frame-sheen 6s ease-in-out infinite;
+    }
+    @keyframes modal-frame-sheen {
+        0%   { left: -130%; opacity: 0; }
+        2%   { opacity: 1; }
+        98%  { left: 155%; opacity: 1; }
+        99%  { opacity: 0; left: 155%; }
+        100% { left: 155%; opacity: 0; }
+    }
+
+    #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
 
     .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
@@ -363,15 +463,25 @@
       </div>
 
       <div class="player-visuals">
+        <!-- Vídeo de fundo da skin (começa invisível; JS faz fade-in) -->
+        <video autoplay muted loop playsinline id="modal-background-video">
+          <source src="" type="video/webm">
+        </video>
+
         <div class="equipment-slots-container left">
             <div class="equipment-slot" id="weapon-slot"></div>
             <div class="equipment-slot" id="ring-slot"></div>
             <div class="equipment-slot" id="helm-slot"></div>
             <div class="equipment-slot" id="special1-slot"></div>
         </div>
-        
-        <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
-        
+
+        <!-- Avatar com suporte à moldura sobreposta -->
+        <div id="modal-avatarFrameWrapper">
+            <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
+            <img id="modal-avatarFrameOverlay" src="" alt="" style="display:none;">
+            <div id="modal-avatarFrameSheen"></div>
+        </div>
+
         <div class="equipment-slots-container right">
             <div class="equipment-slot" id="amulet-slot"></div>
             <div class="equipment-slot" id="wing-slot"></div>
@@ -539,11 +649,11 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL
+    // CACHE #2: PLAYER MODAL  (v3 — inclui dados de skin)
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
-            const key = `player_details_v2_${playerId}`;
+            const key = `player_details_v3_${playerId}`;
             const raw = localStorage.getItem(key);
             if (!raw) return null;
             const obj = JSON.parse(raw);
@@ -554,10 +664,86 @@
 
     function setPlayerCache(playerId, data) {
         try {
-            const key = `player_details_v2_${playerId}`;
+            const key = `player_details_v3_${playerId}`;
             const expirationTime = Date.now() + (24 * 60 * 60 * 1000); 
             localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
         } catch (e) { }
+    }
+
+    // ====================================================================================
+    // SKIN DO MODAL — fade de vídeo + frame overlay + sheen
+    // ====================================================================================
+    const MODAL_FADE_OUT_MS = 400;
+    const MODAL_FADE_IN_MS  = 1500;
+
+    function _swapModalVideo(newSrc, skipFadeOut) {
+        const videoEl = document.getElementById('modal-background-video');
+        if (!videoEl) return;
+
+        const doLoad = () => {
+            const source = videoEl.querySelector('source');
+            if (source) { source.src = newSrc; source.type = 'video/webm'; }
+            videoEl.load();
+            const fadeIn = () => {
+                videoEl.style.transition = `opacity ${MODAL_FADE_IN_MS}ms ease-in`;
+                videoEl.style.opacity    = '0.9';
+            };
+            if (videoEl.readyState >= 3) { fadeIn(); }
+            else {
+                videoEl.addEventListener('canplay',        fadeIn, { once: true });
+                videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
+            }
+            videoEl.play().catch(() => {});
+        };
+
+        if (skipFadeOut) {
+            doLoad();
+        } else {
+            videoEl.style.transition = `opacity ${MODAL_FADE_OUT_MS}ms ease-out`;
+            videoEl.style.opacity    = '0';
+            setTimeout(doLoad, MODAL_FADE_OUT_MS + 30);
+        }
+    }
+
+    function applyModalSkin(frameUrl, videoUrl) {
+        const frameEl  = document.getElementById('modal-avatarFrameOverlay');
+        const sheenEl  = document.getElementById('modal-avatarFrameSheen');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        const videoEl  = document.getElementById('modal-background-video');
+
+        // ── Moldura ──────────────────────────────────────────────────
+        if (frameUrl) {
+            if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
+            if (avatarEl) avatarEl.style.border = 'none';
+            if (sheenEl) {
+                sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+                sheenEl.style.maskImage       = `url('${frameUrl}')`;
+                sheenEl.style.display         = 'block';
+            }
+        } else {
+            if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+            if (sheenEl)  sheenEl.style.display = 'none';
+            if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+        }
+
+        // ── Vídeo de fundo ───────────────────────────────────────────
+        if (videoUrl) {
+            _swapModalVideo(videoUrl, /* skipFadeOut */ true);
+        } else {
+            if (videoEl) { videoEl.style.opacity = '0'; }
+        }
+    }
+
+    function resetModalSkin() {
+        const frameEl  = document.getElementById('modal-avatarFrameOverlay');
+        const sheenEl  = document.getElementById('modal-avatarFrameSheen');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        const videoEl  = document.getElementById('modal-background-video');
+
+        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+        if (sheenEl)  sheenEl.style.display = 'none';
+        if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+        if (videoEl)  { videoEl.style.transition = ''; videoEl.style.opacity = '0'; }
     }
 
     // ====================================================================================
@@ -661,7 +847,7 @@
         try {
             const { data: player, error: pErr } = await supabase
                 .from('players')
-                .select('name, level, avatar_url, guild_id, combat_power, cached_combat_stats')
+                .select('name, level, avatar_url, guild_id, combat_power, cached_combat_stats, active_frame_inventory_id, active_video_inventory_id')
                 .eq('id', playerId)
                 .single();
             if (pErr) throw pErr;
@@ -685,6 +871,22 @@
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
+            // ── Skin: busca frame_url e video_url dos slots ativos ──
+            let frameUrl = null, videoUrl = null;
+            const skinIds = [player.active_frame_inventory_id, player.active_video_inventory_id].filter(Boolean);
+            if (skinIds.length > 0) {
+                const { data: skinItems } = await supabase
+                    .from('inventory_items')
+                    .select('id, items ( skin_frame_url, skin_video_url )')
+                    .in('id', skinIds);
+                if (skinItems) {
+                    const frameItem = skinItems.find(i => i.id === player.active_frame_inventory_id);
+                    const videoItem = skinItems.find(i => i.id === player.active_video_inventory_id);
+                    frameUrl = frameItem?.items?.skin_frame_url || null;
+                    videoUrl = videoItem?.items?.skin_video_url || null;
+                }
+            }
+
             const serverStats = player.cached_combat_stats || {};
             
             const displayStats = {
@@ -704,7 +906,9 @@
                     avatar_url: player.avatar_url,
                     guild_name: guildInfo.name,
                     guild_flag: guildInfo.flag,
-                    cp: player.combat_power || 0
+                    cp: player.combat_power || 0,
+                    frame_url: frameUrl,
+                    video_url: videoUrl
                 },
                 stats: displayStats,
                 items: equippedItems || []
@@ -741,6 +945,9 @@
         const avatarImg = document.getElementById('playerAvatarEquip');
         avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
         avatarImg.classList.remove('shimmer');
+
+        // ── Skin: aplica moldura e vídeo de fundo ──
+        applyModalSkin(basic.frame_url || null, basic.video_url || null);
 
         const statMap = {
             'playerAttack': stats.attack,
@@ -789,6 +996,7 @@
         });
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         document.getElementById('sendmp').style.display = 'none';
+        resetModalSkin();
     }
 
     window.fetchPlayerData = window.fetchPlayerDetailsWithCache;

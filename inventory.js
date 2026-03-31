@@ -533,7 +533,10 @@ async function fullDownload() {
     renderUI();
 
     // === SKIN: Reconcilia estado local com o que o servidor retornou ===
-    window.skinSystem?.reconcileWithServer(playerData.active_skin_inventory_id ?? null);
+    window.skinSystem?.reconcileWithServer(
+        playerData.active_frame_inventory_id ?? null,
+        playerData.active_video_inventory_id ?? null
+    );
 
     // === SKIN: Inicia timers de skins recebidas e ainda não iniciadas ===
     await initPendingSkinTimers();

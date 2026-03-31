@@ -1,5 +1,6 @@
 // =====================================================================
-// skin_system.js — Sistema de Skins, Aden RPG (v2)
+// skin_system.js — Sistema de Skins, Aden RPG (v3)
+// Frame e vídeo de fundo são slots independentes.
 // Carregue APÓS inventory.js no HTML:
 //   <script type="module" src="skin_system.js"></script>
 // =====================================================================
@@ -7,19 +8,30 @@
 import { supabase } from './supabaseClient.js';
 
 // ─── Constantes ──────────────────────────────────────────────────────
-const SKIN_CACHE_KEY     = 'aden_skin_cache_v2';
+const SKIN_CACHE_KEY     = 'aden_skin_cache_v3';
 const DEFAULT_VIDEO      = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
 const DEFAULT_VIDEO_TYPE = 'video/webm';
-const VIDEO_TARGET_OPACITY = '0.9'; // opacidade final do vídeo
+const VIDEO_TARGET_OPACITY = '0.9';
+const FADE_OUT_MS = 400;
+const FADE_IN_MS  = 1500;
 
-// ─── Cache Local (localStorage — < 1 KB) ────────────────────────────
+// ─── Cache Local (localStorage)
+// Estrutura:
+// {
+//   active_frame: { inventory_item_id, frame_url, expires_at, display_name } | null,
+//   active_video: { inventory_item_id, video_url, expires_at, display_name } | null,
+//   cache_time: number
+// }
 
-function saveSkinCache(data) {
+function saveSkinCache(patch) {
     try {
-        localStorage.setItem(SKIN_CACHE_KEY, JSON.stringify({ ...data, cache_time: Date.now() }));
-    } catch (e) {
-        console.warn('[Skin] Erro ao salvar cache:', e);
-    }
+        const current = loadSkinCache() || {};
+        localStorage.setItem(SKIN_CACHE_KEY, JSON.stringify({
+            ...current,
+            ...patch,
+            cache_time: Date.now()
+        }));
+    } catch (e) { console.warn('[Skin] Erro ao salvar cache:', e); }
 }
 
 function loadSkinCache() {
@@ -29,19 +41,12 @@ function loadSkinCache() {
     } catch { return null; }
 }
 
-function clearSkinCache() {
-    localStorage.removeItem(SKIN_CACHE_KEY);
-}
+function clearSkinCache() { localStorage.removeItem(SKIN_CACHE_KEY); }
 
 // ─── Helpers de Tempo ────────────────────────────────────────────────
 
-/**
- * Badge compacto para a bolsa: "7d" / "23h" / "45m" / "Expirado"
- * Retorna null para skins permanentes (expires_at === null).
- * Exportado via window.skinSystem para inventory.js.
- */
 function formatExpiryTime(expiresAt) {
-    if (!expiresAt) return null;                       // permanente
+    if (!expiresAt) return null;
     const diffMs = new Date(expiresAt) - Date.now();
     if (diffMs <= 0) return 'Expirado';
     const mins = Math.floor(diffMs / 60000);
@@ -52,20 +57,15 @@ function formatExpiryTime(expiresAt) {
     return `${mins}m`;
 }
 
-/**
- * Texto longo para modais: "⏰ Expira em: 3 dias e 5h" ou "✨ Permanente"
- */
 function formatExpiryFull(expiresAt) {
     if (!expiresAt) return '✨ Permanente';
     const diffMs = new Date(expiresAt) - Date.now();
     if (diffMs <= 0) return '❌ Expirada';
-
     const mins    = Math.floor(diffMs / 60000);
     const hrs     = Math.floor(mins / 60);
     const days    = Math.floor(hrs / 24);
     const remHrs  = hrs % 24;
     const remMins = mins % 60;
-
     const parts = [];
     if (days   > 0) parts.push(`${days} dia${days > 1 ? 's' : ''}`);
     if (remHrs > 0) parts.push(`${remHrs}h`);
@@ -73,43 +73,28 @@ function formatExpiryFull(expiresAt) {
     return `⏰ Expira em: ${parts.join(' e ')}`;
 }
 
-/** Verifica se a skin no cache local já expirou */
-function isExpiredData(skinData) {
-    if (!skinData) return true;
-    if (!skinData.expires_at) return false;           // permanente
-    return new Date(skinData.expires_at) <= Date.now();
+function isExpiredData(d) {
+    if (!d) return true;
+    if (!d.expires_at) return false;
+    return new Date(d.expires_at) <= Date.now();
 }
 
 // ─── Fade de Vídeo ───────────────────────────────────────────────────
 
-const FADE_OUT_MS = 400;   // duração do fade-out (deve ser <= setTimeout abaixo)
-const FADE_IN_MS  = 1500;  // duração do fade-in
-
-/**
- * Troca o src do vídeo com fade-out → troca → fade-in.
- * skipFadeOut=true: vídeo já está em opacity 0 (boot),
- *   vai direto para o carregamento + fade-in.
- */
 function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
     if (!videoEl) return;
 
     const doLoad = () => {
-        // Vídeo já invisível — troca src
         const source = videoEl.querySelector('source');
-        if (source) {
-            source.src  = newSrc;
-            source.type = newType || DEFAULT_VIDEO_TYPE;
-        }
+        if (source) { source.src = newSrc; source.type = newType || DEFAULT_VIDEO_TYPE; }
         videoEl.load();
 
-        // Fade-in lento após o browser ter frames suficientes
         const fadeIn = () => {
             videoEl.style.transition = `opacity ${FADE_IN_MS}ms ease-in`;
             videoEl.style.opacity    = VIDEO_TARGET_OPACITY;
         };
-        if (videoEl.readyState >= 3) {
-            fadeIn();
-        } else {
+        if (videoEl.readyState >= 3) { fadeIn(); }
+        else {
             videoEl.addEventListener('canplay',        fadeIn, { once: true });
             videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
         }
@@ -117,115 +102,125 @@ function _swapVideo(videoEl, newSrc, newType, skipFadeOut) {
     };
 
     if (skipFadeOut) {
-        // Boot: vídeo já em opacity 0 pelo CSS, vai direto ao load
         doLoad();
     } else {
-        // Fade-out rápido primeiro, garantindo que esteja 100% invisível
-        // antes de trocar o src (elimina o flash do placeholder cinza)
         videoEl.style.transition = `opacity ${FADE_OUT_MS}ms ease-out`;
         videoEl.style.opacity    = '0';
-        setTimeout(doLoad, FADE_OUT_MS + 30); // +30ms de margem de segurança
+        setTimeout(doLoad, FADE_OUT_MS + 30);
     }
 }
 
-// ─── Aplicar / Remover Visual da Skin ────────────────────────────────
+// ─── Aplicar / Remover Frame ─────────────────────────────────────────
 
-function applySkinUI(skinData, skipFadeOut) {
+function _applyFrame(frameUrl) {
     const frameEl  = document.getElementById('avatarFrameOverlay');
-    const videoEl  = document.getElementById('background-video');
+    const sheenEl  = document.getElementById('avatarFrameSheen');
     const avatarEl = document.getElementById('playerAvatarEquip');
 
-    // Moldura
-    if (skinData?.frame_url && frameEl) {
-        frameEl.src           = skinData.frame_url;
-        frameEl.style.display = 'block';
-        if (avatarEl) avatarEl.style.border = 'none';
-    }
-
-    // Vídeo com fade (skipFadeOut=true no boot — vídeo já está em opacity 0)
-    if (skinData?.video_url && videoEl) {
-        _swapVideo(videoEl, skinData.video_url, DEFAULT_VIDEO_TYPE, skipFadeOut);
-    }
+    if (!frameEl) return;
+    frameEl.src           = frameUrl;
+    frameEl.style.display = 'block';
+    if (avatarEl) avatarEl.style.border = 'none';
+    if (sheenEl)  sheenEl.style.display = 'block';
 }
 
-function removeSkinUI(skipFadeOut) {
+function _removeFrame() {
     const frameEl  = document.getElementById('avatarFrameOverlay');
-    const videoEl  = document.getElementById('background-video');
+    const sheenEl  = document.getElementById('avatarFrameSheen');
     const avatarEl = document.getElementById('playerAvatarEquip');
 
-    if (frameEl) { frameEl.src = ''; frameEl.style.display = 'none'; }
+    if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+    if (sheenEl)  sheenEl.style.display = 'none';
     if (avatarEl) avatarEl.style.border = '3px solid gold';
-
-    if (videoEl) {
-        _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, skipFadeOut);
-    }
 }
 
 // ─── Expiração ───────────────────────────────────────────────────────
 
 function checkAndHandleExpiry() {
-    const skinCache = loadSkinCache();
-    if (!skinCache?.active_skin) return;
-    if (!isExpiredData(skinCache.active_skin)) return;
+    const cache = loadSkinCache();
+    if (!cache) return;
 
-    console.log('[Skin] Skin expirou. Removendo visual...');
-    clearSkinCache();
-    removeSkinUI();
+    let changed = false;
 
-    const user = window.globalUser;
-    if (user) {
-        supabase
-            .rpc('cleanup_expired_skins', { p_player_id: user.id })
-            .then(() => window.loadPlayerAndItems?.(true));
+    if (cache.active_frame && isExpiredData(cache.active_frame)) {
+        cache.active_frame = null;
+        _removeFrame();
+        changed = true;
+    }
+    if (cache.active_video && isExpiredData(cache.active_video)) {
+        cache.active_video = null;
+        _swapVideo(document.getElementById('background-video'), DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, true);
+        changed = true;
+    }
+
+    if (changed) {
+        saveSkinCache({ active_frame: cache.active_frame, active_video: cache.active_video });
+        const user = window.globalUser;
+        if (user) {
+            supabase.rpc('cleanup_expired_skins', { p_player_id: user.id })
+                    .then(() => window.loadPlayerAndItems?.(true));
+        }
     }
 }
 
-// Sem polling — verificação ocorre apenas no boot (init).
-// A expiração é puramente local (lê localStorage), mas não há
-// necessidade de checar com a página aberta: o timer do badge
-// é visual e o servidor sempre valida na próxima ação.
-
 // ─── Reconciliação com Servidor ───────────────────────────────────────
 
-function reconcileWithServer(serverActiveSkinId) {
-    const skinCache         = loadSkinCache();
-    const localActiveSkinId = skinCache?.active_skin_inventory_id ?? null;
+function reconcileWithServer(serverFrameId, serverVideoId) {
+    const cache   = loadSkinCache() || {};
+    const items   = window.allInventoryItems || [];
 
-    if (serverActiveSkinId === localActiveSkinId) return;
+    const localFrameId = cache.active_frame?.inventory_item_id ?? null;
+    const localVideoId = cache.active_video?.inventory_item_id ?? null;
 
-    if (!serverActiveSkinId) {
-        clearSkinCache();
-        removeSkinUI();
-        return;
+    const frameChanged = serverFrameId !== localFrameId;
+    const videoChanged = serverVideoId !== localVideoId;
+
+    if (!frameChanged && !videoChanged) return;
+
+    const newCache = { ...cache };
+
+    if (frameChanged) {
+        if (!serverFrameId) {
+            newCache.active_frame = null;
+            _removeFrame();
+        } else {
+            const skinItem = items.find(i => i.id === serverFrameId);
+            if (skinItem?.items?.skin_frame_url) {
+                newCache.active_frame = {
+                    inventory_item_id : serverFrameId,
+                    frame_url         : skinItem.items.skin_frame_url,
+                    expires_at        : skinItem.expires_at || null,
+                    display_name      : skinItem.items.display_name || 'Skin'
+                };
+                _applyFrame(skinItem.items.skin_frame_url);
+            }
+        }
     }
 
-    const items    = window.allInventoryItems || [];
-    const skinItem = items.find(i => i.id === serverActiveSkinId);
-    if (!skinItem?.items) return;
-
-    const def      = skinItem.items;
-    const newCache = {
-        active_skin_inventory_id: serverActiveSkinId,
-        active_skin: {
-            inventory_item_id : serverActiveSkinId,
-            frame_url         : def.skin_frame_url || null,
-            video_url         : def.skin_video_url || null,
-            expires_at        : skinItem.expires_at || null,   // null = permanente
-            display_name      : def.display_name    || 'Skin'
+    if (videoChanged) {
+        const videoEl = document.getElementById('background-video');
+        if (!serverVideoId) {
+            newCache.active_video = null;
+            _swapVideo(videoEl, DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
+        } else {
+            const skinItem = items.find(i => i.id === serverVideoId);
+            if (skinItem?.items?.skin_video_url) {
+                newCache.active_video = {
+                    inventory_item_id : serverVideoId,
+                    video_url         : skinItem.items.skin_video_url,
+                    expires_at        : skinItem.expires_at || null,
+                    display_name      : skinItem.items.display_name || 'Skin'
+                };
+                _swapVideo(videoEl, skinItem.items.skin_video_url, DEFAULT_VIDEO_TYPE, false);
+            }
         }
-    };
+    }
 
     saveSkinCache(newCache);
-    applySkinUI(newCache.active_skin);
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────
 
-/**
- * Ativa a skin da bolsa.
- * Com stacking: se mesma skin já estiver no gerenciador, soma a duração
- * e deleta o token ativado. O resultado_id pode ser diferente do ativado.
- */
 async function handleActivateSkin(item) {
     const user = window.globalUser;
     if (!user) return;
@@ -235,49 +230,48 @@ async function handleActivateSkin(item) {
         p_player_id        : user.id
     });
 
-    if (error) { window.showCustomAlert?.('Erro ao ativar skin: ' + error.message); return; }
+    if (error) { window.showCustomAlert?.('Erro ao ativar: ' + error.message); return; }
     if (data?.error) { window.showCustomAlert?.(data.error); return; }
 
-    // ── Atualiza IDB local ──────────────────────────────────────────
+    // ── Atualiza IDB ──────────────────────────────────────────────
     const items = window.allInventoryItems || [];
-
     if (data.stacked) {
-        // Stacking: token ativado foi consumido (deletar do IDB)
         const consumedIdx = items.findIndex(i => i.id === item.id);
         if (consumedIdx > -1) items.splice(consumedIdx, 1);
-
-        // Atualiza expires_at da skin existente no gerenciador
         const existingIdx = items.findIndex(i => i.id === data.inventory_item_id);
-        if (existingIdx > -1) {
-            items[existingIdx].expires_at = data.expires_at;
-        }
+        if (existingIdx > -1) items[existingIdx].expires_at = data.expires_at;
     } else {
-        // Primeira ativação: move para gerenciador
         const idx = items.findIndex(i => i.id === item.id);
-        if (idx > -1) {
-            items[idx].equipped_slot = 'skin';
-            items[idx].expires_at    = data.expires_at;   // timer resetado
-        }
+        if (idx > -1) { items[idx].equipped_slot = 'skin'; items[idx].expires_at = data.expires_at; }
     }
-
     window.allInventoryItems = items;
     await window.saveCache?.(items, window.playerBaseStats || {}, new Date().toISOString());
 
-    // ── Cache de skin ───────────────────────────────────────────────
-    saveSkinCache({
-        active_skin_inventory_id: data.inventory_item_id,
-        active_skin: {
+    // ── Cache e UI ────────────────────────────────────────────────
+    const patch = {};
+    const def   = item.items || {};
+
+    if (data.has_frame) {
+        patch.active_frame = {
             inventory_item_id : data.inventory_item_id,
-            frame_url         : data.frame_url  || null,
-            video_url         : data.video_url  || null,
-            expires_at        : data.expires_at || null,   // null = permanente
-            display_name      : data.display_name || item.items?.display_name || 'Skin'
-        }
-    });
+            frame_url         : data.frame_url,
+            expires_at        : data.expires_at || null,
+            display_name      : data.display_name || def.display_name || 'Skin'
+        };
+        _applyFrame(data.frame_url);
+    }
+    if (data.has_video) {
+        patch.active_video = {
+            inventory_item_id : data.inventory_item_id,
+            video_url         : data.video_url,
+            expires_at        : data.expires_at || null,
+            display_name      : data.display_name || def.display_name || 'Skin'
+        };
+        _swapVideo(document.getElementById('background-video'), data.video_url, DEFAULT_VIDEO_TYPE, false);
+    }
+    saveSkinCache(patch);
 
-    applySkinUI(data);
     window.renderUI?.();
-
     document.getElementById('itemDetailsModal').style.display = 'none';
 
     const msg = data.stacked
@@ -286,54 +280,64 @@ async function handleActivateSkin(item) {
     window.showCustomAlert?.(msg);
 }
 
-/** Remove o visual ativo; skin continua no gerenciador. */
-async function handleDeactivateSkin() {
+// component: 'frame' | 'video' | 'both'
+async function handleDeactivateSkin(component) {
     const user = window.globalUser;
     if (!user) return;
 
-    const { data, error } = await supabase.rpc('deactivate_skin', { p_player_id: user.id });
-    if (error || data?.error) { window.showCustomAlert?.('Erro ao desativar skin.'); return; }
+    const { data, error } = await supabase.rpc('deactivate_skin', {
+        p_player_id: user.id,
+        p_component: component
+    });
+    if (error || data?.error) { window.showCustomAlert?.('Erro ao desativar.'); return; }
 
-    clearSkinCache();
-    removeSkinUI();
-    closeSkinManagerModal();
-    window.showCustomAlert?.('Visual padrão restaurado.');
+    const patch = {};
+    if (component === 'frame' || component === 'both') { patch.active_frame = null; _removeFrame(); }
+    if (component === 'video' || component === 'both') {
+        patch.active_video = null;
+        _swapVideo(document.getElementById('background-video'), DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
+    }
+    saveSkinCache(patch);
+    openSkinManagerModal();
 }
 
-/** Seleciona uma skin já no gerenciador como a visualmente ativa. */
-async function handleSelectSkin(inventoryItemId) {
+// component: 'frame' | 'video' | 'auto'
+async function handleSelectSkin(inventoryItemId, component) {
     const user = window.globalUser;
     if (!user) return;
 
     const { data, error } = await supabase.rpc('select_skin', {
         p_inventory_item_id: inventoryItemId,
-        p_player_id        : user.id
+        p_player_id        : user.id,
+        p_component        : component || 'auto'
     });
+    if (error || data?.error) { window.showCustomAlert?.(data?.error || 'Erro ao selecionar.'); return; }
 
-    if (error || data?.error) { window.showCustomAlert?.(data?.error || 'Erro ao selecionar skin.'); return; }
+    const patch = {};
+    const skinItem = (window.allInventoryItems || []).find(i => i.id === inventoryItemId);
+    const displayName = data.display_name || skinItem?.items?.display_name || 'Skin';
 
-    saveSkinCache({
-        active_skin_inventory_id: inventoryItemId,
-        active_skin: {
-            inventory_item_id : inventoryItemId,
-            frame_url         : data.frame_url  || null,
-            video_url         : data.video_url  || null,
-            expires_at        : data.expires_at || null,
-            display_name      : data.display_name || 'Skin'
-        }
-    });
-
-    applySkinUI(data);
-    openSkinManagerModal(); // re-renderiza o modal com dados atualizados
+    if (data.frame_url && (component === 'frame' || component === 'auto')) {
+        patch.active_frame = { inventory_item_id: inventoryItemId, frame_url: data.frame_url, expires_at: data.expires_at || null, display_name: displayName };
+        _applyFrame(data.frame_url);
+    }
+    if (data.video_url && (component === 'video' || component === 'auto')) {
+        patch.active_video = { inventory_item_id: inventoryItemId, video_url: data.video_url, expires_at: data.expires_at || null, display_name: displayName };
+        _swapVideo(document.getElementById('background-video'), data.video_url, DEFAULT_VIDEO_TYPE, false);
+    }
+    saveSkinCache(patch);
+    openSkinManagerModal();
 }
 
-// ─── Modal de Detalhes (tipo 'skin') ──────────────────────────────────
+// ─── Modal de Detalhes ────────────────────────────────────────────────
 
 function showSkinDetails(item) {
     const modal = document.getElementById('itemDetailsModal');
     if (!modal) return;
 
     const def = item.items || {};
+    const hasFrame = !!def.skin_frame_url;
+    const hasVideo = !!def.skin_video_url;
 
     const imgEl = document.getElementById('detailItemImage');
     if (imgEl) {
@@ -341,19 +345,20 @@ function showSkinDetails(item) {
         imgEl.onerror = () => { imgEl.src = 'https://aden-rpg.pages.dev/assets/itens/unknown.webp'; };
     }
 
-    const nameEl   = document.getElementById('detailItemName');
+    const nameEl = document.getElementById('detailItemName');
     const rarityEl = document.getElementById('detailItemRarity');
     if (nameEl)   nameEl.textContent   = def.display_name || 'Skin';
     if (rarityEl) rarityEl.textContent = def.rarity || '';
 
-    // Expiração: expires_at null = permanente
+    // Badge do tipo de skin
     const expiryEl = document.getElementById('skinExpiryInfo');
     if (expiryEl) {
-        expiryEl.textContent = formatExpiryFull(item.expires_at);
+        const typeTag = hasFrame && hasVideo ? '🖼️🎬 Moldura + Fundo' : hasFrame ? '🖼️ Moldura' : '🎬 Fundo';
+        expiryEl.textContent = `${typeTag}  •  ${formatExpiryFull(item.expires_at)}`;
         expiryEl.style.display = 'block';
     }
 
-    // Oculta seções de equipamentos
+    // Oculta seções de equipamentos normais
     document.querySelector('.progress-bar-container')?.style.setProperty('display', 'none');
     document.getElementById('levelUpBtn')?.style.setProperty('display', 'none');
     document.getElementById('refineBtn')?.style.setProperty('display', 'none');
@@ -368,38 +373,36 @@ function showSkinDetails(item) {
     const actionsDiv = document.getElementById('itemActions');
     if (actionsDiv) actionsDiv.style.display = 'flex';
 
+    // Verifica se esta skin (ou seus componentes) já está ativa
+    const cache = loadSkinCache();
+    const frameActive = cache?.active_frame?.inventory_item_id === item.id;
+    const videoActive = cache?.active_video?.inventory_item_id === item.id;
+    const fullyActive = (!hasFrame || frameActive) && (!hasVideo || videoActive);
+
     const activateBtn = document.getElementById('activateSkinBtn');
     if (activateBtn) {
-        const skinCache = loadSkinCache();
-        const isActive  = skinCache?.active_skin_inventory_id === item.id;
-
         activateBtn.style.display = 'block';
-        activateBtn.textContent   = isActive ? '✅ Já está Ativa' : 'Ativar';
-        activateBtn.disabled      = isActive;
-        activateBtn.onclick       = isActive ? null : () => handleActivateSkin(item);
+        activateBtn.textContent   = fullyActive ? '✅ Já está Ativa' : 'Ativar';
+        activateBtn.disabled      = fullyActive;
+        activateBtn.onclick       = fullyActive ? null : () => handleActivateSkin(item);
     }
 
-    // Descrição: lazy-load (não está no select "lite" de definições)
-    // skin_duration_hours também é carregado aqui para exibir duração correta
+    // Descrição: lazy-load
     const descEl = document.getElementById('itemDescription');
     if (descEl) {
         if (def.description) {
             descEl.textContent = def.description;
         } else {
             descEl.textContent = 'Carregando...';
-            supabase
-                .from('items')
+            supabase.from('items')
                 .select('description, skin_duration_hours')
                 .eq('item_id', item.item_id)
                 .single()
                 .then(({ data }) => {
                     if (data) {
-                        def.description          = data.description;
-                        def.skin_duration_hours  = data.skin_duration_hours;
-                        // Persiste no mapa de definições para não buscar de novo
-                        if (window.itemDefinitions) {
-                            window.itemDefinitions.set(item.item_id, def);
-                        }
+                        def.description         = data.description;
+                        def.skin_duration_hours = data.skin_duration_hours;
+                        window.itemDefinitions?.set(item.item_id, def);
                         descEl.textContent = data.description || '';
                     }
                 });
@@ -409,85 +412,126 @@ function showSkinDetails(item) {
     modal.style.display = 'flex';
 }
 
-// ─── Modal Gerenciador de Skins ───────────────────────────────────────
+// ─── Modal Gerenciador ────────────────────────────────────────────────
+
+function _buildSkinRow(skinItem, isActive, component) {
+    const def = skinItem.items || {};
+    const el  = document.createElement('div');
+    el.className = `skin-manager-item${isActive ? ' skin-manager-item--active' : ''}`;
+    el.innerHTML = `
+        <img src="https://aden-rpg.pages.dev/assets/itens/${def.name || 'unknown'}.webp"
+             onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'"
+             class="skin-manager-thumb">
+        <div class="skin-manager-info">
+            <span class="skin-manager-name">${def.display_name || 'Skin'}</span>
+            <span class="skin-manager-expiry">${formatExpiryFull(skinItem.expires_at)}</span>
+        </div>
+        ${isActive
+            ? '<span class="skin-active-badge">ATIVA</span>'
+            : `<button class="skin-select-btn" data-id="${skinItem.id}" data-component="${component}">Selecionar</button>`
+        }
+    `;
+    return el;
+}
 
 function openSkinManagerModal() {
     const modal = document.getElementById('skinManagerModal');
     if (!modal) return;
 
-    const skinCache    = loadSkinCache();
-    const activeSkinId = skinCache?.active_skin_inventory_id ?? null;
-    const items        = window.allInventoryItems || [];
+    const cache = loadSkinCache();
+    const items = window.allInventoryItems || [];
 
     const ownedSkins = items.filter(i =>
         i.equipped_slot === 'skin' &&
         i.items?.item_type?.toLowerCase() === 'skin'
     );
 
-    const activeContainer = document.getElementById('skinManagerActiveSkin');
-    const deactivateBtn   = document.getElementById('skinManagerDeactivateBtn');
+    // ── Seção de Molduras ──────────────────────────────────────────
+    const activeFrameId   = cache?.active_frame?.inventory_item_id ?? null;
+    const frameContainer  = document.getElementById('skinManagerActiveFrame');
+    const frameDeactBtn   = document.getElementById('skinManagerFrameDeactivateBtn');
+    const frameList       = document.getElementById('skinManagerFrameList');
+    const frameItems      = ownedSkins.filter(i => i.items?.skin_frame_url);
 
-    if (!activeSkinId || !skinCache?.active_skin) {
-        if (activeContainer) activeContainer.innerHTML =
-            '<p class="skin-manager-empty">Nenhuma skin ativa. Visual padrão.</p>';
-        if (deactivateBtn) deactivateBtn.style.display = 'none';
-    } else {
-        const activeSkin = skinCache.active_skin;
-        const skinItem   = ownedSkins.find(i => i.id === activeSkinId);
-        const imgName    = skinItem?.items?.name || 'unknown';
-
-        if (activeContainer) {
-            activeContainer.innerHTML = `
+    if (frameContainer) {
+        if (!activeFrameId || !cache?.active_frame) {
+            frameContainer.innerHTML = '<p class="skin-manager-empty">Sem moldura ativa.</p>';
+            if (frameDeactBtn) frameDeactBtn.style.display = 'none';
+        } else {
+            const fi = ownedSkins.find(i => i.id === activeFrameId);
+            frameContainer.innerHTML = `
                 <div class="skin-manager-item skin-manager-item--active">
-                    <img src="https://aden-rpg.pages.dev/assets/itens/${imgName}.webp"
+                    <img src="https://aden-rpg.pages.dev/assets/itens/${fi?.items?.name || 'unknown'}.webp"
                          onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'"
                          class="skin-manager-thumb">
                     <div class="skin-manager-info">
-                        <span class="skin-manager-name">${activeSkin.display_name || 'Skin'}</span>
-                        <span class="skin-manager-expiry">${formatExpiryFull(activeSkin.expires_at)}</span>
+                        <span class="skin-manager-name">${cache.active_frame.display_name}</span>
+                        <span class="skin-manager-expiry">${formatExpiryFull(cache.active_frame.expires_at)}</span>
                     </div>
                     <span class="skin-active-badge">ATIVA</span>
-                </div>
-            `;
+                </div>`;
+            if (frameDeactBtn) frameDeactBtn.style.display = 'block';
         }
-        if (deactivateBtn) deactivateBtn.style.display = 'block';
     }
 
-    const listEl = document.getElementById('skinManagerList');
-    if (!listEl) { modal.style.display = 'flex'; return; }
-
-    if (ownedSkins.length === 0) {
-        listEl.innerHTML = '<p class="skin-manager-empty">Nenhuma skin no gerenciador.<br>Ative skins pela bolsa.</p>';
-    } else {
-        listEl.innerHTML = '';
-        ownedSkins.forEach(skinItem => {
-            const def      = skinItem.items || {};
-            const isActive = skinItem.id === activeSkinId;
-
-            const el = document.createElement('div');
-            el.className = `skin-manager-item ${isActive ? 'skin-manager-item--active' : ''}`;
-            el.innerHTML = `
-                <img src="https://aden-rpg.pages.dev/assets/itens/${def.name || 'unknown'}.webp"
-                     onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'"
-                     class="skin-manager-thumb">
-                <div class="skin-manager-info">
-                    <span class="skin-manager-name">${def.display_name || 'Skin'}</span>
-                    <span class="skin-manager-expiry">${formatExpiryFull(skinItem.expires_at)}</span>
-                </div>
-                ${isActive
-                    ? '<span class="skin-active-badge">ATIVA</span>'
-                    : `<button class="skin-select-btn" data-id="${skinItem.id}">Selecionar</button>`
-                }
-            `;
-            listEl.appendChild(el);
-        });
-
-        listEl.querySelectorAll('.skin-select-btn').forEach(btn => {
-            btn.addEventListener('click', () =>
-                handleSelectSkin(parseInt(btn.dataset.id, 10))
-            );
-        });
+    if (frameList) {
+        frameList.innerHTML = '';
+        if (frameItems.length === 0) {
+            frameList.innerHTML = '<p class="skin-manager-empty">Nenhuma moldura no gerenciador.</p>';
+        } else {
+            frameItems.forEach(si => {
+                const isActive = si.id === activeFrameId;
+                frameList.appendChild(_buildSkinRow(si, isActive, 'frame'));
+            });
+        }
     }
+
+    // ── Seção de Fundos (Vídeo) ────────────────────────────────────
+    const activeVideoId   = cache?.active_video?.inventory_item_id ?? null;
+    const videoContainer  = document.getElementById('skinManagerActiveVideo');
+    const videoDeactBtn   = document.getElementById('skinManagerVideoDeactivateBtn');
+    const videoList       = document.getElementById('skinManagerVideoList');
+    const videoItems      = ownedSkins.filter(i => i.items?.skin_video_url);
+
+    if (videoContainer) {
+        if (!activeVideoId || !cache?.active_video) {
+            videoContainer.innerHTML = '<p class="skin-manager-empty">Sem fundo ativo. Usando padrão.</p>';
+            if (videoDeactBtn) videoDeactBtn.style.display = 'none';
+        } else {
+            const vi = ownedSkins.find(i => i.id === activeVideoId);
+            videoContainer.innerHTML = `
+                <div class="skin-manager-item skin-manager-item--active">
+                    <img src="https://aden-rpg.pages.dev/assets/itens/${vi?.items?.name || 'unknown'}.webp"
+                         onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'"
+                         class="skin-manager-thumb">
+                    <div class="skin-manager-info">
+                        <span class="skin-manager-name">${cache.active_video.display_name}</span>
+                        <span class="skin-manager-expiry">${formatExpiryFull(cache.active_video.expires_at)}</span>
+                    </div>
+                    <span class="skin-active-badge">ATIVO</span>
+                </div>`;
+            if (videoDeactBtn) videoDeactBtn.style.display = 'block';
+        }
+    }
+
+    if (videoList) {
+        videoList.innerHTML = '';
+        if (videoItems.length === 0) {
+            videoList.innerHTML = '<p class="skin-manager-empty">Nenhum fundo no gerenciador.</p>';
+        } else {
+            videoItems.forEach(si => {
+                const isActive = si.id === activeVideoId;
+                videoList.appendChild(_buildSkinRow(si, isActive, 'video'));
+            });
+        }
+    }
+
+    // Liga os botões "Selecionar" depois de renderizar
+    modal.querySelectorAll('.skin-select-btn').forEach(btn => {
+        btn.addEventListener('click', () =>
+            handleSelectSkin(parseInt(btn.dataset.id, 10), btn.dataset.component)
+        );
+    });
 
     modal.style.display = 'flex';
 }
@@ -499,47 +543,41 @@ function closeSkinManagerModal() {
 // ─── Inicialização ────────────────────────────────────────────────────
 
 function init() {
-    // 1. Verifica expiração no cache local
+    // 1. Verifica expiração do cache local no boot
     checkAndHandleExpiry();
 
-    const skinCache  = loadSkinCache();
-    const activeSkin = (skinCache?.active_skin && !isExpiredData(skinCache.active_skin))
-        ? skinCache.active_skin
-        : null;
+    const cache = loadSkinCache() || {};
 
-    // 2. Inicializa o vídeo de fundo com o src correto ANTES do browser
-    //    carregar o <source> padrão — evita load duplo e flash cinza.
-    //    O vídeo está em opacity:0 (CSS), skipFadeOut=true → vai direto ao fade-in.
+    // 2. Vídeo: define src correto ANTES do browser carregar o <source> padrão
     const videoEl = document.getElementById('background-video');
-    if (videoEl) {
-        const targetSrc = activeSkin?.video_url || DEFAULT_VIDEO;
-        _swapVideo(videoEl, targetSrc, DEFAULT_VIDEO_TYPE, /* skipFadeOut */ true);
+    const videoSrc = (cache.active_video && !isExpiredData(cache.active_video))
+        ? cache.active_video.video_url
+        : DEFAULT_VIDEO;
+    _swapVideo(videoEl, videoSrc, DEFAULT_VIDEO_TYPE, /* skipFadeOut */ true);
+
+    // 3. Moldura + sheen
+    if (cache.active_frame && !isExpiredData(cache.active_frame)) {
+        _applyFrame(cache.active_frame.frame_url);
     }
 
-    // 3. Aplica moldura se houver skin ativa (vídeo já tratado acima)
-    if (activeSkin?.frame_url) {
-        const frameEl  = document.getElementById('avatarFrameOverlay');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-        if (frameEl) { frameEl.src = activeSkin.frame_url; frameEl.style.display = 'block'; }
-        if (avatarEl) avatarEl.style.border = 'none';
-    }
-
-    // 4. Eventos dos botões
+    // 4. Eventos
     document.getElementById('skinConfigBtn')
         ?.addEventListener('click', openSkinManagerModal);
     document.getElementById('closeSkinManagerModal')
         ?.addEventListener('click', closeSkinManagerModal);
-    document.getElementById('deactivateSkinBtn')
-        ?.addEventListener('click', handleDeactivateSkin);
+
+    // Botões de desativação por componente
+    document.getElementById('deactivateFrameBtn')
+        ?.addEventListener('click', () => handleDeactivateSkin('frame'));
+    document.getElementById('deactivateVideoBtn')
+        ?.addEventListener('click', () => handleDeactivateSkin('video'));
 }
 
 // ─── Exportações ──────────────────────────────────────────────────────
 window.skinSystem = {
     init,
-    applySkinUI,
-    removeSkinUI,
     showSkinDetails,
     reconcileWithServer,
-    formatExpiryTime,   // usado pelo badge da bolsa em inventory.js
+    formatExpiryTime,
     openSkinManagerModal
 };

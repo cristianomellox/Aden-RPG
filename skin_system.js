@@ -121,7 +121,13 @@ function _applyFrame(frameUrl) {
     frameEl.src           = frameUrl;
     frameEl.style.display = 'block';
     if (avatarEl) avatarEl.style.border = 'none';
-    if (sheenEl)  sheenEl.style.display = 'block';
+    if (sheenEl) {
+        // Mascara o sheen com a própria imagem da moldura:
+        // o brilho só aparece sobre os pixels opacos da arte da moldura.
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    }
 }
 
 function _removeFrame() {

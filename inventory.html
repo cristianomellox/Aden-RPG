@@ -189,48 +189,52 @@
 }
 
 /* ── Efeito sheen/shimmer sobre a moldura do avatar ─────────────────
-   Posicionado acima do #avatarFrameOverlay (z-index 3 vs 2).
-   mix-blend-mode: screen faz o brilho prateado realçar os pixels
-   decorativos da moldura sem cobrir ou alterar sua arte.
-   overflow: hidden + border-radius: 50% clipa o sweep ao círculo.    */
+   A máscara CSS (mask-image) é definida pelo JS com a mesma URL
+   da moldura ativa. Assim o brilho só aparece sobre os pixels
+   opacos da arte da moldura — jamais sobre o avatar em baixo.       */
 #avatarFrameSheen {
     position: absolute;
     top: -5px;        /* igual ao top do #avatarFrameOverlay */
     left: 0;
     width: 195px;
     height: 195px;
-    border-radius: 50%;
-    overflow: hidden;
     pointer-events: none;
     z-index: 3;
-    mix-blend-mode: screen;
     display: none;    /* mostrado pelo JS quando há moldura ativa */
+    /* mask-image é injetado pelo JS via _applyFrame() */
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    overflow: hidden;
 }
 #avatarFrameSheen::after {
     content: '';
     position: absolute;
-    top: -25%;
-    left: -85%;
-    width: 48%;
-    height: 150%;
+    top: -20%;
+    left: -130%;
+    width: 55%;
+    height: 140%;
     background: linear-gradient(
         108deg,
-        transparent          0%,
-        rgba(180,195,255,.08) 30%,
-        rgba(210,220,255,.22) 42%,
-        rgba(255,255,255,.58) 50%,
-        rgba(210,220,255,.22) 58%,
-        rgba(180,195,255,.08) 70%,
-        transparent          100%
+        transparent           0%,
+        rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%,
+        rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%,
+        rgba(255,255,255,.04) 72%,
+        transparent           100%
     );
-    animation: avatar-frame-sheen 4.2s ease-in-out infinite;
+    animation: avatar-frame-sheen 4.8s ease-in-out infinite;
 }
 @keyframes avatar-frame-sheen {
-    0%   { left: -85%; opacity: 0; }
-    6%   { opacity: 1; }
-    44%  { left: 135%; opacity: 1; }
-    52%  { opacity: 0; left: 135%; }
-    100% { left: 135%; opacity: 0; }
+    0%   { left: -130%; opacity: 0; }
+    5%   { opacity: 1; }
+    46%  { left: 155%; opacity: 1; }
+    54%  { opacity: 0; left: 155%; }
+    100% { left: 155%; opacity: 0; }
 }
 
 /* Listas do gerenciador de skins com scroll independente */
@@ -525,7 +529,7 @@
     <div id="skinManagerContent" class="modal-content">
         <span id="closeSkinManagerModal" class="btn">x</span>
 
-        <h3>✦ Skins</h3>
+        <h3>✦ Skins ✦</h3>
         <p style="font-size:0.75em; color:#888; text-align:center; margin:0 0 12px;">
             Gerencie moldura e fundo de forma independente
         </p>

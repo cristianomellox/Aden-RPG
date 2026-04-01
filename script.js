@@ -1396,6 +1396,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
                 renderPlayerUI(cachedPlayer, preserveActiveContainer);
                 checkProgressionNotifications(cachedPlayer);
                 
+                // --- PACOTE INICIAL (nível 1, apenas 1 vez) ---
+                if (!localStorage.getItem('aden_starter_pack_given')) {
+                    checkAndGiveStarterPack(cachedPlayer);
+                }
+                
                 // Dispara o evento de "Pronto" para que o PV.js saiba que pode carregar
                 window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
                 
@@ -1516,6 +1521,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
         renderPlayerUI(player, preserveActiveContainer);
         checkProgressionNotifications(player);
+
+        // --- PACOTE INICIAL (nível 1, apenas 1 vez) ---
+        if (!localStorage.getItem('aden_starter_pack_given')) {
+            checkAndGiveStarterPack(player); // async, não bloqueia
+        }
 
         if (/^Nome_[0-9a-fA-F]{6}$/.test(player.name)) {
             if (typeof window.updateProfileEditModal === 'function') {
@@ -1683,41 +1693,57 @@ verifyOtpBtn.addEventListener('click', verifyOtp);
 window.authCheckComplete = false;
 
 async function checkAuthStatus() {
-    // 1. TENTA AUTH VIA GLOBAL DB (ZERO EGRESS)
-    const cachedAuth = await GlobalDB.getAuth();
-    if (cachedAuth && cachedAuth.value && cachedAuth.value.user) {
-         console.log("⚡ [Auth] Sessão válida recuperada do IndexedDB Global.");
-         currentPlayerId = cachedAuth.value.user.id;
-         window.authCheckComplete = true;
+    try {
+        // 1. TENTA AUTH VIA GLOBAL DB (ZERO EGRESS)
+        const cachedAuth = await GlobalDB.getAuth();
+        if (cachedAuth && cachedAuth.value && cachedAuth.value.user) {
+             console.log("⚡ [Auth] Sessão válida recuperada do IndexedDB Global.");
+             currentPlayerId = cachedAuth.value.user.id;
+             window.authCheckComplete = true;
 
-         // Carrega jogador via DB ou rede se necessário (FALSE para respeitar cache)
-         await fetchAndDisplayPlayerInfo(false);
-         
-         if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
-         handleUrlActions();
-         return;
-    }
+             // Carrega jogador via DB ou rede se necessário (FALSE para respeitar cache)
+             await fetchAndDisplayPlayerInfo(false);
+             
+             if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+             handleUrlActions();
+             return;
+        }
 
-    // 2. Fallback: getSession() do Supabase (lê do LocalStorage ou Rede)
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
+        // 2. Fallback: getSession() do Supabase (lê do LocalStorage ou Rede)
+        // ⚠️ CORREÇÃO: destructuring seguro — evita TypeError se 'data' for null
+        //    (ocorre quando o storage foi limpo e o Supabase não consegue inicializar)
+        const authResult = await supabaseClient.auth.getSession();
+        const session = authResult?.data?.session ?? null;
 
-    if (session) {
-        currentPlayerId = session.user.id;
-        window.authCheckComplete = true;
-        
-        // Salva no Global DB para a próxima vez ser Zero Egress
-        await GlobalDB.setAuth(session);
-        
-        // Busca dados (FALSE para respeitar cache)
-        fetchAndDisplayPlayerInfo(false); 
-        
-        if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
-        handleUrlActions();
-    } else {
-        // Sem sessão, mostra tela de login
+        if (session) {
+            currentPlayerId = session.user.id;
+            window.authCheckComplete = true;
+            
+            // Salva no Global DB para a próxima vez ser Zero Egress
+            await GlobalDB.setAuth(session);
+            
+            // Busca dados (FALSE para respeitar cache)
+            fetchAndDisplayPlayerInfo(false); 
+            
+            if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+            handleUrlActions();
+        } else {
+            // Sem sessão, mostra tela de login
+            updateUIVisibility(false);
+            window.authCheckComplete = true;
+            if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        }
+    } catch (err) {
+        // Captura qualquer erro inesperado (ex: storage corrompido, Supabase SDK lançando)
+        console.error('❌ [Auth] Erro em checkAuthStatus:', err);
         updateUIVisibility(false);
-        window.authCheckComplete = true;
-        if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+    } finally {
+        // ✅ GARANTIA ABSOLUTA: authCheckComplete SEMPRE é setado e a loading screen fecha
+        //    independente de qualquer erro ou caminho de código acima.
+        if (!window.authCheckComplete) {
+            window.authCheckComplete = true;
+            if (typeof window.tryHideLoadingScreen === 'function') window.tryHideLoadingScreen();
+        }
     }
 }
 
@@ -1976,6 +2002,234 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
+
+// ===============================================
+// === PACOTE INICIAL DE BOAS-VINDAS (NOVO)   ===
+// ===============================================
+
+/**
+ * Itens do pacote inicial — usado apenas para exibir no modal.
+ * A entrega real é feita pelo RPC no servidor.
+ */
+const STARTER_PACK_ITEMS = [
+    { id: 1,  qty: 1, name: 'Espada de Ferro',           img: 'https://aden-rpg.pages.dev/assets/itens/espada_de_ferro.webp' },
+    { id: 85, qty: 5, name: 'Escudo de Caça',            img: 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp' },
+    { id: 99, qty: 5, name: 'Ampulheta de Caça',         img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp' },
+    { id: 41, qty: 5, name: 'Cartão de Espiral Comum',   img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp' },
+];
+
+/**
+ * Verifica se o jogador é novo (nível 1, nunca recebeu o pacote)
+ * e, se sim, chama o RPC e exibe o modal de boas-vindas.
+ * Zero egress após a primeira execução (localStorage como guard).
+ */
+async function checkAndGiveStarterPack(player) {
+    // Guard dupla client-side: se já tiver a flag, não faz nada
+    if (localStorage.getItem('aden_starter_pack_given')) return;
+
+    // Verifica client-side se o pack já foi marcado no progression_state (sem query extra)
+    if (player?.progression_state?.starter === true) {
+        localStorage.setItem('aden_starter_pack_given', '1');
+        return;
+    }
+
+    // Só entrega para nível 1 — após levelar up o flag já terá sido setado
+    if (!player || player.level !== 1) {
+        localStorage.setItem('aden_starter_pack_given', '1');
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient.rpc('give_starter_pack');
+
+        if (error) {
+            console.warn('⚠️ [StarterPack] Erro na RPC:', error.message);
+            return;
+        }
+
+        // Pack já foi dado (ex: localStorage foi limpo mas server tem a flag)
+        if (data?.already_given || !data?.success) {
+            localStorage.setItem('aden_starter_pack_given', '1');
+            return;
+        }
+
+        // ✅ Sucesso: marca localmente e atualiza cache
+        localStorage.setItem('aden_starter_pack_given', '1');
+
+        // Atualiza progression_state local para refletir a flag
+        if (currentPlayerData) {
+            currentPlayerData.progression_state = {
+                ...(currentPlayerData.progression_state || {}),
+                starter: true
+            };
+            GlobalDB.updatePlayerPartial({ progression_state: currentPlayerData.progression_state });
+        }
+
+        // Atualiza cache cirúrgico do inventário
+        if (data.inventory_updates && data.new_timestamp) {
+            await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
+        }
+
+        // Exibe o modal de boas-vindas
+        showStarterPackModal();
+
+    } catch (err) {
+        console.error('❌ [StarterPack] Erro inesperado:', err);
+    }
+}
+
+/**
+ * Exibe o modal de boas-vindas com os itens do pacote inicial.
+ */
+function showStarterPackModal() {
+    // Remove instância anterior se existir
+    const existing = document.getElementById('starterPackModal');
+    if (existing) existing.remove();
+
+    // --- Injeta CSS do modal (apenas uma vez) ---
+    if (!document.getElementById('starter-pack-style')) {
+        const style = document.createElement('style');
+        style.id = 'starter-pack-style';
+        style.innerHTML = `
+            #starterPackModal {
+                position: fixed; inset: 0; z-index: 99999;
+                display: flex; justify-content: center; align-items: center;
+                background: rgba(0,0,0,0.88);
+                backdrop-filter: blur(6px);
+                animation: spFadeIn 0.4s ease;
+            }
+            @keyframes spFadeIn {
+                from { opacity: 0; }
+                to   { opacity: 1; }
+            }
+            @keyframes spSlideUp {
+                from { opacity: 0; transform: translateY(40px) scale(0.95); }
+                to   { opacity: 1; transform: translateY(0)    scale(1);    }
+            }
+            #starterPackModal .sp-box {
+                background: linear-gradient(160deg, #0e0c07 0%, #1a1508 60%, #0e0c07 100%);
+                border: 1px solid #5a4510;
+                border-radius: 16px;
+                padding: 28px 22px 22px;
+                width: 92%; max-width: 370px;
+                text-align: center;
+                box-shadow: 0 0 40px rgba(201,169,74,0.25), 0 0 8px rgba(0,0,0,0.8);
+                animation: spSlideUp 0.45s cubic-bezier(0.22,1,0.36,1);
+            }
+            #starterPackModal .sp-crown {
+                font-size: 2.4em; margin-bottom: 4px;
+            }
+            #starterPackModal .sp-title {
+                font-size: 1.35em; font-weight: bold;
+                color: #e8c96a;
+                text-shadow: 0 0 12px rgba(201,169,74,0.6);
+                margin: 0 0 4px;
+            }
+            #starterPackModal .sp-subtitle {
+                font-size: 0.82em; color: #9a8456;
+                margin: 0 0 18px;
+                line-height: 1.4;
+            }
+            #starterPackModal .sp-divider {
+                border: none; border-top: 1px solid #3a2e10;
+                margin: 0 0 18px;
+            }
+            #starterPackModal .sp-pack-label {
+                font-size: 0.78em; text-transform: uppercase;
+                letter-spacing: 2px; color: #c9a94a;
+                margin-bottom: 14px;
+            }
+            #starterPackModal .sp-items {
+                display: grid; grid-template-columns: repeat(4, 1fr);
+                gap: 10px; margin-bottom: 20px;
+            }
+            #starterPackModal .sp-item {
+                background: rgba(255,255,255,0.04);
+                border: 1px solid #3a2e10;
+                border-radius: 10px; padding: 8px 4px;
+                display: flex; flex-direction: column;
+                align-items: center; gap: 6px;
+                transition: border-color 0.2s;
+            }
+            #starterPackModal .sp-item:hover { border-color: #c9a94a; }
+            #starterPackModal .sp-item img {
+                width: 44px; height: 44px;
+                object-fit: contain;
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+            }
+            #starterPackModal .sp-item .sp-qty {
+                font-size: 0.78em; color: #c9a94a; font-weight: bold;
+            }
+            #starterPackModal .sp-item .sp-name {
+                font-size: 0.6em; color: #888;
+                line-height: 1.2; text-align: center;
+            }
+            #starterPackModal .sp-bag-hint {
+                font-size: 0.78em; color: #6a5c38;
+                margin-bottom: 18px;
+            }
+            #starterPackModal .sp-bag-hint strong { color: #c9a94a; }
+            #starterPackModal .sp-btn {
+                width: 100%; padding: 13px;
+                background: linear-gradient(180deg, #d4b050 0%, #8a6f22 100%);
+                color: #0e0c07; font-weight: bold;
+                font-size: 0.95em; letter-spacing: 1px;
+                border: none; border-radius: 10px; cursor: pointer;
+                box-shadow: 0 4px 12px rgba(201,169,74,0.35);
+                text-transform: uppercase;
+                transition: filter 0.15s;
+            }
+            #starterPackModal .sp-btn:hover { filter: brightness(1.1); }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // --- Monta o HTML do modal ---
+    const modal = document.createElement('div');
+    modal.id = 'starterPackModal';
+
+    const itemsHTML = STARTER_PACK_ITEMS.map(item => `
+        <div class="sp-item">
+            <img src="${item.img}" alt="${item.name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+            <span class="sp-qty">x${item.qty}</span>
+            <span class="sp-name">${item.name}</span>
+        </div>
+    `).join('');
+
+    modal.innerHTML = `
+        <div class="sp-box">
+            <div class="sp-crown">⚔️</div>
+            <h2 class="sp-title">Bem-vindo a Aden!</h2>
+            <p class="sp-subtitle">
+                Sua jornada começa agora, aventureiro.<br>
+                Preparamos um pacote especial para você.
+            </p>
+            <hr class="sp-divider">
+            <p class="sp-pack-label">🎁 Pacote Inicial</p>
+            <div class="sp-items">${itemsHTML}</div>
+            <p class="sp-bag-hint">Os itens foram enviados para a sua <strong>Bolsa</strong>.</p>
+            <button class="sp-btn" id="spCloseBtn">Começar a Jogar</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Fecha ao clicar no botão
+    modal.querySelector('#spCloseBtn').addEventListener('click', () => {
+        modal.style.opacity = '0';
+        modal.style.transition = 'opacity 0.3s';
+        setTimeout(() => modal.remove(), 300);
+    });
+
+    // Fecha ao clicar fora
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.opacity = '0';
+            modal.style.transition = 'opacity 0.3s';
+            setTimeout(() => modal.remove(), 300);
+        }
+    });
+}
 
 // ===============================================
 // === LÓGICA DO SISTEMA DE PROGRESSÃO (NOVO) ===

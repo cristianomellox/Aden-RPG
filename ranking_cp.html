@@ -115,10 +115,49 @@
     #fixedPlayerRank .rank-avatar-cp { border: 2px solid #fff; box-shadow: 0 0 5px gold; }
 
 
-    /* === MODAL STYLES (INTACTOS PARA MANTER O VISUAL) === */
+    /* === MODAL STYLES === */
     #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
-    .modal-content-player { background-color: #2c2c2c; padding: 20px; border: 1px solid #c9a94a; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #e0dccc; position: relative; }
-    #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; }
+
+    /* Modal box: position relative + overflow hidden para o vídeo de fundo */
+    .modal-content-player {
+        background-color: #2c2c2c;
+        border: 1px solid #c9a94a;
+        width: 90%; max-width: 500px;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        color: #e0dccc;
+        position: relative;
+        overflow: hidden; /* necessário para o vídeo não vazar */
+    }
+
+    /* Vídeo de fundo cobrindo o modal inteiro */
+    #modal-bg-video {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        opacity: 0;              /* começa invisível; JS faz fade-in */
+        background-color: black; /* sem placeholder cinza nativo */
+        z-index: 0;
+        pointer-events: none;
+    }
+    /* Overlay escuro sobre o vídeo para não ofuscar textos */
+    #modal-bg-overlay {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 100%);
+        z-index: 1;
+        pointer-events: none;
+    }
+    /* Todo conteúdo do modal fica acima do vídeo */
+    .modal-inner {
+        position: relative;
+        z-index: 2;
+        padding: 20px;
+    }
+
+    #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; z-index: 10; }
     #closePlayerModal:hover { color: white; }
     .player-header { text-align: center; margin-bottom: 15px; }
     #playerName { font-size: 1.8em; color: #FFD700; margin-bottom: 5px; font-weight: bold; }
@@ -126,47 +165,17 @@
     #playerGuildFlag { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; }
     #playerGuildName { font-size: 1.4em; color: lightblue; }
     #playerLevel { font-size: 1.2em; color: #ccc; font-weight: bold; }
-    /* === PLAYER VISUALS: container relativo para o vídeo de fundo === */
-    .player-visuals {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        position: relative;
-        overflow: hidden;
-        border-radius: 8px;
-        padding: 14px 8px;
-        background: #111;
-        min-height: 230px;
-    }
-    .player-visuals > * { position: relative; z-index: 1; }
 
-    /* === VÍDEO DE FUNDO DA SKIN (modal) === */
-    #modal-bg-video {
-        position: absolute;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        object-fit: cover;
-        opacity: 0;               /* começa invisível; JS controla */
-        background-color: black;  /* elimina placeholder cinza nativo */
-        z-index: 0;
-        border-radius: 8px;
-        pointer-events: none;
-    }
+    /* player-visuals: apenas layout flex, sem background/overflow próprios */
+    .player-visuals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 0; }
 
-    /* === SLOTS EM COLUNA VERTICAL (igual ao inventário) === */
-    .equipment-slots-container {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        flex-shrink: 0;
-    }
+    /* Slots em coluna vertical (igual ao inventário) */
+    .equipment-slots-container { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
     .equipment-slot {
         background-color: #383838; border: 1px dashed #555;
         height: 55px; width: 55px;
         display: flex; align-items: center; justify-content: center;
-        position: relative; overflow: visible;
-        border-radius: 5px; flex-shrink: 0;
+        position: relative; overflow: visible; border-radius: 5px; flex-shrink: 0;
     }
     .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
     .item-level {
@@ -175,12 +184,12 @@
         font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999;
     }
 
-    /* === AVATAR + MOLDURA (igual ao inventário, 160 px wrapper) === */
+    /* Avatar + moldura sobreposta (wrapper 160px, avatar 100px — igual ao inventário) */
     #modal-avatar-wrapper {
         position: relative;
         width: 160px; height: 160px;
         display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0; z-index: 1;
+        flex-shrink: 0;
     }
     #playerAvatarEquip {
         width: 100px; height: 100px;
@@ -190,16 +199,14 @@
         box-shadow: 0 0 15px rgba(255,215,0,0.4);
     }
     #modal-frame-overlay {
-        position: absolute;
-        top: -5px; left: 0;
+        position: absolute; top: -5px; left: 0;
         width: 160px; height: 160px;
         pointer-events: none; z-index: 2;
         object-fit: contain; display: none;
     }
-    /* Sheen: brilho que varre a moldura */
+    /* Sheen: brilho prateado que varre a moldura (igual ao inventário) */
     #modal-frame-sheen {
-        position: absolute;
-        top: -5px; left: 0;
+        position: absolute; top: -5px; left: 0;
         width: 160px; height: 160px;
         pointer-events: none; z-index: 3; display: none;
         -webkit-mask-size: contain; mask-size: contain;
@@ -209,19 +216,13 @@
     }
     #modal-frame-sheen::after {
         content: '';
-        position: absolute;
-        top: -20%; left: -130%;
+        position: absolute; top: -20%; left: -130%;
         width: 55%; height: 140%;
-        background: linear-gradient(
-            108deg,
-            transparent           0%,
-            rgba(255,255,255,.04) 28%,
-            rgba(255,255,255,.18) 42%,
-            rgba(255,255,255,.52) 50%,
-            rgba(255,255,255,.18) 58%,
-            rgba(255,255,255,.04) 72%,
-            transparent           100%
-        );
+        background: linear-gradient(108deg,
+            transparent 0%, rgba(255,255,255,.04) 28%,
+            rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+            rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%,
+            transparent 100%);
         animation: _mfs 6s ease-in-out infinite;
     }
     @keyframes _mfs {
@@ -233,7 +234,6 @@
     }
 
     #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
-
     .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
     .stat-line span:first-child { color: #aaa; }
@@ -428,63 +428,69 @@
 
   <div id="playerModal">
     <div class="modal-content-player">
+      <!-- Vídeo de fundo cobrindo todo o modal (opacity controlada por JS) -->
+      <video autoplay muted loop playsinline id="modal-bg-video">
+        <source src="" type="video/webm">
+      </video>
+      <!-- Overlay escuro para garantir legibilidade -->
+      <div id="modal-bg-overlay"></div>
+
       <span id="closePlayerModal">&times;</span>
+
+      <!-- Todo conteúdo acima do vídeo -->
+      <div class="modal-inner">
       
-      <div class="player-header">
-        <div id="playerName" class="shimmer">Carregando...</div>
-         <div style="display: flex; align-items: center; justify-content: center; margin-top: -12px;">
-          <div id="playerLevel" class="shimmer">Nv. 1</div>
-      </div>
-        <div class="player-level-guild">
-          <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width: 50px; height: 55px;">
-          <div id="playerGuildName" class="shimmer">Nome da Guilda</div></div>
+        <div class="player-header">
+          <div id="playerName" class="shimmer">Carregando...</div>
+           <div style="display: flex; align-items: center; justify-content: center; margin-top: -12px;">
+            <div id="playerLevel" class="shimmer">Nv. 1</div>
+        </div>
+          <div class="player-level-guild">
+            <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width: 50px; height: 55px;">
+            <div id="playerGuildName" class="shimmer">Nome da Guilda</div></div>
+            </div>
+          <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
+         <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
+        </div>
+
+        <div class="player-visuals">
+          <div class="equipment-slots-container left">
+              <div class="equipment-slot" id="weapon-slot"></div>
+              <div class="equipment-slot" id="ring-slot"></div>
+              <div class="equipment-slot" id="helm-slot"></div>
+              <div class="equipment-slot" id="special1-slot"></div>
           </div>
-        <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
-       <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
-      </div>
 
-      <div class="player-visuals">
-        <!-- Vídeo de fundo da skin (fade-in via JS) -->
-        <video autoplay muted loop playsinline id="modal-bg-video">
-          <source src="" type="video/webm">
-        </video>
+          <!-- Avatar com moldura e sheen sobrepostos -->
+          <div id="modal-avatar-wrapper">
+              <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
+              <img id="modal-frame-overlay" src="" alt="">
+              <div id="modal-frame-sheen"></div>
+          </div>
 
-        <div class="equipment-slots-container left">
-            <div class="equipment-slot" id="weapon-slot"></div>
-            <div class="equipment-slot" id="ring-slot"></div>
-            <div class="equipment-slot" id="helm-slot"></div>
-            <div class="equipment-slot" id="special1-slot"></div>
+          <div class="equipment-slots-container right">
+              <div class="equipment-slot" id="amulet-slot"></div>
+              <div class="equipment-slot" id="wing-slot"></div>
+              <div class="equipment-slot" id="armor-slot"></div>
+              <div class="equipment-slot" id="special2-slot"></div>
+          </div>
         </div>
 
-        <!-- Avatar com suporte à moldura e sheen -->
-        <div id="modal-avatar-wrapper">
-            <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
-            <img id="modal-frame-overlay" src="" alt="">
-            <div id="modal-frame-sheen"></div>
+        <div class="player-stats">
+          <div class="stat-line"><span>ATK</span><span id="playerAttack" class="shimmer"></span></div>
+          <div class="stat-line"><span>Defesa</span><span id="playerDefense" class="shimmer"></span></div>
+          <div class="stat-line"><span>HP</span><span id="playerHealth" class="shimmer"></span></div>
+          <div class="stat-line"><span>Evasão</span><span id="playerEvasion" class="shimmer"></span></div>
+          <div class="stat-line"><span>Taxa Crítica</span><span id="playerCritChance" class="shimmer"></span></div>
+          <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
+          <div class="stat-line"><span>Redução Crítica</span><span id="playerCritReduction" class="shimmer"></span></div>
         </div>
+        
+        <a id="sendmp" href="#" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 10px;">
+            <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem
+        </a>
 
-        <div class="equipment-slots-container right">
-            <div class="equipment-slot" id="amulet-slot"></div>
-            <div class="equipment-slot" id="wing-slot"></div>
-            <div class="equipment-slot" id="armor-slot"></div>
-            <div class="equipment-slot" id="special2-slot"></div>
-        </div>
-      </div>
-
-      <div class="player-stats">
-        <div class="stat-line"><span>ATK</span><span id="playerAttack" class="shimmer"></span></div>
-        <div class="stat-line"><span>Defesa</span><span id="playerDefense" class="shimmer"></span></div>
-        <div class="stat-line"><span>HP</span><span id="playerHealth" class="shimmer"></span></div>
-        <div class="stat-line"><span>Evasão</span><span id="playerEvasion" class="shimmer"></span></div>
-        <div class="stat-line"><span>Taxa Crítica</span><span id="playerCritChance" class="shimmer"></span></div>
-        <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
-        <div class="stat-line"><span>Redução Crítica</span><span id="playerCritReduction" class="shimmer"></span></div>
-      </div>
-      
-      <a id="sendmp" href="#" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 10px;">
-          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem
-      </a>
-
+      </div><!-- /.modal-inner -->
     </div>
   </div>
 
@@ -630,7 +636,7 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL  (v3 — inclui skin)
+    // CACHE #2: PLAYER MODAL
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
@@ -646,78 +652,9 @@
     function setPlayerCache(playerId, data) {
         try {
             const key = `player_details_v3_${playerId}`;
-            localStorage.setItem(key, JSON.stringify({ v: data, e: Date.now() + 86400000 }));
+            const expirationTime = Date.now() + (24 * 60 * 60 * 1000); 
+            localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
         } catch (e) { }
-    }
-
-    // ====================================================================================
-    // SKIN DO MODAL — helpers de vídeo, frame e sheen
-    // ====================================================================================
-    const _MFADE_OUT = 400, _MFADE_IN = 1500;
-
-    function _modalVideoSwap(src, skipOut) {
-        const vid = document.getElementById('modal-bg-video');
-        if (!vid) return;
-        const doLoad = () => {
-            const s = vid.querySelector('source');
-            if (s) { s.src = src; s.type = 'video/webm'; }
-            vid.load();
-            const fadeIn = () => {
-                vid.style.transition = `opacity ${_MFADE_IN}ms ease-in`;
-                vid.style.opacity = '0.9';
-            };
-            if (vid.readyState >= 3) fadeIn();
-            else {
-                vid.addEventListener('canplay',        fadeIn, { once: true });
-                vid.addEventListener('canplaythrough', fadeIn, { once: true });
-            }
-            vid.play().catch(() => {});
-        };
-        if (skipOut) {
-            doLoad();
-        } else {
-            vid.style.transition = `opacity ${_MFADE_OUT}ms ease-out`;
-            vid.style.opacity = '0';
-            setTimeout(doLoad, _MFADE_OUT + 30);
-        }
-    }
-
-    function _applyModalSkin(frameUrl, videoUrl) {
-        const frameEl  = document.getElementById('modal-frame-overlay');
-        const sheenEl  = document.getElementById('modal-frame-sheen');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-
-        if (frameUrl) {
-            if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
-            if (avatarEl) avatarEl.style.border = 'none';
-            if (sheenEl) {
-                sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
-                sheenEl.style.maskImage       = `url('${frameUrl}')`;
-                sheenEl.style.display = 'block';
-            }
-        } else {
-            if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
-            if (sheenEl)  sheenEl.style.display = 'none';
-            if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
-        }
-
-        const vid = document.getElementById('modal-bg-video');
-        if (videoUrl) {
-            _modalVideoSwap(videoUrl, true);
-        } else {
-            if (vid) { vid.style.transition = ''; vid.style.opacity = '0'; }
-        }
-    }
-
-    function _resetModalSkin() {
-        const frameEl  = document.getElementById('modal-frame-overlay');
-        const sheenEl  = document.getElementById('modal-frame-sheen');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-        const vid      = document.getElementById('modal-bg-video');
-        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
-        if (sheenEl)  sheenEl.style.display = 'none';
-        if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
-        if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
     }
 
     // ====================================================================================
@@ -805,6 +742,75 @@
     }
 
     // ====================================================================================
+    // SKIN DO MODAL — helpers de vídeo, frame e sheen
+    // ====================================================================================
+    const _MFO = 400, _MFI = 1500; // fade-out ms, fade-in ms
+
+    function _modalVideoSwap(src, skipOut) {
+        const vid = document.getElementById('modal-bg-video');
+        if (!vid) return;
+        const doLoad = () => {
+            const s = vid.querySelector('source');
+            if (s) { s.src = src; s.type = 'video/webm'; }
+            vid.load();
+            const fadeIn = () => {
+                vid.style.transition = `opacity ${_MFI}ms ease-in`;
+                vid.style.opacity = '0.45'; // semi-opaco para não ofuscar texto
+            };
+            if (vid.readyState >= 3) fadeIn();
+            else {
+                vid.addEventListener('canplay',        fadeIn, { once: true });
+                vid.addEventListener('canplaythrough', fadeIn, { once: true });
+            }
+            vid.play().catch(() => {});
+        };
+        if (skipOut) { doLoad(); }
+        else {
+            vid.style.transition = `opacity ${_MFO}ms ease-out`;
+            vid.style.opacity = '0';
+            setTimeout(doLoad, _MFO + 30);
+        }
+    }
+
+    function _applyModalSkin(frameUrl, videoUrl) {
+        const frameEl  = document.getElementById('modal-frame-overlay');
+        const sheenEl  = document.getElementById('modal-frame-sheen');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        const vid      = document.getElementById('modal-bg-video');
+
+        if (frameUrl) {
+            if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
+            if (avatarEl) avatarEl.style.border = 'none';
+            if (sheenEl) {
+                sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+                sheenEl.style.maskImage       = `url('${frameUrl}')`;
+                sheenEl.style.display = 'block';
+            }
+        } else {
+            if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+            if (sheenEl)  sheenEl.style.display = 'none';
+            if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+        }
+
+        if (videoUrl) {
+            _modalVideoSwap(videoUrl, true);
+        } else {
+            if (vid) { vid.style.transition = ''; vid.style.opacity = '0'; }
+        }
+    }
+
+    function _resetModalSkin() {
+        const frameEl  = document.getElementById('modal-frame-overlay');
+        const sheenEl  = document.getElementById('modal-frame-sheen');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        const vid      = document.getElementById('modal-bg-video');
+        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+        if (sheenEl)  sheenEl.style.display = 'none';
+        if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+        if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
+    }
+
+    // ====================================================================================
     // FETCH DETALHES DO JOGADOR
     // ====================================================================================
     window.fetchPlayerDetailsWithCache = async function(playerId) {
@@ -819,6 +825,7 @@
         if (!supabase) return;
 
         try {
+            // Busca dados básicos + IDs de skin ativa
             const { data: player, error: pErr } = await supabase
                 .from('players')
                 .select('name, level, avatar_url, guild_id, combat_power, cached_combat_stats, active_frame_inventory_id, active_video_inventory_id')
@@ -835,21 +842,27 @@
                 }
             }
 
-            // ── Equipamentos + skin em uma única query (mesma path que já funciona via RLS) ──
+            // Equipamentos + dados de skin em uma única query (player_id garante que RLS libera)
             const { data: equippedItems } = await supabase
                 .from('inventory_items')
                 .select('id, equipped_slot, level, items ( image_url, skin_frame_url, skin_video_url )')
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            // Extrai URLs de skin dos itens no slot 'skin'
+            // Extrai URLs de skin — usa String() para evitar mismatch bigint/number
+            const activeFrameId = player.active_frame_inventory_id;
+            const activeVideoId = player.active_video_inventory_id;
             const skinSlots = (equippedItems || []).filter(i => i.equipped_slot === 'skin');
-            const activeFrameItem = skinSlots.find(i => i.id === player.active_frame_inventory_id)
-                                 || skinSlots.find(i => i.items?.skin_frame_url);
-            const activeVideoItem = skinSlots.find(i => i.id === player.active_video_inventory_id)
-                                 || skinSlots.find(i => i.items?.skin_video_url);
-            const frameUrl = activeFrameItem?.items?.skin_frame_url || null;
-            const videoUrl = activeVideoItem?.items?.skin_video_url || null;
+
+            const frameItem = activeFrameId
+                ? skinSlots.find(i => String(i.id) === String(activeFrameId))
+                : skinSlots.find(i => i.items?.skin_frame_url);
+            const videoItem = activeVideoId
+                ? skinSlots.find(i => String(i.id) === String(activeVideoId))
+                : skinSlots.find(i => i.items?.skin_video_url);
+
+            const frameUrl = frameItem?.items?.skin_frame_url || null;
+            const videoUrl = videoItem?.items?.skin_video_url || null;
 
             const serverStats = player.cached_combat_stats || {};
             
@@ -890,33 +903,24 @@
     function populatePlayerModal(data) {
         const { basic, stats, items } = data;
 
+        // Nome
         document.getElementById('playerName').textContent = basic.name;
         document.getElementById('playerName').classList.remove('shimmer');
-        // Emoji shimmer: chama diretamente para não depender do MutationObserver
-        if (typeof window._adenApplyEmojis === 'function') {
-            window._adenApplyEmojis(document.getElementById('playerName'));
-        }
+        // Emoji shimmer: chama diretamente (não depende do MutationObserver)
+        window._adenApplyEmojis?.(document.getElementById('playerName'));
 
         document.getElementById('playerLevel').textContent = 'Nv. ' + safeNum(basic.level);
         document.getElementById('playerLevel').classList.remove('shimmer');
         
-        const gFlag = document.getElementById('playerGuildFlag');
-        gFlag.src = basic.guild_flag;
-        gFlag.classList.remove('shimmer');
-        const gName = document.getElementById('playerGuildName');
-        gName.textContent = basic.guild_name;
-        gName.classList.remove('shimmer');
-
-        // Re-aplica guilda após 1 frame para sobrepor possível reset externo (guild_pv.js)
-        requestAnimationFrame(() => {
+        // Guilda — aplica agora e re-afirma após 250ms para sobrepor guild_pv.js
+        const _setGuild = () => {
             const gf = document.getElementById('playerGuildFlag');
             const gn = document.getElementById('playerGuildName');
-            if (gf && gf.src !== basic.guild_flag) gf.src = basic.guild_flag;
-            if (gn && gn.textContent !== basic.guild_name) {
-                gn.textContent = basic.guild_name;
-                gn.classList.remove('shimmer');
-            }
-        });
+            if (gf) { gf.src = basic.guild_flag; gf.classList.remove('shimmer'); }
+            if (gn) { gn.textContent = basic.guild_name; gn.classList.remove('shimmer'); }
+        };
+        _setGuild();
+        setTimeout(_setGuild, 250); // guild_pv.js pode sobrescrever logo após; re-afirma depois
 
         const cpDiv = document.getElementById('playerCombatPower');
         cpDiv.textContent = formatNumberCompact(basic.cp);
@@ -926,7 +930,7 @@
         avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
         avatarImg.classList.remove('shimmer');
 
-        // Skin: moldura + vídeo de fundo
+        // Skin: moldura + sheen + vídeo de fundo cobrindo o modal inteiro
         _applyModalSkin(basic.frame_url || null, basic.video_url || null);
 
         const statMap = {
@@ -946,8 +950,7 @@
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         
         items.forEach(invItem => {
-            // Ignora slot 'skin' nos equipamentos visuais
-            if(invItem.equipped_slot === 'skin') return;
+            if(invItem.equipped_slot === 'skin') return; // skins não vão nos slots de equipamento
             if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
                 const slotId = `${invItem.equipped_slot}-slot`;
                 const slotDiv = document.getElementById(slotId);
@@ -1552,9 +1555,10 @@
 
     function styleTextNodes(node) {
         if (node.nodeType === 3) {
+            // Fix: reset lastIndex antes de .test() para evitar bug de regex /g stateful
             targetIcons.lastIndex = 0;
             if (targetIcons.test(node.nodeValue)) {
-                targetIcons.lastIndex = 0;
+                targetIcons.lastIndex = 0; // reset antes do .replace() também
                 const span = document.createElement('span');
                 span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
                     if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
@@ -1584,10 +1588,10 @@
     observer.observe(document.body, { childList: true, subtree: true });
     styleTextNodes(document.body);
 
-    // Expõe função global para uso direto no modal (evita dependência do MutationObserver)
+    // Expõe função para chamada direta no modal (não depende do MutationObserver)
     window._adenApplyEmojis = function(el) {
         if (!el) return;
-        targetIcons.lastIndex = 0; // Reseta estado da regex /g/ (bug clássico de lastIndex)
+        targetIcons.lastIndex = 0;
         Array.from(el.childNodes).forEach(styleTextNodes);
     };
 

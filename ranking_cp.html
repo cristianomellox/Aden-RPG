@@ -139,23 +139,22 @@
         background: #111;
         min-height: 230px;
     }
-    /* Garante que tudo dentro fique acima do vídeo */
     .player-visuals > * { position: relative; z-index: 1; }
 
     /* === VÍDEO DE FUNDO DA SKIN (modal) === */
-    #modal-background-video {
+    #modal-bg-video {
         position: absolute;
         top: 0; left: 0;
         width: 100%; height: 100%;
         object-fit: cover;
-        opacity: 0;                  /* começa invisível; JS controla fade */
-        background-color: black;     /* elimina placeholder cinza nativo */
+        opacity: 0;               /* começa invisível; JS controla */
+        background-color: black;  /* elimina placeholder cinza nativo */
         z-index: 0;
         border-radius: 8px;
         pointer-events: none;
     }
 
-    /* === EQUIPMENT SLOTS: coluna vertical (igual ao inventário) === */
+    /* === SLOTS EM COLUNA VERTICAL (igual ao inventário) === */
     .equipment-slots-container {
         display: flex;
         flex-direction: column;
@@ -163,70 +162,52 @@
         flex-shrink: 0;
     }
     .equipment-slot {
-        background-color: #383838;
-        border: 1px dashed #555;
+        background-color: #383838; border: 1px dashed #555;
         height: 55px; width: 55px;
         display: flex; align-items: center; justify-content: center;
-        position: relative;
-        overflow: visible;
-        border-radius: 5px;
-        flex-shrink: 0;
+        position: relative; overflow: visible;
+        border-radius: 5px; flex-shrink: 0;
     }
     .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-
     .item-level {
-        position: absolute;
-        bottom: -10px; right: 7px;
-        background-color: rgba(0, 0, 0, 0.7);
-        color: #fff; font-size: 0.6em;
-        padding: 0 3px; border-radius: 4px;
-        z-index: 99999;
+        position: absolute; bottom: -10px; right: 7px;
+        background-color: rgba(0,0,0,0.7); color: #fff;
+        font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999;
     }
 
-    /* === AVATAR + MOLDURA (modal) — igual ao inventário === */
-    #modal-avatarFrameWrapper {
+    /* === AVATAR + MOLDURA (igual ao inventário, 160 px wrapper) === */
+    #modal-avatar-wrapper {
         position: relative;
         width: 160px; height: 160px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        z-index: 1;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; z-index: 1;
     }
     #playerAvatarEquip {
         width: 100px; height: 100px;
         border-radius: 50%;
         border: 4px solid #c9a94a;
         object-fit: cover;
-        box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        box-shadow: 0 0 15px rgba(255,215,0,0.4);
     }
-    #modal-avatarFrameOverlay {
+    #modal-frame-overlay {
         position: absolute;
         top: -5px; left: 0;
         width: 160px; height: 160px;
-        pointer-events: none;
-        z-index: 2;
-        object-fit: contain;
-        display: none;
+        pointer-events: none; z-index: 2;
+        object-fit: contain; display: none;
     }
-
-    /* Sheen (brilho que varre a moldura) */
-    #modal-avatarFrameSheen {
+    /* Sheen: brilho que varre a moldura */
+    #modal-frame-sheen {
         position: absolute;
         top: -5px; left: 0;
         width: 160px; height: 160px;
-        pointer-events: none;
-        z-index: 3;
-        display: none;
-        -webkit-mask-size: contain;
-        mask-size: contain;
-        -webkit-mask-repeat: no-repeat;
-        mask-repeat: no-repeat;
-        -webkit-mask-position: center;
-        mask-position: center;
+        pointer-events: none; z-index: 3; display: none;
+        -webkit-mask-size: contain; mask-size: contain;
+        -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+        -webkit-mask-position: center; mask-position: center;
         overflow: hidden;
     }
-    #modal-avatarFrameSheen::after {
+    #modal-frame-sheen::after {
         content: '';
         position: absolute;
         top: -20%; left: -130%;
@@ -241,14 +222,14 @@
             rgba(255,255,255,.04) 72%,
             transparent           100%
         );
-        animation: modal-frame-sheen 6s ease-in-out infinite;
+        animation: _mfs 6s ease-in-out infinite;
     }
-    @keyframes modal-frame-sheen {
-        0%   { left: -130%; opacity: 0; }
-        2%   { opacity: 1; }
-        98%  { left: 155%; opacity: 1; }
-        99%  { opacity: 0; left: 155%; }
-        100% { left: 155%; opacity: 0; }
+    @keyframes _mfs {
+        0%   { left:-130%; opacity:0; }
+        2%   { opacity:1; }
+        98%  { left:155%; opacity:1; }
+        99%  { opacity:0; left:155%; }
+        100% { left:155%; opacity:0; }
     }
 
     #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
@@ -463,8 +444,8 @@
       </div>
 
       <div class="player-visuals">
-        <!-- Vídeo de fundo da skin (começa invisível; JS faz fade-in) -->
-        <video autoplay muted loop playsinline id="modal-background-video">
+        <!-- Vídeo de fundo da skin (fade-in via JS) -->
+        <video autoplay muted loop playsinline id="modal-bg-video">
           <source src="" type="video/webm">
         </video>
 
@@ -475,11 +456,11 @@
             <div class="equipment-slot" id="special1-slot"></div>
         </div>
 
-        <!-- Avatar com suporte à moldura sobreposta -->
-        <div id="modal-avatarFrameWrapper">
+        <!-- Avatar com suporte à moldura e sheen -->
+        <div id="modal-avatar-wrapper">
             <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
-            <img id="modal-avatarFrameOverlay" src="" alt="" style="display:none;">
-            <div id="modal-avatarFrameSheen"></div>
+            <img id="modal-frame-overlay" src="" alt="">
+            <div id="modal-frame-sheen"></div>
         </div>
 
         <div class="equipment-slots-container right">
@@ -649,7 +630,7 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL  (v3 — inclui dados de skin)
+    // CACHE #2: PLAYER MODAL  (v3 — inclui skin)
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
@@ -665,60 +646,54 @@
     function setPlayerCache(playerId, data) {
         try {
             const key = `player_details_v3_${playerId}`;
-            const expirationTime = Date.now() + (24 * 60 * 60 * 1000); 
-            localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
+            localStorage.setItem(key, JSON.stringify({ v: data, e: Date.now() + 86400000 }));
         } catch (e) { }
     }
 
     // ====================================================================================
-    // SKIN DO MODAL — fade de vídeo + frame overlay + sheen
+    // SKIN DO MODAL — helpers de vídeo, frame e sheen
     // ====================================================================================
-    const MODAL_FADE_OUT_MS = 400;
-    const MODAL_FADE_IN_MS  = 1500;
+    const _MFADE_OUT = 400, _MFADE_IN = 1500;
 
-    function _swapModalVideo(newSrc, skipFadeOut) {
-        const videoEl = document.getElementById('modal-background-video');
-        if (!videoEl) return;
-
+    function _modalVideoSwap(src, skipOut) {
+        const vid = document.getElementById('modal-bg-video');
+        if (!vid) return;
         const doLoad = () => {
-            const source = videoEl.querySelector('source');
-            if (source) { source.src = newSrc; source.type = 'video/webm'; }
-            videoEl.load();
+            const s = vid.querySelector('source');
+            if (s) { s.src = src; s.type = 'video/webm'; }
+            vid.load();
             const fadeIn = () => {
-                videoEl.style.transition = `opacity ${MODAL_FADE_IN_MS}ms ease-in`;
-                videoEl.style.opacity    = '0.9';
+                vid.style.transition = `opacity ${_MFADE_IN}ms ease-in`;
+                vid.style.opacity = '0.9';
             };
-            if (videoEl.readyState >= 3) { fadeIn(); }
+            if (vid.readyState >= 3) fadeIn();
             else {
-                videoEl.addEventListener('canplay',        fadeIn, { once: true });
-                videoEl.addEventListener('canplaythrough', fadeIn, { once: true });
+                vid.addEventListener('canplay',        fadeIn, { once: true });
+                vid.addEventListener('canplaythrough', fadeIn, { once: true });
             }
-            videoEl.play().catch(() => {});
+            vid.play().catch(() => {});
         };
-
-        if (skipFadeOut) {
+        if (skipOut) {
             doLoad();
         } else {
-            videoEl.style.transition = `opacity ${MODAL_FADE_OUT_MS}ms ease-out`;
-            videoEl.style.opacity    = '0';
-            setTimeout(doLoad, MODAL_FADE_OUT_MS + 30);
+            vid.style.transition = `opacity ${_MFADE_OUT}ms ease-out`;
+            vid.style.opacity = '0';
+            setTimeout(doLoad, _MFADE_OUT + 30);
         }
     }
 
-    function applyModalSkin(frameUrl, videoUrl) {
-        const frameEl  = document.getElementById('modal-avatarFrameOverlay');
-        const sheenEl  = document.getElementById('modal-avatarFrameSheen');
+    function _applyModalSkin(frameUrl, videoUrl) {
+        const frameEl  = document.getElementById('modal-frame-overlay');
+        const sheenEl  = document.getElementById('modal-frame-sheen');
         const avatarEl = document.getElementById('playerAvatarEquip');
-        const videoEl  = document.getElementById('modal-background-video');
 
-        // ── Moldura ──────────────────────────────────────────────────
         if (frameUrl) {
             if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
             if (avatarEl) avatarEl.style.border = 'none';
             if (sheenEl) {
                 sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
                 sheenEl.style.maskImage       = `url('${frameUrl}')`;
-                sheenEl.style.display         = 'block';
+                sheenEl.style.display = 'block';
             }
         } else {
             if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
@@ -726,24 +701,23 @@
             if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
         }
 
-        // ── Vídeo de fundo ───────────────────────────────────────────
+        const vid = document.getElementById('modal-bg-video');
         if (videoUrl) {
-            _swapModalVideo(videoUrl, /* skipFadeOut */ true);
+            _modalVideoSwap(videoUrl, true);
         } else {
-            if (videoEl) { videoEl.style.opacity = '0'; }
+            if (vid) { vid.style.transition = ''; vid.style.opacity = '0'; }
         }
     }
 
-    function resetModalSkin() {
-        const frameEl  = document.getElementById('modal-avatarFrameOverlay');
-        const sheenEl  = document.getElementById('modal-avatarFrameSheen');
+    function _resetModalSkin() {
+        const frameEl  = document.getElementById('modal-frame-overlay');
+        const sheenEl  = document.getElementById('modal-frame-sheen');
         const avatarEl = document.getElementById('playerAvatarEquip');
-        const videoEl  = document.getElementById('modal-background-video');
-
+        const vid      = document.getElementById('modal-bg-video');
         if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
         if (sheenEl)  sheenEl.style.display = 'none';
         if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
-        if (videoEl)  { videoEl.style.transition = ''; videoEl.style.opacity = '0'; }
+        if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
     }
 
     // ====================================================================================
@@ -861,31 +835,21 @@
                 }
             }
 
-            const { data: equippedItems, error: iErr } = await supabase
+            // ── Equipamentos + skin em uma única query (mesma path que já funciona via RLS) ──
+            const { data: equippedItems } = await supabase
                 .from('inventory_items')
-                .select(`
-                    equipped_slot,
-                    level, 
-                    items ( image_url )
-                `)
+                .select('id, equipped_slot, level, items ( image_url, skin_frame_url, skin_video_url )')
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            // ── Skin: busca frame_url e video_url dos slots ativos ──
-            let frameUrl = null, videoUrl = null;
-            const skinIds = [player.active_frame_inventory_id, player.active_video_inventory_id].filter(Boolean);
-            if (skinIds.length > 0) {
-                const { data: skinItems } = await supabase
-                    .from('inventory_items')
-                    .select('id, items ( skin_frame_url, skin_video_url )')
-                    .in('id', skinIds);
-                if (skinItems) {
-                    const frameItem = skinItems.find(i => i.id === player.active_frame_inventory_id);
-                    const videoItem = skinItems.find(i => i.id === player.active_video_inventory_id);
-                    frameUrl = frameItem?.items?.skin_frame_url || null;
-                    videoUrl = videoItem?.items?.skin_video_url || null;
-                }
-            }
+            // Extrai URLs de skin dos itens no slot 'skin'
+            const skinSlots = (equippedItems || []).filter(i => i.equipped_slot === 'skin');
+            const activeFrameItem = skinSlots.find(i => i.id === player.active_frame_inventory_id)
+                                 || skinSlots.find(i => i.items?.skin_frame_url);
+            const activeVideoItem = skinSlots.find(i => i.id === player.active_video_inventory_id)
+                                 || skinSlots.find(i => i.items?.skin_video_url);
+            const frameUrl = activeFrameItem?.items?.skin_frame_url || null;
+            const videoUrl = activeVideoItem?.items?.skin_video_url || null;
 
             const serverStats = player.cached_combat_stats || {};
             
@@ -928,6 +892,11 @@
 
         document.getElementById('playerName').textContent = basic.name;
         document.getElementById('playerName').classList.remove('shimmer');
+        // Emoji shimmer: chama diretamente para não depender do MutationObserver
+        if (typeof window._adenApplyEmojis === 'function') {
+            window._adenApplyEmojis(document.getElementById('playerName'));
+        }
+
         document.getElementById('playerLevel').textContent = 'Nv. ' + safeNum(basic.level);
         document.getElementById('playerLevel').classList.remove('shimmer');
         
@@ -938,6 +907,17 @@
         gName.textContent = basic.guild_name;
         gName.classList.remove('shimmer');
 
+        // Re-aplica guilda após 1 frame para sobrepor possível reset externo (guild_pv.js)
+        requestAnimationFrame(() => {
+            const gf = document.getElementById('playerGuildFlag');
+            const gn = document.getElementById('playerGuildName');
+            if (gf && gf.src !== basic.guild_flag) gf.src = basic.guild_flag;
+            if (gn && gn.textContent !== basic.guild_name) {
+                gn.textContent = basic.guild_name;
+                gn.classList.remove('shimmer');
+            }
+        });
+
         const cpDiv = document.getElementById('playerCombatPower');
         cpDiv.textContent = formatNumberCompact(basic.cp);
         cpDiv.classList.remove('shimmer');
@@ -946,8 +926,8 @@
         avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
         avatarImg.classList.remove('shimmer');
 
-        // ── Skin: aplica moldura e vídeo de fundo ──
-        applyModalSkin(basic.frame_url || null, basic.video_url || null);
+        // Skin: moldura + vídeo de fundo
+        _applyModalSkin(basic.frame_url || null, basic.video_url || null);
 
         const statMap = {
             'playerAttack': stats.attack,
@@ -966,6 +946,8 @@
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         
         items.forEach(invItem => {
+            // Ignora slot 'skin' nos equipamentos visuais
+            if(invItem.equipped_slot === 'skin') return;
             if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
                 const slotId = `${invItem.equipped_slot}-slot`;
                 const slotDiv = document.getElementById(slotId);
@@ -996,7 +978,7 @@
         });
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         document.getElementById('sendmp').style.display = 'none';
-        resetModalSkin();
+        _resetModalSkin();
     }
 
     window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
@@ -1569,20 +1551,19 @@
     const jesterEmoji = '\uD83E\uDD21'; // 🤡
 
     function styleTextNodes(node) {
-        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
-            const span = document.createElement('span');
-            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
-                
-                // Se for o Palhaço (Jester)
-                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
-                    // Cria o span com o data-text para gerar a fumaça
-                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
-                }
-                
-                // Se for Nobre (Shiny normal)
-                return `<span class="shiny-icon">${match}</span>`;
-            });
-            node.parentNode.replaceChild(span, node);
+        if (node.nodeType === 3) {
+            targetIcons.lastIndex = 0;
+            if (targetIcons.test(node.nodeValue)) {
+                targetIcons.lastIndex = 0;
+                const span = document.createElement('span');
+                span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                    if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                        return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                    }
+                    return `<span class="shiny-icon">${match}</span>`;
+                });
+                node.parentNode.replaceChild(span, node);
+            }
         } else if (node.nodeType === 1 && 
                    node.tagName !== 'SCRIPT' && 
                    node.tagName !== 'STYLE' && 
@@ -1602,6 +1583,13 @@
 
     observer.observe(document.body, { childList: true, subtree: true });
     styleTextNodes(document.body);
+
+    // Expõe função global para uso direto no modal (evita dependência do MutationObserver)
+    window._adenApplyEmojis = function(el) {
+        if (!el) return;
+        targetIcons.lastIndex = 0; // Reseta estado da regex /g/ (bug clássico de lastIndex)
+        Array.from(el.childNodes).forEach(styleTextNodes);
+    };
 
 })();
 </script>

@@ -1626,3 +1626,100 @@ font-size: 0.9em;
     animation: blink 1s infinite;
     color: gold !important;
 }
+/* ═══════════════════════════════════════════════════════════
+   SKIN DO MODAL DE JOGADOR (guild)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Modal: overflow hidden para o vídeo não vazar */
+#playerModal .modal-content {
+    overflow: hidden;
+}
+
+/* Vídeo de fundo cobrindo TODO o modal */
+#guild-modal-bg-video {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;              /* JS controla o fade-in */
+    background-color: black; /* sem placeholder cinza nativo */
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 10px;
+}
+
+/* Overlay escuro para legibilidade dos textos */
+#guild-modal-bg-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.4));
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 10px;
+}
+
+/* Todo conteúdo fica acima do vídeo */
+#playerModal .modal-content > *:not(#guild-modal-bg-video):not(#guild-modal-bg-overlay) {
+    position: relative;
+    z-index: 2;
+}
+
+/* Avatar wrapper: 160px para a moldura encaixar exatamente */
+#guild-avatar-wrapper {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Moldura sobreposta ao avatar */
+#guild-frame-overlay {
+    position: absolute;
+    top: -5px; left: 0;
+    width: 160px; height: 160px;
+    pointer-events: none;
+    z-index: 2;
+    object-fit: contain;
+    display: none;
+}
+
+/* Sheen: brilho prateado varrendo a moldura */
+#guild-frame-sheen {
+    position: absolute;
+    top: -5px; left: 0;
+    width: 160px; height: 160px;
+    pointer-events: none;
+    z-index: 3;
+    display: none;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    overflow: hidden;
+}
+#guild-frame-sheen::after {
+    content: '';
+    position: absolute;
+    top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(
+        108deg,
+        transparent           0%,
+        rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%,
+        rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%,
+        rgba(255,255,255,.04) 72%,
+        transparent           100%
+    );
+    animation: _gfs 6s ease-in-out infinite;
+}
+@keyframes _gfs {
+    0%   { left:-130%; opacity:0; }
+    2%   { opacity:1; }
+    98%  { left:155%; opacity:1; }
+    99%  { opacity:0; left:155%; }
+    100% { left:155%; opacity:0; }
+}

@@ -458,6 +458,10 @@ if ('serviceWorker' in navigator) {
 
 <div id="playerModal" class="modal" style="display:none; width: 92%;">
   <div class="modal-content">
+    <!-- Vídeo de fundo cobrindo todo o modal (opacity controlada por JS) -->
+    <video autoplay muted loop playsinline id="guild-modal-bg-video"><source src="" type="video/webm"></video>
+    <div id="guild-modal-bg-overlay"></div>
+
     <span id="closePlayerModal" class="close-btn">&times;</span>
 
     <h3 id="playerName">Jogador</h3>
@@ -479,7 +483,12 @@ if ('serviceWorker' in navigator) {
           <div id="playerGuildName">Nome da Guilda</div>
         </div>
 </div>
-        <img id="playerAvatarEquip" src="https://via.placeholder.com/100" alt="Avatar do Jogador">
+        <!-- Avatar com moldura e sheen sobrepostos -->
+        <div id="guild-avatar-wrapper">
+          <img id="playerAvatarEquip" src="https://via.placeholder.com/100" alt="Avatar do Jogador">
+          <img id="guild-frame-overlay" src="" alt="">
+          <div id="guild-frame-sheen"></div>
+        </div>
         <div style="display: none; flex-wrap: nowrap; width: 100%; gap: 12px; justify-content: center; text-align: center; align-items: center;">
         <img alt="poder" id="cpIcon" style="width: 18px; height: 30px; vertical-align: 4px; position: relative; margin-top: 3px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/><div id="playerCombatPower">0 </div>
       </div>
@@ -982,6 +991,98 @@ document.addEventListener("DOMContentLoaded", () => {
     <script src="guild.js"></script>
     <script type="module" src="playerModal.js"></script>
 <script src="guild_pv.js"></script>
+<script type="module">
+import { supabase } from './supabaseClient.js';
+
+// ─── Skin helpers (guild modal) ────────────────────────────────────────────────
+const _GD_VID  = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+const _MFO = 400, _MFI = 1200;
+
+function _gVideoSwap(src, skipOut) {
+    const vid = document.getElementById('guild-modal-bg-video');
+    if (!vid) return;
+    const doLoad = () => {
+        const s = vid.querySelector('source');
+        if (s) { s.src = src; s.type = 'video/webm'; }
+        vid.load();
+        const fadeIn = () => { vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.45'; };
+        if (vid.readyState >= 3) fadeIn();
+        else { vid.addEventListener('canplay', fadeIn, {once:true}); vid.addEventListener('canplaythrough', fadeIn, {once:true}); }
+        vid.play().catch(()=>{});
+    };
+    if (skipOut) { doLoad(); }
+    else { vid.style.transition = `opacity ${_MFO}ms ease-out`; vid.style.opacity='0'; setTimeout(doLoad, _MFO+30); }
+}
+
+function _gApplySkin(frameUrl, videoUrl) {
+    const frameEl  = document.getElementById('guild-frame-overlay');
+    const sheenEl  = document.getElementById('guild-frame-sheen');
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (frameUrl) {
+        if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
+        if (avatarEl) avatarEl.style.border = 'none';
+        if (sheenEl)  { sheenEl.style.webkitMaskImage=`url('${frameUrl}')`; sheenEl.style.maskImage=`url('${frameUrl}')`; sheenEl.style.display='block'; }
+    } else {
+        if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
+        if (sheenEl)  sheenEl.style.display='none';
+        if (avatarEl) avatarEl.style.border='3px solid #FFD700';
+    }
+    _gVideoSwap(videoUrl || _GD_VID, true);
+}
+
+function _gResetSkin() {
+    const vid = document.getElementById('guild-modal-bg-video');
+    const frameEl = document.getElementById('guild-frame-overlay');
+    const sheenEl = document.getElementById('guild-frame-sheen');
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (vid)      { vid.style.transition=''; vid.style.opacity='0'; }
+    if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
+    if (sheenEl)  sheenEl.style.display='none';
+    if (avatarEl) avatarEl.style.border='3px solid #FFD700';
+}
+
+// ─── Skin cache (localStorage, 24h) ───────────────────────────────────────────
+function _gGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v;
+    } catch(e) { return undefined; }
+}
+function _gSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+// ─── Fetch & apply skins (SECURITY DEFINER bypasses RLS) ──────────────────────
+async function _gFetchAndApplySkins(playerId) {
+    const cached = _gGetSkinCache(playerId);
+    if (cached !== undefined) { _gApplySkin(cached.frame_url, cached.video_url); return; }
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
+        if (error) { _gApplySkin(null, null); return; }
+        const frameUrl = data?.frame_url || null;
+        const videoUrl = data?.video_url || null;
+        _gSetSkinCache(playerId, { frame_url: frameUrl, video_url: videoUrl });
+        _gApplySkin(frameUrl, videoUrl);
+    } catch(e) { _gApplySkin(null, null); }
+}
+
+// ─── Wrapper sobre window.fetchPlayerData ─────────────────────────────────────
+// Mesmo padrão do ranking_cp: DOMContentLoaded + setTimeout(0) garante que
+// este código roda DEPOIS do DOMContentLoaded do playerModal.js.
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const _pmFetch = window.fetchPlayerData;
+        window.fetchPlayerData = async function(playerId) {
+            _gResetSkin();
+            if (_pmFetch) await _pmFetch(playerId);
+            await _gFetchAndApplySkins(playerId);
+        };
+    }, 0);
+});
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     

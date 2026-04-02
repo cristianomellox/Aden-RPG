@@ -115,30 +115,15 @@
     #fixedPlayerRank .rank-avatar-cp { border: 2px solid #fff; box-shadow: 0 0 5px gold; }
 
 
-    /* === MODAL: box com overflow:hidden para o vídeo de fundo === */
+    /* === MODAL === */
     #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
-    .modal-content-player {
-        border: 1px solid #c9a94a; width: 90%; max-width: 500px;
-        border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-        color: #e0dccc; position: relative; overflow: hidden;
-        background-color: #2c2c2c; /* fallback quando sem vídeo */
-    }
-    /* Vídeo de fundo cobrindo TODO o modal */
-    #modal-bg-video {
-        position: absolute; top: 0; left: 0;
-        width: 100%; height: 100%;
-        object-fit: cover;
-        opacity: 0;              /* JS controla o fade */
-        background-color: black; /* sem placeholder cinza */
-        z-index: 0; pointer-events: none;
-    }
-    /* Overlay escuro para legibilidade dos textos */
-    #modal-bg-overlay {
-        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-        background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.4) 100%);
-        z-index: 1; pointer-events: none;
-    }
-    /* Todo o conteúdo fica acima do vídeo */
+    /* overflow:hidden para o vídeo não vazar */
+    .modal-content-player { background-color: #1a1a1a; border: 1px solid #c9a94a; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #e0dccc; position: relative; overflow: hidden; }
+    /* Vídeo cobre TODO o modal */
+    #modal-bg-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; background-color: black; z-index: 0; pointer-events: none; }
+    /* Overlay escuro para legibilidade */
+    #modal-bg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%;  z-index: 1; pointer-events: none; }
+    /* Todo conteúdo acima do vídeo */
     .modal-inner { position: relative; z-index: 2; padding: 20px; }
     #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; z-index: 10; }
     #closePlayerModal:hover { color: white; }
@@ -148,59 +133,19 @@
     #playerGuildFlag { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; }
     #playerGuildName { font-size: 1.4em; color: lightblue; }
     #playerLevel { font-size: 1.2em; color: #ccc; font-weight: bold; }
-    /* player-visuals: apenas layout, sem background próprio */
     .player-visuals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 0; }
     /* Slots em COLUNA VERTICAL (igual ao inventário) */
     .equipment-slots-container { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-    .equipment-slot {
-        background-color: #383838; border: 1px dashed #555;
-        height: 55px; width: 55px;
-        display: flex; align-items: center; justify-content: center;
-        position: relative; overflow: visible; border-radius: 5px; flex-shrink: 0;
-    }
+    .equipment-slot { background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; display: flex; align-items: center; justify-content: center; position: relative; overflow: visible; border-radius: 5px; flex-shrink: 0; }
     .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-    .item-level {
-        position: absolute; bottom: -10px; right: 7px;
-        background-color: rgba(0,0,0,0.7); color: #fff;
-        font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999;
-    }
-    /* Avatar + moldura: wrapper 160px, avatar 100px (igual ao inventário) */
-    #modal-avatar-wrapper {
-        position: relative; width: 160px; height: 160px;
-        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    #playerAvatarEquip {
-        width: 100px; height: 100px; border-radius: 50%;
-        border: 4px solid #c9a94a; object-fit: cover;
-        box-shadow: 0 0 15px rgba(255,215,0,0.4);
-    }
-    #modal-frame-overlay {
-        position: absolute; top: -5px; left: 0;
-        width: 160px; height: 160px;
-        pointer-events: none; z-index: 2; object-fit: contain; display: none;
-    }
-    /* Sheen: brilho prateado varrendo a moldura */
-    #modal-frame-sheen {
-        position: absolute; top: -5px; left: 0;
-        width: 160px; height: 160px;
-        pointer-events: none; z-index: 3; display: none;
-        -webkit-mask-size: contain; mask-size: contain;
-        -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-        -webkit-mask-position: center; mask-position: center;
-        overflow: hidden;
-    }
-    #modal-frame-sheen::after {
-        content: ''; position: absolute; top: -20%; left: -130%;
-        width: 55%; height: 140%;
-        background: linear-gradient(108deg,
-            transparent 0%, rgba(255,255,255,.04) 28%,
-            rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
-            rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
-        animation: _mfs 6s ease-in-out infinite;
-    }
-    @keyframes _mfs {
-        0%{left:-130%;opacity:0} 2%{opacity:1} 98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
-    }
+    .item-level { position: absolute; bottom: -10px; right: 7px; background-color: rgba(0,0,0,0.7); color: #fff; font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999; }
+    /* Avatar wrapper 160px + avatar 100px */
+    #modal-avatar-wrapper { position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    #playerAvatarEquip { width: 100px; height: 100px; border-radius: 50%; border: 4px solid #c9a94a; object-fit: cover; box-shadow: 0 0 15px rgba(255,215,0,0.4); }
+    #modal-frame-overlay { position: absolute; top: -5px; left: 0; width: 160px; height: 160px; pointer-events: none; z-index: 2; object-fit: contain; display: none; }
+    #modal-frame-sheen { position: absolute; top: -5px; left: 0; width: 160px; height: 160px; pointer-events: none; z-index: 3; display: none; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; overflow: hidden; }
+    #modal-frame-sheen::after { content: ''; position: absolute; top: -20%; left: -130%; width: 55%; height: 140%; background: linear-gradient(108deg, transparent 0%, rgba(255,255,255,.04) 28%, rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%, rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%); animation: _mfs 6s ease-in-out infinite; }
+    @keyframes _mfs { 0%{left:-130%;opacity:0} 2%{opacity:1} 98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0} }
     #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
     .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
@@ -396,10 +341,8 @@
 
   <div id="playerModal">
     <div class="modal-content-player">
-      <!-- Vídeo de fundo cobrindo todo o modal -->
-      <video autoplay muted loop playsinline id="modal-bg-video">
-        <source src="" type="video/webm">
-      </video>
+      <!-- Vídeo de fundo (opacity controlada por JS) -->
+      <video autoplay muted loop playsinline id="modal-bg-video"><source src="" type="video/webm"></video>
       <div id="modal-bg-overlay"></div>
 
       <span id="closePlayerModal">&times;</span>
@@ -426,13 +369,11 @@
               <div class="equipment-slot" id="helm-slot"></div>
               <div class="equipment-slot" id="special1-slot"></div>
           </div>
-
           <div id="modal-avatar-wrapper">
               <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
               <img id="modal-frame-overlay" src="" alt="">
               <div id="modal-frame-sheen"></div>
           </div>
-
           <div class="equipment-slots-container right">
               <div class="equipment-slot" id="amulet-slot"></div>
               <div class="equipment-slot" id="wing-slot"></div>
@@ -600,30 +541,16 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL (v3 — inclui skin)
+    // CACHE #2: PLAYER MODAL (v3)
     // ====================================================================================
-    function getPlayerCache(playerId) {
-        try {
-            const key = `player_details_v3_${playerId}`;
-            const raw = localStorage.getItem(key);
-            if (!raw) return null;
-            const obj = JSON.parse(raw);
-            if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(key); return null; }
-            return obj.v;
-        } catch (e) { return null; }
-    }
-    function setPlayerCache(playerId, data) {
-        try {
-            const key = `player_details_v3_${playerId}`;
-            localStorage.setItem(key, JSON.stringify({ v: data, e: Date.now() + 86400000 }));
-        } catch (e) {}
-    }
+    // Nota: window.fetchPlayerData é controlado por playerModal.js (via DOMContentLoaded).
+    // Nós usamos um wrapper que roda DEPOIS dele (segundo DOMContentLoaded + setTimeout)
+    // para injetar: skins via RPC, guild fix para próprio jogador, vídeo padrão.
 
-    // ====================================================================================
-    // SKIN DO MODAL
-    // ====================================================================================
-    const _DEFAULT_VIDEO = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+    const _DEFAULT_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
     const _MFO = 400, _MFI = 1200;
+
+    // ── Skin helpers ──────────────────────────────────────────────────────────────
 
     function _modalVideoSwap(src, skipOut) {
         const vid = document.getElementById('modal-bg-video');
@@ -632,23 +559,13 @@
             const s = vid.querySelector('source');
             if (s) { s.src = src; s.type = 'video/webm'; }
             vid.load();
-            const fadeIn = () => {
-                vid.style.transition = `opacity ${_MFI}ms ease-in`;
-                vid.style.opacity = '0.45';
-            };
+            const fadeIn = () => { vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.45'; };
             if (vid.readyState >= 3) fadeIn();
-            else {
-                vid.addEventListener('canplay',        fadeIn, { once: true });
-                vid.addEventListener('canplaythrough', fadeIn, { once: true });
-            }
-            vid.play().catch(() => {});
+            else { vid.addEventListener('canplay', fadeIn, {once:true}); vid.addEventListener('canplaythrough', fadeIn, {once:true}); }
+            vid.play().catch(()=>{});
         };
         if (skipOut) { doLoad(); }
-        else {
-            vid.style.transition = `opacity ${_MFO}ms ease-out`;
-            vid.style.opacity = '0';
-            setTimeout(doLoad, _MFO + 30);
-        }
+        else { vid.style.transition = `opacity ${_MFO}ms ease-out`; vid.style.opacity='0'; setTimeout(doLoad, _MFO+30); }
     }
 
     function _applyModalSkin(frameUrl, videoUrl) {
@@ -658,78 +575,78 @@
         if (frameUrl) {
             if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
             if (avatarEl) avatarEl.style.border = 'none';
-            if (sheenEl) {
-                sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
-                sheenEl.style.maskImage       = `url('${frameUrl}')`;
-                sheenEl.style.display = 'block';
-            }
+            if (sheenEl)  { sheenEl.style.webkitMaskImage=`url('${frameUrl}')`; sheenEl.style.maskImage=`url('${frameUrl}')`; sheenEl.style.display='block'; }
         } else {
-            if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
-            if (sheenEl)  sheenEl.style.display = 'none';
-            if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+            if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
+            if (sheenEl)  sheenEl.style.display='none';
+            if (avatarEl) avatarEl.style.border='4px solid #c9a94a';
         }
-        // Sempre carrega vídeo: skin ou padrão
-        _modalVideoSwap(videoUrl || _DEFAULT_VIDEO, true);
+        _modalVideoSwap(videoUrl || _DEFAULT_VID, true);
     }
 
     function _resetModalSkin() {
-        const frameEl  = document.getElementById('modal-frame-overlay');
-        const sheenEl  = document.getElementById('modal-frame-sheen');
+        const vid = document.getElementById('modal-bg-video');
+        const frameEl = document.getElementById('modal-frame-overlay');
+        const sheenEl = document.getElementById('modal-frame-sheen');
         const avatarEl = document.getElementById('playerAvatarEquip');
-        const vid      = document.getElementById('modal-bg-video');
-        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
-        if (sheenEl)  sheenEl.style.display = 'none';
-        if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
-        if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
+        if (vid)      { vid.style.transition=''; vid.style.opacity='0'; }
+        if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
+        if (sheenEl)  sheenEl.style.display='none';
+        if (avatarEl) avatarEl.style.border='4px solid #c9a94a';
     }
 
-    // ====================================================================================
-    // GUILD LOCK — protege contra guild_pv.js sobrescrever os dados do modal
-    // ====================================================================================
-    let _guildLock = { active: false, flag: '', name: '', pid: null };
-    let _guildMuteSelf = false;
+    // ── Skin cache (localStorage, 24h) ───────────────────────────────────────────
 
-    function _engageGuildLock(flag, name, pid) {
-        _guildLock = { active: true, flag, name, pid };
-        const _set = () => {
-            if (!_guildLock.active || _guildLock.pid !== pid) return;
-            _guildMuteSelf = true;
-            const gf = document.getElementById('playerGuildFlag');
-            const gn = document.getElementById('playerGuildName');
-            if (gf) { gf.src = flag; gf.classList.remove('shimmer'); }
-            if (gn) { gn.textContent = name; gn.classList.remove('shimmer'); }
-            _guildMuteSelf = false;
-        };
-        _set();
-        setTimeout(_set, 200);
-        setTimeout(_set, 600);
-        setTimeout(_set, 1500);
+    function _getSkinCache(pid) {
+        try {
+            const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+            if (!raw) return null;
+            const obj = JSON.parse(raw);
+            if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return null; }
+            return obj.v;
+        } catch(e) { return null; }
+    }
+    function _setSkinCache(pid, data) {
+        try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
     }
 
-    function _releaseGuildLock() {
-        _guildLock = { active: false, flag: '', name: '', pid: null };
+    // ── Fetch & apply skins for any player (SECURITY DEFINER bypasses RLS) ───────
+
+    async function _fetchAndApplySkins(playerId) {
+        // Check cache first
+        const cached = _getSkinCache(playerId);
+        if (cached !== null) { _applyModalSkin(cached.frame_url, cached.video_url); return; }
+        try {
+            const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
+            if (error) { console.warn('[skin]', error.message); _applyModalSkin(null, null); return; }
+            const frameUrl = data?.frame_url || null;
+            const videoUrl = data?.video_url || null;
+            _setSkinCache(playerId, { frame_url: frameUrl, video_url: videoUrl });
+            _applyModalSkin(frameUrl, videoUrl);
+        } catch(e) { _applyModalSkin(null, null); }
     }
 
-    // MutationObserver no playerGuildName: re-afirma instantaneamente se guild_pv.js mudar
-    const _guildGuardObs = new MutationObserver(() => {
-        if (_guildMuteSelf || !_guildLock.active) return;
-        const gn = document.getElementById('playerGuildName');
-        const gf = document.getElementById('playerGuildFlag');
-        if ((gn && gn.textContent !== _guildLock.name) || (gf && gf.src !== _guildLock.flag)) {
-            _guildMuteSelf = true;
-            if (gn) { gn.textContent = _guildLock.name; gn.classList.remove('shimmer'); }
-            if (gf) { gf.src = _guildLock.flag; gf.classList.remove('shimmer'); }
-            _guildMuteSelf = false;
-        }
-    });
-    document.addEventListener('DOMContentLoaded', () => {
-        const gn = document.getElementById('playerGuildName');
-        const gf = document.getElementById('playerGuildFlag');
-        if (gn) _guildGuardObs.observe(gn, { childList: true, subtree: true, characterData: true });
-        if (gf) _guildGuardObs.observe(gf, { attributes: true, attributeFilter: ['src'] });
-    });
+    // ── Guild fix for own player (playerModal.js CASO A reads GlobalDB which ─────
+    //   may not have guild_name/flag) ─────────────────────────────────────────────
 
-    // ====================================================================================
+    async function _fixOwnGuild(playerId) {
+        const gnEl = document.getElementById('playerGuildName');
+        const gfEl = document.getElementById('playerGuildFlag');
+        // Only run if guild name is blank or placeholder (playerModal didn't populate it)
+        const guildNameMissing = !gnEl || !gnEl.textContent || gnEl.textContent === 'Nome da Guilda';
+        if (!guildNameMissing) return;
+        try {
+            const { data: player } = await supabase.from('players').select('guild_id').eq('id', playerId).single();
+            if (!player?.guild_id) { if (gnEl) gnEl.textContent = 'Sem Guilda'; return; }
+            const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
+            if (guild) {
+                if (gnEl) { gnEl.textContent = guild.name || 'Sem Guilda'; gnEl.classList.remove('shimmer'); }
+                if (gfEl && guild.flag_url) { gfEl.src = guild.flag_url; gfEl.classList.remove('shimmer'); }
+            }
+        } catch(e) {}
+    }
+
+        // ====================================================================================
     // RENDERIZAÇÃO
     // ====================================================================================
     function renderRanking(list, myRankObj){
@@ -739,11 +656,14 @@
       else {
         let html = '<div id="rankingListContainerCP"><ol id="rankingListCP">';
         
+        // Renderiza Top 10 (Limite restaurado)
         for(let i=0;i<list.length && i<10;i++){
             const p = list[i]; 
             const pos = i+1;
             const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
+            
             const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
+
             html += `<li data-player-id="${esc(p.id)}">
             <span class="rank-position-cp">${pos}</span>
             <img class="rank-avatar-cp ${pos===1?'pulse':''}" src="${avatar}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
@@ -761,11 +681,13 @@
         w.innerHTML = html;
       }
 
+      // === Renderização da BARRA FIXA ===
       const fixedRankContainer = document.getElementById('fixedPlayerRank');
       if (myRankObj) {
           const p = myRankObj;
           const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
           const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
+          
           fixedRankContainer.innerHTML = `
           <div class="fixed-content-inner">
              <span class="rank-position-cp">${p.rank}</span>
@@ -791,6 +713,7 @@
                   }
               }
           });
+
       } else {
           fixedRankContainer.style.display = 'none';
       }
@@ -807,169 +730,34 @@
       });
     }
 
-        // ====================================================================================
-    // FETCH DETALHES DO JOGADOR
+
     // ====================================================================================
-    let _activeModalPid = null;
+    // WRAPPER SOBRE window.fetchPlayerData (playerModal.js)
+    // Rodamos depois de TODOS os DOMContentLoaded via setTimeout(0) para garantir
+    // que somos o ÚLTIMO a setar window.fetchPlayerData.
+    // ====================================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            const _pmFetch = window.fetchPlayerData; // versão do playerModal.js
 
-    window.fetchPlayerDetailsWithCache = async function(playerId) {
-        _activeModalPid = playerId;
-        resetModalUI();
+            window.fetchPlayerData = async function(playerId) {
+                // 1. Reset visual de skin antes de começar
+                _resetModalSkin();
 
-        const cachedData = getPlayerCache(playerId);
-        if (cachedData) {
-            populatePlayerModal(cachedData, playerId);
-            return;
-        }
+                // 2. Deixa playerModal.js fazer todo o trabalho (guild, stats, items)
+                if (_pmFetch) await _pmFetch(playerId);
 
-        if (!supabase) return;
+                // 3. Fix guild para próprio jogador (se playerModal não populou do GlobalDB)
+                await _fixOwnGuild(playerId);
 
-        try {
-            const { data: player, error: pErr } = await supabase
-                .from('players')
-                .select('name, level, avatar_url, guild_id, combat_power, cached_combat_stats, active_frame_inventory_id, active_video_inventory_id')
-                .eq('id', playerId)
-                .single();
-            if (pErr) throw pErr;
-
-            let guildInfo = { name: 'Sem Guilda', flag: 'https://aden-rpg.pages.dev/assets/guildaflag.webp' };
-            if (player.guild_id) {
-                const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
-                if (guild) { guildInfo.name = guild.name; if (guild.flag_url) guildInfo.flag = guild.flag_url; }
-            }
-
-            // Equipamentos normais (image_url)
-            const { data: equippedItems } = await supabase
-                .from('inventory_items')
-                .select('id, equipped_slot, level, items ( image_url )')
-                .eq('player_id', playerId)
-                .not('equipped_slot', 'is', null);
-
-            // Skins — query SEPARADA e dedicada (garante que os campos de skin sejam retornados)
-            const { data: skinItems } = await supabase
-                .from('inventory_items')
-                .select('id, items ( skin_frame_url, skin_video_url )')
-                .eq('player_id', playerId)
-                .eq('equipped_slot', 'skin');
-
-            // String() para evitar mismatch bigint/number entre Supabase e JS
-            const afid = player.active_frame_inventory_id != null ? String(player.active_frame_inventory_id) : null;
-            const avid = player.active_video_inventory_id != null ? String(player.active_video_inventory_id) : null;
-
-            let frameUrl = null, videoUrl = null;
-            if (skinItems && skinItems.length > 0) {
-                const frameItem = (afid ? skinItems.find(i => String(i.id) === afid) : null)
-                               || skinItems.find(i => i.items?.skin_frame_url);
-                const videoItem = (avid ? skinItems.find(i => String(i.id) === avid) : null)
-                               || skinItems.find(i => i.items?.skin_video_url);
-                frameUrl = frameItem?.items?.skin_frame_url || null;
-                videoUrl = videoItem?.items?.skin_video_url || null;
-            }
-
-            const serverStats = player.cached_combat_stats || {};
-            const displayStats = {
-                attack:         safeNum(serverStats.attack),
-                defense:        safeNum(serverStats.defense),
-                health:         safeNum(serverStats.health),
-                evasion:        safeNum(serverStats.evasion),
-                crit_chance:    safeNum(serverStats.crit_chance),
-                crit_damage:    safeNum(serverStats.crit_damage),
-                crit_reduction: safeNum(serverStats.crit_reduction)
+                // 4. Busca e aplica skins (RPC com SECURITY DEFINER — funciona para todos)
+                await _fetchAndApplySkins(playerId);
             };
 
-            const fullPlayerData = {
-                basic: {
-                    name: player.name, level: player.level,
-                    avatar_url: player.avatar_url,
-                    guild_name: guildInfo.name, guild_flag: guildInfo.flag,
-                    cp: player.combat_power || 0,
-                    frame_url: frameUrl, video_url: videoUrl
-                },
-                stats: displayStats,
-                items: equippedItems || []
-            };
-
-            setPlayerCache(playerId, fullPlayerData);
-            if (_activeModalPid === playerId) populatePlayerModal(fullPlayerData, playerId);
-
-        } catch (error) {
-            console.error('[Modal] Erro:', error);
-            const el = document.getElementById('playerName');
-            if (el) el.textContent = 'Erro ao carregar';
-        }
-    };
-
-    function populatePlayerModal(data, playerId) {
-        const { basic, stats, items } = data;
-
-        // textContent — o MutationObserver do emoji cuida do nó de texto naturalmente
-        const nameEl = document.getElementById('playerName');
-        nameEl.textContent = basic.name;
-        nameEl.classList.remove('shimmer');
-
-        document.getElementById('playerLevel').textContent = 'Nv. ' + safeNum(basic.level);
-        document.getElementById('playerLevel').classList.remove('shimmer');
-
-        // Guild lock: protege contra sobrescrita assíncrona do guild_pv.js
-        _engageGuildLock(basic.guild_flag, basic.guild_name, playerId);
-
-        const cpDiv = document.getElementById('playerCombatPower');
-        cpDiv.textContent = formatNumberCompact(basic.cp);
-        cpDiv.classList.remove('shimmer');
-
-        const avatarImg = document.getElementById('playerAvatarEquip');
-        avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
-        avatarImg.classList.remove('shimmer');
-
-        // Skin: moldura + sheen + vídeo de fundo (vídeo padrão se não tiver skin)
-        _applyModalSkin(basic.frame_url || null, basic.video_url || null);
-
-        const statMap = {
-            'playerAttack':        stats.attack,
-            'playerDefense':       stats.defense,
-            'playerHealth':        stats.health,
-            'playerEvasion':       stats.evasion,
-            'playerCritChance':    stats.crit_chance + '%',
-            'playerCritDamage':    stats.crit_damage + '%',
-            'playerCritReduction': stats.crit_reduction + '%'
-        };
-        for (const [id, val] of Object.entries(statMap)) {
-            const el = document.getElementById(id);
-            if (el) { el.textContent = val; el.classList.remove('shimmer'); }
-        }
-
-        document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
-        (items || []).forEach(invItem => {
-            if (invItem.equipped_slot === 'skin') return;
-            if (invItem.equipped_slot && invItem.items?.image_url) {
-                const slotDiv = document.getElementById(`${invItem.equipped_slot}-slot`);
-                if (slotDiv) {
-                    slotDiv.innerHTML = `<img src="${invItem.items.image_url}" alt="Item">`
-                        + (invItem.level > 0 ? `<div class="item-level">+${invItem.level}</div>` : '');
-                }
-            }
-        });
-
-        const sendBtn = document.getElementById('sendmp');
-        sendBtn.style.display = 'flex';
-        sendBtn.href = 'go:msg:' + basic.name;
-    }
-
-    function resetModalUI() {
-        _releaseGuildLock();
-        const shimmers = ['playerName','playerLevel','playerGuildName','playerCombatPower','playerAvatarEquip',
-                          'playerAttack','playerDefense','playerHealth','playerEvasion',
-                          'playerCritChance','playerCritDamage','playerCritReduction'];
-        shimmers.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) { el.classList.add('shimmer'); if (el.tagName !== 'IMG') el.textContent = ''; }
-        });
-        document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
-        document.getElementById('sendmp').style.display = 'none';
-        _resetModalSkin();
-    }
-
-    window.fetchPlayerData = window.fetchPlayerDetailsWithCache;
+            // fetchPlayerDetailsWithCache agora aponta para o wrapper também
+            window.fetchPlayerDetailsWithCache = window.fetchPlayerData;
+        }, 0);
+    });
 
     // ====================================================================================
     // FETCH RANKING PRINCIPAL (COM OTIMIZAÇÃO ZERO EGRESS VIA GLOBALDB)
@@ -1540,10 +1328,9 @@
 
     function styleTextNodes(node) {
         if (node.nodeType === 3) {
-            // FIX: regex /g mantém lastIndex entre chamadas — sempre reseta antes de test()
-            targetIcons.lastIndex = 0;
+            targetIcons.lastIndex = 0; // reset: regex /g é stateful
             if (!targetIcons.test(node.nodeValue)) return;
-            if (!node.parentNode) return; // nó pode já ter sido removido pelo processamento anterior
+            if (!node.parentNode) return; // nó pode ter sido removido
             targetIcons.lastIndex = 0;
             const span = document.createElement('span');
             span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {

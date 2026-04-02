@@ -115,48 +115,31 @@
     #fixedPlayerRank .rank-avatar-cp { border: 2px solid #fff; box-shadow: 0 0 5px gold; }
 
 
-    /* === MODAL STYLES === */
+    /* === MODAL: box com overflow:hidden para o vídeo de fundo === */
     #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
-
-    /* Modal box: position relative + overflow hidden para o vídeo de fundo */
     .modal-content-player {
-        background-color: #2c2c2c;
-        border: 1px solid #c9a94a;
-        width: 90%; max-width: 500px;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-        color: #e0dccc;
-        position: relative;
-        overflow: hidden; /* necessário para o vídeo não vazar */
+        border: 1px solid #c9a94a; width: 90%; max-width: 500px;
+        border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        color: #e0dccc; position: relative; overflow: hidden;
+        background-color: #2c2c2c; /* fallback quando sem vídeo */
     }
-
-    /* Vídeo de fundo cobrindo o modal inteiro */
+    /* Vídeo de fundo cobrindo TODO o modal */
     #modal-bg-video {
-        position: absolute;
-        top: 0; left: 0;
+        position: absolute; top: 0; left: 0;
         width: 100%; height: 100%;
         object-fit: cover;
-        opacity: 0;              /* começa invisível; JS faz fade-in */
-        background-color: black; /* sem placeholder cinza nativo */
-        z-index: 0;
-        pointer-events: none;
+        opacity: 0;              /* JS controla o fade */
+        background-color: black; /* sem placeholder cinza */
+        z-index: 0; pointer-events: none;
     }
-    /* Overlay escuro sobre o vídeo para não ofuscar textos */
+    /* Overlay escuro para legibilidade dos textos */
     #modal-bg-overlay {
-        position: absolute;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 100%);
-        z-index: 1;
-        pointer-events: none;
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.4) 100%);
+        z-index: 1; pointer-events: none;
     }
-    /* Todo conteúdo do modal fica acima do vídeo */
-    .modal-inner {
-        position: relative;
-        z-index: 2;
-        padding: 20px;
-    }
-
+    /* Todo o conteúdo fica acima do vídeo */
+    .modal-inner { position: relative; z-index: 2; padding: 20px; }
     #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; z-index: 10; }
     #closePlayerModal:hover { color: white; }
     .player-header { text-align: center; margin-bottom: 15px; }
@@ -165,11 +148,9 @@
     #playerGuildFlag { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; }
     #playerGuildName { font-size: 1.4em; color: lightblue; }
     #playerLevel { font-size: 1.2em; color: #ccc; font-weight: bold; }
-
-    /* player-visuals: apenas layout flex, sem background/overflow próprios */
+    /* player-visuals: apenas layout, sem background próprio */
     .player-visuals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 0; }
-
-    /* Slots em coluna vertical (igual ao inventário) */
+    /* Slots em COLUNA VERTICAL (igual ao inventário) */
     .equipment-slots-container { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
     .equipment-slot {
         background-color: #383838; border: 1px dashed #555;
@@ -183,28 +164,22 @@
         background-color: rgba(0,0,0,0.7); color: #fff;
         font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999;
     }
-
-    /* Avatar + moldura sobreposta (wrapper 160px, avatar 100px — igual ao inventário) */
+    /* Avatar + moldura: wrapper 160px, avatar 100px (igual ao inventário) */
     #modal-avatar-wrapper {
-        position: relative;
-        width: 160px; height: 160px;
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0;
+        position: relative; width: 160px; height: 160px;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     #playerAvatarEquip {
-        width: 100px; height: 100px;
-        border-radius: 50%;
-        border: 4px solid #c9a94a;
-        object-fit: cover;
+        width: 100px; height: 100px; border-radius: 50%;
+        border: 4px solid #c9a94a; object-fit: cover;
         box-shadow: 0 0 15px rgba(255,215,0,0.4);
     }
     #modal-frame-overlay {
         position: absolute; top: -5px; left: 0;
         width: 160px; height: 160px;
-        pointer-events: none; z-index: 2;
-        object-fit: contain; display: none;
+        pointer-events: none; z-index: 2; object-fit: contain; display: none;
     }
-    /* Sheen: brilho prateado que varre a moldura (igual ao inventário) */
+    /* Sheen: brilho prateado varrendo a moldura */
     #modal-frame-sheen {
         position: absolute; top: -5px; left: 0;
         width: 160px; height: 160px;
@@ -215,24 +190,17 @@
         overflow: hidden;
     }
     #modal-frame-sheen::after {
-        content: '';
-        position: absolute; top: -20%; left: -130%;
+        content: ''; position: absolute; top: -20%; left: -130%;
         width: 55%; height: 140%;
         background: linear-gradient(108deg,
             transparent 0%, rgba(255,255,255,.04) 28%,
             rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
-            rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%,
-            transparent 100%);
+            rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
         animation: _mfs 6s ease-in-out infinite;
     }
     @keyframes _mfs {
-        0%   { left:-130%; opacity:0; }
-        2%   { opacity:1; }
-        98%  { left:155%; opacity:1; }
-        99%  { opacity:0; left:155%; }
-        100% { left:155%; opacity:0; }
+        0%{left:-130%;opacity:0} 2%{opacity:1} 98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
     }
-
     #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
     .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
@@ -428,29 +396,27 @@
 
   <div id="playerModal">
     <div class="modal-content-player">
-      <!-- Vídeo de fundo cobrindo todo o modal (opacity controlada por JS) -->
+      <!-- Vídeo de fundo cobrindo todo o modal -->
       <video autoplay muted loop playsinline id="modal-bg-video">
         <source src="" type="video/webm">
       </video>
-      <!-- Overlay escuro para garantir legibilidade -->
       <div id="modal-bg-overlay"></div>
 
       <span id="closePlayerModal">&times;</span>
 
-      <!-- Todo conteúdo acima do vídeo -->
       <div class="modal-inner">
-      
         <div class="player-header">
           <div id="playerName" class="shimmer">Carregando...</div>
            <div style="display: flex; align-items: center; justify-content: center; margin-top: -12px;">
             <div id="playerLevel" class="shimmer">Nv. 1</div>
-        </div>
+          </div>
           <div class="player-level-guild">
             <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width: 50px; height: 55px;">
-            <div id="playerGuildName" class="shimmer">Nome da Guilda</div></div>
-            </div>
-          <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
-         <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
+            <div id="playerGuildName" class="shimmer">Nome da Guilda</div>
+          </div>
+        </div>
+        <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
+          <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
         </div>
 
         <div class="player-visuals">
@@ -461,7 +427,6 @@
               <div class="equipment-slot" id="special1-slot"></div>
           </div>
 
-          <!-- Avatar com moldura e sheen sobrepostos -->
           <div id="modal-avatar-wrapper">
               <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
               <img id="modal-frame-overlay" src="" alt="">
@@ -489,7 +454,6 @@
         <a id="sendmp" href="#" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 10px;">
             <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem
         </a>
-
       </div><!-- /.modal-inner -->
     </div>
   </div>
@@ -636,7 +600,7 @@
     }
 
     // ====================================================================================
-    // CACHE #2: PLAYER MODAL
+    // CACHE #2: PLAYER MODAL (v3 — inclui skin)
     // ====================================================================================
     function getPlayerCache(playerId) {
         try {
@@ -648,14 +612,122 @@
             return obj.v;
         } catch (e) { return null; }
     }
-
     function setPlayerCache(playerId, data) {
         try {
             const key = `player_details_v3_${playerId}`;
-            const expirationTime = Date.now() + (24 * 60 * 60 * 1000); 
-            localStorage.setItem(key, JSON.stringify({ v: data, e: expirationTime }));
-        } catch (e) { }
+            localStorage.setItem(key, JSON.stringify({ v: data, e: Date.now() + 86400000 }));
+        } catch (e) {}
     }
+
+    // ====================================================================================
+    // SKIN DO MODAL
+    // ====================================================================================
+    const _DEFAULT_VIDEO = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+    const _MFO = 400, _MFI = 1200;
+
+    function _modalVideoSwap(src, skipOut) {
+        const vid = document.getElementById('modal-bg-video');
+        if (!vid) return;
+        const doLoad = () => {
+            const s = vid.querySelector('source');
+            if (s) { s.src = src; s.type = 'video/webm'; }
+            vid.load();
+            const fadeIn = () => {
+                vid.style.transition = `opacity ${_MFI}ms ease-in`;
+                vid.style.opacity = '0.45';
+            };
+            if (vid.readyState >= 3) fadeIn();
+            else {
+                vid.addEventListener('canplay',        fadeIn, { once: true });
+                vid.addEventListener('canplaythrough', fadeIn, { once: true });
+            }
+            vid.play().catch(() => {});
+        };
+        if (skipOut) { doLoad(); }
+        else {
+            vid.style.transition = `opacity ${_MFO}ms ease-out`;
+            vid.style.opacity = '0';
+            setTimeout(doLoad, _MFO + 30);
+        }
+    }
+
+    function _applyModalSkin(frameUrl, videoUrl) {
+        const frameEl  = document.getElementById('modal-frame-overlay');
+        const sheenEl  = document.getElementById('modal-frame-sheen');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        if (frameUrl) {
+            if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
+            if (avatarEl) avatarEl.style.border = 'none';
+            if (sheenEl) {
+                sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+                sheenEl.style.maskImage       = `url('${frameUrl}')`;
+                sheenEl.style.display = 'block';
+            }
+        } else {
+            if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+            if (sheenEl)  sheenEl.style.display = 'none';
+            if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+        }
+        // Sempre carrega vídeo: skin ou padrão
+        _modalVideoSwap(videoUrl || _DEFAULT_VIDEO, true);
+    }
+
+    function _resetModalSkin() {
+        const frameEl  = document.getElementById('modal-frame-overlay');
+        const sheenEl  = document.getElementById('modal-frame-sheen');
+        const avatarEl = document.getElementById('playerAvatarEquip');
+        const vid      = document.getElementById('modal-bg-video');
+        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+        if (sheenEl)  sheenEl.style.display = 'none';
+        if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
+        if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
+    }
+
+    // ====================================================================================
+    // GUILD LOCK — protege contra guild_pv.js sobrescrever os dados do modal
+    // ====================================================================================
+    let _guildLock = { active: false, flag: '', name: '', pid: null };
+    let _guildMuteSelf = false;
+
+    function _engageGuildLock(flag, name, pid) {
+        _guildLock = { active: true, flag, name, pid };
+        const _set = () => {
+            if (!_guildLock.active || _guildLock.pid !== pid) return;
+            _guildMuteSelf = true;
+            const gf = document.getElementById('playerGuildFlag');
+            const gn = document.getElementById('playerGuildName');
+            if (gf) { gf.src = flag; gf.classList.remove('shimmer'); }
+            if (gn) { gn.textContent = name; gn.classList.remove('shimmer'); }
+            _guildMuteSelf = false;
+        };
+        _set();
+        setTimeout(_set, 200);
+        setTimeout(_set, 600);
+        setTimeout(_set, 1500);
+    }
+
+    function _releaseGuildLock() {
+        _guildLock = { active: false, flag: '', name: '', pid: null };
+    }
+
+    // MutationObserver no playerGuildName: re-afirma instantaneamente se guild_pv.js mudar
+    const _guildGuardObs = new MutationObserver(() => {
+        if (_guildMuteSelf || !_guildLock.active) return;
+        const gn = document.getElementById('playerGuildName');
+        const gf = document.getElementById('playerGuildFlag');
+        if ((gn && gn.textContent !== _guildLock.name) || (gf && gf.src !== _guildLock.flag)) {
+            _guildMuteSelf = true;
+            if (gn) { gn.textContent = _guildLock.name; gn.classList.remove('shimmer'); }
+            if (gf) { gf.src = _guildLock.flag; gf.classList.remove('shimmer'); }
+            _guildMuteSelf = false;
+        }
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        const gn = document.getElementById('playerGuildName');
+        const gf = document.getElementById('playerGuildFlag');
+        if (gn) _guildGuardObs.observe(gn, { childList: true, subtree: true, characterData: true });
+        if (gf) _guildGuardObs.observe(gf, { attributes: true, attributeFilter: ['src'] });
+    });
 
     // ====================================================================================
     // RENDERIZAÇÃO
@@ -667,14 +739,11 @@
       else {
         let html = '<div id="rankingListContainerCP"><ol id="rankingListCP">';
         
-        // Renderiza Top 10 (Limite restaurado)
         for(let i=0;i<list.length && i<10;i++){
             const p = list[i]; 
             const pos = i+1;
             const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
-            
             const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
-
             html += `<li data-player-id="${esc(p.id)}">
             <span class="rank-position-cp">${pos}</span>
             <img class="rank-avatar-cp ${pos===1?'pulse':''}" src="${avatar}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
@@ -692,13 +761,11 @@
         w.innerHTML = html;
       }
 
-      // === Renderização da BARRA FIXA ===
       const fixedRankContainer = document.getElementById('fixedPlayerRank');
       if (myRankObj) {
           const p = myRankObj;
           const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
           const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
-          
           fixedRankContainer.innerHTML = `
           <div class="fixed-content-inner">
              <span class="rank-position-cp">${p.rank}</span>
@@ -724,7 +791,6 @@
                   }
               }
           });
-
       } else {
           fixedRankContainer.style.display = 'none';
       }
@@ -741,91 +807,24 @@
       });
     }
 
-    // ====================================================================================
-    // SKIN DO MODAL — helpers de vídeo, frame e sheen
-    // ====================================================================================
-    const _MFO = 400, _MFI = 1500; // fade-out ms, fade-in ms
-
-    function _modalVideoSwap(src, skipOut) {
-        const vid = document.getElementById('modal-bg-video');
-        if (!vid) return;
-        const doLoad = () => {
-            const s = vid.querySelector('source');
-            if (s) { s.src = src; s.type = 'video/webm'; }
-            vid.load();
-            const fadeIn = () => {
-                vid.style.transition = `opacity ${_MFI}ms ease-in`;
-                vid.style.opacity = '0.45'; // semi-opaco para não ofuscar texto
-            };
-            if (vid.readyState >= 3) fadeIn();
-            else {
-                vid.addEventListener('canplay',        fadeIn, { once: true });
-                vid.addEventListener('canplaythrough', fadeIn, { once: true });
-            }
-            vid.play().catch(() => {});
-        };
-        if (skipOut) { doLoad(); }
-        else {
-            vid.style.transition = `opacity ${_MFO}ms ease-out`;
-            vid.style.opacity = '0';
-            setTimeout(doLoad, _MFO + 30);
-        }
-    }
-
-    function _applyModalSkin(frameUrl, videoUrl) {
-        const frameEl  = document.getElementById('modal-frame-overlay');
-        const sheenEl  = document.getElementById('modal-frame-sheen');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-        const vid      = document.getElementById('modal-bg-video');
-
-        if (frameUrl) {
-            if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
-            if (avatarEl) avatarEl.style.border = 'none';
-            if (sheenEl) {
-                sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
-                sheenEl.style.maskImage       = `url('${frameUrl}')`;
-                sheenEl.style.display = 'block';
-            }
-        } else {
-            if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
-            if (sheenEl)  sheenEl.style.display = 'none';
-            if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
-        }
-
-        if (videoUrl) {
-            _modalVideoSwap(videoUrl, true);
-        } else {
-            if (vid) { vid.style.transition = ''; vid.style.opacity = '0'; }
-        }
-    }
-
-    function _resetModalSkin() {
-        const frameEl  = document.getElementById('modal-frame-overlay');
-        const sheenEl  = document.getElementById('modal-frame-sheen');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-        const vid      = document.getElementById('modal-bg-video');
-        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
-        if (sheenEl)  sheenEl.style.display = 'none';
-        if (avatarEl) avatarEl.style.border = '4px solid #c9a94a';
-        if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
-    }
-
-    // ====================================================================================
+        // ====================================================================================
     // FETCH DETALHES DO JOGADOR
     // ====================================================================================
+    let _activeModalPid = null;
+
     window.fetchPlayerDetailsWithCache = async function(playerId) {
+        _activeModalPid = playerId;
         resetModalUI();
-        
+
         const cachedData = getPlayerCache(playerId);
         if (cachedData) {
-            populatePlayerModal(cachedData);
+            populatePlayerModal(cachedData, playerId);
             return;
         }
 
         if (!supabase) return;
 
         try {
-            // Busca dados básicos + IDs de skin ativa
             const { data: player, error: pErr } = await supabase
                 .from('players')
                 .select('name, level, avatar_url, guild_id, combat_power, cached_combat_stats, active_frame_inventory_id, active_video_inventory_id')
@@ -834,93 +833,85 @@
             if (pErr) throw pErr;
 
             let guildInfo = { name: 'Sem Guilda', flag: 'https://aden-rpg.pages.dev/assets/guildaflag.webp' };
-            if(player.guild_id){
+            if (player.guild_id) {
                 const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
-                if(guild){
-                    guildInfo.name = guild.name;
-                    if(guild.flag_url) guildInfo.flag = guild.flag_url;
-                }
+                if (guild) { guildInfo.name = guild.name; if (guild.flag_url) guildInfo.flag = guild.flag_url; }
             }
 
-            // Equipamentos + dados de skin em uma única query (player_id garante que RLS libera)
+            // Equipamentos normais (image_url)
             const { data: equippedItems } = await supabase
                 .from('inventory_items')
-                .select('id, equipped_slot, level, items ( image_url, skin_frame_url, skin_video_url )')
+                .select('id, equipped_slot, level, items ( image_url )')
                 .eq('player_id', playerId)
                 .not('equipped_slot', 'is', null);
 
-            // Extrai URLs de skin — usa String() para evitar mismatch bigint/number
-            const activeFrameId = player.active_frame_inventory_id;
-            const activeVideoId = player.active_video_inventory_id;
-            const skinSlots = (equippedItems || []).filter(i => i.equipped_slot === 'skin');
+            // Skins — query SEPARADA e dedicada (garante que os campos de skin sejam retornados)
+            const { data: skinItems } = await supabase
+                .from('inventory_items')
+                .select('id, items ( skin_frame_url, skin_video_url )')
+                .eq('player_id', playerId)
+                .eq('equipped_slot', 'skin');
 
-            const frameItem = activeFrameId
-                ? skinSlots.find(i => String(i.id) === String(activeFrameId))
-                : skinSlots.find(i => i.items?.skin_frame_url);
-            const videoItem = activeVideoId
-                ? skinSlots.find(i => String(i.id) === String(activeVideoId))
-                : skinSlots.find(i => i.items?.skin_video_url);
+            // String() para evitar mismatch bigint/number entre Supabase e JS
+            const afid = player.active_frame_inventory_id != null ? String(player.active_frame_inventory_id) : null;
+            const avid = player.active_video_inventory_id != null ? String(player.active_video_inventory_id) : null;
 
-            const frameUrl = frameItem?.items?.skin_frame_url || null;
-            const videoUrl = videoItem?.items?.skin_video_url || null;
+            let frameUrl = null, videoUrl = null;
+            if (skinItems && skinItems.length > 0) {
+                const frameItem = (afid ? skinItems.find(i => String(i.id) === afid) : null)
+                               || skinItems.find(i => i.items?.skin_frame_url);
+                const videoItem = (avid ? skinItems.find(i => String(i.id) === avid) : null)
+                               || skinItems.find(i => i.items?.skin_video_url);
+                frameUrl = frameItem?.items?.skin_frame_url || null;
+                videoUrl = videoItem?.items?.skin_video_url || null;
+            }
 
             const serverStats = player.cached_combat_stats || {};
-            
             const displayStats = {
-                attack: safeNum(serverStats.attack),
-                defense: safeNum(serverStats.defense),
-                health: safeNum(serverStats.health),
-                evasion: safeNum(serverStats.evasion),
-                crit_chance: safeNum(serverStats.crit_chance),
-                crit_damage: safeNum(serverStats.crit_damage),
+                attack:         safeNum(serverStats.attack),
+                defense:        safeNum(serverStats.defense),
+                health:         safeNum(serverStats.health),
+                evasion:        safeNum(serverStats.evasion),
+                crit_chance:    safeNum(serverStats.crit_chance),
+                crit_damage:    safeNum(serverStats.crit_damage),
                 crit_reduction: safeNum(serverStats.crit_reduction)
             };
-            
+
             const fullPlayerData = {
                 basic: {
-                    name: player.name,
-                    level: player.level,
+                    name: player.name, level: player.level,
                     avatar_url: player.avatar_url,
-                    guild_name: guildInfo.name,
-                    guild_flag: guildInfo.flag,
+                    guild_name: guildInfo.name, guild_flag: guildInfo.flag,
                     cp: player.combat_power || 0,
-                    frame_url: frameUrl,
-                    video_url: videoUrl
+                    frame_url: frameUrl, video_url: videoUrl
                 },
                 stats: displayStats,
                 items: equippedItems || []
             };
 
             setPlayerCache(playerId, fullPlayerData);
-            populatePlayerModal(fullPlayerData);
+            if (_activeModalPid === playerId) populatePlayerModal(fullPlayerData, playerId);
 
         } catch (error) {
-            console.error("Erro ao carregar detalhes:", error);
-            document.getElementById('playerName').textContent = "Erro ao carregar";
+            console.error('[Modal] Erro:', error);
+            const el = document.getElementById('playerName');
+            if (el) el.textContent = 'Erro ao carregar';
         }
     };
 
-    function populatePlayerModal(data) {
+    function populatePlayerModal(data, playerId) {
         const { basic, stats, items } = data;
 
-        // Nome
-        document.getElementById('playerName').textContent = basic.name;
-        document.getElementById('playerName').classList.remove('shimmer');
-        // Emoji shimmer: chama diretamente (não depende do MutationObserver)
-        window._adenApplyEmojis?.(document.getElementById('playerName'));
+        // textContent — o MutationObserver do emoji cuida do nó de texto naturalmente
+        const nameEl = document.getElementById('playerName');
+        nameEl.textContent = basic.name;
+        nameEl.classList.remove('shimmer');
 
         document.getElementById('playerLevel').textContent = 'Nv. ' + safeNum(basic.level);
         document.getElementById('playerLevel').classList.remove('shimmer');
-        
-        // Guilda — aplica agora e re-afirma após 250ms para sobrepor guild_pv.js
-        const _setGuild = () => {
-            const gf = document.getElementById('playerGuildFlag');
-            const gn = document.getElementById('playerGuildName');
-            if (gf) { gf.src = basic.guild_flag; gf.classList.remove('shimmer'); }
-            if (gn) { gn.textContent = basic.guild_name; gn.classList.remove('shimmer'); }
-        };
-        _setGuild();
-        setTimeout(_setGuild, 250); // guild_pv.js pode sobrescrever logo após; re-afirma depois
+
+        // Guild lock: protege contra sobrescrita assíncrona do guild_pv.js
+        _engageGuildLock(basic.guild_flag, basic.guild_name, playerId);
 
         const cpDiv = document.getElementById('playerCombatPower');
         cpDiv.textContent = formatNumberCompact(basic.cp);
@@ -930,54 +921,48 @@
         avatarImg.src = basic.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
         avatarImg.classList.remove('shimmer');
 
-        // Skin: moldura + sheen + vídeo de fundo cobrindo o modal inteiro
+        // Skin: moldura + sheen + vídeo de fundo (vídeo padrão se não tiver skin)
         _applyModalSkin(basic.frame_url || null, basic.video_url || null);
 
         const statMap = {
-            'playerAttack': stats.attack,
-            'playerDefense': stats.defense,
-            'playerHealth': stats.health,
-            'playerEvasion': stats.evasion,
-            'playerCritChance': stats.crit_chance + '%',
-            'playerCritDamage': stats.crit_damage + '%',
+            'playerAttack':        stats.attack,
+            'playerDefense':       stats.defense,
+            'playerHealth':        stats.health,
+            'playerEvasion':       stats.evasion,
+            'playerCritChance':    stats.crit_chance + '%',
+            'playerCritDamage':    stats.crit_damage + '%',
             'playerCritReduction': stats.crit_reduction + '%'
         };
         for (const [id, val] of Object.entries(statMap)) {
             const el = document.getElementById(id);
-            if(el) { el.textContent = val; el.classList.remove('shimmer'); }
+            if (el) { el.textContent = val; el.classList.remove('shimmer'); }
         }
 
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
-        
-        items.forEach(invItem => {
-            if(invItem.equipped_slot === 'skin') return; // skins não vão nos slots de equipamento
-            if(invItem.equipped_slot && invItem.items && invItem.items.image_url) {
-                const slotId = `${invItem.equipped_slot}-slot`;
-                const slotDiv = document.getElementById(slotId);
-                if(slotDiv) {
-                    let itemHtml = `<img src="${invItem.items.image_url}" alt="Item">`;
-                    if(invItem.level > 0) {
-                        itemHtml += `<div class="item-level">+${invItem.level}</div>`;
-                    }
-                    slotDiv.innerHTML = itemHtml;
+        (items || []).forEach(invItem => {
+            if (invItem.equipped_slot === 'skin') return;
+            if (invItem.equipped_slot && invItem.items?.image_url) {
+                const slotDiv = document.getElementById(`${invItem.equipped_slot}-slot`);
+                if (slotDiv) {
+                    slotDiv.innerHTML = `<img src="${invItem.items.image_url}" alt="Item">`
+                        + (invItem.level > 0 ? `<div class="item-level">+${invItem.level}</div>` : '');
                 }
             }
         });
 
         const sendBtn = document.getElementById('sendmp');
         sendBtn.style.display = 'flex';
-        sendBtn.href = "go:msg:" + basic.name; 
+        sendBtn.href = 'go:msg:' + basic.name;
     }
 
     function resetModalUI() {
-        const shimmers = ['playerName', 'playerLevel', 'playerGuildName', 'playerCombatPower', 'playerAvatarEquip',
-                          'playerAttack', 'playerDefense', 'playerHealth', 'playerEvasion', 'playerCritChance', 'playerCritDamage', 'playerCritReduction'];
+        _releaseGuildLock();
+        const shimmers = ['playerName','playerLevel','playerGuildName','playerCombatPower','playerAvatarEquip',
+                          'playerAttack','playerDefense','playerHealth','playerEvasion',
+                          'playerCritChance','playerCritDamage','playerCritReduction'];
         shimmers.forEach(id => {
             const el = document.getElementById(id);
-            if(el) {
-                el.classList.add('shimmer');
-                if(el.tagName !== 'IMG') el.textContent = '';
-            }
+            if (el) { el.classList.add('shimmer'); if (el.tagName !== 'IMG') el.textContent = ''; }
         });
         document.querySelectorAll('.equipment-slot').forEach(div => div.innerHTML = '');
         document.getElementById('sendmp').style.display = 'none';
@@ -1555,19 +1540,19 @@
 
     function styleTextNodes(node) {
         if (node.nodeType === 3) {
-            // Fix: reset lastIndex antes de .test() para evitar bug de regex /g stateful
+            // FIX: regex /g mantém lastIndex entre chamadas — sempre reseta antes de test()
             targetIcons.lastIndex = 0;
-            if (targetIcons.test(node.nodeValue)) {
-                targetIcons.lastIndex = 0; // reset antes do .replace() também
-                const span = document.createElement('span');
-                span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
-                    if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
-                        return `<span class="jester-icon" data-text="${match}">${match}</span>`;
-                    }
-                    return `<span class="shiny-icon">${match}</span>`;
-                });
-                node.parentNode.replaceChild(span, node);
-            }
+            if (!targetIcons.test(node.nodeValue)) return;
+            if (!node.parentNode) return; // nó pode já ter sido removido pelo processamento anterior
+            targetIcons.lastIndex = 0;
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
         } else if (node.nodeType === 1 && 
                    node.tagName !== 'SCRIPT' && 
                    node.tagName !== 'STYLE' && 
@@ -1587,13 +1572,6 @@
 
     observer.observe(document.body, { childList: true, subtree: true });
     styleTextNodes(document.body);
-
-    // Expõe função para chamada direta no modal (não depende do MutationObserver)
-    window._adenApplyEmojis = function(el) {
-        if (!el) return;
-        targetIcons.lastIndex = 0;
-        Array.from(el.childNodes).forEach(styleTextNodes);
-    };
 
 })();
 </script>

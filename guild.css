@@ -1630,51 +1630,54 @@ font-size: 0.9em;
    SKIN DO MODAL DE JOGADOR (guild)
    ═══════════════════════════════════════════════ */
 
-/* Vídeo de fundo cobrindo TODO o modal */
+/* Vídeo de fundo — z-index 0, atrás de tudo */
 #guild-modal-bg-video {
     position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
     object-fit: cover;
-    opacity: 0;              /* JS controla o fade-in */
-    background-color: black; /* sem placeholder cinza nativo */
+    opacity: 0;
+    background-color: black;
     z-index: 0;
     pointer-events: none;
     border-radius: 10px;
 }
 
-/* Overlay escuro para legibilidade */
+/* Overlay escuro — z-index 1 */
 #guild-modal-bg-overlay {
     position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.4));
+    
     z-index: 1;
     pointer-events: none;
     border-radius: 10px;
 }
 
-/* Todo conteúdo acima do vídeo — z-index explícito por elemento */
-#playerModal #playerName       { position: relative; z-index: 2; }
-#playerModal #playerLevel      { z-index: 2; }
-#playerModal #equipmentAndAvatarContainer { position: relative; z-index: 2; }
-#playerModal #attributesSection           { position: relative; z-index: 2; }
-#playerModal #sendmp           { position: relative; z-index: 2; }
+/* Todo conteúdo — z-index 2 (explícito por elemento, sem usar > * que quebra position:absolute) */
+#playerModal h3,
+#playerModal #playerLevel,
+#playerModal #equipmentAndAvatarContainer,
+#playerModal #attributesSection,
+#playerModal #sendmp {
+    position: relative;
+    z-index: 2;
+}
 
-/* Ocultar bandeira e nome de guilda (desnecessário no contexto de guilda) */
+/* Ocultar bandeira e nome de guilda */
 #playerModal .guild-header { display: none !important; }
 
-/* Avatar wrapper 160px para a moldura encaixar exatamente */
+/* Avatar wrapper 160px para moldura encaixar */
 #guild-avatar-wrapper {
     position: relative;
     width: 160px; height: 160px;
     display: flex; align-items: center; justify-content: center;
 }
 
-/* Sobrescreve o tamanho do avatar para funcionar dentro do wrapper */
+/* Avatar dentro do wrapper */
 #playerModal #playerAvatarEquip {
     width: 100px !important; height: 100px !important;
 }
 
-/* Moldura sobreposta ao avatar */
+/* Moldura sobreposta */
 #guild-frame-overlay {
     position: absolute; top: -5px; left: 0;
     width: 160px; height: 160px;
@@ -1682,7 +1685,7 @@ font-size: 0.9em;
     object-fit: contain; display: none;
 }
 
-/* Sheen: brilho prateado varrendo a moldura */
+/* Sheen — brilho prateado varrendo a moldura */
 #guild-frame-sheen {
     position: absolute; top: -5px; left: 0;
     width: 160px; height: 160px;
@@ -1702,5 +1705,6 @@ font-size: 0.9em;
     animation: _gfs 6s ease-in-out infinite;
 }
 @keyframes _gfs {
-    0%{left:-130%;opacity:0} 2%{opacity:1} 98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
+    0%{left:-130%;opacity:0} 2%{opacity:1}
+    98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
 }

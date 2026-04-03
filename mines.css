@@ -505,16 +505,14 @@ p {
 /* NOVO: Estilos para o avatar do dono da mina */
 .mine-owner-container {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 15px;
   margin-top: 10px;
   color: white;
   font-weight: bold;
   background: rgba(0,0,0,0.4);
   border-radius: 8px;
-  padding: 8px 0;
 }
 
 .owner-avatar {
@@ -559,7 +557,7 @@ p {
   font-size: 0.9em;
     font-weight: bold;
     color: #fff;
-    margin-bottom: 10px;
+    margin-bottom: 44px; /* Frame estende 38px acima do avatar; 44px dá folga visual */
 }
 
 .avatar-container {
@@ -622,7 +620,7 @@ p {
     background: linear-gradient(180deg,#111 0%,#1e1e1e 100%);
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 6px;
-    margin-top: 10px;
+    margin-top: 44px; /* Frame estende 38px abaixo do avatar; 44px dá folga visual */
     overflow: hidden;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
 }
@@ -905,132 +903,4 @@ p {
     opacity: 0.4; 
     cursor: not-allowed; 
     pointer-events: none; 
-}
-/* ═══════════════════════════════════════════════════════
-   MOLDURAS DE SKIN — Minas de Cristal
-   ═══════════════════════════════════════════════════════
-
-   Proporção calculada a partir do inventário:
-     avatar 100px + borda 3px×2 = 106px, frame = 195px → ratio 1.8396
-     Owner card: 80px img + 2px×2 borda = 84px  → frame 155px (top -4px)
-     PvP avatar:  80px img + 3px×2 borda = 86px  → frame 158px (top -4px)
-   ═══════════════════════════════════════════════════════ */
-
-/* ── Wrapper do avatar do dono na mine-card ─────────────── */
-.mine-owner-avatar-wrapper {
-    position: relative;
-    width: 155px;
-    height: 155px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-/* Mantém o tamanho original do avatar (não altera nada existente) */
-.mine-owner-avatar-wrapper .owner-avatar {
-    width: 80px;
-    height: 80px;
-}
-
-/* Moldura sobreposta — owner card */
-.mine-frame-overlay {
-    position: absolute;
-    top: -4px;
-    left: 0;
-    width: 155px;
-    height: 155px;
-    pointer-events: none;
-    z-index: 2;
-    object-fit: contain;
-    display: none;
-}
-
-/* Sheen — owner card */
-.mine-frame-sheen {
-    position: absolute;
-    top: -4px;
-    left: 0;
-    width: 155px;
-    height: 155px;
-    pointer-events: none;
-    z-index: 3;
-    display: none;
-    -webkit-mask-size: contain;
-    mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    mask-position: center;
-    overflow: hidden;
-}
-.mine-frame-sheen::after {
-    content: '';
-    position: absolute;
-    top: -20%; left: -130%;
-    width: 55%; height: 140%;
-    background: linear-gradient(108deg,
-        transparent 0%, rgba(255,255,255,.04) 28%,
-        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
-        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
-    animation: _minefs 6s ease-in-out infinite;
-}
-@keyframes _minefs {
-    0%   { left:-130%; opacity:0; }
-    2%   { opacity:1; }
-    98%  { left:155%; opacity:1; }
-    99%  { opacity:0; left:155%; }
-    100% { left:155%; opacity:0; }
-}
-
-/* ── PvP: avatar-container já existe com position:relative ─ */
-
-/* Moldura sobreposta — PvP
-   Avatar PvP: container 80px, imagem 80px (100% do container)
-   Ratio inventário: frame 195px / imagem 100px = 1.95
-   Frame PvP: 80 × 1.95 = 156px
-   Centralização vertical: top = (80 - 156) / 2 = -38px
-   → Para ajustar tamanho: mude width/height e recalcule top = (80 - novoTamanho) / 2 */
-.pvp-frame-overlay {
-    position: absolute;
-    top: -38px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 156px;
-    height: 156px;
-    pointer-events: none;
-    z-index: 2;
-    object-fit: contain;
-    display: none;
-}
-
-/* Sheen — PvP (mesmas dimensões que pvp-frame-overlay) */
-.pvp-frame-sheen {
-    position: absolute;
-    top: -38px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 156px;
-    height: 156px;
-    pointer-events: none;
-    z-index: 3;
-    display: none;
-    -webkit-mask-size: contain;
-    mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    mask-position: center;
-    overflow: hidden;
-}
-.pvp-frame-sheen::after {
-    content: '';
-    position: absolute;
-    top: -20%; left: -130%;
-    width: 55%; height: 140%;
-    background: linear-gradient(108deg,
-        transparent 0%, rgba(255,255,255,.04) 28%,
-        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
-        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
-    animation: _minefs 6s ease-in-out infinite;
 }

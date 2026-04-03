@@ -457,12 +457,11 @@ if ('serviceWorker' in navigator) {
 
 
 <div id="playerModal" class="modal" style="display:none; width: 92%;">
-  <div class="modal-content" id="guildPlayerModalContent">
-    <!-- Vídeo de fundo cobrindo todo o modal (opacity controlada por JS) -->
+  <div class="modal-content">
+    <!-- Vídeo de fundo cobrindo todo o modal -->
     <video autoplay muted loop playsinline id="guild-modal-bg-video"><source src="" type="video/webm"></video>
     <div id="guild-modal-bg-overlay"></div>
 
-    <!-- Conteúdo acima do vídeo (z-index via CSS) -->
     <span id="closePlayerModal" class="close-btn">&times;</span>
 
     <h3 id="playerName">Jogador</h3>
@@ -477,7 +476,6 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div id="playerAvatarEquipContainer">
-        <!-- guild-header oculto por CSS (não necessário no contexto de guilda) -->
         <div class="guild-header">
           <div style="display: flex;
   flex-direction: column; justify-content: center; text-align: center; align-items: center;">
@@ -1007,13 +1005,23 @@ function _gVideoSwap(src, skipOut) {
         const s = vid.querySelector('source');
         if (s) { s.src = src; s.type = 'video/webm'; }
         vid.load();
-        const fadeIn = () => { vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.45'; };
+        const fadeIn = () => {
+            vid.style.transition = `opacity ${_MFI}ms ease-in`;
+            vid.style.opacity = '0.45';
+        };
         if (vid.readyState >= 3) fadeIn();
-        else { vid.addEventListener('canplay', fadeIn, {once:true}); vid.addEventListener('canplaythrough', fadeIn, {once:true}); }
-        vid.play().catch(()=>{});
+        else {
+            vid.addEventListener('canplay',        fadeIn, { once: true });
+            vid.addEventListener('canplaythrough', fadeIn, { once: true });
+        }
+        vid.play().catch(() => {});
     };
     if (skipOut) { doLoad(); }
-    else { vid.style.transition = `opacity ${_MFO}ms ease-out`; vid.style.opacity='0'; setTimeout(doLoad, _MFO+30); }
+    else {
+        vid.style.transition = `opacity ${_MFO}ms ease-out`;
+        vid.style.opacity = '0';
+        setTimeout(doLoad, _MFO + 30);
+    }
 }
 
 function _gApplySkin(frameUrl, videoUrl) {
@@ -1023,11 +1031,15 @@ function _gApplySkin(frameUrl, videoUrl) {
     if (frameUrl) {
         if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
         if (avatarEl) avatarEl.style.border = 'none';
-        if (sheenEl)  { sheenEl.style.webkitMaskImage=`url('${frameUrl}')`; sheenEl.style.maskImage=`url('${frameUrl}')`; sheenEl.style.display='block'; }
+        if (sheenEl) {
+            sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+            sheenEl.style.maskImage       = `url('${frameUrl}')`;
+            sheenEl.style.display = 'block';
+        }
     } else {
-        if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
-        if (sheenEl)  sheenEl.style.display='none';
-        if (avatarEl) avatarEl.style.border='3px solid #FFD700';
+        if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+        if (sheenEl)  sheenEl.style.display = 'none';
+        if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
     }
     _gVideoSwap(videoUrl || _GD_VID, true);
 }
@@ -1036,11 +1048,11 @@ function _gResetSkin() {
     const vid     = document.getElementById('guild-modal-bg-video');
     const frameEl = document.getElementById('guild-frame-overlay');
     const sheenEl = document.getElementById('guild-frame-sheen');
-    const avatarEl= document.getElementById('playerAvatarEquip');
-    if (vid)      { vid.style.transition=''; vid.style.opacity='0'; }
-    if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
-    if (sheenEl)  sheenEl.style.display='none';
-    if (avatarEl) avatarEl.style.border='3px solid #FFD700';
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
+    if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+    if (sheenEl)  sheenEl.style.display = 'none';
+    if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
 }
 
 // ─── Skin cache (shared with ranking_cp — skin_modal_v1_${pid}, 24h) ──────────
@@ -1049,20 +1061,25 @@ function _gGetSkinCache(pid) {
         const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
         if (!raw) return undefined;
         const obj = JSON.parse(raw);
-        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        if (!obj.e || Date.now() >= obj.e) {
+            localStorage.removeItem(`skin_modal_v1_${pid}`);
+            return undefined;
+        }
         return obj.v;
     } catch(e) { return undefined; }
 }
 function _gSetSkinCache(pid, data) {
-    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+    try {
+        localStorage.setItem(`skin_modal_v1_${pid}`,
+            JSON.stringify({ v: data, e: Date.now() + 86400000 }));
+    } catch(e) {}
 }
 
-// ─── Fetch & apply skins (SECURITY DEFINER bypasses RLS) ──────────────────────
-let _gInflight = null; // avoid double-fetching the same player
+// ─── Fetch & apply (SECURITY DEFINER bypasses RLS) ────────────────────────────
+let _gFetching = false;
 async function _gFetchAndApplySkins(playerId) {
-    if (!playerId) return;
-    if (_gInflight === playerId) return; // already in progress
-    _gInflight = playerId;
+    if (!playerId || _gFetching) return;
+    _gFetching = true;
     try {
         const cached = _gGetSkinCache(playerId);
         if (cached !== undefined) {
@@ -1076,47 +1093,54 @@ async function _gFetchAndApplySkins(playerId) {
         _gSetSkinCache(playerId, { frame_url: frameUrl, video_url: videoUrl });
         _gApplySkin(frameUrl, videoUrl);
     } catch(e) {
-        console.warn('[guild skin] exception:', e);
+        console.warn('[guild skin]', e);
         _gApplySkin(null, null);
     } finally {
-        _gInflight = null;
+        _gFetching = false;
     }
 }
 
-// ─── Core wrapping logic (resilient: retries until fetchPlayerData exists) ────
-function _gWrap() {
-    const orig = window.fetchPlayerData;
-    // Already wrapped or doesn't exist yet
-    if (!orig || orig._gSkinWrapped) return false;
+// ─── Core strategy ─────────────────────────────────────────────────────────────
+// playerModal.js calls its own LOCAL fetchPlayerData() — not window.fetchPlayerData.
+// Wrapping window.fetchPlayerData is therefore useless for most click paths.
+//
+// Instead:
+//   Step A — capture phase click listener (runs before any bubble listeners)
+//            → intercepts .player-link clicks → stores playerId
+//   Step B — MutationObserver on #playerAvatarEquip[src]
+//            → fires when playerModal.js sets the avatar (=modal populated)
+//            → at that point the stored playerId is valid → fetch & apply skin
 
-    window.fetchPlayerData = async function(playerId) {
-        // Store current player on the modal element so MutationObserver can use it
-        const modal = document.getElementById('playerModal');
-        if (modal) modal.dataset.currentPid = playerId;
-        _gResetSkin();
-        await orig(playerId);
-        await _gFetchAndApplySkins(playerId);
-    };
-    window.fetchPlayerData._gSkinWrapped = true;
-    return true;
-}
+let _gLastPid = null;
 
-// ─── MutationObserver fallback: fires when modal opens, even if wrap failed ───
+// Step A: capture the playerId before anyone else handles the click
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('.player-link');
+    if (!link) return;
+    const pid = link.dataset.playerId;
+    if (!pid) return;
+    _gLastPid = pid;
+    _gResetSkin(); // clear previous skin immediately on click
+}, true /* capture */);
+
+// Step B: detect when playerModal.js finishes populating the avatar
 document.addEventListener('DOMContentLoaded', () => {
-    const modal = document.getElementById('playerModal');
-    if (modal) {
-        new MutationObserver(() => {
-            if (modal.style.display !== 'none' && modal.style.display !== '') {
-                const pid = modal.dataset.currentPid;
-                if (pid) _gFetchAndApplySkins(pid);
-            }
-        }).observe(modal, { attributes: true, attributeFilter: ['style'] });
-    }
+    const avatarEl = document.getElementById('playerAvatarEquip');
+    if (!avatarEl) return;
 
-    // Try wrapping immediately, then retry a few times to cover all timing scenarios
-    if (!_gWrap()) {
-        setTimeout(() => { if (!_gWrap()) setTimeout(_gWrap, 200); }, 0);
-    }
+    new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            // src changed away from placeholder → modal just got populated
+            if (m.attributeName === 'src') {
+                const newSrc = avatarEl.getAttribute('src') || '';
+                // Skip placeholder / empty states
+                if (!newSrc || newSrc.includes('placeholder') || newSrc === 'https://via.placeholder.com/100') continue;
+                const modal = document.getElementById('playerModal');
+                if (!modal || modal.style.display === 'none' || modal.style.display === '') continue;
+                if (_gLastPid) _gFetchAndApplySkins(_gLastPid);
+            }
+        }
+    }).observe(avatarEl, { attributes: true, attributeFilter: ['src'] });
 });
 </script>
 <script>

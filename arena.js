@@ -1,5 +1,64 @@
 import { supabase } from './supabaseClient.js'
 
+// ═══════════════════════════════════════════════════════════════════
+// SKIN HELPERS — Molduras de avatar (Arena PvP)
+// Cache compartilhado: skin_modal_v1_${pid} (24h), mesmo do ranking e minas
+// ═══════════════════════════════════════════════════════════════════
+
+function _arGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v;
+    } catch(e) { return undefined; }
+}
+
+function _arSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+function _arApplyFrame(containerEl, frameUrl) {
+    if (!containerEl) return;
+    const frameImg  = containerEl.querySelector('.arena-frame-overlay');
+    const sheenEl   = containerEl.querySelector('.arena-frame-sheen');
+    const avatarImg = containerEl.querySelector('.player-avatar-pvp');
+    if (!frameImg || !sheenEl) return;
+    if (frameUrl) {
+        frameImg.src           = frameUrl;
+        frameImg.style.display = 'block';
+        if (avatarImg) avatarImg.style.border = 'none';
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    } else {
+        frameImg.src           = '';
+        frameImg.style.display = 'none';
+        sheenEl.style.display  = 'none';
+        if (avatarImg) avatarImg.style.border = '3px solid #ffd700';
+    }
+}
+
+function _arResetFrame(containerEl) {
+    _arApplyFrame(containerEl, null);
+}
+
+async function _arFetchAndApplyFrame(pid, containerEl) {
+    if (!pid || !containerEl) return;
+    const cached = _arGetSkinCache(pid);
+    if (cached !== undefined) { _arApplyFrame(containerEl, cached.frame_url || null); return; }
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
+        if (error) { _arApplyFrame(containerEl, null); return; }
+        const frameUrl = data?.frame_url || null;
+        const videoUrl = data?.video_url || null;
+        _arSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
+        _arApplyFrame(containerEl, frameUrl);
+    } catch(e) { _arApplyFrame(containerEl, null); }
+}
+
+
 // =======================================================================
 // 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
 // =======================================================================
@@ -1111,6 +1170,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         challengerAvatar.src = me?.avatar_url || defAvatar;
         defenderName.textContent = opp?.name || "Oponente";
         defenderAvatar.src = opp?.avatar_url || defAvatar;
+
+        // Aplica molduras (busca do cache compartilhado ou do servidor)
+        const challContainer = document.getElementById('challengerAvatarContainer');
+        const defContainer   = document.getElementById('defenderAvatarContainer');
+        _arResetFrame(challContainer);
+        _arResetFrame(defContainer);
+        if (userId && challContainer)
+            _arFetchAndApplyFrame(userId, challContainer);
+        if (currentBattleEngine?.opponent?.id && defContainer)
+            _arFetchAndApplyFrame(currentBattleEngine.opponent.id, defContainer);
 
         updateBattleStateUI(state);
         renderBattlePotions(challengerSide, state.attacker_potions, 'left', true); 

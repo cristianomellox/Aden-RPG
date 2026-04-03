@@ -1023,3 +1023,68 @@ textarea:focus, textarea:active {
 #rankingListContainer, #rankingListContainerPast {
     padding-bottom: 70px; /* Espaço para a barra fixa */
 }
+/* ═══════════════════════════════════════════════════════════════
+   MOLDURA DE SKIN — Arena PvP
+   ═══════════════════════════════════════════════════════════════
+   Avatar PvP: avatar-container 80×80px, player-avatar-pvp 100% (80px) + borda 3px
+   Ratio inventário: frame 195px / imagem 100px = 1,95
+   Frame arena: 80 × 1,95 = 156px
+   Centralização: top = (80 − 156) / 2 = −38px
+
+   Para ajustar futuramente:
+     • Tamanho do frame → mude width/height em .arena-frame-overlay e .arena-frame-sheen
+     • Recalcule top = (containerPx − framePx) / 2
+     • containerPx está em .avatar-container (atualmente 80px)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Moldura sobreposta — Arena PvP */
+.arena-frame-overlay {
+    position: absolute;
+    top: -38px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 156px;
+    height: 156px;
+    pointer-events: none;
+    z-index: 2;
+    object-fit: contain;
+    display: none;
+}
+
+/* Sheen: brilho prateado varrendo a moldura (mesmas dimensões) */
+.arena-frame-sheen {
+    position: absolute;
+    top: -38px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 156px;
+    height: 156px;
+    pointer-events: none;
+    z-index: 3;
+    display: none;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    overflow: hidden;
+}
+.arena-frame-sheen::after {
+    content: '';
+    position: absolute;
+    top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg,
+        transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _arenafs 6s ease-in-out infinite;
+}
+@keyframes _arenafs {
+    0%   { left:-130%; opacity:0; }
+    2%   { opacity:1; }
+    98%  { left:155%; opacity:1; }
+    99%  { opacity:0; left:155%; }
+    100% { left:155%; opacity:0; }
+}

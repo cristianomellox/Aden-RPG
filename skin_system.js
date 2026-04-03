@@ -11,7 +11,7 @@ import { supabase } from './supabaseClient.js';
 const SKIN_CACHE_KEY     = 'aden_skin_cache_v3';
 const DEFAULT_VIDEO      = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
 const DEFAULT_VIDEO_TYPE = 'video/webm';
-const VIDEO_TARGET_OPACITY = '0.9';
+const VIDEO_TARGET_OPACITY = '0.98';
 const FADE_OUT_MS = 400;
 const FADE_IN_MS  = 1500;
 

@@ -559,7 +559,7 @@
             const s = vid.querySelector('source');
             if (s) { s.src = src; s.type = 'video/webm'; }
             vid.load();
-            const fadeIn = () => { vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.9'; };
+            const fadeIn = () => { vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.98'; };
             if (vid.readyState >= 3) fadeIn();
             else { vid.addEventListener('canplay', fadeIn, {once:true}); vid.addEventListener('canplaythrough', fadeIn, {once:true}); }
             vid.play().catch(()=>{});

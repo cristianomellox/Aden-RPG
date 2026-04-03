@@ -983,28 +983,33 @@ p {
 
 /* ── PvP: avatar-container já existe com position:relative ─ */
 
-/* Moldura sobreposta — PvP */
+/* Moldura sobreposta — PvP
+   Avatar PvP: container 80px, imagem 80px (100% do container)
+   Ratio inventário: frame 195px / imagem 100px = 1.95
+   Frame PvP: 80 × 1.95 = 156px
+   Centralização vertical: top = (80 - 156) / 2 = -38px
+   → Para ajustar tamanho: mude width/height e recalcule top = (80 - novoTamanho) / 2 */
 .pvp-frame-overlay {
     position: absolute;
-    top: -4px;
+    top: -38px;
     left: 50%;
     transform: translateX(-50%);
-    width: 158px;
-    height: 158px;
+    width: 156px;
+    height: 156px;
     pointer-events: none;
     z-index: 2;
     object-fit: contain;
     display: none;
 }
 
-/* Sheen — PvP */
+/* Sheen — PvP (mesmas dimensões que pvp-frame-overlay) */
 .pvp-frame-sheen {
     position: absolute;
-    top: -4px;
+    top: -38px;
     left: 50%;
     transform: translateX(-50%);
-    width: 158px;
-    height: 158px;
+    width: 156px;
+    height: 156px;
     pointer-events: none;
     z-index: 3;
     display: none;

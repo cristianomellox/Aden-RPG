@@ -139,6 +139,108 @@ const GlobalDB = {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// SKIN HELPERS — Molduras de avatar (mines)
+// Cache compartilhado com ranking_cp e guild: skin_modal_v1_${pid}
+// Busca via get_player_skin_urls (SECURITY DEFINER, bypassa RLS)
+// ═══════════════════════════════════════════════════════════════════
+
+function _mGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v; // { frame_url, video_url }
+    } catch(e) { return undefined; }
+}
+
+function _mSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+// Aplica moldura num wrapper .mine-owner-avatar-wrapper
+function _mApplyFrameToOwnerWrapper(wrapperEl, frameUrl) {
+    if (!wrapperEl) return;
+    const frameImg  = wrapperEl.querySelector('.mine-frame-overlay');
+    const sheenEl   = wrapperEl.querySelector('.mine-frame-sheen');
+    const avatarImg = wrapperEl.querySelector('.owner-avatar');
+    if (!frameImg || !sheenEl) return;
+    if (frameUrl) {
+        frameImg.src           = frameUrl;
+        frameImg.style.display = 'block';
+        if (avatarImg) avatarImg.style.border = 'none';
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    } else {
+        frameImg.src           = '';
+        frameImg.style.display = 'none';
+        sheenEl.style.display  = 'none';
+        if (avatarImg) avatarImg.style.border = '2px solid yellow';
+    }
+}
+
+// Aplica moldura nos elementos PvP
+function _mApplyFrameToPvp(containerEl, frameUrl) {
+    if (!containerEl) return;
+    const frameImg = containerEl.querySelector('.pvp-frame-overlay');
+    const sheenEl  = containerEl.querySelector('.pvp-frame-sheen');
+    const avatarImg= containerEl.querySelector('.player-avatar-pvp');
+    if (!frameImg || !sheenEl) return;
+    if (frameUrl) {
+        frameImg.src           = frameUrl;
+        frameImg.style.display = 'block';
+        if (avatarImg) avatarImg.style.border = 'none';
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    } else {
+        frameImg.src           = '';
+        frameImg.style.display = 'none';
+        sheenEl.style.display  = 'none';
+        if (avatarImg) avatarImg.style.border = '3px solid #ffd700';
+    }
+}
+
+// Busca frame_url do cache ou do servidor, depois aplica
+async function _mFetchAndApplyFrame(pid, applyFn) {
+    if (!pid) return;
+    const cached = _mGetSkinCache(pid);
+    if (cached !== undefined) { applyFn(cached.frame_url || null); return; }
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
+        if (error) { applyFn(null); return; }
+        const frameUrl = data?.frame_url || null;
+        const videoUrl = data?.video_url || null;
+        _mSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
+        applyFn(frameUrl);
+    } catch(e) { applyFn(null); }
+}
+
+// HTML do wrapper do avatar (mine cards) — substitui o img simples
+function _mOwnerAvatarHtml(owner) {
+    if (!owner || !owner.avatar_url) return '';
+    const eid = String(owner.id).replace(/[^a-zA-Z0-9-]/g, '');
+    return `<div class="mine-owner-avatar-wrapper" data-owner-id="${eid}">
+        <img src="${owner.avatar_url}" alt="Avatar" class="owner-avatar" />
+        <img class="mine-frame-overlay" src="" alt="">
+        <div class="mine-frame-sheen"></div>
+    </div>`;
+}
+
+// Após renderizar cards, aplica molduras (sem bloquear render)
+async function _mApplyFramesToCards() {
+    const wrappers = document.querySelectorAll('.mine-owner-avatar-wrapper[data-owner-id]');
+    for (const w of wrappers) {
+        const pid = w.dataset.ownerId;
+        if (!pid) continue;
+        // Captura referência ao wrapper antes do await
+        const wRef = w;
+        await _mFetchAndApplyFrame(pid, (frameUrl) => _mApplyFrameToOwnerWrapper(wRef, frameUrl));
+    }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("[mines] DOM ready - Versão Otimizada vFinal");
 
@@ -1234,7 +1336,7 @@ function formatTimeCombat(totalSeconds) {
     for (const mine of mines) {
       const owner = ownersMap[mine.owner_player_id];
       const ownerName = owner ? (owner.name || "Desconhecido") : null;
-      const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
+      const ownerAvatarHtml = _mOwnerAvatarHtml(owner);
 
       let collectingHtml = "";
       if (mine.owner_player_id) {
@@ -1280,6 +1382,8 @@ function formatTimeCombat(totalSeconds) {
       }
       minesContainer.appendChild(card);
     }
+    // Aplica molduras após render (não bloqueia)
+    _mApplyFramesToCards();
   }
 
   function renderAndAppendSingleCard(mine) {
@@ -1288,7 +1392,7 @@ function formatTimeCombat(totalSeconds) {
 
       const owner = globalOwnersMap[mine.owner_player_id];
       const ownerName = owner ? (owner.name || "Desconhecido") : null;
-      const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
+      const ownerAvatarHtml = _mOwnerAvatarHtml(owner);
 
       let collectingHtml = "";
       if (mine.owner_player_id) {
@@ -1333,6 +1437,14 @@ function formatTimeCombat(totalSeconds) {
         });
       }
       minesContainer.appendChild(card);
+      // Aplica moldura do dono recém-adicionado
+      if (owner && owner.id) {
+          const wrapper = card.querySelector('.mine-owner-avatar-wrapper');
+          if (wrapper) {
+              const ownId = owner.id;
+              _mFetchAndApplyFrame(ownId, (frameUrl) => _mApplyFrameToOwnerWrapper(wrapper, frameUrl));
+          }
+      }
   }
 
   async function updateDominantGuild(mines, ownersMap) {
@@ -1401,7 +1513,7 @@ function formatTimeCombat(totalSeconds) {
           }
 
           const ownerName = owner ? (owner.name || "Desconhecido") : null;
-          const ownerAvatarHtml = owner && owner.avatar_url ? `<img src="${esc(owner.avatar_url)}" alt="Avatar" class="owner-avatar" />` : '';
+          const ownerAvatarHtml = _mOwnerAvatarHtml(owner);
 
           let collectingHtml = "";
           if (mappedMine.owner_player_id) {
@@ -1438,6 +1550,15 @@ function formatTimeCombat(totalSeconds) {
 
           const newCard = cardElement.cloneNode(true);
           cardElement.parentNode.replaceChild(newCard, cardElement);
+
+          // Aplica moldura no card atualizado
+          if (owner && owner.id) {
+              const wrapper = newCard.querySelector('.mine-owner-avatar-wrapper');
+              if (wrapper) {
+                  const ownId = owner.id;
+                  _mFetchAndApplyFrame(ownId, (frameUrl) => _mApplyFrameToOwnerWrapper(wrapper, frameUrl));
+              }
+          }
           
           if (actionType) {
               newCard.addEventListener("click", () => {
@@ -1967,7 +2088,17 @@ function formatTimeCombat(totalSeconds) {
         defenderName.textContent = ownerName || "Dono";
         challengerAvatar.src = challengerAvatarUrl;
         defenderAvatar.src = ownerAvatar || 'https://aden-rpg.pages.dev/assets/default_avatar.png';
-        
+
+        // Aplica molduras PvP (busca do cache ou servidor)
+        const challengerContainer = document.getElementById('challengerAvatarContainer');
+        const defenderContainer   = document.getElementById('defenderAvatarContainer');
+        if (userId && challengerContainer) {
+            _mFetchAndApplyFrame(userId, (f) => _mApplyFrameToPvp(challengerContainer, f));
+        }
+        if (ownerId && defenderContainer) {
+            _mFetchAndApplyFrame(ownerId, (f) => _mApplyFrameToPvp(defenderContainer, f));
+        }
+
         _injectMinesEpicStyles();
         updatePvpHpBar(challengerHpFill, challengerHpText, challengerCurrentHp, challengerMaxHp);
         updatePvpHpBar(defenderHpFill, defenderHpText, defenderCurrentHp, defenderMaxHp);

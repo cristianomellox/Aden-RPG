@@ -12,7 +12,88 @@
         color: #fff!important;
         font-size: 1.1em!important;
       }
-    </style>
+    
+/* ══════════════════════════════════════════════════════════════
+   MOLDURAS DE SKIN — Áreas de Caça
+   Spot avatars: 60px + 3px×2 borda → frame 117px, top −29px
+   PvP avatars:  70px + 3px×2 borda → frame 137px, top −34px
+   Para ajustar: mude as dimensões nos seletores abaixo e
+   recalcule top = (avatarPx − framePx) / 2
+   ══════════════════════════════════════════════════════════════ */
+
+/* Wrapper gerado pelo JS ao redor de spot avatars */
+.hunt-spot-avatar-wrapper { position: relative; display: flex; align-items: center; justify-content: center; }
+
+/* Frame + sheen nos spot avatars (own player e outros) */
+.hunt-spot-frame-overlay {
+    position: absolute; top: -29px; left: 50%;
+    transform: translateX(-50%);
+    width: 117px; height: 117px;
+    pointer-events: none; z-index: 2;
+    object-fit: contain; display: none;
+}
+.hunt-spot-frame-sheen {
+    position: absolute; top: -29px; left: 50%;
+    transform: translateX(-50%);
+    width: 117px; height: 117px;
+    pointer-events: none; z-index: 3; display: none;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    overflow: hidden;
+}
+.hunt-spot-frame-sheen::after {
+    content: ''; position: absolute; top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg, transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _huntfs 6s ease-in-out infinite;
+}
+
+/* Container do PvP (wraps the <img>) */
+.hunt-pvp-avatar-container {
+    position: relative; width: 70px; height: 70px;
+    display: flex; align-items: center; justify-content: center;
+}
+.hunt-pvp-avatar-container img { width: 70px !important; height: 70px !important; }
+
+/* Frame + sheen nos avatares do PvP */
+.hunt-pvp-frame-overlay {
+    position: absolute; top: -34px; left: 50%;
+    transform: translateX(-50%);
+    width: 137px; height: 137px;
+    pointer-events: none; z-index: 2;
+    object-fit: contain; display: none;
+}
+.hunt-pvp-frame-sheen {
+    position: absolute; top: -34px; left: 50%;
+    transform: translateX(-50%);
+    width: 137px; height: 137px;
+    pointer-events: none; z-index: 3; display: none;
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    overflow: hidden;
+}
+.hunt-pvp-frame-sheen::after {
+    content: ''; position: absolute; top: -20%; left: -130%;
+    width: 55%; height: 140%;
+    background: linear-gradient(108deg, transparent 0%, rgba(255,255,255,.04) 28%,
+        rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+        rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+    animation: _huntfs 6s ease-in-out infinite;
+}
+@keyframes _huntfs {
+    0%{left:-130%;opacity:0} 2%{opacity:1} 98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
+}
+
+/* Nome acima do pvp não fica coberto: margin-bottom empurra para cima do frame
+   Frame estende 34px acima do avatar (70px); 40px dá folga.
+   HP bar: frame desce 34px abaixo; margin-top 40px para não cobrir. */
+.pvp-fighter-name { margin-bottom: 40px !important; }
+.pvp-hp-bg        { margin-top:    40px !important; }
+</style>
 </head>
 <style>
 .goog-te-banner-frame.skiptranslate,.skiptranslate{display:none!important;visibility:hidden!important;height:0!important;}
@@ -286,14 +367,22 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
         <div class="pvp-arena">
             <div class="pvp-fighter" id="pvpAttackerSide">
                 <div class="pvp-fighter-name" id="pvpAttackerName">Atacante</div>
+                <div id="pvpAttackerAvatarContainer" class="hunt-pvp-avatar-container">
                 <img id="pvpAttackerAvatar" src="" alt="">
+                <img id="pvpAttackerFrame" class="hunt-pvp-frame-overlay" src="" alt="">
+                <div id="pvpAttackerSheen" class="hunt-pvp-frame-sheen"></div>
+            </div>
                 <div class="pvp-hp-bg"><div class="pvp-hp-fill" id="pvpAttackerHpFill" style="width:100%"></div></div>
                 <div class="pvp-hp-txt" id="pvpAttackerHpText">0/0</div>
             </div>
             <div class="pvp-vs">VS</div>
             <div class="pvp-fighter" id="pvpDefenderSide">
                 <div class="pvp-fighter-name" id="pvpDefenderName">Defensor</div>
+                <div id="pvpDefenderAvatarContainer" class="hunt-pvp-avatar-container">
                 <img id="pvpDefenderAvatar" src="" alt="">
+                <img id="pvpDefenderFrame" class="hunt-pvp-frame-overlay" src="" alt="">
+                <div id="pvpDefenderSheen" class="hunt-pvp-frame-sheen"></div>
+            </div>
                 <div class="pvp-hp-bg"><div class="pvp-hp-fill" id="pvpDefenderHpFill" style="width:100%"></div></div>
                 <div class="pvp-hp-txt" id="pvpDefenderHpText">0/0</div>
             </div>

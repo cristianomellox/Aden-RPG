@@ -1,5 +1,60 @@
 import { supabase } from './supabaseClient.js';
 
+// ═══════════════════════════════════════════════════════════════════
+// SKIN HELPERS — Molduras de avatar (Ruínas PvP)
+// Cache compartilhado: skin_modal_v1_${pid} (24h)
+// ═══════════════════════════════════════════════════════════════════
+
+function _rnGetSkinCache(pid) {
+    try {
+        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
+        if (!raw) return undefined;
+        const obj = JSON.parse(raw);
+        if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return undefined; }
+        return obj.v;
+    } catch(e) { return undefined; }
+}
+
+function _rnSetSkinCache(pid, data) {
+    try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+function _rnApplyFrame(containerEl, frameUrl) {
+    if (!containerEl) return;
+    const frameImg  = containerEl.querySelector('.ruins-frame-overlay');
+    const sheenEl   = containerEl.querySelector('.ruins-frame-sheen');
+    const avatarImg = containerEl.querySelector('.combat-avatar');
+    if (!frameImg || !sheenEl) return;
+    if (frameUrl) {
+        frameImg.src           = frameUrl;
+        frameImg.style.display = 'block';
+        if (avatarImg) avatarImg.style.border = 'none';
+        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+        sheenEl.style.maskImage       = `url('${frameUrl}')`;
+        sheenEl.style.display         = 'block';
+    } else {
+        frameImg.src           = '';
+        frameImg.style.display = 'none';
+        sheenEl.style.display  = 'none';
+        if (avatarImg) avatarImg.style.border = '3px solid #555';
+    }
+}
+
+async function _rnFetchAndApplyFrame(pid, containerEl) {
+    if (!pid || !containerEl) return;
+    const cached = _rnGetSkinCache(pid);
+    if (cached !== undefined) { _rnApplyFrame(containerEl, cached.frame_url || null); return; }
+    try {
+        const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
+        if (error) { _rnApplyFrame(containerEl, null); return; }
+        const frameUrl = data?.frame_url || null;
+        const videoUrl = data?.video_url || null;
+        _rnSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
+        _rnApplyFrame(containerEl, frameUrl);
+    } catch(e) { _rnApplyFrame(containerEl, null); }
+}
+
+
 const GLOBAL_DB_NAME    = 'aden_global_db';
 const GLOBAL_DB_VERSION = 6;
 const OWNERS_STORE      = 'owners_store';
@@ -1008,14 +1063,28 @@ async function runCombatSequence(data, finalMessage) {
     els.combatMyName.textContent = state.myPlayer.name || "Eu";
     els.combatMyClass.textContent = getClassName(state.myPlayer.class_id);
 
+    // Aplica moldura do próprio jogador
+    const _rnMyContainer  = document.getElementById('ruinsMyAvatarContainer');
+    const _rnOppContainer = document.getElementById('ruinsOppAvatarContainer');
+    _rnApplyFrame(_rnMyContainer,  null); // reset
+    _rnApplyFrame(_rnOppContainer, null); // reset
+    if (state.playerId && _rnMyContainer)
+        _rnFetchAndApplyFrame(state.playerId, _rnMyContainer);
+
     if (data.combat_type === 'pve') {
         oppAvatar.src = "https://aden-rpg.pages.dev/assets/monstromina1.webp";
         els.combatOppName.textContent = "Monstro";
         els.combatOppClass.textContent = "Criatura";
+        // PvE: sem moldura no monstro
     }
     else {
         oppAvatar.src = data.opponent_avatar || "https://aden-rpg.pages.dev/avatar01.webp";
         els.combatOppName.textContent = data.opponent_name || "Inimigo";
+        // Busca ID do oponente no participantCache pelo nome
+        if (_rnOppContainer && data.opponent_name) {
+            const oppEntry = Object.values(state.participantCache).find(p => p.name === data.opponent_name);
+            if (oppEntry && oppEntry.id) _rnFetchAndApplyFrame(oppEntry.id, _rnOppContainer);
+        }
 
         // Bug 1 fix: se opponent_class vier vazio/nulo do servidor, busca no cache de participantes pelo nome
         let resolvedClass = data.opponent_class;

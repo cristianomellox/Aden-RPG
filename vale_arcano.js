@@ -60,9 +60,11 @@ async function _huntFetchAndApplyFrame(pid, containerEl, defaultBorder) {
 // Creates a frame wrapper around an avatar img element (for spot avatars created in JS)
 function _huntWrapAvatar(imgEl, frameClass, sheenClass, frameSize, frameTop) {
     if (!imgEl || imgEl.parentElement?.classList.contains('hunt-spot-avatar-wrapper')) return imgEl.parentElement;
+    // Wrapper tem o tamanho do AVATAR (60px), não do frame — evita afetar o wander layout
+    const avatarSize = parseInt(imgEl.style.width) || imgEl.width || 60;
     const wrapper = document.createElement('div');
     wrapper.className = 'hunt-spot-avatar-wrapper';
-    wrapper.style.cssText = `position:relative;width:${frameSize}px;height:${frameSize}px;display:flex;align-items:center;justify-content:center;`;
+    wrapper.style.cssText = `position:relative;width:${avatarSize}px;height:${avatarSize}px;overflow:visible;flex-shrink:0;`;
     imgEl.parentElement.insertBefore(wrapper, imgEl);
     wrapper.appendChild(imgEl);
     const frameImg = document.createElement('img');
@@ -73,8 +75,6 @@ function _huntWrapAvatar(imgEl, frameClass, sheenClass, frameSize, frameTop) {
     const sheenDiv = document.createElement('div');
     sheenDiv.className = sheenClass;
     sheenDiv.style.cssText = `position:absolute;top:${frameTop}px;left:50%;transform:translateX(-50%);width:${frameSize}px;height:${frameSize}px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;`;
-    // Add sheen keyframe animation via inline
-    sheenDiv.style.setProperty('--sheen-anim', '_huntfs');
     wrapper.appendChild(frameImg);
     wrapper.appendChild(sheenDiv);
     return wrapper;

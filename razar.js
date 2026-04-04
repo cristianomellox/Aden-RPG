@@ -2,11 +2,11 @@ import { supabase } from './supabaseClient.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
+// Usa position:absolute nos containers EXISTENTES — sem alterar DOM.
 // Cache compartilhado: skin_modal_v1_${pid} (24h)
 //
-// Dimensões calculadas (ratio inventário = 1.95):
-//   Spot avatars: 60px imagem + 3px×2 borda → frame 117px, top −29px
-//   PvP avatars:  70px imagem + 3px×2 borda → frame 137px, top −34px
+// Spot: frame 117px, bottom:-29px relativo ao wrap (avatar é último filho)
+// PvP:  frame 137px, top lido via offsetTop após layout (rAF)
 // ══════════════════════════════════════════════════════════════════════
 
 function _huntGetSkinCache(pid) {
@@ -22,63 +22,87 @@ function _huntSetSkinCache(pid, data) {
     try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
 }
 
-function _huntApplyFrame(containerEl, frameUrl, defaultBorder) {
-    if (!containerEl) return;
-    const frameImg  = containerEl.querySelector('.hunt-pvp-frame-overlay, .hunt-spot-frame-overlay');
-    const sheenEl   = containerEl.querySelector('.hunt-pvp-frame-sheen, .hunt-spot-frame-sheen');
-    const avatarImg = containerEl.querySelector('img:not([class*="frame"])');
-    if (!frameImg || !sheenEl) return;
+// Appends frame+sheen to an existing container (position:absolute, bottom-anchored).
+// Used for spot avatars where the avatar is the last flex child of wrap.
+function _huntAddSpotFrame(wrapEl) {
+    // Remove any existing frame (re-render)
+    wrapEl.querySelectorAll('.h-sf-overlay, .h-sf-sheen').forEach(e => e.remove());
+    const fr = document.createElement('img');
+    fr.className = 'h-sf-overlay';
+    fr.src = ''; fr.alt = '';
+    fr.style.cssText = 'position:absolute;bottom:-29px;left:50%;transform:translateX(-50%);width:117px;height:117px;pointer-events:none;z-index:20;object-fit:contain;display:none;';
+    const sh = document.createElement('div');
+    sh.className = 'h-sf-sheen';
+    sh.style.cssText = 'position:absolute;bottom:-29px;left:50%;transform:translateX(-50%);width:117px;height:117px;pointer-events:none;z-index:21;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;';
+    wrapEl.appendChild(fr);
+    wrapEl.appendChild(sh);
+    return { fr, sh };
+}
+
+// Appends frame+sheen to a pvp-fighter side (position:relative).
+// Positions them after layout via requestAnimationFrame.
+function _huntAddPvpFrame(sideEl, avatarEl) {
+    sideEl.querySelectorAll('.h-pf-overlay, .h-pf-sheen').forEach(e => e.remove());
+    const fr = document.createElement('img');
+    fr.className = 'h-pf-overlay';
+    fr.src = ''; fr.alt = '';
+    fr.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);width:137px;height:137px;pointer-events:none;z-index:20;object-fit:contain;display:none;top:0;';
+    const sh = document.createElement('div');
+    sh.className = 'h-pf-sheen';
+    sh.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);width:137px;height:137px;pointer-events:none;z-index:21;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;top:0;';
+    sideEl.appendChild(fr);
+    sideEl.appendChild(sh);
+    // Read actual offsetTop of avatar after layout
+    requestAnimationFrame(() => {
+        if (!avatarEl) return;
+        const t = avatarEl.offsetTop - 33.5; // (137-70)/2 = 33.5
+        fr.style.top = t + 'px';
+        sh.style.top = t + 'px';
+    });
+    return { fr, sh };
+}
+
+function _huntApplyFrameToElements(fr, sh, frameUrl, defaultBorderEl, defaultBorder) {
+    if (!fr || !sh) return;
     if (frameUrl) {
-        frameImg.src           = frameUrl;
-        frameImg.style.display = 'block';
-        if (avatarImg) avatarImg.style.border = 'none';
-        sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
-        sheenEl.style.maskImage       = `url('${frameUrl}')`;
-        sheenEl.style.display         = 'block';
+        fr.src = frameUrl; fr.style.display = 'block';
+        if (defaultBorderEl) defaultBorderEl.style.border = 'none';
+        sh.style.webkitMaskImage = `url('${frameUrl}')`;
+        sh.style.maskImage       = `url('${frameUrl}')`;
+        sh.style.display = 'block';
     } else {
-        frameImg.src           = '';
-        frameImg.style.display = 'none';
-        sheenEl.style.display  = 'none';
-        if (avatarImg && defaultBorder) avatarImg.style.border = defaultBorder;
+        fr.src = ''; fr.style.display = 'none';
+        sh.style.display = 'none';
+        if (defaultBorderEl && defaultBorder) defaultBorderEl.style.border = defaultBorder;
     }
 }
 
-async function _huntFetchAndApplyFrame(pid, containerEl, defaultBorder) {
-    if (!pid || !containerEl) return;
+async function _huntFetchFrame(pid, fr, sh, avatarEl, defaultBorder) {
+    if (!pid) return;
+    const apply = (frameUrl) => _huntApplyFrameToElements(fr, sh, frameUrl, avatarEl, defaultBorder);
     const cached = _huntGetSkinCache(pid);
-    if (cached !== undefined) { _huntApplyFrame(containerEl, cached.frame_url || null, defaultBorder); return; }
+    if (cached !== undefined) { apply(cached.frame_url || null); return; }
     try {
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
-        if (error) { _huntApplyFrame(containerEl, null, defaultBorder); return; }
-        const frameUrl = data?.frame_url || null;
-        const videoUrl = data?.video_url || null;
-        _huntSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
-        _huntApplyFrame(containerEl, frameUrl, defaultBorder);
-    } catch(e) { _huntApplyFrame(containerEl, null, defaultBorder); }
+        if (error) { apply(null); return; }
+        _huntSetSkinCache(pid, { frame_url: data?.frame_url || null, video_url: data?.video_url || null });
+        apply(data?.frame_url || null);
+    } catch(e) { apply(null); }
 }
 
-// Creates a frame wrapper around an avatar img element (for spot avatars created in JS)
-function _huntWrapAvatar(imgEl, frameClass, sheenClass, frameSize, frameTop) {
-    if (!imgEl || imgEl.parentElement?.classList.contains('hunt-spot-avatar-wrapper')) return imgEl.parentElement;
-    // Wrapper tem o tamanho do AVATAR (60px), não do frame — evita afetar o wander layout
-    const avatarSize = parseInt(imgEl.style.width) || imgEl.width || 60;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'hunt-spot-avatar-wrapper';
-    wrapper.style.cssText = `position:relative;width:${avatarSize}px;height:${avatarSize}px;overflow:visible;flex-shrink:0;`;
-    imgEl.parentElement.insertBefore(wrapper, imgEl);
-    wrapper.appendChild(imgEl);
-    const frameImg = document.createElement('img');
-    frameImg.className = frameClass;
-    frameImg.src = '';
-    frameImg.alt = '';
-    frameImg.style.cssText = `position:absolute;top:${frameTop}px;left:50%;transform:translateX(-50%);width:${frameSize}px;height:${frameSize}px;pointer-events:none;z-index:2;object-fit:contain;display:none;`;
-    const sheenDiv = document.createElement('div');
-    sheenDiv.className = sheenClass;
-    sheenDiv.style.cssText = `position:absolute;top:${frameTop}px;left:50%;transform:translateX(-50%);width:${frameSize}px;height:${frameSize}px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;`;
-    wrapper.appendChild(frameImg);
-    wrapper.appendChild(sheenDiv);
-    return wrapper;
-}
+// Sheen animation (injected once)
+(function(){
+    if (document.getElementById('_hunt-sheen-style')) return;
+    const s = document.createElement('style');
+    s.id = '_hunt-sheen-style';
+    s.textContent = `
+        .h-sf-sheen::after,.h-pf-sheen::after{content:'';position:absolute;top:-20%;left:-130%;width:55%;height:140%;
+        background:linear-gradient(108deg,transparent 0%,rgba(255,255,255,.04) 28%,rgba(255,255,255,.18) 42%,rgba(255,255,255,.52) 50%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.04) 72%,transparent 100%);
+        animation:_huntfs 6s ease-in-out infinite;}
+        @keyframes _huntfs{0%{left:-130%;opacity:0}2%{opacity:1}98%{left:155%;opacity:1}99%{opacity:0;left:155%}100%{left:155%;opacity:0}}
+    `;
+    document.head.appendChild(s);
+})();
 
 
 // ═══════════════════════════════════════════════════════════
@@ -914,9 +938,9 @@ function renderPlayerOnSpot(spotId){
         wrap.appendChild(gb);
     }
     const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
-    // Moldura do próprio jogador no spot
-    const _mySkinContainer = _huntWrapAvatar(av, 'hunt-spot-frame-overlay', 'hunt-spot-frame-sheen', 117, -29);
-    if(userId) _huntFetchAndApplyFrame(userId, _mySkinContainer, '3px solid #fc0');
+    // Moldura próprio jogador — appended after av, bottom-anchored
+    const {fr:_sFr,sh:_sSh}=_huntAddSpotFrame(wrap);
+    if(userId) _huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');
     spotEl.appendChild(wrap);
     if(spot)startWander(wrap,spot.width,spot.height,800);
 }
@@ -991,11 +1015,9 @@ function renderOtherPlayers(players){
         av.src=displayAvatar;
         av.onerror=()=>{av.src=DEFAULT_AVATAR;};
         wrap.appendChild(av);
-        // Moldura: wraps avatar into container and applies skin frame
-        const _oContainer = _huntWrapAvatar(av, 'hunt-spot-frame-overlay', 'hunt-spot-frame-sheen', 117, -29);
-        if(!p.is_eliminated && !isDead && p.id) {
-            _huntFetchAndApplyFrame(p.id, _oContainer, '3px solid #48f');
-        }
+        // Moldura outros jogadores — appended after av, bottom-anchored
+        const {fr:_oFr,sh:_oSh}=_huntAddSpotFrame(wrap);
+        if(!p.is_eliminated&&!isDead&&p.id) _huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');
 
         if(p.is_eliminated){
             // Eliminado permanentemente hoje
@@ -1559,13 +1581,11 @@ async function runPvpAnimation(data) {
     defAv.src    = data.defender_avatar || DEFAULT_AVATAR;
     atkAv.onerror = () => { atkAv.src = DEFAULT_AVATAR; };
     defAv.onerror = () => { defAv.src = DEFAULT_AVATAR; };
-    // Aplica molduras PvP
-    const _atkContainer = document.getElementById('pvpAttackerAvatarContainer');
-    const _defContainer = document.getElementById('pvpDefenderAvatarContainer');
-    _huntApplyFrame(_atkContainer, null, '3px solid #85a'); // reset
-    _huntApplyFrame(_defContainer, null, '3px solid #85a'); // reset
-    if (atkId) _huntFetchAndApplyFrame(atkId, _atkContainer, '3px solid #85a');
-    if (defId) _huntFetchAndApplyFrame(defId, _defContainer, '3px solid #85a');
+    // Molduras PvP — appended to pvp-fighter sides, positioned via rAF
+    const {fr:_apFr,sh:_apSh}=_huntAddPvpFrame(atkSide,atkAv);
+    const {fr:_dpFr,sh:_dpSh}=_huntAddPvpFrame(defSide,defAv);
+    if(atkId) _huntFetchFrame(atkId,_apFr,_apSh,atkAv,'2px solid rgba(160,80,255,0.75)');
+    if(defId) _huntFetchFrame(defId,_dpFr,_dpSh,defAv,'2px solid rgba(160,80,255,0.75)');
 
     const atkFill = document.getElementById('pvpAttackerHpFill');
     const defFill = document.getElementById('pvpDefenderHpFill');

@@ -505,16 +505,14 @@ p {
 /* NOVO: Estilos para o avatar do dono da mina */
 .mine-owner-container {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 15px;
   margin-top: 10px;
   color: white;
   font-weight: bold;
   background: rgba(0,0,0,0.4);
   border-radius: 8px;
-  padding: 8px 0;
 }
 
 .owner-avatar {
@@ -913,7 +911,9 @@ p {
    Proporção calculada a partir do inventário:
      avatar 100px + borda 3px×2 = 106px, frame = 195px → ratio 1.8396
      Owner card: 80px img + 2px×2 borda = 84px  → frame 155px (top -4px)
-     PvP avatar:  80px img + 3px×2 borda = 86px  → frame 158px (top -4px)
+     PvP avatar:  80px img + 3px×2 borda = 86px  → frame 156px
+
+   PvP frame: top = (containerPx - framePx) / 2 = (80 - 156) / 2 = -38px
    ═══════════════════════════════════════════════════════ */
 
 /* ── Wrapper do avatar do dono na mine-card ─────────────── */
@@ -927,13 +927,11 @@ p {
     flex-shrink: 0;
 }
 
-/* Mantém o tamanho original do avatar (não altera nada existente) */
 .mine-owner-avatar-wrapper .owner-avatar {
     width: 80px;
     height: 80px;
 }
 
-/* Moldura sobreposta — owner card */
 .mine-frame-overlay {
     position: absolute;
     top: -4px;
@@ -946,7 +944,6 @@ p {
     display: none;
 }
 
-/* Sheen — owner card */
 .mine-frame-sheen {
     position: absolute;
     top: -4px;
@@ -985,12 +982,6 @@ p {
 
 /* ── PvP: avatar-container já existe com position:relative ─ */
 
-/* Moldura sobreposta — PvP
-   Avatar PvP: container 80px, imagem 80px (100% do container)
-   Ratio inventário: frame 195px / imagem 100px = 1.95
-   Frame PvP: 80 × 1.95 = 156px
-   Centralização vertical: top = (80 - 156) / 2 = -38px
-   → Para ajustar tamanho: mude width/height e recalcule top = (80 - novoTamanho) / 2 */
 .pvp-frame-overlay {
     position: absolute;
     top: -38px;
@@ -1004,7 +995,6 @@ p {
     display: none;
 }
 
-/* Sheen — PvP (mesmas dimensões que pvp-frame-overlay) */
 .pvp-frame-sheen {
     position: absolute;
     top: -38px;
@@ -1033,4 +1023,15 @@ p {
         rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
         rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
     animation: _minefs 6s ease-in-out infinite;
+}
+
+/* ── Espaçamento PvP — escopado ao modal para não afetar mine cards ──
+   Frame se estende 38px acima/abaixo do avatar-container (80px).
+   44px = 38px + 6px de folga visual.
+   Para ajustar: mude os valores abaixo. ─────────────────────────── */
+#pvpCombatModal .player-name-pvp {
+    margin-bottom: 44px;
+}
+#pvpCombatModal .player-hp-bar {
+    margin-top: 44px;
 }

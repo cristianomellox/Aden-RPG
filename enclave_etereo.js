@@ -2,11 +2,17 @@ import { supabase } from './supabaseClient.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
-// Usa position:absolute nos containers EXISTENTES — sem alterar DOM.
-// Cache compartilhado: skin_modal_v1_${pid} (24h)
+// Sem alteração de DOM — frame/sheen são position:absolute adicionados
+// ao wrap/side EXISTENTE, sem wrapper extra.
+// Cache: skin_modal_v1_${pid} (24h), compartilhado com outras páginas.
 //
-// Spot: frame 117px, bottom:-29px relativo ao wrap (avatar é último filho)
-// PvP:  frame 137px, top lido via offsetTop após layout (rAF)
+// Spot avatars (60px + 3px×2 borda):
+//   Frame = 117px. Posicionado via rAF lendo av.offsetTop dentro do wrap.
+//   top = av.offsetTop - (117-60)/2 = av.offsetTop - 28.5
+//
+// PvP avatars (70px + 3px×2 borda):
+//   Frame = 137px. Posicionado via rAF lendo atkAv/defAv.offsetTop dentro do side.
+//   top = av.offsetTop - (137-70)/2 = av.offsetTop - 33.5
 // ══════════════════════════════════════════════════════════════════════
 
 function _huntGetSkinCache(pid) {
@@ -22,64 +28,46 @@ function _huntSetSkinCache(pid, data) {
     try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
 }
 
-// Appends frame+sheen to an existing container (position:absolute, bottom-anchored).
-// Used for spot avatars where the avatar is the last flex child of wrap.
-function _huntAddSpotFrame(wrapEl) {
-    // Remove any existing frame (re-render)
-    wrapEl.querySelectorAll('.h-sf-overlay, .h-sf-sheen').forEach(e => e.remove());
+// Appends a frame overlay + sheen to parentEl (position:relative expected).
+// Uses rAF to read avatarEl.offsetTop and position the frame centred on the avatar.
+function _huntAddFrame(parentEl, avatarEl, frameW, avatarPx) {
+    parentEl.querySelectorAll('.h-frame-ol, .h-frame-sh').forEach(e => e.remove());
     const fr = document.createElement('img');
-    fr.className = 'h-sf-overlay';
-    fr.src = ''; fr.alt = '';
-    fr.style.cssText = 'position:absolute;bottom:-29px;left:50%;transform:translateX(-50%);width:117px;height:117px;pointer-events:none;z-index:20;object-fit:contain;display:none;';
+    fr.className = 'h-frame-ol'; fr.src = ''; fr.alt = '';
+    fr.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:20;object-fit:contain;display:none;top:0;`;
     const sh = document.createElement('div');
-    sh.className = 'h-sf-sheen';
-    sh.style.cssText = 'position:absolute;bottom:-29px;left:50%;transform:translateX(-50%);width:117px;height:117px;pointer-events:none;z-index:21;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;';
-    wrapEl.appendChild(fr);
-    wrapEl.appendChild(sh);
-    return { fr, sh };
-}
-
-// Appends frame+sheen to a pvp-fighter side (position:relative).
-// Positions them after layout via requestAnimationFrame.
-function _huntAddPvpFrame(sideEl, avatarEl) {
-    sideEl.querySelectorAll('.h-pf-overlay, .h-pf-sheen').forEach(e => e.remove());
-    const fr = document.createElement('img');
-    fr.className = 'h-pf-overlay';
-    fr.src = ''; fr.alt = '';
-    fr.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);width:137px;height:137px;pointer-events:none;z-index:20;object-fit:contain;display:none;top:0;';
-    const sh = document.createElement('div');
-    sh.className = 'h-pf-sheen';
-    sh.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);width:137px;height:137px;pointer-events:none;z-index:21;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;top:0;';
-    sideEl.appendChild(fr);
-    sideEl.appendChild(sh);
-    // Read actual offsetTop of avatar after layout
+    sh.className = 'h-frame-sh';
+    sh.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:21;display:none;top:0;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;`;
+    parentEl.appendChild(fr);
+    parentEl.appendChild(sh);
+    // After layout, centre frame on the avatar by reading its actual offsetTop
     requestAnimationFrame(() => {
-        if (!avatarEl) return;
-        const t = avatarEl.offsetTop - 33.5; // (137-70)/2 = 33.5
+        if (!avatarEl || !fr.isConnected) return;
+        const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2);
         fr.style.top = t + 'px';
         sh.style.top = t + 'px';
     });
     return { fr, sh };
 }
 
-function _huntApplyFrameToElements(fr, sh, frameUrl, defaultBorderEl, defaultBorder) {
+function _huntApplyFrame(fr, sh, frameUrl, avatarEl, defaultBorder) {
     if (!fr || !sh) return;
     if (frameUrl) {
         fr.src = frameUrl; fr.style.display = 'block';
-        if (defaultBorderEl) defaultBorderEl.style.border = 'none';
+        if (avatarEl) avatarEl.style.border = 'none';
         sh.style.webkitMaskImage = `url('${frameUrl}')`;
         sh.style.maskImage       = `url('${frameUrl}')`;
         sh.style.display = 'block';
     } else {
         fr.src = ''; fr.style.display = 'none';
         sh.style.display = 'none';
-        if (defaultBorderEl && defaultBorder) defaultBorderEl.style.border = defaultBorder;
+        if (avatarEl && defaultBorder) avatarEl.style.border = defaultBorder;
     }
 }
 
 async function _huntFetchFrame(pid, fr, sh, avatarEl, defaultBorder) {
     if (!pid) return;
-    const apply = (frameUrl) => _huntApplyFrameToElements(fr, sh, frameUrl, avatarEl, defaultBorder);
+    const apply = url => _huntApplyFrame(fr, sh, url, avatarEl, defaultBorder);
     const cached = _huntGetSkinCache(pid);
     if (cached !== undefined) { apply(cached.frame_url || null); return; }
     try {
@@ -90,17 +78,11 @@ async function _huntFetchFrame(pid, fr, sh, avatarEl, defaultBorder) {
     } catch(e) { apply(null); }
 }
 
-// Sheen animation (injected once)
+// Sheen keyframe (injected once per page)
 (function(){
     if (document.getElementById('_hunt-sheen-style')) return;
-    const s = document.createElement('style');
-    s.id = '_hunt-sheen-style';
-    s.textContent = `
-        .h-sf-sheen::after,.h-pf-sheen::after{content:'';position:absolute;top:-20%;left:-130%;width:55%;height:140%;
-        background:linear-gradient(108deg,transparent 0%,rgba(255,255,255,.04) 28%,rgba(255,255,255,.18) 42%,rgba(255,255,255,.52) 50%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.04) 72%,transparent 100%);
-        animation:_huntfs 6s ease-in-out infinite;}
-        @keyframes _huntfs{0%{left:-130%;opacity:0}2%{opacity:1}98%{left:155%;opacity:1}99%{opacity:0;left:155%}100%{left:155%;opacity:0}}
-    `;
+    const s = document.createElement('style'); s.id = '_hunt-sheen-style';
+    s.textContent = `.h-frame-sh::after{content:'';position:absolute;top:-20%;left:-130%;width:55%;height:140%;background:linear-gradient(108deg,transparent 0%,rgba(255,255,255,.04) 28%,rgba(255,255,255,.18) 42%,rgba(255,255,255,.52) 50%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.04) 72%,transparent 100%);animation:_huntfs 6s ease-in-out infinite;}@keyframes _huntfs{0%{left:-130%;opacity:0}2%{opacity:1}98%{left:155%;opacity:1}99%{opacity:0;left:155%}100%{left:155%;opacity:0}}`;
     document.head.appendChild(s);
 })();
 
@@ -936,10 +918,10 @@ function renderPlayerOnSpot(spotId){
         wrap.appendChild(gb);
     }
     const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
-    // Moldura próprio jogador — appended after av, bottom-anchored
-    const {fr:_sFr,sh:_sSh}=_huntAddSpotFrame(wrap);
-    if(userId) _huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');
     spotEl.appendChild(wrap);
+    // Moldura do próprio jogador (frame centrado no av via rAF)
+    if(userId){const{fr:_sFr,sh:_sSh}=_huntAddFrame(wrap,av,117,60);_huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');}
+
     if(spot)startWander(wrap,spot.width,spot.height,800);
 }
 function removePlayerFromSpot(){stopCombatLoop();document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
@@ -1013,9 +995,8 @@ function renderOtherPlayers(players){
         av.src=displayAvatar;
         av.onerror=()=>{av.src=DEFAULT_AVATAR;};
         wrap.appendChild(av);
-        // Moldura outros jogadores — appended after av, bottom-anchored
-        const {fr:_oFr,sh:_oSh}=_huntAddSpotFrame(wrap);
-        if(!p.is_eliminated&&!isDead&&p.id) _huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');
+        // Moldura outros jogadores
+        if(!p.is_eliminated&&!isDead&&p.id){const{fr:_oFr,sh:_oSh}=_huntAddFrame(wrap,av,117,60);_huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');}
 
         if(p.is_eliminated){
             // Eliminado permanentemente hoje
@@ -1579,11 +1560,6 @@ async function runPvpAnimation(data) {
     defAv.src    = data.defender_avatar || DEFAULT_AVATAR;
     atkAv.onerror = () => { atkAv.src = DEFAULT_AVATAR; };
     defAv.onerror = () => { defAv.src = DEFAULT_AVATAR; };
-    // Molduras PvP — appended to pvp-fighter sides, positioned via rAF
-    const {fr:_apFr,sh:_apSh}=_huntAddPvpFrame(atkSide,atkAv);
-    const {fr:_dpFr,sh:_dpSh}=_huntAddPvpFrame(defSide,defAv);
-    if(atkId) _huntFetchFrame(atkId,_apFr,_apSh,atkAv,'2px solid rgba(160,80,255,0.75)');
-    if(defId) _huntFetchFrame(defId,_dpFr,_dpSh,defAv,'2px solid rgba(160,80,255,0.75)');
 
     const atkFill = document.getElementById('pvpAttackerHpFill');
     const defFill = document.getElementById('pvpDefenderHpFill');
@@ -1594,6 +1570,12 @@ async function runPvpAnimation(data) {
     const cntdn   = document.getElementById('pvpCountdown');
     const atkId   = combat.attacker_id;
     const defId   = combat.defender_id;
+
+    // Molduras PvP — inseridas APÓS atkId/defId declarados
+    const{fr:_apFr,sh:_apSh}=_huntAddFrame(atkSide,atkAv,137,70);
+    const{fr:_dpFr,sh:_dpSh}=_huntAddFrame(defSide,defAv,137,70);
+    if(atkId)_huntFetchFrame(atkId,_apFr,_apSh,atkAv,'2px solid rgba(160,80,255,0.75)');
+    if(defId)_huntFetchFrame(defId,_dpFr,_dpSh,defAv,'2px solid rgba(160,80,255,0.75)');
 
     // ── FIX: Move texto do HP para dentro da barra ──────────────
     const atkBg = atkFill.parentElement;

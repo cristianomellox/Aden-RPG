@@ -505,9 +505,10 @@ p {
 /* NOVO: Estilos para o avatar do dono da mina */
 .mine-owner-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 15px;
+  gap: 6px;
   margin-top: 10px;
   color: white;
   font-weight: bold;

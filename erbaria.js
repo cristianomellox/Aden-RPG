@@ -5,14 +5,12 @@ import { supabase } from './supabaseClient.js';
 // Sem alterar DOM. Frame/sheen = position:absolute adicionados ao
 // container existente. Cache: skin_modal_v1_${pid} (24h).
 //
-// Spot avatars (60px img + 3px×2 borda):
-//   Frame = 117px.  Posição via rAF após spot estar visível.
-//   top = av.offsetTop - (117-60)/2 = av.offsetTop - 28.5
+// Spot avatars: 60px CSS + 3px×2 borda → Frame 117px
+//   Posição via rAF: av.offsetTop - (117-60)/2
 //
-// PvP avatars (70px img + 3px×2 borda):
-//   Frame = 137px.  Criado em _huntAddFrame, POSICIONADO em
-//   _huntPositionFrame() chamada após modal.style.display='flex'
-//   + void offsetWidth (forced reflow). Nunca usa rAF.
+// PvP avatars: 90px RENDERIZADO (epic styles força !important) + 2px×2 borda
+//   Frame = 90 × 1.95 = 175px
+//   Posição via getBoundingClientRect (independe de position:relative)
 // ══════════════════════════════════════════════════════════════════════
 
 function _huntGetSkinCache(pid) {
@@ -28,10 +26,9 @@ function _huntSetSkinCache(pid, data) {
     try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
 }
 
-// Creates frame + sheen elements inside parentEl (must have position:relative).
-// Does NOT set top yet — caller must call _huntPositionFrame after layout.
+// Creates frame + sheen inside parentEl. Sets top=0 initially.
 function _huntAddFrame(parentEl, frameW) {
-    parentEl.querySelectorAll('.h-frame-ol, .h-frame-sh').forEach(e => e.remove());
+    parentEl.querySelectorAll('.h-frame-ol,.h-frame-sh').forEach(e => e.remove());
     const fr = document.createElement('img');
     fr.className = 'h-frame-ol'; fr.src = ''; fr.alt = '';
     fr.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:20;object-fit:contain;display:none;top:0;`;
@@ -43,10 +40,23 @@ function _huntAddFrame(parentEl, frameW) {
     return { fr, sh };
 }
 
-// Reads avatarEl.offsetTop (requires parent visible + layout done) and sets top.
-function _huntPositionFrame(fr, sh, avatarEl, frameW, avatarPx) {
+// Positions frame centred on avatarEl using offsetTop (for spot avatars in visible DOM).
+function _huntPositionFrameOffset(fr, sh, avatarEl, frameW, avatarPx) {
     if (!fr || !sh || !avatarEl || !fr.isConnected) return;
     const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2);
+    fr.style.top = t + 'px';
+    sh.style.top = t + 'px';
+}
+
+// Positions frame centred on avatarEl using getBoundingClientRect.
+// Works even if parentEl doesn't have position:relative yet.
+// parentEl must have position:relative set by caller before this.
+function _huntPositionFrameRect(fr, sh, parentEl, avatarEl, frameW) {
+    if (!fr || !sh || !parentEl || !avatarEl || !fr.isConnected) return;
+    const pRect = parentEl.getBoundingClientRect();
+    const aRect = avatarEl.getBoundingClientRect();
+    const aCenter = aRect.top + aRect.height / 2 - pRect.top;
+    const t = Math.round(aCenter - frameW / 2);
     fr.style.top = t + 'px';
     sh.style.top = t + 'px';
 }
@@ -74,12 +84,11 @@ async function _huntFetchFrame(pid, fr, sh, avatarEl, defaultBorder) {
     try {
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
         if (error) { apply(null); return; }
-        _huntSetSkinCache(pid, { frame_url: data?.frame_url || null, video_url: data?.video_url || null });
+        _huntSetSkinCache(pid, { frame_url: data?.frame_url||null, video_url: data?.video_url||null });
         apply(data?.frame_url || null);
     } catch(e) { apply(null); }
 }
 
-// Sheen keyframe (injected once per page)
 (function(){
     if (document.getElementById('_hunt-sheen-style')) return;
     const s = document.createElement('style'); s.id = '_hunt-sheen-style';
@@ -918,12 +927,11 @@ function renderPlayerOnSpot(spotId){
         gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
         gb.textContent=esc(myGuildName);
         wrap.appendChild(gb);
-        gb.style.marginBottom='30px'; // espaço para moldura não cobrir guilda
-    } else { nm.style.marginBottom='30px'; } // sem guilda: margem no nome
+        gb.style.marginBottom='30px';
+    } else { nm.style.marginBottom='30px'; }
     const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
     spotEl.appendChild(wrap);
-    // Moldura próprio jogador — rAF após wrap estar no DOM (visível)
-    if(userId){const{fr:_sFr,sh:_sSh}=_huntAddFrame(wrap,117);requestAnimationFrame(()=>{_huntPositionFrame(_sFr,_sSh,av,117,60);});_huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');}
+    if(userId){const{fr:_sFr,sh:_sSh}=_huntAddFrame(wrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_sFr,_sSh,av,117,60);});_huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');}
     if(spot)startWander(wrap,spot.width,spot.height,800);
 }
 function removePlayerFromSpot(){stopCombatLoop();document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
@@ -988,8 +996,8 @@ function renderOtherPlayers(players){
             gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;';
             gb.textContent=esc(guildName);
             wrap.appendChild(gb);
-            gb.style.marginBottom='30px'; // espaço para moldura não cobrir guilda
-        } else { nm.style.marginBottom='30px'; } // sem guilda: margem no nome
+            gb.style.marginBottom='30px';
+        } else { nm.style.marginBottom='30px'; }
 
         // Avatar
         const av=document.createElement('img');
@@ -998,8 +1006,7 @@ function renderOtherPlayers(players){
         av.src=displayAvatar;
         av.onerror=()=>{av.src=DEFAULT_AVATAR;};
         wrap.appendChild(av);
-        // Moldura outros jogadores — rAF após wrap estar no DOM (visível)
-        if(!p.is_eliminated&&!isDead&&p.id){const{fr:_oFr,sh:_oSh}=_huntAddFrame(wrap,117);requestAnimationFrame(()=>{_huntPositionFrame(_oFr,_oSh,av,117,60);});_huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');}
+        if(!p.is_eliminated&&!isDead&&p.id){const{fr:_oFr,sh:_oSh}=_huntAddFrame(wrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_oFr,_oSh,av,117,60);});_huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');}
 
         if(p.is_eliminated){
             // Eliminado permanentemente hoje
@@ -1574,10 +1581,12 @@ async function runPvpAnimation(data) {
     const atkId   = combat.attacker_id;
     const defId   = combat.defender_id;
 
-    // Criar elementos de frame PvP — posicionamento via _huntPositionFrame
-    // após modal visível (veja abaixo, após void offsetWidth)
-    const{fr:_apFr,sh:_apSh}=_huntAddFrame(atkSide,137);
-    const{fr:_dpFr,sh:_dpSh}=_huntAddFrame(defSide,137);
+    // Cria frame PvP — tamanho 175px (avatar renderizado = 90px via epic-styles !important)
+    // position:relative forçado aqui para garantir posicionamento correto
+    atkSide.style.position = 'relative';
+    defSide.style.position = 'relative';
+    const{fr:_apFr,sh:_apSh}=_huntAddFrame(atkSide,175);
+    const{fr:_dpFr,sh:_dpSh}=_huntAddFrame(defSide,175);
     if(atkId)_huntFetchFrame(atkId,_apFr,_apSh,atkAv,'2px solid rgba(160,80,255,0.75)');
     if(defId)_huntFetchFrame(defId,_dpFr,_dpSh,defAv,'2px solid rgba(160,80,255,0.75)');
 
@@ -1632,9 +1641,9 @@ async function runPvpAnimation(data) {
     // ── Intro slide-in ─────────────────────────────────────────
     void atkSide.offsetWidth;
     void defSide.offsetWidth;
-    // Posiciona frames agora que modal está visível e layout foi calculado
-    _huntPositionFrame(_apFr,_apSh,atkAv,137,70);
-    _huntPositionFrame(_dpFr,_dpSh,defAv,137,70);
+    // Posiciona frames via getBoundingClientRect (layout já calculado, modal visível)
+    _huntPositionFrameRect(_apFr,_apSh,atkSide,atkAv,175);
+    _huntPositionFrameRect(_dpFr,_dpSh,defSide,defAv,175);
     atkSide.classList.add('pvp-intro');
     defSide.classList.add('pvp-intro');
 

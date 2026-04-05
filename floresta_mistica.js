@@ -2,15 +2,12 @@ import { supabase } from './supabaseClient.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
-// Sem alterar DOM. Frame/sheen = position:absolute adicionados ao
-// container existente. Cache: skin_modal_v1_${pid} (24h).
+// Cache: skin_modal_v1_${pid} (24h), compartilhado com outras páginas.
 //
-// Spot avatars: 60px CSS + 3px×2 borda → Frame 117px
-//   Posição via rAF: av.offsetTop - (117-60)/2
-//
-// PvP avatars: 90px RENDERIZADO (epic styles força !important) + 2px×2 borda
-//   Frame = 90 × 1.95 = 175px
-//   Posição via getBoundingClientRect (independe de position:relative)
+// IMPORTANTE: O seletor .pvp-fighter img { width:90px !important;
+// border-radius:50%; border:3px solid } das epic-styles captura TODOS
+// os <img> dentro de .pvp-fighter, incluindo nosso frame overlay.
+// Por isso o frame overlay usa <div> (não <img>) com background-image.
 // ══════════════════════════════════════════════════════════════════════
 
 function _huntGetSkinCache(pid) {
@@ -26,12 +23,14 @@ function _huntSetSkinCache(pid, data) {
     try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
 }
 
-// Creates frame + sheen inside parentEl. Sets top=0 initially.
+// Creates frame + sheen as DIVs (not img) inside parentEl.
+// Using <div> with background-image avoids .pvp-fighter img CSS rules.
+// parentEl must have position:relative.
 function _huntAddFrame(parentEl, frameW) {
     parentEl.querySelectorAll('.h-frame-ol,.h-frame-sh').forEach(e => e.remove());
-    const fr = document.createElement('img');
-    fr.className = 'h-frame-ol'; fr.src = ''; fr.alt = '';
-    fr.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:20;object-fit:contain;display:none;top:0;`;
+    const fr = document.createElement('div');
+    fr.className = 'h-frame-ol';
+    fr.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:20;background-size:contain;background-repeat:no-repeat;background-position:center;display:none;top:0;`;
     const sh = document.createElement('div');
     sh.className = 'h-frame-sh';
     sh.style.cssText = `position:absolute;left:50%;transform:translateX(-50%);width:${frameW}px;height:${frameW}px;pointer-events:none;z-index:21;display:none;top:0;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;`;
@@ -40,37 +39,37 @@ function _huntAddFrame(parentEl, frameW) {
     return { fr, sh };
 }
 
-// Positions frame centred on avatarEl using offsetTop (for spot avatars in visible DOM).
+// Positions frame centred on avatarEl using offsetTop (spot avatars in visible DOM).
 function _huntPositionFrameOffset(fr, sh, avatarEl, frameW, avatarPx) {
-    if (!fr || !sh || !avatarEl || !fr.isConnected) return;
+    if (!fr||!sh||!avatarEl||!fr.isConnected) return;
     const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2);
-    fr.style.top = t + 'px';
-    sh.style.top = t + 'px';
+    fr.style.top = t + 'px'; sh.style.top = t + 'px';
 }
 
-// Positions frame centred on avatarEl using getBoundingClientRect.
-// Works even if parentEl doesn't have position:relative yet.
-// parentEl must have position:relative set by caller before this.
+// Positions frame centred on avatarEl via getBoundingClientRect.
+// For PvP: modal is visible + forced reflow done when this is called.
 function _huntPositionFrameRect(fr, sh, parentEl, avatarEl, frameW) {
-    if (!fr || !sh || !parentEl || !avatarEl || !fr.isConnected) return;
+    if (!fr||!sh||!parentEl||!avatarEl||!fr.isConnected) return;
     const pRect = parentEl.getBoundingClientRect();
     const aRect = avatarEl.getBoundingClientRect();
     const aCenter = aRect.top + aRect.height / 2 - pRect.top;
     const t = Math.round(aCenter - frameW / 2);
-    fr.style.top = t + 'px';
-    sh.style.top = t + 'px';
+    fr.style.top = t + 'px'; sh.style.top = t + 'px';
 }
 
 function _huntApplyFrame(fr, sh, frameUrl, avatarEl, defaultBorder) {
-    if (!fr || !sh) return;
+    if (!fr||!sh) return;
     if (frameUrl) {
-        fr.src = frameUrl; fr.style.display = 'block';
+        // <div> uses background-image instead of src
+        fr.style.backgroundImage = `url('${frameUrl}')`;
+        fr.style.display = 'block';
         if (avatarEl) avatarEl.style.border = 'none';
         sh.style.webkitMaskImage = `url('${frameUrl}')`;
         sh.style.maskImage       = `url('${frameUrl}')`;
         sh.style.display = 'block';
     } else {
-        fr.src = ''; fr.style.display = 'none';
+        fr.style.backgroundImage = '';
+        fr.style.display = 'none';
         sh.style.display = 'none';
         if (avatarEl && defaultBorder) avatarEl.style.border = defaultBorder;
     }
@@ -1582,8 +1581,10 @@ async function runPvpAnimation(data) {
     const atkId   = combat.attacker_id;
     const defId   = combat.defender_id;
 
-    // Cria frame PvP — tamanho 175px (avatar renderizado = 90px via epic-styles !important)
-    // position:relative forçado aqui para garantir posicionamento correto
+    // Cria frames PvP como <div> (não <img>) para evitar que
+    // .pvp-fighter img { width:90px !important; border-radius:50% }
+    // sobreponha as dimensões e o shape do frame overlay.
+    // Frame = 90px avatar × 1.95 = 175px. Posicionado após reflow.
     atkSide.style.position = 'relative';
     defSide.style.position = 'relative';
     const{fr:_apFr,sh:_apSh}=_huntAddFrame(atkSide,175);
@@ -1642,7 +1643,6 @@ async function runPvpAnimation(data) {
     // ── Intro slide-in ─────────────────────────────────────────
     void atkSide.offsetWidth;
     void defSide.offsetWidth;
-    // Posiciona frames via getBoundingClientRect (layout já calculado, modal visível)
     _huntPositionFrameRect(_apFr,_apSh,atkSide,atkAv,175);
     _huntPositionFrameRect(_dpFr,_dpSh,defSide,defAv,175);
     atkSide.classList.add('pvp-intro');

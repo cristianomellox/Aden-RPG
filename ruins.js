@@ -1709,14 +1709,25 @@ async function runHeartbeat() {
     }
     
     if (data.relic_holder) {
+        const holderChanged = data.relic_holder !== state.relicHolderId;
+        const roomChanged   = data.relic_room_id != null && data.relic_room_id !== state.relicRoomId;
+
         state.relicHolderId = data.relic_holder;
+        state.relicRoomId   = data.relic_room_id ?? null;
+
         els.relicStatus.textContent = "Relíquia: TOMADA!";
         els.relicStatus.style.color = "silver";
-        if (data.relic_room_id) {
+
+        // Só loga quando o portador ou a sala realmente mudarem,
+        // evitando a repetição a cada heartbeat (bug: "Sala 26" em loop)
+        if (data.relic_room_id && (holderChanged || roomChanged)) {
             logEvent(`O Portador da Relíquia está na Sala ${data.relic_room_id}`, "relic");
         }
     } else {
-        state.relicHolderId = null;
+        if (state.relicHolderId !== null) {
+            state.relicHolderId = null;
+            state.relicRoomId   = null;
+        }
         els.relicStatus.textContent = "Relíquia: Livre";
         els.relicStatus.style.color = "gold";
     }

@@ -822,7 +822,7 @@ async function updateLocalInventoryState(args) {
     
     // Se estávamos vendo detalhes de um item que ainda existe, atualiza a modal
     if (selectedItem && allInventoryItems.find(i => i.id === selectedItem.id && i.quantity > 0)) {
-        showItemDetails(selectedItem);
+        await showItemDetails(selectedItem);
     } else {
         document.getElementById('itemDetailsModal').style.display = 'none';
     }
@@ -851,6 +851,8 @@ async function handleRefineMulti(item, selections, crystalCost) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
             showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
             
+            document.getElementById('refineFragmentModal').style.display = 'none';
+
             // ATUALIZAÇÃO LOCAL — todos os bônus vêm do servidor
             await updateLocalInventoryState({
                 updatedItemId: item.id,
@@ -994,7 +996,6 @@ async function handleEquipUnequip(item, isEquipped) {
         }
 
         showCustomAlert(isEquipped ? 'Item desequipado com sucesso.' : 'Item equipado com sucesso.');
-        document.getElementById('itemDetailsModal').style.display = 'none';
         
         // Determina slot para update visual
         let slot = item.equipped_slot;
@@ -1011,7 +1012,8 @@ async function handleEquipUnequip(item, isEquipped) {
         await updateLocalInventoryState({
             equipUpdate: { itemId: item.id, isEquipping: !isEquipped, slot: slot },
             newStats: data.player_stats // Recebe stats atualizados
-        }); 
+        });
+        document.getElementById('itemDetailsModal').style.display = 'none';
     } catch (err) {
         console.error('Erro geral ao equipar/desequipar:', err);
         showCustomAlert('Ocorreu um erro inesperado.');

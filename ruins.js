@@ -1263,10 +1263,12 @@ function animateHit(targetEl, dmg, isCrit) {
     const attackerSide = (targetEl === document.getElementById('combatMyAvatar')) ? oppSide : mySide;
     const isAttackerLeft = attackerSide && attackerSide.classList.contains('left');
     if (attackerSide) {
-        const attAv = attackerSide.querySelector('.combat-avatar');
-        if (attAv) {
-            attAv.style.animation = isAttackerLeft ? 'ru-lunge-l 0.46s ease-out' : 'ru-lunge-r 0.46s ease-out';
-            setTimeout(() => { attAv.style.animation = ''; }, 480);
+        // Anima o container inteiro para moldura acompanhar o avatar no lunge
+        const attContainer = attackerSide.querySelector('.ruins-avatar-container');
+        const attTarget = attContainer || attackerSide.querySelector('.combat-avatar');
+        if (attTarget) {
+            attTarget.style.animation = isAttackerLeft ? 'ru-lunge-l 0.46s ease-out' : 'ru-lunge-r 0.46s ease-out';
+            setTimeout(() => { attTarget.style.animation = ''; }, 480);
         }
     }
 

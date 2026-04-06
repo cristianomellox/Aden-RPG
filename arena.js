@@ -1752,14 +1752,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     function animateActorMove(element) {
         _injectArenaEpicStyles();
         const isLeft = element === challengerSide;
-        const av = element.querySelector('.player-avatar-pvp');
-        if (av) {
-            av.style.animation = isLeft ? 'ar-lunge-l 0.46s ease-out' : 'ar-lunge-r 0.46s ease-out';
-            setTimeout(() => { av.style.animation = ''; }, 480);
+        // Anima o avatar-container inteiro para que a moldura (frame overlay + sheen)
+        // acompanhe o movimento junto com o avatar.
+        const container = element.querySelector('.avatar-container');
+        if (container) {
+            container.style.animation = isLeft ? 'ar-lunge-l 0.46s ease-out' : 'ar-lunge-r 0.46s ease-out';
+            setTimeout(() => { container.style.animation = ''; }, 480);
         } else {
-            element.style.transition = 'transform 0.1s';
-            element.style.transform = 'scale(1.1) translateY(-10px)';
-            setTimeout(() => { element.style.transform = 'scale(1) translateY(0)'; }, 160);
+            const av = element.querySelector('.player-avatar-pvp');
+            if (av) {
+                av.style.animation = isLeft ? 'ar-lunge-l 0.46s ease-out' : 'ar-lunge-r 0.46s ease-out';
+                setTimeout(() => { av.style.animation = ''; }, 480);
+            } else {
+                element.style.transition = 'transform 0.1s';
+                element.style.transform = 'scale(1.1) translateY(-10px)';
+                setTimeout(() => { element.style.transform = 'scale(1) translateY(0)'; }, 160);
+            }
         }
     }
 

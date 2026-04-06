@@ -2163,6 +2163,9 @@ function formatTimeCombat(totalSeconds) {
             const tgtSide = isOwnerAtk ? challengerSide : defenderSide;
             const srcAv   = isOwnerAtk ? defenderAvatar : challengerAvatar;
             const tgtAv   = isOwnerAtk ? challengerAvatar : defenderAvatar;
+            // Containers para lunge/dodge — moldura acompanha o avatar
+            const srcContainer = isOwnerAtk ? defenderContainer : challengerContainer;
+            const tgtContainer = isOwnerAtk ? challengerContainer : defenderContainer;
 
             if (isOwnerAtk) {
                 challengerCurrentHp = Math.max(0, challengerCurrentHp - Number(turn.damage));
@@ -2173,15 +2176,17 @@ function formatTimeCombat(totalSeconds) {
             }
 
             if (turn.evaded) {
-              tgtAv.style.animation = isOwnerAtk ? 'pvp-dodge-r 0.4s ease-out' : 'pvp-dodge-l 0.4s ease-out';
-              setTimeout(() => { tgtAv.style.animation = ''; }, 420);
+              const _tgtC = tgtContainer || tgtAv;
+              _tgtC.style.animation = isOwnerAtk ? 'pvp-dodge-r 0.4s ease-out' : 'pvp-dodge-l 0.4s ease-out';
+              setTimeout(() => { _tgtC.style.animation = ''; }, 420);
               await new Promise(r => setTimeout(r, 200));
               _showPvpDmg(0, false, true, tgtSide);
               try { playSound('evade'); } catch(_) {}
             } else {
-              // Lunge
-              srcAv.style.animation = isOwnerAtk ? 'pvp-lunge-r 0.48s ease-out' : 'pvp-lunge-l 0.48s ease-out';
-              setTimeout(() => { srcAv.style.animation = ''; }, 480);
+              // Lunge — anima o container inteiro para moldura acompanhar
+              const _srcC = srcContainer || srcAv;
+              _srcC.style.animation = isOwnerAtk ? 'pvp-lunge-r 0.48s ease-out' : 'pvp-lunge-l 0.48s ease-out';
+              setTimeout(() => { _srcC.style.animation = ''; }, 480);
               await new Promise(r => setTimeout(r, 200));
               // Flash on target
               tgtAv.style.animation = turn.critical ? 'pvp-crit-f 0.55s ease-out' : 'pvp-hit-f 0.38s ease-out';

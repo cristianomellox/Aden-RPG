@@ -2,12 +2,8 @@ import { supabase } from './supabaseClient.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
-// Cache: skin_modal_v1_${pid} (24h), compartilhado com outras páginas.
-//
-// IMPORTANTE: O seletor .pvp-fighter img { width:90px !important;
-// border-radius:50%; border:3px solid } das epic-styles captura TODOS
-// os <img> dentro de .pvp-fighter, incluindo nosso frame overlay.
-// Por isso o frame overlay usa <div> (não <img>) com background-image.
+// Cache: skin_modal_v1_${pid} (24h).
+// Frame/sheen são <div> (não <img>) para evitar .pvp-fighter img rules.
 // ══════════════════════════════════════════════════════════════════════
 
 function _huntGetSkinCache(pid) {
@@ -23,9 +19,6 @@ function _huntSetSkinCache(pid, data) {
     try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
 }
 
-// Creates frame + sheen as DIVs (not img) inside parentEl.
-// Using <div> with background-image avoids .pvp-fighter img CSS rules.
-// parentEl must have position:relative.
 function _huntAddFrame(parentEl, frameW) {
     parentEl.querySelectorAll('.h-frame-ol,.h-frame-sh').forEach(e => e.remove());
     const fr = document.createElement('div');
@@ -39,15 +32,12 @@ function _huntAddFrame(parentEl, frameW) {
     return { fr, sh };
 }
 
-// Positions frame centred on avatarEl using offsetTop (spot avatars in visible DOM).
 function _huntPositionFrameOffset(fr, sh, avatarEl, frameW, avatarPx) {
     if (!fr||!sh||!avatarEl||!fr.isConnected) return;
     const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2);
     fr.style.top = t + 'px'; sh.style.top = t + 'px';
 }
 
-// Positions frame centred on avatarEl via getBoundingClientRect.
-// For PvP: modal is visible + forced reflow done when this is called.
 function _huntPositionFrameRect(fr, sh, parentEl, avatarEl, frameW) {
     if (!fr||!sh||!parentEl||!avatarEl||!fr.isConnected) return;
     const pRect = parentEl.getBoundingClientRect();
@@ -60,7 +50,6 @@ function _huntPositionFrameRect(fr, sh, parentEl, avatarEl, frameW) {
 function _huntApplyFrame(fr, sh, frameUrl, avatarEl, defaultBorder) {
     if (!fr||!sh) return;
     if (frameUrl) {
-        // <div> uses background-image instead of src
         fr.style.backgroundImage = `url('${frameUrl}')`;
         fr.style.display = 'block';
         if (avatarEl) avatarEl.style.border = 'none';
@@ -68,8 +57,7 @@ function _huntApplyFrame(fr, sh, frameUrl, avatarEl, defaultBorder) {
         sh.style.maskImage       = `url('${frameUrl}')`;
         sh.style.display = 'block';
     } else {
-        fr.style.backgroundImage = '';
-        fr.style.display = 'none';
+        fr.style.backgroundImage = ''; fr.style.display = 'none';
         sh.style.display = 'none';
         if (avatarEl && defaultBorder) avatarEl.style.border = defaultBorder;
     }
@@ -1579,12 +1567,8 @@ async function runPvpAnimation(data) {
     const atkId   = combat.attacker_id;
     const defId   = combat.defender_id;
 
-    // Cria frames PvP como <div> (não <img>) para evitar que
-    // .pvp-fighter img { width:90px !important; border-radius:50% }
-    // sobreponha as dimensões e o shape do frame overlay.
-    // Frame = 90px avatar × 1.95 = 175px. Posicionado após reflow.
-    atkSide.style.position = 'relative';
-    defSide.style.position = 'relative';
+    // Frames PvP — <div> para não ser afetado por .pvp-fighter img rules
+    atkSide.style.position = 'relative'; defSide.style.position = 'relative';
     const{fr:_apFr,sh:_apSh}=_huntAddFrame(atkSide,175);
     const{fr:_dpFr,sh:_dpSh}=_huntAddFrame(defSide,175);
     if(atkId)_huntFetchFrame(atkId,_apFr,_apSh,atkAv,'2px solid rgba(160,80,255,0.75)');

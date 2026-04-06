@@ -575,6 +575,18 @@ window.selectClass = (classId) => {
     modal.style.display = 'flex';
 };
 
+function showInfoModal(message, title = 'Aviso') {
+    const modal = document.getElementById('resultModal');
+    const content = modal.querySelector('.modal-content');
+    content.style.cssText = '';
+    content.innerHTML = `
+        <h2 style="color:gold; margin-bottom:14px; text-align:center;">${title}</h2>
+        <p style="color:#ddd; text-align:center; margin-bottom:24px;">${message}</p>
+        <button class="action-btn" style="width:100%;" onclick="document.getElementById('resultModal').style.display='none'">OK</button>
+    `;
+    modal.style.display = 'flex';
+}
+
 async function register() {
     if (!state.selectedClass) return;
 
@@ -584,7 +596,7 @@ async function register() {
     });
 
     if (error || !data.success) {
-        alert(data?.message || error?.message || "Erro ao inscrever.");
+        showInfoModal(data?.message || error?.message || "Erro ao inscrever.", "Inscrição Negada");
         // Desseleciona o card em caso de erro
         state.selectedClass = null;
         document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
@@ -657,7 +669,7 @@ async function enterGame() {
             setTimeout(pollLobbyStart, 2000);
             return;
         }
-        alert("Erro ao entrar na partida: " + (data?.message || error?.message));
+        showInfoModal("Erro ao entrar na partida: " + (data?.message || error?.message), "Erro");
         return;
     }
 
@@ -780,7 +792,7 @@ window.probeRooms = async () => {
     const { data, error } = await supabase.rpc('probe_ruins_rooms');
     
     if (error || !data.success) {
-        alert(data?.message || "Erro ao sondar.");
+        showInfoModal(data?.message || "Erro ao sondar.", "Erro");
         state.isProcessing = false;
         return;
     }

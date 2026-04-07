@@ -67,37 +67,7 @@ const TRADE_ITEMS = [
     { id: 92,  name: 'Totem Reptiliano',   img: 'totem_reptiliano.webp'  },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PRNG SIMPLES (LCG) — determinístico por slot
-// ─────────────────────────────────────────────────────────────────────────────
-function createPrng(seed) {
-    let s = seed;
-    return function() {
-        s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
-        return (s >>> 0) / 0xFFFFFFFF;
-    };
-}
-
-/**
- * Gera 3 itens que o mercador deseja receber neste slot.
- * O jogador oferece 5x do item sorteado e recebe 1 ouro.
- * Retorna array de 3 objetos { give: itemObj }
- */
-function generateTradePairs(slot) {
-    const rand = createPrng(slot);
-    const pool = [...TRADE_ITEMS];
-    const pairs = [];
-    const usedIds = new Set();
-
-    while (pairs.length < 3) {
-        let gi;
-        do { gi = Math.floor(rand() * pool.length); } while (usedIds.has(pool[gi].id));
-        const give = pool[gi];
-        usedIds.add(give.id);
-        pairs.push({ give });
-    }
-    return pairs;
-}
+// PRNG e generateTradePairs removidos — escambo agora exibe todos os itens permanentemente.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INDEXEDDB — lê inventário do cache local
@@ -319,10 +289,8 @@ async function openMercadorModal() {
     cachedMoedaQty = qtys[MOEDA_ID] || 0;
     cachedTradeQtys = qtys;
 
-    const pairs = generateTradePairs(state.slot);
-
-    // Inicializar qtys UI
-    for (let i = 0; i < pairs.length; i++) tradeQtys[i] = 1;
+    // Inicializar qtys UI para todos os itens de escambo
+    for (let i = 0; i < TRADE_ITEMS.length; i++) tradeQtys[i] = 1;
 
     content.innerHTML = `
         <!-- RECURSOS TOPO -->
@@ -358,12 +326,12 @@ async function openMercadorModal() {
         <!-- SEÇÃO ESCAMBO -->
         <div class="mercador-section-title">🔄 Escambo</div>
         <div class="mercador-section mercador-escambo" id="mercadorEscambo">
-            ${pairs.map((p, i) => renderEscamboCard(p, i)).join('')}
+            ${TRADE_ITEMS.map((item, i) => renderEscamboCard(item, i)).join('')}
         </div>
     `;
 
     startCountdown(state.nextSlot);
-    attachMercadorEvents(pairs);
+    attachMercadorEvents();
 }
 
 function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnType, costPerPack = 1) {
@@ -401,26 +369,26 @@ function renderVendaCard(type, itemImg, itemLabel, receiveBaseQty, costImg, btnT
     </div>`;
 }
 
-function renderEscamboCard(pair, idx) {
-    const giveImg = BASE_URL + pair.give.img;
+function renderEscamboCard(item, idx) {
+    const giveImg = BASE_URL + item.img;
     return `
     <div class="mercador-card" id="escambo-card-${idx}">
         <div class="mercador-card-header">
             <div class="mercador-trade-icons">
                 <div class="mercador-trade-side">
-                    <img src="${GOLD_IMG}" class="mercador-item-icon" alt="Ouro">
+                    <img src="${MOEDA_IMG}" class="mercador-item-icon" alt="Moeda Rúnica">
                     <span class="mercador-trade-qty" id="get-qty-label-${idx}">x1</span>
-                    <span class="mercador-item-name">Ouro</span>
+                    <span class="mercador-item-name">Moeda Rúnica</span>
                 </div>
                 <div class="mercador-arrow">⟵</div>
                 <div class="mercador-trade-side">
-                    <img src="${giveImg}" class="mercador-item-icon" alt="${pair.give.name}">
-                    <span class="mercador-trade-qty give-qty-label" id="give-qty-label-${idx}">x5</span>
-                    <span class="mercador-item-name">${pair.give.name}</span>
+                    <img src="${giveImg}" class="mercador-item-icon" alt="${item.name}">
+                    <span class="mercador-trade-qty give-qty-label" id="give-qty-label-${idx}">x1</span>
+                    <span class="mercador-item-name">${item.name}</span>
                 </div>
             </div>
             <div class="mercador-have">
-                Você tem: <span id="give-have-${idx}">${fmt(cachedTradeQtys[pair.give.id] || 0)}</span> ${pair.give.name}
+                Você tem: <span id="give-have-${idx}">${fmt(cachedTradeQtys[item.id] || 0)}</span> ${item.name}
             </div>
         </div>
         <div class="mercador-controls">
@@ -429,13 +397,13 @@ function renderEscamboCard(pair, idx) {
                 <span class="pm-qty-val" id="eqty-${idx}">1</span>
                 <button class="pm-qty-btn plus" data-eidx="${idx}">+</button>
             </div>
-            <div class="mercador-total">Custo: <span id="etot-${idx}">5</span> ${pair.give.name} → <span id="eget-${idx}">1</span> Ouro</div>
+            <div class="mercador-total">Custo: <span id="etot-${idx}">1</span> ${item.name} → <span id="eget-${idx}">1</span> Moeda(s) Rúnica(s)</div>
             <button class="pm-buy-btn" id="ebuy-${idx}" data-eidx="${idx}">Trocar</button>
         </div>
     </div>`;
 }
 
-function attachMercadorEvents(pairs) {
+function attachMercadorEvents() {
     // Venda: qty selectors
     // receiveBaseQty per type
     const vendaReceiveBase = { pedra: 1, crystals: 50, escudo: 1, ampulheta: 1, receita_foice: 1, receita_armadura: 1, receita_colar: 1, receita_anel: 1, receita_asa: 1, receita_elmo: 1 };
@@ -476,35 +444,34 @@ function attachMercadorEvents(pairs) {
         });
     }
 
-    // Escambo: qty selectors
-    for (let i = 0; i < pairs.length; i++) {
+    // Escambo: qty selectors para todos os TRADE_ITEMS
+    for (let i = 0; i < TRADE_ITEMS.length; i++) {
         const idx = i;
-        document.querySelector(`.pm-qty-btn.plus[data-eidx="${idx}"]`)?.addEventListener('click', () => updateEscamboQty(idx, 1, pairs));
-        document.querySelector(`.pm-qty-btn.minus[data-eidx="${idx}"]`)?.addEventListener('click', () => updateEscamboQty(idx, -1, pairs));
+        document.querySelector(`.pm-qty-btn.plus[data-eidx="${idx}"]`)?.addEventListener('click', () => updateEscamboQty(idx));
+        document.querySelector(`.pm-qty-btn.minus[data-eidx="${idx}"]`)?.addEventListener('click', () => updateEscamboQty(idx, -1));
         document.getElementById(`ebuy-${idx}`)?.addEventListener('click', () => {
             const qty = parseInt(document.getElementById(`eqty-${idx}`)?.textContent || 1);
-            doEscambo(pairs[idx], idx, qty);
+            doEscambo(TRADE_ITEMS[idx], idx, qty);
         });
     }
 }
 
-function updateEscamboQty(idx, delta, pairs) {
+function updateEscamboQty(idx, delta = 1) {
     const el = document.getElementById(`eqty-${idx}`);
     if (!el) return;
     const cur = parseInt(el.textContent || 1);
     const nv = Math.max(1, Math.min(cur + delta, 99));
     el.textContent = nv;
+    // labels do ícone — ambos os lados são 1:1
+    const giveQtyLabel = document.getElementById(`give-qty-label-${idx}`);
+    if (giveQtyLabel) giveQtyLabel.textContent = `x${nv}`;
+    const getQtyLabel = document.getElementById(`get-qty-label-${idx}`);
+    if (getQtyLabel) getQtyLabel.textContent = `x${nv}`;
     // texto resumo embaixo
     const totEl = document.getElementById(`etot-${idx}`);
     const getEl = document.getElementById(`eget-${idx}`);
-    if (totEl) totEl.textContent = nv * 5;
+    if (totEl) totEl.textContent = nv;
     if (getEl) getEl.textContent = nv;
-    // ícones: lado direito (custo - item que dá)
-    const giveQtyLabel = document.getElementById(`give-qty-label-${idx}`);
-    if (giveQtyLabel) giveQtyLabel.textContent = `x${nv * 5}`;
-    // ícones: lado esquerdo (recebe - ouro)
-    const getQtyLabel = document.getElementById(`get-qty-label-${idx}`);
-    if (getQtyLabel) getQtyLabel.textContent = `x${nv}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -593,23 +560,23 @@ async function buyVendaItem(type, quantity) {
     }
 }
 
-async function doEscambo(pair, idx, tradeQty) {
+async function doEscambo(item, idx, tradeQty) {
     const btn = document.getElementById(`ebuy-${idx}`);
     if (btn) { btn.disabled = true; btn.textContent = 'Trocando...'; }
 
-    const giveTotal = tradeQty * 5;
-    const haveQty = cachedTradeQtys[pair.give.id] || 0;
+    const giveTotal = tradeQty; // 1:1
+    const haveQty = cachedTradeQtys[item.id] || 0;
 
     // Só bloqueia localmente se cache > 0 e insuficiente. Cache=0 pode ser miss.
     if (haveQty > 0 && haveQty < giveTotal) {
-        showMsg(`${pair.give.name} insuficiente! Você tem ${haveQty}, precisa de ${giveTotal}.`);
+        showMsg(`${item.name} insuficiente! Você tem ${haveQty}, precisa de ${giveTotal}.`);
         if (btn) { btn.disabled = false; btn.textContent = 'Trocar'; }
         return;
     }
 
     try {
         const { data, error } = await supabase.rpc('merchant_trade', {
-            p_give_id:   pair.give.id,
+            p_give_id:   item.id,
             p_trade_qty: tradeQty
         });
         if (error) throw error;
@@ -618,26 +585,25 @@ async function doEscambo(pair, idx, tradeQty) {
         // Sincroniza cache do item entregue
         const newGiveQty = (data.new_give_qty != null)
             ? data.new_give_qty
-            : Math.max(0, (cachedTradeQtys[pair.give.id] || 0) - giveTotal);
+            : Math.max(0, (cachedTradeQtys[item.id] || 0) - giveTotal);
 
-        cachedTradeQtys[pair.give.id] = newGiveQty;
-        await updateCacheQty(pair.give.id, -giveTotal);
+        cachedTradeQtys[item.id] = newGiveQty;
+        await updateCacheQty(item.id, -giveTotal);
 
         const haveEl = document.getElementById(`give-have-${idx}`);
         if (haveEl) haveEl.textContent = fmt(newGiveQty);
 
-        // Atualiza ouro no localStorage se disponível
-        if (data.new_gold != null) {
-            try {
-                const cStr = localStorage.getItem('player_data_cache');
-                if (cStr) {
-                    const c = JSON.parse(cStr);
-                    if (c.data) { c.data.gold = data.new_gold; localStorage.setItem('player_data_cache', JSON.stringify(c)); }
-                }
-            } catch {}
-        }
+        // Atualiza Moedas Rúnicas
+        const newMoedaQty = (data.new_moeda_qty != null)
+            ? data.new_moeda_qty
+            : cachedMoedaQty + tradeQty;
+        cachedMoedaQty = newMoedaQty;
+        await updateCacheQty(MOEDA_ID, tradeQty);
 
-        showMsg(`Troca realizada! Você recebeu ${tradeQty} Ouro.`);
+        const moedaEl = document.getElementById('mercadorMoedaQty');
+        if (moedaEl) moedaEl.textContent = `x${fmt(cachedMoedaQty)}`;
+
+        showMsg(`Troca realizada! Você recebeu ${tradeQty} Moeda(s) Rúnica(s).`);
     } catch (err) {
         showMsg(`Erro: ${err.message || 'Falha na troca.'}`);
     } finally {

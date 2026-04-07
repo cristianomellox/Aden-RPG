@@ -458,7 +458,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // quando um batch é rejeitado por falta de estamina (evita HP travado em 0 localmente
   // enquanto o servidor ainda tem HP positivo).
   let lastKnownServerHp = 0;
-  
+  let lastRenderedMines = []; // Guarda último array de minas renderizado (usado por updateDominantGuild pós-combate)
+
   // CONFIGURAÇÃO DE BATCH
   let knownParticipantCount = 0;     
   
@@ -1331,6 +1332,7 @@ function formatTimeCombat(totalSeconds) {
 
   function renderMines(mines, ownersMap) {
     globalOwnersMap = { ...globalOwnersMap, ...ownersMap };
+    lastRenderedMines = [...mines]; // Salva snapshot para atualizações pontuais posteriores
 
     minesContainer.innerHTML = "";
     for (const mine of mines) {
@@ -1382,8 +1384,8 @@ function formatTimeCombat(totalSeconds) {
       }
       minesContainer.appendChild(card);
     }
-    // Aplica molduras após render (não bloqueia)
-    _mApplyFramesToCards();
+    // Aplica molduras após render — diferido para não competir com updateDominantGuild
+    setTimeout(() => _mApplyFramesToCards(), 0);
   }
 
   function renderAndAppendSingleCard(mine) {
@@ -1570,6 +1572,12 @@ function formatTimeCombat(totalSeconds) {
           if (mappedMine.owner_player_id === userId) myOwnedMineId = mappedMine.id;
           else if (myOwnedMineId === mappedMine.id) myOwnedMineId = null;
           syncMiningActivity(); // Sincroniza o lock de caça com a posse real de mina
+
+          // Atualiza a guilda dominante refletindo a nova posse desta mina
+          const updatedMinesList = lastRenderedMines.map(m =>
+              m.id === mappedMine.id ? { ...m, owner_player_id: mappedMine.owner_player_id } : m
+          );
+          await updateDominantGuild(updatedMinesList, globalOwnersMap);
           
           return mappedMine;
 

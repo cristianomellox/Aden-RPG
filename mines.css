@@ -985,11 +985,11 @@ p {
 
 .pvp-frame-overlay {
     position: absolute;
-    top: -38px;
+    top: -41px;
     left: 50%;
     transform: translateX(-50%);
-    width: 156px;
-    height: 156px;
+    width: 154px;
+    height: 154px;
     pointer-events: none;
     z-index: 2;
     object-fit: contain;

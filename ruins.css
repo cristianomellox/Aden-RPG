@@ -1345,7 +1345,7 @@ body {
 /* Moldura sobreposta */
 .ruins-frame-overlay {
     position: absolute;
-    top: -38px;
+    top: -42px;
     left: 50%;
     transform: translateX(-50%);
     width: 156px;
@@ -1359,7 +1359,7 @@ body {
 /* Sheen: brilho prateado varrendo a moldura */
 .ruins-frame-sheen {
     position: absolute;
-    top: -38px;
+    top: -42px;
     left: 50%;
     transform: translateX(-50%);
     width: 156px;

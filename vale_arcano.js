@@ -34,7 +34,7 @@ function _huntAddFrame(parentEl, frameW) {
 
 function _huntPositionFrameOffset(fr, sh, avatarEl, frameW, avatarPx) {
     if (!fr||!sh||!avatarEl||!fr.isConnected) return;
-    const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2);
+    const t = avatarEl.offsetTop - Math.round((frameW - avatarPx) / 2) - 4;
     fr.style.top = t + 'px'; sh.style.top = t + 'px';
 }
 

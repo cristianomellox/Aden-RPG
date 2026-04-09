@@ -332,7 +332,7 @@ body {
     background-repeat: no-repeat;
     z-index: 3000;
     flex-direction: column;
-    justify-content: flex-end; /* Conteúdo no fundo */
+    justify-content: center; /* Conteúdo no fundo */
     align-items: center;
 }
 
@@ -342,7 +342,6 @@ body {
     padding: 20px;
     display: flex;
     justify-content: center;
-    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
 }
 
 /* ================================================================= */
@@ -589,6 +588,65 @@ body {
     opacity: 0;
     transition: opacity 0.5s ease-in-out;
 }
+
+/* === MERCHANT DISTRICT CARDS === */
+@keyframes merchantFadeIn {
+    0%   { opacity: 0; transform: translateY(30px) scale(0.95); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.merchant-card-grid {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding: 20px 10px 30px;
+    flex-wrap: wrap;
+}
+
+.merchant-card {
+    background: rgba(30, 20, 5, 0.88);
+    border: 2px solid #c9a94a;
+    border-radius: 10px;
+    padding: 12px 10px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-width: 90px;
+    max-width: 110px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+    opacity: 0;
+    animation: merchantFadeIn 0.6s ease-out forwards;
+}
+
+.merchant-card:hover, .merchant-card:active {
+    border-color: gold;
+    background: rgba(60, 40, 0, 0.95);
+    transform: scale(1.05);
+    box-shadow: 0 6px 18px rgba(200,160,0,0.3);
+}
+
+.merchant-card-img {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    filter: drop-shadow(1px 1px 3px black);
+}
+
+.merchant-card-name {
+    color: #e0dccc;
+    font-size: 0.71em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    line-height: 1.2;
+}
+
 </style>
 <body>
 
@@ -601,7 +659,7 @@ body {
     </svg>
 </button>
        <div> <span id="pageTitle">Área Pacífica</span></div>
-        <img src="https://aden-rpg.pages.dev/assets/refresh.webp" alt="Recarregar" style="width:30px; height:30px; opacity: 0;">
+        <img src="https://aden-rpg.pages.dev/assets/sobre.webp" id="btnOpenHistory" style="width:50px; height:35px;">
     </div>
 
     <div id="mapContainer">
@@ -630,34 +688,30 @@ body {
 
     </div>
 
-    <div id="mitrarSubmenu" class="footer-submenu">
-        <div id="btnOpenHistory" class="footer-submenu-btn">
-            <img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="submenu-icon"> História
-        </div>
-        <div id="btnOpenMerchantsModal" class="footer-submenu-btn">
-            <img src="https://aden-rpg.pages.dev/assets/mercante.webp" class="submenu-icon"> Distrito Mercante
-        </div>
-    </div>
+    <!-- mitrarSubmenu removed - Menu now opens merchantsModal directly -->
     
     <div id="merchantsModal">
         <span class="close-btn" id="closeMerchantsModal" style="color:white; top:20px; right:20px; font-size:40px;">&times;</span>
         
-        <div id="merchantsFooter">
-            <button id="shopsMenuBtn" class="action-btn" style="padding: 35px 40px;">Mercantes</button>
+                <div id="merchantsFooter">
+            <div class="merchant-card-grid">
+                <div class="merchant-card" id="btnPotionMaster" style="animation-delay:0.1s;">
+                    <img src="https://aden-rpg.pages.dev/assets/mdp.webp" class="merchant-card-img">
+                    <span class="merchant-card-name">Poções</span>
+                </div>
+                <div class="merchant-card" id="btnOficina" style="animation-delay:0.25s;">
+                    <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="merchant-card-img">
+                    <span class="merchant-card-name">Oficina</span>
+                </div>
+                <div class="merchant-card" id="btnMercador" style="animation-delay:0.4s;">
+                    <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="merchant-card-img">
+                    <span class="merchant-card-name">Mercador</span>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div id="shopsSubmenu" class="footer-submenu">
-        <div class="footer-submenu-btn" id="btnPotionMaster">
-            <img src="https://aden-rpg.pages.dev/assets/mdp.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Mestre de Poções
-        </div>
-        <div class="footer-submenu-btn" id="btnOficina">
-            <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Oficina
-        </div>
-                <div class="footer-submenu-btn" id="btnMercador">
-            <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="submenu-icon" style="width: 80px; height: 80px;"> Mercador
-        </div>
-    </div>
+    <div id="shopsSubmenu" class="footer-submenu" style="display:none;"><!-- Moved to merchantsModal as cards --></div>
     
     <!-- Modal Mestre de Poções -->
     <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
@@ -999,25 +1053,22 @@ function enableMapInteraction() {
 // =======================================================================
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- 1. Menu Principal de Mitrar ---
+    // --- 1. Menu Principal ---
     const menuBtn = document.getElementById('mitrarMenuBtn');
-    const submenu = document.getElementById('mitrarSubmenu');
 
-    if (menuBtn && submenu) {
+    if (menuBtn) {
         menuBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const isVisible = submenu.style.display === 'flex';
-            if (!isVisible) {
-                submenu.style.display = 'flex';
-                // Posiciona acima do botão Menu
-                const btnRect = menuBtn.getBoundingClientRect();
-                const submenuRect = submenu.getBoundingClientRect();
-                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
-                let newTop = btnRect.top - submenuRect.height - 10; 
-                submenu.style.top = newTop + 'px';
-                submenu.style.left = newLeft + 'px';
-            } else {
-                submenu.style.display = 'none';
+            const merchantsModal = document.getElementById('merchantsModal');
+            if (merchantsModal) {
+                merchantsModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                // Re-trigger card animations on each open
+                document.querySelectorAll('.merchant-card').forEach(card => {
+                    card.style.animation = 'none';
+                    card.offsetHeight; // reflow
+                    card.style.animation = '';
+                });
             }
         });
     }
@@ -1050,21 +1101,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 3. Modal de Mercantes (Tela Cheia) ---
-    const openMerchantsBtn = document.getElementById('btnOpenMerchantsModal');
     const merchantsModal = document.getElementById('merchantsModal');
     const closeMerchantsBtn = document.getElementById('closeMerchantsModal');
 
-    if (openMerchantsBtn && merchantsModal) {
-        openMerchantsBtn.addEventListener('click', () => {
-            merchantsModal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-            if(submenu) submenu.style.display = 'none'; // Fecha o submenu principal
-        });
-
+    if (closeMerchantsBtn && merchantsModal) {
         closeMerchantsBtn.addEventListener('click', () => {
             merchantsModal.style.display = 'none';
             document.body.style.overflow = '';
-            // Se houver submenu de lojas aberto, fecha também
             const shopsSubmenu = document.getElementById('shopsSubmenu');
             if(shopsSubmenu) shopsSubmenu.style.display = 'none';
         });
@@ -1102,9 +1145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', (e) => {
         // Fechar submenu principal
         if (submenu && submenu.style.display === 'flex') {
-            if (!e.target.closest('#mitrarSubmenu') && !e.target.closest('#mitrarMenuBtn')) {
-                submenu.style.display = 'none';
-            }
+            // (city submenu removed - now using merchantsModal directly)
         }
         // Fechar submenu de lojas
         if (shopsSubmenu && shopsSubmenu.style.display === 'flex') {

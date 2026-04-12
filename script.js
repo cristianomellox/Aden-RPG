@@ -1076,6 +1076,34 @@ function showFloatingMessage(message, duration = 5000) {
 window.showFloatingMessage = showFloatingMessage; // Expor globalmente
 
 // Funções de Autenticação
+// =============================================================
+// TRADUÇÃO DE ERROS DO SUPABASE (mensagens chegam em inglês)
+// =============================================================
+function translateSupabaseError(message) {
+    if (!message) return 'Erro desconhecido.';
+    const m = message.toLowerCase();
+    if (m.includes('invalid login credentials') || m.includes('invalid_credentials') || m.includes('invalid credentials'))
+        return '❌ E-mail ou senha incorretos. Caso tenha criado sua conta recentemente, use "Esqueci minha senha" para definir uma senha.';
+    if (m.includes('email not confirmed'))
+        return '⚠️ E-mail não confirmado. Verifique sua caixa de entrada (ou spam).';
+    if (m.includes('user already registered') || m.includes('already registered'))
+        return '⚠️ Este e-mail já está cadastrado. Tente fazer login.';
+    if (m.includes('password should be at least') || m.includes('password must be'))
+        return '⚠️ A senha deve ter pelo menos 6 caracteres.';
+    if (m.includes('too many requests') || m.includes('rate limit') || m.includes('over_email_send_rate_limit'))
+        return '⏳ Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+    if (m.includes('email link is invalid or has expired') || m.includes('token has expired') || m.includes('otp expired'))
+        return '⏱️ O código expirou ou é inválido. Solicite um novo.';
+    if (m.includes('signup is disabled') || m.includes('signups not allowed'))
+        return '🚫 Cadastro temporariamente desativado.';
+    if (m.includes('network') || m.includes('fetch'))
+        return '🌐 Erro de conexão. Verifique sua internet e tente novamente.';
+    if (m.includes('user not found'))
+        return '❌ Nenhuma conta encontrada com este e-mail.';
+    // Fallback: retorna a mensagem original traduzida literalmente
+    return `Erro: ${message}`;
+}
+
 async function signIn() {
     const email = emailInput.value;
     const password = passwordInput.value;
@@ -1085,7 +1113,7 @@ async function signIn() {
     // atualizará o GlobalDB
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
-        authMessage.textContent = `Erro ao entrar: ${error.message}`;
+        authMessage.textContent = translateSupabaseError(error.message);
     }
 }
 
@@ -1137,7 +1165,7 @@ async function _executeSignUp() {
     });
 
     if (error) {
-        authMessage.textContent = `Erro ao registrar: ${error.message}`;
+        authMessage.textContent = translateSupabaseError(error.message);
     } else {
         authMessage.textContent = 'Código de confirmação enviado para seu e-mail! Verifique a caixa de spam, caso não receba.';
         signInBtn.style.display = 'none';
@@ -1309,8 +1337,113 @@ async function verifyOtp() {
     });
 
     if (error) {
-        authMessage.textContent = `Erro ao verificar código: ${error.message}`;
+        authMessage.textContent = translateSupabaseError(error.message);
+    } else {
+        // Conta criada com sucesso via OTP — porém sem senha definida.
+        // Exibe modal para o jogador definir uma senha para logins futuros.
+        authMessage.textContent = '✅ Conta verificada! Defina uma senha para acessar futuramente.';
+        showSetPasswordModal();
     }
+}
+
+/**
+ * Exibe modal para o novo jogador definir uma senha logo após o registro por OTP.
+ * Isso evita o erro "invalid credentials" ao tentar logar novamente no futuro.
+ */
+function showSetPasswordModal() {
+    const existing = document.getElementById('setPasswordModal');
+    if (existing) existing.remove();
+
+    if (!document.getElementById('set-password-style')) {
+        const style = document.createElement('style');
+        style.id = 'set-password-style';
+        style.innerHTML = `
+            #setPasswordModal {
+                position: fixed; inset: 0; z-index: 99998;
+                display: flex; justify-content: center; align-items: center;
+                background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+            }
+            #setPasswordModal .spw-box {
+                background: #0e0e0e; border: 1px solid #333; border-radius: 14px;
+                padding: 26px 22px 20px; width: 92%; max-width: 360px;
+                text-align: center;
+                box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            }
+            #setPasswordModal h3 {
+                color: #c9a94a; margin: 0 0 6px; font-size: 1.1em;
+            }
+            #setPasswordModal p {
+                color: #888; font-size: 0.82em; margin: 0 0 16px; line-height: 1.5;
+            }
+            #setPasswordModal input {
+                width: 100%; padding: 10px 12px; background: #1a1a1a;
+                border: 1px solid #444; color: #fff; border-radius: 8px;
+                font-size: 0.9em; margin-bottom: 10px; box-sizing: border-box;
+            }
+            #setPasswordModal .spw-confirm-btn {
+                width: 100%; padding: 11px;
+                background: linear-gradient(180deg, #c9a94a, #8a7330);
+                color: #000; font-weight: bold; font-size: 0.9em;
+                border: none; border-radius: 8px; cursor: pointer;
+                text-transform: uppercase; letter-spacing: 1px;
+                margin-bottom: 8px;
+            }
+            #setPasswordModal .spw-skip-btn {
+                width: 100%; padding: 9px; background: transparent;
+                border: 1px solid #333; color: #666; font-size: 0.8em;
+                border-radius: 8px; cursor: pointer;
+            }
+            #setPasswordModal .spw-msg { font-size: 0.8em; min-height: 18px; margin-top: 6px; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'setPasswordModal';
+    modal.innerHTML = `
+        <div class="spw-box">
+            <h3>🔐 Defina sua Senha</h3>
+            <p>
+                Sua conta foi criada! Defina uma senha agora.
+            </p>
+            <input type="password" id="spwNewPwd" placeholder="Nova senha (mín. 6 caracteres)">
+            <input type="password" id="spwConfPwd" placeholder="Confirme a senha">
+            <button class="spw-confirm-btn" id="spwConfirmBtn">Salvar Senha</button>
+            <button class="spw-skip-btn" id="spwSkipBtn" style="display: none;">Definir depois (use "Esqueci minha senha")</button>
+            <p class="spw-msg" id="spwMsg"></p>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const confirmBtn = modal.querySelector('#spwConfirmBtn');
+    const skipBtn    = modal.querySelector('#spwSkipBtn');
+    const msgEl      = modal.querySelector('#spwMsg');
+    const pwd1       = modal.querySelector('#spwNewPwd');
+    const pwd2       = modal.querySelector('#spwConfPwd');
+
+    confirmBtn.addEventListener('click', async () => {
+        const p1 = pwd1.value;
+        const p2 = pwd2.value;
+        if (!p1 || p1.length < 6) { msgEl.style.color = '#e55'; msgEl.textContent = 'A senha deve ter pelo menos 6 caracteres.'; return; }
+        if (p1 !== p2)             { msgEl.style.color = '#e55'; msgEl.textContent = 'As senhas não coincidem.'; return; }
+
+        confirmBtn.disabled = true;
+        msgEl.style.color = '#aaa';
+        msgEl.textContent = 'Salvando...';
+
+        const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+        if (error) {
+            msgEl.style.color = '#e55';
+            msgEl.textContent = translateSupabaseError(error.message);
+            confirmBtn.disabled = false;
+        } else {
+            msgEl.style.color = '#7dc97d';
+            msgEl.textContent = '✅ Senha salva com sucesso!';
+            setTimeout(() => modal.remove(), 1500);
+        }
+    });
+
+    skipBtn.addEventListener('click', () => modal.remove());
 }
 
 async function signOut() {
@@ -1396,8 +1529,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
                 renderPlayerUI(cachedPlayer, preserveActiveContainer);
                 checkProgressionNotifications(cachedPlayer);
                 
-                // --- PACOTE INICIAL (nível 1, apenas 1 vez) ---
-                if (!localStorage.getItem('aden_starter_pack_given')) {
+                // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
+                if (!localStorage.getItem('aden_starter_pack_given_' + cachedPlayer.id)) {
                     checkAndGiveStarterPack(cachedPlayer);
                 }
                 
@@ -1522,8 +1655,8 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         renderPlayerUI(player, preserveActiveContainer);
         checkProgressionNotifications(player);
 
-        // --- PACOTE INICIAL (nível 1, apenas 1 vez) ---
-        if (!localStorage.getItem('aden_starter_pack_given')) {
+        // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
+        if (!localStorage.getItem('aden_starter_pack_given_' + player.id)) {
             checkAndGiveStarterPack(player); // async, não bloqueia
         }
 
@@ -2021,21 +2154,25 @@ const STARTER_PACK_ITEMS = [
 /**
  * Verifica se o jogador é novo (nível 1, nunca recebeu o pacote)
  * e, se sim, chama o RPC e exibe o modal de boas-vindas.
- * Zero egress após a primeira execução (localStorage como guard).
+ * Zero egress após a primeira execução.
+ * Chave localStorage é por ID de jogador — evita colisão entre contas no mesmo browser.
  */
 async function checkAndGiveStarterPack(player) {
+    if (!player || !player.id) return;
+    const PACK_KEY = 'aden_starter_pack_given_' + player.id;
+
     // Guard dupla client-side: se já tiver a flag, não faz nada
-    if (localStorage.getItem('aden_starter_pack_given')) return;
+    if (localStorage.getItem(PACK_KEY)) return;
 
     // Verifica client-side se o pack já foi marcado no progression_state (sem query extra)
     if (player?.progression_state?.starter === true) {
-        localStorage.setItem('aden_starter_pack_given', '1');
+        localStorage.setItem(PACK_KEY, '1');
         return;
     }
 
-    // Só entrega para nível 1 — após levelar up o flag já terá sido setado
-    if (!player || player.level !== 1) {
-        localStorage.setItem('aden_starter_pack_given', '1');
+    // Só entrega para nível 1 — após levelar up a flag já terá sido setada
+    if (player.level !== 1) {
+        localStorage.setItem(PACK_KEY, '1');
         return;
     }
 
@@ -2049,12 +2186,12 @@ async function checkAndGiveStarterPack(player) {
 
         // Pack já foi dado (ex: localStorage foi limpo mas server tem a flag)
         if (data?.already_given || !data?.success) {
-            localStorage.setItem('aden_starter_pack_given', '1');
+            localStorage.setItem(PACK_KEY, '1');
             return;
         }
 
         // ✅ Sucesso: marca localmente e atualiza cache
-        localStorage.setItem('aden_starter_pack_given', '1');
+        localStorage.setItem(PACK_KEY, '1');
 
         // Atualiza progression_state local para refletir a flag
         if (currentPlayerData) {
@@ -2092,7 +2229,7 @@ function showStarterPackModal() {
         style.id = 'starter-pack-style';
         style.innerHTML = `
             #starterPackModal {
-                position: fixed; inset: 0; z-index: 99999;
+                position: fixed; inset: 0; z-index: 99997;
                 display: flex; justify-content: center; align-items: center;
                 background: rgba(0,0,0,0.88);
                 backdrop-filter: blur(6px);

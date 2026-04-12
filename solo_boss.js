@@ -642,7 +642,7 @@ async function initCombatState(serverData) {
     state.maxBossHp = Number(serverData.boss_hp);
     state.initialBossHp = state.maxBossHp;
     state.bossHp = state.maxBossHp;
-    state.bossImageUrl = serverData.boss_image || "https://aden-rpg.pages.dev/assets/kar-drakul.webp"; 
+    state.bossImageUrl = serverData.boss_image || "https://aden-rpg.pages.dev/assets/kar-drakul.png"; 
     
     if (typeof state.totalHits === 'undefined') state.totalHits = 0;
     

@@ -12,7 +12,7 @@ const CITY_LABELS = {
 };
 
 const EPOCH   = new Date('2025-01-01T01:00:00Z').getTime(); // +1h vs mercador
-const SLOT_MS = 4 * 60 * 60 * 1000;                        // 4 horas
+const SLOT_MS = 24 * 60 * 60 * 1000;                        // 4 horas
 
 function getOficinaState() {
     const now       = Date.now();

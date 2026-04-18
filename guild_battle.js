@@ -46,7 +46,8 @@ const REWARD_ITEMS = {
     CRYSTALS: { name: 'Cristais', img: 'https://aden-rpg.pages.dev/assets/cristais.webp' },
     REFORGE_STONE: { name: 'Pedra de Refundição', img: 'https://aden-rpg.pages.dev/assets/itens/pedra_de_refundicao.webp' },
     CARD_ADVANCED: { name: 'Cartão Avançado', img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp' },
-    CARD_COMMON: { name: 'Cartão Comum', img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp' }
+    CARD_COMMON: { name: 'Cartão Comum', img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp' },
+    BATTLE_FRAME: { name: 'Moldura de Batalha', img: 'https://aden-rpg.pages.dev/assets/itens/moldura_batalha_guilda.webp' }
 };
 
 // --- Elementos DOM ---
@@ -740,7 +741,8 @@ function renderResultsScreen(instance, playerDamageRanking) {
         guildRewardsHTML += '<div class="results-reward-list">';
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); 
         guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.BATTLE_FRAME, 1);
         guildRewardsHTML += '</div>';
         hasGuildRewards = true;
     } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
@@ -1219,6 +1221,23 @@ function processHeartbeat(data) {
                     fullObj.expelled_players = heartbeatObj.expelled_players || [];
                 }
             });
+
+            // Sincroniza o HP restante da guarnição do jogador no footer
+            if (currentBattleState.player_garrison) {
+                const garrisonObjId = data.player_garrison_objective_id;
+                const garrisonRemainingHp = data.player_garrison_remaining_hp;
+
+                if (garrisonObjId && garrisonObjId === currentBattleState.player_garrison.objective_id
+                    && garrisonRemainingHp !== null && garrisonRemainingHp !== undefined) {
+                    // Ainda está guarnecendo: atualiza HP restante com valor real do servidor
+                    currentBattleState.player_garrison.remaining_hp = parseInt(garrisonRemainingHp, 10);
+                } else if (!garrisonObjId) {
+                    // Não está mais na tabela de guarnição = foi expulso por dano
+                    currentBattleState.player_state.last_garrison_leave_at = new Date().toISOString();
+                    currentBattleState.player_garrison = null;
+                }
+                renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+            }
 
             if (data.guild_honor) {
                 data.guild_honor.forEach(heartbeatGuild => {

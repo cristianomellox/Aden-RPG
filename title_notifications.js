@@ -172,11 +172,19 @@ async function processUpdates(cities) {
         // Atualiza o aden_titles_cache com os nomes frescos (com emoji) para esta cidade,
         // independentemente de haver nobres ou não (lista vazia = cidade sem títulos).
         if (!noblesError) {
-            patchTitlesCache(city.id, nobles || [], city.owner, {
+            const freshNobles = nobles || [];
+            const previousNobleIds = patchTitlesCache(city.id, freshNobles, city.owner, {
                 id: guildData.leader_id,
                 name: leaderName,
                 gender: leaderGender
             });
+
+            // Invalida o owners_store (IndexedDB) para todos os afetados:
+            // - nobles frescos (ganharam emoji) e nobles anteriores (perderam emoji).
+            // Isso força mines.js, ruins.js e demais páginas a rebuscarem os
+            // nomes corretos na próxima vez que carregarem.
+            const freshIds = freshNobles.map(n => n.id).filter(Boolean);
+            invalidateOwnersCache([...new Set([...freshIds, ...previousNobleIds])]);
         }
 
         if (nobles && nobles.length > 0) {
@@ -235,22 +243,53 @@ function patchTitlesCache(cityId, freshNobles, newOwnerGuildId, leaderInfo) {
             rangeEnd = cityId * 100 + 2;
         }
 
-        // 3. Remove entradas antigas desta cidade do cache (inclusive nomes com emoji desatualizado)
+        // 3. Captura IDs dos nobles anteriores (que serão removidos) antes de sobrescrever
+        const previousNobles = city.nobles.filter(n => n.nobless >= rangeStart && n.nobless <= rangeEnd);
+        const previousNobleIds = previousNobles.map(n => n.id).filter(Boolean);
+
+        // 4. Remove entradas antigas desta cidade do cache (inclusive nomes com emoji desatualizado)
         city.nobles = city.nobles.filter(n => n.nobless < rangeStart || n.nobless > rangeEnd);
 
-        // 4. Insere os nobles frescos vindos do DB (já com o prefixo emoji correto no campo name)
+        // 5. Insere os nobles frescos vindos do DB (já com o prefixo emoji correto no campo name)
         city.nobles.push(...freshNobles);
 
-        // 5. Atualiza timestamp para sinalizar que este cache está fresco
+        // 6. Atualiza timestamp para sinalizar que este cache está fresco
         city.lastUpdate = new Date().toISOString();
 
         cacheData[cityIndex] = city;
         localStorage.setItem('aden_titles_cache', JSON.stringify(cacheData));
         console.log(`[Cache] Títulos da cidade ${cityId} atualizados cirurgicamente.`);
+
+        return previousNobleIds; // Retorna para o chamador invalidar o owners_store
     } catch (e) {
         // Falha silenciosa: não compromete a exibição de notificações
         console.warn('[Cache] Falha ao corrigir aden_titles_cache:', e);
+        return [];
     }
+}
+
+// --- 3.6 Invalidação do Cache de Owners (IndexedDB) ---
+// Remove as entradas dos jogadores afetados do owners_store,
+// forçando mines.js, ruins.js e demais páginas a rebuscarem os
+// nomes atualizados (com ou sem emoji) na próxima vez que carregarem.
+function invalidateOwnersCache(playerIds) {
+    if (!playerIds || playerIds.length === 0) return;
+
+    const req = indexedDB.open('aden_global_db', 6);
+    req.onsuccess = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('owners_store')) return;
+
+        const tx = db.transaction('owners_store', 'readwrite');
+        const store = tx.objectStore('owners_store');
+
+        playerIds.forEach(id => { if (id) store.delete(id); });
+
+        tx.oncomplete = () => {
+            console.log(`[Cache] owners_store invalidado para: ${playerIds.join(', ')}`);
+        };
+    };
+    req.onerror = (e) => console.warn('[Cache] Falha ao abrir DB para invalidação de owners', e);
 }
 
 // --- 4. Sistema de Fila e Exibição ---

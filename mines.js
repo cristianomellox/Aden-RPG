@@ -206,15 +206,10 @@ function _mApplyFrameToPvp(containerEl, frameUrl) {
 // Busca frame_url do cache ou do servidor, depois aplica
 async function _mFetchAndApplyFrame(pid, applyFn) {
     if (!pid) return;
-    const cached = _mGetSkinCache(pid);
-    if (cached !== undefined) { applyFn(cached.frame_url || null); return; }
     try {
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
         if (error) { applyFn(null); return; }
-        const frameUrl = data?.frame_url || null;
-        const videoUrl = data?.video_url || null;
-        _mSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
-        applyFn(frameUrl);
+        applyFn(data?.frame_url || null);
     } catch(e) { applyFn(null); }
 }
 

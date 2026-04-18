@@ -614,15 +614,10 @@
 
     async function _fetchAndApplySkins(playerId) {
         // Check cache first
-        const cached = _getSkinCache(playerId);
-        if (cached !== null) { _applyModalSkin(cached.frame_url, cached.video_url); return; }
         try {
             const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
             if (error) { console.warn('[skin]', error.message); _applyModalSkin(null, null); return; }
-            const frameUrl = data?.frame_url || null;
-            const videoUrl = data?.video_url || null;
-            _setSkinCache(playerId, { frame_url: frameUrl, video_url: videoUrl });
-            _applyModalSkin(frameUrl, videoUrl);
+            _applyModalSkin(data?.frame_url || null, data?.video_url || null);
         } catch(e) { _applyModalSkin(null, null); }
     }
 

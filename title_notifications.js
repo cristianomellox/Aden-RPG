@@ -162,11 +162,22 @@ async function processUpdates(cities) {
             rangeEnd = city.id * 100 + 2;
         }
 
-        const { data: nobles } = await supabase
+        const { data: nobles, error: noblesError } = await supabase
             .from('players')
-            .select('name, gender, nobless')
+            .select('id, name, gender, nobless')
             .gte('nobless', rangeStart)
             .lte('nobless', rangeEnd);
+
+        // --- PATCH CIRÚRGICO DO CACHE ---
+        // Atualiza o aden_titles_cache com os nomes frescos (com emoji) para esta cidade,
+        // independentemente de haver nobres ou não (lista vazia = cidade sem títulos).
+        if (!noblesError) {
+            patchTitlesCache(city.id, nobles || [], city.owner, {
+                id: guildData.leader_id,
+                name: leaderName,
+                gender: leaderGender
+            });
+        }
 
         if (nobles && nobles.length > 0) {
             nobles.forEach(noble => {
@@ -194,6 +205,51 @@ async function processUpdates(cities) {
 
     if (ownersUpdated) {
         localStorage.setItem(OWNERS_KEY, JSON.stringify(localOwners));
+    }
+}
+
+// --- 3.5 Patch Cirúrgico do Cache de Títulos ---
+// Atualiza apenas os nobles da cidade afetada no aden_titles_cache,
+// preservando todos os outros dados intactos.
+function patchTitlesCache(cityId, freshNobles, newOwnerGuildId, leaderInfo) {
+    try {
+        const cached = localStorage.getItem('aden_titles_cache');
+        if (!cached) return; // Cache não existe ainda, nada a corrigir
+
+        const cacheData = JSON.parse(cached);
+        const cityIndex = cacheData.findIndex(c => c.id === cityId);
+        if (cityIndex === -1) return; // Cidade não está no cache
+
+        const city = cacheData[cityIndex];
+
+        // 1. Atualiza guilda dona e líder (reflete troca de rei/lord sem esperar a página de títulos)
+        city.ownerGuildId = newOwnerGuildId;
+        city.leader = leaderInfo;
+
+        // 2. Determina o range de nobless desta cidade (espelha a lógica do titulos.js)
+        let rangeStart, rangeEnd;
+        if (cityId === 1) {
+            rangeStart = 101; rangeEnd = 103;
+        } else {
+            rangeStart = cityId * 100 + 1;
+            rangeEnd = cityId * 100 + 2;
+        }
+
+        // 3. Remove entradas antigas desta cidade do cache (inclusive nomes com emoji desatualizado)
+        city.nobles = city.nobles.filter(n => n.nobless < rangeStart || n.nobless > rangeEnd);
+
+        // 4. Insere os nobles frescos vindos do DB (já com o prefixo emoji correto no campo name)
+        city.nobles.push(...freshNobles);
+
+        // 5. Atualiza timestamp para sinalizar que este cache está fresco
+        city.lastUpdate = new Date().toISOString();
+
+        cacheData[cityIndex] = city;
+        localStorage.setItem('aden_titles_cache', JSON.stringify(cacheData));
+        console.log(`[Cache] Títulos da cidade ${cityId} atualizados cirurgicamente.`);
+    } catch (e) {
+        // Falha silenciosa: não compromete a exibição de notificações
+        console.warn('[Cache] Falha ao corrigir aden_titles_cache:', e);
     }
 }
 

@@ -42,15 +42,10 @@ function _rnApplyFrame(containerEl, frameUrl) {
 
 async function _rnFetchAndApplyFrame(pid, containerEl) {
     if (!pid || !containerEl) return;
-    const cached = _rnGetSkinCache(pid);
-    if (cached !== undefined) { _rnApplyFrame(containerEl, cached.frame_url || null); return; }
     try {
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
         if (error) { _rnApplyFrame(containerEl, null); return; }
-        const frameUrl = data?.frame_url || null;
-        const videoUrl = data?.video_url || null;
-        _rnSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
-        _rnApplyFrame(containerEl, frameUrl);
+        _rnApplyFrame(containerEl, data?.frame_url || null);
     } catch(e) { _rnApplyFrame(containerEl, null); }
 }
 

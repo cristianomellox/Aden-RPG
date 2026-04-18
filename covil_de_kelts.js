@@ -66,12 +66,9 @@ function _huntApplyFrame(fr, sh, frameUrl, avatarEl, defaultBorder) {
 async function _huntFetchFrame(pid, fr, sh, avatarEl, defaultBorder) {
     if (!pid) return;
     const apply = url => _huntApplyFrame(fr, sh, url, avatarEl, defaultBorder);
-    const cached = _huntGetSkinCache(pid);
-    if (cached !== undefined) { apply(cached.frame_url || null); return; }
     try {
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
         if (error) { apply(null); return; }
-        _huntSetSkinCache(pid, { frame_url: data?.frame_url||null, video_url: data?.video_url||null });
         apply(data?.frame_url || null);
     } catch(e) { apply(null); }
 }
@@ -2400,7 +2397,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     const sndName = isEvade ? 'evade' : isCrit ? 'critical' : 'normal';
     const _vf = _spotVolume(spot.id);
     playSoundAt(sndName, (sndName === 'critical' ? 0.15 : 1.0) * _vf);
-    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 2 * _vf), 300); }
+    if (!isEvade) { const _mn = 'mob_' + spot.id; if (audioBufs[_mn]) setTimeout(() => playSoundAt(_mn, 0.4 * _vf), 300); }
 
     // Shake mob avatar
     const mobAv = targetMob.querySelector('.mob-avatar');

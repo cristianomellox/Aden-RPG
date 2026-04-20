@@ -1097,3 +1097,220 @@ textarea:focus, textarea:active {
 #pvpCombatModal .player-hp-bar {
     margin-top: 44px;
 }
+
+/* =======================================================================
+   RANKING BUTTON GLOW (Notificação de Recompensa de Temporada)
+   ======================================================================= */
+@keyframes arenaRewardSpin {
+    100% { transform: rotate(360deg); }
+}
+
+/* Wrapper do botão de ranking no topo */
+#rankingBtnWrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+#rankingBtnWrap.has-reward::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 8px;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        #ffd700 65deg,
+        transparent 130deg,
+        transparent 230deg,
+        #ff8800 295deg,
+        transparent 360deg
+    );
+    animation: arenaRewardSpin 1.8s linear infinite;
+    z-index: 0;
+    pointer-events: none;
+}
+
+#rankingBtnWrap.has-reward::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    background: #1a1a1a;
+    border-radius: 5px;
+    z-index: 0;
+    pointer-events: none;
+}
+
+#rankingBtnWrap img {
+    position: relative;
+    z-index: 1;
+}
+
+/* Aba "Passada" com glow de recompensa */
+.ranking-tab[data-tab="past"].has-reward {
+    position: relative;
+    overflow: visible !important;
+    z-index: 1;
+}
+
+.ranking-tab[data-tab="past"].has-reward::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 11px;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        #ffd700 65deg,
+        transparent 130deg,
+        transparent 230deg,
+        #ff8800 295deg,
+        transparent 360deg
+    );
+    animation: arenaRewardSpin 1.8s linear infinite;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* =======================================================================
+   MODAL DE RECOMPENSA DE TEMPORADA DA ARENA
+   ======================================================================= */
+#arenaRewardModal {
+    z-index: 1500;
+    background: rgba(0, 0, 0, 0.9) !important;
+}
+
+.arena-reward-modal-content {
+    background: linear-gradient(160deg, #1c0f00, #2a1a00, #1a0a00) !important;
+    border: 3px solid #ffd700 !important;
+    box-shadow:
+        0 0 30px rgba(255, 215, 0, 0.4),
+        0 0 60px rgba(255, 120, 0, 0.15),
+        inset 0 0 30px rgba(255, 150, 0, 0.05) !important;
+    text-align: center;
+    padding: 28px 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.arena-reward-crown-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 6px;
+    animation: arenaRewardCrownPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes arenaRewardCrownPulse {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5));
+    }
+    50% {
+        transform: scale(1.12);
+        filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.9)) drop-shadow(0 0 32px rgba(255, 140, 0, 0.5));
+    }
+}
+
+.arena-reward-title {
+    color: #ffd700 !important;
+    font-size: 1.4em;
+    font-weight: bold;
+    text-shadow: 0 0 14px rgba(255, 180, 0, 0.7), 1px 1px 3px #000 !important;
+    margin: 4px 0 10px;
+}
+
+.arena-reward-subtitle {
+    color: #e0dccc;
+    font-size: 1.05em;
+    margin-bottom: 20px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+}
+
+.arena-reward-items {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+}
+
+.arena-reward-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 215, 0, 0.07);
+    border: 1px solid rgba(255, 215, 0, 0.35) !important;
+    border-radius: 10px;
+    padding: 14px 12px 10px;
+    min-width: 82px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.arena-reward-item:hover {
+    transform: scale(1.06);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+
+.arena-reward-item img {
+    width: 62px !important;
+    height: 62px !important;
+    object-fit: contain;
+    margin-bottom: 8px;
+    border: none !important;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.4));
+}
+
+.arena-reward-item-qty {
+    color: #ffd700;
+    font-weight: bold;
+    font-size: 1.1em;
+    text-shadow: 0 0 6px rgba(255, 215, 0, 0.6), 1px 1px 2px #000;
+    margin-bottom: 4px;
+}
+
+.arena-reward-item-name {
+    color: #c8c0a8;
+    font-size: 0.68em;
+    text-align: center;
+    line-height: 1.3;
+    font-weight: normal;
+}
+
+.arena-reward-claim-btn {
+    background: linear-gradient(135deg, #b8922a, #f0d070, #c9a94a, #f0d070, #b8922a) !important;
+    background-size: 200% 100% !important;
+    background-image: none !important;
+    color: #1a0800 !important;
+    font-weight: bold !important;
+    padding: 14px 36px !important;
+    font-size: 1.15em !important;
+    text-shadow: 0 1px 2px rgba(255, 200, 0, 0.4) !important;
+    border-radius: 8px !important;
+    border: none !important;
+    transition: transform 0.2s, box-shadow 0.2s, background-position 0.4s;
+    box-shadow: 0 4px 16px rgba(255, 200, 0, 0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+    cursor: pointer;
+    animation: arenaClaimBtnShimmer 2.5s linear infinite;
+}
+
+@keyframes arenaClaimBtnShimmer {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+
+.arena-reward-claim-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 22px rgba(255, 200, 0, 0.65), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.arena-reward-claim-btn:disabled {
+    filter: grayscale(0.6) !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+    animation: none !important;
+}

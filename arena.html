@@ -22,7 +22,9 @@
     </svg>
 </button>
         <div><span id="pageTitle">Arena</span></div>
-        <img id="openRankingBtn" src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width:40px; height:40px; cursor: pointer;">
+        <div id="rankingBtnWrap">
+            <img id="openRankingBtn" src="https://aden-rpg.pages.dev/assets/iconranking.webp" alt="Ranking" style="width:40px; height:40px; cursor: pointer;">
+        </div>
     </div>
 
     <div id="arenaContainer">
@@ -136,6 +138,17 @@
             <h3 id="confirmTitle">Resultado</h3>
             <p id="confirmMessage" style="color: white; font-size: 1.1em;"></p>
             <button id="confirmActionBtn" class="action-btn">Ok</button>
+        </div>
+    </div>
+
+    <!-- Modal de Recompensa de Temporada da Arena -->
+    <div id="arenaRewardModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content arena-reward-modal-content">
+            <div class="arena-reward-crown-icon">🏆</div>
+            <h2 class="arena-reward-title">Recompensa de Temporada!</h2>
+            <p id="arenaRewardRankText" class="arena-reward-subtitle"></p>
+            <div id="arenaRewardItems" class="arena-reward-items"></div>
+            <button id="arenaRewardClaimBtn" class="action-btn arena-reward-claim-btn">⚔ Resgatar ⚔</button>
         </div>
     </div>
 

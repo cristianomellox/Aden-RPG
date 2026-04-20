@@ -46,15 +46,10 @@ function _arResetFrame(containerEl) {
 
 async function _arFetchAndApplyFrame(pid, containerEl) {
     if (!pid || !containerEl) return;
-    const cached = _arGetSkinCache(pid);
-    if (cached !== undefined) { _arApplyFrame(containerEl, cached.frame_url || null); return; }
     try {
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: pid });
         if (error) { _arApplyFrame(containerEl, null); return; }
-        const frameUrl = data?.frame_url || null;
-        const videoUrl = data?.video_url || null;
-        _arSetSkinCache(pid, { frame_url: frameUrl, video_url: videoUrl });
-        _arApplyFrame(containerEl, frameUrl);
+        _arApplyFrame(containerEl, data?.frame_url || null);
     } catch(e) { _arApplyFrame(containerEl, null); }
 }
 
@@ -1985,8 +1980,221 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }
                 }
             }
+            // === VERIFICA RECOMPENSAS DE TEMPORADA ===
+            checkArenaSeasonRewards(d);
+
             if (rankingModal) rankingModal.style.display = 'flex';
         } catch { showModalAlert("Erro ao carregar temporada passada."); } finally { hideLoading(); }
+    }
+
+    // =======================================================================
+    // 9b. SISTEMA DE RECOMPENSAS DE TEMPORADA DA ARENA
+    // =======================================================================
+
+    /** Retorna a chave YYYY_MM do mês anterior (UTC) */
+    function getArenaSeasonRewardKey() {
+        const now = new Date();
+        let y = now.getUTCFullYear(), m = now.getUTCMonth() + 1; // 1-12
+        if (m === 1) { y--; m = 12; } else { m--; }
+        return `${y}_${String(m).padStart(2, '0')}`;
+    }
+
+    /** Verifica se as recompensas da temporada anterior ainda não foram resolvidas */
+    function isArenaRewardPending() {
+        return !localStorage.getItem(`arena_season_reward_${getArenaSeasonRewardKey()}`);
+    }
+
+    /** Marca as recompensas como resolvidas (claimed ou dispensadas) */
+    function markArenaRewardDone() {
+        localStorage.setItem(`arena_season_reward_${getArenaSeasonRewardKey()}`, '1');
+    }
+
+    /** Remove o efeito de glow do botão de ranking e da aba Passada */
+    function removeArenaRewardGlow() {
+        const wrap = document.getElementById('rankingBtnWrap');
+        if (wrap) wrap.classList.remove('has-reward');
+        const pastTab = document.querySelector('.ranking-tab[data-tab="past"]');
+        if (pastTab) pastTab.classList.remove('has-reward');
+    }
+
+    /** Adiciona o efeito glow no botão de ranking e na aba Passada (apenas no dia 1) */
+    function checkAndShowArenaRewardGlow() {
+        const now = new Date();
+        if (now.getUTCDate() !== 1) return; // Glow somente no dia 1 UTC
+        if (!isArenaRewardPending()) return;
+
+        const wrap = document.getElementById('rankingBtnWrap');
+        if (wrap) wrap.classList.add('has-reward');
+
+        const pastTab = document.querySelector('.ranking-tab[data-tab="past"]');
+        if (pastTab) pastTab.classList.add('has-reward');
+    }
+
+    /**
+     * Chamada quando o ranking do mês passado é carregado.
+     * Verifica se o jogador está no top 3 e mostra o modal de recompensa.
+     * Se não estiver, remove o glow e marca como dispensado.
+     */
+    function checkArenaSeasonRewards(rankingData) {
+        if (!isArenaRewardPending()) return;
+
+        // Sem dados: dispensa o glow
+        if (!rankingData || !rankingData.length || !userId) {
+            markArenaRewardDone();
+            removeArenaRewardGlow();
+            return;
+        }
+
+        // Verifica se o snapshot tem campo 'id' (novo formato)
+        const hasIds = rankingData.some(p => p.id);
+        if (!hasIds) {
+            // Snapshot antigo sem ID — não dispensa, não mostra modal
+            // (aguarda próximo mês quando snapshot já terá o campo id)
+            return;
+        }
+
+        // Busca o jogador no top 3
+        const myIndex = rankingData.findIndex(p => p.id === userId);
+        if (myIndex === -1 || myIndex > 2) {
+            // Não está no top 3 — dispensa glow silenciosamente
+            markArenaRewardDone();
+            removeArenaRewardGlow();
+            return;
+        }
+
+        // Está no top 3 — exibe modal de recompensa
+        showArenaRewardModal(myIndex + 1);
+    }
+
+    /** Exibe o modal de recompensa de temporada para o rank informado */
+    function showArenaRewardModal(rank) {
+        const rewardDefs = {
+            1: {
+                label: '🥇 1° Lugar da Temporada!',
+                items: [
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/moldura_arena_rank1.webp', name: 'Moldura Rank 1 da Arena', qty: 1 },
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp',   name: 'Ampulheta de Caça',       qty: 10 },
+                    { img: 'https://aden-rpg.pages.dev/assets/goldcoin.webp',                  name: 'Ouro',                    qty: 50 }
+                ]
+            },
+            2: {
+                label: '🥈 2° Lugar da Temporada!',
+                items: [
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/moldura_arena_rank2.webp', name: 'Moldura Rank 2 da Arena', qty: 1 },
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp',   name: 'Ampulheta de Caça',       qty: 5 },
+                    { img: 'https://aden-rpg.pages.dev/assets/goldcoin.webp',                  name: 'Ouro',                    qty: 25 }
+                ]
+            },
+            3: {
+                label: '🥉 3° Lugar da Temporada!',
+                items: [
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/moldura_arena_rank3.webp', name: 'Moldura Rank 3 da Arena', qty: 1 },
+                    { img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp',   name: 'Ampulheta de Caça',       qty: 3 },
+                    { img: 'https://aden-rpg.pages.dev/assets/goldcoin.webp',                  name: 'Ouro',                    qty: 10 }
+                ]
+            }
+        };
+
+        const def = rewardDefs[rank];
+        if (!def) return;
+
+        const modal        = document.getElementById('arenaRewardModal');
+        const rankText     = document.getElementById('arenaRewardRankText');
+        const itemsEl      = document.getElementById('arenaRewardItems');
+        const claimBtn     = document.getElementById('arenaRewardClaimBtn');
+
+        if (!modal) return;
+
+        if (rankText) rankText.textContent = def.label;
+
+        if (itemsEl) {
+            itemsEl.innerHTML = '';
+            def.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'arena-reward-item';
+                div.innerHTML = `
+                    <img src="${item.img}" alt="${esc(item.name)}">
+                    <div class="arena-reward-item-qty">x${item.qty}</div>
+                    <div class="arena-reward-item-name">${esc(item.name)}</div>
+                `;
+                itemsEl.appendChild(div);
+            });
+        }
+
+        // Armazena o rank no dataset para o botão de resgatar
+        modal.dataset.pendingRank = rank;
+
+        // Reseta estado do botão (caso modal tenha sido aberto antes)
+        if (claimBtn) {
+            claimBtn.disabled = false;
+            claimBtn.textContent = '⚔ Resgatar ⚔';
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    /** Chama o backend para resgatar as recompensas e atualiza os caches locais */
+    async function claimArenaSeasonRewards() {
+        const modal    = document.getElementById('arenaRewardModal');
+        const claimBtn = document.getElementById('arenaRewardClaimBtn');
+
+        if (claimBtn) { claimBtn.disabled = true; claimBtn.textContent = 'Resgatando...'; }
+        showLoading();
+
+        try {
+            const { data, error } = await supabase.rpc('claim_arena_season_rewards');
+            const res = normalizeRpcResult(data);
+
+            if (error || !res?.success) {
+                showModalAlert(res?.message || 'Erro ao resgatar recompensas.');
+                if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
+                return;
+            }
+
+            // Marca como concluído e remove glows
+            markArenaRewardDone();
+            removeArenaRewardGlow();
+            if (modal) modal.style.display = 'none';
+
+            // Atualização cirúrgica do inventário (Zero Egress — igual ao commitSession)
+            if (res.timestamp && res.inventory_updates) {
+                await surgicalCacheUpdate(res.inventory_updates, res.timestamp, null);
+            }
+
+            // Atualiza ouro no cache do player (LocalStorage legado)
+            if (res.gold) {
+                try {
+                    const cached = localStorage.getItem('player_data_cache');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (parsed?.data) {
+                            parsed.data.gold = (parsed.data.gold || 0) + res.gold;
+                            localStorage.setItem('player_data_cache', JSON.stringify(parsed));
+                        }
+                    }
+                } catch(e) {}
+                // Atualiza GlobalDB
+                const gPlayer = await GlobalDB.getPlayer();
+                if (gPlayer) {
+                    await GlobalDB.updatePlayerPartial({ gold: (gPlayer.gold || 0) + res.gold });
+                }
+            }
+
+            showModalAlert(
+                `Recompensas de temporada resgatadas! 🏆<br>` +
+                `<strong style="color:#ffd700;">+${res.gold} Ouro</strong> · ` +
+                `<strong style="color:#8cf;">+${res.hourglasses} Ampulhetas</strong> · ` +
+                `<strong style="color:#fa0;">Moldura Rank ${res.rank}</strong>`,
+                'Parabéns!'
+            );
+
+        } catch(e) {
+            console.error("Erro ao resgatar recompensas de temporada:", e);
+            showModalAlert('Erro inesperado ao resgatar recompensas.');
+            if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
+        } finally {
+            hideLoading();
+        }
     }
 
     async function fetchAttackHistory() {
@@ -2092,6 +2300,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             await updateAttemptsUI();
             ensureStreakDate();
             await loadArenaLoadout();
+            // Notificação de recompensa de temporada (dia 1 do mês)
+            checkAndShowArenaRewardGlow();
         } catch (e) {
             console.error("Erro no boot:", e);
             if (e.message && (e.message.includes('JWT') || e.message.includes('auth'))) { window.location.href = "index.html"; }
@@ -2104,6 +2314,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (challengeBtn) challengeBtn.addEventListener("click", handleChallengeClick);
     if (openRankingBtn) openRankingBtn.addEventListener("click", () => { document.querySelector(".ranking-tab[data-tab='current']").click(); });
+    
+    // Listener do botão de resgatar recompensas de temporada
+    const arenaRewardClaimBtn = document.getElementById('arenaRewardClaimBtn');
+    if (arenaRewardClaimBtn) arenaRewardClaimBtn.addEventListener('click', claimArenaSeasonRewards);
     
     if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { 
         if (rankingModal) rankingModal.style.display = 'none';

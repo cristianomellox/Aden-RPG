@@ -1099,45 +1099,54 @@ textarea:focus, textarea:active {
 }
 
 /* =======================================================================
-   RANKING BUTTON GLOW (Notificação de Recompensa de Temporada)
+   RANKING BUTTON / TAB — Border-following spinner (Recompensa de Temporada)
+   Uma faísca curta que percorre a borda seguindo o contorno do elemento.
+   Técnica: conic-gradient com arco estreito girando num ::before;
+   ::after mascara o centro deixando exposta só a faixa da borda.
    ======================================================================= */
-@keyframes arenaRewardSpin {
-    100% { transform: rotate(360deg); }
+
+@keyframes arenaRewardBorderSpin {
+    to { transform: rotate(360deg); }
 }
 
-/* Wrapper do botão de ranking no topo */
+/* ── Botão de ranking (quadrado 40×40px) ── */
 #rankingBtnWrap {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
     flex-shrink: 0;
+    border-radius: 6px;
 }
 
+/* Camada giratória com a faísca */
 #rankingBtnWrap.has-reward::before {
     content: '';
     position: absolute;
-    inset: -4px;
-    border-radius: 8px;
+    inset: -3px;
+    border-radius: 7px;
+    /* Arco de ~30° dourado sobre fundo transparente — é a "faísca" */
     background: conic-gradient(
         from 0deg,
         transparent 0deg,
-        #ffd700 65deg,
-        transparent 130deg,
-        transparent 230deg,
-        #ff8800 295deg,
+        rgba(255, 215, 0, 0.18) 10deg,
+        #ffd700 22deg,
+        #fff8a0 30deg,
+        #ffd700 38deg,
+        rgba(255, 215, 0, 0.18) 50deg,
+        transparent 60deg,
         transparent 360deg
     );
-    animation: arenaRewardSpin 1.8s linear infinite;
+    animation: arenaRewardBorderSpin 1.6s linear infinite;
     z-index: 0;
     pointer-events: none;
 }
 
+/* Máscara do centro — expõe apenas a borda */
 #rankingBtnWrap.has-reward::after {
     content: '';
     position: absolute;
-    inset: 1px;
+    inset: 2px;
     background: #1a1a1a;
     border-radius: 5px;
     z-index: 0;
@@ -1149,13 +1158,14 @@ textarea:focus, textarea:active {
     z-index: 1;
 }
 
-/* Aba "Passada" com glow de recompensa */
+/* ── Aba "Passada" (retângulo arredondado) ── */
 .ranking-tab[data-tab="past"].has-reward {
     position: relative;
     overflow: visible !important;
     z-index: 1;
 }
 
+/* Camada giratória com a faísca */
 .ranking-tab[data-tab="past"].has-reward::before {
     content: '';
     position: absolute;
@@ -1164,13 +1174,27 @@ textarea:focus, textarea:active {
     background: conic-gradient(
         from 0deg,
         transparent 0deg,
-        #ffd700 65deg,
-        transparent 130deg,
-        transparent 230deg,
-        #ff8800 295deg,
+        rgba(255, 215, 0, 0.18) 10deg,
+        #ffd700 22deg,
+        #fff8a0 30deg,
+        #ffd700 38deg,
+        rgba(255, 215, 0, 0.18) 50deg,
+        transparent 60deg,
         transparent 360deg
     );
-    animation: arenaRewardSpin 1.8s linear infinite;
+    animation: arenaRewardBorderSpin 1.6s linear infinite;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Máscara do centro — expõe apenas a borda */
+.ranking-tab[data-tab="past"].has-reward::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    /* Fundo igual ao modal que contém as abas */
+    background: #3a3a3a;
+    border-radius: 9px;
     z-index: -1;
     pointer-events: none;
 }

@@ -458,11 +458,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // CONFIGURAÇÃO DE BATCH
   let knownParticipantCount = 0;     
   
-  const BATCH_THRESHOLD_MULTI = 5;   
-  const BATCH_THRESHOLD_SOLO = 5;   
+  const BATCH_THRESHOLD_MULTI = 4;   
+  const BATCH_THRESHOLD_SOLO = 4;   
   
   const DEBOUNCE_TIME_MULTI = 10000;  
-  const DEBOUNCE_TIME_SOLO = 45000;  
+  const DEBOUNCE_TIME_SOLO = 40000;  
   
   const STATS_CACHE_DURATION = 72 * 60 * 60 * 1000; 
   

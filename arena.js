@@ -2017,10 +2017,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (pastTab) pastTab.classList.remove('has-reward');
     }
 
-    /** Adiciona o efeito glow no botão de ranking e na aba Passada (apenas no dia 1) */
+    /** Adiciona o efeito glow no botão de ranking e na aba Passada enquanto houver recompensa pendente */
     function checkAndShowArenaRewardGlow() {
-        const now = new Date();
-        if (now.getUTCDate() !== 1) return; // Glow somente no dia 1 UTC
         if (!isArenaRewardPending()) return;
 
         const wrap = document.getElementById('rankingBtnWrap');

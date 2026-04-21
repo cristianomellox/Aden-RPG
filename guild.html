@@ -1055,43 +1055,16 @@ function _gResetSkin() {
     if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
 }
 
-// ─── Skin cache (shared with ranking_cp — skin_modal_v1_${pid}, 24h) ──────────
-function _gGetSkinCache(pid) {
-    try {
-        const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
-        if (!raw) return undefined;
-        const obj = JSON.parse(raw);
-        if (!obj.e || Date.now() >= obj.e) {
-            localStorage.removeItem(`skin_modal_v1_${pid}`);
-            return undefined;
-        }
-        return obj.v;
-    } catch(e) { return undefined; }
-}
-function _gSetSkinCache(pid, data) {
-    try {
-        localStorage.setItem(`skin_modal_v1_${pid}`,
-            JSON.stringify({ v: data, e: Date.now() + 86400000 }));
-    } catch(e) {}
-}
-
 // ─── Fetch & apply (SECURITY DEFINER bypasses RLS) ────────────────────────────
+// Sempre busca do servidor (sem cache) para garantir moldura e fundo sempre atualizados
 let _gFetching = false;
 async function _gFetchAndApplySkins(playerId) {
     if (!playerId || _gFetching) return;
     _gFetching = true;
     try {
-        const cached = _gGetSkinCache(playerId);
-        if (cached !== undefined) {
-            _gApplySkin(cached.frame_url, cached.video_url);
-            return;
-        }
         const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
         if (error) { console.warn('[guild skin]', error.message); _gApplySkin(null, null); return; }
-        const frameUrl = data?.frame_url || null;
-        const videoUrl = data?.video_url || null;
-        _gSetSkinCache(playerId, { frame_url: frameUrl, video_url: videoUrl });
-        _gApplySkin(frameUrl, videoUrl);
+        _gApplySkin(data?.frame_url || null, data?.video_url || null);
     } catch(e) {
         console.warn('[guild skin]', e);
         _gApplySkin(null, null);

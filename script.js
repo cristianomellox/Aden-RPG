@@ -2149,6 +2149,7 @@ const STARTER_PACK_ITEMS = [
     { id: 85, qty: 5, name: 'Escudo de Caça',            img: 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp' },
     { id: 99, qty: 5, name: 'Ampulheta de Caça',         img: 'https://aden-rpg.pages.dev/assets/itens/ampulheta_de_caca.webp' },
     { id: 41, qty: 5, name: 'Cartão de Espiral Comum',   img: 'https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp' },
+    { id: 128, qty: 1, name: 'Moldura da Raposa',   img: 'https://aden-rpg.pages.dev/assets/itens/moldura_da_raposa.webp' },
 ];
 
 /**

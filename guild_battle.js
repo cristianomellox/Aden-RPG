@@ -218,7 +218,12 @@ function computeShownAttacksAndRemaining() {
     const attacksLeft = playerState.attacks_left || 0;
     const lastAttackAt = playerState.last_attack_at;
 
-    // Se já está no cap
+    // Ações compradas podem exceder MAX_ACTIONS — mostrar valor real sem tentar regenerar
+    if (attacksLeft > MAX_ACTIONS) {
+        return { shownAttacks: attacksLeft, secondsToNext: 0 };
+    }
+
+    // Se já está exatamente no cap
     if (attacksLeft >= MAX_ACTIONS) {
         return { shownAttacks: MAX_ACTIONS, secondsToNext: 0 };
     }
@@ -1011,13 +1016,33 @@ function openBattleShop() {
     if (modals.battleShopMessage) {
         modals.battleShopMessage.textContent = "";
     }
+
+    const MAX_PACK_PURCHASES = 5;
+    const playerState = currentBattleState && currentBattleState.player_state;
+    const pack1Count = playerState ? (parseInt(playerState.bought_action_pack_1) || 0) : 0;
+    const pack2Count = playerState ? (parseInt(playerState.bought_action_pack_2) || 0) : 0;
+    const pack1Remaining = Math.max(0, MAX_PACK_PURCHASES - pack1Count);
+    const pack2Remaining = Math.max(0, MAX_PACK_PURCHASES - pack2Count);
+
     if (modals.shopBtnPack1) {
-        modals.shopBtnPack1.disabled = false;
+        const exhausted1 = pack1Remaining <= 0;
+        modals.shopBtnPack1.disabled = exhausted1;
         modals.shopBtnPack1.textContent = "Comprar";
+        const rem1El = document.getElementById('pack1Remaining');
+        if (rem1El) {
+            rem1El.textContent = exhausted1 ? "Esgotado" : `${pack1Remaining} compra(s) restante(s)`;
+            rem1El.style.color = exhausted1 ? '#dc3545' : '#aaa';
+        }
     }
     if (modals.shopBtnPack2) {
-        modals.shopBtnPack2.disabled = false;
+        const exhausted2 = pack2Remaining <= 0;
+        modals.shopBtnPack2.disabled = exhausted2;
         modals.shopBtnPack2.textContent = "Comprar";
+        const rem2El = document.getElementById('pack2Remaining');
+        if (rem2El) {
+            rem2El.textContent = exhausted2 ? "Esgotado" : `${pack2Remaining} compra(s) restante(s)`;
+            rem2El.style.color = exhausted2 ? '#dc3545' : '#aaa';
+        }
     }
     modals.battleShop.style.display = 'flex';
 }
@@ -1031,16 +1056,54 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     if (error || !data.success) {
         modals.battleShopMessage.textContent = `Erro: ${error ? error.message : data.message}`;
         modals.battleShopMessage.style.color = '#dc3545';
-        if (!data.message.includes("já comprou")) {
-             btnEl.disabled = false;
+        // Reabilita o botão apenas se não for erro de limite atingido
+        if (!data?.message?.includes("Limite")) {
+            btnEl.disabled = false;
         }
         return;
     }
 
     modals.battleShopMessage.textContent = data.message;
     modals.battleShopMessage.style.color = '#28a745';
-    btnEl.textContent = "Comprado";
-    pollBattleState(); // Sync para garantir as novas ações
+
+    // Atualiza o estado local imediatamente com a resposta do servidor
+    // (sem precisar de um pollBattleState completo, que poderia resetar o display para 5/5)
+    if (data.new_attacks_left !== undefined && currentBattleState && currentBattleState.player_state) {
+        currentBattleState.player_state.attacks_left = data.new_attacks_left;
+        // Se a quantidade de ações excede o MAX_ACTIONS, garante que não há cooldown ativo
+        if (data.new_attacks_left >= MAX_ACTIONS) {
+            currentBattleState.player_state.last_attack_at = null;
+        }
+        renderPlayerFooter(currentBattleState.player_state, currentBattleState.player_garrison);
+    }
+
+    // Incrementa o contador local de compras para atualizar a loja em tempo real
+    if (currentBattleState && currentBattleState.player_state) {
+        const MAX_PACK_PURCHASES = 5;
+        const packCol = packId === 1 ? 'bought_action_pack_1' : 'bought_action_pack_2';
+        const oldCount = parseInt(currentBattleState.player_state[packCol]) || 0;
+        currentBattleState.player_state[packCol] = Math.min(oldCount + 1, MAX_PACK_PURCHASES);
+
+        // Atualiza visualmente os contadores da loja
+        const pack1Count = parseInt(currentBattleState.player_state.bought_action_pack_1) || 0;
+        const pack2Count = parseInt(currentBattleState.player_state.bought_action_pack_2) || 0;
+
+        const rem1El = document.getElementById('pack1Remaining');
+        if (rem1El) {
+            const rem = Math.max(0, MAX_PACK_PURCHASES - pack1Count);
+            rem1El.textContent = rem <= 0 ? "Esgotado" : `${rem} compra(s) restante(s)`;
+            rem1El.style.color = rem <= 0 ? '#dc3545' : '#aaa';
+            if (modals.shopBtnPack1) modals.shopBtnPack1.disabled = rem <= 0;
+        }
+        const rem2El = document.getElementById('pack2Remaining');
+        if (rem2El) {
+            const rem = Math.max(0, MAX_PACK_PURCHASES - pack2Count);
+            rem2El.textContent = rem <= 0 ? "Esgotado" : `${rem} compra(s) restante(s)`;
+            rem2El.style.color = rem <= 0 ? '#dc3545' : '#aaa';
+            if (modals.shopBtnPack2) modals.shopBtnPack2.disabled = rem <= 0;
+        }
+    }
+
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
     }, 1500);

@@ -1501,6 +1501,11 @@ document.addEventListener("DOMContentLoaded", () => {
       <img id="pvGiftPreviewImg" src="" alt="" style="display:none">
       <div><strong id="pvGiftPreviewName"></strong><small id="pvGiftPreviewSub"></small></div>
     </div>
+    <div class="pv-trade-input-group" style="display:flex;flex-direction:column;gap:4px;">
+      <label style="color:#9a7abf;font-size:.75em;text-transform:uppercase;letter-spacing:.4px;">Quantidade</label>
+      <input type="number" id="pvGiftQtyInput" min="1" max="1" value="1"
+        style="background:rgba(0,0,0,.4);border:1px solid rgba(120,70,200,.5);border-radius:6px;color:#e0ccff;padding:6px 10px;font-size:.9em;outline:none;width:100%;box-sizing:border-box;">
+    </div>
     <p class="pv-gift-hint">O destinatário tem 24h para aceitar.</p>
     <button id="pvGiftSendBtn">Enviar Presente</button>
   </div>
@@ -1549,6 +1554,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 document.getElementById('pvGiftPreviewImg').style.display = skin.img ? 'block' : 'none';
                 document.getElementById('pvGiftPreviewName').textContent = skin.name;
                 document.getElementById('pvGiftPreviewSub').textContent  = sub;
+                const qtyInput = document.getElementById('pvGiftQtyInput');
+                if (qtyInput) { qtyInput.max = skin.qty; qtyInput.value = 1; }
                 cfg.style.display = 'flex';
             });
             listDiv.appendChild(row);
@@ -1558,19 +1565,21 @@ document.addEventListener("DOMContentLoaded", () => {
     async function submitGiftOffer() {
         if (!selectedGiftItem || !currentOpenConversationId || !currentOtherPlayerId) return;
         const btn = document.getElementById('pvGiftSendBtn');
+        const qtyInput = document.getElementById('pvGiftQtyInput');
+        const qty = Math.max(1, Math.min(parseInt(qtyInput?.value) || 1, selectedGiftItem.qty));
         btn.disabled = true; btn.textContent = 'Enviando...';
         try {
             const { data, error } = await supabaseClient.rpc('create_player_gift', {
                 p_conversation_id: parseInt(currentOpenConversationId),
                 p_receiver_id:     currentOtherPlayerId,
                 p_item_id:         selectedGiftItem.id,
+                p_quantity:        qty,
                 p_item_name:       selectedGiftItem.name,
                 p_item_img:        selectedGiftItem.img || ''
             });
             if (error) throw error;
             if (!data.success) throw new Error(data.message);
-            // Decrementa IDB
-            await decrementIdbItem(selectedGiftItem.id, 1);
+            await decrementIdbItem(selectedGiftItem.id, qty);
             closeGiftModal();
             showFloatingMessage('Presente enviado! O destinatário tem 24h para aceitar.');
             await fetchAndSyncMessages(true);
@@ -1615,7 +1624,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
                 btns.forEach(b => b.disabled = false); return;
             }
-            if (isSender) await incrementIdbItem(itemId, 1);
+            if (isSender) await incrementIdbItem(itemId, data.quantity || 1);
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
             showFloatingMessage(data.message || 'Presente processado.');
@@ -1625,6 +1634,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function buildGiftMessageHtml(msg, giftStatuses) {
         const giftId   = Number(msg.gift_id);
         const itemId   = Number(msg.gift_item_id);
+        const qty      = Number(msg.gift_quantity) || 1;
         const expiresAt = new Date(msg.gift_expires_at);
         const isSender = msg.sender_id === currentPlayer.id;
         const itemName = msg.gift_item_name || `Skin #${itemId}`;
@@ -1648,7 +1658,7 @@ document.addEventListener("DOMContentLoaded", () => {
   <div class="pv-gift-msg-header"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>${isSender ? 'Presente Enviado' : 'Você Recebeu um Presente'}</div>
   <div class="pv-gift-msg-body">
     ${itemImg ? `<img src="${itemImg}" alt="${itemName}" loading="lazy">` : ''}
-    <div class="pv-gift-msg-info"><div class="pv-gift-name">${itemName}</div><div class="pv-gift-sub">Skin</div></div>
+    <div class="pv-gift-msg-info"><div class="pv-gift-name">${itemName}</div><div class="pv-gift-sub">Skin${qty > 1 ? ` · Qtd: ${qty}` : ''}</div></div>
   </div>
   <div class="pv-gift-msg-footer">
     ${expiryStr ? `<div class="pv-gift-expiry">${expiryStr}</div>` : ''}

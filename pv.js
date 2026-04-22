@@ -1566,7 +1566,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!selectedGiftItem || !currentOpenConversationId || !currentOtherPlayerId) return;
         const btn = document.getElementById('pvGiftSendBtn');
         const qtyInput = document.getElementById('pvGiftQtyInput');
-        const qty = Math.max(1, Math.min(parseInt(qtyInput?.value) || 1, selectedGiftItem.qty));
+        const qty = parseInt(qtyInput?.value) || 1;
+
+        if (qty < 1 || isNaN(qty)) {
+            showFloatingMessage('Quantidade inválida.');
+            return;
+        }
+        if (qty > selectedGiftItem.qty) {
+            showFloatingMessage(`Quantidade insuficiente. Você tem apenas ${selectedGiftItem.qty} disponível(is).`);
+            if (qtyInput) qtyInput.value = selectedGiftItem.qty;
+            return;
+        }
+
         btn.disabled = true; btn.textContent = 'Enviando...';
         try {
             const { data, error } = await supabaseClient.rpc('create_player_gift', {

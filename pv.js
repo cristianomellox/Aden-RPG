@@ -471,22 +471,27 @@ margin-top: 8px;
 .pv-trade-btn-cancel:hover  { opacity: .85; }
 .chat-message .pv-trade-msg { max-width: 100%; }
 
-/* ── CABEÇALHO DA LISTA ── */
-#pv-list-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 14px 4px;
-    border-bottom: 1px solid rgba(120,60,200,.2);
+/* ── BARRA ABAIXO DAS ABAS (➕ nova conversa) ── */
+#pv-list-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 6px 12px 5px;
+    border-bottom: 1px solid rgba(120,60,200,.18);
     flex-shrink: 0;
+    background: rgba(0,0,0,.08);
 }
-.pv-list-title { color: #b090e0; font-size: .82em; font-weight: bold; letter-spacing: .4px; text-transform: uppercase; }
 #pv-new-convo-btn {
-    background: none; border: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    padding: 5px; border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
     transition: background .15s, transform .15s;
-    color: #d4a017;
+    line-height: 0;
 }
-#pv-new-convo-btn:hover { background: rgba(212,160,23,.12); transform: scale(1.15); }
+#pv-new-convo-btn:hover { background: rgba(212,160,23,.14); transform: scale(1.18); }
 
 /* ── MENU TRÊS PONTOS ── */
 #pv-context-menu-wrap { position: relative; display: flex; align-items: center; }
@@ -1372,6 +1377,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         conversationListDiv.style.display = 'none';
+        const pvListBar = document.getElementById('pv-list-bar');
+        if (pvListBar) pvListBar.style.display = 'none';
         chatViewDiv.style.display = 'flex';
         await renderChatMessages(convo);
     }
@@ -1930,6 +1937,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function setupEventListeners() {
+        const pvListBar = document.getElementById('pv-list-bar');
+
         if (pvMenuBtn) pvMenuBtn.onclick = () => { pvModal.style.display = 'flex'; };
         if (closePvModalBtn) closePvModalBtn.onclick = () => pvModal.style.display = 'none';
 
@@ -1937,10 +1946,12 @@ document.addEventListener("DOMContentLoaded", () => {
             tab.addEventListener('click', () => {
                 pvTabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
-                pvMessageContent.style.display = tab.dataset.tab === 'pv-messages' ? 'block' : 'none';
-                pvSystemContent.style.display  = tab.dataset.tab === 'pv-system'   ? 'block' : 'none';
-                if (tab.dataset.tab === 'pv-system') fetchAndRenderSystemMessages({ markAsRead: true, forceRefresh: true });
-                else if (tab.dataset.tab === 'pv-messages') fetchAndSyncMessages(true);
+                const isMessages = tab.dataset.tab === 'pv-messages';
+                pvMessageContent.style.display = isMessages ? 'block' : 'none';
+                pvSystemContent.style.display  = !isMessages ? 'block' : 'none';
+                if (pvListBar) pvListBar.style.display = isMessages ? 'flex' : 'none';
+                if (!isMessages) fetchAndRenderSystemMessages({ markAsRead: true, forceRefresh: true });
+                else fetchAndSyncMessages(true);
             });
         });
 
@@ -1950,8 +1961,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 conversationListDiv.style.display = 'flex';
                 currentOpenConversationId         = null;
                 currentOtherPlayerId              = null;
-                // Fecha dropdown se estiver aberto
                 if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+                const pvListBar = document.getElementById('pv-list-bar');
+                if (pvListBar) pvListBar.style.display = 'flex';
             };
         }
 

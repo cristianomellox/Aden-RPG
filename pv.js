@@ -476,10 +476,11 @@ margin-top: 8px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    padding: 6px 12px 5px;
+    padding: 5px 10px 4px;
     border-bottom: 1px solid rgba(120,60,200,.18);
-    flex-shrink: 0;
     background: rgba(0,0,0,.08);
+    width: 100%;
+    box-sizing: border-box;
 }
 #pv-new-convo-btn {
     display: flex;
@@ -490,6 +491,7 @@ margin-top: 8px;
     border-radius: 50%;
     transition: background .15s, transform .15s;
     line-height: 0;
+    user-select: none;
 }
 #pv-new-convo-btn:hover { background: rgba(212,160,23,.14); transform: scale(1.18); }
 
@@ -763,6 +765,70 @@ document.addEventListener("DOMContentLoaded", () => {
         confirmModalCancelBtn.addEventListener('click', closeConfirmModal);
         confirmModalCloseBtn.addEventListener('click', closeConfirmModal);
         confirmModal.addEventListener('click', e => { if (e.target === confirmModal) closeConfirmModal(); });
+    }
+
+    // ── LISTENERS QUE NÃO DEPENDEM DE DADOS DO JOGADOR ──
+    // Executados imediatamente, sem esperar initializePV
+    if (pvMenuBtn) pvMenuBtn.onclick = () => { pvModal.style.display = 'flex'; };
+    if (closePvModalBtn) closePvModalBtn.onclick = () => pvModal.style.display = 'none';
+
+    pvTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            pvTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const isMessages = tab.dataset.tab === 'pv-messages';
+            if (pvMessageContent) pvMessageContent.style.display = isMessages ? 'block' : 'none';
+            if (pvSystemContent)  pvSystemContent.style.display  = !isMessages ? 'block' : 'none';
+            const pvListBar = document.getElementById('pv-list-bar');
+            if (pvListBar) pvListBar.style.display = isMessages ? 'flex' : 'none';
+            if (!isMessages) fetchAndRenderSystemMessages({ markAsRead: true, forceRefresh: true });
+            else fetchAndSyncMessages(true);
+        });
+    });
+
+    if (pvNewConvoBtn) pvNewConvoBtn.onclick = () => openNewConvoModal();
+
+    if (backToListBtn) {
+        backToListBtn.onclick = () => {
+            if (chatViewDiv)         chatViewDiv.style.display         = 'none';
+            if (conversationListDiv) conversationListDiv.style.display = 'flex';
+            currentOpenConversationId = null;
+            currentOtherPlayerId      = null;
+            if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+            const pvListBar = document.getElementById('pv-list-bar');
+            if (pvListBar) pvListBar.style.display = 'flex';
+        };
+    }
+
+    document.addEventListener('click', () => {
+        if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+    });
+
+    if (pvContextMenuBtn) {
+        pvContextMenuBtn.onclick = (e) => {
+            e.stopPropagation();
+            const isOpen = pvContextDropdown && pvContextDropdown.style.display === 'block';
+            if (pvContextDropdown) pvContextDropdown.style.display = isOpen ? 'none' : 'block';
+        };
+    }
+
+    if (pvMenuDelete) {
+        pvMenuDelete.onclick = (e) => {
+            e.stopPropagation();
+            if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+            if (!currentOpenConversationId) return;
+            const convo = localConversations.get(currentOpenConversationId);
+            const message = convo && convo.is_server_deleted
+                ? 'Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local.'
+                : 'Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.';
+            showConfirmModal(message, () => {
+                localConversations.delete(currentOpenConversationId);
+                saveToLocalStorage();
+                renderConversationList();
+                if (backToListBtn) backToListBtn.click();
+                showFloatingMessage('Conversa apagada.');
+            });
+        };
     }
 
     function showSystemMessageModal(title, content, date) {
@@ -1936,74 +2002,20 @@ document.addEventListener("DOMContentLoaded", () => {
         checkUnreadStatus();
     }
 
+    // ── LISTENERS QUE DEPENDEM DE DADOS DO JOGADOR ──
+    // Chamado após initializePV() resolver
     function setupEventListeners() {
-        const pvListBar = document.getElementById('pv-list-bar');
-
-        if (pvMenuBtn) pvMenuBtn.onclick = () => { pvModal.style.display = 'flex'; };
-        if (closePvModalBtn) closePvModalBtn.onclick = () => pvModal.style.display = 'none';
-
-        pvTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                pvTabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                const isMessages = tab.dataset.tab === 'pv-messages';
-                pvMessageContent.style.display = isMessages ? 'block' : 'none';
-                pvSystemContent.style.display  = !isMessages ? 'block' : 'none';
-                if (pvListBar) pvListBar.style.display = isMessages ? 'flex' : 'none';
-                if (!isMessages) fetchAndRenderSystemMessages({ markAsRead: true, forceRefresh: true });
-                else fetchAndSyncMessages(true);
-            });
-        });
-
-        if (backToListBtn) {
-            backToListBtn.onclick = () => {
-                chatViewDiv.style.display         = 'none';
-                conversationListDiv.style.display = 'flex';
-                currentOpenConversationId         = null;
-                currentOtherPlayerId              = null;
-                if (pvContextDropdown) pvContextDropdown.style.display = 'none';
-                const pvListBar = document.getElementById('pv-list-bar');
-                if (pvListBar) pvListBar.style.display = 'flex';
-            };
-        }
-
-        // Botão ➕ – nova conversa
-        if (pvNewConvoBtn) pvNewConvoBtn.onclick = openNewConvoModal;
-
-        // Menu três pontos
-        if (pvContextMenuBtn) {
-            pvContextMenuBtn.onclick = (e) => {
-                e.stopPropagation();
-                const isOpen = pvContextDropdown.style.display === 'block';
-                pvContextDropdown.style.display = isOpen ? 'none' : 'block';
-            };
-        }
-        // Fecha dropdown ao clicar fora
-        document.addEventListener('click', () => {
+        // Escambo e Presentear precisam de supabaseClient e currentPlayer
+        if (pvMenuTrade) pvMenuTrade.onclick = (e) => {
+            e.stopPropagation();
             if (pvContextDropdown) pvContextDropdown.style.display = 'none';
-        });
-
-        // Itens do menu
-        if (pvMenuTrade) pvMenuTrade.onclick = (e) => { e.stopPropagation(); pvContextDropdown.style.display = 'none'; openTradePanel(); };
-        if (pvMenuGift)  pvMenuGift.onclick  = (e) => { e.stopPropagation(); pvContextDropdown.style.display = 'none'; openGiftPanel(); };
-        if (pvMenuDelete) {
-            pvMenuDelete.onclick = (e) => {
-                e.stopPropagation();
-                pvContextDropdown.style.display = 'none';
-                if (!currentOpenConversationId) return;
-                const convo = localConversations.get(currentOpenConversationId);
-                const message = convo && convo.is_server_deleted
-                    ? 'Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local.'
-                    : 'Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.';
-                showConfirmModal(message, () => {
-                    localConversations.delete(currentOpenConversationId);
-                    saveToLocalStorage();
-                    renderConversationList();
-                    backToListBtn.click();
-                    showFloatingMessage('Conversa apagada.');
-                });
-            };
-        }
+            openTradePanel();
+        };
+        if (pvMenuGift) pvMenuGift.onclick = (e) => {
+            e.stopPropagation();
+            if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+            openGiftPanel();
+        };
 
         const handleSendMessage = async () => {
             const messageText = chatInput.value.trim();
@@ -2036,7 +2048,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     chatInput.placeholder = 'Aguardando resposta...';
                     sendMessageBtn.style.filter = 'grayscale(1)';
                 } else {
-                    backToListBtn.click();
+                    if (backToListBtn) backToListBtn.click();
                 }
                 sendMessageBtn.style.pointerEvents = 'auto';
             }

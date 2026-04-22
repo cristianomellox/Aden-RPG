@@ -193,21 +193,6 @@ function injectTradeStyles() {
     const s = document.createElement('style');
     s.id = 'pvTradeStyles';
     s.textContent = `
-/* ── BOTÃO DE COMÉRCIO ── */
-#pv-trade-btn {
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    margin-left: auto;
-    margin-right: 4px;
-    opacity: 0.9;
-    transition: opacity .2s, transform .2s;
-}
-#pv-trade-btn:hover { opacity: 1; transform: scale(1.1); }
-#pv-trade-btn img   { width: 45px; height: 45px; display: block;
-margin-top: 8px;
-}
-
 /* ── MODAL DE SELEÇÃO DE ITENS ── */
 #pvTradeModal {
     position: fixed; inset: 0;
@@ -592,13 +577,17 @@ async function getGiftableSkinsFromIdb() {
             if (!item) continue;
             const id = item.item_id;
             if (!id || item.item_type !== 'skin' || BLOCKED_GIFT_IDS.has(id)) continue;
+            // Skins com equipped_slot preenchido estão ativas no perfil → não podem ser presenteadas
+            if (inv.equipped_slot) continue;
             if (!totals[id]) {
-                const raw = item.img || null;
+                const raw = item.img || item.skin_frame_url || null;
                 totals[id] = {
-                    id, name: item.name || `Skin #${id}`,
+                    id, name: item.name || item.display_name || `Skin #${id}`,
                     img: raw ? (raw.startsWith('http') ? raw : BASE_ITEM_URL + raw) : '',
                     subtype: item.item_subtype || item.subtype || '',
                     qty: 0,
+                    // Guarda o inventory_items.id para exclusão precisa
+                    inv_id: inv.id,
                 };
             }
             totals[id].qty += (inv.quantity || 0);
@@ -610,20 +599,38 @@ async function getGiftableSkinsFromIdb() {
 
 async function getGiftableSkinsFromSupabase(playerId) {
     try {
+        // Busca o player para saber quais inventory_ids estão ativos
+        const { data: playerData } = await supabaseClient
+            .from('players')
+            .select('active_frame_inventory_id, active_video_inventory_id')
+            .eq('id', playerId)
+            .single();
+
+        const activeIds = new Set([
+            playerData?.active_frame_inventory_id,
+            playerData?.active_video_inventory_id,
+        ].filter(Boolean));
+
         const { data, error } = await supabaseClient
             .from('inventory_items')
-            .select('item_id, quantity, items:item_id(id, name, img, item_type, item_subtype)')
-            .eq('player_id', playerId).gt('quantity', 0);
+            .select('id, item_id, quantity, equipped_slot, items:item_id(item_id, name, display_name, img, skin_frame_url, item_type, item_subtype)')
+            .eq('player_id', playerId)
+            .eq('items.item_type', 'skin')
+            .gt('quantity', 0);
         if (error || !data) return [];
+
         const totals = {};
         for (const row of data) {
             const item = Array.isArray(row.items) ? row.items[0] : row.items;
-            if (!item || item.item_type !== 'skin' || BLOCKED_GIFT_IDS.has(row.item_id)) continue;
+            if (!item || item.item_type !== 'skin') continue;
+            if (BLOCKED_GIFT_IDS.has(row.item_id)) continue;
+            // Exclui skins com equipped_slot (ativas) ou com inventory id ativo
+            if (row.equipped_slot || activeIds.has(row.id)) continue;
             const id = row.item_id;
             if (!totals[id]) {
-                const raw = item.img || null;
+                const raw = item.img || item.skin_frame_url || null;
                 totals[id] = {
-                    id, name: item.name || `Skin #${id}`,
+                    id, name: item.display_name || item.name || `Skin #${id}`,
                     img: raw ? (raw.startsWith('http') ? raw : BASE_ITEM_URL + raw) : '',
                     subtype: item.item_subtype || '',
                     qty: 0,
@@ -677,9 +684,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let   confirmModalConfirmBtn = document.getElementById('confirmModalConfirmBtn');
     const confirmModalCancelBtn  = document.getElementById('confirmModalCancelBtn');
     const confirmModalCloseBtn   = confirmModal ? confirmModal.querySelector('.close-btn') : null;
-
-    // --- Botão de comércio (inserido dinamicamente no header do chat) ---
-    let tradeBtnEl = null;
 
     // --- Novos elementos ───
     const pvNewConvoBtn     = document.getElementById('pv-new-convo-btn');
@@ -1309,7 +1313,6 @@ document.addEventListener("DOMContentLoaded", () => {
             chatInput.disabled = true;
             chatInput.placeholder = 'Conversa arquivada - somente leitura.';
             sendMessageBtn.style.filter = 'grayscale(1)';
-            if (tradeBtnEl) tradeBtnEl.style.display = 'none';
         } else {
             const isPlayerOne    = convo.player_one_id === currentPlayer.id;
             const unreadColumn   = isPlayerOne ? 'unread_by_player_one' : 'unread_by_player_two';
@@ -1331,7 +1334,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 chatInput.placeholder = 'Digite sua mensagem...';
                 sendMessageBtn.style.filter = '';
             }
-            if (tradeBtnEl) tradeBtnEl.style.display = 'flex';
         }
 
         conversationListDiv.style.display = 'none';
@@ -1341,30 +1343,21 @@ document.addEventListener("DOMContentLoaded", () => {
     window.openChatView = openChatView;
 
     function _ensureTradeHeaderBtn(convo) {
-        const chatHeader = chatViewDiv.querySelector('.chat-header');
-        if (!chatHeader) return;
-
-        // Remove botão antigo se existir
+        // Remove botão legado se existir de versão anterior
         const old = document.getElementById('pv-trade-btn');
         if (old) old.remove();
 
         // Controla visibilidade do menu de contexto (⋮)
         if (pvContextMenuBtn) {
-            pvContextMenuBtn.style.display = convo.is_server_deleted ? 'none' : 'flex';
+            pvContextMenuBtn.style.display = 'flex';
         }
         if (pvContextDropdown) pvContextDropdown.style.display = 'none';
 
-        if (convo.is_server_deleted) return;
-
-        tradeBtnEl = document.createElement('div');
-        tradeBtnEl.id = 'pv-trade-btn';
-        tradeBtnEl.title = 'Comércio entre jogadores';
-        tradeBtnEl.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/tradep.webp" alt="Comércio">`;
-        tradeBtnEl.addEventListener('click', openTradePanel);
-
-        // Insere antes do menu de contexto
-        const ctxWrap = document.getElementById('pv-context-menu-wrap');
-        chatHeader.insertBefore(tradeBtnEl, ctxWrap || deleteConvoBtn);
+        // Mostra/oculta opções de escambo e presente para conversas arquivadas
+        if (pvMenuTrade) pvMenuTrade.style.display = convo.is_server_deleted ? 'none' : 'flex';
+        if (pvMenuGift)  pvMenuGift.style.display  = convo.is_server_deleted ? 'none' : 'flex';
+        // Excluir sempre visível
+        if (pvMenuDelete) pvMenuDelete.style.display = 'flex';
     }
 
     async function renderChatMessages(convo) {
@@ -1693,13 +1686,29 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!name) return;
             statusEl.textContent = ''; statusEl.className = ''; btn.disabled = true; btn.textContent = 'Buscando...';
             try {
-                const { data: players, error } = await supabaseClient.from('players').select('id, name').eq('name', name).limit(1);
-                if (error) throw error;
-                if (!players || players.length === 0) {
-                    statusEl.textContent = 'Jogador não encontrado. Verifique o nome.';
+                // Tenta nome exato primeiro; caso falhe, busca nomes que terminem com o texto
+                // para cobrir jogadores com emojis de título (👑⚜️🤡🔰🛡️) na frente do nome
+                let found = null;
+
+                const { data: exact } = await supabaseClient
+                    .from('players').select('id, name').eq('name', name).limit(1);
+                if (exact && exact.length > 0) {
+                    found = exact[0];
+                } else {
+                    // Busca ilike terminando com o nome (captura "👑 Nome", "⚜️ Nome", etc.)
+                    const { data: fuzzy } = await supabaseClient
+                        .from('players').select('id, name').ilike('name', `%${name}`).limit(10);
+                    if (fuzzy && fuzzy.length > 0) {
+                        const emojiStrip = /^[\p{Emoji}\s]+/u;
+                        found = fuzzy.find(p => p.name.replace(emojiStrip, '') === name) || null;
+                    }
+                }
+
+                if (!found) {
+                    statusEl.textContent = 'Jogador não encontrado. Verifique o nome exato.';
                     btn.disabled = false; btn.textContent = 'Iniciar Conversa'; return;
                 }
-                const target = players[0];
+                const target = found;
                 if (target.id === currentPlayer.id) {
                     statusEl.textContent = 'Você não pode conversar consigo mesmo.';
                     btn.disabled = false; btn.textContent = 'Iniciar Conversa'; return;

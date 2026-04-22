@@ -914,9 +914,10 @@ function renderPlayerOnSpot(spotId){
         wrap.appendChild(gb);
         gb.style.marginBottom='30px';
     } else { nm.style.marginBottom='30px'; }
-    const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};wrap.appendChild(av);
+    const av=document.createElement('img');av.className='player-spot-avatar';av.src=playerData.avatar_url||DEFAULT_AVATAR;av.onerror=()=>{av.src=DEFAULT_AVATAR;};
+    const avWrap=document.createElement('div');avWrap.className='avatar-frame-wrap';avWrap.appendChild(av);wrap.appendChild(avWrap);
     spotEl.appendChild(wrap);
-    if(userId){const{fr:_sFr,sh:_sSh}=_huntAddFrame(wrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_sFr,_sSh,av,117,60);});_huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');}
+    if(userId){const{fr:_sFr,sh:_sSh}=_huntAddFrame(avWrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_sFr,_sSh,av,117,60);});_huntFetchFrame(userId,_sFr,_sSh,av,'3px solid #fc0');}
     if(spot)startWander(wrap,spot.width,spot.height,800);
 }
 function removePlayerFromSpot(){stopCombatLoop();document.querySelectorAll('.player-avatar-wrapper').forEach(e=>e.remove());}
@@ -990,8 +991,8 @@ function renderOtherPlayers(players){
         if(p.is_eliminated||isDead) av.classList.add('eliminated');
         av.src=displayAvatar;
         av.onerror=()=>{av.src=DEFAULT_AVATAR;};
-        wrap.appendChild(av);
-        if(!p.is_eliminated&&!isDead&&p.id){const{fr:_oFr,sh:_oSh}=_huntAddFrame(wrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_oFr,_oSh,av,117,60);});_huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');}
+        const avWrap=document.createElement('div');avWrap.className='avatar-frame-wrap';avWrap.appendChild(av);wrap.appendChild(avWrap);
+        if(!p.is_eliminated&&!isDead&&p.id){const{fr:_oFr,sh:_oSh}=_huntAddFrame(avWrap,117);requestAnimationFrame(()=>{_huntPositionFrameOffset(_oFr,_oSh,av,117,60);});_huntFetchFrame(p.id,_oFr,_oSh,av,'3px solid #48f');}
 
         if(p.is_eliminated){
             // Eliminado permanentemente hoje

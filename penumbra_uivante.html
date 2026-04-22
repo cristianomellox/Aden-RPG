@@ -129,12 +129,13 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}
 .player-name-label{font-size:0.75em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
-.player-spot-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #fc0;object-fit:cover;background:#222;}
+.avatar-frame-wrap{position:relative;width:60px;height:60px;flex-shrink:0;}
+.player-spot-avatar{position:absolute;top:0;left:0;width:60px;height:60px;border-radius:50%;border:3px solid #fc0;object-fit:cover;background:#222;}
 
 .other-player-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:9;cursor:pointer;}
 .other-player-shield{width:30px;height:30px;object-fit:contain;}
 .other-player-name{font-size:0.75em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
-.other-player-avatar{width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
+.other-player-avatar{position:absolute;top:0;left:0;width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
 .other-player-avatar.eliminated{filter:grayscale(100%) brightness(.6);}
 .other-eliminated-label{font-size:.55em;color:#ffc3c3;font-weight:bold;text-shadow:1px 1px 2px #000;}
 
@@ -202,7 +203,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 .mob-dying .mob-name{animation:mob-death-fade 0.65s ease-out forwards!important;}
 .mob-respawning .mob-avatar{animation:mob-respawn 0.7s cubic-bezier(.22,1,.36,1) forwards!important;}
 .mob-respawning .mob-name{animation:mob-respawn 0.55s cubic-bezier(.22,1,.36,1) forwards!important;}
-.player-lunging .player-spot-avatar,.player-lunging .other-player-avatar{animation:player-lunge 0.45s ease-out!important;}
+.player-lunging .avatar-frame-wrap{animation:player-lunge 0.45s ease-out!important;}
 .mob-impact-flash .mob-avatar{animation:mob-impact-flash 0.28s ease-out!important;}
 
 /* ── KILL BANNER ─── */

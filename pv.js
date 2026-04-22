@@ -186,6 +186,92 @@ async function incrementIdbItem(itemId, amount) {
 }
 
 // =========================================================
+// >>> SKINS PRESENTEÁVEIS – IDB + FALLBACK SUPABASE <<<
+// =========================================================
+const BLOCKED_GIFT_IDS = new Set([130, 131, 132, 133]);
+
+async function getGiftableSkinsFromIdb() {
+    try {
+        const db = await openIdb();
+        if (!db.objectStoreNames.contains(IDB_STORE)) return null; // trigger fallback
+        const tx  = db.transaction(IDB_STORE, 'readonly');
+        const all = await new Promise((res, rej) => {
+            const r = tx.objectStore(IDB_STORE).getAll();
+            r.onsuccess = () => res(r.result);
+            r.onerror   = () => rej(r.error);
+        });
+        const totals = {};
+        for (const inv of all) {
+            const item = inv.items;
+            if (!item) continue;
+            const id   = item.item_id;
+            const type = item.item_type;
+            if (!id || type !== 'skin' || BLOCKED_GIFT_IDS.has(id)) continue;
+            if (!totals[id]) {
+                const rawImg = item.img || null;
+                totals[id] = {
+                    id,
+                    name: item.name || `Skin #${id}`,
+                    img:  rawImg ? (rawImg.startsWith('http') ? rawImg : BASE_ITEM_URL + rawImg) : '',
+                    subtype: item.item_subtype || item.subtype || '',
+                    qty:  0,
+                };
+            }
+            totals[id].qty += (inv.quantity || 0);
+        }
+        const skins = Object.values(totals).filter(s => s.qty > 0);
+        return skins.length > 0 ? skins : null; // null forces fallback
+    } catch (e) {
+        console.warn('gift: idb read fail', e);
+        return null;
+    }
+}
+
+async function getGiftableSkinsFromSupabase(supabaseClient, playerId) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('inventory_items')
+            .select('item_id, quantity, items:item_id(id, name, img, item_type, item_subtype)')
+            .eq('player_id', playerId)
+            .gt('quantity', 0);
+        if (error || !data) return [];
+        const totals = {};
+        for (const row of data) {
+            const item = Array.isArray(row.items) ? row.items[0] : row.items;
+            if (!item || item.item_type !== 'skin') continue;
+            if (BLOCKED_GIFT_IDS.has(row.item_id)) continue;
+            const id = row.item_id;
+            if (!totals[id]) {
+                const rawImg = item.img || null;
+                totals[id] = {
+                    id,
+                    name: item.name || `Skin #${id}`,
+                    img:  rawImg ? (rawImg.startsWith('http') ? rawImg : BASE_ITEM_URL + rawImg) : '',
+                    subtype: item.item_subtype || '',
+                    qty:  0,
+                };
+            }
+            totals[id].qty += row.quantity || 0;
+        }
+        return Object.values(totals).filter(s => s.qty > 0);
+    } catch { return []; }
+}
+
+async function loadGiftableSkins(supabaseClient, playerId) {
+    const fromIdb = await getGiftableSkinsFromIdb();
+    if (fromIdb !== null) return fromIdb;
+    return getGiftableSkinsFromSupabase(supabaseClient, playerId);
+}
+
+async function decrementIdbGiftItem(itemId) {
+    return decrementIdbItem(itemId, 1);
+}
+
+async function incrementIdbGiftItem(itemId) {
+    return incrementIdbItem(itemId, 1);
+}
+
+// =========================================================
 // >>> ESTILOS CSS DO SISTEMA DE COMÉRCIO <<<
 // =========================================================
 function injectTradeStyles() {
@@ -384,6 +470,222 @@ margin-top: 8px;
 .pv-trade-btn-decline:hover { opacity: .85; }
 .pv-trade-btn-cancel:hover  { opacity: .85; }
 .chat-message .pv-trade-msg { max-width: 100%; }
+
+/* ── CABEÇALHO DA LISTA ── */
+#pv-list-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px 4px;
+    border-bottom: 1px solid rgba(120,60,200,.2);
+    flex-shrink: 0;
+}
+.pv-list-title { color: #b090e0; font-size: .82em; font-weight: bold; letter-spacing: .4px; text-transform: uppercase; }
+#pv-new-convo-btn {
+    background: none; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 5px; border-radius: 50%;
+    transition: background .15s, transform .15s;
+    color: #d4a017;
+}
+#pv-new-convo-btn:hover { background: rgba(212,160,23,.12); transform: scale(1.15); }
+
+/* ── MENU TRÊS PONTOS ── */
+#pv-context-menu-wrap { position: relative; display: flex; align-items: center; }
+#pv-context-menu-btn {
+    background: none; border: none; cursor: pointer; color: #a07ce0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 6px; border-radius: 50%;
+    transition: color .15s, background .15s;
+    margin-top: 6px;
+}
+#pv-context-menu-btn:hover { color: #fff; background: rgba(160,124,224,.15); }
+.pv-dropdown {
+    position: absolute; top: calc(100% + 4px); right: 0;
+    background: #1e1030; border: 1px solid #5a3090;
+    border-radius: 10px; min-width: 170px; z-index: 5000;
+    box-shadow: 0 6px 24px rgba(0,0,0,.55);
+    overflow: hidden;
+}
+.pv-dropdown-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 11px 16px; font-size: .85em; color: #d0b8ff;
+    cursor: pointer; transition: background .12s;
+}
+.pv-dropdown-item:hover { background: rgba(120,60,200,.25); }
+.pv-dropdown-item svg { flex-shrink: 0; opacity: .8; }
+.pv-dropdown-danger { color: #e07070 !important; }
+.pv-dropdown-danger svg { stroke: #e07070; }
+.pv-dropdown-danger:hover { background: rgba(200,60,60,.2) !important; }
+
+/* ── MODAL NOVA CONVERSA ── */
+#pvNewConvoModal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.72);
+    display: none; align-items: center; justify-content: center; z-index: 4600;
+}
+#pvNewConvoModal.active { display: flex; }
+#pvNewConvoBox {
+    background: linear-gradient(160deg, #1a0d2e, #120920);
+    border: 1px solid #6a3fa0; border-radius: 14px;
+    width: min(380px, 94vw); padding: 0;
+    box-shadow: 0 0 40px rgba(120,60,200,.4); overflow: hidden;
+}
+#pvNewConvoBox h3 {
+    margin: 0; padding: 14px 18px;
+    background: linear-gradient(90deg, #3b1d6e, #1a0d2e);
+    color: #d4b4ff; font-size: 1em; letter-spacing: .5px;
+    border-bottom: 1px solid #4a2a7a;
+    display: flex; align-items: center; justify-content: space-between;
+}
+#pvNewConvoBox h3 .pv-nc-close { cursor: pointer; font-size: 1.3em; color: #a07ce0; }
+#pvNewConvoBox h3 .pv-nc-close:hover { color: #fff; }
+#pvNewConvoBody { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.pv-nc-warning {
+    background: rgba(212,160,23,.08); border: 1px solid rgba(212,160,23,.3);
+    border-radius: 8px; padding: 10px 12px;
+    color: #d4a017; font-size: .78em; line-height: 1.5;
+}
+#pvNewConvoInput {
+    background: rgba(0,0,0,.4); border: 1px solid rgba(120,70,200,.5);
+    border-radius: 8px; color: #e0ccff; padding: 10px 12px;
+    font-size: .9em; width: 100%; box-sizing: border-box; outline: none;
+    transition: border-color .2s;
+}
+#pvNewConvoInput:focus { border-color: #9060e0; }
+#pvNewConvoStatus {
+    font-size: .78em; text-align: center; min-height: 1.2em;
+    color: #e07070; transition: color .2s;
+}
+#pvNewConvoStatus.ok { color: #60e090; }
+#pvNewConvoSubmitBtn {
+    background: linear-gradient(135deg, #6a2fa0, #3d1870);
+    border: none; color: #f0e0ff; border-radius: 8px; padding: 10px;
+    font-size: .9em; font-weight: bold; cursor: pointer;
+    transition: opacity .2s; letter-spacing: .4px;
+}
+#pvNewConvoSubmitBtn:hover { opacity: .9; }
+#pvNewConvoSubmitBtn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── MENSAGEM DE PRESENTE NO CHAT ── */
+.pv-gift-msg {
+    width: 100%; max-width: 300px; min-width: 0; box-sizing: border-box;
+    background: linear-gradient(140deg, #1a0d1a, #0e0718);
+    border: 1px solid #7a3090; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 16px rgba(120,30,160,.35); font-size: .85em;
+}
+.pv-gift-msg-header {
+    background: linear-gradient(90deg, #3d1460, #1a0d2e);
+    padding: 7px 12px; display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid rgba(160,60,220,.3);
+    color: #d090e0; font-size: .78em; font-weight: bold;
+    text-transform: uppercase; letter-spacing: .5px;
+}
+.pv-gift-msg-header svg { flex-shrink: 0; }
+.pv-gift-msg-body {
+    padding: 12px; display: flex; align-items: center; gap: 12px;
+}
+.pv-gift-msg-body img.pv-gift-item-icon {
+    width: 60px; height: 60px; object-fit: contain; border-radius: 8px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(160,60,220,.2); padding: 2px;
+}
+.pv-gift-msg-info { flex: 1; }
+.pv-gift-msg-info .pv-gift-msg-name { color: #e0ccff; font-weight: bold; font-size: .9em; margin-bottom: 3px; }
+.pv-gift-msg-info .pv-gift-msg-sub  { color: #9a7abf; font-size: .78em; }
+.pv-gift-msg-footer {
+    padding: 6px 12px 10px; display: flex; flex-direction: column; gap: 6px;
+    box-sizing: border-box; width: 100%;
+}
+.pv-gift-msg-expiry { color: #7a5caa; font-size: .72em; text-align: center; }
+.pv-gift-msg-status {
+    text-align: center; font-weight: bold; font-size: .82em;
+    padding: 5px; border-radius: 6px; box-sizing: border-box; width: 100%;
+}
+.pv-gift-msg-status.status-accepted  { background: rgba(30,120,60,.3);  color: #60e090; border: 1px solid rgba(40,160,80,.3);  }
+.pv-gift-msg-status.status-cancelled { background: rgba(120,30,30,.3);  color: #e06060; border: 1px solid rgba(180,40,40,.3);  }
+.pv-gift-msg-status.status-declined  { background: rgba(120,60,20,.3);  color: #e09060; border: 1px solid rgba(180,80,30,.3);  }
+.pv-gift-msg-status.status-expired   { background: rgba(60,60,60,.3);   color: #909090; border: 1px solid rgba(90,90,90,.3);   }
+.pv-gift-msg-status.status-pending   { background: rgba(100,30,140,.25);color: #c060e0; border: 1px solid rgba(140,60,180,.3); }
+.pv-gift-msg-actions { display: flex; gap: 8px; width: 100%; box-sizing: border-box; }
+.pv-gift-action-btn {
+    flex: 1 1 0; padding: 8px 6px; border: none; border-radius: 7px;
+    font-size: .82em; font-weight: bold; cursor: pointer;
+    transition: opacity .15s, transform .1s;
+    box-sizing: border-box; text-align: center; white-space: normal; word-break: break-word; line-height: 1.2;
+}
+.pv-gift-action-btn:active  { transform: scale(.96); }
+.pv-gift-action-btn:disabled{ opacity: .4; cursor: not-allowed; }
+.pv-gift-btn-accept  { background: linear-gradient(135deg, #1d7040, #0e3d20); color: #80ffa0; }
+.pv-gift-btn-decline { background: linear-gradient(135deg, #70200d, #3d0e07); color: #ffaa80; }
+.pv-gift-btn-cancel  { background: linear-gradient(135deg, #5a1a7a, #2d0d45); color: #d080f0; }
+.pv-gift-btn-accept:hover  { opacity: .85; }
+.pv-gift-btn-decline:hover { opacity: .85; }
+.pv-gift-btn-cancel:hover  { opacity: .85; }
+.chat-message .pv-gift-msg { max-width: 100%; }
+
+/* ── MODAL DE SELEÇÃO DE SKINS PARA PRESENTE ── */
+#pvGiftModal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.72);
+    display: none; align-items: center; justify-content: center; z-index: 4500;
+}
+#pvGiftModal.active { display: flex; }
+#pvGiftBox {
+    background: linear-gradient(160deg, #1a0d2e 0%, #120920 100%);
+    border: 1px solid #7a3fa0; border-radius: 14px;
+    width: min(420px, 96vw); max-height: 90vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 0 40px rgba(160,60,200,.4);
+}
+#pvGiftBox h3 {
+    margin: 0; padding: 14px 18px;
+    background: linear-gradient(90deg, #4b1d6e, #1a0d2e);
+    color: #e4b4ff; font-size: 1em; letter-spacing: .5px;
+    border-bottom: 1px solid #5a2a7a;
+    display: flex; align-items: center; gap: 8px;
+}
+#pvGiftBox h3 span.pv-gift-close { margin-left: auto; cursor: pointer; font-size: 1.3em; color: #b07ce0; line-height: 1; }
+#pvGiftBox h3 span.pv-gift-close:hover { color: #fff; }
+#pvGiftItemList {
+    overflow-y: auto; padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 8px; flex: 1;
+}
+#pvGiftItemList::-webkit-scrollbar { width: 4px; }
+#pvGiftItemList::-webkit-scrollbar-thumb { background: #6a2d9a; border-radius: 2px; }
+.pv-gift-item-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(180,100,255,.15);
+    border-radius: 8px; padding: 8px 10px;
+    cursor: pointer; transition: background .15s, border-color .15s;
+}
+.pv-gift-item-row:hover, .pv-gift-item-row.selected { background: rgba(140,60,200,.2); border-color: #9a5ad0; }
+.pv-gift-item-row img { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.3); }
+.pv-gift-item-info { flex: 1; }
+.pv-gift-item-info strong { display: block; font-size: .85em; color: #e0ccff; }
+.pv-gift-item-info small  { color: #9a7abf; font-size: .75em; }
+.pv-gift-item-qty-badge {
+    background: rgba(100,45,154,.6); border-radius: 6px; padding: 2px 8px;
+    font-size: .8em; color: #d8aaff; font-weight: bold;
+}
+#pvGiftConfigArea {
+    padding: 14px 18px; border-top: 1px solid rgba(120,60,200,.3);
+    background: rgba(0,0,0,.2); display: flex; flex-direction: column; gap: 10px;
+}
+.pv-gift-selected-preview {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(100,40,140,.25); border-radius: 8px; padding: 10px 12px;
+    border: 1px solid rgba(160,80,240,.3);
+}
+.pv-gift-selected-preview img { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.3); }
+.pv-gift-selected-preview .pv-gift-preview-info { flex: 1; }
+.pv-gift-selected-preview strong { display: block; color: #e4ccff; font-size: .9em; }
+.pv-gift-selected-preview small  { color: #9070bf; font-size: .78em; }
+#pvGiftSendBtn {
+    background: linear-gradient(135deg, #7a2fa0, #4d1870);
+    border: none; color: #f0e0ff; border-radius: 8px; padding: 10px;
+    font-size: .9em; font-weight: bold; cursor: pointer;
+    transition: opacity .2s, transform .1s; letter-spacing: .4px;
+}
+#pvGiftSendBtn:hover   { opacity: .9; }
+#pvGiftSendBtn:active  { transform: scale(.97); }
+#pvGiftSendBtn:disabled{ opacity: .45; cursor: not-allowed; }
+.pv-gift-hint { color: #7a5caa; font-size: .73em; text-align: center; }
 `;
     document.head.appendChild(s);
 }
@@ -408,7 +710,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const chatViewDiv          = document.getElementById('pv-chat-view');
     const backToListBtn        = document.getElementById('pv-back-to-list-btn');
     const chatWithName         = document.getElementById('pv-chat-with-name');
-    const deleteConvoBtn       = document.getElementById('pv-delete-convo-btn');
+
     const chatMessagesDiv      = document.getElementById('pv-chat-messages');
     const chatInput            = document.getElementById('pv-chat-input');
     const sendMessageBtn       = document.getElementById('pv-send-message-btn');
@@ -425,8 +727,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const confirmModalCancelBtn  = document.getElementById('confirmModalCancelBtn');
     const confirmModalCloseBtn   = confirmModal ? confirmModal.querySelector('.close-btn') : null;
 
-    // --- Botão de comércio (inserido dinamicamente no header do chat) ---
-    let tradeBtnEl = null;
+    // --- Menu de três pontos no header do chat ---
+    const pvContextMenuWrap    = document.getElementById('pv-context-menu-wrap');
+    const pvContextMenuBtn     = document.getElementById('pv-context-menu-btn');
+    const pvContextDropdown    = document.getElementById('pv-context-dropdown');
+    const pvMenuTrade          = document.getElementById('pv-menu-trade');
+    const pvMenuGift           = document.getElementById('pv-menu-gift');
+    const pvMenuDelete         = document.getElementById('pv-menu-delete');
+
+    // --- Botão nova conversa ---
+    const pvNewConvoBtn        = document.getElementById('pv-new-convo-btn');
 
     const closeConfirmModal = () => { if (confirmModal) confirmModal.style.display = 'none'; };
 
@@ -980,9 +1290,10 @@ document.addEventListener("DOMContentLoaded", () => {
             item.className = 'conversation-item';
             item.dataset.conversationId = convo.id;
 
-            // Preview: oculta texto de trade
+            // Preview: oculta texto de trade/gift
             let previewText = convo.last_message || 'Nenhuma mensagem ainda.';
             if (previewText === '__TRADE__') previewText = '🛒 Oferta de comércio';
+            if (previewText === '__GIFT__')  previewText = '🎁 Presente enviado';
 
             if (convo.is_server_deleted) {
                 item.classList.add('archived');
@@ -1013,8 +1324,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!finalPlayerName || finalPlayerName === 'Desconhecido') finalPlayerName = getPlayerName(otherPlayerId);
         chatWithName.textContent = finalPlayerName;
 
-        // Adiciona/atualiza botão de comércio ao lado do delete
-        _ensureTradeHeaderBtn(convo);
+        // Mostra/atualiza o menu de três pontos
+        _updateContextMenu(convo);
 
         if (!convo.is_server_deleted) {
             const { data: msgData } = await supabaseClient
@@ -1033,17 +1344,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        if (deleteConvoBtn) {
-            deleteConvoBtn.style.display = 'block';
-            deleteConvoBtn.title = convo.is_server_deleted ? 'Apagar Histórico Local' : 'Apagar Conversa';
-        }
-
         if (convo.is_server_deleted) {
             showFloatingMessage('Esta conversa foi arquivada. Você pode apenas visualizar o histórico.');
             chatInput.disabled = true;
             chatInput.placeholder = 'Conversa arquivada - somente leitura.';
             sendMessageBtn.style.filter = 'grayscale(1)';
-            if (tradeBtnEl) tradeBtnEl.style.display = 'none';
         } else {
             const isPlayerOne    = convo.player_one_id === currentPlayer.id;
             const unreadColumn   = isPlayerOne ? 'unread_by_player_one' : 'unread_by_player_two';
@@ -1065,48 +1370,43 @@ document.addEventListener("DOMContentLoaded", () => {
                 chatInput.placeholder = 'Digite sua mensagem...';
                 sendMessageBtn.style.filter = '';
             }
-            if (tradeBtnEl) tradeBtnEl.style.display = 'flex';
         }
-
         conversationListDiv.style.display = 'none';
         chatViewDiv.style.display = 'flex';
         await renderChatMessages(convo);
     }
     window.openChatView = openChatView;
 
-    function _ensureTradeHeaderBtn(convo) {
-        const chatHeader = chatViewDiv.querySelector('.chat-header');
-        if (!chatHeader) return;
-
-        // Remove botão antigo se existir
-        const old = document.getElementById('pv-trade-btn');
-        if (old) old.remove();
-
-        if (convo.is_server_deleted) return;
-
-        tradeBtnEl = document.createElement('div');
-        tradeBtnEl.id = 'pv-trade-btn';
-        tradeBtnEl.title = 'Comércio entre jogadores';
-        tradeBtnEl.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/tradep.webp" alt="Comércio">`;
-        tradeBtnEl.addEventListener('click', openTradePanel);
-
-        // Insere antes do botão de deletar
-        chatHeader.insertBefore(tradeBtnEl, deleteConvoBtn);
+    function _updateContextMenu(convo) {
+        if (!pvContextMenuBtn) return;
+        if (convo.is_server_deleted) {
+            pvContextMenuBtn.style.display = 'none';
+            pvContextDropdown.style.display = 'none';
+        } else {
+            pvContextMenuBtn.style.display = 'flex';
+            // escambo e presente só disponíveis se não for archived
+            if (pvMenuTrade) pvMenuTrade.style.display = 'flex';
+            if (pvMenuGift)  pvMenuGift.style.display  = 'flex';
+        }
     }
 
     async function renderChatMessages(convo) {
         chatMessagesDiv.innerHTML = '';
         const messages = convo.messages || [];
 
-        // Coleta todos os trade_ids para buscar status em batch
+        // Batch-fetch trade statuses
         const tradeIds = messages
             .filter(m => m.text === '__TRADE__' && m.trade_id != null)
             .map(m => Number(m.trade_id));
-
         let tradeStatuses = {};
-        if (tradeIds.length > 0) {
-            tradeStatuses = await fetchTradeStatuses(tradeIds);
-        }
+        if (tradeIds.length > 0) tradeStatuses = await fetchTradeStatuses(tradeIds);
+
+        // Batch-fetch gift statuses
+        const giftIds = messages
+            .filter(m => m.text === '__GIFT__' && m.gift_id != null)
+            .map(m => Number(m.gift_id));
+        let giftStatuses = {};
+        if (giftIds.length > 0) giftStatuses = await fetchGiftStatuses(giftIds);
 
         for (const msg of messages) {
             const msgDiv = document.createElement('div');
@@ -1114,32 +1414,45 @@ document.addEventListener("DOMContentLoaded", () => {
             msgDiv.classList.add(msg.sender_id === currentPlayer.id ? 'sent' : 'received');
 
             if (msg.text === '__TRADE__' && msg.trade_id != null) {
-                // Mensagem de trade — renderiza card especial
-                const tradeHtml = await buildTradeMessageHtml(msg, tradeStatuses);
+                const tradeHtml = buildTradeMessageHtml(msg, tradeStatuses);
                 msgDiv.innerHTML = tradeHtml;
 
-                // Eventos dos botões de ação do trade
                 const tradeId  = Number(msg.trade_id);
                 const isSeller = msg.sender_id === currentPlayer.id;
                 const footer   = msgDiv.querySelector('.pv-trade-msg-footer');
-
                 const acceptBtn  = msgDiv.querySelector('.pv-trade-btn-accept');
                 const declineBtn = msgDiv.querySelector('.pv-trade-btn-decline');
                 const cancelBtn  = msgDiv.querySelector('.pv-trade-btn-cancel');
 
-                if (acceptBtn && footer) {
+                if (acceptBtn && footer)
                     acceptBtn.addEventListener('click', () => handleAcceptTrade(tradeId, Number(msg.trade_gold), footer));
-                }
-                if (declineBtn && footer) {
+                if (declineBtn && footer)
                     declineBtn.addEventListener('click', () => handleCancelTrade(tradeId, msg.trade_item_id, msg.trade_quantity, footer, false));
-                }
-                if (cancelBtn && footer) {
+                if (cancelBtn && footer)
                     cancelBtn.addEventListener('click', () => handleCancelTrade(tradeId, msg.trade_item_id, msg.trade_quantity, footer, true));
-                }
+
+            } else if (msg.text === '__GIFT__' && msg.gift_id != null) {
+                const giftHtml = buildGiftMessageHtml(msg, giftStatuses);
+                msgDiv.innerHTML = giftHtml;
+
+                const giftId   = Number(msg.gift_id);
+                const isSender = msg.sender_id === currentPlayer.id;
+                const footer   = msgDiv.querySelector('.pv-gift-msg-footer');
+                const acceptBtn  = msgDiv.querySelector('.pv-gift-btn-accept');
+                const declineBtn = msgDiv.querySelector('.pv-gift-btn-decline');
+                const cancelBtn  = msgDiv.querySelector('.pv-gift-btn-cancel');
+
+                if (acceptBtn && footer)
+                    acceptBtn.addEventListener('click', () => handleAcceptGift(giftId, footer));
+                if (declineBtn && footer)
+                    declineBtn.addEventListener('click', () => handleCancelGift(giftId, msg.gift_item_id, footer, false));
+                if (cancelBtn && footer)
+                    cancelBtn.addEventListener('click', () => handleCancelGift(giftId, msg.gift_item_id, footer, true));
+
             } else {
-                const sentDate     = new Date(msg.timestamp);
+                const sentDate      = new Date(msg.timestamp);
                 const formattedDate = `${sentDate.toLocaleDateString()} ${sentDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-                msgDiv.innerHTML   = `<p>${msg.text}</p><small>${formattedDate}</small>`;
+                msgDiv.innerHTML    = `<p>${msg.text}</p><small>${formattedDate}</small>`;
             }
 
             chatMessagesDiv.appendChild(msgDiv);
@@ -1217,6 +1530,354 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>`;
     }
 
+    }
+
+    // ============================================================
+    // SISTEMA DE PRESENTE ENTRE JOGADORES
+    // ============================================================
+
+    let selectedGiftItem = null;
+
+    function ensureGiftModal() {
+        if (document.getElementById('pvGiftModal')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'pvGiftModal';
+        wrap.innerHTML = `
+<div id="pvGiftBox">
+  <h3>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+    Presentear Jogador
+    <span class="pv-gift-close" id="pvGiftCloseBtn">&times;</span>
+  </h3>
+  <div id="pvGiftItemList"><p style="color:#9a7abf;padding:16px;text-align:center;">Carregando skins...</p></div>
+  <div id="pvGiftConfigArea" style="display:none;">
+    <div class="pv-gift-selected-preview">
+      <img id="pvGiftPreviewImg" src="" alt="">
+      <div class="pv-gift-preview-info">
+        <strong id="pvGiftPreviewName">Selecione uma skin</strong>
+        <small id="pvGiftPreviewSub"></small>
+      </div>
+    </div>
+    <p class="pv-gift-hint">A skin será enviada como presente. O destinatário tem 24h para aceitar.</p>
+    <button id="pvGiftSendBtn">Enviar Presente</button>
+  </div>
+</div>`;
+        document.body.appendChild(wrap);
+        document.getElementById('pvGiftCloseBtn').onclick = closeGiftModal;
+        wrap.addEventListener('click', e => { if (e.target === wrap) closeGiftModal(); });
+        document.getElementById('pvGiftSendBtn').addEventListener('click', submitGiftOffer);
+    }
+
+    function closeGiftModal() {
+        const m = document.getElementById('pvGiftModal');
+        if (m) m.classList.remove('active');
+        selectedGiftItem = null;
+    }
+
+    async function openGiftPanel() {
+        ensureGiftModal();
+        selectedGiftItem = null;
+
+        const configArea = document.getElementById('pvGiftConfigArea');
+        if (configArea) configArea.style.display = 'none';
+
+        const listDiv = document.getElementById('pvGiftItemList');
+        listDiv.innerHTML = '<p style="color:#9a7abf;padding:16px;text-align:center;">Carregando suas skins...</p>';
+
+        document.getElementById('pvGiftModal').classList.add('active');
+
+        const skins = await loadGiftableSkins(supabaseClient, currentPlayer.id);
+
+        if (!skins || skins.length === 0) {
+            listDiv.innerHTML = '<p style="color:#9a7abf;padding:16px;text-align:center;">Nenhuma skin disponível para presentear.<br><small>Apenas skins (molduras e fundos) podem ser presenteadas.</small></p>';
+            return;
+        }
+
+        listDiv.innerHTML = '';
+        for (const skin of skins) {
+            const row = document.createElement('div');
+            row.className = 'pv-gift-item-row';
+            row.dataset.itemId = skin.id;
+            const subtypeLabel = skin.subtype ? (skin.subtype === 'moldura' ? 'Moldura' : skin.subtype === 'fundo' ? 'Fundo' : skin.subtype) : 'Skin';
+            row.innerHTML = `
+              ${skin.img ? `<img src="${skin.img}" alt="${skin.name}" loading="lazy">` : '<div style="width:44px;height:44px;background:rgba(255,255,255,.06);border-radius:6px;"></div>'}
+              <div class="pv-gift-item-info">
+                <strong>${skin.name}</strong>
+                <small>${subtypeLabel}</small>
+              </div>
+              <span class="pv-gift-item-qty-badge">x${skin.qty}</span>`;
+            row.addEventListener('click', () => selectGiftItem(skin, row, subtypeLabel));
+            listDiv.appendChild(row);
+        }
+    }
+
+    function selectGiftItem(skin, rowEl, subtypeLabel) {
+        document.querySelectorAll('.pv-gift-item-row.selected').forEach(r => r.classList.remove('selected'));
+        rowEl.classList.add('selected');
+        selectedGiftItem = skin;
+
+        const configArea = document.getElementById('pvGiftConfigArea');
+        const previewImg  = document.getElementById('pvGiftPreviewImg');
+        const previewName = document.getElementById('pvGiftPreviewName');
+        const previewSub  = document.getElementById('pvGiftPreviewSub');
+
+        configArea.style.display = 'flex';
+        previewImg.src = skin.img || '';
+        previewImg.style.display = skin.img ? 'block' : 'none';
+        previewName.textContent = skin.name;
+        previewSub.textContent  = subtypeLabel || 'Skin';
+    }
+
+    async function submitGiftOffer() {
+        if (!selectedGiftItem || !currentOpenConversationId || !currentOtherPlayerId) return;
+        const sendBtn = document.getElementById('pvGiftSendBtn');
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Enviando...';
+        try {
+            const { data, error } = await supabaseClient.rpc('create_player_gift', {
+                p_conversation_id: parseInt(currentOpenConversationId),
+                p_receiver_id:     currentOtherPlayerId,
+                p_item_id:         selectedGiftItem.id,
+                p_item_name:       selectedGiftItem.name,
+                p_item_img:        selectedGiftItem.img || ''
+            });
+            if (error) throw error;
+            if (!data.success) throw new Error(data.message);
+
+            await decrementIdbGiftItem(selectedGiftItem.id);
+            closeGiftModal();
+            showFloatingMessage('Presente enviado! O destinatário tem 24h para aceitar.');
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+        } catch (err) {
+            showFloatingMessage(`Erro: ${err.message || 'Não foi possível enviar o presente.'}`);
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Enviar Presente';
+        }
+    }
+
+    async function fetchGiftStatuses(giftIds) {
+        if (!giftIds || giftIds.length === 0) return {};
+        try {
+            const { data, error } = await supabaseClient.rpc('get_gift_statuses', { p_gift_ids: giftIds });
+            if (error || !data) return {};
+            return data;
+        } catch { return {}; }
+    }
+
+    async function handleAcceptGift(giftId, footerEl) {
+        showConfirmModal('Aceitar este presente?', async () => {
+            const btns = footerEl.querySelectorAll('.pv-gift-action-btn');
+            btns.forEach(b => b.disabled = true);
+            const { data, error } = await supabaseClient.rpc('accept_player_gift', { p_gift_id: giftId });
+            if (error || !data?.success) {
+                showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
+                btns.forEach(b => b.disabled = false);
+                return;
+            }
+            await incrementIdbGiftItem(data.item_id);
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+            showFloatingMessage('Presente aceito! Skin adicionada ao inventário.');
+        });
+    }
+
+    async function handleCancelGift(giftId, itemId, footerEl, isSender) {
+        const msg = isSender
+            ? 'Cancelar este presente? A skin será devolvida para você.'
+            : 'Recusar este presente? A skin será devolvida ao remetente.';
+        showConfirmModal(msg, async () => {
+            const btns = footerEl.querySelectorAll('.pv-gift-action-btn');
+            btns.forEach(b => b.disabled = true);
+            const { data, error } = await supabaseClient.rpc('cancel_player_gift', { p_gift_id: giftId });
+            if (error || !data?.success) {
+                showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
+                btns.forEach(b => b.disabled = false);
+                return;
+            }
+            if (isSender) await incrementIdbGiftItem(itemId);
+            await fetchAndSyncMessages(true);
+            await openChatView(currentOpenConversationId);
+            showFloatingMessage(data.message || 'Presente processado.');
+        });
+    }
+
+    function buildGiftMessageHtml(msg, giftStatuses) {
+        const giftId    = Number(msg.gift_id);
+        const itemId    = Number(msg.gift_item_id);
+        const expiresAt = new Date(msg.gift_expires_at);
+        const isSender  = msg.sender_id === currentPlayer.id;
+
+        const itemName = msg.gift_item_name || `Skin #${itemId}`;
+        const itemImg  = msg.gift_item_img  || '';
+
+        const serverGift = giftStatuses[String(giftId)];
+        let status = serverGift?.status || 'pending';
+        if (status === 'pending' && Date.now() > expiresAt.getTime()) status = 'expired';
+
+        const expiryStr = status === 'pending'
+            ? `Expira em ${expiresAt.toLocaleDateString()} ${expiresAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+            : '';
+
+        const statusLabels = {
+            pending:   '⏳ Aguardando resposta',
+            accepted:  '✅ Presente aceito',
+            cancelled: '❌ Cancelado pelo remetente',
+            declined:  '🚫 Presente recusado',
+            expired:   '⌛ Presente expirado',
+        };
+
+        let actionsHtml = '';
+        if (status === 'pending') {
+            if (isSender) {
+                actionsHtml = `<div class="pv-gift-msg-actions"><button class="pv-gift-action-btn pv-gift-btn-cancel">Cancelar Presente</button></div>`;
+            } else {
+                actionsHtml = `
+                    <div class="pv-gift-msg-actions">
+                        <button class="pv-gift-action-btn pv-gift-btn-accept">Aceitar</button>
+                        <button class="pv-gift-action-btn pv-gift-btn-decline">Recusar</button>
+                    </div>`;
+            }
+        }
+
+        return `
+<div class="pv-gift-msg">
+  <div class="pv-gift-msg-header">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+    ${isSender ? 'Presente Enviado' : 'Você Recebeu um Presente'}
+  </div>
+  <div class="pv-gift-msg-body">
+    ${itemImg ? `<img class="pv-gift-item-icon" src="${itemImg}" alt="${itemName}" loading="lazy">` : ''}
+    <div class="pv-gift-msg-info">
+      <div class="pv-gift-msg-name">${itemName}</div>
+      <div class="pv-gift-msg-sub">Skin</div>
+    </div>
+  </div>
+  <div class="pv-gift-msg-footer">
+    ${expiryStr ? `<div class="pv-gift-msg-expiry">${expiryStr}</div>` : ''}
+    <div class="pv-gift-msg-status status-${status}">${statusLabels[status] || status}</div>
+    ${actionsHtml}
+  </div>
+</div>`;
+    }
+
+    // ============================================================
+    // MODAL NOVA CONVERSA
+    // ============================================================
+
+    function ensureNewConvoModal() {
+        if (document.getElementById('pvNewConvoModal')) return;
+        const wrap = document.createElement('div');
+        wrap.id = 'pvNewConvoModal';
+        wrap.innerHTML = `
+<div id="pvNewConvoBox">
+  <h3>
+    Nova Conversa
+    <span class="pv-nc-close" id="pvNcCloseBtn">&times;</span>
+  </h3>
+  <div id="pvNewConvoBody">
+    <div class="pv-nc-warning">
+      ⚠️ Digite o nome do jogador <strong>exatamente</strong> como está em seu perfil, respeitando letras maiúsculas, minúsculas e pontos.
+    </div>
+    <input type="text" id="pvNewConvoInput" placeholder="Nome exato do jogador..." autocomplete="off">
+    <div id="pvNewConvoStatus"></div>
+    <button id="pvNewConvoSubmitBtn">Iniciar Conversa</button>
+  </div>
+</div>`;
+        document.body.appendChild(wrap);
+
+        document.getElementById('pvNcCloseBtn').onclick = closeNewConvoModal;
+        wrap.addEventListener('click', e => { if (e.target === wrap) closeNewConvoModal(); });
+
+        document.getElementById('pvNewConvoInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') document.getElementById('pvNewConvoSubmitBtn').click();
+        });
+
+        document.getElementById('pvNewConvoSubmitBtn').addEventListener('click', async () => {
+            const input   = document.getElementById('pvNewConvoInput');
+            const statusEl = document.getElementById('pvNewConvoStatus');
+            const btn     = document.getElementById('pvNewConvoSubmitBtn');
+            const name    = input.value.trim();
+
+            if (!name) return;
+
+            statusEl.textContent = '';
+            statusEl.className   = '';
+            btn.disabled         = true;
+            btn.textContent      = 'Buscando jogador...';
+
+            try {
+                // Busca o jogador pelo nome exato
+                const { data: players, error } = await supabaseClient
+                    .from('players')
+                    .select('id, name')
+                    .eq('name', name)
+                    .limit(1);
+
+                if (error) throw error;
+
+                if (!players || players.length === 0) {
+                    statusEl.textContent = 'Jogador não encontrado. Verifique o nome e tente novamente.';
+                    btn.disabled   = false;
+                    btn.textContent = 'Iniciar Conversa';
+                    return;
+                }
+
+                const target = players[0];
+                if (target.id === currentPlayer.id) {
+                    statusEl.textContent = 'Você não pode conversar consigo mesmo.';
+                    btn.disabled   = false;
+                    btn.textContent = 'Iniciar Conversa';
+                    return;
+                }
+
+                btn.textContent = 'Abrindo conversa...';
+                statusEl.textContent = `Jogador encontrado: ${target.name}`;
+                statusEl.className   = 'ok';
+
+                // Cria ou obtém a conversa
+                const { data: convoData, error: convoErr } = await supabaseClient.rpc(
+                    'get_or_create_private_conversation',
+                    { target_player_id: target.id }
+                );
+
+                if (convoErr) throw convoErr;
+                const convoId = convoData?.conversation_id;
+                if (!convoId) throw new Error('Não foi possível criar a conversa.');
+
+                // Armazena o nome no cache
+                playerCache.set(String(target.id), target.name);
+                saveNameCache();
+
+                closeNewConvoModal();
+                pvModal.style.display = 'flex';
+                await fetchAndSyncMessages(true);
+                await openChatView(convoId, target.name);
+
+            } catch (err) {
+                statusEl.textContent = `Erro: ${err.message || 'Falha ao iniciar conversa.'}`;
+                btn.disabled   = false;
+                btn.textContent = 'Iniciar Conversa';
+            }
+        });
+    }
+
+    function openNewConvoModal() {
+        ensureNewConvoModal();
+        const input    = document.getElementById('pvNewConvoInput');
+        const statusEl = document.getElementById('pvNewConvoStatus');
+        const btn      = document.getElementById('pvNewConvoSubmitBtn');
+        if (input)    { input.value = ''; input.focus(); }
+        if (statusEl) { statusEl.textContent = ''; statusEl.className = ''; }
+        if (btn)      { btn.disabled = false; btn.textContent = 'Iniciar Conversa'; }
+        document.getElementById('pvNewConvoModal').classList.add('active');
+    }
+
+    function closeNewConvoModal() {
+        const m = document.getElementById('pvNewConvoModal');
+        if (m) m.classList.remove('active');
+    }
+
     // ============================================================
     // INICIALIZAÇÃO & EVENTOS
     // ============================================================
@@ -1289,6 +1950,46 @@ document.addEventListener("DOMContentLoaded", () => {
                 conversationListDiv.style.display = 'flex';
                 currentOpenConversationId         = null;
                 currentOtherPlayerId              = null;
+                // Fecha dropdown se estiver aberto
+                if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+            };
+        }
+
+        // Botão ➕ – nova conversa
+        if (pvNewConvoBtn) pvNewConvoBtn.onclick = openNewConvoModal;
+
+        // Menu três pontos
+        if (pvContextMenuBtn) {
+            pvContextMenuBtn.onclick = (e) => {
+                e.stopPropagation();
+                const isOpen = pvContextDropdown.style.display === 'block';
+                pvContextDropdown.style.display = isOpen ? 'none' : 'block';
+            };
+        }
+        // Fecha dropdown ao clicar fora
+        document.addEventListener('click', () => {
+            if (pvContextDropdown) pvContextDropdown.style.display = 'none';
+        });
+
+        // Itens do menu
+        if (pvMenuTrade) pvMenuTrade.onclick = (e) => { e.stopPropagation(); pvContextDropdown.style.display = 'none'; openTradePanel(); };
+        if (pvMenuGift)  pvMenuGift.onclick  = (e) => { e.stopPropagation(); pvContextDropdown.style.display = 'none'; openGiftPanel(); };
+        if (pvMenuDelete) {
+            pvMenuDelete.onclick = (e) => {
+                e.stopPropagation();
+                pvContextDropdown.style.display = 'none';
+                if (!currentOpenConversationId) return;
+                const convo = localConversations.get(currentOpenConversationId);
+                const message = convo && convo.is_server_deleted
+                    ? 'Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local.'
+                    : 'Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.';
+                showConfirmModal(message, () => {
+                    localConversations.delete(currentOpenConversationId);
+                    saveToLocalStorage();
+                    renderConversationList();
+                    backToListBtn.click();
+                    showFloatingMessage('Conversa apagada.');
+                });
             };
         }
 
@@ -1331,23 +2032,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (sendMessageBtn) sendMessageBtn.onclick = handleSendMessage;
         if (chatInput) chatInput.onkeydown = e => { if (e.key === 'Enter' && !chatInput.disabled) handleSendMessage(); };
-
-        if (deleteConvoBtn) {
-            deleteConvoBtn.onclick = () => {
-                if (!currentOpenConversationId) return;
-                const convo = localConversations.get(currentOpenConversationId);
-                const message = convo && convo.is_server_deleted
-                    ? 'Tem certeza que deseja apagar ESTE HISTÓRICO? Esta ação a removerá permanentemente do seu cache local.'
-                    : 'Tem certeza que deseja apagar esta conversa? Esta ação é irreversível e só apagará para você.';
-                showConfirmModal(message, () => {
-                    localConversations.delete(currentOpenConversationId);
-                    saveToLocalStorage();
-                    renderConversationList();
-                    backToListBtn.click();
-                    showFloatingMessage('Conversa apagada.');
-                });
-            };
-        }
     }
 
     window.pvInitializationPromise = new Promise(async resolve => {

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Fortaleza - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance2.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="forte.css" />
+    <style>
+        .goog-te-banner-frame.skiptranslate,.skiptranslate{display:none!important;visibility:hidden!important;height:0!important;}
+        body{top:0!important;margin-top:0!important;position:static!important;}
+        .goog-te-balloon-frame,.goog-te-gadget{display:none!important;height:0!important;overflow:hidden!important;}
+        font>font{background-color:transparent!important;box-shadow:none!important;position:static!important;}
+    </style>
+</head>
+<body onload="removeTranslateBar()">
+
+<!-- TOP BAR -->
+<div id="playerTopBar">
+    <button id="menuToggleBtn" class="top-bar-link" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+    </button>
+    <div><span id="pageTitle">🏰 Fortaleza</span></div>
+    <button id="btnOpenLogs" style="background:none;border:none;cursor:pointer;color:#ffd700;font-size:1.4em;padding:0 4px;">📋</button>
+</div>
+
+<!-- ═══ FIX 6: FULLSCREEN HOME MAP (like hunting page) ═══ -->
+<div id="homeMapContainer" style="display:none;">
+    <!-- Map canvas -->
+    <div id="homeMap">
+        <!-- Mobs and boss injected by JS -->
+    </div>
+
+    <!-- Overlay: shield banner -->
+    <div id="shieldBanner">
+        <span id="shieldIcon">🛡️</span>
+        <div>
+            <div id="shieldLabel">Escudo Ativo</div>
+            <div id="shieldCountdown">--:--:--</div>
+        </div>
+    </div>
+
+    <!-- Overlay: summary chips -->
+    <div id="fortSummaryChips"></div>
+    <div id="fortSummary"></div>
+
+    <!-- Overlay: action buttons at bottom -->
+    <div id="homeActions">
+        <button id="btnEditDefense" class="home-action-btn">🏰 Editar Defesa</button>
+        <button id="btnAttackHome"  class="home-action-btn home-action-btn-attack">⚔️ ATACAR</button>
+    </div>
+</div>
+
+<!-- ═══ BATTLE CONTAINER ═══ -->
+<div id="battleContainer" style="display:none">
+    <!-- HUD topo -->
+    <div id="battleHUD">
+        <div id="hudLeft">
+            <img id="hudPlayerAvatar" class="hud-avatar">
+            <div class="hud-hp-wrap">
+                <div class="hud-hp-bar"><div id="hudPlayerHPFill" class="hud-hp-fill hud-hp-player"></div></div>
+                <span id="hudPlayerHPText" class="hud-hp-text"></span>
+            </div>
+        </div>
+        <div id="hudCenter">
+            <div id="hudRoomName">Sala 1</div>
+            <div id="hudStars">
+                <span class="star-slot" id="star1">☆</span>
+                <span class="star-slot" id="star2">☆</span>
+                <span class="star-slot" id="star3">☆</span>
+            </div>
+            <div id="hudClassIcon"></div>
+        </div>
+        <div id="hudRight">
+            <div class="hud-hp-wrap hud-hp-right">
+                <div class="hud-hp-bar"><div id="hudDefenderHPFill" class="hud-hp-fill hud-hp-enemy"></div></div>
+            </div>
+            <img id="hudDefenderAvatar" class="hud-avatar hud-avatar-enemy">
+        </div>
+    </div>
+
+    <!-- Timer + retreat button row -->
+    <div id="battleTimerRow">
+        <div id="battleTimerWrap"><div id="battleTimer">3:00</div></div>
+        <img id="btnRetreat" src="https://aden-rpg.pages.dev/assets/sair.webp"
+             style="width:25px;height:30px;cursor:pointer;opacity:.85;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));flex-shrink:0;">
+    </div>
+
+    <!-- Battle Map -->
+    <div id="mapContainer">
+        <div id="map"></div>
+    </div>
+
+    <!-- Prep Overlay -->
+    <div id="prepOverlay" style="display:none">
+        <div id="prepPanel">
+            <div id="prepTitle">⚔️ PREPARAÇÃO</div>
+            <div id="prepRoomName">Sala 1</div>
+            <div id="prepClassInfo">⚔️ Guerreiro</div>
+            <p id="prepDesc">Explore o mapa · Toque para mover</p>
+            <div id="prepTimerWrap">
+                <div id="prepTimerCircle"><span id="prepTimerNum">30</span></div>
+                <button id="btnDropAvatar">ENTRAR NA BATALHA</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom: attack button -->
+    <div id="battleBottomBar">
+        <div style="flex:1"></div>
+        <img id="btnAttack" src="https://aden-rpg.pages.dev/assets/attackbtn.webp"
+             style="width:40px;height:40px;cursor:pointer;opacity:.35;filter:grayscale(.8);transition:opacity .2s,filter .2s,transform .15s;">
+        <div style="flex:1"></div>
+    </div>
+</div>
+
+<!-- ═══ MATCHMAKING MODAL ═══ -->
+<div id="matchmakingModal" class="modal-overlay" style="display:none">
+    <div class="modal-content match-content">
+        <button class="modal-close-x" id="matchCancelBtn">&times;</button>
+        <h3>⚔️ Oponente Encontrado</h3>
+        <img id="matchAvatar" class="match-avatar">
+        <p id="matchName"  class="match-name"></p>
+        <p id="matchLevel" class="match-level"></p>
+        <div id="matchRooms">
+            <div class="match-room-row"><span class="match-room-lbl">Sala 1</span><span id="matchRoom1"></span></div>
+            <div class="match-room-row"><span class="match-room-lbl">Sala 2</span><span id="matchRoom2"></span></div>
+            <div class="match-room-row"><span class="match-room-lbl">Sala 3</span><span id="matchRoom3"></span></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+            <button id="matchNextBtn"    class="home-action-btn"              style="flex:1">➜ Próximo</button>
+            <button id="matchConfirmBtn" class="home-action-btn home-action-btn-attack" style="flex:1">⚔️ Atacar!</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ FIX 5: CARD EDITOR MODAL ═══ -->
+<div id="editorModal" class="modal-overlay" style="display:none">
+    <div class="modal-content editor-content">
+        <button class="modal-close-x" id="editorCloseBtn">&times;</button>
+        <h3>🏰 Editar Defesa</h3>
+        <p class="editor-hint">5 slots por sala · Sala 3 sempre tem o Boss</p>
+
+        <div id="editorRoomTabs">
+            <button class="editor-room-tab active" data-room="1">Sala 1</button>
+            <button class="editor-room-tab"        data-room="2">Sala 2</button>
+            <button class="editor-room-tab"        data-room="3">Sala 3</button>
+        </div>
+
+        <!-- Card slots for the current room -->
+        <div id="editorCardSlots"></div>
+
+        <p id="editorBudget" style="font-size:.78em;color:#c9a94a;margin:4px 0 10px;">
+            Mobs nesta sala: <span id="editorBudgetNum">0</span>/5
+        </p>
+
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <button id="editorSaveBtn"   class="action-btn">Salvar</button>
+            <button id="editorCancelBtn" class="action-btn">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MOB PICKER SUB-MODAL -->
+<div id="mobPickerModal" class="modal-overlay" style="display:none;z-index:2500">
+    <div class="modal-content" style="max-width:320px">
+        <button class="modal-close-x" id="mobPickerCloseBtn">&times;</button>
+        <h3>Escolher Defensor</h3>
+        <div id="mobPickerList"></div>
+    </div>
+</div>
+
+<!-- RESULT MODAL -->
+<div id="resultModal" class="modal-overlay" style="display:none">
+    <div class="modal-content result-content">
+        <div id="resultTitle">VITÓRIA!</div>
+        <div id="resultStarsDisplay"></div>
+        <div id="resultDestructionWrap">
+            <span>Destruição</span>
+            <div id="resultDestructionBar"><div id="resultDestructionFill"></div></div>
+            <span id="resultDestructionPct">0%</span>
+        </div>
+        <div id="resultRewards"></div>
+        <button id="resultCloseBtn" class="action-btn" style="margin-top:14px">Continuar</button>
+    </div>
+</div>
+
+<!-- LOGS MODAL -->
+<div id="logsModal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+        <button class="modal-close-x" id="logsCloseBtn">&times;</button>
+        <h3>📋 Histórico de Ataques</h3>
+        <div id="logsList"></div>
+    </div>
+</div>
+
+<!-- LOADING -->
+<div id="loadingOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.88);z-index:9000;justify-content:center;align-items:center;flex-direction:column;gap:14px;">
+    <div class="fort-spinner"></div>
+    <span id="loadingText" style="color:#ffd700;font-family:Cinzel,serif;font-size:.95em;letter-spacing:2px;">Carregando...</span>
+</div>
+
+<script type="module" src="forte.js"></script>
+
+<!-- SCALE LOCK -->
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+    const t=document.createElement("div");t.style.cssText="position:absolute;visibility:hidden;font-size:1rem;line-height:1;";t.textContent="M";document.body.appendChild(t);
+    const r=t.getBoundingClientRect().height;document.body.removeChild(t);
+    const s=document.createElement("style");s.textContent=`html{font-size:${16*(16/r)}px!important;}body{font-size:1.3rem!important;}`;document.head.appendChild(s);
+});
+</script>
+<div id="maintenance-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);color:#fff;z-index:9999;justify-content:center;align-items:center;text-align:center;flex-direction:column;font-family:Arial,sans-serif;">
+    <img src="https://aden-rpg.pages.dev/assets/config.webp" style="width:120px;height:120px;margin-bottom:20px;">
+    <h1 id="maintenance-title">Manutenção</h1>
+    <p id="maintenance-message" style="font-size:1.2em;max-width:80%;"></p>
+</div>
+<div id="google_translate_element"></div>
+<script src="auto_translate.js"></script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script type="module" src="title_notifications.js"></script>
+<div id="sideMenuOverlay" class="menu-overlay" style="display:none;"></div>
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn"></button>
+        <h3>Menu</h3><div style="width:28px;"></div>
+    </div>
+    <ul id="menuList" class="menu-list"></ul>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+    const CUR="forte.html",A="https://aden-rpg.pages.dev/assets/";
+    const items=[{name:"Tela inicial",url:"index.html",icon:A+"homeic.webp"},{name:"Aventura AFK",url:"afk.html",icon:A+"expm.webp"},{name:"Mineração",url:"mines.html",icon:A+"recursos.webp"},{name:"Áreas de Caça",icon:A+"mapicon.webp",isDropdown:true,sub:[{name:"Covil de Kelts",url:"covil_de_kelts.html"},{name:"Desfiladeiro",url:"desfiladeiro.html"},{name:"Enclave Etéreo",url:"enclave_etereo.html"},{name:"Erbária",url:"erbaria.html"},{name:"Floresta Mística",url:"floresta_mistica.html"},{name:"Pântano de Molinar",url:"pantano_de_molinar.html"},{name:"Penumbra Uivante",url:"penumbra_uivante.html"},{name:"Queda Fontana",url:"queda_fontana.html"},{name:"Razar",url:"razar.html"},{name:"Vale Arcano",url:"vale_arcano.html"}]},{name:"Instâncias",icon:A+"dgs.webp",isDropdown:true,sub:[{name:"Ruínas Ancestrais",url:"ruins.html"}]},{name:"Fortaleza",url:"forte.html",icon:A+"pvp.webp"},{name:"Arena PvP",url:"arena.html",icon:A+"pvp.webp"},{name:"Chefe Mundial",url:"solo_boss.html",icon:A+"bossm.webp"},{name:"Guilda",url:"guild.html",icon:A+"guilda.webp"},{name:"Bolsa",url:"inventory.html",icon:A+"iconbolsa.webp"},{name:"Ranking",url:"ranking_cp.html",icon:A+"iconranking.webp"}];
+    const ml=document.getElementById("menuList"),sm=document.getElementById("leftSideMenu"),ov=document.getElementById("sideMenuOverlay"),ob=document.getElementById("menuToggleBtn"),cb=document.getElementById("closeMenuBtn");
+    const H=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`;
+    const C=`<svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+    if(cb)cb.innerHTML=H;
+    if(ml){ml.innerHTML="";items.forEach(item=>{const li=document.createElement("li");li.className="menu-item";if(item.isDropdown){const iA=item.sub?.some(s=>s.url===CUR);const a=document.createElement("a");a.className="menu-link dropdown-toggle";a.style.cursor="pointer";a.innerHTML=`<img src="${item.icon}" class="menu-icon" onerror="this.style.display='none'"><span>${item.name}</span>${C}`;const sub=document.createElement("ul");sub.className=`submenu-list ${iA?"open":""}`;if(iA)li.classList.add("dropdown-active");a.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();sub.classList.toggle("open");li.classList.toggle("dropdown-active");});(item.sub||[]).forEach(si=>{const iM=si.url===CUR;const sli=document.createElement("li");sli.className=`menu-item ${iM?"active":""}`;const sa=document.createElement("a");sa.className="menu-link submenu-link";sa.innerHTML=`<span>${si.name}</span>`;if(iM){sa.style.cursor="default";sa.style.pointerEvents="none";}else{sa.href=si.url;}sli.appendChild(sa);sub.appendChild(sli);});li.appendChild(a);li.appendChild(sub);}else{const iM=item.url===CUR;if(iM)li.classList.add("active");const a=document.createElement("a");a.className="menu-link";a.innerHTML=`<img src="${item.icon}" class="menu-icon" onerror="this.style.display='none'"><span>${item.name}</span>`;a.href=iM?"javascript:void(0)":item.url;a.addEventListener("click",e=>{e.preventDefault();if(!iM)setTimeout(()=>{window.location.href=item.url;},50);});li.appendChild(a);}ml.appendChild(li);}); }
+    const om=()=>{if(!sm)return;sm.classList.add("open");if(ov){ov.style.display="block";setTimeout(()=>{ov.style.opacity="1";ov.style.pointerEvents="auto";},10);}};
+    const cm=()=>{if(!sm)return;sm.classList.remove("open");if(ov){ov.style.opacity="0";ov.style.pointerEvents="none";setTimeout(()=>{ov.style.display="none";},300);}};
+    if(ob)ob.addEventListener("click",om);if(cb)cb.addEventListener("click",cm);if(ov)ov.addEventListener("click",cm);
+});
+</script>
+</body>
+</html>

@@ -1619,11 +1619,34 @@ document.addEventListener("DOMContentLoaded", () => {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
                 btns.forEach(b => b.disabled = false); return;
             }
-            await incrementIdbItem(data.item_id, data.items_received);
+            // Invalida o cache do inventário no IDB para forçar re-sync
+            // quando o receptor abrir o inventário
+            _invalidateInventoryCache();
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
-            showFloatingMessage('Presente aceito! Skin adicionada ao inventário.');
+            showFloatingMessage('Presente aceito! Abra o inventário para ver a skin recebida.');
         });
+    }
+
+    // Limpa o cache_time do IDB para forçar re-sync no próximo acesso ao inventário
+    async function _invalidateInventoryCache() {
+        try {
+            const IDB_NAME_INV = 'aden_inventory_db';
+            const IDB_VER_INV  = 47;
+            const META_STORE   = 'meta_store';
+            const db = await new Promise((res, rej) => {
+                const r = indexedDB.open(IDB_NAME_INV, IDB_VER_INV);
+                r.onsuccess = () => res(r.result);
+                r.onerror   = () => rej(r.error);
+                r.onupgradeneeded = () => {}; // não modifica schema
+            });
+            if (!db.objectStoreNames.contains(META_STORE)) return;
+            const tx    = db.transaction(META_STORE, 'readwrite');
+            const store = tx.objectStore(META_STORE);
+            // Deleta cache_time — inventory.js vai forçar re-sync
+            store.delete('cache_time');
+            store.delete('last_updated');
+        } catch (e) { console.warn('pv: inventory cache invalidation failed', e); }
     }
 
     async function handleCancelGift(giftId, itemId, footerEl, isSender) {

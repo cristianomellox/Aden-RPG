@@ -1743,8 +1743,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     const { data: fuzzy } = await supabaseClient
                         .from('players').select('id, name').ilike('name', `%${name}`).limit(10);
                     if (fuzzy && fuzzy.length > 0) {
-                        const emojiStrip = /^[\p{Emoji}\s]+/u;
-                        found = fuzzy.find(p => p.name.replace(emojiStrip, '') === name) || null;
+                        // Remove qualquer prefixo que não seja letra, número ou ponto
+                    // (cobre emojis atuais e futuros, sem depender de lista hardcoded)
+                    const prefixStrip = /^[^\p{L}\p{N}.]+/u;
+                        found = fuzzy.find(p => p.name.replace(prefixStrip, '') === name) || null;
                     }
                 }
 

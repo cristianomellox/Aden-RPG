@@ -224,7 +224,7 @@
 
   <div id="btnAreasToggle" class="footer-submenu-btn" style="cursor: pointer; justify-content: space-between;">
     <div style="display:flex; align-items:center; gap:10px;">
-      <img src="https://aden-rpg.pages.dev/assets/dgs.webp" class="submenu-icon">Masmorras
+      <img src="https://aden-rpg.pages.dev/assets/dgs.webp" class="submenu-icon">Instâncias
     </div>
     <svg id="areasArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s;">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -1212,7 +1212,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // Lógica para o Dropdown "Masmorras" (Áreas)
+    // Lógica para o Dropdown "Instâncias" (Áreas)
     const btnAreasToggle = document.getElementById('btnAreasToggle');
     const areasDropdownContent = document.getElementById('areasDropdownContent');
     const areasArrow = document.getElementById('areasArrow');
@@ -1250,5 +1250,47 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 <script src="pvp_boot_notifs.js"></script>
+<script>
+// =======================================================================
+// FORÇAR TELA CHEIA (FULLSCREEN) - PC E ANDROID
+// =======================================================================
+(function() {
+    function ativarTelaCheia() {
+        const docEl = document.documentElement;
+
+        // Verifica se já NÃO estamos em tela cheia
+        if (!document.fullscreenElement && 
+            !document.mozFullScreenElement && 
+            !document.webkitFullscreenElement && 
+            !document.msFullscreenElement) {
+            
+            // Tenta ativar a tela cheia com suporte a vários navegadores
+            if (docEl.requestFullscreen) {
+                docEl.requestFullscreen().catch(err => console.warn("Fullscreen ignorado:", err));
+            } else if (docEl.webkitRequestFullscreen) { /* Safari/Chrome antigo */
+                docEl.webkitRequestFullscreen().catch(err => console.warn("Fullscreen ignorado:", err));
+            } else if (docEl.mozRequestFullScreen) { /* Firefox */
+                docEl.mozRequestFullScreen().catch(err => console.warn("Fullscreen ignorado:", err));
+            } else if (docEl.msRequestFullscreen) { /* IE/Edge antigo */
+                docEl.msRequestFullscreen().catch(err => console.warn("Fullscreen ignorado:", err));
+            }
+        }
+    }
+
+    // Adiciona o evento de clique/toque em toda a tela.
+    // Usamos { once: true } para que ele tente apenas no primeiro toque, economizando processamento.
+    document.body.addEventListener('click', ativarTelaCheia, { once: true });
+    document.body.addEventListener('touchstart', ativarTelaCheia, { once: true });
+
+    // Opcional: Se o jogador sair da tela cheia (apertando ESC no PC), 
+    // reativamos o gatilho para o próximo clique.
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) {
+            document.body.addEventListener('click', ativarTelaCheia, { once: true });
+            document.body.addEventListener('touchstart', ativarTelaCheia, { once: true });
+        }
+    });
+})();
+</script>
 </body>
 </html>

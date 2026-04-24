@@ -89,7 +89,7 @@
     overlay.innerHTML = `
       <div id="bg-guard-box">
         <img class="bg-guard-icon"
-             src="https://aden-rpg.pages.dev/assets/recusar.webp"
+             src="https://aden-rpg.pages.dev/assets/alertax.webp"
              onerror="this.style.display='none'" alt="">
         <p>${htmlMessage}</p>
         <button id="bg-guard-btn">${buttonLabel}</button>
@@ -352,7 +352,7 @@
       // ── Card Pix ──
       const pixCard = buildPaymentCard(
         'https://aden-rpg.pages.dev/assets/pixbtn.webp',
-        'Pix com Whatsapp'
+        'Pix'
       );
 
       // ── Card PayPal ──

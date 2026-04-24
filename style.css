@@ -1281,8 +1281,8 @@ margin-right: 15px;
 }
 
 .shop-item-img {
-    width: 120px;
-    height: 160px;
+    width: 90px;
+    height: 130px;
     object-fit: contain;
     margin-right: 15px;
 }
@@ -1295,8 +1295,9 @@ margin-right: 15px;
 
 .shop-item-details h3 {
     margin: 0 0 5px 0;
-    font-size: 1.1em;
+    font-size: 1.4em;
     color: #fff;
+    
 }
 
 .shop-item-details p {
@@ -1333,9 +1334,14 @@ margin-right: 15px;
 }
 
 .recharge-item .shop-item-details span {
-    font-size: 1.4em;
+    font-size: 1.7em;
     font-weight: bold;
-    color: #4CAF50;
+    color: gold;
+}
+.formas {
+    font-size: 1.2em!important;
+    font-weight: bold;
+    color: lightblue!important;
 }
 
 /* Aba de Vídeos */

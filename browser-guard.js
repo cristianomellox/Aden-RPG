@@ -407,7 +407,7 @@
 
     const lbl = document.createElement('span');
     lbl.textContent = label;
-    lbl.style.cssText = 'font-size:.92em; color:#ccc; text-align:center; line-height:1.2; text-shadow: none;';
+    lbl.style.cssText = 'font-size:.92em; color:gold; text-align:center; line-height:1.2;';
 
     card.appendChild(img);
     card.appendChild(lbl);

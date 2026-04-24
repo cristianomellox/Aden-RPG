@@ -89,7 +89,7 @@
     overlay.innerHTML = `
       <div id="bg-guard-box">
         <img class="bg-guard-icon"
-             src="https://aden-rpg.pages.dev/assets/sobre.webp"
+             src="https://aden-rpg.pages.dev/assets/recusar.webp"
              onerror="this.style.display='none'" alt="">
         <p>${htmlMessage}</p>
         <button id="bg-guard-btn">${buttonLabel}</button>

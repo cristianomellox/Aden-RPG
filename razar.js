@@ -725,8 +725,8 @@ function enableMapInteraction() {
         return m ? parseFloat(m[1]) : 1.1;
     })();
     let cx = 0, cy = 0, currentScale = cssScale;
-    const MIN_SCALE = 0.5;   // zoom-out máximo
-    const MAX_SCALE = 3.0;   // zoom-in máximo
+    let MIN_SCALE = 0.5;     // zoom-out mínimo (recalculado dinamicamente)
+    const MAX_SCALE = 3.0;   // zoom-in máximo (inalterado)
 
     // ── Inércia ─────────────────────────────────────────────────────────
     let vx = 0, vy = 0, lt = 0, aId = null;
@@ -746,6 +746,13 @@ function enableMapInteraction() {
 
     function recalcLimits() {
         const cr = cont.getBoundingClientRect();
+        // Zoom-out mínimo dinâmico: impede afastar além da tela (mesma lógica do forte.js)
+        MIN_SCALE = Math.max(cr.width / 1500, cr.height / 1500);
+        // Se a escala atual ficou abaixo do mínimo (ex: tela maior após resize), corrige
+        if (currentScale < MIN_SCALE) {
+            currentScale = MIN_SCALE;
+            map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
+        }
         minX = Math.min(0, cr.width  - 1500 * currentScale);
         minY = Math.min(0, cr.height - 1500 * currentScale);
         maxX = 0; maxY = 0;

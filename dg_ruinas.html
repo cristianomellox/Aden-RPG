@@ -6,8 +6,6 @@
     <meta name="viewport" 
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <meta name="robots" content="noindex, nofollow">
-    <meta name="googlebot" content="noindex, nofollow">
     <title>Ruínas Ancestrais - Aden RPG</title>
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
@@ -559,8 +557,18 @@ function enableMapInteraction() {
     map.style.cursor = 'grab';
 
     setTimeout(() => {
+        // Escala mínima para preencher a tela sem fundo preto (mesma lógica do forte.js)
+        const cr = mapContainer.getBoundingClientRect();
+        const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
+        map.style.transform = `translate(0px, 0px) scale(${minScale})`;
         recalcLimits();
     }, 100);
+    window.addEventListener("resize", () => {
+        const cr = mapContainer.getBoundingClientRect();
+        const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
+        map.style.transform = `translate(0px, 0px) scale(${minScale})`;
+        recalcLimits();
+    });
 }
 
 // Lógica de UI (Menu e Modais)

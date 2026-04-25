@@ -3199,7 +3199,7 @@ function enableMapInteraction() {
     // ── Estado de posição e escala ──────────────────────────────────────────
     let currentX = 0, currentY = 0;
     let currentScale = 1;
-    const MIN_SCALE = 0.45; // limite mínimo de zoom-out
+    let MIN_SCALE = 0.45; // recalculado dinamicamente para preencher a tela
     const MAX_SCALE = 2.0;  // limite máximo de zoom-in
 
     // ── Inércia ─────────────────────────────────────────────────────────────
@@ -3226,6 +3226,9 @@ function enableMapInteraction() {
         const container = document.getElementById('mapContainer');
         if (!container) return;
         const cr = container.getBoundingClientRect();
+        // Mesma lógica do forte.js: minScale = max(largura/mapaW, altura/mapaH)
+        // Garante que o mapa sempre preencha a tela sem deixar fundo preto
+        MIN_SCALE = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1600));
         const scaledW = (map.offsetWidth  || 1500) * currentScale;
         const scaledH = (map.offsetHeight || 1600) * currentScale;
         minX = Math.min(0, cr.width  - scaledW);
@@ -3235,6 +3238,9 @@ function enableMapInteraction() {
     }
 
     recalcLimits();
+    // Inicia no zoom mínimo que preenche a tela (evita fundo preto desde o início)
+    currentScale = MIN_SCALE;
+    map.style.transform = `translate(0px, 0px) scale(${MIN_SCALE})`;
     window.addEventListener('resize', recalcLimits);
 
     map.style.touchAction = 'none';

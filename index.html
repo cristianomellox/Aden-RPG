@@ -73,7 +73,8 @@
 <button id="signInBtn">Entrar</button>
 <button id="signUpBtn">Registrar</button>
 </div>
-<a style="background-color: rgba(51, 51, 51, 0.8); color: white; border-radius: 5px; position: flex; width: 85vw;" href="#" id="forgotPasswordLink">Esqueceu a senha?</a>
+<!-- Botão Esqueceu a senha alinhado à esquerda -->
+<a style="display: inline-block; align-self: flex-start; background-color: rgba(51, 51, 51, 0.8); color: white; border-radius: 10px; padding: 2px 5px; margin-top: 15px; text-decoration: none; font-size: 0.9em; font-weight: bold;" href="#" id="forgotPasswordLink">Esqueceu a senha?</a>
 
 <div id="forgotPasswordModal" class="modal-container" style="display: none;">
     <div class="modal-content">
@@ -96,19 +97,30 @@
         <button id="updatePasswordBtn">Atualizar Senha</button>
         <button id="closeVerifyRecoveryModalBtn">Fechar</button>
         <p id="verifyRecoveryMessage"></p>
-    
-</div></div>
-<p id="authMessage"></p>
- <p style="background-color: rgba(51, 51, 51, 0.8); text-align: justify; border-radius: 5px; position: flex; width: 85vw;">Ao se registrar você concorda com os <a href="termos_de_uso.html" style="color: #fff; text-weight: bold;">Termos de Uso</a> e <a href="politica_de_privacidade.html" style="color: #fff; text-weight: bold;">Política de Privacidade</a>.</p>
- 
-<p id="authCopyrightFooter"
-    style="background-color: rgba(51, 51, 51, 0.8); text-align: center; border-radius: 5px; position: flex; width: 85vw; font-size: 0.9em; padding: 5px 0; margin-top: 10px; color: #ccc;"
-    data-lang-pt="&copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados."
-    data-lang-en="&copy; 2025 - 2026 Aden RPG Online. All rights reserved.">
-    &copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados.
-</p>
- 
+    </div>
 </div>
+
+<p id="authMessage"></p>
+
+<!-- Termos de uso (Fica colado no login) -->
+<p class="termos-text" style="background-color: rgba(51, 51, 51, 0.8); text-align: center; border-radius: 10px; padding: 5px 6px; width: 100%; box-sizing: border-box; margin-top: 1px; line-height: 1.4; font-size: 0.85em;">
+    Ao se registrar você concorda com os <a href="termos_de_uso.html" style="color: #fff; font-weight: bold;">Termos de Uso</a> e <a href="politica_de_privacidade.html" style="color: #fff; font-weight: bold;">Política de Privacidade</a>.
+</p>
+
+</div> <!-- FIM DO #caixaLogin -->
+
+<!-- Footer TOTALMENTE SEPARADO, preso ao fundo -->
+<div id="authFooter" style="width: 100%; text-align: center; padding-bottom: 0;">
+    <!-- A caixa do Copyright agora tem a mesma largura máxima da caixa de login -->
+    <p id="authCopyrightFooter"
+        style="background-color: rgba(51, 51, 51, 0.8); display: inline-block; border-radius: 5px; padding: 5px 10px; margin: 0; font-size: 0.8em; color: #ccc; width: 100vw; box-sizing: border-box;"
+        data-lang-pt="&copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados."
+        data-lang-en="&copy; 2025 - 2026 Aden RPG Online. All rights reserved.">
+        &copy; 2025 - 2026 Aden RPG Online. Todos os direitos reservados.
+    </p>
+</div>
+
+</div> <!-- FIM DO #authContainer -->
 </div>
 <div id="welcomeContainer" style="display:none; margin-top: 3px;">
 </div>

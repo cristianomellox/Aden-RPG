@@ -22,7 +22,7 @@
         { id: 'erbaria', name: 'Erbária', top: 780, left: 530, width: 118, height: 75, url: '/erbaria.html', color: '#ffc3c3' },
         { id: 'arena', name: 'Arena', top: 645, left: 220, width: 148, height: 120, url: '/arena.html', color: '#b7a5ff' },
         { id: 'tdd', name: 'Torre da Desolação', top: 1070, left: 146, width: 148, height: 180, url: '/tdd.html', color: '#b7a5ff' },
-        { id: 'capital', name: 'Capital', top: 515, left: 667, width: 220, height: 140, url: 'go:cpt', color: '#84e000' },
+        { id: 'capital', name: 'Capital', top: 515, left: 667, width: 220, height: 140, url: '/capital.html', color: '#84e000' },
         // EXEMPLO DE NOVO LOCAL:
         // { id: 'nova_regiao', name: 'Nova Região', top: 500, left: 500, width: 100, height: 100, url: '/nova.html', color: 'blue' },
     ];

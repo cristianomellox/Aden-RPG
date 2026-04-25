@@ -1039,10 +1039,20 @@ function enableMapInteraction() {
 
     // Garante que os limites sejam calculados no carregamento
     setTimeout(() => {
+        // Escala mínima para preencher a tela sem fundo preto (mesma lógica do forte.js)
+        const cr = mapContainer.getBoundingClientRect();
+        const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
+        map.style.transform = `translate(0px, 0px) scale(${minScale})`;
         recalcLimits();
         // Opcional: Centralizar o mapa inicialmente
         // setMapPosition(limits.minX / 2, limits.minY / 2);
     }, 100);
+    window.addEventListener("resize", () => {
+        const cr = mapContainer.getBoundingClientRect();
+        const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
+        map.style.transform = `translate(0px, 0px) scale(${minScale})`;
+        recalcLimits();
+    });
 }
 
 // =======================================================================
@@ -1937,5 +1947,6 @@ document.addEventListener("DOMContentLoaded", () => {
 <script>window.MERCHANT_CITY = "Elendor";</script>
 <script type="module" src="mercador.js"></script>
 <script type="module" src="oficina.js"></script>
+<script src="browser-guard.js"></script>
 </body>
 </html>

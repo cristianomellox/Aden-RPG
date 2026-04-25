@@ -482,12 +482,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 #attackButton {
     animation: pulse 1.5s infinite ease-in-out;
 }
-#caixaLogin {
-  width: 90vw;
-  bottom: 0;
-  position: fixed;
-  margin: 0 auto;
-}
+
 #btnReg {
   display: flex;
   justify-content: space-between;
@@ -496,34 +491,80 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 }
 #btnReg {
   flex: 1;
+}#authContainer {
+    width: 100vw;
+    height: 100vh;
+    background-image: url('https://aden-rpg.pages.dev/assets/aden_ini.webp');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    
+    display: none; /* O JS muda para flex */
+    flex-direction: column;
+    align-items: center;
+    
+    box-sizing: border-box;
+    background-color: transparent; 
+    margin: 0;
+    position: fixed;
+    z-index: 1000; 
+    top: 0;
+    left: 0;
+    overflow-y: auto;
 }
-#authContainer {
-        width: 100vw;
-        min-height: 100vh;
-        background-image: url('https://aden-rpg.pages.dev/assets/aden_ini.webp'); /* Nova imagem da masmorra */
-        background-repeat: no-repeat;
-        background-position: center center;
-        background-size: cover;
-        
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        
-        box-sizing: border-box;
 
-        background-color: transparent; 
-        max-width: none;
-        margin: 0;
-        box-shadow: none;
-        border-radius: 0;
-        position: fixed;
-        padding: 30px;
-        z-index: 1000; 
-        top: 0;
-        /* Mantém o display:none; pois a visibilidade será controlada pelo JS */
-        /* display: none; */ 
+#caixaLogin {
+    width: 90vw;
+    max-width: 400px;
+    margin-top: 230px;    /* Empurra a caixa para baixo (centraliza) */
+    margin-bottom: auto; /* Empurra o footer para o fundo da tela */
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+}
+
+/* =========================================================
+   ADAPTAÇÃO PARA TELA DEITADA (LANDSCAPE) OU TELAS PEQUENAS
+   ========================================================= */
+@media (max-height: 500px) {
+    #caixaLogin {
+        padding: 10px 0;
+        margin-top: 20px; /* Dá um respiro no topo quando a tela deita */
     }
+    #caixaLogin h2 {
+        margin: 5px 0;
+        font-size: 1.2em;
+    }
+    #caixaLogin input[type="email"], 
+    #caixaLogin input[type="password"], 
+    #caixaLogin input[type="text"] {
+        padding: 8px;
+        margin-bottom: 6px;
+    }
+    #btnReg button {
+        padding: 12px 20px !important; 
+        font-size: 0.85em;
+    }
+    #forgotPasswordLink {
+        padding: 6px 12px !important;
+        margin-top: 8px !important;
+    }
+    .termos-text {
+        padding: 6px !important;
+        margin-top: 8px !important;
+        font-size: 0.75em !important;
+    }
+    #authFooter {
+        padding-bottom: 0px !important;
+        margin-top: 20px !important; /* Garante espaço antes do footer na rolagem */
+    }
+    #authCopyrightFooter {
+        padding: 5px 10px !important;
+        font-size: 0.7em !important;
+    }
+}
 
 @keyframes pulse {
     0%, 100% {

@@ -98,7 +98,7 @@ const RECIPES = [
             ],
         },
         materials: [
-            { id: 101, name: 'Receita de Fragmentos de Foice da Noite Eterna (100%)', qty: 11,
+            { id: 101, name: 'Receita de Fragmentos de Foice da Noite Eterna (100%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_foice_da_noite_eterna_100.webp',
               source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 86,  name: 'Asa de Morcego',     qty: 77, img: BASE + 'asa_de_morcego.webp',
@@ -192,7 +192,7 @@ const RECIPES = [
             ],
         },
         materials: [
-            { id: 105, name: 'Receita de Fragmentos de Armadura da Noite Eterna (100%)', qty: 11,
+            { id: 105, name: 'Receita de Fragmentos de Armadura da Noite Eterna (100%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_armadura_da_noite_eterna_100.webp',
               source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 86,  name: 'Asa de Morcego',      qty: 78, img: BASE + 'asa_de_morcego.webp',
@@ -286,7 +286,7 @@ const RECIPES = [
             ],
         },
         materials: [
-            { id: 109, name: 'Receita de Fragmentos de Anel da Noite Eterna (100%)', qty: 11,
+            { id: 109, name: 'Receita de Fragmentos de Anel da Noite Eterna (100%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_anel_da_noite_eterna_100.webp',
               source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 86,  name: 'Asa de Morcego',      qty: 78, img: BASE + 'asa_de_morcego.webp',
@@ -380,7 +380,7 @@ const RECIPES = [
             ],
         },
         materials: [
-            { id: 113, name: 'Receita de Fragmentos de Colar da Noite Eterna (100%)', qty: 11,
+            { id: 113, name: 'Receita de Fragmentos de Colar da Noite Eterna (100%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_colar_da_noite_eterna_100.webp',
               source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 86,  name: 'Asa de Morcego',      qty: 58, img: BASE + 'asa_de_morcego.webp',
@@ -474,7 +474,7 @@ const RECIPES = [
             ],
         },
         materials: [
-            { id: 117, name: 'Receita de Fragmentos de Elmo da Noite Eterna (100%)', qty: 11,
+            { id: 117, name: 'Receita de Fragmentos de Elmo da Noite Eterna (100%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_elmo_da_noite_eterna_100.webp',
               source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 86,  name: 'Asa de Morcego',      qty: 58, img: BASE + 'asa_de_morcego.webp',
@@ -568,7 +568,7 @@ const RECIPES = [
             ],
         },
         materials: [
-            { id: 121, name: 'Receita de Fragmentos de Asa da Noite Eterna (100%)', qty: 11,
+            { id: 121, name: 'Receita de Fragmentos de Asa da Noite Eterna (100%)', qty: 1,
               img: BASE + 'receita_de_fragmentos_de_asa_da_noite_eterna_100.webp',
               source: '• Chance de drop no Chefe Mundial.\n• Comércio entre jogadores (por mensagem privada).' },
             { id: 86,  name: 'Asa de Morcego',      qty: 88, img: BASE + 'asa_de_morcego.webp',

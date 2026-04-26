@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="robots" content="index, follow">
+    <meta property="og:title" content="Aden RPG Online – Download">
+    <meta property="og:description" content="Entre no continente de Aden. Forje seu legado em batalhas épicas, guildas e um mundo repleto de segredos.">
+    <meta property="og:image" content="https://aden-rpg.pages.dev/assets/fundo_down.jpg">
     <title>Download - Aden RPG Online</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
     <style>
         :root {
             --gold:        #c9a94a;
@@ -14,16 +17,15 @@
             --gold-dark:   #8a6e24;
             --gold-glow:   rgba(201,169,74,0.35);
             --bg-dark:     rgba(0,0,0,0.82);
-            --bg-panel:    rgba(8,6,4,0.88);
+            --bg-panel:    rgba(8,6,4,0.90);
             --bg-card:     rgba(20,14,6,0.80);
             --text-main:   #e8e0cc;
-            --text-muted:  #a89878;
+            --text-muted:  silver;
             --border:      rgba(201,169,74,0.30);
             --border-mid:  rgba(201,169,74,0.55);
+            --topbar-h:    52px;
         }
-
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
         html, body {
             height: 100%;
             font-family: 'Crimson Pro', Georgia, serif;
@@ -32,475 +34,514 @@
             background: #0a0704;
         }
 
-        /* ── BACKGROUND ───────────────────────────────────────────────── */
+        /* ── BACKGROUND ── */
         #bg-layer {
-            position: fixed;
-            inset: 0;
+            position: fixed; inset: 0;
             background: url('https://aden-rpg.pages.dev/assets/fundo_down.jpg') no-repeat center center / cover;
             z-index: 0;
         }
         #bg-layer::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(
-                to bottom,
-                rgba(0,0,0,0.60) 0%,
-                rgba(0,0,0,0.40) 30%,
-                rgba(0,0,0,0.55) 70%,
-                rgba(0,0,0,0.85) 100%
-            );
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.40) 30%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.88) 100%);
         }
-
-        /* ── NOISE GRAIN OVERLAY ──────────────────────────────────────── */
         #grain {
-            position: fixed;
-            inset: 0;
-            z-index: 1;
-            pointer-events: none;
-            opacity: 0.045;
+            position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.045;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-            background-repeat: repeat;
-            background-size: 180px;
+            background-repeat: repeat; background-size: 180px;
         }
 
-        /* ── SCROLLABLE WRAPPER ───────────────────────────────────────── */
-        #page-wrap {
-            position: relative;
-            z-index: 2;
-            min-height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        /* ══ TOPBAR ══════════════════════════════════════════════════════════ */
+        #topbar {
+            position: fixed; top: 0; left: 0; right: 0;
+            height: var(--topbar-h);
+            z-index: 200;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px;background: linear-gradient(to bottom, #444, #222);
+            
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 2px 24px rgba(0,0,0,0.8), 0 1px 0 rgba(201,169,74,0.15);
         }
-
-        /* ── HEADER ───────────────────────────────────────────────────── */
-        #site-header {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 28px 20px 0;
-            position: relative;
-            flex-shrink: 0;
+        #topbar::before {
+            content: '';
+            position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--gold), transparent);
+            opacity: 0.4;
         }
-
-        #lang-selector {
-            position: absolute;
-            right: 18px;
-            top: 22px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
+        #topbar-logo {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--gold-light);
+            letter-spacing: 0.06em;
+            text-shadow: 0 0 18px var(--gold-glow), 0 1px 4px rgba(0,0,0,0.9);
+            white-space: nowrap;
+            line-height: 1;
         }
-
+        #topbar-right {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .topbar-icon-btn {
+            background: none; border: 4px solid var(--border);
+            border-radius: 6px; width: 36px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--gold);
+            transition: border-color 0.2s, background 0.2s, transform 0.15s;
+        }
+        .topbar-icon-btn:hover {
+            border-color: var(--gold); background: rgba(201,169,74,0.12); transform: scale(1.06);
+        }
+        .topbar-icon-btn svg { width: 20px; height: 20px; }
+        #lang-selector { display: flex; gap: 6px; align-items: center; }
         .lang-btn {
-            width: 52px;
-            height: 34px;
-            border: 2px solid transparent;
-            border-radius: 4px;
-            cursor: pointer;
-            object-fit: cover;
-            transition: border-color 0.2s, opacity 0.2s, transform 0.15s;
-            opacity: 0.65;
+            width: 44px; height: 30px; border: 2px solid transparent;
+            border-radius: 4px; cursor: pointer; object-fit: cover;
+            transition: border-color 0.2s, opacity 0.2s, transform 0.15s; opacity: 0.60;
         }
-        .lang-btn.active {
-            border-color: var(--gold);
-            opacity: 1;
-            transform: scale(1.08);
-        }
-        .lang-btn:not(.active):hover {
-            opacity: 0.9;
+        .lang-btn.active { border-color: var(--gold); opacity: 1; transform: scale(1.08); }
+        .lang-btn:not(.active):hover { opacity: 0.88; }
+
+        /* ── PAGE WRAP ── */
+        #page-wrap {
+            position: relative; z-index: 2;
+            min-height: 100%; display: flex; flex-direction: column; align-items: center;
+            padding-top: var(--topbar-h);
         }
 
+        /* ── HEADER / LOGO ── */
+        #site-header {
+            width: 100%; display: flex; align-items: center; justify-content: center;
+            padding: 24px 20px 0; position: relative; flex-shrink: 0;
+        }
         #logo-img {
-            max-width: min(320px, 78vw);
-            height: auto;
+            max-width: min(300px, 74vw); height: auto;
             filter: drop-shadow(0 0 28px rgba(201,169,74,0.45)) drop-shadow(0 4px 16px rgba(0,0,0,0.9));
             animation: logo-float 5s ease-in-out infinite;
-            margin-top: 35px;
         }
         @keyframes logo-float {
-            0%,100% { transform: translateY(0px);   }
-            50%      { transform: translateY(-6px);  }
+            0%,100% { transform: translateY(0px); } 50% { transform: translateY(-6px); }
         }
 
-        /* ── HERO ─────────────────────────────────────────────────────── */
+        /* ── HERO ── */
         #hero {
-            width: 100%;
-            max-width: 820px;
-            padding: 32px 22px 20px;
-            text-align: center;
+            width: 100%; max-width: 820px;
+            padding: 22px 12px 18px; text-align: center;
             animation: fadeUp 0.8s ease both;
         }
         @keyframes fadeUp {
             from { opacity:0; transform: translateY(24px); }
-            to   { opacity:1; transform: translateY(0);    }
+            to   { opacity:1; transform: translateY(0); }
         }
-
         #hero-title {
             font-family: 'Cinzel', serif;
-            font-size: clamp(1.5rem, 5vw, 2.55rem);
-            font-weight: 700;
-            letter-spacing: 0.06em;
+            font-size: clamp(1.4rem, 5vw, 2.5rem);
+            font-weight: 700; letter-spacing: 0.06em;
             color: var(--gold-light);
             text-shadow: 0 0 40px var(--gold-glow), 0 3px 12px rgba(0,0,0,0.9);
-            margin-bottom: 12px;
-            line-height: 1.2;
+            margin-bottom: 10px; line-height: 1.2;
         }
-
         #hero-subtitle {
-            font-size: clamp(1rem, 2.5vw, 1.2rem);
-            font-weight: 300;
-            font-style: italic;
-            color: var(--text-muted);
-            letter-spacing: 0.03em;
-            margin-bottom: 34px;
+            font-size: clamp(1.4rem, 2.5vw, 1.15rem);
+            font-weight: 300; font-style: italic;
+            color: var(--text-muted); letter-spacing: 0.03em; margin-bottom: 30px;
         }
 
-        /* ── ORNAMENT LINE ────────────────────────────────────────────── */
+        /* ── ORNAMENT ── */
         .ornament {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 0 auto 34px;
-            max-width: 400px;
+            display: flex; align-items: center; gap: 12px;
+            margin: 0 auto 30px; max-width: 400px;
         }
-        .ornament-line {
-            flex: 1;
-            height: 1px;
-            background: linear-gradient(to right, transparent, var(--gold), transparent);
-        }
+        .ornament-line { flex: 1; height: 3px; background: linear-gradient(to right, transparent, var(--gold), transparent); }
         .ornament svg { flex-shrink: 0; }
 
-        /* ── DOWNLOAD BUTTONS ─────────────────────────────────────────── */
+        /* ── DOWNLOAD SECTION ── */
         #download-section {
-            width: 100%;
-            max-width: 820px;
-            padding: 0 22px 10px;
+            width: 100%; max-width: 820px; padding: 0 22px 10px;
             animation: fadeUp 0.85s 0.1s ease both;
         }
+        .section-header {
+            text-align: center; margin-bottom: 18px;
+        }
+        .section-header h2 {
+            font-family: 'Cinzel', serif; font-size: clamp(1.5rem, 3vw, 1.3rem);
+            font-weight: 600; color: var(--gold); letter-spacing: 0.07em;
+            text-shadow: 0 0 20px var(--gold-glow);
+        }
+        .section-header p {
+            font-size: 1.2rem; color: var(--text-muted); margin-top: 4px;
+            font-style: italic;
+        }
+
+        /* Android-only badge */
+        .android-notice {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(201,169,74,0.10); border: 1px solid var(--border);
+            border-radius: 20px; padding: 5px 14px; margin-bottom: 18px;
+            font-size: 1.2rem; font-family: 'Crimson Pro', serif;
+            color: var(--text-muted); letter-spacing: 0.02em;
+        }
+        .android-notice svg { color: var(--gold); flex-shrink: 0; }
 
         .dl-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 14px;
-            justify-content: center;
+            display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
         }
-
         .dl-btn {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 14px 24px;
+            display: flex; align-items: center; gap: 14px;
+            padding: 14px 22px;
             background: linear-gradient(135deg, rgba(201,169,74,0.12), rgba(201,169,74,0.04));
-            border: 1px solid var(--border-mid);
-            border-radius: 8px;
-            text-decoration: none;
-            color: var(--text-main);
-            font-family: 'Cinzel', serif;
-            font-size: 0.88rem;
-            letter-spacing: 0.05em;
-            cursor: pointer;
-            transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
-            min-width: 200px;
-            box-shadow: 0 2px 18px rgba(0,0,0,0.45);
-            position: relative;
-            overflow: hidden;
+            border: 1px solid var(--border-mid); border-radius: 8px;
+            text-decoration: none; color: var(--text-main);
+            font-family: 'Cinzel', serif; font-size: 1.88rem; letter-spacing: 0.05em;
+            cursor: pointer; transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+            min-width: 190px; box-shadow: 0 2px 18px rgba(0,0,0,0.45);
+            position: relative; overflow: hidden;
         }
         .dl-btn::before {
-            content: '';
-            position: absolute;
-            inset: 0;
+            content: ''; position: absolute; inset: 0;
             background: linear-gradient(135deg, rgba(201,169,74,0.18), transparent);
-            opacity: 0;
-            transition: opacity 0.2s;
+            opacity: 0; transition: opacity 0.2s;
         }
         .dl-btn:hover::before { opacity: 1; }
         .dl-btn:hover {
-            border-color: var(--gold);
-            transform: translateY(-2px);
+            border-color: var(--gold); transform: translateY(-2px);
             box-shadow: 0 6px 28px rgba(201,169,74,0.22), 0 2px 8px rgba(0,0,0,0.6);
         }
         .dl-btn:active { transform: translateY(0); }
-
-        .dl-btn-icon {
-            flex-shrink: 0;
-            width: 38px;
-            height: 38px;
-        }
-
-        .dl-btn-label {
-            display: flex;
-            flex-direction: column;
-            text-align: left;
-        }
+        .dl-btn-icon { flex-shrink: 0; width: 36px; height: 36px; }
+        .dl-btn-label { display: flex; flex-direction: column; text-align: left; }
         .dl-btn-sub {
-            font-family: 'Crimson Pro', serif;
-            font-size: 0.72rem;
-            font-weight: 300;
-            color: var(--text-muted);
-            letter-spacing: 0.03em;
-            margin-bottom: 2px;
+            font-family: 'Crimson Pro', serif; font-size: 1.1rem;
+            font-weight: 300; color: var(--text-muted);
+            letter-spacing: 0.03em; margin-bottom: 2px;
         }
-        .dl-btn-main {
-            font-weight: 600;
-            font-size: 0.95rem;
-            color: var(--gold-light);
-        }
-
-        .dl-btn.soon {
-            opacity: 0.52;
-            cursor: default;
-            pointer-events: none;
-        }
-        .dl-soon-tag {
-            position: absolute;
-            top: 6px;
-            right: 8px;
-            font-family: 'Cinzel', serif;
-            font-size: 0.56rem;
-            letter-spacing: 0.08em;
-            color: var(--gold);
-            border: 1px solid var(--gold-dark);
-            border-radius: 3px;
-            padding: 1px 5px;
+        .dl-btn-main { font-weight: 600; font-size: 1.15rem; color: var(--gold-light); }
+        .dl-btn-badge {
+            position: absolute; top: 5px; right: 7px;
+            font-family: 'Cinzel', serif; font-size: 0.52rem;
+            letter-spacing: 0.08em; color: var(--gold);
+            border: 1px solid var(--gold-dark); border-radius: 3px; padding: 1px 4px;
         }
 
-        /* ── DIVIDER ──────────────────────────────────────────────────── */
-        .section-divider {
-            width: 100%;
-            max-width: 820px;
-            padding: 28px 22px 0;
-        }
+        /* Web version btn special */
+        .dl-btn.web-btn { border-color: rgba(180,150,80,0.35); }
+
+        /* ── DIVIDER ── */
+        .section-divider { width: 100%; max-width: 820px; padding: 24px 22px 0; }
         .section-divider .ornament { margin-bottom: 0; }
 
-        /* ── DESCRIPTION PANEL ────────────────────────────────────────── */
+        /* ── DESCRIPTION PANEL ── */
         #description-panel {
-            width: 100%;
-            max-width: 820px;
-            margin: 28px 22px 0;
-            padding: 28px 30px;
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            box-shadow: 0 4px 40px rgba(0,0,0,0.6);
+            width: 100%; max-width: 820px; margin: 26px 22px 0;
+            padding: 26px 28px;
+            background: var(--bg-panel); border: 1px solid var(--border);
+            border-radius: 10px; box-shadow: 0 4px 40px rgba(0,0,0,0.6);
             animation: fadeUp 0.9s 0.15s ease both;
         }
-
         #description-panel h2 {
-            font-family: 'Cinzel', serif;
-            font-size: clamp(1.5rem, 2.8vw, 1.3rem);
-            font-weight: 600;
-            color: var(--gold);
-            letter-spacing: 0.05em;
-            border-bottom: 1px solid var(--border-mid);
-            padding-bottom: 8px;
-            margin-bottom: 14px;
+            font-family: 'Cinzel', serif; font-size: clamp(1.6rem, 2.8vw, 1.25rem);
+            font-weight: 600; color: var(--gold); letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-mid); padding-bottom: 8px; margin-bottom: 14px;
         }
         #description-panel p {
-            font-size: clamp(1.3rem, 2.2vw, 1.08rem);
-            line-height: 1.72;
-            color: var(--text-main);
-            text-shadow: 0 1px 3px rgba(0,0,0,0.7);
-            margin-bottom: 12px;
+            font-size: clamp(1.4rem, 2.2vw, 1.05rem); line-height: 1.72;
+            color: var(--text-main); text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+            margin-bottom: 12px; text-align: justify;
         }
         #description-panel p:last-child { margin-bottom: 0; }
 
-        /* ── FEATURES GRID ────────────────────────────────────────────── */
+        /* ── FEATURES ── */
         #features-section {
-            width: 100%;
-            max-width: 820px;
-            padding: 28px 22px 0;
+            width: 100%; max-width: 820px; padding: 26px 22px 0;
             animation: fadeUp 0.9s 0.2s ease both;
         }
-
         #features-title {
-            font-family: 'Cinzel', serif;
-            font-size: clamp(1.1rem, 3vw, 1.45rem);
-            font-weight: 700;
-            color: var(--gold-light);
-            text-align: center;
-            letter-spacing: 0.07em;
-            margin-bottom: 6px;
+            font-family: 'Cinzel', serif; font-size: clamp(1.5rem, 3vw, 1.4rem);
+            font-weight: 700; color: var(--gold-light); text-align: center;
+            letter-spacing: 0.07em; margin-bottom: 6px;
             text-shadow: 0 0 30px var(--gold-glow);
         }
         #features-sub {
-            text-align: center;
-            font-size: 0.95rem;
-            font-style: italic;
-            color: var(--text-muted);
-            margin-bottom: 22px;
+            font-family: 'Crimson Pro', serif; font-size: clamp(1.3rem, 2vw, 1.05rem);
+            font-weight: 300; font-style: italic; color: var(--text-muted);
+            text-align: center; margin-bottom: 22px; letter-spacing: 0.03em;
         }
-
         .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+          display: flex;
             gap: 14px;
+            overflow-x: auto;
         }
-
         .feat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 9px;
-            padding: 18px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            transition: border-color 0.2s, transform 0.18s, box-shadow 0.2s;
-            box-shadow: 0 2px 16px rgba(0,0,0,0.45);
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px 18px;
+            transition: border-color 0.25s, transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+            min-width: 300px;
         }
         .feat-card:hover {
-            border-color: var(--gold-dark);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 30px rgba(201,169,74,0.14), 0 2px 8px rgba(0,0,0,0.55);
+            border-color: var(--gold-dark); transform: translateY(-5px);
+            box-shadow: 0 8px 32px rgba(201,169,74,0.14), 0 2px 8px rgba(0,0,0,0.7);
         }
-
         .feat-icon-wrap {
-            width: 42px;
-            height: 42px;
-            background: rgba(201,169,74,0.08);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
+            width: 54px; height: 54px; margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(201,169,74,0.08); border-radius: 50%;
+            border: 1px solid rgba(201,169,74,0.15);
         }
-
         .feat-card h3 {
-            font-family: 'Cinzel', serif;
-            font-size: 0.88rem;
-            font-weight: 600;
-            color: var(--gold);
-            letter-spacing: 0.04em;
-            line-height: 1.3;
+            font-family: 'Cinzel', serif; font-size: 1.2rem;
+            font-weight: 600; letter-spacing: 0.06em;
+            color: var(--gold-light); margin-bottom: 8px;
         }
         .feat-card p {
-            font-size: 0.93rem;
-            line-height: 1.6;
-            color: var(--text-muted);
+            font-size: 1.3rem; line-height: 1.55; color: var(--text-muted);
+            text-align: justify;
         }
 
-        /* ── LANGUAGES PANEL ──────────────────────────────────────────── */
+        /* ── LANGUAGES PANEL ── */
         #languages-panel {
-            width: 100%;
-            max-width: 820px;
-            margin: 28px 22px 0;
-            padding: 22px 28px;
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+            width: 100%; max-width: 820px; margin: 26px 22px 0;
+            padding: 18px 24px;
+            background: var(--bg-panel); border: 1px solid var(--border);
+            border-radius: 10px; text-align: center;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.4);
         }
         #languages-panel h3 {
-            font-family: 'Cinzel', serif;
-            font-size: 1rem;
-            color: var(--gold);
-            letter-spacing: 0.05em;
-            margin-bottom: 10px;
+            font-family: 'Cinzel', serif; font-size: 1.3rem; font-weight: 600;
+            color: var(--gold); letter-spacing: 0.07em; margin-bottom: 8px;
         }
-        #languages-panel p {
-            font-size: 0.92rem;
-            color: var(--text-muted);
-            line-height: 1.6;
-        }
+        #languages-panel p { font-size: 1.2rem; line-height: 1.6; color: var(--text-muted); }
 
-        /* ── NO P2W BANNER ────────────────────────────────────────────── */
+        /* ── NO P2W ── */
         #no-p2w {
-            width: 100%;
-            max-width: 820px;
-            margin: 28px 22px 0;
-            padding: 22px 28px;
-            border: 1px solid var(--gold-dark);
-            border-radius: 10px;
-            background: linear-gradient(135deg, rgba(201,169,74,0.08), rgba(0,0,0,0.3));
-            text-align: center;
-            box-shadow: 0 0 30px rgba(201,169,74,0.10);
+            width: 100%; max-width: 820px; margin: 18px 22px 0;
+            padding: 14px 22px;
+            background: linear-gradient(135deg, rgba(201,169,74,0.08), rgba(201,169,74,0.02));
+            border: 1px solid var(--border); border-radius: 8px; text-align: center;
         }
         #no-p2w p {
-            font-family: 'Cinzel', serif;
-            font-size: clamp(0.88rem, 2.2vw, 1.05rem);
-            color: var(--gold-light);
-            letter-spacing: 0.04em;
-            line-height: 1.6;
-            text-shadow: 0 0 20px var(--gold-glow);
+            font-size: clamp(1.5rem, 2vw, 1rem); line-height: 1.5;
+            color: var(--text-muted); font-style: italic;
         }
 
-        /* ── BOTTOM CTA ───────────────────────────────────────────────── */
+        /* ── STORY CARD ── */
+        #story-card-wrap {
+            width: 100%; max-width: 820px; padding: 30px 22px 0;
+            animation: fadeUp 0.9s 0.18s ease both;
+        }
+        #story-card {
+            background: linear-gradient(135deg, rgba(40,20,4,0.82), rgba(12,8,3,0.88));
+            border: 1px solid var(--border-mid); border-radius: 12px;
+            padding: 28px 30px;
+            box-shadow: 0 4px 40px rgba(0,0,0,0.65), inset 0 1px 0 rgba(201,169,74,0.15);
+            position: relative; overflow: hidden; cursor: pointer;
+            transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+        }
+        #story-card::before {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(ellipse at 20% 50%, rgba(201,169,74,0.07) 0%, transparent 70%);
+        }
+        #story-card:hover {
+            border-color: var(--gold); transform: translateY(-2px);
+            box-shadow: 0 8px 48px rgba(201,169,74,0.18), 0 2px 12px rgba(0,0,0,0.7);
+        }
+        .story-card-eyebrow {
+            font-family: 'Cinzel', serif; font-size: 1rem;
+            letter-spacing: 0.20em; color: var(--gold-dark);
+            text-transform: uppercase; margin-bottom: 10px;
+        }
+        #story-card h2 {
+            font-family: 'Cinzel Decorative', serif;
+            font-size: clamp(1.3rem, 3.5vw, 1.55rem); font-weight: 700;
+            color: var(--gold-light); letter-spacing: 0.05em; margin-bottom: 10px;
+            text-shadow: 0 0 30px var(--gold-glow), 0 2px 8px rgba(0,0,0,0.9);
+        }
+        #story-card p {
+            font-size: clamp(1.4rem, 2vw, 1rem); font-style: italic;
+            color: var(--text-muted); line-height: 1.6; margin-bottom: 18px;
+            text-align: justify;
+        }
+        .story-card-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: linear-gradient(135deg, rgba(201,169,74,0.18), rgba(201,169,74,0.06));
+            border: 1px solid var(--gold-dark); border-radius: 6px;
+            padding: 10px 22px; color: var(--gold-light);
+            font-family: 'Cinzel', serif; font-size: 1.2rem; letter-spacing: 0.07em;
+            transition: background 0.2s, border-color 0.2s;
+            pointer-events: none;
+        }
+        #story-card:hover .story-card-btn {
+            background: linear-gradient(135deg, rgba(201,169,74,0.28), rgba(201,169,74,0.12));
+            border-color: var(--gold);
+        }
+        .story-rune {
+            position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
+            opacity: 0.08; font-size: 9rem; font-family: 'Cinzel Decorative', serif;
+            color: var(--gold); pointer-events: none; user-select: none;
+            line-height: 1;
+        }
+
+        /* ── BOTTOM CTA ── */
         #bottom-cta {
-            width: 100%;
-            max-width: 820px;
-            padding: 34px 22px 10px;
-            text-align: center;
+            width: 100%; max-width: 820px; padding: 36px 22px 28px; text-align: center;
         }
         #bottom-cta h2 {
-            font-family: 'Cinzel', serif;
-            font-size: clamp(1.15rem, 3.5vw, 1.6rem);
-            font-weight: 700;
-            color: var(--gold-light);
-            letter-spacing: 0.06em;
-            margin-bottom: 8px;
-            text-shadow: 0 0 30px var(--gold-glow);
+            font-family: 'Cinzel', serif; font-size: clamp(1.4rem, 4vw, 1.9rem);
+            font-weight: 700; color: var(--gold-light); letter-spacing: 0.07em;
+            text-shadow: 0 0 40px var(--gold-glow), 0 3px 12px rgba(0,0,0,0.9);
+            margin-bottom: 10px;
         }
         #bottom-cta p {
-            font-size: 1rem;
-            font-style: italic;
-            color: var(--text-muted);
-            margin-bottom: 24px;
+            font-size: clamp(1.4rem, 2.2vw, 1.05rem); font-style: italic;
+            color: var(--text-muted); margin-bottom: 24px;
         }
 
-        /* ── FOOTER ───────────────────────────────────────────────────── */
+        /* ── FOOTER ── */
         footer {
-            width: 100%;
-            text-align: center;
-            padding: 18px 20px;
-            margin-top: 40px;
-            background: rgba(0,0,0,0.75);
-            border-top: 1px solid var(--border);
-            font-size: 0.82rem;
-            color: var(--text-muted);
-            letter-spacing: 0.04em;
-            flex-shrink: 0;
+            width: 100%; padding: 20px 22px;
+            text-align: center; border-top: 1px solid var(--border);
+            margin-top: 14px;
+        }
+        footer p { font-size: 1.2rem; color: silver; letter-spacing: 0.04em; }
+
+        /* ── REVEAL ANIMATION ── */
+        .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+
+        /* ════════════════════════════════════════════
+           MODALS
+        ═══════════════════════════════════════════ */
+        .modal-backdrop {
+            position: fixed; inset: 0; z-index: 500;
+            background: rgba(0,0,0,0.80);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.22s ease;
+        }
+        .modal-backdrop.open { opacity: 1; pointer-events: all; }
+        .modal-box {
+            background: linear-gradient(160deg, rgba(14,9,4,0.97), rgba(6,4,2,0.99));
+            border: 1px solid var(--border-mid); border-radius: 14px;
+            padding: 30px 28px; max-width: 440px; width: 100%;
+            box-shadow: 0 8px 60px rgba(0,0,0,0.9), 0 1px 0 rgba(201,169,74,0.2) inset;
+            position: relative; transform: translateY(20px);
+            transition: transform 0.22s ease;
+            max-height: 92vh; overflow-y: auto;
+        }
+        .modal-backdrop.open .modal-box { transform: translateY(0); }
+        .modal-box h3 {
+            font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: 700;
+            color: var(--gold-light); letter-spacing: 0.06em;
+            margin-bottom: 14px; text-align: center;
+            text-shadow: 0 0 20px var(--gold-glow);
+        }
+        .modal-box p {
+            font-size: 1.4rem; line-height: 1.68;
+            color: var(--text-main); margin-bottom: 14px;
+        }
+        .modal-box p:last-of-type { margin-bottom: 0; }
+        .modal-divider {
+            height: 3px; margin: 16px 0;
+            background: linear-gradient(to right, transparent, var(--border-mid), transparent);
+        }
+        .modal-close-btn {
+            position: absolute; top: 12px; right: 14px;
+            background: none; border: none; color: var(--text-muted);
+            font-size: 1.4rem; cursor: pointer; line-height: 1;
+            transition: color 0.15s;
+        }
+        .modal-close-btn:hover { color: var(--gold); }
+        .modal-btn-row {
+            display: flex; gap: 10px; justify-content: center;
+            flex-wrap: wrap; margin-top: 18px;
+        }
+        .mbtn {
+            font-family: 'Cinzel', serif; font-size: 1.3rem;
+            letter-spacing: 0.06em; padding: 10px 22px;
+            border-radius: 6px; cursor: pointer; transition: all 0.18s;
+            border: 1px solid var(--border-mid);
+            background: rgba(201,169,74,0.08); color: var(--gold-light);
+        }
+        .mbtn:hover { background: rgba(201,169,74,0.18); border-color: var(--gold); }
+        .mbtn.primary {
+            background: linear-gradient(135deg, rgba(201,169,74,0.22), rgba(201,169,74,0.10));
+            border-color: var(--gold);
+        }
+        .mbtn.primary:hover { background: linear-gradient(135deg, rgba(201,169,74,0.35), rgba(201,169,74,0.18)); }
+        .mbtn.muted { color: var(--text-muted); border-color: rgba(200,185,150,0.20); background: rgba(0,0,0,0.2); }
+        .mbtn.muted:hover { color: var(--text-main); border-color: var(--border); background: rgba(201,169,74,0.06); }
+
+        /* "Saiba mais" link inside modal */
+        .modal-link {
+            color: var(--gold); text-decoration: underline; cursor: pointer;
+            font-family: 'Crimson Pro', serif; font-size: 1.2rem;
+            background: none; border: none; padding: 0; transition: color 0.15s;
+        }
+        .modal-link:hover { color: var(--gold-light); }
+
+        /* Android guide steps */
+        .guide-steps { list-style: none; margin: 10px 0 0; }
+        .guide-steps li {
+            display: flex; gap: 12px; align-items: flex-start;
+            padding: 10px 0; border-bottom: 1px solid rgba(201,169,74,0.12);
+            font-size: 1.3rem; line-height: 1.55; color: var(--text-main);
+        }
+        .guide-steps li:last-child { border-bottom: none; }
+        .guide-step-num {
+            flex-shrink: 0; width: 34px; height: 34px;
+            border-radius: 50%; border: 1px solid var(--gold-dark);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--gold);
+            margin-top: 2px;
         }
 
-        /* ── BACK BUTTON (top-left) ───────────────────────────────────── */
-        #back-btn {
-            position: absolute;
-            left: 16px;
-            top: 26px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-family: 'Cinzel', serif;
-            font-size: 0.78rem;
-            letter-spacing: 0.05em;
-            transition: color 0.2s;
-            z-index: 10;
+        /* Story modal */
+        #story-modal .modal-box {
+            max-width: 580px;
         }
-        #back-btn:hover { color: var(--gold); }
+        .story-chapter {
+            margin-bottom: 22px;
+        }
+        .story-chapter-title {
+            font-family: 'Cinzel', serif; font-size: 1.2rem; font-weight: 700;
+            color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase;
+            margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+        }
+        .story-chapter-title::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(to right, var(--gold-dark), transparent);
+        }
+        .story-chapter p {
+            font-size: 1.5rem; line-height: 1.28;
+            color: #ddd5bb; text-align: justify;
+            margin-bottom: 10px; 
+        }
+        .story-chapter p:last-child { margin-bottom: 0; }
 
-        /* ── SCROLL REVEAL ────────────────────────────────────────────── */
-        .reveal {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.7s ease, transform 0.7s ease;
+        /* Share modal */
+        .share-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+            margin-top: 16px;
         }
-        .reveal.visible {
-            opacity: 1;
-            transform: none;
+        .share-btn {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 14px 10px; border-radius: 10px; cursor: pointer;
+            border: 1px solid var(--border); background: rgba(201,169,74,0.05);
+            transition: all 0.18s; text-decoration: none; color: var(--text-muted);
+            font-family: 'Cinzel', serif; font-size: 0.60rem; letter-spacing: 0.05em;
         }
+        .share-btn:hover { border-color: var(--gold); background: rgba(201,169,74,0.12); color: var(--gold-light); transform: translateY(-2px); }
+        .share-btn svg { width: 28px; height: 28px; }
 
-        @media (max-width: 480px) {
-            #description-panel { padding: 20px 18px; }
-            .dl-btn { min-width: 160px; padding: 12px 16px; gap: 10px; }
+        @media (max-width: 520px) {
             .features-grid { grid-template-columns: 1fr 1fr; }
+            .dl-grid { flex-direction: column; align-items: center; }
+            .dl-btn { width: 100%; max-width: 320px; }
+            .share-grid { grid-template-columns: repeat(3, 1fr); }
         }
         @media (max-width: 360px) {
             .features-grid { grid-template-columns: 1fr; }
+            #topbar-logo { font-size: 0.72rem; }
         }
     </style>
 </head>
@@ -509,275 +550,64 @@
 <div id="bg-layer"></div>
 <div id="grain"></div>
 
+<!-- ══ TOPBAR ══════════════════════════════════════════════════════════════ -->
+<div id="topbar">
+    <span id="topbar-logo">Aden RPG Online</span>
+    <div id="topbar-right">
+        <!-- Share -->
+        <button class="topbar-icon-btn" id="share-open-btn" aria-label="Compartilhar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+        </button>
+        <!-- Lang -->
+        <div id="lang-selector">
+            <img id="lang-pt" src="https://flagcdn.com/w40/br.png" alt="PT" class="lang-btn active" role="button">
+            <img id="lang-en" src="https://flagcdn.com/w40/us.png" alt="EN" class="lang-btn" role="button">
+        </div>
+    </div>
+</div>
+
 <div id="page-wrap">
 
-    <!-- ══ HEADER ══════════════════════════════════════════════════════ -->
+    <!-- ══ LOGO ══ -->
     <header id="site-header">
-        <a href="index.html" id="back-btn" title="Voltar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m15 18-6-6 6-6"/>
-            </svg>
-        </a>
-
-        <img id="logo-img" src="https://aden-rpg.pages.dev/assets/aden_logo.webp" alt="Aden RPG Online" />
-
-        <!-- Language selector top-right -->
-        <div id="lang-selector">
-            <img id="lang-pt" src="https://aden-rpg.pages.dev/assets/flag_pt.webp"
-                 alt="Português" class="lang-btn active" width="52" height="34" />
-            <img id="lang-en" src="https://aden-rpg.pages.dev/assets/flag_en.webp"
-                 alt="English" class="lang-btn" width="52" height="34" />
-        </div>
+        <img id="logo-img" src="https://aden-rpg.pages.dev/assets/aden_logo.webp" alt="Aden RPG Online" onerror="this.style.display='none'">
     </header>
 
-    <!-- ══ HERO ════════════════════════════════════════════════════════ -->
+    <!-- ══ HERO ══ -->
     <section id="hero">
-        <h1 id="hero-title"
-            data-i18n="hero_title"
-            data-lang-en="Download Aden RPG Online">
-            Baixe Aden RPG Online
-        </h1>
-        <p id="hero-subtitle"
-           data-i18n="hero_sub"
-           data-lang-en="Where Strategy Meets Legacy">
-            Onde a Estratégia Encontra o Legado
-        </p>
-
+        <h1 id="hero-title" data-i18n="hero_title" data-lang-en="Forge Your Destiny in Aden">Forje Seu Destino em Aden</h1>
+        <p id="hero-subtitle" data-i18n="hero_sub" data-lang-en="A world of strategy, alliances and ancient glory awaits.">Um mundo de estratégia, alianças e glória ancestral te aguarda.</p>
         <div class="ornament">
             <div class="ornament-line"></div>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.5">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="2.5">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
             <div class="ornament-line"></div>
         </div>
-
-        <!-- DOWNLOAD BUTTONS -->
-        <div id="download-section-inner">
-            <div class="dl-grid">
-
-                <!-- Google Drive -->
-                <a href="https://drive.google.com/file/d/1ylZx3fiqqxca3e9Aw-oaPI60aDAGTVVB" target="_blank" class="dl-btn" aria-label="Baixar via Google Drive">
-                    <svg class="dl-btn-icon" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-                        <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                        <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
-                        <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-                        <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-                        <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-                        <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-                    </svg>
-                    <div class="dl-btn-label">
-                        <span class="dl-btn-sub" data-i18n="dl_drive_sub" data-lang-en="Direct APK">APK Direto</span>
-                        <span class="dl-btn-main">Google Drive</span>
-                    </div>
-                </a>
-
-                <!-- Google Play (em breve) -->
-                <div class="dl-btn soon" aria-label="Google Play - Em breve">
-                    <span class="dl-soon-tag" data-i18n="coming_soon" data-lang-en="COMING SOON">EM BREVE</span>
-                    <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none">
-                        <linearGradient id="gp1" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#00d4ff"/>
-                            <stop offset="100%" stop-color="#0087ff"/>
-                        </linearGradient>
-                        <linearGradient id="gp2" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stop-color="#ffde00"/>
-                            <stop offset="100%" stop-color="#ff8e00"/>
-                        </linearGradient>
-                        <linearGradient id="gp3" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#ff3a44"/>
-                            <stop offset="100%" stop-color="#c00"/></linearGradient>
-                        <linearGradient id="gp4" x1="0" y1="1" x2="1" y2="0">
-                            <stop offset="0%" stop-color="#00f076"/>
-                            <stop offset="100%" stop-color="#00c650"/>
-                        </linearGradient>
-                        <path d="M3.18 23.5c.4.22.88.22 1.3-.02l12.5-7.23-2.73-2.73z" fill="url(#gp4)"/>
-                        <path d="M21.5 10.5c-.5-.28-1.18-.28-1.68 0l-2.64 1.53 2.73 2.73 1.6-.93c.92-.54.92-1.79-.01-2.33z" fill="url(#gp2)"/>
-                        <path d="M3.18.5C2.72.78 2.5 1.27 2.5 1.78V22.2c0 .51.22 1 .68 1.28L14.25 12z" fill="url(#gp1)"/>
-                        <path d="M17.18 12 14.25 9.07 3.18.5l11.07 11.5z" fill="url(#gp3)"/>
-                    </svg>
-                    <div class="dl-btn-label">
-                        <span class="dl-btn-sub" data-i18n="dl_play_sub" data-lang-en="Android">Android</span>
-                        <span class="dl-btn-main">Google Play</span>
-                    </div>
-                </div>
-
-                <!-- APKPure -->
-                <a href="https://apkpure.com/p/com.cmellox.aden" target="_blank" class="dl-btn" aria-label="Baixar no APKPure">
-                    <svg class="dl-btn-icon" viewBox="0 0 100 100" fill="none">
-                        <circle cx="50" cy="50" r="46" fill="#5E35B1"/>
-                        <rect x="30" y="22" width="40" height="56" rx="5" fill="white" opacity="0.92"/>
-                        <rect x="36" y="30" width="28" height="5" rx="2.5" fill="#5E35B1" opacity="0.5"/>
-                        <rect x="36" y="40" width="20" height="3" rx="1.5" fill="#5E35B1" opacity="0.35"/>
-                        <path d="M50 52 L40 62 L46 62 L46 72 L54 72 L54 62 L60 62 Z" fill="#5E35B1"/>
-                    </svg>
-                    <div class="dl-btn-label">
-                        <span class="dl-btn-sub" data-i18n="dl_apk_sub" data-lang-en="APK Store">Loja de APK</span>
-                        <span class="dl-btn-main">APKPure</span>
-                    </div>
-                </a>
-
-            </div>
-        </div>
     </section>
 
-    <!-- ══ DESCRIPTION ═════════════════════════════════════════════════ -->
-    <div id="description-panel" class="reveal">
-        <h2 data-i18n="desc_title" data-lang-en="Welcome to Aden">Bem-vindo a Aden</h2>
-        <p data-i18n="desc_p1"
-           data-lang-en="Dive into a deep strategic RPG world, designed for fans of classic browser games and modern idle, gacha, turn-based, and dungeon mechanics. You are the chosen hero to restore balance, but raw power is not enough — you will need allies, economy, and tactics.">
-            Mergulhe em um mundo de RPG estratégico profundo, projetado para fãs de jogos de navegador clássicos e mecânicas modernas de idle, gacha, turno e masmorras. Você é o herói escolhido para restaurar o equilíbrio, mas o poder bruto não é suficiente — você precisará de aliados, economia e tática.
-        </p>
-        <p data-i18n="desc_p2"
-           data-lang-en="Unlike games with heavy graphics that drain your battery, Aden focuses on depth, community, and strategy. You know those browser games that, although they seem simple, are extremely addictive? That is the core of the game! Moreover, in Aden RPG Online you don't need to spend hours doing boring, exhausting quests — you can have fun progressing without compromising your precious time.">
-            Ao contrário de jogos com gráficos pesados que esgotam sua bateria, Aden foca em profundidade, comunidade e estratégia. Sabe aqueles jogos de navegador que, embora pareçam simples, são extremamente viciantes? Esse é o núcleo do jogo! Além disso, em Aden RPG Online você não precisa passar horas realizando missões chatas e desgastantes — você pode se divertir evoluindo sem comprometer seu precioso tempo.
-        </p>
-    </div>
-
-    <!-- ══ FEATURES ═════════════════════════════════════════════════════ -->
-    <section id="features-section" class="reveal">
-        <h2 id="features-title" data-i18n="feat_title" data-lang-en="Key Features">Principais Características</h2>
-        <p id="features-sub" data-i18n="feat_sub" data-lang-en="Everything that makes Aden unique">Tudo que faz Aden ser único</p>
-
-        <div class="features-grid">
-
-            <!-- Guild War -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        <path d="m9 12 2 2 4-4"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f1_title" data-lang-en="Deep Guild Wars">Guerra de Guildas Profunda</h3>
-                <p data-i18n="f1_body" data-lang-en="Join forces to conquer legendary cities like Capital, Zion and Elendor. Coordinate with your guild in real time to dominate the server map.">Una forças para conquistar cidades lendárias como a Capital, Zion e Elendor. Coordene-se com sua guilda em tempo real para dominar o mapa do servidor.</p>
-            </div>
-
-            <!-- Idle -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
-                        <polyline points="16 7 22 7 22 13"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f2_title" data-lang-en="Strategic Idle Progression">Progressão Idle Estratégica</h3>
-                <p data-i18n="f2_body" data-lang-en="Your heroes gather resources and fight while you are AFK. Log in to manage your spoils, craft legendary gear, and optimize your build.">Seus heróis coletam recursos e lutam enquanto você está AFK. Faça login para gerenciar espólios, fabricar equipamentos lendários e otimizar sua build.</p>
-            </div>
-
-            <!-- Combat -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
-                        <path d="M13 19l6-6"/>
-                        <path d="M2 2l1 1"/>
-                        <path d="M6.5 3.5 3 7M19 5.5 5.5 19M16.5 3 21 7.5"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f3_title" data-lang-en="Tactical Combat">Combate Tático em Turnos e Tempo Real</h3>
-                <p data-i18n="f3_body" data-lang-en="Attributes matter. Analyze your enemy, adjust your gear — Attack, Critical, Evasion — and outplay your opponents in the Arena.">Atributos importam. Analise seu inimigo, ajuste seu equipamento (Ataque, Crítico, Evasão) e supere seus oponentes na Arena.</p>
-            </div>
-
-            <!-- Economy -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="6 3 18 3 22 9 12 22 2 9"/>
-                        <path d="m12 22-4-13M12 22l4-13M2 9h20"/>
-                        <path d="M6 3 8 9m4-6v6m4-6-2 6"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f4_title" data-lang-en="Real Economy">Economia Real</h3>
-                <p data-i18n="f4_body" data-lang-en="Fight for control of Crystal Mines in PvP/PvE events. Secure resources to craft items or trade directly with other players via private messages.">Lute pelo controle das Minas de Cristal em eventos PvP/PvE. Garanta recursos para fabricar itens ou negocie diretamente com outros jogadores.</p>
-            </div>
-
-            <!-- World Boss -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2c-2 0-4 1-5 3L4 9l1 2H3l-1 3 2 1-1 3 3-1 1 2 3-3h2l3 3 1-2 3 1-1-3 2-1-1-3h-2l1-2-3-4c-1-2-3-3-5-3z"/>
-                        <circle cx="9" cy="10" r="1" fill="#c9a94a" stroke="none"/>
-                        <circle cx="15" cy="10" r="1" fill="#c9a94a" stroke="none"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f5_title" data-lang-en="World Boss">Chefe Mundial</h3>
-                <p data-i18n="f5_body" data-lang-en="Kar-Drakul, the dragon that once terrorized the entire continent, must be held back in the frozen mountains of Solaris. Are you brave enough for this quest?">Kar-Drakul, o dragão que outrora aterrorizou todo o continente, precisa ser contido nas montanhas geladas de Solaris. Você é corajoso o suficiente?</p>
-            </div>
-
-            <!-- Forts -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 21V9l9-6 9 6v12H3z"/>
-                        <rect x="9" y="14" width="6" height="7" rx="0.5"/>
-                        <polyline points="3 9 3 5 7 5 7 9"/>
-                        <polyline points="17 9 17 5 21 5 21 9"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f6_title" data-lang-en="Forts">Fortalezas</h3>
-                <p data-i18n="f6_body" data-lang-en="Attack other players' fortresses and defend yours with diverse troops. Use your attack and defense strategy.">Ataque fortalezas de outros jogadores e defenda a sua com tropas diversas. Use sua estratégia de ataque e defesa!</p>
-            </div>
-
-            <!-- Instances -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="8" r="4"/>
-                        <path d="M8 8 4 20M16 8l4 12M4 20h16"/>
-                        <path d="M8 20l4-4 4 4"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f7_title" data-lang-en="Instances">Instâncias</h3>
-                <p data-i18n="f7_body" data-lang-en="Face the Ancient Ruins: 25 players across 50 rooms. After 3 minutes the rooms collapse. Eliminate opponents and be the last survivor.">Enfrente as Ruínas Ancestrais: 25 jogadores em 50 salas. Após 3 minutos as salas colapsam. Elimine os oponentes e seja o último sobrevivente.</p>
-            </div>
-
-            <!-- Skins -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 3C9 3 6 5 6 8v1H4l-1 3 2 1c0 4 3 7 7 7s7-3 7-7l2-1-1-3h-2V8c0-3-3-5-6-5z"/>
-                        <path d="M9 12h6M12 9v6"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f8_title" data-lang-en="Skins">Skins</h3>
-                <p data-i18n="f8_body" data-lang-en="Avatar frames and animated profile backgrounds available. Give a personal touch to your profile.">Molduras de avatar e fundos animados de perfil disponíveis. Dê um toque personalizado ao seu perfil.</p>
-            </div>
-
-            <!-- Multilanguage -->
-            <div class="feat-card">
-                <div class="feat-icon-wrap">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                    </svg>
-                </div>
-                <h3 data-i18n="f9_title" data-lang-en="15 Languages">Suporte Multi-idioma</h3>
-                <p data-i18n="f9_body" data-lang-en="Fully localized in 15 languages, including Portuguese, English, Russian, Spanish, and Chinese.">Totalmente localizado em 15 idiomas, incluindo Português, Inglês, Russo, Espanhol e Chinês.</p>
-            </div>
-
+    <!-- ══ DOWNLOAD SECTION ══ -->
+    <section id="download-section">
+        <div class="section-header">
+            <h2 data-i18n="dl_title" data-lang-en="Choose Your Platform">Escolha Sua Plataforma</h2>
         </div>
-    </section>
 
-    <!-- ══ LANGUAGES PANEL ══════════════════════════════════════════════ -->
-    <div id="languages-panel" class="reveal">
-        <h3 data-i18n="lang_title" data-lang-en="Available Languages (beta)">Idiomas Disponíveis (beta)</h3>
-        <p>Português · English · Español · 中文 · 日本語 · 한국어 · Indonesian · Filipino · Русский · Italiano · Français · Hindi · Melayu · Tiếng Việt · Arabic</p>
-    </div>
+        <!-- Android notice -->
+        <div style="text-align:center; margin-bottom:16px;">
+            <span class="android-notice">
+                
+                <span data-i18n="android_notice" data-lang-en="Mobile version available for Android only.">Versão mobile disponível apenas para Android.</span><br>
+                <span data-i18n="android_notice" data-lang-en="iPhone users may use the Web version.">Usuários de iPhone podem usar a versão Web.</span>
+            </span>
+        </div>
 
-    <!-- ══ NO P2W ════════════════════════════════════════════════════════ -->
-    <div id="no-p2w" class="reveal">
-        <p data-i18n="no_p2w"
-           data-lang-en="No Pay-to-Win. Pure strategy, active developers, and a growing community.">
-            Sem Pay-to-Win! Apenas estratégia pura, desenvolvedores ativos e uma comunidade em crescimento.
-        </p>
-    </div>
-
-    <!-- ══ BOTTOM CTA ════════════════════════════════════════════════════ -->
-    <section id="bottom-cta" class="reveal">
-        <h2 data-i18n="cta_title" data-lang-en="Start Your Legacy Now">Comece Seu Legado Agora</h2>
-        <p data-i18n="cta_sub" data-lang-en="Download Aden RPG Online and write your story.">Baixe Aden RPG Online e escreva sua história.</p>
-        <div class="dl-grid" style="justify-content:center;">
-            <a href="https://drive.google.com/file/d/1ylZx3fiqqxca3e9Aw-oaPI60aDAGTVVB" target="_blank" class="dl-btn">
+        <div class="dl-grid">
+            <!-- Google Drive -->
+            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://drive.google.com/file/d/1ylZx3fiqqxca3e9Aw-oaPI60aDAGTVVB')" aria-label="Baixar via Google Drive">
                 <svg class="dl-btn-icon" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
                     <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
                     <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
@@ -790,8 +620,31 @@
                     <span class="dl-btn-sub" data-i18n="dl_drive_sub" data-lang-en="Direct APK">APK Direto</span>
                     <span class="dl-btn-main">Google Drive</span>
                 </div>
-            </a>
-            <a href="https://apkpure.com/p/com.cmellox.aden" target="_blank" class="dl-btn">
+            </div>
+
+            <!-- Google Play (em breve) -->
+            <div class="dl-btn" role="button" tabindex="0" onclick="openModal('modal-soon')" aria-label="Google Play - Em breve">
+                <span class="dl-btn-badge" data-i18n="coming_soon" data-lang-en="COMING SOON">EM BREVE</span>
+                <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none">
+                    <defs>
+                        <linearGradient id="gp1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#0087ff"/></linearGradient>
+                        <linearGradient id="gp2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffde00"/><stop offset="100%" stop-color="#ff8e00"/></linearGradient>
+                        <linearGradient id="gp3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3a44"/><stop offset="100%" stop-color="#c00"/></linearGradient>
+                        <linearGradient id="gp4" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#00f076"/><stop offset="100%" stop-color="#00c650"/></linearGradient>
+                    </defs>
+                    <path d="M3.18 23.5c.4.22.88.22 1.3-.02l12.5-7.23-2.73-2.73z" fill="url(#gp4)"/>
+                    <path d="M21.5 10.5c-.5-.28-1.18-.28-1.68 0l-2.64 1.53 2.73 2.73 1.6-.93c.92-.54.92-1.79-.01-2.33z" fill="url(#gp2)"/>
+                    <path d="M3.18.5C2.72.78 2.5 1.27 2.5 1.78V22.2c0 .51.22 1 .68 1.28L14.25 12z" fill="url(#gp1)"/>
+                    <path d="M17.18 12 14.25 9.07 3.18.5l11.07 11.5z" fill="url(#gp3)"/>
+                </svg>
+                <div class="dl-btn-label">
+                    <span class="dl-btn-sub" data-i18n="dl_play_sub" data-lang-en="Android">Android</span>
+                    <span class="dl-btn-main">Google Play</span>
+                </div>
+            </div>
+
+            <!-- APKPure -->
+            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://apkpure.com/p/com.cmellox.aden')" aria-label="Baixar no APKPure">
                 <svg class="dl-btn-icon" viewBox="0 0 100 100" fill="none">
                     <circle cx="50" cy="50" r="46" fill="#5E35B1"/>
                     <rect x="30" y="22" width="40" height="56" rx="5" fill="white" opacity="0.92"/>
@@ -803,11 +656,209 @@
                     <span class="dl-btn-sub" data-i18n="dl_apk_sub" data-lang-en="APK Store">Loja de APK</span>
                     <span class="dl-btn-main">APKPure</span>
                 </div>
-            </a>
+            </div>
+
+            <!-- Versão Web -->
+            <div class="dl-btn web-btn" role="button" tabindex="0" onclick="openModal('modal-web')" aria-label="Versão Web">
+                <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                <div class="dl-btn-label">
+                    <span class="dl-btn-sub" data-i18n="dl_web_sub" data-lang-en="Limited" style="color: rgba(201,169,74,0.65);">Limitada</span>
+                    <span class="dl-btn-main" data-i18n="dl_web_main" data-lang-en="Web Version">Versão Web</span>
+                </div>
+            </div>
         </div>
     </section>
 
-    <!-- ══ FOOTER ════════════════════════════════════════════════════════ -->
+    <!-- ══ DIVIDER ══ -->
+    <div class="section-divider reveal">
+        <div class="ornament">
+            <div class="ornament-line"></div>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#c9a94a"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <div class="ornament-line"></div>
+        </div>
+    </div>
+
+    <!-- ══ DESCRIPTION ══ -->
+    <div id="description-panel" class="reveal">
+        <h2 data-i18n="desc_title" data-lang-en="Welcome to Aden">Bem-vindo a Aden</h2>
+        <p data-i18n="desc_p1"
+           data-lang-en="Dive into a deep strategic RPG world, designed for fans of classic browser games and modern idle, gacha, turn-based, and dungeon mechanics. You are the chosen hero to restore balance, but raw power is not enough — you will need allies, economy, and tactics.">
+            Mergulhe em um mundo de RPG estratégico profundo, projetado para fãs de jogos de navegador clássicos e mecânicas modernas de idle, gacha, turno e masmorras. Você é o herói escolhido para restaurar o equilíbrio, mas o poder bruto não é suficiente — você precisará de aliados, economia e tática.
+        </p>
+        <p data-i18n="desc_p2"
+           data-lang-en="Unlike games with heavy graphics that drain your battery, Aden focuses on depth, community, and strategy. You know those browser games that, although they seem simple, are extremely addictive? That is the core of the game! Moreover, in Aden RPG Online you don't need to spend hours doing boring, exhausting quests — you can have fun progressing without compromising your precious time.">
+            Ao contrário de jogos com gráficos pesados que esgotam sua bateria, Aden foca em profundidade, comunidade e estratégia. Sabe aqueles jogos de navegador que, embora pareçam simples, são extremamente viciantes? Esse é o núcleo do jogo! Além disso, em Aden RPG Online você não precisa passar horas realizando missões chatas — você pode se divertir evoluindo sem comprometer seu precioso tempo.
+        </p>
+    </div>
+
+    <!-- ══ FEATURES ══ -->
+    <section id="features-section" class="reveal">
+        <h2 id="features-title" data-i18n="feat_title" data-lang-en="Key Features">Principais Características</h2>
+        <p id="features-sub" data-i18n="feat_sub" data-lang-en="Everything that makes Aden unique">Tudo que faz Aden ser único</p>
+        <div class="features-grid">
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f1_title" data-lang-en="Deep Guild Wars">Guerra de Guildas Profunda</h3>
+                <p data-i18n="f1_body" data-lang-en="Join forces to conquer legendary cities like Capital, Zion and Elendor. Coordinate with your guild in real time to dominate the server map.">Una forças para conquistar cidades lendárias como a Capital, Zion e Elendor. Coordene-se com sua guilda em tempo real para dominar o mapa do servidor.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f2_title" data-lang-en="Strategic Idle Progression">Progressão Idle Estratégica</h3>
+                <p data-i18n="f2_body" data-lang-en="Your heroes gather resources and fight while you are AFK. Log in to manage your spoils, craft legendary gear, and optimize your build.">Seus heróis coletam recursos e lutam enquanto você está AFK. Faça login para gerenciar espólios, fabricar equipamentos lendários e otimizar sua build.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M2 2l1 1"/><path d="M6.5 3.5 3 7M19 5.5 5.5 19M16.5 3 21 7.5"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f3_title" data-lang-en="Tactical Combat">Combate Tático em Turnos e Tempo Real</h3>
+                <p data-i18n="f3_body" data-lang-en="Attributes matter. Analyze your enemy, adjust your gear — Attack, Critical, Evasion — and outplay your opponents in the Arena.">Atributos importam. Analise seu inimigo, ajuste seu equipamento (Ataque, Crítico, Evasão) e supere seus oponentes na Arena.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="6 3 18 3 22 9 12 22 2 9"/>
+                        <path d="m12 22-4-13M12 22l4-13M2 9h20"/><path d="M6 3 8 9m4-6v6m4-6-2 6"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f4_title" data-lang-en="Real Economy">Economia Real</h3>
+                <p data-i18n="f4_body" data-lang-en="Fight for control of Crystal Mines in PvP/PvE events. Secure resources to craft items or trade directly with other players via private messages.">Lute pelo controle das Minas de Cristal em eventos PvP/PvE. Garanta recursos para fabricar itens ou negocie diretamente com outros jogadores.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2c-2 0-4 1-5 3L4 9l1 2H3l-1 3 2 1-1 3 3-1 1 2 3-3h2l3 3 1-2 3 1-1-3 2-1-1-3h-2l1-2-3-4c-1-2-3-3-5-3z"/>
+                        <circle cx="9" cy="10" r="1" fill="#c9a94a" stroke="none"/>
+                        <circle cx="15" cy="10" r="1" fill="#c9a94a" stroke="none"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f5_title" data-lang-en="World Boss">Chefe Mundial</h3>
+                <p data-i18n="f5_body" data-lang-en="Kar-Drakul, the dragon that once terrorized the entire continent, must be held back in the frozen mountains of Solaris. Are you brave enough for this quest?">Kar-Drakul, o dragão que outrora aterrorizou todo o continente, precisa ser contido nas montanhas geladas de Solaris. Você é corajoso o suficiente?</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 21V9l9-6 9 6v12H3z"/>
+                        <rect x="9" y="14" width="6" height="7" rx="0.5"/>
+                        <polyline points="3 9 3 5 7 5 7 9"/>
+                        <polyline points="17 9 17 5 21 5 21 9"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f6_title" data-lang-en="Forts">Fortalezas</h3>
+                <p data-i18n="f6_body" data-lang-en="Attack other players' fortresses and defend yours with diverse troops. Use your attack and defense strategy.">Ataque fortalezas de outros jogadores e defenda a sua com tropas diversas. Use sua estratégia de ataque e defesa!</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M8 8 4 20M16 8l4 12M4 20h16"/><path d="M8 20l4-4 4 4"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f7_title" data-lang-en="Instances">Instâncias</h3>
+                <p data-i18n="f7_body" data-lang-en="Face the Ancient Ruins: 25 players across 50 rooms. After 3 minutes the rooms collapse. Eliminate opponents and be the last survivor.">Enfrente as Ruínas Ancestrais: 25 jogadores em 50 salas. Após 3 minutos as salas colapsam. Elimine os oponentes e seja o último sobrevivente.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3C9 3 6 5 6 8v1H4l-1 3 2 1c0 4 3 7 7 7s7-3 7-7l2-1-1-3h-2V8c0-3-3-5-6-5z"/>
+                        <path d="M9 12h6M12 9v6"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f8_title" data-lang-en="Skins">Skins</h3>
+                <p data-i18n="f8_body" data-lang-en="Avatar frames and animated profile backgrounds available. Give a personal touch to your profile.">Molduras de avatar e fundos animados de perfil disponíveis. Dê um toque personalizado ao seu perfil.</p>
+            </div>
+            <div class="feat-card">
+                <div class="feat-icon-wrap">
+                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                </div>
+                <h3 data-i18n="f9_title" data-lang-en="15 Languages">Suporte Multi-idioma</h3>
+                <p data-i18n="f9_body" data-lang-en="Fully localized in 15 languages, including Portuguese, English, Russian, Spanish, and Chinese.">Totalmente localizado em 15 idiomas, incluindo Português, Inglês, Russo, Espanhol e Chinês.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══ LANGUAGES ══ -->
+    <div id="languages-panel" class="reveal">
+        <h3 data-i18n="lang_title" data-lang-en="Available Languages (beta)">Idiomas Disponíveis (beta)</h3>
+        <p>Português · English · Español · 中文 · 日本語 · 한국어 · Indonesian · Filipino · Русский · Italiano · Français · Hindi · Melayu · Tiếng Việt · Arabic</p>
+    </div>
+
+    <!-- ══ NO P2W ══ -->
+    <div id="no-p2w" class="reveal">
+        <p data-i18n="no_p2w" data-lang-en="No Pay-to-Win. Pure strategy, active developers, and a growing community.">
+            Sem Pay-to-Win! Apenas estratégia pura, desenvolvedores ativos e uma comunidade em crescimento.
+        </p>
+    </div>
+
+    <!-- ══ STORY CARD ══ -->
+    <div id="story-card-wrap" class="reveal">
+        <div id="story-card" onclick="openModal('modal-story')" role="button" tabindex="0" aria-label="Ver a história de Aden">
+            <div class="story-card-eyebrow" data-i18n="story_eyebrow" data-lang-en="Chronicles">Crônicas</div>
+            <h2 data-i18n="story_title" data-lang-en="The History of Aden">A História de Aden</h2>
+            <p data-i18n="story_desc" data-lang-en="From the fall of an empire to the shadow of an ancient dragon — discover the lore that forged the world you are about to enter.">Da queda de um império à sombra de um dragão antigo — descubra o lore que forjou o mundo que você está prestes a habitar.</p>
+            <div class="story-card-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                <span data-i18n="story_btn" data-lang-en="Read the Chronicles">Ler as Crônicas</span>
+            </div>
+            <div class="story-rune">Ω</div>
+        </div>
+    </div>
+
+    <!-- ══ BOTTOM CTA ══ -->
+    <section id="bottom-cta" class="reveal">
+        <h2 data-i18n="cta_title" data-lang-en="Start Your Legacy Now">Comece Seu Legado Agora</h2>
+        <p data-i18n="cta_sub" data-lang-en="Download Aden RPG Online and write your story.">Baixe Aden RPG Online e escreva sua história.</p>
+        <div class="dl-grid" style="justify-content:center;">
+            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://drive.google.com/file/d/1ylZx3fiqqxca3e9Aw-oaPI60aDAGTVVB')" aria-label="Google Drive">
+                <svg class="dl-btn-icon" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                    <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                    <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                    <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                    <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                    <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                </svg>
+                <div class="dl-btn-label">
+                    <span class="dl-btn-sub" data-i18n="dl_drive_sub" data-lang-en="Direct APK">APK Direto</span>
+                    <span class="dl-btn-main">Google Drive</span>
+                </div>
+            </div>
+            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://apkpure.com/p/com.cmellox.aden')" aria-label="APKPure">
+                <svg class="dl-btn-icon" viewBox="0 0 100 100" fill="none">
+                    <circle cx="50" cy="50" r="46" fill="#5E35B1"/>
+                    <rect x="30" y="22" width="40" height="56" rx="5" fill="white" opacity="0.92"/>
+                    <rect x="36" y="30" width="28" height="5" rx="2.5" fill="#5E35B1" opacity="0.5"/>
+                    <rect x="36" y="40" width="20" height="3" rx="1.5" fill="#5E35B1" opacity="0.35"/>
+                    <path d="M50 52 L40 62 L46 62 L46 72 L54 72 L54 62 L60 62 Z" fill="#5E35B1"/>
+                </svg>
+                <div class="dl-btn-label">
+                    <span class="dl-btn-sub" data-i18n="dl_apk_sub" data-lang-en="APK Store">Loja de APK</span>
+                    <span class="dl-btn-main">APKPure</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══ FOOTER ══ -->
     <footer>
         <p id="footer-copy"
            data-lang-pt="&copy; 2025 &ndash; 2026 Aden RPG Online. Todos os direitos reservados."
@@ -815,21 +866,273 @@
             &copy; 2025 &ndash; 2026 Aden RPG Online. Todos os direitos reservados.
         </p>
     </footer>
+</div>
 
-</div><!-- /#page-wrap -->
+<!-- ════════════════════════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════════════════════════ -->
+
+<!-- MODAL: Em Breve (Play Store) -->
+<div class="modal-backdrop" id="modal-soon" role="dialog" aria-modal="true" aria-labelledby="modal-soon-title">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-soon')" aria-label="Fechar">&times;</button>
+        <h3 id="modal-soon-title" data-i18n="msoon_title" data-lang-en="Coming Soon">Em breve</h3>
+        <p data-i18n="msoon_body" data-lang-en="Our game is still undergoing mass testing before being submitted to the Play Store. But you can download it through the other options.">Nosso jogo ainda está em fase de testes em massa antes de ser enviado para a Play Store. Mas você pode baixar através das outras opções.</p>
+        <div class="modal-btn-row">
+            <button class="mbtn muted" onclick="closeModal('modal-soon')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Importante (Drive/APKPure warning) -->
+<div class="modal-backdrop" id="modal-important" role="dialog" aria-modal="true" aria-labelledby="modal-imp-title">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-important')" aria-label="Fechar">&times;</button>
+        <h3 id="modal-imp-title" data-i18n="mimp_title" data-lang-en="⚠️ Important ⚠️">⚠️ Importante ⚠️</h3>
+        <p data-i18n="mimp_body" data-lang-en="Before downloading through this option, you should know that every Android device, by default, displays a warning about downloads from unknown sources (standard behavior for apps downloaded outside the Play Store). Therefore, you will need to allow your device to install from unknown sources.">Antes de baixar por esta opção, você deve saber que todo dispositivo Android, por padrão, emite um aviso sobre downloads de fontes desconhecidas (comportamento padrão para apps baixados fora da Play Store). Portanto, você precisará permitir que seu aparelho instale fontes desconhecidas.</p>
+        <div class="modal-divider"></div>
+        <button class="modal-link" onclick="openModal('modal-guide'); closeModal('modal-important');" data-i18n="mimp_learn" data-lang-en="Learn how to do this here.">Saiba mais aqui.</button>
+        <div class="modal-btn-row">
+            <button class="mbtn muted" onclick="closeModal('modal-important')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
+            <button class="mbtn primary" id="modal-proceed-btn" onclick="proceedDownload()" data-i18n="mimp_proceed" data-lang-en="Proceed with download">Prosseguir com download</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Guia Android -->
+<div class="modal-backdrop" id="modal-guide" role="dialog" aria-modal="true" aria-labelledby="modal-guide-title">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-guide')" aria-label="Fechar">&times;</button>
+        <h3 id="modal-guide-title" data-i18n="mguide_title" data-lang-en="How to install APK on Android">Como instalar APK no Android</h3>
+        <p data-i18n="mguide_intro" data-lang-en="Follow these steps to allow your device to install apps from outside the Play Store:">Siga estes passos para permitir que seu dispositivo instale apps de fora da Play Store:</p>
+        <ul class="guide-steps">
+            <li>
+                <div class="guide-step-num">1</div>
+                <span data-i18n="mguide_s1" data-lang-en="Open Settings on your Android device.">Abra as <strong>Configurações</strong> do seu Android.</span>
+            </li>
+            <li>
+                <div class="guide-step-num">2</div>
+                <span data-i18n="mguide_s2" data-lang-en="Go to Apps or Security (varies by manufacturer).">Vá em <strong>Aplicativos</strong> ou <strong>Segurança</strong> (varia por fabricante).</span>
+            </li>
+            <li>
+                <div class="guide-step-num">3</div>
+                <span data-i18n="mguide_s3" data-lang-en="Look for 'Install unknown apps' or 'Unknown sources'.">Procure por <strong>"Instalar apps desconhecidos"</strong> ou <strong>"Fontes desconhecidas"</strong>.</span>
+            </li>
+            <li>
+                <div class="guide-step-num">4</div>
+                <span data-i18n="mguide_s4" data-lang-en="Select the browser or file manager you used to download the APK.">Selecione o navegador ou gerenciador de arquivos que você usou para baixar o APK.</span>
+            </li>
+            <li>
+                <div class="guide-step-num">5</div>
+                <span data-i18n="mguide_s5" data-lang-en="Enable 'Allow from this source'.">Ative <strong>"Permitir desta fonte"</strong>.</span>
+            </li>
+            <li>
+                <div class="guide-step-num">6</div>
+                <span data-i18n="mguide_s6" data-lang-en="Return to the downloaded APK file and tap to install.">Volte ao arquivo APK baixado e toque para instalar normalmente.</span>
+            </li>
+        </ul>
+        <div class="modal-btn-row">
+            <button class="mbtn primary" onclick="closeModal('modal-guide'); openModal('modal-important');" data-i18n="mguide_back" data-lang-en="Back to download">Voltar ao download</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Versão Web -->
+<div class="modal-backdrop" id="modal-web" role="dialog" aria-modal="true" aria-labelledby="modal-web-title">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-web')" aria-label="Fechar">&times;</button>
+        <h3 id="modal-web-title" data-i18n="mweb_title" data-lang-en="Web Version">Versão Web</h3>
+        <p data-i18n="mweb_body" data-lang-en="You can continue using the web version, however some features and areas are locked in this version.">Você pode continuar usando a versão web, porém alguns recursos e áreas estão bloqueados nessa versão.</p>
+        <div class="modal-btn-row">
+            <button class="mbtn muted" onclick="closeModal('modal-web')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
+            <a class="mbtn primary" href="https://aden-rpg.pages.dev" target="_blank" onclick="closeModal('modal-web')" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</a>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Compartilhar -->
+<div class="modal-backdrop" id="modal-share" role="dialog" aria-modal="true" aria-labelledby="modal-share-title">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-share')" aria-label="Fechar">&times;</button>
+        <h3 id="modal-share-title" data-i18n="mshare_title" data-lang-en="Share Aden">Compartilhar Aden</h3>
+        <p style="text-align:center; font-size:0.88rem;" data-i18n="mshare_sub" data-lang-en="Invite your friends to forge their destinies!">Convide seus amigos para forjarem seus destinos!</p>
+        <div class="share-grid">
+            <!-- WhatsApp -->
+            <a class="share-btn" id="share-whatsapp" href="#" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="#25D366">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.526 5.845L.057 23.57l5.862-1.538A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.796 9.796 0 0 1-5.006-1.372l-.36-.213-3.48.913.929-3.397-.234-.371A9.79 9.79 0 0 1 2.182 12C2.182 6.572 6.572 2.182 12 2.182S21.818 6.572 21.818 12 17.428 21.818 12 21.818z"/>
+                </svg>
+                <span data-i18n="share_wa" data-lang-en="WhatsApp">WhatsApp</span>
+            </a>
+            <!-- Telegram -->
+            <a class="share-btn" id="share-telegram" href="#" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="#2CA5E0">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/>
+                </svg>
+                <span>Telegram</span>
+            </a>
+            <!-- X / Twitter -->
+            <a class="share-btn" id="share-twitter" href="#" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="color:#e8e0cc;">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                <span>X / Twitter</span>
+            </a>
+            <!-- Facebook -->
+            <a class="share-btn" id="share-facebook" href="#" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="#1877F2">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                <span>Facebook</span>
+            </a>
+            <!-- Reddit -->
+            <a class="share-btn" id="share-reddit" href="#" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="#FF4500">
+                    <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/>
+                </svg>
+                <span>Reddit</span>
+            </a>
+            <!-- Copy Link -->
+            <button class="share-btn" id="share-copy" onclick="copyLink()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#c9a94a;">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <span id="share-copy-label" data-i18n="share_copy" data-lang-en="Copy link">Copiar link</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: História de Aden -->
+<div class="modal-backdrop" id="modal-story" role="dialog" aria-modal="true" aria-labelledby="modal-story-title">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-story')" aria-label="Fechar">&times;</button>
+        <h3 id="modal-story-title" style="margin-bottom:4px;" data-i18n="mstory_title" data-lang-en="The Chronicles of Aden">As Crônicas de Aden</h3>
+        <p style="text-align:center; font-size:1rem; color:var(--gold-dark); font-family:'Cinzel',serif; letter-spacing:0.1em; margin-bottom:20px;" data-i18n="mstory_sub" data-lang-en="From the Age of Conquest to the Age of Balance">Da Era da Conquista à Era do Equilíbrio</p>
+
+        <div class="story-chapter">
+            <div class="story-chapter-title" data-i18n="sch1" data-lang-en="I — The World Before the War">I — O Mundo Antes da Guerra</div>
+            <p data-i18n="sch1_p1" data-lang-en="Long before the great conflict tore the continent apart, the races of Aden lived in their own corners of the world, each forging unique civilizations. Zion rose as the great neutral market where merchants traded crystals and secrets. Elendor, entwined in the roots of the Mother Trees of the Ether Jungle, was cultivated over millennia by the Forest Elves, guided by the Circle of Guardians of the Seed. In the frozen peaks, the dwarves of the Iron Hand Clan carved Mitrar out of the Glacial Mountains of Razar, forging weapons with Star Iron. And in the southeast, the humans of Astrax raised the Bastion of Strategy — an academy of war, discipline and military doctrine.">Muito antes de o grande conflito rasgar o continente, as raças de Aden viviam em seus próprios cantos do mundo, cada uma forjando civilizações únicas. Zion ergueu-se como o grande mercado neutro onde mercadores trocavam cristais e segredos. Elendor, entrelaçada nas raízes das Árvores-Mãe da Selva de Éter, foi cultivada ao longo de milênios pelos Elfos da Floresta, guiada pelo Círculo dos Guardiões da Semente. Nos picos gelados, os anões do Clã Mão de Gelo esculpiram Mitrar dentro das Montanhas Gélidas de Razar, forjando armas com Ferro Estelar. E no sudeste, os humanos de Astrax ergueram o Bastião da Estratégia — uma academia de guerra, disciplina e doutrina militar.</p>
+            <p data-i18n="sch1_p2" data-lang-en="Duratar, squeezed between the Pântano de Kretus and the wastelands of Madekai, was the home of the orc clans — resilient warriors who patrolled borders and repelled the swamp creatures that crept from the darkness. And Tandra, the Heart of Stone, prospered coldly in its rocky gorge, ruled by merchants of sand who made profit their only morality.">Duratar, espremida entre o Pântano de Kretus e as terras áridas de Madekai, era o lar dos clãs orcs — guerreiros resilientes que patrulhavam fronteiras e repeliam as criaturas do pântano que rastejavam das trevas. E Tandra, o Coração de Pedra, prosperava friamente em seu desfiladeiro rochoso, governada por mercadores de areia que faziam do lucro sua única moralidade.</p>
+        </div>
+
+        <div class="story-chapter">
+            <div class="story-chapter-title" data-i18n="sch2" data-lang-en="II — The Rise of Veinur">II — A Ascensão de Veinur</div>
+            <p data-i18n="sch2_p1" data-lang-en="From the bowels of ambition, Veinur emerged — a human of sharp strategic mind and ferocity that rivaled dragons. For him, humanity was the superior race, destined to command every inch of Aden. He transformed his army into an unstoppable force and set out to build an empire centered in the Capital, the great city at the geographic heart of the continent.">Das entranhas da ambição, emergiu Veinur — um humano de mente estratégica afiada e ferocidade que rivalizava com dragões. Para ele, a humanidade era a raça superior, destinada a comandar cada palmo de Aden. Transformou seu exército em uma força imparável e se lançou a construir um império centrado na Capital, a grande cidade no coração geográfico do continente.</p>
+            <p data-i18n="sch2_p2" data-lang-en="But conquest alone was not enough to sate his hunger. He sought a power darker than steel and gold. A calling guided him inevitably to a structure that rose like a scar on the horizon — the Tower of Desolation, long abandoned, harboring a force that no one had ever dared to touch. Veinur plunged into the ritual, and his implacable hatred served as the perfect crucible. The obscure power tried to consume him, but his iron will bent it to his service. He emerged transformed: the true master of the night, his power devastating.">Mas a conquista, sozinha, não era suficiente para saciar sua fome. Ele buscou um poder mais sombrio que aço e ouro. Um chamado o guiou, inevitavelmente, para uma estrutura que se erguia como uma cicatriz no horizonte — a Torre da Desolação, abandonada há muito, abrigando uma força que ninguém jamais ousara tocar. Veinur mergulhou no ritual, e seu ódio implacável serviu como o cadinho perfeito. O poder obscuro tentou consumi-lo, mas sua vontade de ferro o dobrou a seu serviço. Ele emergiu transformado: o verdadeiro mestre da noite, seu poder avassalador.</p>
+        </div>
+
+        <div class="story-chapter">
+            <div class="story-chapter-title" data-i18n="sch3" data-lang-en="III — The Great War">III — A Grande Guerra</div>
+            <p data-i18n="sch3_p1" data-lang-en="The war that followed was long, bloody and devastating. Cities were burned. Forests were trampled. Blood ran like rivers. The ancient ruins of what had once been prosperous civilizations became dungeons of shadow, infested by horrors that the necrotic energy of conquest had awakened — the Penumbra Uivante, where the dead do not rest but are bound in eternal servitude, was born from this era.">A guerra que se seguiu foi longa, sangrenta e devastadora. Cidades foram incendiadas. Florestas foram pisoteadas. O sangue correu como rios. As antigas ruínas do que um dia foram prósperas civilizações tornaram-se masmorras de sombra, infestadas por horrores que a energia necrótica da conquista havia despertado — a Penumbra Uivante, onde os mortos não descansam mas são atados em servidão eterna, nasceu dessa era.</p>
+            <p data-i18n="sch3_p2" data-lang-en="However, the strength of the alliance, fed by the cause of liberty, proved unbreakable. Elves, dwarves, orcs, and humans who refused the empire's yoke united under a common banner. After years of struggle, Veinur was defeated. The Capital, once the epicenter of his empire, became a symbol of a past the new order of Aden refuses to repeat. The surviving races signed a pact: never again would one race dominate all others.">Porém, a força da aliança, alimentada pela causa da liberdade, provou ser inquebrantável. Elfos, anões, orcs e humanos que se recusavam ao jugo do império uniram-se sob uma bandeira comum. Após anos de luta, Veinur foi derrotado. A Capital, outrora epicentro de seu império, tornou-se símbolo de um passado que a nova ordem de Aden se recusa a repetir. As raças sobreviventes firmaram um pacto: nunca mais uma raça dominaria todas as outras.</p>
+        </div>
+
+        <div class="story-chapter">
+            <div class="story-chapter-title" data-i18n="sch4" data-lang-en="IV — The World After — Wounds and Wonders">IV — O Mundo Pós-Guerra — Feridas e Maravilhas</div>
+            <p data-i18n="sch4_p1" data-lang-en="Peace brought its own scars. Elendor, overloaded by the magic used in the defense of the world, purged its excess mana into a neighboring stretch of virgin forest — creating the Floresta Mística, a place of chaotic magical superabundance where primeval beasts of pure light and elemental fury now roam between silver-barked trees. In the Arcane Vale, magic so dense it accelerated the evolution of flora and fauna into sentient guardians of ancient runes. And in the Queda Fontana, waters that once were a pilgrimage site now rage out of control, imbuing life with raw elemental power.">A paz trouxe suas próprias cicatrizes. Elendor, sobrecarregada pela magia usada na defesa do mundo, purgou o excesso de mana para uma faixa de mata virgem adjacente — criando a Floresta Mística, um lugar de caótica superabundância mágica onde bestas primordiais de pura luz e fúria elemental vagam entre árvores de casca prateada. No Vale Arcano, a magia tão densa acelerou a evolução da flora e fauna em guardiões sencientes de runas ancestrais. E na Queda Fontana, águas que outrora eram local de peregrinação agora correm fora de controle, impregnando a vida com poder elemental puro.</p>
+            <p data-i18n="sch4_p2" data-lang-en="The Desfiladeiro do Sol Poente remained a sacred scar — the Daz, creatures of fused rock and ancient power, guard this gorge as if defending the resting place of an exiled deity. And within the mountains of Razar, where the dwarves of Mitrar harvest Star Iron, the geological creatures — yetis, fenrirs — stand as natural guardians of the earth's veins.">O Desfiladeiro do Sol Poente permaneceu uma cicatriz sagrada — os Daz, criaturas de rocha fundida e poder antigo, guardam esse desfiladeiro como se defendessem o repouso de uma divindade exilada. E dentro das montanhas de Razar, onde os anões de Mitrar colhem Ferro Estelar, as criaturas geológicas — yetis, fenrirs — mantêm-se como guardiões naturais das veias da terra.</p>
+        </div>
+
+        <div class="story-chapter">
+            <div class="story-chapter-title" data-i18n="sch5" data-lang-en="V — Kar-Drakul, the Threat that Never Sleeps">V — Kar-Drakul, A Ameaça que Nunca Dorme</div>
+            <p data-i18n="sch5_p1" data-lang-en="From the ashes of war, one shadow remained unchecked: Kar-Drakul, the dragon that once terrorized the entire continent. Forced to hide in the high mountains of Solaris, the beast endures — confined, but never vanquished. Zion, the nearest civilized bastion, assumed the responsibility of containment: the Council of Zion finances patrols and expeditions to hold back the ancient threat. Heroes gather there, drawn by gold and glory, knowing that if Kar-Drakul breaks free, no pact, no city, no alliance will withstand the flames.">Das cinzas da guerra, uma sombra permaneceu solta: Kar-Drakul, o dragão que outrora aterrorizou todo o continente. Obrigado a se esconder nas montanhas altas de Solaris, a besta persiste — contida, mas jamais vencida. Zion, o bastião civilizado mais próximo, assumiu a responsabilidade de contenção: o Conselho de Zion financia patrulhas e expedições para conter a ameaça ancestral. Heróis se reúnem ali, atraídos por ouro e glória, sabendo que se Kar-Drakul se libertar, nenhum pacto, nenhuma cidade, nenhuma aliança resistirá às chamas.</p>
+        </div>
+
+        <div class="story-chapter">
+            <div class="story-chapter-title" data-i18n="sch6" data-lang-en="VI — Your Story Begins Now">VI — Sua História Começa Agora</div>
+            <p data-i18n="sch6_p1" data-lang-en="The Age of Balance is fragile. Guilds compete for the legendary cities — Capital, Zion, Elendor, Astrax. The Ethereal Enclave floats between worlds, guarded by entities of condensed will and light. The Kelts proliferate in their hive, a living labyrinth of biological drive for infinite expansion. And the Tower of Desolation stands silent, a reminder that the darkest powers of Aden are never truly buried. You arrive at this world as a single hero. But in Aden, legacies are not forged alone.">A Era do Equilíbrio é frágil. Guildas competem pelas cidades lendárias — Capital, Zion, Elendor, Astrax. O Enclave Etéreo flutua entre mundos, guardado por entidades de vontade e luz condensada. Os Kelts proliferam em sua colmeia, um labirinto vivo de pulsão biológica para expansão infinita. E a Torre da Desolação permanece silenciosa, lembrando que os poderes mais sombrios de Aden jamais estão verdadeiramente sepultados. Você chega a este mundo como um único herói. Mas em Aden, legados não se forjam sozinhos.</p>
+        </div>
+
+        <div class="modal-btn-row">
+            <button class="mbtn primary" onclick="closeModal('modal-story')" data-i18n="mstory_close" data-lang-en="Begin the Journey">Começar a Jornada</button>
+        </div>
+    </div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════════════════════════════════
-// i18n — mesmo padrão da página sobre.html
+// MODAL SYSTEM
 // ══════════════════════════════════════════════════════════════════════════
+function openModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('open');
+    // only restore scroll if no other modals are open
+    if (!document.querySelector('.modal-backdrop.open')) {
+        document.body.style.overflow = '';
+    }
+}
+// Close on backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.addEventListener('click', function(e) {
+        if (e.target === this) closeModal(this.id);
+    });
+});
+// Close on Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        const open = document.querySelector('.modal-backdrop.open');
+        if (open) closeModal(open.id);
+    }
+});
+
+// ── Drive/APKPure warning modal ──
+let pendingDownloadUrl = '';
+function openDriveModal(url) {
+    pendingDownloadUrl = url;
+    openModal('modal-important');
+}
+function proceedDownload() {
+    closeModal('modal-important');
+    if (pendingDownloadUrl) window.open(pendingDownloadUrl, '_blank');
+}
+
+// ── Share ──
+const SHARE_URL = encodeURIComponent(window.location.href);
+const SHARE_TEXT_PT = encodeURIComponent('Entre no continente de Aden! Um RPG estratégico épico – sem Pay-to-Win. Forje seu legado!');
+const SHARE_TEXT_EN = encodeURIComponent('Join the continent of Aden! An epic strategy RPG – no Pay-to-Win. Forge your legacy!');
+
+function buildShareLinks(lang) {
+    const txt = lang === 'en' ? SHARE_TEXT_EN : SHARE_TEXT_PT;
+    document.getElementById('share-whatsapp').href  = `https://wa.me/?text=${txt}%20${SHARE_URL}`;
+    document.getElementById('share-telegram').href  = `https://t.me/share/url?url=${SHARE_URL}&text=${txt}`;
+    document.getElementById('share-twitter').href   = `https://twitter.com/intent/tweet?text=${txt}&url=${SHARE_URL}`;
+    document.getElementById('share-facebook').href  = `https://www.facebook.com/sharer/sharer.php?u=${SHARE_URL}`;
+    document.getElementById('share-reddit').href    = `https://www.reddit.com/submit?url=${SHARE_URL}&title=${txt}`;
+}
+
+document.getElementById('share-open-btn').addEventListener('click', () => openModal('modal-share'));
+
+function copyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+        const lbl = document.getElementById('share-copy-label');
+        const orig = lbl.textContent;
+        lbl.textContent = currentLang === 'en' ? 'Copied!' : 'Copiado!';
+        setTimeout(() => { lbl.textContent = orig; }, 2000);
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// i18n
+// ══════════════════════════════════════════════════════════════════════════
+let currentLang = 'pt';
+
 function setLanguage(lang) {
+    currentLang = lang;
     const isEn = lang === 'en';
 
-    // 1. Title + html lang
-    document.title = isEn ? 'Download - Aden RPG Online' : 'Download - Aden RPG Online';
+    document.title = 'Download - Aden RPG Online';
     document.documentElement.lang = isEn ? 'en' : 'pt-br';
 
-    // 2. All [data-i18n] elements
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const text = isEn
             ? el.getAttribute('data-lang-en')
@@ -837,13 +1140,13 @@ function setLanguage(lang) {
         if (text !== null) el.textContent = text;
     });
 
-    // 3. Footer copyright (innerHTML, not textContent)
     const fc = document.getElementById('footer-copy');
     if (fc) fc.innerHTML = fc.getAttribute(isEn ? 'data-lang-en' : 'data-lang-pt');
 
-    // 4. Active flag button
     document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('lang-' + lang).classList.add('active');
+
+    buildShareLinks(lang);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -852,14 +1155,23 @@ document.addEventListener('DOMContentLoaded', () => {
         el.setAttribute('data-lang-pt-original', el.textContent.trim());
     });
 
-    // Flag click handlers
     document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt'));
     document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 
-    // Default language
     setLanguage('pt');
+    buildShareLinks('pt');
 
-    // ── Scroll reveal ──────────────────────────────────────────────────
+    // Keyboard accessibility for dl-btn divs
+    document.querySelectorAll('.dl-btn[tabindex]').forEach(btn => {
+        btn.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                btn.click();
+            }
+        });
+    });
+
+    // Scroll reveal
     const revealEls = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(e => {
@@ -868,12 +1180,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 observer.unobserve(e.target);
             }
         });
-    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+    }, { threshold: 0.06, rootMargin: '0px 0px -30px 0px' });
     revealEls.forEach(el => observer.observe(el));
 });
 </script>
 
-<!-- Scale lock (igual ao sobre.html) -->
+<!-- Scale lock -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const t = document.createElement("div");

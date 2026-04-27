@@ -1075,7 +1075,7 @@
         <p data-i18n="mweb_body" data-lang-en="You can continue using the web version, however some features and areas are locked in this version.">Você pode continuar usando a versão web, porém alguns recursos e áreas estão bloqueados nessa versão.</p>
         <div class="modal-btn-row">
             <button class="mbtn muted" onclick="closeModal('modal-web')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
-            <a class="mbtn primary" href="https://aden-rpg.pages.dev/index.html" target="_blank" onclick="closeModal('modal-web')" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</a>
+            <a class="mbtn primary" href="#" onclick="openWebVersionExternally(event)" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</a>
         </div>
     </div>
 </div>
@@ -1232,6 +1232,24 @@ function openDriveModal(url) {
 function proceedDownload() {
     closeModal('modal-important');
     if (pendingDownloadUrl) window.open(pendingDownloadUrl, '_blank');
+}
+
+// ── Forçar abertura externa no AppCreator24 ──
+function openWebVersionExternally(event) {
+    event.preventDefault(); // Evita o comportamento padrão da tag <a>
+    closeModal('modal-web'); // Fecha o modal
+
+    const domainPath = "aden-rpg.pages.dev/index.html";
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
+    if (isAndroid) {
+        // O esquema intent:// obriga o WebView do Android a passar o link para o sistema operacional,
+        // abrindo no navegador padrão (Chrome, Edge, etc) e saindo do AppCreator24.
+        window.location.href = `intent://${domainPath}#Intent;scheme=https;action=android.intent.action.VIEW;end;`;
+    } else {
+        // Comportamento normal para PC ou iOS (abre em nova aba)
+        window.open(`https://${domainPath}`, '_blank');
+    }
 }
 
 // ── Share ──

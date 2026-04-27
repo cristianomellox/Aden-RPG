@@ -561,6 +561,85 @@
             .features-grid { grid-template-columns: 1fr; }
             #topbar-logo { font-size: 0.72rem; }
         }
+
+        /* ── SCREENSHOT GALLERY ── */
+        #screenshot-gallery {
+            width: 100%;
+            max-width: 820px;
+            padding: 0 0 28px;
+            animation: fadeUp 0.85s 0.05s ease both;
+        }
+        .screenshot-strip {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 8px 22px 14px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--gold-dark) transparent;
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x mandatory;
+        }
+        .screenshot-strip::-webkit-scrollbar { height: 4px; }
+        .screenshot-strip::-webkit-scrollbar-track { background: transparent; }
+        .screenshot-strip::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 2px; }
+        .screenshot-item {
+            flex-shrink: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1.5px solid var(--border);
+            cursor: pointer;
+            scroll-snap-align: start;
+            transition: border-color 0.2s, transform 0.18s, box-shadow 0.2s;
+            box-shadow: 0 3px 18px rgba(0,0,0,0.5);
+            display: block;
+        }
+        .screenshot-item:hover {
+            border-color: var(--gold);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 28px rgba(201,169,74,0.22), 0 3px 10px rgba(0,0,0,0.6);
+        }
+        .screenshot-item img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+        }
+
+        /* ── IMAGE VIEWER MODAL ── */
+        #modal-imgview {
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+        }
+        #modal-imgview .modal-box {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 0;
+            max-width: 95vw;
+            width: auto;
+        }
+        #imgview-img {
+            max-width: 88vw;
+            max-height: 88vh;
+            border-radius: 14px;
+            box-shadow: 0 8px 60px rgba(0,0,0,0.9);
+            border: 1px solid var(--border-mid);
+            display: block;
+        }
+        #modal-imgview .modal-close-btn {
+            position: fixed;
+            top: 16px; right: 16px;
+            background: rgba(0,0,0,0.65);
+            border: 1px solid var(--border-mid);
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.6rem;
+            z-index: 601;
+            color: var(--gold-light);
+        }
     </style>
     <script type="application/ld+json">
 {
@@ -621,6 +700,14 @@
     <section id="hero">
         <h1 id="hero-title" data-i18n="hero_title" data-lang-en="Forge Your Destiny in Aden">Forje Seu Destino em Aden</h1>
         <p id="hero-subtitle" data-i18n="hero_sub" data-lang-en="A world of strategy, alliances and ancient glory awaits.">Um mundo de estratégia, alianças e glória ancestral te aguarda.</p>
+
+    <!-- ══ SCREENSHOT GALLERY ══ -->
+    <div id="screenshot-gallery">
+        <div class="screenshot-strip" id="screenshot-strip">
+            <!-- Populado via JS conforme idioma -->
+        </div>
+    </div>
+
         <div class="ornament">
             <div class="ornament-line"></div>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="2.5">
@@ -1095,6 +1182,14 @@
     </div>
 </div>
 
+<!-- MODAL: Visualizador de Screenshot -->
+<div class="modal-backdrop" id="modal-imgview" role="dialog" aria-modal="true" aria-label="Visualizar screenshot">
+    <div class="modal-box">
+        <button class="modal-close-btn" onclick="closeModal('modal-imgview')" aria-label="Fechar">&times;</button>
+        <img id="imgview-img" src="" alt="Screenshot">
+    </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════════════════
 // MODAL SYSTEM
@@ -1169,6 +1264,48 @@ function copyLink() {
 // ══════════════════════════════════════════════════════════════════════════
 let currentLang = 'pt';
 
+// ── SCREENSHOT GALLERY ──
+const SCREENSHOTS = {
+    pt: [
+        { src: 'https://aden-rpg.pages.dev/assets/01_promo.webp', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/02_promo.png', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/05_promo.png', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/06_promo.jpg', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/03_promo.jpg', w: 230, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/04_promo.png', w: 230, h: 200 },
+    ],
+    en: [
+        { src: 'https://aden-rpg.pages.dev/assets/07_promo.png', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/05_promo.png', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/06_promo.jpg', w: 100, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/08_promo.jpg', w: 230, h: 200 },
+        { src: 'https://aden-rpg.pages.dev/assets/04_promo.png', w: 230, h: 200 },
+    ]
+};
+
+function updateGallery(lang) {
+    const strip = document.getElementById('screenshot-strip');
+    if (!strip) return;
+    const list = SCREENSHOTS[lang] || SCREENSHOTS.pt;
+    strip.innerHTML = list.map(img =>
+        `<div class="screenshot-item" style="width:${img.w}px;height:${img.h}px;" onclick="openImgView('${img.src}')" role="button" tabindex="0" aria-label="Ver screenshot">` +
+        `<img src="${img.src}" alt="Screenshot" width="${img.w}" height="${img.h}" loading="lazy">` +
+        `</div>`
+    ).join('');
+    // keyboard support for gallery items
+    strip.querySelectorAll('.screenshot-item').forEach(item => {
+        item.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); }
+        });
+    });
+}
+
+function openImgView(src) {
+    const img = document.getElementById('imgview-img');
+    if (img) img.src = src;
+    openModal('modal-imgview');
+}
+
 function setLanguage(lang) {
     currentLang = lang;
     const isEn = lang === 'en';
@@ -1190,6 +1327,7 @@ function setLanguage(lang) {
     document.getElementById('lang-' + lang).classList.add('active');
 
     buildShareLinks(lang);
+    updateGallery(lang);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

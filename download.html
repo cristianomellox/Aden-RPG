@@ -611,7 +611,24 @@
             padding: 0;
             align-items: center;
             justify-content: center;
+            flex-direction: column;
         }
+        #imgview-close-btn {
+            position: fixed;
+            top: 14px; right: 14px;
+            background: rgba(10,7,4,0.88);
+            border: 1px solid var(--border-mid);
+            border-radius: 50%;
+            width: 42px; height: 42px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem;
+            z-index: 602;
+            color: var(--gold-light);
+            cursor: pointer;
+            line-height: 1;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        #imgview-close-btn:hover { background: rgba(30,20,8,0.98); border-color: var(--gold); }
         #modal-imgview .modal-box {
             background: transparent;
             border: none;
@@ -628,18 +645,88 @@
             border: 1px solid var(--border-mid);
             display: block;
         }
-        #modal-imgview .modal-close-btn {
-            position: fixed;
-            top: 16px; right: 16px;
-            background: rgba(0,0,0,0.65);
-            border: 1px solid var(--border-mid);
-            border-radius: 50%;
-            width: 40px; height: 40px;
+
+        /* ── SIDEBAR MENU ── */
+        #dl-sidebar-overlay {
+            position: fixed; inset: 0; z-index: 300;
+            background: rgba(0,0,0,0.55);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.28s ease;
+        }
+        #dl-sidebar-overlay.open { opacity: 1; pointer-events: all; }
+
+        #dl-sidebar {
+            position: fixed; top: 0; left: 0;
+            width: 260px; height: 100%;
+            background: linear-gradient(to bottom, #1e1508, #110d04);
+            border-right: 1px solid var(--border-mid);
+            box-shadow: 4px 0 32px rgba(0,0,0,0.8);
+            z-index: 350;
+            transform: translateX(-100%);
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+            display: flex; flex-direction: column;
+        }
+        #dl-sidebar.open { transform: translateX(0); }
+
+        #dl-sidebar-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(to bottom, #2a1c08, #1a1106);
+        }
+        #dl-sidebar-header h3 {
+            font-family: 'Cinzel', serif; font-size: 1.1rem;
+            font-weight: 600; color: var(--gold-light);
+            letter-spacing: 0.08em; margin: 0;
+        }
+        #dl-sidebar-close {
+            background: none; border: none; cursor: pointer;
+            color: var(--text-muted); padding: 4px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.6rem;
-            z-index: 601;
+            transition: color 0.15s;
+        }
+        #dl-sidebar-close:hover { color: var(--gold); }
+
+        #dl-sidebar-list {
+            list-style: none; padding: 12px 0; margin: 0; flex: 1;
+        }
+        .dl-menu-item { display: block; }
+        .dl-menu-link {
+            display: flex; align-items: center; gap: 14px;
+            padding: 13px 20px;
+            color: var(--text-main); text-decoration: none;
+            font-family: 'Cinzel', serif; font-size: 1rem;
+            letter-spacing: 0.04em;
+            border-left: 3px solid transparent;
+            transition: background 0.18s, border-color 0.18s, color 0.18s;
+            cursor: pointer; background: none; border-top: none;
+            border-right: none; border-bottom: none; width: 100%;
+            text-align: left;
+        }
+        .dl-menu-link:hover {
+            background: rgba(201,169,74,0.10);
+            border-left-color: var(--gold-dark);
             color: var(--gold-light);
         }
+        .dl-menu-icon {
+            width: 28px; height: 28px;
+            object-fit: contain; flex-shrink: 0;
+            opacity: 0.85;
+        }
+        .dl-menu-link:hover .dl-menu-icon { opacity: 1; }
+
+        /* hamburger btn in topbar */
+        #dl-hamburger-btn {
+            background: none; border: 4px solid var(--border);
+            border-radius: 6px; width: 36px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--gold);
+            transition: border-color 0.2s, background 0.2s, transform 0.15s;
+        }
+        #dl-hamburger-btn:hover {
+            border-color: var(--gold); background: rgba(201,169,74,0.12); transform: scale(1.06);
+        }
+        #dl-hamburger-btn svg { width: 20px; height: 20px; }
     </style>
     <script type="application/ld+json">
 {
@@ -671,16 +758,16 @@
 
 <!-- ══ TOPBAR ══════════════════════════════════════════════════════════════ -->
 <div id="topbar">
+    <!-- Hamburger (left) -->
+    <button id="dl-hamburger-btn" aria-label="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+    </button>
     <span id="topbar-logo">Aden RPG Online</span>
     <div id="topbar-right">
-        <!-- Share -->
-        <button class="topbar-icon-btn" id="share-open-btn" aria-label="Compartilhar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-        </button>
         <!-- Lang -->
         <div id="lang-selector">
             <img id="lang-pt" src="https://flagcdn.com/w40/br.png" alt="PT" class="lang-btn active" role="button">
@@ -1075,7 +1162,7 @@
         <p data-i18n="mweb_body" data-lang-en="You can continue using the web version, however some features and areas are locked in this version.">Você pode continuar usando a versão web, porém alguns recursos e áreas estão bloqueados nessa versão.</p>
         <div class="modal-btn-row">
             <button class="mbtn muted" onclick="closeModal('modal-web')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
-            <a class="mbtn primary" id="web-version-link" href="https://aden-rpg.pages.dev/index.html" target="_blank" onclick="closeModal('modal-web')" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</a>
+            <button class="mbtn primary" onclick="openWebVersion()" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</button>
         </div>
     </div>
 </div>
@@ -1184,8 +1271,8 @@
 
 <!-- MODAL: Visualizador de Screenshot -->
 <div class="modal-backdrop" id="modal-imgview" role="dialog" aria-modal="true" aria-label="Visualizar screenshot">
+    <button id="imgview-close-btn" onclick="closeModal('modal-imgview')" aria-label="Fechar">&times;</button>
     <div class="modal-box">
-        <button class="modal-close-btn" onclick="closeModal('modal-imgview')" aria-label="Fechar">&times;</button>
         <img id="imgview-img" src="" alt="Screenshot">
     </div>
 </div>
@@ -1233,35 +1320,33 @@ function proceedDownload() {
     closeModal('modal-important');
     if (pendingDownloadUrl) window.open(pendingDownloadUrl, '_blank');
 }
-// ── Preparar links externos para burlar o AppCreator24 ──
 
-// 1. Função para abrir o Modal de Download e preparar o link
-function openDriveModal(url) {
-    const proceedBtn = document.getElementById('modal-proceed-btn');
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    
-    if (isAndroid) {
-        // Remove o https:// e monta o intent nativo
-        const cleanUrl = url.replace(/^https?:\/\//, '');
-        // Usamos a action.VIEW sem forçar o pacote do Chrome, assim abre no navegador padrão do usuário
-        proceedBtn.href = `intent://${cleanUrl}#Intent;scheme=https;action=android.intent.action.VIEW;end;`;
+// ── Web Version — força abertura no navegador externo quando dentro do wrapper ──
+function openWebVersion() {
+    closeModal('modal-web');
+    const WEB_URL = 'https://aden-rpg.pages.dev';
+    const ua = navigator.userAgent;
+
+    // Detecta Android WebView: UA contém "Android" + "wv" (marcador nativo do WebView)
+    // AppCreator24 usa WebView padrão do Android que mantém esse marcador
+    const isAndroidWebView = /Android/.test(ua) && /\bwv\b/.test(ua);
+
+    if (isAndroidWebView) {
+        // Android Intent URL — o sistema operacional intercepta e abre no navegador padrão,
+        // ignorando completamente o controle do WebView
+        const intentUrl =
+            'intent://' + WEB_URL.replace(/^https?:\/\//, '') +
+            '#Intent' +
+            ';scheme=https' +
+            ';action=android.intent.action.VIEW' +
+            ';category=android.intent.category.BROWSABLE' +
+            ';end';
+        window.location.href = intentUrl;
     } else {
-        proceedBtn.href = url;
+        // Fora do wrapper (navegador normal): abre em nova aba normalmente
+        window.open(WEB_URL, '_blank', 'noopener,noreferrer');
     }
-    
-    openModal('modal-important');
 }
-
-// 2. Preparar o link da Versão Web assim que a página carregar
-document.addEventListener('DOMContentLoaded', () => {
-    const webLink = document.getElementById('web-version-link');
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    
-    if (webLink && isAndroid) {
-        const targetUrl = "aden-rpg.pages.dev/index.html";
-        webLink.href = `intent://${targetUrl}#Intent;scheme=https;action=android.intent.action.VIEW;end;`;
-    }
-});
 
 // ── Share ──
 const SHARE_URL = encodeURIComponent(window.location.href);
@@ -1277,7 +1362,7 @@ function buildShareLinks(lang) {
     document.getElementById('share-reddit').href    = `https://www.reddit.com/submit?url=${SHARE_URL}&title=${txt}`;
 }
 
-document.getElementById('share-open-btn').addEventListener('click', () => openModal('modal-share'));
+// share-open-btn moved to sidebar — handled by sidebar script below
 
 function copyLink() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -1410,5 +1495,79 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 <script src="security.js"></script>
+
+<!-- ══ SIDEBAR MENU ══════════════════════════════════════════════════════ -->
+<div id="dl-sidebar-overlay"></div>
+<div id="dl-sidebar" role="dialog" aria-label="Menu de navegação">
+    <div id="dl-sidebar-header">
+        <h3>Menu</h3>
+        <button id="dl-sidebar-close" aria-label="Fechar menu">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+    </div>
+    <ul id="dl-sidebar-list">
+        <li class="dl-menu-item">
+            <a href="https://aden-rpg.pages.dev/sobre.html" class="dl-menu-link">
+                <img src="https://aden-rpg.pages.dev/assets/sobre.webp" class="dl-menu-icon" alt="" onerror="this.style.display='none'">
+                <span data-i18n="menu_sobre" data-lang-en="About">Sobre</span>
+            </a>
+        </li>
+        <li class="dl-menu-item">
+            <a href="https://aden-rpg.pages.dev/suporte.html" class="dl-menu-link">
+                <img src="https://aden-rpg.pages.dev/assets/suporte.webp" class="dl-menu-icon" alt="" onerror="this.style.display='none'">
+                <span data-i18n="menu_suporte" data-lang-en="Support">Suporte</span>
+            </a>
+        </li>
+        <li class="dl-menu-item">
+            <button class="dl-menu-link" id="sidebar-share-btn">
+                <img src="https://aden-rpg.pages.dev/assets/share.webp" class="dl-menu-icon" alt="" onerror="this.style.display='none'">
+                <span data-i18n="menu_share" data-lang-en="Share">Compartilhar</span>
+            </button>
+        </li>
+    </ul>
+</div>
+
+<script>
+(function() {
+    const sidebar  = document.getElementById('dl-sidebar');
+    const overlay  = document.getElementById('dl-sidebar-overlay');
+    const openBtn  = document.getElementById('dl-hamburger-btn');
+    const closeBtn = document.getElementById('dl-sidebar-close');
+    const shareBtn = document.getElementById('sidebar-share-btn');
+
+    function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    if (openBtn)  openBtn.addEventListener('click', openSidebar);
+    if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+    if (overlay)  overlay.addEventListener('click', closeSidebar);
+
+    if (shareBtn) {
+        shareBtn.addEventListener('click', () => {
+            closeSidebar();
+            // Small delay to let sidebar close before opening modal
+            setTimeout(() => { openModal('modal-share'); }, 180);
+        });
+    }
+
+    // Close sidebar on Escape (but don't interfere with modal Escape)
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+            closeSidebar();
+        }
+    });
+})();
+</script>
 </body>
 </html>

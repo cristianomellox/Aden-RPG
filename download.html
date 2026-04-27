@@ -1233,24 +1233,30 @@ function proceedDownload() {
     closeModal('modal-important');
     if (pendingDownloadUrl) window.open(pendingDownloadUrl, '_blank');
 }
-
 // ── Forçar abertura externa no AppCreator24 ──
 function openWebVersionExternally(event) {
-    event.preventDefault(); // Evita o comportamento padrão da tag <a>
-    closeModal('modal-web'); // Fecha o modal
+    if(event) event.preventDefault();
+    closeModal('modal-web');
 
-    const domainPath = "aden-rpg.pages.dev/index.html";
+    const targetUrl = "https://aden-rpg.pages.dev/index.html";
     const isAndroid = /Android/i.test(navigator.userAgent);
 
     if (isAndroid) {
-        // O esquema intent:// obriga o WebView do Android a passar o link para o sistema operacional,
-        // abrindo no navegador padrão (Chrome, Edge, etc) e saindo do AppCreator24.
-        window.location.href = `intent://${domainPath}#Intent;scheme=https;action=android.intent.action.VIEW;end;`;
+        // Intent completa forçando o Chrome e com fallback caso o usuário não tenha o Chrome
+        const intentUrl = "intent://aden-rpg.pages.dev/index.html#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.android.chrome;S.browser_fallback_url=" + encodeURIComponent(targetUrl) + ";end;";
+        
+        // Cria um link invisível e clica nele (burla o bloqueio do AppCreator24)
+        const a = document.createElement('a');
+        a.href = intentUrl;
+        a.target = "_blank"; // Tenta abrir em nova guia nativa
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     } else {
-        // Comportamento normal para PC ou iOS (abre em nova aba)
-        window.open(`https://${domainPath}`, '_blank');
+        window.open(targetUrl, '_blank');
     }
 }
+
 
 // ── Share ──
 const SHARE_URL = encodeURIComponent(window.location.href);

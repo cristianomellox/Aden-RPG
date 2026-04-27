@@ -1075,7 +1075,7 @@
         <p data-i18n="mweb_body" data-lang-en="You can continue using the web version, however some features and areas are locked in this version.">Você pode continuar usando a versão web, porém alguns recursos e áreas estão bloqueados nessa versão.</p>
         <div class="modal-btn-row">
             <button class="mbtn muted" onclick="closeModal('modal-web')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
-            <a class="mbtn primary" href="#" onclick="openWebVersionExternally(event)" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</a>
+            <a class="mbtn primary" id="web-version-link" href="https://aden-rpg.pages.dev/index.html" target="_blank" onclick="closeModal('modal-web')" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</a>
         </div>
     </div>
 </div>
@@ -1233,30 +1233,35 @@ function proceedDownload() {
     closeModal('modal-important');
     if (pendingDownloadUrl) window.open(pendingDownloadUrl, '_blank');
 }
-// ── Forçar abertura externa no AppCreator24 ──
-function openWebVersionExternally(event) {
-    if(event) event.preventDefault();
-    closeModal('modal-web');
+// ── Preparar links externos para burlar o AppCreator24 ──
 
-    const targetUrl = "https://aden-rpg.pages.dev/index.html";
+// 1. Função para abrir o Modal de Download e preparar o link
+function openDriveModal(url) {
+    const proceedBtn = document.getElementById('modal-proceed-btn');
     const isAndroid = /Android/i.test(navigator.userAgent);
-
+    
     if (isAndroid) {
-        // Intent completa forçando o Chrome e com fallback caso o usuário não tenha o Chrome
-        const intentUrl = "intent://aden-rpg.pages.dev/index.html#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.android.chrome;S.browser_fallback_url=" + encodeURIComponent(targetUrl) + ";end;";
-        
-        // Cria um link invisível e clica nele (burla o bloqueio do AppCreator24)
-        const a = document.createElement('a');
-        a.href = intentUrl;
-        a.target = "_blank"; // Tenta abrir em nova guia nativa
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        // Remove o https:// e monta o intent nativo
+        const cleanUrl = url.replace(/^https?:\/\//, '');
+        // Usamos a action.VIEW sem forçar o pacote do Chrome, assim abre no navegador padrão do usuário
+        proceedBtn.href = `intent://${cleanUrl}#Intent;scheme=https;action=android.intent.action.VIEW;end;`;
     } else {
-        window.open(targetUrl, '_blank');
+        proceedBtn.href = url;
     }
+    
+    openModal('modal-important');
 }
 
+// 2. Preparar o link da Versão Web assim que a página carregar
+document.addEventListener('DOMContentLoaded', () => {
+    const webLink = document.getElementById('web-version-link');
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    if (webLink && isAndroid) {
+        const targetUrl = "aden-rpg.pages.dev/index.html";
+        webLink.href = `intent://${targetUrl}#Intent;scheme=https;action=android.intent.action.VIEW;end;`;
+    }
+});
 
 // ── Share ──
 const SHARE_URL = encodeURIComponent(window.location.href);

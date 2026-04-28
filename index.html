@@ -1292,5 +1292,239 @@ document.addEventListener("DOMContentLoaded", () => {
 <script src="pvp_boot_notifs.js"></script>
 <script src="browser-guard.js"></script>
 <script src="security.js"></script>
+<!-- ══ MODAL COMPARTILHAR — cole antes de </body> no index.html ══════════ -->
+
+<!-- CSS do modal -->
+<style>
+  /* Variáveis locais do modal (não conflitam com style.css) */
+  #aden-share-modal-backdrop {
+    --sm-gold:        #c9a94a;
+    --sm-gold-light:  #e8d08a;
+    --sm-gold-dark:   #8a6e24;
+    --sm-gold-glow:   rgba(201,169,74,0.35);
+    --sm-bg-panel:    rgba(8,6,4,0.97);
+    --sm-text-main:   #e8e0cc;
+    --sm-text-muted:  silver;
+    --sm-border:      rgba(201,169,74,0.30);
+    --sm-border-mid:  rgba(201,169,74,0.55);
+
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.82);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease;
+    font-family: 'Crimson Pro', Georgia, serif;
+  }
+  #aden-share-modal-backdrop.open {
+    opacity: 1; pointer-events: all;
+  }
+  #aden-share-modal-box {
+    background: linear-gradient(160deg, rgba(14,9,4,0.97), rgba(6,4,2,0.99));
+    border: 1px solid var(--sm-border-mid);
+    border-radius: 14px;
+    padding: 30px 28px;
+    max-width: 440px; width: 100%;
+    box-shadow: 0 8px 60px rgba(0,0,0,0.9), 0 1px 0 rgba(201,169,74,0.2) inset;
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.22s ease;
+    max-height: 92vh; overflow-y: auto;
+    box-sizing: border-box;
+  }
+  #aden-share-modal-backdrop.open #aden-share-modal-box {
+    transform: translateY(0);
+  }
+  #aden-share-modal-box h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.4rem; font-weight: 700;
+    color: var(--sm-gold-light); letter-spacing: 0.06em;
+    margin: 0 0 10px; text-align: center;
+    text-shadow: 0 0 20px var(--sm-gold-glow);
+  }
+  #aden-share-modal-box .sm-sub {
+    text-align: center; font-size: 1rem;
+    color: var(--sm-text-muted); margin-bottom: 4px;
+    font-style: italic;
+  }
+  #aden-share-modal-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none;
+    color: var(--sm-text-muted);
+    font-size: 1.6rem; line-height: 1;
+    cursor: pointer; transition: color 0.15s;
+    padding: 0;
+  }
+  #aden-share-modal-close:hover { color: var(--sm-gold); }
+
+  /* Grid de redes */
+  .aden-share-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin-top: 16px;
+  }
+  .aden-share-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 14px 10px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--sm-border);
+    background: rgba(201,169,74,0.05);
+    transition: all 0.18s; text-decoration: none;
+    color: var(--sm-text-muted);
+    font-family: 'Cinzel', serif; font-size: 0.60rem;
+    letter-spacing: 0.05em; box-sizing: border-box;
+  }
+  .aden-share-btn:hover {
+    border-color: var(--sm-gold);
+    background: rgba(201,169,74,0.12);
+    color: var(--sm-gold-light);
+    transform: translateY(-2px);
+  }
+  .aden-share-btn svg { width: 28px; height: 28px; }
+  @media (max-width: 360px) { .aden-share-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+
+<!-- HTML do modal -->
+<div id="aden-share-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="aden-share-title">
+  <div id="aden-share-modal-box">
+    <button id="aden-share-modal-close" aria-label="Fechar">&times;</button>
+    <h3 id="aden-share-title">Compartilhar Aden</h3>
+    <p class="sm-sub">Convide seus amigos para forjarem seus destinos!</p>
+
+    <div class="aden-share-grid">
+
+      <!-- WhatsApp -->
+      <a class="aden-share-btn" id="aden-share-whatsapp" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#25D366">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.526 5.845L.057 23.57l5.862-1.538A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.796 9.796 0 0 1-5.006-1.372l-.36-.213-3.48.913.929-3.397-.234-.371A9.79 9.79 0 0 1 2.182 12C2.182 6.572 6.572 2.182 12 2.182S21.818 6.572 21.818 12 17.428 21.818 12 21.818z"/>
+        </svg>
+        <span>WhatsApp</span>
+      </a>
+
+      <!-- Telegram -->
+      <a class="aden-share-btn" id="aden-share-telegram" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#2CA5E0">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/>
+        </svg>
+        <span>Telegram</span>
+      </a>
+
+      <!-- X / Twitter -->
+      <a class="aden-share-btn" id="aden-share-twitter" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="color:#e8e0cc;">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+        <span>X / Twitter</span>
+      </a>
+
+      <!-- Facebook -->
+      <a class="aden-share-btn" id="aden-share-facebook" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#1877F2">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+        </svg>
+        <span>Facebook</span>
+      </a>
+
+      <!-- Reddit -->
+      <a class="aden-share-btn" id="aden-share-reddit" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#FF4500">
+          <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/>
+        </svg>
+        <span>Reddit</span>
+      </a>
+
+      <!-- Copiar link -->
+      <button class="aden-share-btn" id="aden-share-copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+        <span id="aden-share-copy-label">Copiar link</span>
+      </button>
+
+    </div>
+  </div>
+</div>
+
+<!-- Lógica do modal -->
+<script>
+(function () {
+  /* ── URL e textos fixos da página /download ── */
+  var DOWNLOAD_PAGE = 'https://aden-rpg.pages.dev/download';
+  var ENC_URL  = encodeURIComponent(DOWNLOAD_PAGE);
+  var TEXT_PT  = encodeURIComponent('Entre no continente de Aden! Um RPG estratégico épico – sem Pay-to-Win. Forje seu legado!');
+  var TEXT_EN  = encodeURIComponent('Join the continent of Aden! An epic strategy RPG – no Pay-to-Win. Forge your legacy!');
+
+  /* ── Monta os hrefs de compartilhamento ── */
+  function buildAdenShareLinks(lang) {
+    var txt = (lang === 'en') ? TEXT_EN : TEXT_PT;
+    document.getElementById('aden-share-whatsapp').href  = 'https://wa.me/?text=' + txt + '%20' + ENC_URL;
+    document.getElementById('aden-share-telegram').href  = 'https://t.me/share/url?url=' + ENC_URL + '&text=' + txt;
+    document.getElementById('aden-share-twitter').href   = 'https://twitter.com/intent/tweet?text=' + txt + '&url=' + ENC_URL;
+    document.getElementById('aden-share-facebook').href  = 'https://www.facebook.com/sharer/sharer.php?u=' + ENC_URL;
+    document.getElementById('aden-share-reddit').href    = 'https://www.reddit.com/submit?url=' + ENC_URL + '&title=' + txt;
+  }
+
+  /* ── Abre / fecha o modal ── */
+  function openAdenShareModal() {
+    buildAdenShareLinks('pt'); // usa PT por padrão; troque para 'en' se o index tiver idioma
+    document.getElementById('aden-share-modal-backdrop').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeAdenShareModal() {
+    document.getElementById('aden-share-modal-backdrop').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  /* ── Copiar link ── */
+  function adenShareCopyLink() {
+    navigator.clipboard.writeText(DOWNLOAD_PAGE).then(function () {
+      var lbl = document.getElementById('aden-share-copy-label');
+      var orig = lbl.textContent;
+      lbl.textContent = 'Copiado!';
+      setTimeout(function () { lbl.textContent = orig; }, 2000);
+    });
+  }
+
+  /* ── Eventos do modal (fechar) ── */
+  document.getElementById('aden-share-modal-close').addEventListener('click', closeAdenShareModal);
+  document.getElementById('aden-share-modal-backdrop').addEventListener('click', function (e) {
+    if (e.target === this) closeAdenShareModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && document.getElementById('aden-share-modal-backdrop').classList.contains('open')) {
+      closeAdenShareModal();
+    }
+  });
+
+  /* ── Botão Copiar link ── */
+  document.getElementById('aden-share-copy').addEventListener('click', adenShareCopyLink);
+
+  /* ── Intercepta o botão "Compartilhar" do menu de Opções ──
+       Procura pelo div que navega para download.html dentro do #maisSubmenu
+       e substitui o onclick pelo modal. ── */
+  document.addEventListener('DOMContentLoaded', function () {
+    var maisSubmenu = document.getElementById('maisSubmenu');
+    if (!maisSubmenu) return;
+
+    var allDivs = maisSubmenu.querySelectorAll('.footer-submenu-btn');
+    allDivs.forEach(function (el) {
+      var onclick = el.getAttribute('onclick') || '';
+      if (onclick.indexOf('download') !== -1) {
+        el.removeAttribute('onclick');
+        el.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openAdenShareModal();
+        });
+      }
+    });
+  });
+
+  /* Expõe globalmente caso outra parte da página precise chamar */
+  window.openAdenShareModal  = openAdenShareModal;
+  window.closeAdenShareModal = closeAdenShareModal;
+})();
+</script>
+
 </body>
 </html>

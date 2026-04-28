@@ -849,19 +849,17 @@ async function handleRefineMulti(item, selections, crystalCost) {
             showCustomAlert(`Erro ao refinar: ${data.error}`);
         } else if (data && data.success) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
-            const _refineImgUrl = `https://aden-rpg.pages.dev/assets/itens/${item.items?.name}_${item.items?.stars}estrelas.webp`;
-            if (typeof window.showItemActionSuccess === 'function') {
-                window.showItemActionSuccess('refine', {
-                    itemName:     item.items?.display_name || item.items?.name || 'Item',
-                    itemImageUrl: _refineImgUrl,
-                    itemImageName: item.items?.name,
-                    stars:        stars
-                });
-            } else {
-                showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
-            }
-            
+
+            // Coleta dados do item ANTES de anular selectedItem
+            const _shareImgUrl  = `https://aden-rpg.pages.dev/assets/itens/${item.items?.name}_${item.items?.stars}estrelas.webp`;
+            const _shareImgName = item.items?.name;
+            const _shareName    = item.items?.display_name || item.items?.name || 'Item';
+
+            // Fecha modais e anula selectedItem ANTES do updateLocalInventoryState
+            // para impedir que ele reabra o itemDetailsModal via showItemDetails()
             document.getElementById('refineFragmentModal').style.display = 'none';
+            document.getElementById('itemDetailsModal').style.display = 'none';
+            selectedItem = null;
 
             // ATUALIZAÇÃO LOCAL — todos os bônus vêm do servidor
             await updateLocalInventoryState({
@@ -883,8 +881,18 @@ async function handleRefineMulti(item, selections, crystalCost) {
                 usedCrystals: data.used_crystals,
                 newStats: data.player_stats
             });
-            
-            document.getElementById('itemDetailsModal').style.display = 'none';
+
+            // Exibe modal de compartilhamento (ou alerta de fallback)
+            if (typeof window.showItemActionSuccess === 'function') {
+                window.showItemActionSuccess('refine', {
+                    itemName:     _shareName,
+                    itemImageUrl: _shareImgUrl,
+                    itemImageName: _shareImgName,
+                    stars:        stars
+                });
+            } else {
+                showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
+            }
         } else {
             showCustomAlert('Não foi possível refinar o item. Tente novamente.');
         }
@@ -912,18 +920,16 @@ async function handleLevelUpMulti(item, selections) {
         if (data && data.error) {
             showCustomAlert(`Erro ao subir de nível: ${data.error}`);
         } else if (data && data.success) {
-            const _lvlImgUrl = `https://aden-rpg.pages.dev/assets/itens/${item.items?.name}_${item.items?.stars}estrelas.webp`;
-            if (typeof window.showItemActionSuccess === 'function') {
-                window.showItemActionSuccess('level', {
-                    itemName:     item.items?.display_name || item.items?.name || 'Item',
-                    itemImageUrl: _lvlImgUrl,
-                    itemImageName: item.items?.name,
-                    level:        data.new_level
-                });
-            } else {
-                showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
-            }
-            
+            // Coleta dados do item ANTES de anular selectedItem
+            const _shareImgUrl  = `https://aden-rpg.pages.dev/assets/itens/${item.items?.name}_${item.items?.stars}estrelas.webp`;
+            const _shareImgName = item.items?.name;
+            const _shareName    = item.items?.display_name || item.items?.name || 'Item';
+
+            // Fecha modal e anula selectedItem ANTES do updateLocalInventoryState
+            // para impedir que ele reabra o itemDetailsModal via showItemDetails()
+            document.getElementById('itemDetailsModal').style.display = 'none';
+            selectedItem = null;
+
             // ATUALIZAÇÃO LOCAL — todos os bônus vêm do servidor
             await updateLocalInventoryState({
                 updatedItemId: item.id,
@@ -944,7 +950,17 @@ async function handleLevelUpMulti(item, selections) {
                 newStats: data.player_stats
             });
 
-            document.getElementById('itemDetailsModal').style.display = 'none';
+            // Exibe modal de compartilhamento (ou alerta de fallback)
+            if (typeof window.showItemActionSuccess === 'function') {
+                window.showItemActionSuccess('level', {
+                    itemName:     _shareName,
+                    itemImageUrl: _shareImgUrl,
+                    itemImageName: _shareImgName,
+                    level:        data.new_level
+                });
+            } else {
+                showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
+            }
         } else {
             showCustomAlert('Não foi possível evoluir o item. Tente novamente.');
         }
@@ -970,20 +986,19 @@ async function handleCraft(itemId, fragmentId) {
         if (data && data.error) {
             showCustomAlert(`Erro ao construir: ${data.error}`);
         } else if (data && data.success) {
-            const _craftDef    = window.itemDefinitions?.get(itemId);
-            const _craftImgUrl = _craftDef
-                ? `https://aden-rpg.pages.dev/assets/itens/${_craftDef.name}_${_craftDef.stars}estrelas.webp`
+            // Coleta dados do item construído ANTES de fechar modais
+            const craftDef     = window.itemDefinitions?.get(itemId);
+            const _shareImgUrl = craftDef
+                ? `https://aden-rpg.pages.dev/assets/itens/${craftDef.name}_${craftDef.stars}estrelas.webp`
                 : 'https://aden-rpg.pages.dev/assets/itens/unknown.webp';
-            if (typeof window.showItemActionSuccess === 'function') {
-                window.showItemActionSuccess('craft', {
-                    itemName:     _craftDef?.display_name || _craftDef?.name || 'Item',
-                    itemImageUrl: _craftImgUrl,
-                    itemImageName: _craftDef?.name
-                });
-            } else {
-                showCustomAlert(`Item construído com sucesso!`);
-            }
+            const _shareName    = craftDef?.display_name || craftDef?.name || 'Item';
+            const _shareImgName = craftDef?.name;
+
+            // Fecha modais e anula selectedItem ANTES do updateLocalInventoryState
+            // para impedir que ele reabra o itemDetailsModal via showItemDetails()
             document.getElementById('craftingModal').style.display = 'none';
+            document.getElementById('itemDetailsModal').style.display = 'none';
+            selectedItem = null;
             
             let newItemFull = null;
             if (data.new_item_id) {
@@ -999,6 +1014,17 @@ async function handleCraft(itemId, fragmentId) {
                 usedCrystals: data.crystals_spent,
                 newStats: null 
             });
+
+            // Exibe modal de compartilhamento (ou alerta de fallback)
+            if (typeof window.showItemActionSuccess === 'function') {
+                window.showItemActionSuccess('craft', {
+                    itemName:     _shareName,
+                    itemImageUrl: _shareImgUrl,
+                    itemImageName: _shareImgName
+                });
+            } else {
+                showCustomAlert(`Item construído com sucesso!`);
+            }
 
         } else {
             showCustomAlert('Não foi possível construir o item. Tente novamente.');

@@ -1040,6 +1040,8 @@ document.addEventListener("DOMContentLoaded", () => {
     backdrop-filter: blur(5px);
     align-items: center; justify-content: center;
     padding: 16px;
+    /* Não usa flex aqui para não interferir com display:none;
+       o JS seta display:flex quando abre */
   }
   #issm-box {
     background: linear-gradient(160deg, #1a1208 0%, #0d0903 100%);
@@ -1052,8 +1054,6 @@ document.addEventListener("DOMContentLoaded", () => {
     box-sizing: border-box;
     font-family: 'Cinzel', serif;
   }
-
-  /* Partículas de estrelas no topo */
   #issm-sparkle {
     position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
     font-size: 1.6rem; line-height: 1; letter-spacing: 4px;
@@ -1064,8 +1064,6 @@ document.addEventListener("DOMContentLoaded", () => {
     0%,100% { transform: translateX(-50%) translateY(0); }
     50%      { transform: translateX(-50%) translateY(-5px); }
   }
-
-  /* Imagem do item */
   #issm-item-img {
     width: 88px; height: 88px; object-fit: contain;
     border-radius: 10px;
@@ -1073,37 +1071,33 @@ document.addEventListener("DOMContentLoaded", () => {
     background: rgba(0,0,0,0.35);
     margin-bottom: 10px;
     box-shadow: 0 0 18px rgba(201,169,74,0.20);
+    display: block; margin-left: auto; margin-right: auto;
   }
-
-  /* Título da ação */
   #issm-title {
     font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em;
     color: #e8d08a; margin: 0 0 6px;
     text-shadow: 0 0 16px rgba(201,169,74,0.6);
   }
-
-  /* Texto do share (prévia) */
   #issm-msg {
     font-family: 'Crimson Pro', Georgia, serif;
     font-size: 0.88rem; line-height: 1.55;
-    color: #b8b0a0; margin: 0 0 16px;
+    color: #b8b0a0; margin: 0 0 14px;
     font-style: italic;
   }
-
-  /* Divisor */
   .issm-divider {
     height: 1px; margin: 0 0 14px;
     background: linear-gradient(to right, transparent, rgba(201,169,74,0.5), transparent);
   }
-
-  /* Grid de redes sociais */
   #issm-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px; margin-bottom: 14px;
   }
+
+  /* ── Estilo base compartilhado para <a> e <button> ── */
   .issm-net-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 5px;
     padding: 10px 6px; border-radius: 8px; cursor: pointer;
     border: 1px solid rgba(201,169,74,0.25);
     background: rgba(255,255,255,0.04);
@@ -1111,14 +1105,20 @@ document.addEventListener("DOMContentLoaded", () => {
     color: #a09080;
     font-family: 'Cinzel', serif; font-size: 0.52rem; letter-spacing: 0.04em;
     transition: border-color 0.18s, background 0.18s, color 0.18s, transform 0.15s;
+    box-sizing: border-box;
+    width: 100%; height: 100%;
+    /* Reset para <button> */
+    -webkit-appearance: none;
+    appearance: none;
+    line-height: 1;
   }
   .issm-net-btn:hover {
     border-color: #c9a94a; background: rgba(201,169,74,0.12);
     color: #e8d08a; transform: translateY(-2px);
   }
-  .issm-net-btn svg { width: 26px; height: 26px; }
+  .issm-net-btn svg { width: 26px; height: 26px; flex-shrink: 0; }
+  .issm-net-btn span { display: block; }
 
-  /* Botão Fechar */
   #issm-close {
     width: 100%;
     padding: 10px; border-radius: 7px; cursor: pointer;
@@ -1126,7 +1126,8 @@ document.addEventListener("DOMContentLoaded", () => {
     background: rgba(255,255,255,0.05);
     color: #a09080; font-family: 'Cinzel', serif;
     font-size: 0.78rem; letter-spacing: 0.07em;
-    transition: all 0.18s;
+    -webkit-appearance: none; appearance: none;
+    transition: all 0.18s; box-sizing: border-box;
   }
   #issm-close:hover {
     background: rgba(201,169,74,0.10); color: #e8d08a;
@@ -1138,7 +1139,8 @@ document.addEventListener("DOMContentLoaded", () => {
 <div id="issm-overlay">
   <div id="issm-box">
     <div id="issm-sparkle">✦ ✦ ✦</div>
-    <img id="issm-item-img" src="" alt="Item"
+    <!-- crossorigin="anonymous" é essencial para o canvas no Instagram -->
+    <img id="issm-item-img" crossorigin="anonymous" src="" alt="Item"
          onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
     <div id="issm-title">Item Criado!</div>
     <p id="issm-msg"></p>
@@ -1187,15 +1189,15 @@ document.addEventListener("DOMContentLoaded", () => {
         <span>Reddit</span>
       </a>
 
-      <!-- Instagram — via Web Share API com imagem -->
-      <button class="issm-net-btn" id="issm-ig">
-        <svg viewBox="0 0 24 24" fill="url(#ig-grad)">
+      <!-- Instagram — Web Share API com imagem do item via canvas -->
+      <button class="issm-net-btn" id="issm-ig" type="button">
+        <svg viewBox="0 0 24 24" fill="url(#issm-ig-grad)">
           <defs>
-            <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" style="stop-color:#f09433"/>
-              <stop offset="25%" style="stop-color:#e6683c"/>
-              <stop offset="50%" style="stop-color:#dc2743"/>
-              <stop offset="75%" style="stop-color:#cc2366"/>
+            <linearGradient id="issm-ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%"   style="stop-color:#f09433"/>
+              <stop offset="25%"  style="stop-color:#e6683c"/>
+              <stop offset="50%"  style="stop-color:#dc2743"/>
+              <stop offset="75%"  style="stop-color:#cc2366"/>
               <stop offset="100%" style="stop-color:#bc1888"/>
             </linearGradient>
           </defs>
@@ -1206,25 +1208,54 @@ document.addEventListener("DOMContentLoaded", () => {
 
     </div><!-- /issm-grid -->
 
-    <button id="issm-close">Fechar</button>
+    <button id="issm-close" type="button">Fechar</button>
   </div>
 </div>
 
 <!-- ── Lógica JS ── -->
 <script>
 (function () {
+  'use strict';
+
   var DOWNLOAD_URL = 'https://aden-rpg.pages.dev/download';
 
   /* ─────────────────────────────────────────────────────────────
-     showItemActionSuccess(action, ctx)
-     ─────────────────────────────────────────────────────────────
-     action : 'craft' | 'level' | 'refine'
-     ctx    : {
-       itemName     : string   – nome de exibição do item
-       itemImageUrl : string   – URL completa da imagem
-       level        : number   – (para 'level')
-       stars        : number   – (para 'refine', total de estrelas)
-     }
+     Extrai a imagem já carregada no modal (#issm-item-img)
+     para um File via canvas (sem segundo fetch, sem CORS duplo).
+     O atributo crossorigin="anonymous" no <img> garante que o
+     canvas não fique "tainted".
+  ──────────────────────────────────────────────────────────────── */
+  function _issmImgToFile(imgEl, name) {
+    return new Promise(function (resolve) {
+      try {
+        // Aguarda carregamento se ainda não terminou
+        function draw() {
+          try {
+            var canvas = document.createElement('canvas');
+            canvas.width  = imgEl.naturalWidth  || 256;
+            canvas.height = imgEl.naturalHeight || 256;
+            canvas.getContext('2d').drawImage(imgEl, 0, 0);
+            canvas.toBlob(function (blob) {
+              resolve(blob
+                ? new File([blob], 'aden_' + (name || 'item') + '.png', { type: 'image/png' })
+                : null);
+            }, 'image/png');
+          } catch (e) {
+            resolve(null); // canvas tainted ou erro — segue sem imagem
+          }
+        }
+        if (imgEl.complete && imgEl.naturalWidth > 0) {
+          draw();
+        } else {
+          imgEl.addEventListener('load',  draw, { once: true });
+          imgEl.addEventListener('error', function () { resolve(null); }, { once: true });
+        }
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     API pública: chamada pelo inventory.js após cada ação
   ──────────────────────────────────────────────────────────────── */
   window.showItemActionSuccess = function (action, ctx) {
     var title, shareText, sparkle;
@@ -1245,73 +1276,87 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    var fullText = shareText + ' ' + DOWNLOAD_URL;
-    var encUrl   = encodeURIComponent(DOWNLOAD_URL);
-    var encFull  = encodeURIComponent(fullText);
-    var encText  = encodeURIComponent(shareText);
+    var encUrl  = encodeURIComponent(DOWNLOAD_URL);
+    var encFull = encodeURIComponent(shareText + ' ' + DOWNLOAD_URL);
+    var encText = encodeURIComponent(shareText);
 
     /* Preenche o modal */
-    document.getElementById('issm-sparkle').textContent    = sparkle;
-    document.getElementById('issm-item-img').src           = ctx.itemImageUrl || '';
-    document.getElementById('issm-title').textContent      = title;
-    document.getElementById('issm-msg').textContent        = shareText;
+    document.getElementById('issm-sparkle').textContent = sparkle;
+    document.getElementById('issm-title').textContent   = title;
+    document.getElementById('issm-msg').textContent     = shareText;
 
-    /* Monta links das redes */
+    /* Carrega a imagem do item (crossorigin já está no elemento) */
+    var imgEl = document.getElementById('issm-item-img');
+    imgEl.src = ctx.itemImageUrl || '';
+    imgEl.dataset.imgName = ctx.itemImageName || 'item';
+
+    /* Links das redes (URL + texto apenas — preview via og:image do /download) */
     document.getElementById('issm-wa').href = 'https://wa.me/?text=' + encFull;
     document.getElementById('issm-tg').href = 'https://t.me/share/url?url=' + encUrl + '&text=' + encText;
     document.getElementById('issm-tw').href = 'https://twitter.com/intent/tweet?text=' + encFull;
     document.getElementById('issm-fb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encUrl;
     document.getElementById('issm-rd').href = 'https://www.reddit.com/submit?url=' + encUrl + '&title=' + encText;
 
-    /* Instagram — Web Share API com imagem (abre o compartilhamento nativo do Android/iOS,
-       onde o usuário pode escolher o Instagram Stories ou o Feed diretamente) */
-    document.getElementById('issm-ig').onclick = async function () {
-      if (!navigator.share) {
-        /* Fallback desktop: copia o texto */
-        try {
-          await navigator.clipboard.writeText(fullText);
-          alert('Link copiado! Cole no Instagram.');
-        } catch (e) {
-          alert('Abra o Instagram e compartilhe manualmente:\n\n' + fullText);
-        }
-        return;
-      }
-
-      var shareObj = { text: shareText, url: DOWNLOAD_URL };
-
-      /* Tenta incluir a imagem do item como arquivo */
-      if (navigator.canShare && ctx.itemImageUrl) {
-        try {
-          var resp = await fetch(ctx.itemImageUrl);
-          var blob = await resp.blob();
-          var ext  = (blob.type.includes('png') ? 'png' : blob.type.includes('jpg') || blob.type.includes('jpeg') ? 'jpg' : 'webp');
-          var file = new File([blob], 'aden_' + (ctx.itemImageName || 'item') + '.' + ext, { type: blob.type });
-          if (navigator.canShare({ files: [file] })) {
-            shareObj.files = [file];
-          }
-        } catch (e) {
-          /* Segue sem imagem */
-        }
-      }
-
-      try {
-        await navigator.share(shareObj);
-      } catch (e) {
-        if (e.name !== 'AbortError') console.error('Share error:', e);
-      }
-    };
-
-    /* Exibe o modal */
+    /* Exibe o overlay */
     document.getElementById('issm-overlay').style.display = 'flex';
   };
 
-  /* Fechar */
-  document.getElementById('issm-close').addEventListener('click', function () {
+  /* ─────────────────────────────────────────────────────────────
+     Botão Instagram — Web Share API com arquivo de imagem
+  ──────────────────────────────────────────────────────────────── */
+  document.getElementById('issm-ig').addEventListener('click', async function () {
+    var msgEl   = document.getElementById('issm-msg');
+    var imgEl   = document.getElementById('issm-item-img');
+    var imgName = imgEl.dataset.imgName || 'item';
+    var text    = (msgEl ? msgEl.textContent : '') || '';
+    var fullText = text + ' ' + DOWNLOAD_URL;
+
+    /* Desktop / sem suporte nativo */
+    if (!navigator.share) {
+      try { await navigator.clipboard.writeText(fullText); } catch (e) {}
+      alert('Link copiado!\nCole no Instagram para compartilhar.');
+      return;
+    }
+
+    /* Tenta incluir a imagem do item como arquivo (canvas → blob → File) */
+    var sharePayload = { text: text, url: DOWNLOAD_URL };
+
+    try {
+      var file = await _issmImgToFile(imgEl, imgName);
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        /* Com arquivo: remove url para máxima compatibilidade (alguns apps ignoram
+           url quando files está presente, outros aceitam os dois) */
+        sharePayload = { text: text, files: [file] };
+      }
+    } catch (e) {
+      /* segue com URL apenas */
+    }
+
+    try {
+      await navigator.share(sharePayload);
+    } catch (e) {
+      if (e.name !== 'AbortError') console.warn('Share error:', e);
+    }
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     Fechar o modal
+  ──────────────────────────────────────────────────────────────── */
+  function _issmClose() {
     document.getElementById('issm-overlay').style.display = 'none';
-  });
+  }
+
+  document.getElementById('issm-close').addEventListener('click', _issmClose);
   document.getElementById('issm-overlay').addEventListener('click', function (e) {
-    if (e.target === this) this.style.display = 'none';
+    if (e.target === this) _issmClose();
   });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' &&
+        document.getElementById('issm-overlay').style.display !== 'none') {
+      _issmClose();
+    }
+  });
+
 })();
 </script>
 

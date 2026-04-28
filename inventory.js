@@ -849,7 +849,17 @@ async function handleRefineMulti(item, selections, crystalCost) {
             showCustomAlert(`Erro ao refinar: ${data.error}`);
         } else if (data && data.success) {
             const stars = (typeof data.new_total_stars !== 'undefined') ? data.new_total_stars : ((item.items?.stars || 0) + ((item.refine_level || 0) + 1));
-            showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
+            const _refineImgUrl = `https://aden-rpg.pages.dev/assets/itens/${item.items?.name}_${item.items?.stars}estrelas.webp`;
+            if (typeof window.showItemActionSuccess === 'function') {
+                window.showItemActionSuccess('refine', {
+                    itemName:     item.items?.display_name || item.items?.name || 'Item',
+                    itemImageUrl: _refineImgUrl,
+                    itemImageName: item.items?.name,
+                    stars:        stars
+                });
+            } else {
+                showCustomAlert(`Item refinado! Estrelas totais: ${stars}.`);
+            }
             
             document.getElementById('refineFragmentModal').style.display = 'none';
 
@@ -902,7 +912,17 @@ async function handleLevelUpMulti(item, selections) {
         if (data && data.error) {
             showCustomAlert(`Erro ao subir de nível: ${data.error}`);
         } else if (data && data.success) {
-            showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
+            const _lvlImgUrl = `https://aden-rpg.pages.dev/assets/itens/${item.items?.name}_${item.items?.stars}estrelas.webp`;
+            if (typeof window.showItemActionSuccess === 'function') {
+                window.showItemActionSuccess('level', {
+                    itemName:     item.items?.display_name || item.items?.name || 'Item',
+                    itemImageUrl: _lvlImgUrl,
+                    itemImageName: item.items?.name,
+                    level:        data.new_level
+                });
+            } else {
+                showCustomAlert(`Item evoluído para Nível ${data.new_level}!`);
+            }
             
             // ATUALIZAÇÃO LOCAL — todos os bônus vêm do servidor
             await updateLocalInventoryState({
@@ -950,7 +970,19 @@ async function handleCraft(itemId, fragmentId) {
         if (data && data.error) {
             showCustomAlert(`Erro ao construir: ${data.error}`);
         } else if (data && data.success) {
-            showCustomAlert(`Item construído com sucesso!`);
+            const _craftDef    = window.itemDefinitions?.get(itemId);
+            const _craftImgUrl = _craftDef
+                ? `https://aden-rpg.pages.dev/assets/itens/${_craftDef.name}_${_craftDef.stars}estrelas.webp`
+                : 'https://aden-rpg.pages.dev/assets/itens/unknown.webp';
+            if (typeof window.showItemActionSuccess === 'function') {
+                window.showItemActionSuccess('craft', {
+                    itemName:     _craftDef?.display_name || _craftDef?.name || 'Item',
+                    itemImageUrl: _craftImgUrl,
+                    itemImageName: _craftDef?.name
+                });
+            } else {
+                showCustomAlert(`Item construído com sucesso!`);
+            }
             document.getElementById('craftingModal').style.display = 'none';
             
             let newItemFull = null;

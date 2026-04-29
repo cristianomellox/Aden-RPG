@@ -1094,8 +1094,9 @@ document.addEventListener("DOMContentLoaded", () => {
 <div id="issm-overlay">
   <div id="issm-box">
     <div id="issm-sparkle">✦ ✦ ✦</div>
-    <img id="issm-item-img" crossorigin="anonymous" src="" alt=""
-         onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+    <!-- SEM src aqui — evita requisição fantasma que prende o spinner do wrapper -->
+    <img id="issm-item-img" crossorigin="anonymous" alt=""
+         onerror="this.onerror=null;this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
     <div id="issm-title"></div>
     <p id="issm-msg"></p>
     <div class="issm-div"></div>
@@ -1169,7 +1170,7 @@ function showItemActionSuccess(action, ctx) {
     document.getElementById('issm-msg').textContent     = text;
 
     var img = document.getElementById('issm-item-img');
-    img.src = ctx.itemImageUrl || '';
+    img.src = ctx.itemImageUrl || ''; // src é atribuído AQUI, só quando abre o modal
     img.dataset.name = ctx.itemImageName || 'item';
 
     document.getElementById('issm-wa').href = 'https://wa.me/?text=' + eFull;

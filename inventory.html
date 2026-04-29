@@ -1031,174 +1031,108 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
-<!-- ── CSS ── -->
 <style>
   #issm-overlay {
-    display: none;
-    position: fixed; inset: 0; z-index: 10010;
-    background: rgba(0,0,0,0.88);
-    backdrop-filter: blur(5px);
-    align-items: center; justify-content: center;
-    padding: 16px;
-    /* Não usa flex aqui para não interferir com display:none;
-       o JS seta display:flex quando abre */
+    display:none; position:fixed; inset:0; z-index:10010;
+    background:rgba(0,0,0,0.88); backdrop-filter:blur(5px);
+    align-items:center; justify-content:center; padding:16px;
   }
   #issm-box {
-    background: linear-gradient(160deg, #1a1208 0%, #0d0903 100%);
-    border: 2px solid #c9a94a;
-    border-radius: 14px;
-    padding: 24px 20px 20px;
-    width: 90%; max-width: 360px;
-    box-shadow: 0 0 40px rgba(201,169,74,0.25), 0 8px 40px rgba(0,0,0,0.9);
-    position: relative; text-align: center;
-    box-sizing: border-box;
-    font-family: 'Cinzel', serif;
+    background:linear-gradient(160deg,#1a1208,#0d0903);
+    border:2px solid #c9a94a; border-radius:14px;
+    padding:24px 20px 20px; width:90%; max-width:360px;
+    box-shadow:0 0 40px rgba(201,169,74,.25),0 8px 40px rgba(0,0,0,.9);
+    position:relative; text-align:center; box-sizing:border-box;
+    font-family:'Cinzel',serif;
   }
   #issm-sparkle {
-    position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-    font-size: 1.6rem; line-height: 1; letter-spacing: 4px;
-    filter: drop-shadow(0 0 6px gold);
-    animation: issm-float 2.4s ease-in-out infinite;
+    position:absolute; top:-18px; left:50%; transform:translateX(-50%);
+    font-size:1.6rem; letter-spacing:4px; filter:drop-shadow(0 0 6px gold);
+    animation:issmFloat 2.4s ease-in-out infinite;
   }
-  @keyframes issm-float {
-    0%,100% { transform: translateX(-50%) translateY(0); }
-    50%      { transform: translateX(-50%) translateY(-5px); }
+  @keyframes issmFloat {
+    0%,100%{transform:translateX(-50%) translateY(0)}
+    50%    {transform:translateX(-50%) translateY(-5px)}
   }
   #issm-item-img {
-    width: 88px; height: 88px; object-fit: contain;
-    border-radius: 10px;
-    border: 1.5px solid rgba(201,169,74,0.45);
-    background: rgba(0,0,0,0.35);
-    margin-bottom: 10px;
-    box-shadow: 0 0 18px rgba(201,169,74,0.20);
-    display: block; margin-left: auto; margin-right: auto;
+    width:88px; height:88px; object-fit:contain; border-radius:10px;
+    border:1.5px solid rgba(201,169,74,.45); background:rgba(0,0,0,.35);
+    display:block; margin:0 auto 10px; box-shadow:0 0 18px rgba(201,169,74,.2);
   }
   #issm-title {
-    font-size: 1.1rem; font-weight: 700; letter-spacing: 0.08em;
-    color: #e8d08a; margin: 0 0 6px;
-    text-shadow: 0 0 16px rgba(201,169,74,0.6);
+    font-size:1.1rem; font-weight:700; letter-spacing:.08em;
+    color:#e8d08a; margin:0 0 6px; text-shadow:0 0 16px rgba(201,169,74,.6);
   }
   #issm-msg {
-    font-family: 'Crimson Pro', Georgia, serif;
-    font-size: 0.88rem; line-height: 1.55;
-    color: #b8b0a0; margin: 0 0 14px;
-    font-style: italic;
+    font-family:'Crimson Pro',Georgia,serif; font-size:.88rem;
+    line-height:1.55; color:#b8b0a0; margin:0 0 14px; font-style:italic;
   }
-  .issm-divider {
-    height: 1px; margin: 0 0 14px;
-    background: linear-gradient(to right, transparent, rgba(201,169,74,0.5), transparent);
+  .issm-div { height:1px; margin:0 0 14px; background:linear-gradient(to right,transparent,rgba(201,169,74,.5),transparent); }
+  #issm-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .issm-btn {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:5px; padding:10px 6px; border-radius:8px; cursor:pointer;
+    border:1px solid rgba(201,169,74,.25); background:rgba(255,255,255,.04);
+    text-decoration:none; color:#a09080;
+    font-family:'Cinzel',serif; font-size:.52rem; letter-spacing:.04em;
+    transition:border-color .18s,background .18s,color .18s,transform .15s;
+    box-sizing:border-box; width:100%;
+    -webkit-appearance:none; appearance:none; line-height:1;
   }
-  #issm-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px; margin-bottom: 14px;
-  }
-
-  /* ── Estilo base compartilhado para <a> e <button> ── */
-  .issm-net-btn {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 5px;
-    padding: 10px 6px; border-radius: 8px; cursor: pointer;
-    border: 1px solid rgba(201,169,74,0.25);
-    background: rgba(255,255,255,0.04);
-    text-decoration: none;
-    color: #a09080;
-    font-family: 'Cinzel', serif; font-size: 0.52rem; letter-spacing: 0.04em;
-    transition: border-color 0.18s, background 0.18s, color 0.18s, transform 0.15s;
-    box-sizing: border-box;
-    width: 100%; height: 100%;
-    /* Reset para <button> */
-    -webkit-appearance: none;
-    appearance: none;
-    line-height: 1;
-  }
-  .issm-net-btn:hover {
-    border-color: #c9a94a; background: rgba(201,169,74,0.12);
-    color: #e8d08a; transform: translateY(-2px);
-  }
-  .issm-net-btn svg { width: 26px; height: 26px; flex-shrink: 0; }
-  .issm-net-btn span { display: block; }
-
+  .issm-btn:hover { border-color:#c9a94a; background:rgba(201,169,74,.12); color:#e8d08a; transform:translateY(-2px); }
+  .issm-btn svg { width:26px; height:26px; flex-shrink:0; }
+  .issm-btn span { display:block; }
   #issm-close {
-    width: 100%;
-    padding: 10px; border-radius: 7px; cursor: pointer;
-    border: 1px solid rgba(201,169,74,0.35);
-    background: rgba(255,255,255,0.05);
-    color: #a09080; font-family: 'Cinzel', serif;
-    font-size: 0.78rem; letter-spacing: 0.07em;
-    -webkit-appearance: none; appearance: none;
-    transition: all 0.18s; box-sizing: border-box;
+    width:100%; padding:10px; border-radius:7px; cursor:pointer;
+    border:1px solid rgba(201,169,74,.35); background:rgba(255,255,255,.05);
+    color:#a09080; font-family:'Cinzel',serif; font-size:.78rem; letter-spacing:.07em;
+    -webkit-appearance:none; appearance:none; transition:all .18s; box-sizing:border-box;
   }
-  #issm-close:hover {
-    background: rgba(201,169,74,0.10); color: #e8d08a;
-    border-color: #c9a94a;
-  }
+  #issm-close:hover { background:rgba(201,169,74,.10); color:#e8d08a; border-color:#c9a94a; }
 </style>
 
-<!-- ── HTML do modal ── -->
 <div id="issm-overlay">
   <div id="issm-box">
     <div id="issm-sparkle">✦ ✦ ✦</div>
-    <!-- crossorigin="anonymous" é essencial para o canvas no Instagram -->
-    <img id="issm-item-img" crossorigin="anonymous" src="" alt="Item"
+    <img id="issm-item-img" crossorigin="anonymous" src="" alt=""
          onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
-    <div id="issm-title">Item Criado!</div>
+    <div id="issm-title"></div>
     <p id="issm-msg"></p>
-    <div class="issm-divider"></div>
-
+    <div class="issm-div"></div>
     <div id="issm-grid">
 
-      <!-- WhatsApp -->
-      <a class="issm-net-btn" id="issm-wa" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="#25D366">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/>
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.526 5.845L.057 23.57l5.862-1.538A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.796 9.796 0 0 1-5.006-1.372l-.36-.213-3.48.913.929-3.397-.234-.371A9.79 9.79 0 0 1 2.182 12C2.182 6.572 6.572 2.182 12 2.182S21.818 6.572 21.818 12 17.428 21.818 12 21.818z"/>
-        </svg>
+      <a class="issm-btn" id="issm-wa" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.526 5.845L.057 23.57l5.862-1.538A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.796 9.796 0 0 1-5.006-1.372l-.36-.213-3.48.913.929-3.397-.234-.371A9.79 9.79 0 0 1 2.182 12C2.182 6.572 6.572 2.182 12 2.182S21.818 6.572 21.818 12 17.428 21.818 12 21.818z"/></svg>
         <span>WhatsApp</span>
       </a>
 
-      <!-- Telegram -->
-      <a class="issm-net-btn" id="issm-tg" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="#2CA5E0">
-          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/>
-        </svg>
+      <a class="issm-btn" id="issm-tg" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#2CA5E0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/></svg>
         <span>Telegram</span>
       </a>
 
-      <!-- X / Twitter -->
-      <a class="issm-net-btn" id="issm-tw" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="#e8e0cc">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-        </svg>
+      <a class="issm-btn" id="issm-tw" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#e8e0cc"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
         <span>X / Twitter</span>
       </a>
 
-      <!-- Facebook -->
-      <a class="issm-net-btn" id="issm-fb" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="#1877F2">
-          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-        </svg>
+      <a class="issm-btn" id="issm-fb" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
         <span>Facebook</span>
       </a>
 
-      <!-- Reddit -->
-      <a class="issm-net-btn" id="issm-rd" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="#FF4500">
-          <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/>
-        </svg>
+      <a class="issm-btn" id="issm-rd" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="#FF4500"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
         <span>Reddit</span>
       </a>
 
-      <!-- Instagram — Web Share API com imagem do item via canvas -->
-      <button class="issm-net-btn" id="issm-ig" type="button">
-        <svg viewBox="0 0 24 24" fill="url(#issm-ig-grad)">
+      <button class="issm-btn" id="issm-ig" type="button">
+        <svg viewBox="0 0 24 24" fill="url(#issmIgG)">
           <defs>
-            <linearGradient id="issm-ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%"   style="stop-color:#f09433"/>
-              <stop offset="25%"  style="stop-color:#e6683c"/>
-              <stop offset="50%"  style="stop-color:#dc2743"/>
-              <stop offset="75%"  style="stop-color:#cc2366"/>
-              <stop offset="100%" style="stop-color:#bc1888"/>
+            <linearGradient id="issmIgG" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%"   stop-color="#f09433"/><stop offset="25%"  stop-color="#e6683c"/>
+              <stop offset="50%"  stop-color="#dc2743"/><stop offset="75%"  stop-color="#cc2366"/>
+              <stop offset="100%" stop-color="#bc1888"/>
             </linearGradient>
           </defs>
           <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>
@@ -1206,158 +1140,86 @@ document.addEventListener("DOMContentLoaded", () => {
         <span>Instagram</span>
       </button>
 
-    </div><!-- /issm-grid -->
-
+    </div>
     <button id="issm-close" type="button">Fechar</button>
   </div>
 </div>
 
-<!-- ── Lógica JS ── -->
 <script>
-(function () {
-  'use strict';
-
-  var DOWNLOAD_URL = 'https://aden-rpg.pages.dev/download';
-
-  /* ─────────────────────────────────────────────────────────────
-     Extrai a imagem já carregada no modal (#issm-item-img)
-     para um File via canvas (sem segundo fetch, sem CORS duplo).
-     O atributo crossorigin="anonymous" no <img> garante que o
-     canvas não fique "tainted".
-  ──────────────────────────────────────────────────────────────── */
-  function _issmImgToFile(imgEl, name) {
-    return new Promise(function (resolve) {
-      try {
-        // Aguarda carregamento se ainda não terminou
-        function draw() {
-          try {
-            var canvas = document.createElement('canvas');
-            canvas.width  = imgEl.naturalWidth  || 256;
-            canvas.height = imgEl.naturalHeight || 256;
-            canvas.getContext('2d').drawImage(imgEl, 0, 0);
-            canvas.toBlob(function (blob) {
-              resolve(blob
-                ? new File([blob], 'aden_' + (name || 'item') + '.png', { type: 'image/png' })
-                : null);
-            }, 'image/png');
-          } catch (e) {
-            resolve(null); // canvas tainted ou erro — segue sem imagem
-          }
-        }
-        if (imgEl.complete && imgEl.naturalWidth > 0) {
-          draw();
-        } else {
-          imgEl.addEventListener('load',  draw, { once: true });
-          imgEl.addEventListener('error', function () { resolve(null); }, { once: true });
-        }
-      } catch (e) { resolve(null); }
-    });
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     API pública: chamada pelo inventory.js após cada ação
-  ──────────────────────────────────────────────────────────────── */
-  window.showItemActionSuccess = function (action, ctx) {
-    var title, shareText, sparkle;
-
+function showItemActionSuccess(action, ctx) {
+    var DL = 'https://aden-rpg.pages.dev/download';
+    var title, text, sparkle;
     if (action === 'craft') {
-      title     = 'Item Criado!';
-      sparkle   = '✦ ✦ ✦';
-      shareText = 'Eu acabei de criar ' + ctx.itemName + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
+        title = 'Item Criado!'; sparkle = '✦ ✦ ✦';
+        text = 'Eu acabei de criar ' + ctx.itemName + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
     } else if (action === 'level') {
-      title     = 'Item Evoluído!';
-      sparkle   = '⬆ ⬆ ⬆';
-      shareText = 'Eu acabei de evoluir ' + ctx.itemName + ' para o nível ' + ctx.level + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
+        title = 'Item Evoluído!'; sparkle = '⬆ ⬆ ⬆';
+        text = 'Eu acabei de evoluir ' + ctx.itemName + ' para o nível ' + ctx.level + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
     } else if (action === 'refine') {
-      title     = 'Item Refinado!';
-      sparkle   = '★ ★ ★';
-      shareText = 'Eu acabei de refinar ' + ctx.itemName + ' para ' + ctx.stars + ' ★ em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
-    } else {
-      return;
-    }
+        title = 'Item Refinado!'; sparkle = '★ ★ ★';
+        text = 'Eu acabei de refinar ' + ctx.itemName + ' para ' + ctx.stars + ' ★ em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
+    } else { return; }
 
-    var encUrl  = encodeURIComponent(DOWNLOAD_URL);
-    var encFull = encodeURIComponent(shareText + ' ' + DOWNLOAD_URL);
-    var encText = encodeURIComponent(shareText);
+    var eUrl  = encodeURIComponent(DL);
+    var eFull = encodeURIComponent(text + ' ' + DL);
+    var eText = encodeURIComponent(text);
 
-    /* Preenche o modal */
     document.getElementById('issm-sparkle').textContent = sparkle;
     document.getElementById('issm-title').textContent   = title;
-    document.getElementById('issm-msg').textContent     = shareText;
+    document.getElementById('issm-msg').textContent     = text;
 
-    /* Carrega a imagem do item (crossorigin já está no elemento) */
-    var imgEl = document.getElementById('issm-item-img');
-    imgEl.src = ctx.itemImageUrl || '';
-    imgEl.dataset.imgName = ctx.itemImageName || 'item';
+    var img = document.getElementById('issm-item-img');
+    img.src = ctx.itemImageUrl || '';
+    img.dataset.name = ctx.itemImageName || 'item';
 
-    /* Links das redes (URL + texto apenas — preview via og:image do /download) */
-    document.getElementById('issm-wa').href = 'https://wa.me/?text=' + encFull;
-    document.getElementById('issm-tg').href = 'https://t.me/share/url?url=' + encUrl + '&text=' + encText;
-    document.getElementById('issm-tw').href = 'https://twitter.com/intent/tweet?text=' + encFull;
-    document.getElementById('issm-fb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encUrl;
-    document.getElementById('issm-rd').href = 'https://www.reddit.com/submit?url=' + encUrl + '&title=' + encText;
+    document.getElementById('issm-wa').href = 'https://wa.me/?text=' + eFull;
+    document.getElementById('issm-tg').href = 'https://t.me/share/url?url=' + eUrl + '&text=' + eText;
+    document.getElementById('issm-tw').href = 'https://twitter.com/intent/tweet?text=' + eFull;
+    document.getElementById('issm-fb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + eUrl;
+    document.getElementById('issm-rd').href = 'https://www.reddit.com/submit?url=' + eUrl + '&title=' + eText;
 
-    /* Exibe o overlay */
     document.getElementById('issm-overlay').style.display = 'flex';
-  };
+}
 
-  /* ─────────────────────────────────────────────────────────────
-     Botão Instagram — Web Share API com arquivo de imagem
-  ──────────────────────────────────────────────────────────────── */
-  document.getElementById('issm-ig').addEventListener('click', async function () {
-    var msgEl   = document.getElementById('issm-msg');
-    var imgEl   = document.getElementById('issm-item-img');
-    var imgName = imgEl.dataset.imgName || 'item';
-    var text    = (msgEl ? msgEl.textContent : '') || '';
-    var fullText = text + ' ' + DOWNLOAD_URL;
+document.getElementById('issm-ig').addEventListener('click', async function () {
+    var DL  = 'https://aden-rpg.pages.dev/download';
+    var img = document.getElementById('issm-item-img');
+    var txt = document.getElementById('issm-msg').textContent || '';
+    var nm  = img.dataset.name || 'item';
 
-    /* Desktop / sem suporte nativo */
     if (!navigator.share) {
-      try { await navigator.clipboard.writeText(fullText); } catch (e) {}
-      alert('Link copiado!\nCole no Instagram para compartilhar.');
-      return;
+        try { await navigator.clipboard.writeText(txt + ' ' + DL); } catch(e) {}
+        alert('Link copiado! Cole no Instagram para compartilhar.');
+        return;
     }
-
-    /* Tenta incluir a imagem do item como arquivo (canvas → blob → File) */
-    var sharePayload = { text: text, url: DOWNLOAD_URL };
-
+    var pl = { text: txt, url: DL };
     try {
-      var file = await _issmImgToFile(imgEl, imgName);
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        /* Com arquivo: remove url para máxima compatibilidade (alguns apps ignoram
-           url quando files está presente, outros aceitam os dois) */
-        sharePayload = { text: text, files: [file] };
-      }
-    } catch (e) {
-      /* segue com URL apenas */
-    }
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth || 256; c.height = img.naturalHeight || 256;
+        c.getContext('2d').drawImage(img, 0, 0);
+        await new Promise(function(res) {
+            c.toBlob(function(blob) {
+                if (blob) {
+                    var f = new File([blob], 'aden_' + nm + '.png', { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [f] })) pl = { text: txt, files: [f] };
+                }
+                res();
+            }, 'image/png');
+        });
+    } catch(e) {}
+    try { await navigator.share(pl); } catch(e) { if (e.name !== 'AbortError') console.warn(e); }
+});
 
-    try {
-      await navigator.share(sharePayload);
-    } catch (e) {
-      if (e.name !== 'AbortError') console.warn('Share error:', e);
-    }
-  });
-
-  /* ─────────────────────────────────────────────────────────────
-     Fechar o modal
-  ──────────────────────────────────────────────────────────────── */
-  function _issmClose() {
+document.getElementById('issm-close').addEventListener('click', function () {
     document.getElementById('issm-overlay').style.display = 'none';
-  }
-
-  document.getElementById('issm-close').addEventListener('click', _issmClose);
-  document.getElementById('issm-overlay').addEventListener('click', function (e) {
-    if (e.target === this) _issmClose();
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' &&
-        document.getElementById('issm-overlay').style.display !== 'none') {
-      _issmClose();
-    }
-  });
-
-})();
+});
+document.getElementById('issm-overlay').addEventListener('click', function (e) {
+    if (e.target === this) this.style.display = 'none';
+});
+document.addEventListener('keydown', function (e) {
+    var ov = document.getElementById('issm-overlay');
+    if (e.key === 'Escape' && ov && ov.style.display !== 'none') ov.style.display = 'none';
+});
 </script>
 
 </body>

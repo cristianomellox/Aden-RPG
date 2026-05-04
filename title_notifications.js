@@ -43,7 +43,7 @@ function injectStyles() {
             max-width: 90vw;
         }
         #titleNotificationBanner.show {
-            animation: slideTitleBanner 7s linear forwards;
+            animation: slideTitleBanner 6s linear forwards;
         }
         #titleNotificationBanner.royal-announcement {
             border-left: 4px solid #ff4444; /* Cor diferente para o Rei */

@@ -1147,9 +1147,37 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
 
 <script>
+/**
+ * Monta a URL de compartilhamento que aponta para a Pages Function
+ * /compartilhar com os parâmetros do item.
+ * Bots de redes sociais vão ler os OG meta tags dinâmicos dessa URL.
+ * Humanos que clicarem no link são redirecionados para /download.
+ */
+function buildShareUrl(action, ctx) {
+    var BASE = 'https://aden-rpg.pages.dev';
+
+    // Extrai o número de estrelas diretamente da URL da imagem do item
+    // Ex: ".../Espada_5estrelas.webp" → "5"
+    var m = (ctx.itemImageUrl || '').match(/_(\d+)estrelas\.webp$/i);
+    var imgEstrelas = m ? m[1] : (ctx.stars ? String(ctx.stars) : '1');
+
+    var params = new URLSearchParams({
+        acao:     action,
+        nome:     ctx.itemImageName  || '',   // nome interno → caminho da imagem
+        display:  ctx.itemName       || '',   // nome de exibição → textos dos meta tags
+        estrelas: imgEstrelas
+    });
+
+    if (action === 'level'  && ctx.level)  params.set('nivel', ctx.level);
+    if (action === 'refine' && ctx.stars)  params.set('estrelas', String(ctx.stars));
+
+    return BASE + '/compartilhar?' + params.toString();
+}
+
 function showItemActionSuccess(action, ctx) {
     var DL = 'https://aden-rpg.pages.dev/download';
     var title, text, sparkle;
+
     if (action === 'craft') {
         title = 'Item Criado!'; sparkle = '✦ ✦ ✦';
         text = 'Eu acabei de criar ' + ctx.itemName + ' em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
@@ -1161,8 +1189,14 @@ function showItemActionSuccess(action, ctx) {
         text = 'Eu acabei de refinar ' + ctx.itemName + ' para ' + ctx.stars + ' ★ em Aden RPG Online! Venha fazer parte dessa jornada! Baixe agora!';
     } else { return; }
 
-    var eUrl  = encodeURIComponent(DL);
-    var eFull = encodeURIComponent(text + ' ' + DL);
+    // ── URL de compartilhamento com OG dinâmico ──────────────────────────
+    // shareUrl aponta para /compartilhar?... (Pages Function com og:image do item)
+    // O bot da rede social crawleia ESSA URL e vê a imagem certa.
+    // Humanos que clicam no link são redirecionados para /download.
+    var shareUrl = buildShareUrl(action, ctx);
+
+    var eUrl  = encodeURIComponent(shareUrl);
+    var eFull = encodeURIComponent(text + ' ' + shareUrl);
     var eText = encodeURIComponent(text);
 
     document.getElementById('issm-sparkle').textContent = sparkle;
@@ -1170,8 +1204,9 @@ function showItemActionSuccess(action, ctx) {
     document.getElementById('issm-msg').textContent     = text;
 
     var img = document.getElementById('issm-item-img');
-    img.src = ctx.itemImageUrl || ''; // src é atribuído AQUI, só quando abre o modal
-    img.dataset.name = ctx.itemImageName || 'item';
+    img.src = ctx.itemImageUrl || '';
+    img.dataset.name    = ctx.itemImageName || 'item';
+    img.dataset.shareUrl = shareUrl; // guarda para o botão do Instagram
 
     document.getElementById('issm-wa').href = 'https://wa.me/?text=' + eFull;
     document.getElementById('issm-tg').href = 'https://t.me/share/url?url=' + eUrl + '&text=' + eText;
@@ -1183,20 +1218,22 @@ function showItemActionSuccess(action, ctx) {
 }
 
 document.getElementById('issm-ig').addEventListener('click', async function () {
-    var DL  = 'https://aden-rpg.pages.dev/download';
-    var img = document.getElementById('issm-item-img');
-    var txt = document.getElementById('issm-msg').textContent || '';
-    var nm  = img.dataset.name || 'item';
+    var img      = document.getElementById('issm-item-img');
+    var txt      = document.getElementById('issm-msg').textContent || '';
+    var nm       = img.dataset.name     || 'item';
+    // Usa a shareUrl com OG dinâmico; fallback para /download
+    var shareUrl = img.dataset.shareUrl || 'https://aden-rpg.pages.dev/download';
 
     if (!navigator.share) {
-        try { await navigator.clipboard.writeText(txt + ' ' + DL); } catch(e) {}
+        try { await navigator.clipboard.writeText(txt + ' ' + shareUrl); } catch(e) {}
         alert('Link copiado! Cole no Instagram para compartilhar.');
         return;
     }
-    var pl = { text: txt, url: DL };
+    var pl = { text: txt, url: shareUrl };
     try {
         var c = document.createElement('canvas');
-        c.width = img.naturalWidth || 256; c.height = img.naturalHeight || 256;
+        c.width  = img.naturalWidth  || 256;
+        c.height = img.naturalHeight || 256;
         c.getContext('2d').drawImage(img, 0, 0);
         await new Promise(function(res) {
             c.toBlob(function(blob) {
@@ -1222,6 +1259,7 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && ov && ov.style.display !== 'none') ov.style.display = 'none';
 });
 </script>
+
 
 </body>
 </html>

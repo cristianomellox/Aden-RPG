@@ -46,6 +46,13 @@ const GlobalDB = {
 };
 
 // =========================================================
+// >>> CONTROLE DE PRIMEIRO CADASTRO (Modal obrigatório) <<<
+// =========================================================
+// Flag que indica se o modal está em modo "onboarding" obrigatório.
+// Enquanto true, o botão Fechar e o ESC ficam bloqueados.
+let isNewUserSetup = false;
+
+// =========================================================
 // >>> CLOUDINARY UPLOAD FUNCTION <<<
 // =========================================================
 async function uploadAvatarAoCloudinary(file) {
@@ -201,6 +208,30 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- FUNÇÃO DE UPDATE DO MODAL ---
     window.updateProfileEditModal = (playerData) => {
         if (playerData) {
+            // Detecta novo usuário pelo padrão de nome padrão gerado no cadastro
+            const isFirstSetup = /^Nome_[0-9a-fA-F]{6}$/.test(playerData.name);
+            isNewUserSetup = isFirstSetup;
+
+            // Aplica o modo travado ou libera o modal
+            if (profileEditModal) {
+                if (isFirstSetup) {
+                    profileEditModal.setAttribute('data-locked', 'true');
+                } else {
+                    profileEditModal.removeAttribute('data-locked');
+                }
+            }
+
+            // Mostra/oculta o botão de fechar conforme o modo
+            if (closeProfileModalBtn) {
+                closeProfileModalBtn.style.display = isFirstSetup ? 'none' : '';
+            }
+
+            // Mensagem de boas-vindas diferente para novos jogadores
+            if (isFirstSetup && profileEditMessage) {
+                profileEditMessage.style.color = '#c9a94a';
+                profileEditMessage.textContent = '⚔️ Bem-vindo(a)! Escolha seu nome, gênero, facção e avatar para começar sua jornada.';
+            }
+
             let currentName = playerData.name;
             let iconPrefix = "";
 
@@ -224,7 +255,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
             
-            if (editPlayerNameInput) editPlayerNameInput.value = currentName;
+            if (editPlayerNameInput) {
+                // Para novos usuários, limpa o campo para forçar um nome próprio
+                editPlayerNameInput.value = isNewUserSetup ? '' : currentName;
+            }
             if (editPlayerFactionSelect) editPlayerFactionSelect.value = playerData.faction;
             if (editPlayerGenderSelect) editPlayerGenderSelect.value = playerData.gender || "Masculino";
 
@@ -263,6 +297,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (closeProfileModalBtn) {
         closeProfileModalBtn.onclick = () => {
+            if (isNewUserSetup) {
+                // Impede fechar e dá um feedback visual
+                if (profileEditMessage) {
+                    profileEditMessage.style.color = '#ff9999';
+                    profileEditMessage.textContent = '⚠️ Você precisa configurar seu perfil antes de continuar!';
+                    // Pequeno tremor no modal para chamar atenção
+                    profileEditModal.classList.add('modal-shake');
+                    setTimeout(() => profileEditModal.classList.remove('modal-shake'), 500);
+                }
+                return;
+            }
             profileEditModal.style.display = 'none';
         };
     }
@@ -310,7 +355,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (error) throw error;
 
                 showFloatingMessage('Perfil atualizado com sucesso!');
-                
+
+                // Dispara o tutorial de onboarding somente no primeiro cadastro
+                const wasNewUser = isNewUserSetup;
+
+                // Libera o modo de primeiro cadastro
+                isNewUserSetup = false;
+                if (profileEditModal) profileEditModal.removeAttribute('data-locked');
+                if (closeProfileModalBtn) closeProfileModalBtn.style.display = '';
+
+                if (wasNewUser && window.AdenTutorial && !window.AdenTutorial.isDone()) {
+                    window.AdenTutorial.startOnboarding();
+                }
+
                 const finalName = (typeof data === 'string' && data.length > 0) ? data : rawName;
 
                 await GlobalDB.updatePlayerPartial({
@@ -344,5 +401,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveProfileBtn.textContent = 'Salvar Perfil';
             }
         };
+    }
+
+    // Bloqueia a tecla ESC quando o modal está travado (primeiro cadastro)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isNewUserSetup && profileEditModal.style.display === 'flex') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (profileEditMessage) {
+                profileEditMessage.style.color = '#ff9999';
+                profileEditMessage.textContent = '⚠️ Você precisa configurar seu perfil antes de continuar!';
+            }
+            profileEditModal.classList.add('modal-shake');
+            setTimeout(() => profileEditModal.classList.remove('modal-shake'), 500);
+        }
+    }, true); // capture=true para interceptar antes de outros handlers
+
+    // Sobrescreve o handler do script.js principal (que não tem ciência do modo travado)
+    // Isso garante que o botão Fechar seja controlado apenas por esta lógica.
+    const closeBtn = document.getElementById('closeProfileModalBtn');
+    if (closeBtn && !closeBtn._perfilEditPatched) {
+        closeBtn._perfilEditPatched = true;
+        // O onclick já foi definido acima; esta marcação evita duplo patch
     }
 });

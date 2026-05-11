@@ -1,12 +1,3 @@
-// tutorial_onboarding.js — Aden RPG Online  v3
-// ============================================================
-// Tutorial de onboarding — spotlight via 4 painéis bloqueadores.
-// Não mexe em z-index de nenhum elemento do jogo.
-// O "buraco" é criado por 4 divs que cobrem tudo EXCETO o alvo.
-//
-// INSTALAÇÃO — adicione antes do </body> em AMBAS as páginas:
-//   <script src="tutorial_onboarding.js"></script>
-// ============================================================
 
 (function () {
     'use strict';
@@ -223,10 +214,13 @@
 
     /* ─────────────────────────────────────────────────────────
        RECALCULA posição quando a janela redimensiona / scroll
+       — ignora se o elemento ficou fora da viewport (0x0)
     ───────────────────────────────────────────────────────── */
     function recalc() {
         if (!_curTarget) return;
         var r = _curTarget.getBoundingClientRect();
+        // Elemento oculto ou fora da viewport → não reposiciona
+        if (r.width === 0 && r.height === 0) return;
         layoutPanels(r);
         positionHints(r);
     }
@@ -421,14 +415,28 @@
     }
 
     function step2_Sword() {
-        function tryShow() {
-            if (getStep() !== '2') return true;
+        var _pid    = null;   // polling interval
+        var _obs    = null;   // MutationObserver
+        var _done   = false;  // garante que só exibe uma vez
+
+        function stopAll(origRenderUI) {
+            _done = true;
+            if (_pid) { clearInterval(_pid); _pid = null; }
+            if (_obs) { _obs.disconnect(); _obs = null; }
+            // restaura renderUI ao original
+            if (origRenderUI && window.renderUI !== origRenderUI) {
+                window.renderUI = origRenderUI;
+            }
+        }
+
+        function tryShow(origRenderUI) {
+            if (_done || getStep() !== '2') { stopAll(origRenderUI); return true; }
             var card = findSwordCard();
             if (!card) return false;
-
-            // Confirma que o card está visível na viewport
             var r = card.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) return false;
+            if (r.width === 0 || r.height === 0) return false; // ainda não visível
+
+            stopAll(origRenderUI); // para todos os mecanismos de busca ANTES de exibir
 
             showStep(card,
                 '⚔️ Esta é sua Espada de Ferro!\nToque nela para inspecioná-la.',
@@ -441,44 +449,43 @@
             return true;
         }
 
-        if (tryShow()) return;
+        // Tentativa imediata
+        if (tryShow(window.renderUI)) return;
 
-        // Hook em window.renderUI (exposto pelo inventory.js)
+        // Hook em window.renderUI (exposto pelo inventory.js linha 1524)
         var orig = window.renderUI;
         if (typeof orig === 'function') {
             window.renderUI = function () {
                 var r = orig.apply(this, arguments);
-                if (getStep() === '2') {
-                    window.renderUI = orig;
-                    setTimeout(tryShow, 60);
+                // Restaura antes de tentar para evitar recursão
+                window.renderUI = orig;
+                if (!_done && getStep() === '2') {
+                    setTimeout(function () { tryShow(orig); }, 60);
                 }
                 return r;
             };
         }
 
-        // MutationObserver na grid
+        // MutationObserver na grid (detecta quando itens são inseridos)
         var grid = document.getElementById('bagItemsGrid');
         if (grid) {
-            var obs1 = new MutationObserver(function () {
-                if (getStep() !== '2') { obs1.disconnect(); return; }
-                if (tryShow()) obs1.disconnect();
+            _obs = new MutationObserver(function () {
+                if (tryShow(orig)) _obs && _obs.disconnect();
             });
-            obs1.observe(grid, { childList: true });
-            addObs(obs1);
+            _obs.observe(grid, { childList: true });
+            addObs(_obs);
         }
 
-        // Polling de segurança
-        var pid = setInterval(function () {
-            if (getStep() !== '2') { clearInterval(pid); return; }
-            if (tryShow()) clearInterval(pid);
+        // Polling de segurança (15 s)
+        _pid = setInterval(function () {
+            if (tryShow(orig)) clearInterval(_pid);
         }, 375);
     }
 
     function step3_Equipar() {
         /*
-         * #itemDetailsModal tem z-index 1000 (abaixo dos nossos painéis em 10000).
-         * Usamos noOverlay: true — o modal do jogo já cobre a tela.
-         * A seta/tooltip (10001) ficam acima do modal.
+         * #itemDetailsModal z-index 1000 < nossos painéis (10000).
+         * noOverlay: true — o modal do jogo já cobre a tela.
          */
         function tryShow() {
             if (getStep() !== '3') return true;
@@ -492,7 +499,9 @@
                 function () {
                     setStep('4');
                     destroy();
-                    setTimeout(step4_Hamburger, 1200);
+                    // Após equipar, o jogo abre #customAlertModal ("Item equipado com sucesso.")
+                    // Esperamos o jogador clicar OK nesse modal antes de avançar.
+                    waitCustomAlertClose(step4_Hamburger);
                 },
                 { noOverlay: true }
             );
@@ -517,6 +526,37 @@
         }, 300);
     }
 
+    /*
+     * Aguarda o #customAlertModal ser fechado pelo jogador (clique em OK),
+     * depois chama callback. Timeout de segurança: 30 s.
+     */
+    function waitCustomAlertClose(callback) {
+        var alertModal = document.getElementById('customAlertModal');
+
+        // Se o modal não existir ou já estiver fechado, avança imediatamente
+        if (!alertModal || getComputedStyle(alertModal).display === 'none') {
+            setTimeout(callback, 300);
+            return;
+        }
+
+        // Observa o display do modal até ele fechar
+        var obsAlert = new MutationObserver(function () {
+            if (getComputedStyle(alertModal).display === 'none') {
+                obsAlert.disconnect();
+                clearTimeout(safetyTid);
+                setTimeout(callback, 300);
+            }
+        });
+        obsAlert.observe(alertModal, { attributes: true, attributeFilter: ['style'] });
+        addObs(obsAlert);
+
+        // Safety timeout: se o jogador demorar demais, avança mesmo assim
+        var safetyTid = setTimeout(function () {
+            obsAlert.disconnect();
+            callback();
+        }, 30000);
+    }
+
     function step4_Hamburger() {
         var btn = document.getElementById('menuToggleBtn');
         if (!btn) return;
@@ -533,15 +573,30 @@
 
     function step5_TelaInicial() {
         /*
-         * #leftSideMenu tem z-index 9999 — fica naturalmente acima dos painéis (10000)?
-         * NÃO — 9999 < 10000. Por isso usamos noOverlay: true aqui também.
-         * O menu já cobre visualmente a tela; seta/tooltip (10001) ficam acima do menu.
+         * #leftSideMenu z-index 9999 < nossos painéis (10000).
+         * noOverlay: true — o menu já cobre visualmente a tela.
+         * Seta/tooltip (10001) ficam acima do menu.
+         *
+         * IMPORTANTE: a.href no DOM vira URL absoluta (https://aden-rpg.pages.dev/index.html),
+         * então NÃO usamos [href="index.html"]. Buscamos pelo texto da <span>.
          */
+        function findTelaInicialLink() {
+            var menu = document.getElementById('leftSideMenu');
+            if (!menu || !menu.classList.contains('open')) return null;
+
+            var links = menu.querySelectorAll('a.menu-link');
+            for (var i = 0; i < links.length; i++) {
+                var span = links[i].querySelector('span');
+                if (span && span.textContent.trim() === 'Tela inicial') {
+                    return links[i];
+                }
+            }
+            return null;
+        }
+
         function tryShow() {
             if (getStep() !== '5') return true;
-            var menu = document.getElementById('leftSideMenu');
-            if (!menu || !menu.classList.contains('open')) return false;
-            var link = menu.querySelector('a[href="index.html"]');
+            var link = findTelaInicialLink();
             if (!link) return false;
 
             showStep(link,

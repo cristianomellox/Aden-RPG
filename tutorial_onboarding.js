@@ -51,7 +51,7 @@
         var s = document.createElement('style');
         s.id = '_atcss';
         s.textContent = [
-            '._atp{position:fixed;z-index:' + Z + ';background:rgba(0,0,0,.82);pointer-events:all}',
+            '._atp{position:fixed;z-index:' + Z + ';background:rgba(0,0,0,.82);pointer-events:all;touch-action:pan-y}',
             '#_atar{position:fixed;z-index:' + (Z+1) + ';pointer-events:none;',
             '  animation:_atB .9s ease-in-out infinite;',
             '  filter:drop-shadow(0 0 8px rgba(255,215,0,.8))}',
@@ -83,8 +83,8 @@
             for (var i = 0; i < 4; i++) {
                 var p = document.createElement('div');
                 p.className = '_atp';
-                p.addEventListener('click',      blockEv, true);
-                p.addEventListener('touchstart', blockEv, { capture: true, passive: false });
+                p.addEventListener('click', blockEv, true);
+                // NÃO bloqueia touchstart → permite scroll vertical nos painéis
                 document.body.appendChild(p);
                 _panels.push(p);
             }
@@ -193,6 +193,11 @@
         if (!_curTarget) return;
         var r = _curTarget.getBoundingClientRect();
         if (r.width === 0 && r.height === 0) return; // elemento oculto: não reposiciona
+        var vh = window.innerHeight;
+        var vw = window.innerWidth;
+        // Se o alvo estiver completamente fora da viewport (ex: abaixo do fold),
+        // não relayouta os painéis — evita o painel superior cobrir a tela toda.
+        if (r.top > vh || r.bottom < 0 || r.left > vw || r.right < 0) return;
         layoutPanels(r);
         positionHints(r);
     }
@@ -415,39 +420,81 @@
     }
 
     function step2_Sword() {
-        var done = false;   // garante exibição única
+        var done = false;
         var pid  = null;
         var obsGrid = null;
+        var obsModal = null;
         var origRenderUI = null;
 
+        // Encerra TUDO. Chamado quando o usuário tocou a espada (modal abriu)
+        // ou o passo mudou externamente.
         var cleanup = function () {
+            if (done) return;
             done = true;
             if (pid) { clearInterval(pid); pid = null; }
-            if (obsGrid) { obsGrid.disconnect(); obsGrid = null; }
-            // restaura renderUI ao original
+            if (obsGrid)  { obsGrid.disconnect();  obsGrid  = null; }
+            if (obsModal) { obsModal.disconnect(); obsModal = null; }
             if (origRenderUI && typeof origRenderUI === 'function') {
                 window.renderUI = origRenderUI;
                 origRenderUI = null;
             }
         };
 
+        // Avança para o passo 3. Única saída de sucesso do step2.
+        var advance = function () {
+            if (done) return;
+            cleanup();
+            setStep('3');
+            destroy();
+            setTimeout(step3_Equipar, 150);
+        };
+
+        // ── Detector primário: itemDetailsModal abre ──────────────────────────
+        // Independe de qual elemento exato o usuário tocou. Se o modal da espada
+        // abre, é prova suficiente de que o usuário inspecionou o item.
+        var checkModal = function () {
+            if (done || getStep() !== '2') { cleanup(); return; }
+            var modal = document.getElementById('itemDetailsModal');
+            if (modal && getComputedStyle(modal).display !== 'none') {
+                advance();
+            }
+        };
+
+        var modal = document.getElementById('itemDetailsModal');
+        if (modal) {
+            obsModal = new MutationObserver(checkModal);
+            obsModal.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+            addObs(obsModal);
+        }
+
+        // ── Spotlight visual: mostra onde está a espada ───────────────────────
+        var stopPolling = function () {
+            if (pid) { clearInterval(pid); pid = null; }
+            if (obsGrid)  { obsGrid.disconnect();  obsGrid  = null; }
+        };
+
         var tryShow = function () {
             if (done || getStep() !== '2') { cleanup(); return true; }
+
+            // Antes de exibir o spotlight, já verifica se o modal abriu
+            // (pode ter acontecido entre ciclos de polling)
+            checkModal();
+            if (done) return true;
+
             var card = findSwordCard();
             if (!card) return false;
             var r = card.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) return false; // ainda fora da viewport
+            if (r.width === 0 || r.height === 0) return false;
 
-            cleanup(); // para TODOS os mecanismos antes de exibir
+            stopPolling();
 
+            // Listener de clique no card como reforço ao obsModal.
+            // Se o card correto for encontrado e clicado, avança imediatamente
+            // sem esperar o MutationObserver do modal.
             showStep(
                 card,
                 '⚔️ Esta é sua Espada de Ferro!\nToque nela para inspecioná-la.',
-                function () {
-                    setStep('3');
-                    destroy();
-                    setTimeout(step3_Equipar, 350);
-                }
+                function () { advance(); }
             );
             return true;
         };
@@ -455,26 +502,21 @@
         // Tentativa imediata
         if (tryShow()) return;
 
-        // Hook em window.renderUI (exposto pelo inventory.js)
+        // Hook em window.renderUI — sobrevive a re-renders do grid
         origRenderUI = window.renderUI;
         if (typeof origRenderUI === 'function') {
             window.renderUI = function () {
                 var result = origRenderUI.apply(this, arguments);
-                // Restaura antes de tentar (evita recursão)
-                window.renderUI = origRenderUI;
-                origRenderUI = null;
-                if (!done && getStep() === '2') {
-                    setTimeout(tryShow, 60);
-                }
+                if (!done && getStep() === '2') setTimeout(tryShow, 60);
                 return result;
             };
         }
 
-        // MutationObserver na grid
+        // MutationObserver no grid
         var grid = document.getElementById('bagItemsGrid');
         if (grid) {
             obsGrid = new MutationObserver(function () {
-                if (tryShow()) { if (obsGrid) obsGrid.disconnect(); }
+                if (!done && getStep() === '2') setTimeout(tryShow, 60);
             });
             obsGrid.observe(grid, { childList: true });
             addObs(obsGrid);
@@ -510,8 +552,12 @@
                 function () {
                     setStep('4');
                     destroy();
-                    // Espera o modal de sucesso do jogo fechar antes de avançar
-                    waitCustomAlertClose(step4_Hamburger);
+                    // Aguarda 600 ms para o jogo abrir o modal de sucesso antes de observá-lo.
+                    // Sem esse delay, waitCustomAlertClose detecta o modal fechado prematuramente
+                    // e avança o tutorial antes do modal aparecer, causando conflito de overlay.
+                    setTimeout(function () {
+                        waitCustomAlertClose(step4_Hamburger);
+                    }, 600);
                 },
                 { noOverlay: true }
             );
@@ -582,8 +628,9 @@
                 function () {
                     setStep('6');
                     destroy();
-                },
-                { noOverlay: true } // leftSideMenu já cobre visualmente a tela
+                }
+                // Sem noOverlay: os painéis criam o "spotlight" em volta de "Tela inicial",
+                // evitando que a seta apareça na posição visual do 3º item do menu.
             );
             return true;
         };

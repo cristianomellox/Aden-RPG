@@ -550,13 +550,11 @@
                 btn,
                 '✅ Agora toque em "Equipar"\npara usar sua espada!',
                 function () {
-                    setStep('4');
+                    setStep('3b');
                     destroy();
                     // Aguarda 600 ms para o jogo abrir o modal de sucesso antes de observá-lo.
-                    // Sem esse delay, waitCustomAlertClose detecta o modal fechado prematuramente
-                    // e avança o tutorial antes do modal aparecer, causando conflito de overlay.
                     setTimeout(function () {
-                        waitCustomAlertClose(step4_Hamburger);
+                        waitCustomAlertClose(step3b_OutrosTab);
                     }, 600);
                 },
                 { noOverlay: true }
@@ -577,6 +575,170 @@
 
         pid3 = setInterval(function () {
             if (tryShow()) clearInterval(pid3);
+        }, 300);
+    }
+
+    /* ─── step3b: guia para a aba "Outros" ─────────────────────────────── */
+    function step3b_OutrosTab() {
+        var btn = document.getElementById('tab-others');
+        if (!btn) { setStep('3c'); step3c_FoxFrame(); return; }
+        showStep(
+            btn,
+            '🎨 Agora abra a aba "Outros"\npara ver suas molduras!',
+            function () {
+                setStep('3c');
+                destroy();
+                setTimeout(step3c_FoxFrame, 300);
+            }
+        );
+    }
+
+    /* ─── step3c: guia para tocar no card da moldura de raposa ──────────── */
+    function step3c_FoxFrame() {
+        var done = false;
+        var pid  = null;
+        var obsGrid  = null;
+        var obsBtn   = null;
+
+        var cleanup = function () {
+            if (done) return;
+            done = true;
+            if (pid)     { clearInterval(pid); pid = null; }
+            if (obsGrid) { obsGrid.disconnect(); obsGrid = null; }
+            if (obsBtn)  { obsBtn.disconnect();  obsBtn  = null; }
+        };
+
+        var advance = function () {
+            if (done) return;
+            cleanup();
+            setStep('3d');
+            destroy();
+            setTimeout(step3d_AtivarMoldura, 150);
+        };
+
+        // Detector primário: activateSkinBtn fica visível → skin modal abriu
+        var checkSkinBtn = function () {
+            if (done || getStep() !== '3c') { cleanup(); return; }
+            var btn = document.getElementById('activateSkinBtn');
+            if (btn && getComputedStyle(btn).display !== 'none') advance();
+        };
+
+        var skinBtn = document.getElementById('activateSkinBtn');
+        if (skinBtn) {
+            obsBtn = new MutationObserver(checkSkinBtn);
+            obsBtn.observe(skinBtn, { attributes: true, attributeFilter: ['style'] });
+            addObs(obsBtn);
+        }
+
+        // Encontra o card da moldura de raposa (item_id = 128) no grid
+        var findFoxCard = function () {
+            var grid = document.getElementById('bagItemsGrid');
+            if (!grid) return null;
+            var items = window.allInventoryItems;
+            if (items) {
+                for (var i = 0; i < items.length; i++) {
+                    var itm   = items[i];
+                    var defId = itm.item_id || (itm.items && itm.items.id);
+                    if (defId == 128) {
+                        var card = grid.querySelector('[data-inventory-item-id="' + itm.id + '"]');
+                        if (card) return card;
+                    }
+                }
+            }
+            // Fallback: nome da imagem
+            var cards = grid.querySelectorAll('.inventory-item[data-inventory-item-id]');
+            for (var j = 0; j < cards.length; j++) {
+                var img = cards[j].querySelector('img');
+                if (!img) continue;
+                var txt = ((img.src || '') + ' ' + (img.alt || '')).toLowerCase();
+                if (txt.indexOf('raposa') !== -1 || txt.indexOf('fox') !== -1) return cards[j];
+            }
+            return null;
+        };
+
+        var tryShow = function () {
+            if (done || getStep() !== '3c') { cleanup(); return true; }
+            checkSkinBtn(); if (done) return true;
+
+            var card = findFoxCard();
+            if (!card) return false;
+            var r = card.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) return false;
+
+            if (pid) { clearInterval(pid); pid = null; }
+            if (obsGrid) { obsGrid.disconnect(); obsGrid = null; }
+
+            showStep(
+                card,
+                '🦊 Esta é a Moldura de Raposa!\nToque nela para ativá-la.',
+                function () { advance(); }
+            );
+            return true;
+        };
+
+        if (tryShow()) return;
+
+        // MutationObserver no grid
+        var grid = document.getElementById('bagItemsGrid');
+        if (grid) {
+            obsGrid = new MutationObserver(function () {
+                if (!done && getStep() === '3c') setTimeout(tryShow, 60);
+            });
+            obsGrid.observe(grid, { childList: true });
+            addObs(obsGrid);
+        }
+
+        // Polling de segurança (16 s)
+        pid = setInterval(function () {
+            if (tryShow()) clearInterval(pid);
+        }, 375);
+    }
+
+    /* ─── step3d: guia para tocar em "Ativar" na modal da moldura ───────── */
+    function step3d_AtivarMoldura() {
+        var pid3d = null;
+        var obs3d = null;
+
+        var tryShow = function () {
+            if (getStep() !== '3d') {
+                if (pid3d) clearInterval(pid3d);
+                if (obs3d) obs3d.disconnect();
+                return true;
+            }
+            var btn = document.getElementById('activateSkinBtn');
+            if (!btn || getComputedStyle(btn).display === 'none') return false;
+
+            if (pid3d) clearInterval(pid3d);
+            if (obs3d) obs3d.disconnect();
+
+            showStep(
+                btn,
+                '✨ Toque em "Ativar" para\nequipar sua Moldura de Raposa!',
+                function () {
+                    setStep('4');
+                    destroy();
+                    setTimeout(function () {
+                        waitCustomAlertClose(step4_Hamburger);
+                    }, 600);
+                },
+                { noOverlay: true }
+            );
+            return true;
+        };
+
+        if (tryShow()) return;
+
+        var skinBtn = document.getElementById('activateSkinBtn');
+        if (skinBtn) {
+            obs3d = new MutationObserver(function () {
+                if (tryShow()) { if (obs3d) obs3d.disconnect(); }
+            });
+            obs3d.observe(skinBtn, { attributes: true, attributeFilter: ['style'] });
+            addObs(obs3d);
+        }
+
+        pid3d = setInterval(function () {
+            if (tryShow()) clearInterval(pid3d);
         }, 300);
     }
 
@@ -697,10 +859,13 @@
 
         if (onInventory) {
             var invStep = null;
-            if (step === '2') invStep = step2_Sword;
-            if (step === '3') invStep = step3_Equipar;
-            if (step === '4') invStep = step4_Hamburger;
-            if (step === '5') invStep = step5_TelaInicial;
+            if (step === '2')  invStep = step2_Sword;
+            if (step === '3')  invStep = step3_Equipar;
+            if (step === '3b') invStep = step3b_OutrosTab;
+            if (step === '3c') invStep = step3c_FoxFrame;
+            if (step === '3d') invStep = step3d_AtivarMoldura;
+            if (step === '4')  invStep = step4_Hamburger;
+            if (step === '5')  invStep = step5_TelaInicial;
 
             if (invStep) {
                 // Delay para auth + cache do inventário inicializarem

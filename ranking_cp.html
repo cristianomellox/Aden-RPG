@@ -4,1357 +4,1475 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
   <meta name="robots" content="index,follow" />
-  <title>Ranking de Poder de Combate - Aden RPG</title>
+  <title>Rankings - Aden RPG</title>
   <style>
-    /* ... Estilos base (Intactos) ... */
-    body, html { margin:0;padding:0;height:100%;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;overflow-y:auto;
-      background:url('https://aden-rpg.pages.dev/assets/ranking_cp.webp') no-repeat center center fixed;background-size:cover;color:#e0dccc;
-      text-shadow: 1px 1px 2px #000;
-    }
-    #playerTopBar{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;background:linear-gradient(to bottom,#444,#222);color:#fff;min-height:44px;box-shadow:0 2px 5px rgba(0,0,0,0.5);}
-    #pageTitle{font-weight:700;font-size:1.1em;text-align:center;flex-grow:1;}
+    /* ===================================================================
+       BASE
+    =================================================================== */
+    body,html{margin:0;padding:0;height:100%;font-family:Arial,Helvetica,sans-serif;
+      display:flex;flex-direction:column;overflow-y:auto;
+      background:url('https://aden-rpg.pages.dev/assets/ranking_cp.webp') no-repeat center center fixed;
+      background-size:cover;color:#e0dccc;text-shadow:1px 1px 2px #000;}
+    #playerTopBar{display:flex;align-items:center;justify-content:space-between;padding:10px 15px;
+      background:linear-gradient(to bottom,#444,#222);color:#fff;min-height:44px;box-shadow:0 2px 5px rgba(0,0,0,.5);}
+    #pageTitle{font-weight:700;font-size:1.1em;text-align:center;flex-grow:1;transition:color .3s;}
     .top-bar-link{display:flex;align-items:center;color:white;text-decoration:none;}
-    
+
     #rankingContent{
-        flex-grow:1;
-        padding:20px;
-        width: 90vw;
-        max-width:999px;
-        margin:20px auto;
-        border-radius:10px;
-        box-shadow:0 0 20px rgba(0,0,0,0.8);
-        background-color: rgba(0,0,0,0.5);
-        /* Espaço extra para o rodapé fixo não cobrir o último item da lista */
-        padding-bottom: 90px;
-    }
+      flex-grow:1;padding:14px 14px 96px;width:90vw;max-width:999px;
+      margin:18px auto;border-radius:10px;
+      box-shadow:0 0 20px rgba(0,0,0,.8);background-color:rgba(0,0,0,.5);}
 
-    #rankingContent h2{color:#c9a94a;margin-top:0;font-size:1.6em;text-align:center;}
-    #atualiza {color:#fff;border-bottom:4px solid #c9a94a;margin-top:-20px!important;font-size:1em;text-align:center; margin-bottom: 15px;}
+    .loading{text-align:center;padding:20px;font-size:1.05em;opacity:.9;}
+    .pulse{animation:pulse 2s infinite;}
+    @keyframes pulse{0%{box-shadow:0 0 0 rgba(255,215,0,1);}70%{box-shadow:2px 2px 56px rgba(255,215,0,.9);}100%{box-shadow:0 0 0 rgba(255,215,0,.8);}}
+    .shimmer{background:linear-gradient(-90deg,#383838 0%,#444 50%,#383838 100%);background-size:400% 400%;animation:shimmer 1.2s ease-in-out infinite;color:transparent!important;}
+    @keyframes shimmer{0%{background-position:-100% 0}100%{background-position:100% 0}}
+    .shimmer::before{content:'\00a0';}
 
-    .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid rgba(201,169,74,0.6);}
-    .pulse{animation:pulse 2s infinite;} @keyframes pulse{0%{box-shadow:0 0 0px rgba(255,215,0,1);}70%{box-shadow:2px 2px 56px rgba(255,215,0,0.9);}100%{box-shadow:0 0 0 rgba(255,215,0,0.8);} }
-    .loading{text-align:center;padding:20px;font-size:1.05em;opacity:0.9;}
-    
-    @media(max-width:700px){.avatar{width:40px;height:40px;} }
+    /* ===================================================================
+       BARRA DE ABAS — entalhada em pedra escura com bordas douradas
+    =================================================================== */
+    #rankingTabBar{
+      display:flex;gap:5px;margin-bottom:16px;padding:5px;
+      background:linear-gradient(180deg,rgba(5,4,2,.88) 0%,rgba(18,14,6,.94) 100%);
+      border:1px solid rgba(201,169,74,.28);border-radius:8px;
+      box-shadow:inset 0 3px 14px rgba(0,0,0,.95),0 1px 0 rgba(201,169,74,.1);}
 
-    /* === ESTILOS DA LISTA E OLHO === */
-    #rankingListCP { list-style: none; padding: 0; margin: 0; width: 100%; max-width: 99vw; }
-    #rankingListCP li {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 10px 15px; border-bottom: 1px solid rgba(201,169,74,0.2);
-        background: rgba(20, 20, 20, 0.4); transition: background 0.2s ease;
-    }
-    #rankingListCP li:hover { background: rgba(201, 169, 74, 0.06); }
-    
-    .rank-position-cp { font-size: 1.1em; font-weight: bold; color: #FFC107; width: 40px; flex-shrink: 0; text-align: center; }
-    .rank-avatar-cp { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #888; margin-right: 10px; flex-shrink: 0; }
-    .rank-player-info-cp { flex-grow: 1; text-align: left; }
-    
-    /* Wrapper para nome e olho */
-    .rank-player-name-wrapper { display: flex; align-items: center; gap: 8px; }
-    
-    .rank-player-name-cp {
-        display: block; font-size: 1em; font-weight: bold; color: #e0dccc;
-        white-space: nowrap; overflow-x: hidden; text-overflow: ellipsis; max-width: 180px;
-        cursor: pointer;
-    }
-    .rank-player-name-cp:hover { color: gold; text-decoration: underline; }
-    
-    /* Olho Dourado SVG */
-    .rank-eye-icon {
-        width: 20px; height: 20px; fill: #fff; cursor: pointer; opacity: 0.8; transition: opacity 0.2s, transform 0.2s;
-    }
-    .rank-eye-icon:hover { opacity: 1; transform: scale(1.1); filter: drop-shadow(0 0 2px gold); }
+    .rank-tab{
+      flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:5px;padding:9px 4px 8px;
+      background:linear-gradient(180deg,#2e2519 0%,#1c1610 55%,#252010 100%);
+      border:1px solid rgba(80,60,25,.55);border-radius:5px;
+      color:#6e5e3a;cursor:pointer;
+      transition:background .22s,color .22s,border-color .22s,box-shadow .22s;
+      font-size:.62em;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+      min-width:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;}
+    .rank-tab svg{width:22px;height:22px;fill:currentColor;flex-shrink:0;transition:filter .22s;}
+    .rank-tab:hover{background:linear-gradient(180deg,#3c3020,#262010);color:#c9a94a;border-color:rgba(201,169,74,.42);}
+    .rank-tab.active{
+      background:linear-gradient(180deg,#5c4518 0%,#2e2008 50%,#4c3c12 100%);
+      border-color:#c9a94a;color:#ffd700;
+      box-shadow:0 0 14px rgba(201,169,74,.32),inset 0 1px 0 rgba(255,215,0,.13);}
+    .rank-tab.active svg{filter:drop-shadow(0 0 5px rgba(255,215,0,.85));}
+    .rank-tab.active::after{
+      content:'';position:absolute;bottom:0;left:15%;width:70%;height:2px;
+      background:linear-gradient(90deg,transparent,#ffd700,transparent);border-radius:1px;}
+    .rank-tab.active::before{
+      content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;
+      background:linear-gradient(105deg,transparent 30%,rgba(255,215,0,.07) 50%,transparent 70%);
+      animation:tabSheen 4s ease-in-out infinite;}
+    @keyframes tabSheen{0%{left:-60%;opacity:0}10%{opacity:1}90%{left:130%;opacity:1}100%{left:130%;opacity:0}}
 
-    .rank-guild-name-cp { display: block; font-size: 0.85em; color: lightblue; font-weight: bold; }
-    .rank-power-cp { font-size: 1.1em; font-weight: bold; color: #4CAF50; text-align: right; min-width: 120px; flex-shrink: 0; }
+    /* ===================================================================
+       PAINÉIS DE ABA
+    =================================================================== */
+    .ranking-panel{display:none;}
+    .ranking-panel.active{display:block;animation:panelFade .28s ease;}
+    @keyframes panelFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-    /* Top 3 Cores */
-    #rankingListCP li:nth-child(1) { background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09); border-left: 5px solid gold; }
-    #rankingListCP li:nth-child(1) .rank-position-cp, #rankingListCP li:nth-child(1) .rank-power-cp { color: #FFD700; font-size: 1.2em; text-shadow: 0 0 8px #FFD700, 0 0 15px #000; }
-    #rankingListCP li:nth-child(1) .rank-avatar-cp { border: 6px solid #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.7); }
+    .panel-heading{color:#c9a94a;margin:0 0 4px;font-size:1.4em;text-align:center;letter-spacing:.5px;}
+    .panel-subtext{color:#bbb;border-bottom:3px solid #c9a94a;font-size:.85em;text-align:center;margin:0 0 14px;padding-bottom:8px;}
 
-    #rankingListCP li:nth-child(2) { background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c); border-left: 5px solid silver; }
-    #rankingListCP li:nth-child(2) .rank-position-cp, #rankingListCP li:nth-child(2) .rank-power-cp { color: silver; font-size: 1.15em; text-shadow: 0 0 8px silver; }
-    #rankingListCP li:nth-child(2) .rank-avatar-cp { border: 6px solid silver; box-shadow: 0 0 10px rgba(192, 192, 192, 0.7); }
+    /* ===================================================================
+       LISTA CP (preservada igual ao original)
+    =================================================================== */
+    #rankingListCP{list-style:none;padding:0;margin:0;width:100%;max-width:99vw;}
+    #rankingListCP li{display:flex;align-items:center;justify-content:space-between;
+      padding:10px 15px;border-bottom:1px solid rgba(201,169,74,.2);
+      background:rgba(20,20,20,.4);transition:background .2s;}
+    #rankingListCP li:hover{background:rgba(201,169,74,.06);}
+    .rank-position-cp{font-size:1.1em;font-weight:bold;color:#FFC107;width:40px;flex-shrink:0;text-align:center;}
+    .rank-avatar-cp{width:45px;height:45px;border-radius:50%;border:2px solid #888;margin-right:10px;flex-shrink:0;object-fit:cover;}
+    .rank-player-info-cp{flex-grow:1;text-align:left;}
+    .rank-player-name-wrapper{display:flex;align-items:center;gap:8px;}
+    .rank-player-name-cp{display:block;font-size:1em;font-weight:bold;color:#e0dccc;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;cursor:pointer;}
+    .rank-player-name-cp:hover{color:gold;text-decoration:underline;}
+    .rank-guild-name-cp{display:block;font-size:.85em;color:lightblue;font-weight:bold;}
+    .rank-power-cp{font-size:1.1em;font-weight:bold;color:#4CAF50;text-align:right;min-width:120px;flex-shrink:0;}
+    .rank-eye-icon{width:20px;height:20px;fill:#fff;cursor:pointer;opacity:.8;transition:opacity .2s,transform .2s;flex-shrink:0;}
+    .rank-eye-icon:hover{opacity:1;transform:scale(1.1);filter:drop-shadow(0 0 2px gold);}
+    /* Top 3 CP */
+    #rankingListCP li:nth-child(1){background:linear-gradient(180deg,#b79c09,#8b7601,#b79c09);border-left:5px solid gold;}
+    #rankingListCP li:nth-child(1) .rank-position-cp,#rankingListCP li:nth-child(1) .rank-power-cp{color:#FFD700;font-size:1.2em;text-shadow:0 0 8px #FFD700,0 0 15px #000;}
+    #rankingListCP li:nth-child(1) .rank-avatar-cp{border:6px solid #FFD700;box-shadow:0 0 10px rgba(255,215,0,.7);}
+    #rankingListCP li:nth-child(2){background:linear-gradient(180deg,#a88c8c,#8b6363,#a88c8c);border-left:5px solid silver;}
+    #rankingListCP li:nth-child(2) .rank-position-cp,#rankingListCP li:nth-child(2) .rank-power-cp{color:silver;font-size:1.15em;text-shadow:0 0 8px silver;}
+    #rankingListCP li:nth-child(2) .rank-avatar-cp{border:6px solid silver;box-shadow:0 0 10px rgba(192,192,192,.7);}
+    #rankingListCP li:nth-child(3){background:linear-gradient(180deg,rgba(173,99,26,.5),rgba(152,81,11,.7),rgba(173,99,26,.5));border-left:5px solid #CD7F32;}
+    #rankingListCP li:nth-child(3) .rank-position-cp,#rankingListCP li:nth-child(3) .rank-power-cp{color:#CD7F32;font-size:1.1em;text-shadow:0 0 8px #CD7F32;}
+    #rankingListCP li:nth-child(3) .rank-avatar-cp{border:6px solid #CD7F32;box-shadow:0 0 10px rgba(205,127,50,.7);}
+    @media(max-width:700px){
+      .rank-player-name-cp{max-width:120px;font-size:.9em}
+      .rank-guild-name-cp{font-size:.75em}
+      .rank-power-cp{font-size:1em;min-width:90px}
+      #rankingListCP li{padding:8px 10px}}
 
-    #rankingListCP li:nth-child(3) { background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5)); border-left: 5px solid #CD7F32; }
-    #rankingListCP li:nth-child(3) .rank-position-cp, #rankingListCP li:nth-child(3) .rank-power-cp { color: #CD7F32; font-size: 1.1em; text-shadow: 0 0 8px #CD7F32; }
-    #rankingListCP li:nth-child(3) .rank-avatar-cp { border: 6px solid #CD7F32; box-shadow: 0 0 10px rgba(205, 127, 50, 0.7); }
-    
-    /* === BARRA FIXA DE RANKING DO JOGADOR === */
-    #fixedPlayerRank {
-        display: none;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        z-index: 990;
-        background: linear-gradient(to top, #141414, #2a2a2a);
-        border-top: 3px solid #c9a94a;
-        box-shadow: 0 -4px 15px rgba(0,0,0,0.9);
-    }
-    
-    /* Contêiner interno da barra fixa para limitar largura e alinhar */
-    #fixedPlayerRank .fixed-content-inner {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 15px;
-        width: 100%;
-        max-width: 1000px;
-        margin: 0 auto;
-        box-sizing: border-box; /* Garante que o padding não estoure a largura */
-    }
+    /* ===================================================================
+       LISTA UNIVERSAL  (Arena & Ruínas)
+    =================================================================== */
+    .rank-list-u{list-style:none;padding:0;margin:0;width:100%;}
+    .rli{display:flex;align-items:center;gap:10px;padding:10px 15px;
+      border-bottom:1px solid rgba(201,169,74,.14);background:rgba(18,15,8,.48);
+      transition:background .2s;animation:itemIn .3s ease both;}
+    .rli:hover{background:rgba(201,169,74,.07);}
+    @keyframes itemIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+    .rli:nth-child(1){animation-delay:.02s}.rli:nth-child(2){animation-delay:.05s}
+    .rli:nth-child(3){animation-delay:.08s}.rli:nth-child(4){animation-delay:.1s}
+    .rli:nth-child(5){animation-delay:.12s}
+    .rli.top-1{background:linear-gradient(90deg,rgba(183,156,9,.52) 0%,rgba(90,68,0,.28) 100%);border-left:4px solid #FFD700;}
+    .rli.top-2{background:linear-gradient(90deg,rgba(168,140,140,.42) 0%,rgba(80,60,60,.22) 100%);border-left:4px solid silver;}
+    .rli.top-3{background:linear-gradient(90deg,rgba(173,99,26,.38) 0%,rgba(80,40,8,.22) 100%);border-left:4px solid #CD7F32;}
+    .rli.is-me{outline:1px solid rgba(120,200,255,.28);}
+    .rli.footer-personal{background:rgba(10,20,35,.65);border-top:2px dashed rgba(100,160,255,.3);border-bottom:none;}
+    .rli-pos{font-size:1.05em;font-weight:bold;color:#FFC107;width:30px;flex-shrink:0;text-align:center;}
+    .rli-av{width:44px;height:44px;border-radius:50%;border:2px solid #666;flex-shrink:0;object-fit:cover;}
+    .rli.top-1 .rli-av{border-color:#FFD700;box-shadow:0 0 10px rgba(255,215,0,.65);animation:pulse 2s infinite;}
+    .rli.top-2 .rli-av{border-color:silver;}
+    .rli.top-3 .rli-av{border-color:#CD7F32;}
+    .rli-info{flex-grow:1;min-width:0;}
+    .rli-name{display:block;font-size:.97em;font-weight:bold;color:#e0dccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+    .rli-name:hover{color:gold;text-decoration:underline;}
+    .rli-guild{display:block;font-size:.8em;color:lightblue;font-weight:bold;}
+    .rli-val{font-weight:bold;text-align:right;flex-shrink:0;min-width:78px;font-size:1em;}
+    .val-arena{color:#FFD700;}
+    .val-ruins{color:#e53935;}
 
-    /* Cores ajustadas para o footer fixo */
-    #fixedPlayerRank .rank-position-cp { color: #fff; font-size: 1.3em; }
-    #fixedPlayerRank .rank-player-name-cp { color: #fff; font-size: 1.1em; }
-    #fixedPlayerRank .rank-guild-name-cp { color: #ddd; }
-    #fixedPlayerRank .rank-power-cp { color: #4CAF50; text-shadow: 0 0 3px black; font-size: 1.2em;}
-    #fixedPlayerRank .rank-avatar-cp { border: 2px solid #fff; box-shadow: 0 0 5px gold; }
+    /* ===================================================================
+       LISTA GUILDAS
+    =================================================================== */
+    .guild-rank-list{list-style:none;padding:0;margin:0;}
+    .gli{display:flex;align-items:center;gap:12px;padding:10px 15px;
+      border-bottom:1px solid rgba(201,169,74,.14);background:rgba(18,15,8,.48);
+      transition:background .2s;cursor:pointer;animation:itemIn .3s ease both;}
+    .gli:hover{background:rgba(201,169,74,.08);}
+    .gli.top-1{background:linear-gradient(90deg,rgba(183,156,9,.52) 0%,rgba(90,68,0,.28) 100%);border-left:4px solid #FFD700;}
+    .gli.top-2{background:linear-gradient(90deg,rgba(168,140,140,.42) 0%,rgba(80,60,60,.22) 100%);border-left:4px solid silver;}
+    .gli.top-3{background:linear-gradient(90deg,rgba(173,99,26,.38) 0%,rgba(80,40,8,.22) 100%);border-left:4px solid #CD7F32;}
+    .gli-pos{font-size:1.05em;font-weight:bold;color:#FFC107;width:30px;flex-shrink:0;text-align:center;}
+    .gli-flag{width:44px;height:44px;border-radius:6px;object-fit:cover;border:2px solid #666;flex-shrink:0;}
+    .gli.top-1 .gli-flag{border-color:#FFD700;box-shadow:0 0 8px rgba(255,215,0,.55);animation:pulse 2s infinite;}
+    .gli.top-2 .gli-flag{border-color:silver;}
+    .gli.top-3 .gli-flag{border-color:#CD7F32;}
+    .gli-info{flex-grow:1;min-width:0;}
+    .gli-name{display:block;font-size:.97em;font-weight:bold;color:#e0dccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .gli-power{font-size:1em;font-weight:bold;color:#FF9800;text-align:right;flex-shrink:0;min-width:80px;}
 
+    /* ===================================================================
+       BARRA FIXA DO JOGADOR
+    =================================================================== */
+    #fixedPlayerRank{display:none;position:fixed;bottom:0;left:0;width:100%;z-index:990;
+      background:linear-gradient(to top,#111,#222);border-top:3px solid #c9a94a;
+      box-shadow:0 -4px 15px rgba(0,0,0,.9);}
+    .fixed-content-inner{display:flex;align-items:center;justify-content:space-between;
+      padding:10px 15px;width:100%;max-width:1000px;margin:0 auto;box-sizing:border-box;}
+    #fixedPlayerRank .rank-position-cp{color:#fff;font-size:1.3em;}
+    #fixedPlayerRank .rank-player-name-cp{color:#fff;font-size:1.1em;}
+    #fixedPlayerRank .rank-guild-name-cp{color:#ddd;}
+    #fixedPlayerRank .rank-avatar-cp{border:2px solid #fff;box-shadow:0 0 5px gold;}
+    .fixed-val-cp{font-size:1.2em;font-weight:bold;color:#4CAF50;text-shadow:0 0 3px #000;min-width:90px;text-align:right;flex-shrink:0;}
+    .fixed-val-arena{font-size:1.2em;font-weight:bold;color:#FFD700;text-shadow:0 0 4px rgba(255,215,0,.5);min-width:90px;text-align:right;flex-shrink:0;}
+    .fixed-val-ruins{font-size:1.2em;font-weight:bold;color:#e53935;min-width:90px;text-align:right;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:4px;}
+    .fixed-val-guild{font-size:1.2em;font-weight:bold;color:#FF9800;min-width:90px;text-align:right;flex-shrink:0;}
 
-    /* === MODAL === */
-    #playerModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
-    /* overflow:hidden para o vídeo não vazar */
-    .modal-content-player { background-color: #1a1a1a; border: 1px solid #c9a94a; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #e0dccc; position: relative; overflow: hidden; }
-    /* Vídeo cobre TODO o modal */
-    #modal-bg-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; background-color: black; z-index: 0; pointer-events: none; }
-    /* Overlay escuro para legibilidade */
-    #modal-bg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%;  z-index: 1; pointer-events: none; }
-    /* Todo conteúdo acima do vídeo */
-    .modal-inner { position: relative; z-index: 2; padding: 20px; }
-    #closePlayerModal { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s; z-index: 10; }
-    #closePlayerModal:hover { color: white; }
-    .player-header { text-align: center; margin-bottom: 15px; }
-    #playerName { font-size: 1.8em; color: #FFD700; margin-bottom: 5px; font-weight: bold; }
-    .player-level-guild { display: flex; justify-content: center; align-items: center; gap: 2px; margin-bottom: 10px; flex-direction: column; }
-    #playerGuildFlag { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; }
-    #playerGuildName { font-size: 1.4em; color: lightblue; }
-    #playerLevel { font-size: 1.2em; color: #ccc; font-weight: bold; }
-    .player-visuals { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 0; }
-    /* Slots em COLUNA VERTICAL (igual ao inventário) */
-    .equipment-slots-container { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-    .equipment-slot { background-color: #383838; border: 1px dashed #555; height: 55px; width: 55px; display: flex; align-items: center; justify-content: center; position: relative; overflow: visible; border-radius: 5px; flex-shrink: 0; }
-    .equipment-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
-    .item-level { position: absolute; bottom: -10px; right: 7px; background-color: rgba(0,0,0,0.7); color: #fff; font-size: 0.6em; padding: 0 3px; border-radius: 4px; z-index: 99999; }
-    /* Avatar wrapper 160px + avatar 100px */
-    #modal-avatar-wrapper { position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    #playerAvatarEquip { width: 100px; height: 100px; border-radius: 50%; border: 4px solid #c9a94a; object-fit: cover; box-shadow: 0 0 15px rgba(255,215,0,0.4); }
-    #modal-frame-overlay { position: absolute; top: -5px; left: 0; width: 160px; height: 160px; pointer-events: none; z-index: 2; object-fit: contain; display: none; }
-    #modal-frame-sheen { position: absolute; top: -5px; left: 0; width: 160px; height: 160px; pointer-events: none; z-index: 3; display: none; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; overflow: hidden; }
-    #modal-frame-sheen::after { content: ''; position: absolute; top: -20%; left: -130%; width: 55%; height: 140%; background: linear-gradient(108deg, transparent 0%, rgba(255,255,255,.04) 28%, rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%, rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%); animation: _mfs 6s ease-in-out infinite; }
-    @keyframes _mfs { 0%{left:-130%;opacity:0} 2%{opacity:1} 98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0} }
-    #playerCombatPower { font-size: 2em; font-weight: bold; color: #4CAF50; background: linear-gradient(to bottom, white, orange, orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-top: 10px; text-shadow: none!important; }
-    .player-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #444; }
-    .stat-line { display: flex; justify-content: space-between; font-size: 0.8em; }
-    .stat-line span:first-child { color: #aaa; }
-    .stat-line span:last-child { font-weight: bold; color: #fff; }
-    .shimmer { background: linear-gradient(-90deg, #383838 0%, #444444 50%, #383838 100%); background-size: 400% 400%; animation: shimmer 1.2s ease-in-out infinite; color: transparent !important; }
-    @keyframes shimmer { 0% { background-position: -100% 0; } 100% { background-position: 100% 0; } }
-    .shimmer::before { content: '\00a0'; }
-    #sendmp { display: none; width: 100%; padding: 10px; margin-top: 20px; background-color: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: bold; transition: background-color 0.2s; text-align: center; text-decoration: none; }
-    #sendmp:hover { background-color: #1e84d4; }
-    @media(max-width:700px){ .rank-player-name-cp { max-width: 120px; font-size: 0.9em; } .rank-guild-name-cp { font-size: 0.75em; } .rank-power-cp { font-size: 1em; min-width: 90px; } #rankingListCP li { padding: 8px 10px; } }
-    #cpIcon { width: 26px; height: 38px; margin-top: 8px; margin-left: -6px; position: relative; }
-    
-    /* Traductor clean */
-    .goog-te-banner-frame.skiptranslate, .skiptranslate, .goog-te-balloon-frame, .goog-te-gadget { display: none !important; visibility: hidden !important; height: 0 !important; }
-    body { top: 0px !important; margin-top: 0px !important; position: static !important; }
-    font > font { background-color: transparent !important; box-shadow: none !important; position: static !important; }
-    /* O Menu em si (ID alterado para não conflitar com o da direita) */
-#leftSideMenu {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 280px; /* Largura um pouco maior para acomodar ícones */
-    height: 100%;
-    background: #1a1a1a; /* Fundo escuro */
-    border-right: 2px solid #444;
-    z-index: 9999;
-    transform: translateX(-100%); /* Começa escondido à esquerda */
-    transition: transform 2s ease;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 5px 0 15px rgba(0,0,0,0.5);
-}
+    /* ===================================================================
+       MODAL DO JOGADOR  (intacto do original)
+    =================================================================== */
+    #playerModal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;
+      background-color:rgba(0,0,0,.8);align-items:center;justify-content:center;}
+    .modal-content-player{background-color:#1a1a1a;border:1px solid #c9a94a;width:90%;max-width:500px;
+      border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,.5);color:#e0dccc;position:relative;overflow:hidden;}
+    #modal-bg-video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;
+      background-color:black;z-index:0;pointer-events:none;}
+    #modal-bg-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none;}
+    .modal-inner{position:relative;z-index:2;padding:20px;}
+    #closePlayerModal{position:absolute;top:10px;right:15px;color:#aaa;font-size:28px;font-weight:bold;cursor:pointer;transition:color .2s;z-index:10;}
+    #closePlayerModal:hover{color:white;}
+    .player-header{text-align:center;margin-bottom:15px;}
+    #playerName{font-size:1.8em;color:#FFD700;margin-bottom:5px;font-weight:bold;}
+    .player-level-guild{display:flex;justify-content:center;align-items:center;gap:2px;margin-bottom:10px;flex-direction:column;}
+    #playerGuildFlag{width:30px;height:30px;border-radius:5px;object-fit:cover;}
+    #playerGuildName{font-size:1.4em;color:lightblue;}
+    #playerLevel{font-size:1.2em;color:#ccc;font-weight:bold;}
+    .player-visuals{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding:10px 0;}
+    .equipment-slots-container{display:flex;flex-direction:column;gap:8px;flex-shrink:0;}
+    .equipment-slot{background-color:#383838;border:1px dashed #555;height:55px;width:55px;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible;border-radius:5px;flex-shrink:0;}
+    .equipment-slot img{width:100%;height:100%;object-fit:cover;border-radius:5px;}
+    .item-level{position:absolute;bottom:-10px;right:7px;background-color:rgba(0,0,0,.7);color:#fff;font-size:.6em;padding:0 3px;border-radius:4px;z-index:99999;}
+    #modal-avatar-wrapper{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    #playerAvatarEquip{width:100px;height:100px;border-radius:50%;border:4px solid #c9a94a;object-fit:cover;box-shadow:0 0 15px rgba(255,215,0,.4);}
+    #modal-frame-overlay{position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:2;object-fit:contain;display:none;}
+    #modal-frame-sheen{position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;}
+    #modal-frame-sheen::after{content:'';position:absolute;top:-20%;left:-130%;width:55%;height:140%;
+      background:linear-gradient(108deg,transparent 0%,rgba(255,255,255,.04) 28%,rgba(255,255,255,.18) 42%,rgba(255,255,255,.52) 50%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.04) 72%,transparent 100%);
+      animation:_mfs 6s ease-in-out infinite;}
+    @keyframes _mfs{0%{left:-130%;opacity:0}2%{opacity:1}98%{left:155%;opacity:1}99%{opacity:0;left:155%}100%{left:155%;opacity:0}}
+    #playerCombatPower{font-size:2em;font-weight:bold;color:#4CAF50;background:linear-gradient(to bottom,white,orange,orange);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;margin-top:10px;text-shadow:none!important;}
+    .player-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:20px;padding:10px;border-top:1px solid #444;}
+    .stat-line{display:flex;justify-content:space-between;font-size:.8em;}
+    .stat-line span:first-child{color:#aaa;}
+    .stat-line span:last-child{font-weight:bold;color:#fff;}
+    #sendmp{display:none;width:100%;padding:10px;margin-top:20px;background-color:#2196F3;color:white;border:none;border-radius:5px;cursor:pointer;font-size:1em;font-weight:bold;transition:background-color .2s;text-align:center;text-decoration:none;}
+    #sendmp:hover{background-color:#1e84d4;}
+    #cpIcon{width:26px;height:38px;margin-top:8px;margin-left:-6px;position:relative;}
 
-/* Classe para abrir o menu via JS */
-#leftSideMenu.open {
-    transform: translateX(0);
-}
-
-/* Cabeçalho do Menu */
-.menu-header {
-    padding: 15px;
-    background: #111;
-    display: flex;
-    justify-content: space-between; /* Botão e título afastados */
-    align-items: center;
-    border-bottom: 1px solid #333;
-    height: 60px; /* Altura fixa */
-    box-sizing: border-box;
-}
-
-.menu-header h3 {
-    margin: 0;
-    color: #ffd700;
-    font-size: 1.5rem;
-    flex-grow: 1;
-    text-align: center; /* Título centralizado */
-}
-
-/* Botão de Fechar (Hambúrguer) */
-.close-menu-btn {
-    background: none;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Lista e Itens */
-.menu-list {
-    list-style: none;
-    padding: 0; /* Remove padding padrão da UL */
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.menu-item {
-    width: 100%;
-}
-
-.menu-link {
-    display: flex; /* Flexbox para alinhar ícone e texto */
-    align-items: center;
-    justify-content: flex-start; /* Alinha tudo à esquerda */
-    padding: 15px 15px; /* Padding reduzido na esquerda */
-    color: #e0e0e0;
-    text-decoration: none;
-    font-size: 1.4rem;
-    transition: background 0.4s, color 0.4s;
-    border-bottom: 1px solid #252525;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.menu-link:hover {
-    background: #333;
-    color: #fff;
-}
-
-/* Estilo do Ícone no Menu */
-.menu-icon {
-    width: 35px;
-    height: 35px;
-    object-fit: contain;
-    margin-right: 15px; /* Espaço entre ícone e texto */
-}
-
-/* Item Ativo (Página atual) */
-.menu-item.active .menu-link {
-    background: #555;
-    color: #ffd700;
-    font-weight: bold;
-    border-left: 4px solid #ffd700;
-    padding-left: 11px; /* Compensa a borda para manter alinhamento */
-}
-
-/* --- ANIMAÇÃO DO BOTÃO DE MENU (TOPO) --- */
-#menuToggleBtn svg {
-    /* Garante que a transição ocorra suavemente */
-    transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-}
-
-/* Classe para deixar o ícone "Em Pé" (Vertical) */
-/* Usamos -90deg para girar à esquerda como pediu */
-.icon-vertical {
-    transform: rotate(-90deg);
-}
-
-/* --- BOTÃO DE FECHAR (DENTRO DO MENU) --- */
-/* Força o SVG do botão de fechar a ser idêntico ao botão aberto (Vertical) */
-#closeMenuBtn svg {
-    transform: rotate(-90deg); 
-    transition: transform 3s ease;
-    cursor: pointer;
-}
-
-/* Opcional: Ao passar o mouse no fechar, ele gira um pouco */
-#closeMenuBtn:hover svg {
-    transform: rotate(0deg); /* Gira para deitado ao passar o mouse */
-    color: #ff4500;
-}
-
-/* --- BOLINHAS DE NOTIFICAÇÃO (AJUSTE FINO) --- */
-.menu-notification-dot {
-    position: absolute;
-    /* Ajuste de posição para não ficar em cima do ícone */
-    left: 45px; 
-    top: 50%;
-    transform: translateY(-50%);
-    width: 10px;
-    height: 10px;
-    background-color: #ff0000;
-    border: 2px solid #fff;
-    border-radius: 50%;
-    z-index: 15;
-    box-shadow: 0 0 5px rgba(255, 0, 0, 0.9);
-    pointer-events: none;
-    animation: pulseSideDot 2s infinite;
-}
-
-@keyframes pulseSideDot {
-    0% { transform: translateY(-50%) scale(1); opacity: 1; }
-    50% { transform: translateY(-50%) scale(1.3); opacity: 0.8; }
-    100% { transform: translateY(-50%) scale(1); opacity: 1; }
-}
+    /* ===================================================================
+       MENU LATERAL  (intacto)
+    =================================================================== */
+    .goog-te-banner-frame.skiptranslate,.skiptranslate,.goog-te-balloon-frame,.goog-te-gadget{display:none!important;visibility:hidden!important;height:0!important;}
+    body{top:0!important;margin-top:0!important;position:static!important;}
+    font > font{background-color:transparent!important;box-shadow:none!important;position:static!important;}
+    #leftSideMenu{position:fixed;top:0;left:0;width:280px;height:100%;background:#1a1a1a;border-right:2px solid #444;
+      z-index:9999;transform:translateX(-100%);transition:transform 2s ease;display:flex;flex-direction:column;
+      box-shadow:5px 0 15px rgba(0,0,0,.5);}
+    #leftSideMenu.open{transform:translateX(0);}
+    .menu-header{padding:15px;background:#111;display:flex;justify-content:space-between;align-items:center;
+      border-bottom:1px solid #333;height:60px;box-sizing:border-box;}
+    .menu-header h3{margin:0;color:#ffd700;font-size:1.5rem;flex-grow:1;text-align:center;}
+    .close-menu-btn{background:none;border:none;color:#fff;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;}
+    .menu-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;}
+    .menu-item{width:100%;}
+    .menu-link{display:flex;align-items:center;justify-content:flex-start;padding:15px;color:#e0e0e0;text-decoration:none;
+      font-size:1.4rem;transition:background .4s,color .4s;border-bottom:1px solid #252525;width:100%;box-sizing:border-box;}
+    .menu-link:hover{background:#333;color:#fff;}
+    .menu-icon{width:35px;height:35px;object-fit:contain;margin-right:15px;}
+    .menu-item.active .menu-link{background:#555;color:#ffd700;font-weight:bold;border-left:4px solid #ffd700;padding-left:11px;}
+    #menuToggleBtn svg{transition:transform 3s cubic-bezier(.4,0,.2,1);transform-origin:center;}
+    .icon-vertical{transform:rotate(-90deg);}
+    #closeMenuBtn svg{transform:rotate(-90deg);transition:transform 3s ease;cursor:pointer;}
+    #closeMenuBtn:hover svg{transform:rotate(0deg);color:#ff4500;}
+    .menu-notification-dot{position:absolute;left:45px;top:50%;transform:translateY(-50%);width:10px;height:10px;
+      background-color:#ff0000;border:2px solid #fff;border-radius:50%;z-index:15;
+      box-shadow:0 0 5px rgba(255,0,0,.9);pointer-events:none;animation:pulseSideDot 2s infinite;}
+    @keyframes pulseSideDot{0%{transform:translateY(-50%) scale(1);opacity:1}50%{transform:translateY(-50%) scale(1.3);opacity:.8}100%{transform:translateY(-50%) scale(1);opacity:1}}
+    .submenu-list{list-style:none;padding:0;margin:0;max-height:0;overflow:hidden;transition:max-height .35s ease;background:#111;}
+    .submenu-list.open{max-height:500px;}
+    .submenu-link{padding-left:55px!important;font-size:1.1rem!important;}
+    .dropdown-arrow{margin-left:auto;transition:transform .3s;}
+    .dropdown-active > .menu-link .dropdown-arrow{transform:rotate(180deg);}
+    #sideMenuOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9998;opacity:0;transition:opacity .3s;}
   </style>
 </head>
 <body>
-  <div id="playerTopBar">
-    <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="3" y1="12" x2="21" y2="12"></line>
-        <line x1="3" y1="6" x2="21" y2="6"></line>
-        <line x1="3" y1="18" x2="21" y2="18"></line>
-    </svg>
-</button>
-    <div id="pageTitle">Ranking de Poder de Combate</div>
-    <div style="width:44px;height:34px;"></div>
-  </div>
 
-  <div id="rankingContent">
-    <h2>Top 10</h2>
-   <center> <div id="atualiza">(Atualiza Segunda, Quarta e Sexta-feira)</div></center>
+<!-- ── BARRA SUPERIOR ── -->
+<div id="playerTopBar">
+  <button id="menuToggleBtn" class="top-bar-link" style="background:none;border:none;cursor:pointer;color:inherit;padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <div id="pageTitle">Rankings</div>
+  <div style="width:4px;height:28px;"></div>
+</div>
+
+<!-- ── CONTEÚDO ── -->
+<div id="rankingContent">
+
+  <!-- ╔══════════════════════════════╗
+       ║       BARRA DE ABAS          ║
+       ╚══════════════════════════════╝ -->
+  <div id="rankingTabBar">
+
+    <!-- ABA: Poder de Combate -->
+    <button class="rank-tab active" data-tab="cp">
+      <!-- Escudo com relâmpago -->
+      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5L12 1zm1 15.17l-2.5-4.17H12V8l2.5 4.17H13v4z"/></svg>
+      <span>Poder</span>
+    </button>
+
+    <!-- ABA: Guildas -->
+    <button class="rank-tab" data-tab="guild">
+      <!-- Fortaleza -->
+      <svg viewBox="0 0 24 24"><path d="M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg>
+      <span>Guilda</span>
+    </button>
+
+    <!-- ABA: Arena PvP -->
+    <button class="rank-tab" data-tab="arena">
+      <!-- Espadas cruzadas -->
+      <svg viewBox="0 0 24 24"><path d="M6.92 5H5L3 9l1.5 1.5 1-1 1.5 1.5-3.5 3.5 1 1L7 12l2 2-1.5 1.5 1 1 3.5-3.5-1-1 5.92-5.92L21 3l-3 .08L6.92 5zm4.95 7.36l-1.42 1.42L14 17.33V21h3v-3l-4.13-4.64zM17 5.5l1 1-9 9-1-1 9-9z"/></svg>
+      <span>Arena</span>
+    </button>
+
+    <!-- ABA: Ruínas -->
+    <button class="rank-tab" data-tab="ruins">
+      <!-- Caveira -->
+      <svg viewBox="0 0 24 24"><path d="M12 2A9 9 0 003 11c0 3.18 1.65 5.97 4.14 7.58L7 21h2v1h2v-1h2v1h2v-1h2l-.14-2.42C19.35 16.97 21 14.18 21 11A9 9 0 0012 2zm-2.5 13.5v-1.25A2.25 2.25 0 0112 16a2.25 2.25 0 002.5-1.75v1.25A2.25 2.25 0 0112 17.5a2.25 2.25 0 01-2.5-2zm1-5.5a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2z"/></svg>
+      <span>Ruínas</span>
+    </button>
+
+  </div><!-- /#rankingTabBar -->
+
+  <!-- ── PAINEL: PODER DE COMBATE ── -->
+  <div id="rankingPanel-cp" class="ranking-panel active">
+    <h2 class="panel-heading">Top 10 &mdash; Poder de Combate</h2>
+    <div class="panel-subtext">(Atualiza Segunda, Quarta e Sexta-feira)</div>
     <div id="rankingWrapper"><div id="loading" class="loading">Carregando ranking...</div></div>
   </div>
 
-  <div id="fixedPlayerRank"></div>
-
-  <div id="playerModal">
-    <div class="modal-content-player">
-      <!-- Vídeo de fundo (opacity controlada por JS) -->
-      <video autoplay muted loop playsinline id="modal-bg-video"><source src="" type="video/webm"></video>
-      <div id="modal-bg-overlay"></div>
-
-      <span id="closePlayerModal">&times;</span>
-
-      <div class="modal-inner">
-        <div class="player-header">
-          <div id="playerName" class="shimmer">Carregando...</div>
-           <div style="display: flex; align-items: center; justify-content: center; margin-top: -12px;">
-            <div id="playerLevel" class="shimmer">Nv. 1</div>
-          </div>
-          <div class="player-level-guild">
-            <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width: 50px; height: 55px;">
-            <div id="playerGuildName" class="shimmer">Nome da Guilda</div>
-          </div>
-        </div>
-        <div style="display: none; align-items: center; justify-content: center; gap: 7px; margin-top: -25px; margin-bottom: 8px;">
-          <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/> <div id="playerCombatPower" class="shimmer"></div>
-        </div>
-
-        <div class="player-visuals">
-          <div class="equipment-slots-container left">
-              <div class="equipment-slot" id="weapon-slot"></div>
-              <div class="equipment-slot" id="ring-slot"></div>
-              <div class="equipment-slot" id="helm-slot"></div>
-              <div class="equipment-slot" id="special1-slot"></div>
-          </div>
-          <div id="modal-avatar-wrapper">
-              <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
-              <img id="modal-frame-overlay" src="" alt="">
-              <div id="modal-frame-sheen"></div>
-          </div>
-          <div class="equipment-slots-container right">
-              <div class="equipment-slot" id="amulet-slot"></div>
-              <div class="equipment-slot" id="wing-slot"></div>
-              <div class="equipment-slot" id="armor-slot"></div>
-              <div class="equipment-slot" id="special2-slot"></div>
-          </div>
-        </div>
-
-        <div class="player-stats">
-          <div class="stat-line"><span>ATK</span><span id="playerAttack" class="shimmer"></span></div>
-          <div class="stat-line"><span>Defesa</span><span id="playerDefense" class="shimmer"></span></div>
-          <div class="stat-line"><span>HP</span><span id="playerHealth" class="shimmer"></span></div>
-          <div class="stat-line"><span>Evasão</span><span id="playerEvasion" class="shimmer"></span></div>
-          <div class="stat-line"><span>Taxa Crítica</span><span id="playerCritChance" class="shimmer"></span></div>
-          <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
-          <div class="stat-line"><span>Redução Crítica</span><span id="playerCritReduction" class="shimmer"></span></div>
-        </div>
-        
-        <a id="sendmp" href="#" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 10px;">
-            <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem
-        </a>
-      </div><!-- /.modal-inner -->
-    </div>
+  <!-- ── PAINEL: GUILDAS ── -->
+  <div id="rankingPanel-guild" class="ranking-panel">
+    <h2 class="panel-heading">Top 10 &mdash; Guildas</h2>
+    <div class="panel-subtext">(Poder total de combate dos membros)</div>
+    <div id="guildRankingWrapper"><div class="loading">Carregando guildas...</div></div>
   </div>
 
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script type="module" src="playerModal.js"></script> 
-  <script src="number_format.js"></script>
-  <script type="module" src="guild_pv.js"></script>
+  <!-- ── PAINEL: ARENA PvP ── -->
+  <div id="rankingPanel-arena" class="ranking-panel">
+    <h2 class="panel-heading">Top 10 &mdash; Arena PvP</h2>
+    <div id="arenaSeasonLabel" class="panel-subtext">Temporada atual</div>
+    <div id="arenaRankingWrapper"><div class="loading">Carregando arena...</div></div>
+  </div>
 
-  <script type="module">
-    import { supabase } from './supabaseClient.js'
+  <!-- ── PAINEL: RUÍNAS ── -->
+  <div id="rankingPanel-ruins" class="ranking-panel">
+    <h2 class="panel-heading">Top 10 &mdash; Ruínas</h2>
+    <div id="ruinsMonthLabel" class="panel-subtext">Eliminações do mês</div>
+    <div id="ruinsRankingWrapper"><div class="loading">Carregando ruínas...</div></div>
+  </div>
 
-  (function(){
-    // CONFIG DO SUPABASE
-    
-    function esc(s){ return String(s||''); }
-    function safeNum(n){ return typeof n === 'number' ? n : (n?Number(n):0); }
+</div><!-- /#rankingContent -->
 
-    // =======================================================================
-    // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS COMPARTILHADO COM MINAS)
-    // =======================================================================
-    const GLOBAL_DB_NAME = 'aden_global_db';
-    const GLOBAL_DB_VERSION = 6;
-    const AUTH_STORE = 'auth_store';
-    const OWNERS_STORE = 'owners_store'; // Store compartilhada com mines.js
-    
-    const GlobalDB = {
-        open: function() {
-            return new Promise((resolve, reject) => {
-                const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
-                // NOTA: Se o DB já foi criado pelo mines.js com versão 3, este upgrade não roda.
-                // Isso garante compatibilidade.
-                req.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(AUTH_STORE)) db.createObjectStore(AUTH_STORE, { keyPath: 'key' });
-                    if (!db.objectStoreNames.contains(OWNERS_STORE)) db.createObjectStore(OWNERS_STORE, { keyPath: 'id' });
-                };
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-        },
-        getAuth: async function() {
-            try {
-                const db = await this.open();
-                return new Promise((resolve) => {
-                    const tx = db.transaction(AUTH_STORE, 'readonly');
-                    const req = tx.objectStore(AUTH_STORE).get('current_session');
-                    req.onsuccess = () => resolve(req.result ? req.result.value : null);
-                    req.onerror = () => resolve(null);
-                });
-            } catch(e) { return null; }
-        },
-        // --- NOVO: Lê todos os donos cacheados (Minas + Bots + Players) ---
-        getAllOwners: async function() {
-            try {
-                const db = await this.open();
-                return new Promise((resolve) => {
-                    const tx = db.transaction(OWNERS_STORE, 'readonly');
-                    const store = tx.objectStore(OWNERS_STORE);
-                    const req = store.getAll();
-                    req.onsuccess = () => {
-                        const result = req.result || [];
-                        const map = {};
-                        // Mapeia por ID para acesso rápido
-                        result.forEach(o => map[o.id] = o);
-                        resolve(map);
-                    };
-                    req.onerror = () => resolve({});
-                });
-            } catch(e) { return {}; }
-        },
-        // Salva donos/jogadores no cache compartilhado (útil para mines.js)
-        saveOwners: async function(ownersList) {
-            if (!ownersList || ownersList.length === 0) return;
-            try {
-                const db = await this.open();
-                const tx = db.transaction(OWNERS_STORE, 'readwrite');
-                const store = tx.objectStore(OWNERS_STORE);
-                const now = Date.now();
+<!-- ── BARRA FIXA DE RANKING PESSOAL ── -->
+<div id="fixedPlayerRank"></div>
 
-                ownersList.forEach(o => {
-                    const cacheObj = {
-                        id: o.id,
-                        name: o.name,
-                        avatar_url: o.avatar_url,
-                        guild_id: o.guild_id,
-                        timestamp: now // Atualiza timestamp para o TTL de 24h do mines.js
-                    };
-                    store.put(cacheObj);
-                });
-                return new Promise(resolve => { tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); });
-            } catch(e) { console.warn("Erro ao salvar donos no cache global:", e); }
-        }
-    };
-
-    // Helper Otimista de Auth (Zero Egress)
-    async function getLocalUserId() {
-        const globalAuth = await GlobalDB.getAuth();
-        if (globalAuth && globalAuth.value && globalAuth.value.user) {
-            return globalAuth.value.user.id;
-        }
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
-                    const session = JSON.parse(localStorage.getItem(k));
-                    if (session?.user?.id) return session.user.id;
-                }
-            }
-        } catch (e) {}
-        return null;
-    }
-
-    // ====================================================================================
-    // CACHE #1: RANKING DIÁRIO (SEG, QUA, SEX)
-    // ====================================================================================
-    function calculateNextUpdateDate(){
-        const now = new Date();
-        for(let i = 1; i <= 7; i++){
-            const nextDate = new Date(now);
-            nextDate.setUTCDate(now.getUTCDate() + i);
-            nextDate.setUTCHours(0,0,0,0);
-            const day = nextDate.getUTCDay(); // 0=Dom, 1=Seg ...
-            if (day === 1 || day === 3 || day === 5) {
-                return nextDate.getTime();
-            }
-        }
-        return now.getTime() + 86400000;
-    }
-
-    function setRankingCache(key, value){
-        const expirationTime = calculateNextUpdateDate();
-        try { localStorage.setItem(key, JSON.stringify({ v:value, e: expirationTime })); } catch(e){}
-    }
-
-    function getRankingCache(key){
-        try {
-            const raw = localStorage.getItem(key);
-            if(!raw) return null;
-            const obj = JSON.parse(raw);
-            if(!obj.e || Date.now()>=obj.e){ localStorage.removeItem(key); return null; }
-            return obj.v;
-        } catch(e){ return null; }
-    }
-
-    // ====================================================================================
-    // CACHE #2: PLAYER MODAL (v3)
-    // ====================================================================================
-    // Nota: window.fetchPlayerData é controlado por playerModal.js (via DOMContentLoaded).
-    // Nós usamos um wrapper que roda DEPOIS dele (segundo DOMContentLoaded + setTimeout)
-    // para injetar: skins via RPC, guild fix para próprio jogador, vídeo padrão.
-
-    const _DEFAULT_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
-    const _MFO = 400, _MFI = 1200;
-
-    // ── Skin helpers ──────────────────────────────────────────────────────────────
-
-    function _modalVideoSwap(src, skipOut) {
-        const vid = document.getElementById('modal-bg-video');
-        if (!vid) return;
-        const doLoad = () => {
-            const s = vid.querySelector('source');
-            if (s) { s.src = src; s.type = 'video/webm'; }
-            vid.load();
-            const fadeIn = () => { vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.98'; };
-            if (vid.readyState >= 3) fadeIn();
-            else { vid.addEventListener('canplay', fadeIn, {once:true}); vid.addEventListener('canplaythrough', fadeIn, {once:true}); }
-            vid.play().catch(()=>{});
-        };
-        if (skipOut) { doLoad(); }
-        else { vid.style.transition = `opacity ${_MFO}ms ease-out`; vid.style.opacity='0'; setTimeout(doLoad, _MFO+30); }
-    }
-
-    function _applyModalSkin(frameUrl, videoUrl) {
-        const frameEl  = document.getElementById('modal-frame-overlay');
-        const sheenEl  = document.getElementById('modal-frame-sheen');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-        if (frameUrl) {
-            if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
-            if (avatarEl) avatarEl.style.border = 'none';
-            if (sheenEl)  { sheenEl.style.webkitMaskImage=`url('${frameUrl}')`; sheenEl.style.maskImage=`url('${frameUrl}')`; sheenEl.style.display='block'; }
-        } else {
-            if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
-            if (sheenEl)  sheenEl.style.display='none';
-            if (avatarEl) avatarEl.style.border='4px solid #c9a94a';
-        }
-        _modalVideoSwap(videoUrl || _DEFAULT_VID, true);
-    }
-
-    function _resetModalSkin() {
-        const vid = document.getElementById('modal-bg-video');
-        const frameEl = document.getElementById('modal-frame-overlay');
-        const sheenEl = document.getElementById('modal-frame-sheen');
-        const avatarEl = document.getElementById('playerAvatarEquip');
-        if (vid)      { vid.style.transition=''; vid.style.opacity='0'; }
-        if (frameEl)  { frameEl.src=''; frameEl.style.display='none'; }
-        if (sheenEl)  sheenEl.style.display='none';
-        if (avatarEl) avatarEl.style.border='4px solid #c9a94a';
-    }
-
-    // ── Skin cache (localStorage, 24h) ───────────────────────────────────────────
-
-    function _getSkinCache(pid) {
-        try {
-            const raw = localStorage.getItem(`skin_modal_v1_${pid}`);
-            if (!raw) return null;
-            const obj = JSON.parse(raw);
-            if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(`skin_modal_v1_${pid}`); return null; }
-            return obj.v;
-        } catch(e) { return null; }
-    }
-    function _setSkinCache(pid, data) {
-        try { localStorage.setItem(`skin_modal_v1_${pid}`, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
-    }
-
-    // ── Fetch & apply skins for any player (SECURITY DEFINER bypasses RLS) ───────
-
-    async function _fetchAndApplySkins(playerId) {
-        // Check cache first
-        try {
-            const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
-            if (error) { console.warn('[skin]', error.message); _applyModalSkin(null, null); return; }
-            _applyModalSkin(data?.frame_url || null, data?.video_url || null);
-        } catch(e) { _applyModalSkin(null, null); }
-    }
-
-    // ── Guild fix for own player (playerModal.js CASO A reads GlobalDB which ─────
-    //   may not have guild_name/flag) ─────────────────────────────────────────────
-
-    async function _fixOwnGuild(playerId) {
-        const gnEl = document.getElementById('playerGuildName');
-        const gfEl = document.getElementById('playerGuildFlag');
-        // Only run if guild name is blank or placeholder (playerModal didn't populate it)
-        const guildNameMissing = !gnEl || !gnEl.textContent || gnEl.textContent === 'Nome da Guilda';
-        if (!guildNameMissing) return;
-        try {
-            const { data: player } = await supabase.from('players').select('guild_id').eq('id', playerId).single();
-            if (!player?.guild_id) { if (gnEl) gnEl.textContent = 'Sem Guilda'; return; }
-            const { data: guild } = await supabase.from('guilds').select('name, flag_url').eq('id', player.guild_id).single();
-            if (guild) {
-                if (gnEl) { gnEl.textContent = guild.name || 'Sem Guilda'; gnEl.classList.remove('shimmer'); }
-                if (gfEl && guild.flag_url) { gfEl.src = guild.flag_url; gfEl.classList.remove('shimmer'); }
-            }
-        } catch(e) {}
-    }
-
-        // ====================================================================================
-    // RENDERIZAÇÃO
-    // ====================================================================================
-    function renderRanking(list, myRankObj){
-      const w = document.getElementById('rankingWrapper');
-      
-      if((!list || list.length === 0)){ w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>'; } 
-      else {
-        let html = '<div id="rankingListContainerCP"><ol id="rankingListCP">';
-        
-        // Renderiza Top 10 (Limite restaurado)
-        for(let i=0;i<list.length && i<10;i++){
-            const p = list[i]; 
-            const pos = i+1;
-            const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
-            
-            const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
-
-            html += `<li data-player-id="${esc(p.id)}">
-            <span class="rank-position-cp">${pos}</span>
-            <img class="rank-avatar-cp ${pos===1?'pulse':''}" src="${avatar}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
-            <div class="rank-player-info-cp">
-                <div class="rank-player-name-wrapper">
-                    <span class="rank-player-name-cp" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
-                    ${eyeIcon}
-                </div>
-                <span class="rank-guild-name-cp">${esc(p.guild_name||'Sem Guilda')}</span>
-            </div>
-            <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
-            </li>`;
-        }
-        html += '</ol></div>';
-        w.innerHTML = html;
-      }
-
-      // === Renderização da BARRA FIXA ===
-      const fixedRankContainer = document.getElementById('fixedPlayerRank');
-      if (myRankObj) {
-          const p = myRankObj;
-          const avatar = esc(p.avatar_url) || 'https://aden-rpg.pages.dev/avatar01.webp';
-          const eyeIcon = `<svg class="rank-eye-icon" data-player-id="${esc(p.id)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
-          
-          fixedRankContainer.innerHTML = `
-          <div class="fixed-content-inner">
-             <span class="rank-position-cp">${p.rank}</span>
-             <img class="rank-avatar-cp" src="${avatar}" onerror="this.src='https://aden-rpg.pages.dev/avatar01.webp'">
-             <div class="rank-player-info-cp">
-                 <div class="rank-player-name-wrapper">
-                     <span class="rank-player-name-cp" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
-                     ${eyeIcon}
-                 </div>
-                 <span class="rank-guild-name-cp">${esc(p.guild_name||'Sem Guilda')}</span>
-             </div>
-             <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
-          </div>`;
-          fixedRankContainer.style.display = 'block';
-
-          fixedRankContainer.addEventListener('click', (e) => {
-              const trigger = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
-              if (trigger) {
-                  const pid = trigger.dataset.playerId;
-                  if (pid) {
-                      document.getElementById('playerModal').style.display = 'flex';
-                      window.fetchPlayerData(pid);
-                  }
-              }
-          });
-
-      } else {
-          fixedRankContainer.style.display = 'none';
-      }
-
-      document.getElementById('rankingListCP')?.addEventListener('click', (e) => {
-          const trigger = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
-          if (!trigger) return;
-          const playerId = trigger.dataset.playerId;
-          if (playerId) {
-              const playerModal = document.getElementById('playerModal');
-              if (playerModal) playerModal.style.display = 'flex';
-              window.fetchPlayerData(playerId);
-          }
-      });
-    }
-
-
-    // ====================================================================================
-    // WRAPPER SOBRE window.fetchPlayerData (playerModal.js)
-    // Rodamos depois de TODOS os DOMContentLoaded via setTimeout(0) para garantir
-    // que somos o ÚLTIMO a setar window.fetchPlayerData.
-    // ====================================================================================
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => {
-            const _pmFetch = window.fetchPlayerData; // versão do playerModal.js
-
-            window.fetchPlayerData = async function(playerId) {
-                // 1. Reset visual de skin antes de começar
-                _resetModalSkin();
-
-                // 2. Deixa playerModal.js fazer todo o trabalho (guild, stats, items)
-                if (_pmFetch) await _pmFetch(playerId);
-
-                // 3. Fix guild para próprio jogador (se playerModal não populou do GlobalDB)
-                await _fixOwnGuild(playerId);
-
-                // 4. Busca e aplica skins (RPC com SECURITY DEFINER — funciona para todos)
-                await _fetchAndApplySkins(playerId);
-            };
-
-            // fetchPlayerDetailsWithCache agora aponta para o wrapper também
-            window.fetchPlayerDetailsWithCache = window.fetchPlayerData;
-        }, 0);
-    });
-
-    // ====================================================================================
-    // FETCH RANKING PRINCIPAL (COM OTIMIZAÇÃO ZERO EGRESS VIA GLOBALDB)
-    // ====================================================================================
-    async function fetchTop100ByCombatPower(){
-      const myId = await getLocalUserId();
-
-      const viewCacheKey = 'ranking_cp_MWF_v4'; 
-      const cachedView = getRankingCache(viewCacheKey);
-      
-      if(!supabase){ document.getElementById('loading').textContent = 'Supabase erro.'; return; }
-      
-      let finalRankingList = [];
-
-      try {
-        if(cachedView) {
-             finalRankingList = cachedView;
-        } else {
-            document.getElementById('loading').textContent = 'Sincronizando Ranking...';
-            
-            // 1. Passo Leve: Buscar apenas IDs e CP (O "Esqueleto" do Ranking)
-            // Economiza banda pois não baixamos strings longas (avatares/nomes) ainda
-            const { data: skeletonList, error: skelErr } = await supabase
-              .from('players')
-              .select('id, guild_id, combat_power') // SELECT MAGRO
-              .neq('is_banned', true)
-              .order('combat_power', { ascending: false })
-              .limit(10); // Mantive 10 conforme solicitado
-
-            if(skelErr) throw skelErr;
-            if(!skeletonList) skeletonList = [];
-
-            // 2. Ler Cache Global (Populado por minas.js e acessos anteriores)
-            const globalCacheMap = await GlobalDB.getAllOwners();
-            const missingIds = [];
-            const idsToUpdateTimestamp = []; // IDs que já temos, mas vamos avisar o DB que estão "ativos"
-
-            // 3. Cruzamento de Dados (Hydration)
-            const hydratedList = skeletonList.map(item => {
-                const cachedProfile = globalCacheMap[item.id];
-                
-                if (cachedProfile && cachedProfile.name) {
-                    // Temos no cache! Usamos o dado local.
-                    idsToUpdateTimestamp.push(cachedProfile);
-                    return {
-                        ...item,
-                        name: cachedProfile.name,
-                        avatar_url: cachedProfile.avatar_url,
-                        // Guild ID já veio do skeleton, mas mantemos o do cache se quiser consistência
-                    };
-                } else {
-                    // Não temos, marcar para baixar
-                    missingIds.push(item.id);
-                    return { ...item, _needsFetch: true };
-                }
-            });
-
-            // 4. Baixar APENAS os dados faltantes (Delta Fetch)
-            if (missingIds.length > 0) {
-                const { data: freshProfiles } = await supabase
-                    .from('players')
-                    .select('id, name, avatar_url')
-                    .in('id', missingIds);
-                
-                if (freshProfiles) {
-                    // Atualiza a lista hidratada com os dados novos
-                    freshProfiles.forEach(fp => {
-                        const index = hydratedList.findIndex(h => h.id === fp.id);
-                        if (index !== -1) {
-                            hydratedList[index].name = fp.name;
-                            hydratedList[index].avatar_url = fp.avatar_url;
-                            delete hydratedList[index]._needsFetch;
-                        }
-                    });
-                    
-                    // Salva os novos no Cache Global
-                    // Adiciona guild_id que já tínhamos no skeleton para o cache ficar completo para as minas
-                    const toSave = freshProfiles.map(fp => {
-                        const original = hydratedList.find(h => h.id === fp.id);
-                        return { ...fp, guild_id: original?.guild_id };
-                    });
-                    await GlobalDB.saveOwners(toSave);
-                }
-            }
-
-            // 5. Atualizar Timestamps dos que já tínhamos (Refresh Cache TTL)
-            // Isso impede que o mines.js apague esses jogadores se eles não visitarem minas por 24h
-            if (idsToUpdateTimestamp.length > 0) {
-                await GlobalDB.saveOwners(idsToUpdateTimestamp);
-            }
-
-            // 6. Resolver Nomes de Guildas (Cachear Guildas separadamente seria ideal no futuro)
-            const uniqueGuilds = Array.from(new Set(hydratedList.map(p=>p.guild_id).filter(Boolean)));
-            const guildsById = {};
-            if(uniqueGuilds.length){
-              const { data: guilds } = await supabase.from('guilds').select('id,name').in('id', uniqueGuilds);
-              (guilds||[]).forEach(g => guildsById[g.id] = g.name);
-            }
-
-            // 7. Formatação Final
-            finalRankingList = hydratedList.map(p => ({
-                id: p.id,
-                name: p.name || 'Desconhecido', 
-                avatar_url: p.avatar_url,
-                guild_name: p.guild_id ? (guildsById[p.guild_id] || 'Sem Guilda') : 'Sem Guilda',
-                guild_id: p.guild_id,
-                cp: p.combat_power
-            }));
-
-            // Salva no cache de visualização da página (Seg/Qua/Sex)
-            setRankingCache(viewCacheKey, finalRankingList);
-        }
-
-        // === LÓGICA DO JOGADOR ATUAL PARA BARRA FIXA ===
-        let myRankObj = null;
-
-        if (myId) {
-            const indexInTop = finalRankingList.findIndex(p => p.id === myId);
-            
-            if (indexInTop !== -1) {
-                myRankObj = { 
-                    ...finalRankingList[indexInTop], 
-                    rank: indexInTop + 1 
-                };
-            } else {
-                // Tenta pegar do cache global primeiro
-                const globalCache = await GlobalDB.getAllOwners();
-                let me = globalCache[myId];
-                
-                // Se não estiver no cache ou faltar CP, busca no server
-                if (!me || me.cp === undefined) {
-                     const { data: serverMe } = await supabase
-                        .from('players')
-                        .select('id, name, avatar_url, guild_id, combat_power')
-                        .eq('id', myId)
-                        .single();
-                     me = serverMe;
-                     // Salva meus dados atualizados no cache global
-                     if(me) await GlobalDB.saveOwners([me]);
-                }
-
-                if (me) {
-                     const { count } = await supabase
-                        .from('players')
-                        .select('*', { count: 'exact', head: true })
-                        .gt('combat_power', me.combat_power || me.cp);
-                    
-                     let myGuildName = 'Sem Guilda';
-                     if (me.guild_id) {
-                         const { data: g } = await supabase.from('guilds').select('name').eq('id', me.guild_id).single();
-                         if (g) myGuildName = g.name;
-                     }
-
-                     myRankObj = {
-                        id: me.id,
-                        name: me.name,
-                        avatar_url: me.avatar_url,
-                        guild_name: myGuildName,
-                        cp: me.combat_power || me.cp,
-                        rank: (count || 0) + 1
-                     };
-                }
-            }
-        }
-
-        renderRanking(finalRankingList, myRankObj);
-
-      } catch(err){
-        document.getElementById('rankingWrapper').innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', fetchTop100ByCombatPower);
-  })();
-  </script>
-  
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const testEl = document.createElement("div");
-      testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
-      testEl.textContent = "M";
-      document.body.appendChild(testEl);
-      const actualRem = testEl.getBoundingClientRect().height;
-      document.body.removeChild(testEl);
-      const targetRem = 16;
-      const correction = targetRem / actualRem;
-      const style = document.createElement("style");
-      style.textContent = `html { font-size: ${16 * correction}px !important; } body { font-size: 1.3rem !important; }`;
-      document.head.appendChild(style);
-    });
-  </script>
-  <div id="google_translate_element"></div>
-  <script src="auto_translate.js"></script>
-  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-  
-  <div id="leftSideMenu">
-    <div class="menu-header">
-        <button id="closeMenuBtn" class="close-menu-btn">
-             </button>
-        <h3>Menu</h3>
-        <div style="width: 28px;"></div> 
+<!-- ── MODAL DO JOGADOR (intacto) ── -->
+<div id="playerModal">
+  <div class="modal-content-player">
+    <video autoplay muted loop playsinline id="modal-bg-video"><source src="" type="video/webm"></video>
+    <div id="modal-bg-overlay"></div>
+    <span id="closePlayerModal">&times;</span>
+    <div class="modal-inner">
+      <div class="player-header">
+        <div id="playerName" class="shimmer">Carregando...</div>
+        <div style="display:flex;align-items:center;justify-content:center;margin-top:-12px;">
+          <div id="playerLevel" class="shimmer">Nv. 1</div>
+        </div>
+        <div class="player-level-guild">
+          <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guild Flag" class="shimmer" style="width:50px;height:55px;">
+          <div id="playerGuildName" class="shimmer">Nome da Guilda</div>
+        </div>
+      </div>
+      <div style="display:none;align-items:center;justify-content:center;gap:7px;margin-top:-25px;margin-bottom:8px;">
+        <img alt="poder" id="cpIcon" src="https://aden-rpg.pages.dev/assets/CPicon.webp"/>
+        <div id="playerCombatPower" class="shimmer"></div>
+      </div>
+      <div class="player-visuals">
+        <div class="equipment-slots-container left">
+          <div class="equipment-slot" id="weapon-slot"></div>
+          <div class="equipment-slot" id="ring-slot"></div>
+          <div class="equipment-slot" id="helm-slot"></div>
+          <div class="equipment-slot" id="special1-slot"></div>
+        </div>
+        <div id="modal-avatar-wrapper">
+          <img id="playerAvatarEquip" src="https://via.placeholder.com/120" alt="Player Avatar" class="shimmer">
+          <img id="modal-frame-overlay" src="" alt="">
+          <div id="modal-frame-sheen"></div>
+        </div>
+        <div class="equipment-slots-container right">
+          <div class="equipment-slot" id="amulet-slot"></div>
+          <div class="equipment-slot" id="wing-slot"></div>
+          <div class="equipment-slot" id="armor-slot"></div>
+          <div class="equipment-slot" id="special2-slot"></div>
+        </div>
+      </div>
+      <div class="player-stats">
+        <div class="stat-line"><span>ATK</span><span id="playerAttack" class="shimmer"></span></div>
+        <div class="stat-line"><span>Defesa</span><span id="playerDefense" class="shimmer"></span></div>
+        <div class="stat-line"><span>HP</span><span id="playerHealth" class="shimmer"></span></div>
+        <div class="stat-line"><span>Evasão</span><span id="playerEvasion" class="shimmer"></span></div>
+        <div class="stat-line"><span>Taxa Crítica</span><span id="playerCritChance" class="shimmer"></span></div>
+        <div class="stat-line"><span>Dano Crítico</span><span id="playerCritDamage" class="shimmer"></span></div>
+        <div class="stat-line"><span>Redução Crítica</span><span id="playerCritReduction" class="shimmer"></span></div>
+      </div>
+      <a id="sendmp" href="#" style="display:none;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;font-size:1em;padding:10px;">
+        <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:35px;height:35px;"> Enviar Mensagem
+      </a>
     </div>
-    <ul id="menuList" class="menu-list">
-        </ul>
+  </div>
 </div>
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    // --- CONFIGURAÇÃO MANUAL ---
-    // Mude isso em cada arquivo (ex: "mines.html", "capital.html", "afk.html")
-    const MANUAL_CURRENT_PAGE = "ranking_cp.html"; 
 
-    const assetBase = "https://aden-rpg.pages.dev/assets/";
+<!-- ── SCRIPTS EXTERNOS ── -->
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script type="module" src="playerModal.js"></script>
+<script src="number_format.js"></script>
+<script type="module" src="guild_pv.js"></script>
 
-    const menuItems = [
-        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
-        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
-        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
-        { 
-            name: "Áreas de Caça", 
-            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
-            isDropdown: true,
-            subItems: [
-                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
-               { name: "Desfiladeiro", url: "desfiladeiro.html" },
-               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
-               { name: "Erbária", url: "erbaria.html" },
-                { name: "Floresta Mística", url: "floresta_mistica.html" },
-                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
-                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
-                { name: "Queda Fontana", url: "queda_fontana.html" },
-                { name: "Razar", url: "razar.html" },
-                { name: "Vale Arcano", url: "vale_arcano.html" },
-            ]
-        },
-        { 
-            name: "Instâncias", 
-            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
-            isDropdown: true,
-            subItems: [
-                { name: "Ruínas Ancestrais", url: "ruins.html" }
-            ]
-        },
-        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
-        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
-        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
-        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
-        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
-        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
-        
-        // --- NOVO MENU CIDADES (DROPDOWN) ---
-        { 
-            name: "Cidades", 
-            icon: assetBase + "mapicon.webp",
-            isDropdown: true, // Flag para indicar que é dropdown
-            subItems: [
-                { name: "Capital", url: "capital.html" },
-                { name: "Astrax", url: "astrax.html" },
-                { name: "Duratar", url: "duratar.html" },
-                { name: "Elendor", url: "elendor.html" },
-                { name: "Mitrar", url: "mitrar.html" },
-                { name: "Tandra", url: "tandra.html" },
-                { name: "Zion", url: "zion.html" }
-            ]
-        }
-    ];
+<!-- ═══════════════════════════════════════════════════════════════════
+     SCRIPT PRINCIPAL  (module)
+═══════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { supabase } from './supabaseClient.js'
 
-    const menuList = document.getElementById("menuList");
-    const sideMenu = document.getElementById("leftSideMenu");
-    const overlay = document.getElementById("sideMenuOverlay");
-    const openBtn = document.getElementById("menuToggleBtn");
-    const closeBtn = document.getElementById("closeMenuBtn");
+;(function(){
 
-    const hamburgerSVG = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-    `;
-    
-    // Ícone de Seta para baixo (Chevron Down)
-    const chevronDownSVG = `
-        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-    `;
+/* ─────────────────────────────────────────
+   UTILITÁRIOS
+───────────────────────────────────────── */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const DEF_AV   = 'https://aden-rpg.pages.dev/avatar01.webp';
+const DEF_FLAG = 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
 
-    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+const EYE_SVG = (pid) =>
+  `<svg class="rank-eye-icon" data-player-id="${esc(pid)}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+     <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5
+              c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z
+              m0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+   </svg>`;
 
-    if (menuList) {
-        menuList.innerHTML = ""; 
+const SKULL_SVG =
+  `<svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#e53935;vertical-align:middle;display:inline-block;margin-left:2px;">
+     <path d="M12 2A9 9 0 003 11c0 3.18 1.65 5.97 4.14 7.58L7 21h2v1h2v-1h2v1h2v-1h2l-.14-2.42
+              C19.35 16.97 21 14.18 21 11A9 9 0 0012 2zm-2.5 13.5v-1.25A2.25 2.25 0 0012 16
+              a2.25 2.25 0 002.5-1.75v1.25A2.25 2.25 0 0112 17.5a2.25 2.25 0 01-2.5-2z
+              m1-5.5a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2z"/>
+   </svg>`;
 
-        menuItems.forEach(item => {
-            const li = document.createElement("li");
-            li.className = "menu-item";
+function openPlayerModal(pid){
+  if(!pid) return;
+  const m = document.getElementById('playerModal');
+  if(m) m.style.display = 'flex';
+  if(window.fetchPlayerData) window.fetchPlayerData(pid);
+}
 
-            // === CASO 1: É UM MENU DROPDOWN (CIDADES) ===
-            if (item.isDropdown) {
-                // Verifica se alguma sub-página é a atual (para abrir o menu automaticamente)
-                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
-                
-                // Link principal do Dropdown (apenas abre/fecha)
-                const a = document.createElement("a");
-                a.className = "menu-link dropdown-toggle";
-                a.style.cursor = "pointer";
-                a.innerHTML = `
-                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
-                    <span>${item.name}</span>
-                    ${chevronDownSVG}
-                `;
+function delegateListClicks(container){
+  container?.addEventListener('click',(e)=>{
+    const t = e.target.closest('.rli-name') || e.target.closest('.rank-eye-icon') ||
+              e.target.closest('.rank-player-name-cp');
+    if(t && t.dataset.playerId) openPlayerModal(t.dataset.playerId);
+  });
+}
 
-                // Container dos Sub-itens
-                const subUl = document.createElement("ul");
-                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`; // Abre se estiver dentro
+/* ─────────────────────────────────────────
+   GLOBAL DB  (compartilhado com mines.js)
+───────────────────────────────────────── */
+const GLOBAL_DB_NAME = 'aden_global_db', GLOBAL_DB_VERSION = 6;
+const AUTH_STORE = 'auth_store', OWNERS_STORE = 'owners_store';
 
-                if(isSubItemActive) li.classList.add('dropdown-active');
+const GlobalDB = {
+  open(){
+    return new Promise((res,rej)=>{
+      const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+      req.onupgradeneeded = (e)=>{
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains(AUTH_STORE))
+          db.createObjectStore(AUTH_STORE, {keyPath:'key'});
+        if(!db.objectStoreNames.contains(OWNERS_STORE))
+          db.createObjectStore(OWNERS_STORE, {keyPath:'id'});
+      };
+      req.onsuccess = ()=> res(req.result);
+      req.onerror  = ()=> rej(req.error);
+    });
+  },
+  async getAuth(){
+    try{
+      const db = await this.open();
+      return new Promise(r=>{
+        const tx  = db.transaction(AUTH_STORE,'readonly');
+        const req = tx.objectStore(AUTH_STORE).get('current_session');
+        req.onsuccess = ()=> r(req.result ? req.result.value : null);
+        req.onerror   = ()=> r(null);
+      });
+    }catch(e){ return null; }
+  },
+  async getAllOwners(){
+    try{
+      const db = await this.open();
+      return new Promise(r=>{
+        const tx  = db.transaction(OWNERS_STORE,'readonly');
+        const req = tx.objectStore(OWNERS_STORE).getAll();
+        req.onsuccess = ()=>{
+          const map = {};
+          (req.result||[]).forEach(o => map[o.id] = o);
+          r(map);
+        };
+        req.onerror = ()=> r({});
+      });
+    }catch(e){ return {}; }
+  },
+  async saveOwners(list){
+    if(!list || !list.length) return;
+    try{
+      const db    = await this.open();
+      const tx    = db.transaction(OWNERS_STORE,'readwrite');
+      const store = tx.objectStore(OWNERS_STORE);
+      const now   = Date.now();
+      list.forEach(o => store.put({id:o.id, name:o.name, avatar_url:o.avatar_url, guild_id:o.guild_id, timestamp:now}));
+      return new Promise(r=>{ tx.oncomplete = ()=>r(); tx.onerror = ()=>r(); });
+    }catch(e){}
+  }
+};
 
-                // Toggle ao clicar no pai
-                a.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    e.stopPropagation(); // Não fecha o menu lateral
-                    subUl.classList.toggle("open");
-                    li.classList.toggle("dropdown-active");
-                });
+async function getLocalUserId(){
+  const g = await GlobalDB.getAuth();
+  if(g && g.user) return g.user.id;
+  if(g && g.value && g.value.user) return g.value.user.id;
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k.startsWith('sb-') && k.endsWith('-auth-token')){
+        const s = JSON.parse(localStorage.getItem(k));
+        if(s?.user?.id) return s.user.id;
+      }
+    }
+  }catch(e){}
+  return null;
+}
 
-                // Renderiza os Sub-itens
-                item.subItems.forEach(sub => {
-                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
-                    const subLi = document.createElement("li");
-                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`; // Aplica active no li filho
+/* ─────────────────────────────────────────
+   CAMADAS DE CACHE COMPARTILHADAS
+   Cada formato é idêntico ao do arquivo de origem,
+   garantindo total compatibilidade.
+───────────────────────────────────────── */
 
-                    const subA = document.createElement("a");
-                    subA.className = "menu-link submenu-link"; // Classe extra para padding
-                    subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
+/* CP: expira na próxima Seg/Qua/Sex (mesmo formato do ranking_cp original) */
+function calcNextMWF(){
+  const now = new Date();
+  for(let i = 1; i <= 7; i++){
+    const d = new Date(now);
+    d.setUTCDate(now.getUTCDate()+i);
+    d.setUTCHours(0,0,0,0);
+    const day = d.getUTCDay();
+    if(day===1||day===3||day===5) return d.getTime();
+  }
+  return now.getTime()+86400000;
+}
+function setCPCache(k,v)  { try{ localStorage.setItem(k, JSON.stringify({v, e:calcNextMWF()})); }catch(e){} }
+function getCPCache(k){
+  try{
+    const r = localStorage.getItem(k);
+    if(!r) return null;
+    const o = JSON.parse(r);
+    if(!o.e || Date.now() >= o.e){ localStorage.removeItem(k); return null; }
+    return o.v;
+  }catch(e){ return null; }
+}
 
-                    if (isMatch) {
-                        // Bloqueio Total (igual ao código anterior)
-                        subA.removeAttribute("href");
-                        subA.style.cursor = "default";
-                        subA.style.pointerEvents = "none";
-                        subA.style.opacity = "1";
-                        subA.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
-                            return false;
-                        }, true);
-                    } else {
-                        subA.href = sub.url;
-                        subA.addEventListener("click", () => {
-                            setTimeout(closeMenu, 100);
-                        });
-                    }
+/* Arena: {expires, data} em ms  (mesmo formato de arena.js → setCache/getCache) */
+function setArenaCache(k,data,ttlMin=1440){
+  try{ localStorage.setItem(k, JSON.stringify({expires: Date.now()+ttlMin*60000, data})); }catch(e){}
+}
+function getArenaCache(k){
+  try{
+    const item = localStorage.getItem(k);
+    if(!item) return null;
+    const p = JSON.parse(item);
+    if(Date.now() > p.expires){ localStorage.removeItem(k); return null; }
+    return p.data;
+  }catch(e){ return null; }
+}
 
-                    subLi.appendChild(subA);
-                    subUl.appendChild(subLi);
-                });
+/* Guild: {data, expiry} em ms  (mesmo formato de guild.js → setCache/getCache) */
+function setGuildCache(k,data,ttlMs){
+  try{ localStorage.setItem(k, JSON.stringify({data, expiry: Date.now()+ttlMs})); }catch(e){}
+}
+function getGuildCache(k){
+  try{
+    const r = localStorage.getItem(k);
+    if(!r) return null;
+    const o = JSON.parse(r);
+    if(Date.now() > o.expiry){ localStorage.removeItem(k); return null; }
+    return o.data;
+  }catch(e){ return null; }
+}
 
-                li.appendChild(a);
-                li.appendChild(subUl);
+/* Ruins: {data, expires} em ms  (mesmo formato de ruins.js) */
+function setRuinsCache(k,data,expiresMs){
+  try{ localStorage.setItem(k, JSON.stringify({data, expires:expiresMs})); }catch(e){}
+}
+function getRuinsCache(k){
+  try{
+    const r = localStorage.getItem(k);
+    if(!r) return null;
+    const {data, expires} = JSON.parse(r);
+    return Date.now() < expires ? data : null;
+  }catch(e){ return null; }
+}
 
-            } else {
-                // === CASO 2: É UM MENU NORMAL ===
-                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
-                if(isMatch) li.classList.add('active');
+function minsToMidnightUTC(){
+  const now = new Date();
+  const mid = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()+1));
+  return Math.max(1, Math.floor((mid - now)/60000));
+}
+function ttlNextMonday(){
+  const now = new Date(), day = now.getUTCDay();
+  let add = (8 - day) % 7;
+  if(add === 0) add = 7;
+  const next = new Date(now);
+  next.setUTCDate(now.getUTCDate()+add);
+  next.setUTCHours(0,0,0,0);
+  const ttl = next.getTime() - now.getTime();
+  return ttl > 0 ? ttl : 86400000;
+}
 
-                const a = document.createElement("a");
-                a.className = "menu-link";
-                a.dataset.menuKey = item.key || '';
-
-                a.innerHTML = `
-                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
-                    <span>${item.name}</span>
-                `;
-
-                if (isMatch) {
-                    a.removeAttribute("href");
-                    a.style.cursor = "default";
-                    a.style.pointerEvents = "none";
-                    a.style.opacity = "1";
-                    a.addEventListener("click", (e) => {
-                        e.preventDefault();
-                        e.stopImmediatePropagation();
-                        return false;
-                    }, true);
-                } else {
-                    a.href = item.url;
-                    a.addEventListener("click", () => {
-                         setTimeout(closeMenu, 100);
-                    });
-                }
-                li.appendChild(a);
+/* ─────────────────────────────────────────
+   HYDRATE PROFILES  (idêntico ao arena.js)
+   Lê GlobalDB → busca apenas os ausentes
+───────────────────────────────────────── */
+async function hydrateProfiles(list){
+  if(!list || !list.length) return [];
+  const gmap = await GlobalDB.getAllOwners();
+  const miss = [], toUpdate = [];
+  const hyd = list.map(item=>{
+    const tid = item.id || item.opponent_id;
+    if(!tid){ return item; }
+    const c = gmap[tid];
+    if(c && c.name){
+      toUpdate.push(c);
+      return {...item, name:c.name, avatar_url:c.avatar_url||DEF_AV, guild_id:item.guild_id||c.guild_id};
+    }
+    miss.push(tid);
+    return {...item, _needsFetch:true};
+  });
+  if(miss.length){
+    try{
+      const {data:fresh} = await supabase.rpc('get_missing_profiles', {p_user_ids:miss});
+      if(fresh){
+        const toSave = [];
+        fresh.forEach(fp=>{
+          hyd.forEach(h=>{
+            const tid = h.id || h.opponent_id;
+            if(tid === fp.id && h._needsFetch){
+              h.name = fp.name || 'Desconhecido';
+              h.avatar_url = fp.avatar_url || DEF_AV;
+              if(!h.guild_id) h.guild_id = fp.guild_id;
+              delete h._needsFetch;
             }
-
-            menuList.appendChild(li);
+          });
+          toSave.push(fp);
         });
+        await GlobalDB.saveOwners(toSave);
+      }
+    }catch(e){ console.warn('[hydrate]', e); }
+  }
+  hyd.forEach(h=>{ if(h._needsFetch){ h.name='Desconhecido'; h.avatar_url=DEF_AV; delete h._needsFetch; } });
+  if(toUpdate.length) await GlobalDB.saveOwners(toUpdate);
+  return hyd;
+}
+
+function normalizeRpc(d){
+  try{
+    if(!d) return null;
+    if(Array.isArray(d)){
+      const f = d[0];
+      if(f && typeof f==='object'){
+        const ks = Object.keys(f);
+        if(ks.length===1 && typeof f[ks[0]]==='object') return f[ks[0]];
+        return f;
+      }
+    }
+    if(typeof d==='string'){ try{ return normalizeRpc(JSON.parse(d)); }catch{} }
+    return d;
+  }catch(e){ return null; }
+}
+
+/* ─────────────────────────────────────────
+   SKINS / MODAL WRAPPER  (intacto do original)
+───────────────────────────────────────── */
+const _DEFAULT_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+const _MFO = 400, _MFI = 1200;
+
+function _videoSwap(src, skipOut){
+  const vid = document.getElementById('modal-bg-video');
+  if(!vid) return;
+  const doLoad = ()=>{
+    const s = vid.querySelector('source');
+    if(s){ s.src = src; s.type = 'video/webm'; }
+    vid.load();
+    const fi = ()=>{ vid.style.transition = `opacity ${_MFI}ms ease-in`; vid.style.opacity = '0.98'; };
+    if(vid.readyState >= 3) fi();
+    else{ vid.addEventListener('canplay', fi, {once:true}); vid.addEventListener('canplaythrough', fi, {once:true}); }
+    vid.play().catch(()=>{});
+  };
+  if(skipOut) doLoad();
+  else{ vid.style.transition = `opacity ${_MFO}ms ease-out`; vid.style.opacity = '0'; setTimeout(doLoad, _MFO+30); }
+}
+
+function _applySkin(frameUrl, videoUrl){
+  const fr = document.getElementById('modal-frame-overlay');
+  const sh = document.getElementById('modal-frame-sheen');
+  const av = document.getElementById('playerAvatarEquip');
+  if(frameUrl){
+    if(fr){ fr.src = frameUrl; fr.style.display = 'block'; }
+    if(av) av.style.border = 'none';
+    if(sh){ sh.style.webkitMaskImage = `url('${frameUrl}')`; sh.style.maskImage = `url('${frameUrl}')`; sh.style.display = 'block'; }
+  }else{
+    if(fr){ fr.src=''; fr.style.display='none'; }
+    if(sh) sh.style.display='none';
+    if(av) av.style.border='4px solid #c9a94a';
+  }
+  _videoSwap(videoUrl || _DEFAULT_VID, true);
+}
+
+function _resetSkin(){
+  const vid = document.getElementById('modal-bg-video');
+  const fr  = document.getElementById('modal-frame-overlay');
+  const sh  = document.getElementById('modal-frame-sheen');
+  const av  = document.getElementById('playerAvatarEquip');
+  if(vid){ vid.style.transition=''; vid.style.opacity='0'; }
+  if(fr){ fr.src=''; fr.style.display='none'; }
+  if(sh) sh.style.display='none';
+  if(av) av.style.border='4px solid #c9a94a';
+}
+
+async function _fixOwnGuild(pid){
+  const gn = document.getElementById('playerGuildName');
+  const gf = document.getElementById('playerGuildFlag');
+  if(!gn || !gn.textContent || gn.textContent === 'Nome da Guilda') return;
+  try{
+    const {data:pl} = await supabase.from('players').select('guild_id').eq('id',pid).single();
+    if(!pl?.guild_id){ if(gn) gn.textContent='Sem Guilda'; return; }
+    const {data:g} = await supabase.from('guilds').select('name,flag_url').eq('id',pl.guild_id).single();
+    if(g){
+      if(gn){ gn.textContent = g.name||'Sem Guilda'; gn.classList.remove('shimmer'); }
+      if(gf && g.flag_url){ gf.src = g.flag_url; gf.classList.remove('shimmer'); }
+    }
+  }catch(e){}
+}
+
+async function _fetchApplySkins(pid){
+  try{
+    const {data, error} = await supabase.rpc('get_player_skin_urls', {p_player_id:pid});
+    if(error){ _applySkin(null,null); return; }
+    _applySkin(data?.frame_url||null, data?.video_url||null);
+  }catch(e){ _applySkin(null,null); }
+}
+
+// Wrapper sobre window.fetchPlayerData de playerModal.js
+document.addEventListener('DOMContentLoaded', ()=>{
+  setTimeout(()=>{
+    const _pm = window.fetchPlayerData;
+    window.fetchPlayerData = async function(pid){
+      _resetSkin();
+      if(_pm) await _pm(pid);
+      await _fixOwnGuild(pid);
+      await _fetchApplySkins(pid);
+    };
+    window.fetchPlayerDetailsWithCache = window.fetchPlayerData;
+  }, 0);
+});
+
+/* ─────────────────────────────────────────
+   ESTADO GLOBAL DE ABAS
+───────────────────────────────────────── */
+let activeTab = 'cp';
+const tabLoaded  = {cp:false, guild:false, arena:false, ruins:false};
+const myRankData = {cp:null,  guild:null,  arena:null,  ruins:null};
+
+/* ─────────────────────────────────────────
+   BARRA FIXA UNIVERSAL
+   Exibe rank pessoal do jogador adaptado a cada aba
+───────────────────────────────────────── */
+function renderFixedBar(tab){
+  const c = document.getElementById('fixedPlayerRank');
+  if(!c) return;
+  const d = myRankData[tab];
+  if(!d){ c.style.display='none'; return; }
+
+  let inner = '';
+
+  if(tab === 'cp'){
+    const av = esc(d.avatar_url)||DEF_AV;
+    inner = `
+      <span class="rank-position-cp">${d.rank}</span>
+      <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp" data-player-id="${esc(d.id)}">${esc(d.name)}</span>
+          ${EYE_SVG(d.id)}
+        </div>
+        <span class="rank-guild-name-cp">${esc(d.guild_name||'Sem Guilda')}</span>
+      </div>
+      <span class="fixed-val-cp">${formatNumberCompact(Number(d.cp||0))}</span>`;
+  }
+  else if(tab === 'arena'){
+    const av = esc(d.avatar_url)||DEF_AV;
+    inner = `
+      <span class="rank-position-cp">${d.rank}</span>
+      <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp" data-player-id="${esc(d.id)}">${esc(d.name)}</span>
+          ${EYE_SVG(d.id)}
+        </div>
+        <span class="rank-guild-name-cp">${esc(d.guild_name||'Sem Guilda')}</span>
+      </div>
+      <span class="fixed-val-arena">${Number(d.ranking_points||0).toLocaleString()} pts</span>`;
+  }
+  else if(tab === 'ruins'){
+    const av = esc(d.my_avatar)||DEF_AV;
+    inner = `
+      <span class="rank-position-cp">${d.my_rank}</span>
+      <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp">${esc(d.my_name||'Você')}</span>
+        </div>
+        <span class="rank-guild-name-cp">${esc(d.my_guild||'')}</span>
+      </div>
+      <span class="fixed-val-ruins">${d.my_kills}&nbsp;${SKULL_SVG}</span>`;
+  }
+  else if(tab === 'guild'){
+    const flag = esc(d.flag_url)||DEF_FLAG;
+    inner = `
+      <span class="rank-position-cp">${d.rank}</span>
+      <img class="rank-avatar-cp" src="${flag}" onerror="this.src='${DEF_FLAG}'" style="border-radius:6px;">
+      <div class="rank-player-info-cp">
+        <div class="rank-player-name-wrapper">
+          <span class="rank-player-name-cp">${esc(d.name)}</span>
+        </div>
+        <span class="rank-guild-name-cp">Sua Guilda</span>
+      </div>
+      <span class="fixed-val-guild">${formatNumberCompact(Number(d.total_power||0))}</span>`;
+  }
+
+  c.innerHTML = `<div class="fixed-content-inner">${inner}</div>`;
+  c.style.display = 'block';
+
+  // Delegação de clique para olho/nome no footer
+  c.onclick = (e)=>{
+    const t = e.target.closest('.rank-player-name-cp') || e.target.closest('.rank-eye-icon');
+    if(t && t.dataset.playerId) openPlayerModal(t.dataset.playerId);
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA CP — Lógica original preservada na íntegra
+   Cache: getCPCache/setCPCache  →  'ranking_cp_MWF_v4'
+   Shares GlobalDB with mines.js for zero-egress hydration
+═══════════════════════════════════════════════════════════════ */
+async function loadCPRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'ranking_cp_MWF_v4';
+  const w = document.getElementById('rankingWrapper');
+  let finalList = [];
+
+  try{
+    const cached = getCPCache(CACHE_KEY);
+    if(cached){
+      finalList = cached;
+    }else{
+      const loadEl = document.getElementById('loading');
+      if(loadEl) loadEl.textContent = 'Sincronizando Ranking...';
+
+      // 1. Esqueleto leve
+      const {data:sk, error:skE} = await supabase
+        .from('players').select('id,guild_id,combat_power')
+        .neq('is_banned',true).order('combat_power',{ascending:false}).limit(10);
+      if(skE) throw skE;
+
+      // 2. Hydration via GlobalDB
+      const gcMap = await GlobalDB.getAllOwners();
+      const miss=[], upd=[];
+      const hyd = (sk||[]).map(item=>{
+        const c = gcMap[item.id];
+        if(c && c.name){ upd.push(c); return {...item,name:c.name,avatar_url:c.avatar_url}; }
+        miss.push(item.id);
+        return {...item,_needsFetch:true};
+      });
+
+      // 3. Delta fetch dos ausentes
+      if(miss.length){
+        const {data:fp} = await supabase.from('players').select('id,name,avatar_url').in('id',miss);
+        if(fp){
+          fp.forEach(p=>{
+            const idx = hyd.findIndex(h=>h.id===p.id);
+            if(idx!==-1){ hyd[idx].name=p.name; hyd[idx].avatar_url=p.avatar_url; delete hyd[idx]._needsFetch; }
+          });
+          const toSave = fp.map(p=>{ const o=hyd.find(h=>h.id===p.id); return {...p,guild_id:o?.guild_id}; });
+          await GlobalDB.saveOwners(toSave);
+        }
+      }
+      if(upd.length) await GlobalDB.saveOwners(upd);
+
+      // 4. Resolver nomes de guilda
+      const uGuilds = [...new Set(hyd.map(p=>p.guild_id).filter(Boolean))];
+      const gMap = {};
+      if(uGuilds.length){
+        const {data:gs} = await supabase.from('guilds').select('id,name').in('id',uGuilds);
+        (gs||[]).forEach(g=>gMap[g.id]=g.name);
+      }
+
+      finalList = hyd.map(p=>({
+        id:p.id, name:p.name||'Desconhecido', avatar_url:p.avatar_url,
+        guild_name: p.guild_id ? (gMap[p.guild_id]||'Sem Guilda') : 'Sem Guilda',
+        guild_id:p.guild_id, cp:p.combat_power
+      }));
+      setCPCache(CACHE_KEY, finalList);
     }
 
-    // --- FUNÇÕES DE CONTROLE DO MENU ---
-    const toggleMenuRotation = (isOpening) => {
-        if (!openBtn) return;
-        const svg = openBtn.querySelector('svg');
-        if (svg) {
-            if (isOpening) svg.classList.add('icon-vertical');
-            else svg.classList.remove('icon-vertical');
+    // Render da lista
+    if(!finalList || !finalList.length){
+      w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>';
+    }else{
+      let html = '<ol id="rankingListCP">';
+      finalList.slice(0,10).forEach((p,i)=>{
+        const pos = i+1;
+        const av  = esc(p.avatar_url)||DEF_AV;
+        html += `<li data-player-id="${esc(p.id)}">
+          <span class="rank-position-cp">${pos}</span>
+          <img class="rank-avatar-cp ${pos===1?'pulse':''}" src="${av}" onerror="this.src='${DEF_AV}'">
+          <div class="rank-player-info-cp">
+            <div class="rank-player-name-wrapper">
+              <span class="rank-player-name-cp" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
+              ${EYE_SVG(p.id)}
+            </div>
+            <span class="rank-guild-name-cp">${esc(p.guild_name||'Sem Guilda')}</span>
+          </div>
+          <span class="rank-power-cp">${formatNumberCompact(Number(p.cp||0))}</span>
+        </li>`;
+      });
+      html += '</ol>';
+      w.innerHTML = html;
+      delegateListClicks(document.getElementById('rankingListCP'));
+    }
+
+    // Rank pessoal (barra fixa)
+    if(myId){
+      const idx = finalList.findIndex(p=>p.id===myId);
+      if(idx !== -1){
+        myRankData.cp = {...finalList[idx], rank:idx+1};
+      }else{
+        const gcMap = await GlobalDB.getAllOwners();
+        let me = gcMap[myId];
+        if(!me || me.cp===undefined){
+          const {data:sm} = await supabase.from('players').select('id,name,avatar_url,guild_id,combat_power').eq('id',myId).single();
+          me = sm;
+          if(me) await GlobalDB.saveOwners([me]);
         }
-    };
-
-    const openMenu = () => {
-        if(!sideMenu) return;
-        sideMenu.classList.add("open");
-        if(overlay) overlay.style.display = "block";
-        toggleMenuRotation(true);
-        setTimeout(() => {
-            if(overlay) {
-                overlay.style.opacity = "1";
-                overlay.style.pointerEvents = "auto";
-            }
-        }, 10);
-    };
-
-    const closeMenu = () => {
-        if(!sideMenu) return;
-        sideMenu.classList.remove("open");
-        if(overlay) {
-            overlay.style.opacity = "0";
-            overlay.style.pointerEvents = "none";
+        if(me){
+          const {count} = await supabase.from('players').select('*',{count:'exact',head:true}).gt('combat_power',me.combat_power||me.cp);
+          let gn = 'Sem Guilda';
+          if(me.guild_id){
+            const {data:g} = await supabase.from('guilds').select('name').eq('id',me.guild_id).single();
+            if(g) gn = g.name;
+          }
+          myRankData.cp = {id:me.id, name:me.name, avatar_url:me.avatar_url, guild_name:gn, cp:me.combat_power||me.cp, rank:(count||0)+1};
         }
-        toggleMenuRotation(false);
-        setTimeout(() => {
-            if(overlay) overlay.style.display = "none";
-        }, 300);
-    };
+      }
+    }
+    if(activeTab==='cp') renderFixedBar('cp');
 
-    if(openBtn) openBtn.addEventListener("click", openMenu);
-    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
-    if(overlay) overlay.addEventListener("click", closeMenu);
+  }catch(err){
+    const w2 = document.getElementById('rankingWrapper');
+    if(w2) w2.innerHTML = `<div class="loading">Erro: ${esc(err.message)}</div>`;
+  }
+}
 
-    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
-    const renderSideMenuNotifications = () => {
-        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
-        let dailyStatus = {};
-        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+/* ═══════════════════════════════════════════════════════════════
+   ABA GUILDAS — cache compartilhado com guild.js
+   Cache key: 'guild_ranking_weekly'  (formato {data, expiry})
+═══════════════════════════════════════════════════════════════ */
+async function loadGuildRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'guild_ranking_weekly';
+  const w = document.getElementById('guildRankingWrapper');
+  let data = getGuildCache(CACHE_KEY);
 
-        let showGuildDot = false;
-        const now = new Date();
-        const day = now.getUTCDay(); 
-        const hours = now.getUTCHours();
-        const minutes = now.getUTCMinutes();
-        const KEY_SAT = 'aden_guild_notif_seen_saturday';
-        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+  try{
+    if(!data){
+      w.innerHTML = '<div class="loading">Sincronizando guildas...</div>';
+      const {data:rpc, error} = await supabase.rpc('get_guilds_ranking', {limit_count:10});
+      if(error) throw error;
+      data = rpc;
+      setGuildCache(CACHE_KEY, data, ttlNextMonday());
+    }
+    renderGuildList(data, myId, w);
+  }catch(e){
+    w.innerHTML = '<div class="loading">Erro ao carregar ranking de guildas.</div>';
+  }
+}
 
-        if (day === 1) { 
-             localStorage.removeItem(KEY_SAT); 
-             localStorage.removeItem(KEY_SUN); 
+function renderGuildList(data, myId, container){
+  if(!data || !data.length){ container.innerHTML='<div class="loading">Nenhuma guilda encontrada.</div>'; return; }
+  let html = '<ul class="guild-rank-list">';
+  data.forEach((g,i)=>{
+    const pos  = i+1;
+    const flag = esc(g.flag_url)||DEF_FLAG;
+    const pwr  = formatNumberCompact(Number(g.total_power||0));
+    let cls = 'gli';
+    if(pos===1) cls+=' top-1';
+    else if(pos===2) cls+=' top-2';
+    else if(pos===3) cls+=' top-3';
+    html += `<li class="${cls}" data-guild-id="${esc(g.guild_id)}">
+      <span class="gli-pos">${pos}</span>
+      <img class="gli-flag" src="${flag}" onerror="this.src='${DEF_FLAG}'">
+      <div class="gli-info"><span class="gli-name">${esc(g.name)}</span></div>
+      <span class="gli-power">${pwr}</span>
+    </li>`;
+  });
+  html += '</ul>';
+  container.innerHTML = html;
+
+  // Footer fixo — detecta guilda do jogador via GlobalDB
+  if(myId){
+    GlobalDB.getAllOwners().then(gmap=>{
+      const me = gmap[myId];
+      if(me && me.guild_id){
+        const idx = data.findIndex(g => g.guild_id === me.guild_id);
+        if(idx !== -1){
+          myRankData.guild = {...data[idx], rank:idx+1};
+          if(activeTab==='guild') renderFixedBar('guild');
         }
-        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
-        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+      }
+    });
+  }
+}
 
-        const links = menuList.querySelectorAll('.menu-link');
-        links.forEach(link => {
-            const key = link.dataset.menuKey;
-            let shouldShow = false;
+/* ═══════════════════════════════════════════════════════════════
+   ABA ARENA — cache compartilhado com arena.js
+   Cache key: 'arena_top_100_cache'  (formato {expires, data})
+═══════════════════════════════════════════════════════════════ */
+async function loadArenaRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'arena_top_100_cache';
+  const w = document.getElementById('arenaRankingWrapper');
 
-            if (key && dailyStatus[key] === true) shouldShow = true;
-            if (key === 'guild' && showGuildDot) shouldShow = true;
+  // Migração: descarta cache sem 'id'
+  const raw = localStorage.getItem(CACHE_KEY);
+  if(raw && !raw.includes('"id"')) localStorage.removeItem(CACHE_KEY);
 
-            const existingDot = link.querySelector('.menu-notification-dot');
-            if (existingDot) existingDot.remove();
+  let rankData = getArenaCache(CACHE_KEY);
 
-            if (shouldShow) {
-                const dot = document.createElement('div');
-                dot.className = 'menu-notification-dot';
-                link.appendChild(dot);
-            }
-        });
+  // Label temporada
+  const now = new Date();
+  const month = now.toLocaleString('pt-BR',{month:'long'});
+  const lbl = document.getElementById('arenaSeasonLabel');
+  if(lbl) lbl.textContent = `Temporada: ${month[0].toUpperCase()+month.slice(1)} / ${now.getFullYear()}`;
+
+  try{
+    if(!rankData){
+      w.innerHTML = '<div class="loading">Carregando arena...</div>';
+      const {data:rpc, error} = await supabase.rpc('get_arena_top_100');
+      if(!error){
+        const r = normalizeRpc(rpc);
+        if(r?.success && Array.isArray(r.ranking)){
+          rankData = await hydrateProfiles(r.ranking);
+          if(rankData.length) setArenaCache(CACHE_KEY, rankData, minsToMidnightUTC());
+        }
+      }
+      // Fallback direto
+      if(!rankData){
+        const {data:pl} = await supabase.from('players').select('id,name,avatar_url,ranking_points,guild_id')
+          .neq('is_banned',true).order('ranking_points',{ascending:false}).limit(10);
+        if(pl && pl.length){
+          const gids = [...new Set(pl.map(p=>p.guild_id).filter(Boolean))];
+          const gmap = {};
+          if(gids.length){
+            const {data:gs} = await supabase.from('guilds').select('id,name').in('id',gids);
+            (gs||[]).forEach(g=>gmap[g.id]=g.name);
+          }
+          rankData = pl.map(p=>({...p, guild_name: p.guild_id?(gmap[p.guild_id]||'Sem Guilda'):'Sem Guilda'}));
+          if(rankData.length) setArenaCache(CACHE_KEY, rankData, minsToMidnightUTC());
+        }
+      }
+    }
+
+    renderArenaList(rankData||[], myId, w);
+
+  }catch(e){
+    w.innerHTML = '<div class="loading">Erro ao carregar arena.</div>';
+  }
+}
+
+function renderArenaList(data, myId, container){
+  if(!data || !data.length){ container.innerHTML='<div class="loading">Nenhum jogador classificado ainda.</div>'; return; }
+  let html = '<ul class="rank-list-u">';
+  data.slice(0,10).forEach((p,i)=>{
+    const pos = i+1;
+    const av  = esc(p.avatar_url||p.avatar)||DEF_AV;
+    let cls = 'rli';
+    if(pos===1) cls+=' top-1'; else if(pos===2) cls+=' top-2'; else if(pos===3) cls+=' top-3';
+    if(p.id===myId) cls+=' is-me';
+    const pts = Number(p.ranking_points||0).toLocaleString();
+    html += `<li class="${cls}">
+      <span class="rli-pos">${pos}</span>
+      <img class="rli-av" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rli-info">
+        <span class="rli-name" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
+        <span class="rli-guild">${esc(p.guild_name||'Sem Guilda')}</span>
+      </div>
+      ${EYE_SVG(p.id)}
+      <span class="rli-val val-arena">${pts} pts</span>
+    </li>`;
+  });
+  html += '</ul>';
+  container.innerHTML = html;
+  delegateListClicks(container.querySelector('.rank-list-u'));
+
+  // Rank pessoal arena
+  if(myId){
+    const idx = data.findIndex(p=>p.id===myId);
+    if(idx !== -1){
+      myRankData.arena = {...data[idx], rank:idx+1};
+      if(activeTab==='arena') renderFixedBar('arena');
+    }else{
+      (async()=>{
+        try{
+          const {data:me} = await supabase.from('players').select('id,name,avatar_url,ranking_points,guild_id').eq('id',myId).single();
+          if(!me) return;
+          const {count} = await supabase.from('players').select('*',{count:'exact',head:true}).gt('ranking_points',me.ranking_points).neq('is_banned',true);
+          let gn = 'Sem Guilda';
+          if(me.guild_id){ const {data:g} = await supabase.from('guilds').select('name').eq('id',me.guild_id).single(); if(g) gn=g.name; }
+          myRankData.arena = {...me, guild_name:gn, rank:(count||0)+1};
+          if(activeTab==='arena') renderFixedBar('arena');
+        }catch(e){}
+      })();
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA RUÍNAS — cache compartilhado com ruins.js
+   Cache key: 'ruins_kills_ranking_v3'  (formato {data, expires})
+═══════════════════════════════════════════════════════════════ */
+async function loadRuinsRanking(){
+  const myId = await getLocalUserId();
+  const CACHE_KEY = 'ruins_kills_ranking_v3';
+  const w = document.getElementById('ruinsRankingWrapper');
+
+  // Label mensal
+  const now = new Date();
+  const month = now.toLocaleString('pt-BR',{month:'long'});
+  const lbl = document.getElementById('ruinsMonthLabel');
+  if(lbl) lbl.textContent = `Eliminações de ${month[0].toUpperCase()+month.slice(1)} / ${now.getFullYear()}`;
+
+  const cached = getRuinsCache(CACHE_KEY);
+  if(cached){ renderRuinsList({...cached, my_id:myId}, w); return; }
+
+  try{
+    w.innerHTML = '<div class="loading">Carregando ruínas...</div>';
+    const {data, error} = await supabase.rpc('get_ruins_kills_ranking');
+    if(error || !data) throw new Error('rpc failed');
+
+    const top10 = data.top10 || [];
+
+    // Salva top10 no GlobalDB (igual ao ruins.js)
+    if(top10.length){
+      GlobalDB.saveOwners(top10.map(p=>({id:p.id, name:p.name, avatar_url:p.avatar_url, guild_name:p.guild_name||null})));
+    }
+
+    // Dados pessoais com fallback para GlobalDB
+    let myName=data.my_name, myAvatar=data.my_avatar, myGuild=data.my_guild;
+    if(!myName || !myAvatar){
+      const gmap = await GlobalDB.getAllOwners();
+      const me = gmap[myId];
+      if(me){ myName=myName||me.name; myAvatar=myAvatar||me.avatar_url; myGuild=myGuild||me.guild_name; }
+    }
+
+    const result = {
+      top10, my_rank:data.my_rank, my_kills:data.my_kills,
+      my_name:myName||'Você', my_avatar:myAvatar||DEF_AV, my_guild:myGuild||''
     };
+    setRuinsCache(CACHE_KEY, result, Date.now() + minsToMidnightUTC()*60000);
+    renderRuinsList({...result, my_id:myId}, w);
 
-    renderSideMenuNotifications();
+  }catch(e){
+    w.innerHTML = '<div class="loading">Erro ao carregar ruínas.</div>';
+  }
+}
+
+function renderRuinsList(data, container){
+  const top10 = data.top10||[];
+  if(!top10.length){ container.innerHTML='<div class="loading">Nenhuma eliminação este mês.</div>'; return; }
+
+  let html = '<ul class="rank-list-u">';
+  top10.forEach((p,i)=>{
+    const pos  = i+1;
+    const av   = esc(p.avatar_url)||DEF_AV;
+    const kills = Number(p.kills||0);
+    const isMe = p.id === data.my_id;
+    let cls = 'rli';
+    if(pos===1) cls+=' top-1'; else if(pos===2) cls+=' top-2'; else if(pos===3) cls+=' top-3';
+    if(isMe) cls+=' is-me';
+    const gH = p.guild_name ? `<span class="rli-guild">${esc(p.guild_name)}</span>` : '';
+    html += `<li class="${cls}">
+      <span class="rli-pos">${pos}</span>
+      <img class="rli-av" src="${av}" onerror="this.src='${DEF_AV}'">
+      <div class="rli-info">
+        <span class="rli-name" data-player-id="${esc(p.id)}">${esc(p.name||'Desconhecido')}</span>
+        ${gH}
+      </div>
+      ${EYE_SVG(p.id)}
+      <span class="rli-val val-ruins">${kills}&nbsp;${SKULL_SVG}</span>
+    </li>`;
+  });
+
+  // Footer pessoal (fora do top)
+  const inTop = top10.some(p => p.id === data.my_id);
+  if(!inTop && data.my_id){
+    const myGH = data.my_guild ? `<span class="rli-guild">${esc(data.my_guild)}</span>` : '';
+    html += `<li class="rli footer-personal is-me">
+      <span class="rli-pos">${data.my_rank}</span>
+      <img class="rli-av" src="${esc(data.my_avatar)}" onerror="this.src='${DEF_AV}'">
+      <div class="rli-info">
+        <span class="rli-name">${esc(data.my_name||'Você')}</span>
+        ${myGH}
+      </div>
+      <span class="rli-val val-ruins">${data.my_kills}&nbsp;${SKULL_SVG}</span>
+    </li>`;
+  }
+  html += '</ul>';
+  container.innerHTML = html;
+  delegateListClicks(container.querySelector('.rank-list-u'));
+
+  // Rank pessoal ruínas → footer fixo
+  myRankData.ruins = data;
+  if(activeTab==='ruins') renderFixedBar('ruins');
+}
+
+/* ─────────────────────────────────────────
+   TROCA DE ABA
+───────────────────────────────────────── */
+const TAB_TITLES = {
+  cp:    'Ranking de Poder de Combate',
+  guild: 'Ranking de Guildas',
+  arena: 'Ranking da Arena PvP',
+  ruins: 'Ranking das Ruínas'
+};
+
+function switchTab(name){
+  if(!['cp','guild','arena','ruins'].includes(name)) return;
+  activeTab = name;
+
+  document.querySelectorAll('.rank-tab').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  document.querySelectorAll('.ranking-panel').forEach(p=>{
+    p.classList.toggle('active', p.id === `rankingPanel-${name}`);
+  });
+
+  const ptEl = document.getElementById('pageTitle');
+  if(ptEl) ptEl.textContent = TAB_TITLES[name]||'Rankings';
+
+  // Atualiza footer com dados já disponíveis
+  renderFixedBar(name);
+
+  // Carrega dados apenas na primeira vez que a aba é acessada
+  if(!tabLoaded[name]){
+    tabLoaded[name] = true;
+    switch(name){
+      case 'cp':    loadCPRanking();    break;
+      case 'guild': loadGuildRanking(); break;
+      case 'arena': loadArenaRanking(); break;
+      case 'ruins': loadRuinsRanking(); break;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────
+   INIT
+───────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Fechar modal
+  document.getElementById('closePlayerModal')?.addEventListener('click',()=>{
+    const m = document.getElementById('playerModal');
+    if(m) m.style.display='none';
+  });
+  document.getElementById('playerModal')?.addEventListener('click',(e)=>{
+    if(e.target === document.getElementById('playerModal'))
+      document.getElementById('playerModal').style.display='none';
+  });
+
+  // Listener das abas
+  document.querySelectorAll('.rank-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
+  });
+
+  // Aba padrão
+  switchTab('cp');
+});
+
+})(); // fim IIFE
+</script>
+
+<!-- Correção de tamanho de fonte -->
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  const t = document.createElement("div");
+  t.style.cssText="position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  t.textContent="M";
+  document.body.appendChild(t);
+  const aR = t.getBoundingClientRect().height;
+  document.body.removeChild(t);
+  const s = document.createElement("style");
+  s.textContent=`html{font-size:${16*(16/aR)}px!important}body{font-size:1.3rem!important}`;
+  document.head.appendChild(s);
 });
 </script>
+
+<!-- Google Translate -->
+<div id="google_translate_element"></div>
+<script src="auto_translate.js"></script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<!-- Overlay do menu lateral -->
+<div id="sideMenuOverlay"></div>
+
+<!-- MENU LATERAL -->
+<div id="leftSideMenu">
+  <div class="menu-header">
+    <button id="closeMenuBtn" class="close-menu-btn"></button>
+    <h3>Menu</h3>
+    <div style="width:28px;"></div>
+  </div>
+  <ul id="menuList" class="menu-list"></ul>
+</div>
+
 <script>
-(function() {
-    const style = document.createElement('style');
+document.addEventListener("DOMContentLoaded",()=>{
+  const MANUAL_CURRENT_PAGE = "ranking_cp.html";
+  const assetBase = "https://aden-rpg.pages.dev/assets/";
+  const menuItems = [
+    {name:"Tela inicial",url:"index.html",icon:assetBase+"homeic.webp"},
+    {name:"Aventura AFK",url:"afk.html",icon:assetBase+"expm.webp",key:'afk'},
+    {name:"Mineração",url:"mines.html",icon:assetBase+"recursos.webp"},
+    {name:"Áreas de Caça",icon:assetBase+"mapicon.webp",isDropdown:true,subItems:[
+      {name:"Covil de Kelts",url:"covil_de_kelts.html"},
+      {name:"Desfiladeiro",url:"desfiladeiro.html"},
+      {name:"Enclave Etéreo",url:"enclave_etereo.html"},
+      {name:"Erbária",url:"erbaria.html"},
+      {name:"Floresta Mística",url:"floresta_mistica.html"},
+      {name:"Pântano de Molinar",url:"pantano_de_molinar.html"},
+      {name:"Penumbra Uivante",url:"penumbra_uivante.html"},
+      {name:"Queda Fontana",url:"queda_fontana.html"},
+      {name:"Razar",url:"razar.html"},
+      {name:"Vale Arcano",url:"vale_arcano.html"}
+    ]},
+    {name:"Instâncias",icon:assetBase+"dgs.webp",isDropdown:true,subItems:[
+      {name:"Ruínas Ancestrais",url:"ruins.html"}
+    ]},
+    {name:"Arena PvP",url:"arena.html",icon:assetBase+"pvp.webp",key:'arena'},
+    {name:"Chefe Mundial",url:"solo_boss.html",icon:assetBase+"bossm.webp",key:'boss'},
+    {name:"Guilda",url:"guild.html",icon:assetBase+"guilda.webp",key:'guild'},
+    {name:"Bolsa",url:"inventory.html",icon:assetBase+"iconbolsa.webp"},
+    {name:"Ranking",url:"ranking_cp.html",icon:assetBase+"iconranking.webp"},
+    {name:"Títulos",url:"titulos.html",icon:assetBase+"icontitulos.webp"},
+    {name:"Cidades",icon:assetBase+"mapicon.webp",isDropdown:true,subItems:[
+      {name:"Capital",url:"capital.html"},
+      {name:"Astrax",url:"astrax.html"},
+      {name:"Duratar",url:"duratar.html"},
+      {name:"Elendor",url:"elendor.html"},
+      {name:"Mitrar",url:"mitrar.html"},
+      {name:"Tandra",url:"tandra.html"},
+      {name:"Zion",url:"zion.html"}
+    ]}
+  ];
 
-    style.innerHTML = `
-        /* Animação de movimento (serve para ambos) */
-        @keyframes shine {
-            0% { background-position: -200% center; }
-            100% { background-position: 200% center; }
-        }
+  const menuList = document.getElementById("menuList");
+  const sideMenu = document.getElementById("leftSideMenu");
+  const overlay  = document.getElementById("sideMenuOverlay");
+  const openBtn  = document.getElementById("menuToggleBtn");
+  const closeBtn = document.getElementById("closeMenuBtn");
 
-        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
-        .shiny-icon {
-            display: inline-block;
-            background: linear-gradient(
-                120deg, 
-                #add8e6 0%, 
-                #2b4bf2 30%, 
-                #ffffff 40%, 
-                #2b4bf2 50%, 
-                #add8e6 80%
-            );
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            color: transparent;
-            animation: shine 8s linear infinite;
-            font-weight: 900;
-            font-size: 1.2em;
-            line-height: 1;
-            vertical-align: middle;
-            text-shadow: none !important;
-        }
+  const hamburgerSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`;
+  const chevronSVG   = `<svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
 
-        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
-        .jester-icon {
-            display: inline-block;
-            position: relative; 
-            font-size: 1.4em;
-            line-height: 1;
-            vertical-align: middle;
-            text-shadow: none !important;
-            
-            /* Garante que o emoji original seja visto normalmente */
-            color: inherit !important;
-            -webkit-text-fill-color: inherit !important;
-        }
+  if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
 
-        /* A "Fumaça/Sujeira" que passa por cima */
-        .jester-icon::after {
-            content: attr(data-text);
-            position: absolute;
-            left: 0;
-            top: 0;
-            pointer-events: none;
-            
-            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
-            color: transparent;
-            -webkit-text-fill-color: transparent;
-            
-            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
-            background: linear-gradient(
-                120deg, 
-                transparent 25%, 
-                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
-                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
-                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
-                transparent 75%
-            );
-            background-size: 200% auto;
-            
-            /* Recorta a fumaça no formato do emoji */
-            -webkit-background-clip: text;
-            background-clip: text;
-            
-            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
-            filter: blur(1.5px);
-            
-            /* Animação lenta arrastada */
-            animation: shine 6s linear infinite;
-        }
-    `;
-    document.head.appendChild(style);
-
-    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
-    const jesterEmoji = '\uD83E\uDD21'; // 🤡
-
-    function styleTextNodes(node) {
-        if (node.nodeType === 3) {
-            targetIcons.lastIndex = 0; // reset: regex /g é stateful
-            if (!targetIcons.test(node.nodeValue)) return;
-            if (!node.parentNode) return; // nó pode ter sido removido
-            targetIcons.lastIndex = 0;
-            const span = document.createElement('span');
-            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
-                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
-                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
-                }
-                return `<span class="shiny-icon">${match}</span>`;
-            });
-            node.parentNode.replaceChild(span, node);
-        } else if (node.nodeType === 1 && 
-                   node.tagName !== 'SCRIPT' && 
-                   node.tagName !== 'STYLE' && 
-                   !node.classList.contains('shiny-icon') &&
-                   !node.classList.contains('jester-icon')) {
-            Array.from(node.childNodes).forEach(styleTextNodes);
-        }
-    }
-
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            mutation.addedNodes.forEach((node) => {
-                styleTextNodes(node);
-            });
+  if(menuList){
+    menuList.innerHTML = "";
+    menuItems.forEach(item=>{
+      const li = document.createElement("li");
+      li.className = "menu-item";
+      if(item.isDropdown){
+        const isSubActive = item.subItems.some(s=>s.url===MANUAL_CURRENT_PAGE);
+        const a = document.createElement("a");
+        a.className = "menu-link dropdown-toggle";
+        a.style.cursor = "pointer";
+        a.innerHTML = `<img src="${item.icon}" class="menu-icon" alt="" onerror="this.style.display='none'"><span>${item.name}</span>${chevronSVG}`;
+        const subUl = document.createElement("ul");
+        subUl.className = `submenu-list${isSubActive?' open':''}`;
+        if(isSubActive) li.classList.add('dropdown-active');
+        a.addEventListener("click",(e)=>{ e.preventDefault(); e.stopPropagation(); subUl.classList.toggle("open"); li.classList.toggle("dropdown-active"); });
+        item.subItems.forEach(sub=>{
+          const isM = sub.url===MANUAL_CURRENT_PAGE;
+          const sLi = document.createElement("li");
+          sLi.className = `menu-item${isM?' active':''}`;
+          const sA = document.createElement("a");
+          sA.className = "menu-link submenu-link";
+          sA.innerHTML = `<span>${sub.name}</span>`;
+          if(isM){ sA.style.cursor="default"; sA.style.pointerEvents="none"; }
+          else{ sA.href=sub.url; sA.addEventListener("click",()=>setTimeout(closeMenu,100)); }
+          sLi.appendChild(sA); subUl.appendChild(sLi);
         });
+        li.appendChild(a); li.appendChild(subUl);
+      }else{
+        const isM = item.url===MANUAL_CURRENT_PAGE;
+        if(isM) li.classList.add('active');
+        const a = document.createElement("a");
+        a.className="menu-link"; a.dataset.menuKey=item.key||'';
+        a.innerHTML=`<img src="${item.icon}" class="menu-icon" alt="" onerror="this.style.display='none'"><span>${item.name}</span>`;
+        if(isM){ a.style.cursor="default"; a.style.pointerEvents="none"; }
+        else{ a.href=item.url; a.addEventListener("click",()=>setTimeout(closeMenu,100)); }
+        li.appendChild(a);
+      }
+      menuList.appendChild(li);
     });
+  }
 
-    observer.observe(document.body, { childList: true, subtree: true });
-    styleTextNodes(document.body);
+  const toggleRot = (open)=>{ const svg=openBtn?.querySelector('svg'); if(svg) svg.classList.toggle('icon-vertical',open); };
+  const openMenu  = ()=>{ sideMenu?.classList.add("open"); if(overlay){overlay.style.display="block";setTimeout(()=>{overlay.style.opacity="1";overlay.style.pointerEvents="auto";},10);} toggleRot(true); };
+  const closeMenu = ()=>{ sideMenu?.classList.remove("open"); if(overlay){overlay.style.opacity="0";overlay.style.pointerEvents="none";setTimeout(()=>{overlay.style.display="none";},300);} toggleRot(false); };
 
+  if(openBtn)  openBtn.addEventListener("click",openMenu);
+  if(closeBtn) closeBtn.addEventListener("click",closeMenu);
+  if(overlay)  overlay.addEventListener("click",closeMenu);
+
+  // Notificações de bolinha
+  const renderNotifs = ()=>{
+    let daily = {};
+    try{ daily=JSON.parse(localStorage.getItem('aden_daily_actions_status')||'{}'); }catch(e){}
+    let showGuild = false;
+    const now=new Date(), day=now.getUTCDay(), h=now.getUTCHours(), m=now.getUTCMinutes();
+    const KS='aden_guild_notif_seen_saturday', KU='aden_guild_notif_seen_sunday';
+    if(day===1){ localStorage.removeItem(KS); localStorage.removeItem(KU); }
+    if(day===6 && !localStorage.getItem(KS)) showGuild=true;
+    if(day===0 && h===23 && m>=30 && !localStorage.getItem(KU)) showGuild=true;
+    menuList?.querySelectorAll('.menu-link').forEach(link=>{
+      const key = link.dataset.menuKey;
+      const show = (key && daily[key]===true)||(key==='guild'&&showGuild);
+      link.querySelector('.menu-notification-dot')?.remove();
+      if(show){ const dot=document.createElement('div'); dot.className='menu-notification-dot'; link.appendChild(dot); }
+    });
+  };
+  renderNotifs();
+});
+</script>
+
+<!-- Shiny / Jester icons (intacto) -->
+<script>
+(function(){
+  const style = document.createElement('style');
+  style.innerHTML=`
+    @keyframes shine{0%{background-position:-200% center}100%{background-position:200% center}}
+    .shiny-icon{display:inline-block;background:linear-gradient(120deg,#add8e6 0%,#2b4bf2 30%,#fff 40%,#2b4bf2 50%,#add8e6 80%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:shine 8s linear infinite;font-weight:900;font-size:1.2em;line-height:1;vertical-align:middle;text-shadow:none!important}
+    .jester-icon{display:inline-block;position:relative;font-size:1.4em;line-height:1;vertical-align:middle;text-shadow:none!important;color:inherit!important;-webkit-text-fill-color:inherit!important}
+    .jester-icon::after{content:attr(data-text);position:absolute;left:0;top:0;pointer-events:none;color:transparent;-webkit-text-fill-color:transparent;background:linear-gradient(120deg,transparent 25%,rgba(101,67,33,.4) 40%,rgba(139,69,19,.7) 50%,rgba(80,80,80,.5) 60%,transparent 75%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;filter:blur(1.5px);animation:shine 6s linear infinite}
+  `;
+  document.head.appendChild(style);
+  const tgt = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+  const jester = '\uD83E\uDD21';
+  function styleNodes(node){
+    if(node.nodeType===3){
+      tgt.lastIndex=0; if(!tgt.test(node.nodeValue)) return;
+      if(!node.parentNode) return;
+      tgt.lastIndex=0;
+      const sp=document.createElement('span');
+      sp.innerHTML=node.nodeValue.replace(tgt,(m)=>
+        (m.indexOf(jester)!==-1||m==='🤡')
+          ? `<span class="jester-icon" data-text="${m}">${m}</span>`
+          : `<span class="shiny-icon">${m}</span>`
+      );
+      node.parentNode.replaceChild(sp,node);
+    }else if(node.nodeType===1&&node.tagName!=='SCRIPT'&&node.tagName!=='STYLE'&&!node.classList.contains('shiny-icon')&&!node.classList.contains('jester-icon')){
+      Array.from(node.childNodes).forEach(styleNodes);
+    }
+  }
+  new MutationObserver(muts=>muts.forEach(m=>m.addedNodes.forEach(styleNodes))).observe(document.body,{childList:true,subtree:true});
+  styleNodes(document.body);
 })();
 </script>
 </body>

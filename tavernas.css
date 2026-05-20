@@ -154,19 +154,19 @@ html,body {
 /* Seat */
 .seat { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transition:transform 0.15s; }
 .seat:active { transform:scale(0.92); }
-.seat-btn { width:50px; height:50px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; overflow:hidden; }
+.seat-btn { width:50px; height:50px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; }
 .seat-btn:not(.taken):hover { border-color:rgba(122,184,255,0.5); background:rgba(30,40,60,0.6); }
 .seat-btn.taken { border-color:var(--gold-dark); background:var(--seat-taken); box-shadow:0 0 10px rgba(201,169,74,0.2); }
 .seat-btn.taken.speaking { border-color:var(--gold); animation:speak-ring 1.2s ease-in-out infinite; }
 @keyframes speak-ring { 0%,100%{box-shadow:0 0 8px rgba(201,169,74,0.3),0 0 3px var(--gold);} 50%{box-shadow:0 0 20px rgba(201,169,74,0.65),0 0 10px var(--gold);} }
 .seat-btn svg.seat-mic-svg { width:22px; height:22px; }
 .seat-btn.taken svg.seat-mic-svg { display:none; }
-.seat-avatar-img { display:none; width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.seat-avatar-img { display:none; width:100%; height:100%; object-fit:cover; border-radius:50%; overflow: hidden;}
 .seat-btn.taken .seat-avatar-img { display:block; }
 .seat-lbl { font-family:'Cinzel',serif; font-size:0.52rem; letter-spacing:0.06em; color:var(--blue-light); text-align:center; opacity:0.9; }
 .seat-nm { font-size:0.6rem; color:var(--gold-light); max-width:52px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
 .seat-nm.vacant { color:var(--blue-light); opacity:0.55; }
-.muted-badge { position:absolute; bottom:1px; right:1px; width:15px; height:15px; border-radius:50%; background:rgba(192,57,43,0.9); display:none; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.2); }
+.muted-badge { position:absolute; bottom:1px; right:1px; width:15px; height:15px; border-radius:50%; background:rgba(192,57,43,0.9); display:none; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.2);  z-index: 20;}
 .muted-badge svg { width:8px; height:8px; }
 .seat-btn.muted .muted-badge { display:flex; }
 .throne-seat .seat-btn { width:62px; height:62px; border-width:2px; background:rgba(40,25,5,0.8); }

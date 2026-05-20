@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="tavernas.css">
 <!-- Ably SDK carregado no head para estar pronto ao entrar na sala -->
 <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+<!-- Supabase SDK — necessário para buscar avatares/perfis -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
@@ -237,7 +239,7 @@
           <div class="seat-btn" id="seat-btn-t1">
             <svg class="seat-mic-svg" viewBox="0 0 48 48" fill="none"><rect x="10" y="18" width="28" height="20" rx="3" fill="none" stroke="#c9a94a" stroke-width="1.4"/><rect x="8" y="36" width="32" height="5" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.2"/><path d="M10 18 L10 8 L20 14 L24 6 L28 14 L38 8 L38 18" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="8" r="2" fill="#e8d08a"/><circle cx="24" cy="6" r="2" fill="#e8d08a"/><circle cx="38" cy="8" r="2" fill="#e8d08a"/></svg>
             <img class="seat-avatar-img" src="" alt="">
-            <div class="throne-role-badge">Dono</div>
+            <div class="throne-role-badge">Trono</div>
             <div class="muted-badge"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="1" y1="1" x2="23" y2="23"/></svg></div>
           </div>
           <div class="seat-lbl">Trono</div>
@@ -247,10 +249,10 @@
           <div class="seat-btn" id="seat-btn-t2">
             <svg class="seat-mic-svg" viewBox="0 0 48 48" fill="none"><rect x="10" y="18" width="28" height="20" rx="3" fill="none" stroke="#c9a94a" stroke-width="1.4"/><rect x="8" y="36" width="32" height="5" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.2"/><path d="M10 18 L10 8 L20 14 L24 6 L28 14 L38 8 L38 18" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="8" r="2" fill="#e8d08a"/><circle cx="24" cy="6" r="2" fill="#e8d08a"/><circle cx="38" cy="8" r="2" fill="#e8d08a"/></svg>
             <img class="seat-avatar-img" src="" alt="">
-            <div class="throne-role-badge">Admin</div>
+            <div class="throne-role-badge">Trono</div>
             <div class="muted-badge"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="1" y1="1" x2="23" y2="23"/></svg></div>
           </div>
-          <div class="seat-lbl">Admin</div>
+          <div class="seat-lbl">Trono</div>
           <div class="seat-nm vacant" id="seat-name-t2">Vago</div>
         </div>
       </div>

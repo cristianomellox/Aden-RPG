@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tavernas — Aden RPG Online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tavernas.css">
+<!-- Ably SDK carregado no head para estar pronto ao entrar na sala -->
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+</head>
+<body>
+
+<div id="bg"></div>
+<div id="grain"></div>
+
+<!-- ══ TOPBAR ══ -->
+<div id="topbar">
+  <div id="topbar-left">
+    <button class="topbar-back" id="btn-back" style="visibility:hidden;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Voltar
+    </button>
+    <!-- Connection dot — visível dentro da sala (JS controla display) -->
+    <div class="conn-dot off" id="conn-dot" style="display:none;margin-left:4px;"></div>
+  </div>
+  <div id="topbar-center">Tavernas</div>
+  <div id="topbar-right">
+    <button class="topbar-action" id="btn-create" title="Criar Taverna"
+      onclick="showToast('Crie sua taverna por ouro — em breve!')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app">
+
+  <!-- ════════════ LIST VIEW ════════════ -->
+  <div class="view active" id="list-view">
+
+    <div id="list-tabs">
+      <div class="list-tab active" data-tab="popular">Popular</div>
+      <div class="list-tab" data-tab="recentes">Recentes</div>
+      <div class="list-tab" data-tab="minha">Minha</div>
+    </div>
+
+    <div id="list-search">
+      <input type="text" placeholder="Buscar taverna..." id="search-input">
+    </div>
+
+    <!-- ── POPULAR ── -->
+    <div id="pane-popular" class="tab-pane active">
+
+      <div class="sec-label">Tavernas das Cidades</div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna da Capital',312,'Capital')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(60,30,10,0.85)"/><rect x="19" y="22" width="26" height="23" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.4"/><path d="M15 22 L23 11 L32 17 L41 11 L49 22" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><rect x="26" y="33" width="12" height="12" rx="1" fill="none" stroke="#8a6e24" stroke-width="1.1"/><circle cx="23" cy="11" r="2" fill="#e8d08a"/><circle cx="32" cy="17" r="2" fill="#e8d08a"/><circle cx="41" cy="11" r="2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna da Capital</div>
+          <div class="tavern-desc">O centro de tudo em Aden</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+8</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>312</div><div class="t-tag city">Capital</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna de Elendor',187,'Elendor')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(8,28,16,0.9)"/><path d="M32 12 Q46 20 46 34 Q46 48 32 54 Q18 48 18 34 Q18 20 32 12Z" fill="none" stroke="#6ab87a" stroke-width="1.4"/><path d="M22 30 Q32 22 42 30 Q38 40 32 42 Q26 40 22 30Z" fill="rgba(60,140,70,0.2)" stroke="#4a9a5a" stroke-width="1"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna de Elendor</div>
+          <div class="tavern-desc">Entre as arvores eternas</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+4</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>187</div><div class="t-tag city">Elendor</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna de Zion',244,'Zion')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(16,16,46,0.9)"/><polygon points="32,9 42,25 55,25 45,36 49,52 32,42 15,52 19,36 9,25 22,25" fill="none" stroke="#8888ee" stroke-width="1.4" stroke-linejoin="round"/><circle cx="32" cy="32" r="7" fill="none" stroke="#6666cc" stroke-width="1"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna de Zion</div>
+          <div class="tavern-desc">Cidade abencoada pelos magos</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+6</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>244</div><div class="t-tag city">Zion</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna de Mitrar',98,'Mitrar')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(48,18,8,0.9)"/><path d="M18 44 L32 13 L46 44 Z" fill="none" stroke="#e87a3a" stroke-width="1.4" stroke-linejoin="round"/><path d="M22 44 Q32 36 42 44" fill="rgba(220,100,30,0.3)" stroke="#c9641a" stroke-width="1"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna de Mitrar</div>
+          <div class="tavern-desc">Forjada nas brasas do deserto</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>98</div><div class="t-tag city">Mitrar</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna de Tandra',156,'Tandra')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(14,28,46,0.9)"/><path d="M14 46 Q18 26 32 20 Q46 26 50 46" fill="none" stroke="#7ab8d8" stroke-width="1.4" stroke-linecap="round"/><circle cx="32" cy="18" r="3.5" fill="none" stroke="#7ab8d8" stroke-width="1.2"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna de Tandra</div>
+          <div class="tavern-desc">Porto das aguas profundas</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+3</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>156</div><div class="t-tag city">Tandra</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna de Astrax',73,'Astrax')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(26,8,40,0.9)"/><circle cx="32" cy="32" r="15" fill="none" stroke="#c080e8" stroke-width="1.4"/><circle cx="32" cy="32" r="8" fill="none" stroke="#9050c0" stroke-width="0.9"/><line x1="32" y1="13" x2="32" y2="17" stroke="#c080e8" stroke-width="1.5" stroke-linecap="round"/><line x1="32" y1="47" x2="32" y2="51" stroke="#c080e8" stroke-width="1.5" stroke-linecap="round"/><line x1="13" y1="32" x2="17" y2="32" stroke="#c080e8" stroke-width="1.5" stroke-linecap="round"/><line x1="47" y1="32" x2="51" y2="32" stroke="#c080e8" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna de Astrax</div>
+          <div class="tavern-desc">Sob os ceus estrelados</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>73</div><div class="t-tag city">Astrax</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Taverna de Duratar',115,'Duratar')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(36,18,4,0.9)"/><rect x="17" y="23" width="30" height="22" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.4"/><path d="M17 23 L22 13 L32 19 L42 13 L47 23" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><rect x="25" y="29" width="14" height="10" rx="1" fill="none" stroke="#8a6e24" stroke-width="1.1"/><circle cx="22" cy="13" r="2" fill="#e8d08a"/><circle cx="32" cy="19" r="2" fill="#e8d08a"/><circle cx="42" cy="13" r="2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna de Duratar</div>
+          <div class="tavern-desc">Onde os guerreiros descansam</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+2</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>115</div><div class="t-tag city">Duratar</div></div>
+      </div>
+
+      <div class="sec-label">Tavernas de Jogadores</div>
+
+      <div class="tavern-card" onclick="openRoom('Cla Liberdade',1816,'Cla Liberdade')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(8,16,36,0.9)"/><path d="M32 9 L36 22 H51 L40 31 L44 44 L32 35 L20 44 L24 31 L13 22 H28 Z" fill="none" stroke="#c9a94a" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Cla Liberdade</div>
+          <div class="tavern-desc">Sejam bem-vindos</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+6</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>1816</div><div class="t-tag">Cla Liberdade</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('A Estalagem do Dragao',36,'Cla Tempestade')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(70,24,8,0.85)"/><path d="M32 13 C21 17 15 26 17 34 C19 41 25 45 32 47 C39 45 45 41 47 34 C49 26 43 17 32 13Z" fill="rgba(201,120,30,0.35)" stroke="#c9a94a" stroke-width="1.2"/><circle cx="27" cy="30" r="2.2" fill="#e8d08a"/><circle cx="37" cy="30" r="2.2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">A Estalagem do Dragao</div>
+          <div class="tavern-desc">Bem-vindo a minha sala</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+5</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>36</div><div class="t-tag">Cla Tempestade</div></div>
+      </div>
+
+      <div class="tavern-card" onclick="openRoom('Imperio Oficial',42,'LehCaps')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(12,8,4,0.9)"/><path d="M16 43 L20 26 L28 34 L32 19 L36 34 L44 26 L48 43 Z" fill="none" stroke="#c9a94a" stroke-width="1.5" stroke-linejoin="round"/><rect x="16" y="43" width="32" height="5" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.2"/><circle cx="20" cy="26" r="2" fill="#e8d08a"/><circle cx="32" cy="19" r="2" fill="#e8d08a"/><circle cx="44" cy="26" r="2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Imperio Oficial</div>
+          <div class="tavern-desc">Melhor painho do mundo...</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+1</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>42</div><div class="t-tag">LehCaps</div></div>
+      </div>
+
+    </div><!-- /pane-popular -->
+
+    <!-- ── RECENTES ── -->
+    <div id="pane-recentes" class="tab-pane">
+      <div class="sec-label">Tavernas das Cidades</div>
+      <div class="tavern-card" onclick="openRoom('Taverna da Capital',312,'Capital')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(60,30,10,0.85)"/><rect x="19" y="22" width="26" height="23" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.4"/><path d="M15 22 L23 11 L32 17 L41 11 L49 22" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="23" cy="11" r="2" fill="#e8d08a"/><circle cx="32" cy="17" r="2" fill="#e8d08a"/><circle cx="41" cy="11" r="2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna da Capital</div>
+          <div class="tavern-desc">O centro de tudo em Aden</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+8</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>312</div><div class="t-tag city">Capital</div></div>
+      </div>
+      <div class="sec-label">Tavernas de Jogadores</div>
+      <div class="tavern-card" onclick="openRoom('A Estalagem do Dragao',36,'Cla Tempestade')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(70,24,8,0.85)"/><path d="M32 13 C21 17 15 26 17 34 C19 41 25 45 32 47 C39 45 45 41 47 34 C49 26 43 17 32 13Z" fill="rgba(201,120,30,0.35)" stroke="#c9a94a" stroke-width="1.2"/><circle cx="27" cy="30" r="2.2" fill="#e8d08a"/><circle cx="37" cy="30" r="2.2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">A Estalagem do Dragao</div>
+          <div class="tavern-desc">Bem-vindo a minha sala</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+5</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>36</div><div class="t-tag">Cla Tempestade</div></div>
+      </div>
+    </div>
+
+    <!-- ── MINHA ── -->
+    <div id="pane-minha" class="tab-pane">
+      <div class="empty-state">
+        <svg width="58" height="58" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" stroke="var(--border-mid)" stroke-width="1.5"/><rect x="19" y="23" width="26" height="22" rx="2" fill="none" stroke="var(--gold-dark)" stroke-width="1.4"/><path d="M15 23 L23 12 L32 18 L41 12 L49 23" fill="none" stroke="var(--gold-dark)" stroke-width="1.4" stroke-linejoin="round"/><line x1="32" y1="37" x2="32" y2="31" stroke="var(--gold-dark)" stroke-width="1.5" stroke-linecap="round"/><line x1="28" y1="34" x2="36" y2="34" stroke="var(--gold-dark)" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <p>Voce ainda nao possui<br>uma taverna propria.</p>
+        <button class="es-btn" onclick="showToast('Crie sua taverna usando ouro — em breve!')">Fundar uma Taverna</button>
+      </div>
+      <div class="sec-label">Tavernas das Cidades</div>
+      <div class="tavern-card" onclick="openRoom('Taverna da Capital',312,'Capital')">
+        <div class="tavern-cover"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="31" fill="rgba(60,30,10,0.85)"/><rect x="19" y="22" width="26" height="23" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.4"/><path d="M15 22 L23 11 L32 17 L41 11 L49 22" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="23" cy="11" r="2" fill="#e8d08a"/><circle cx="32" cy="17" r="2" fill="#e8d08a"/><circle cx="41" cy="11" r="2" fill="#e8d08a"/></svg></div>
+        <div class="tavern-info">
+          <div class="tavern-name">Taverna da Capital</div>
+          <div class="tavern-desc">O centro de tudo em Aden</div>
+          <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+8</div></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>312</div><div class="t-tag city">Capital</div></div>
+      </div>
+    </div>
+
+  </div><!-- /list-view -->
+
+
+  <!-- ════════════ ROOM VIEW ════════════ -->
+  <div class="view" id="room-view">
+    <div id="room-bg"></div>
+
+    <!-- Header -->
+    <div id="room-header">
+      <div id="room-header-name">Nome da Taverna</div>
+      <div id="room-people-btn" onclick="openPeopleModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span id="room-people-count">0</span>
+      </div>
+    </div>
+
+    <!-- Capacity bar -->
+    <div id="capacity-bar-wrap"><div id="capacity-bar" style="width:0%"></div></div>
+
+    <!-- Seats -->
+    <div id="room-scene">
+      <div class="orn-row">
+        <div class="orn-line"></div>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><polygon points="8,1 10,6 15,6 11,9 13,15 8,11 3,15 5,9 1,6 6,6" fill="none" stroke="#c9a94a" stroke-width="1" stroke-linejoin="round"/></svg>
+        <div class="orn-line r"></div>
+      </div>
+
+      <!-- Thrones (owner + admin only) -->
+      <div id="throne-row">
+        <div class="seat throne-seat" id="seat-wrap-t1" onclick="onSeatClick('t1')">
+          <div class="seat-btn" id="seat-btn-t1">
+            <svg class="seat-mic-svg" viewBox="0 0 48 48" fill="none"><rect x="10" y="18" width="28" height="20" rx="3" fill="none" stroke="#c9a94a" stroke-width="1.4"/><rect x="8" y="36" width="32" height="5" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.2"/><path d="M10 18 L10 8 L20 14 L24 6 L28 14 L38 8 L38 18" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="8" r="2" fill="#e8d08a"/><circle cx="24" cy="6" r="2" fill="#e8d08a"/><circle cx="38" cy="8" r="2" fill="#e8d08a"/></svg>
+            <img class="seat-avatar-img" src="" alt="">
+            <div class="throne-role-badge">Dono</div>
+            <div class="muted-badge"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="1" y1="1" x2="23" y2="23"/></svg></div>
+          </div>
+          <div class="seat-lbl">Trono</div>
+          <div class="seat-nm vacant" id="seat-name-t1">Vago</div>
+        </div>
+        <div class="seat throne-seat" id="seat-wrap-t2" onclick="onSeatClick('t2')">
+          <div class="seat-btn" id="seat-btn-t2">
+            <svg class="seat-mic-svg" viewBox="0 0 48 48" fill="none"><rect x="10" y="18" width="28" height="20" rx="3" fill="none" stroke="#c9a94a" stroke-width="1.4"/><rect x="8" y="36" width="32" height="5" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.2"/><path d="M10 18 L10 8 L20 14 L24 6 L28 14 L38 8 L38 18" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="8" r="2" fill="#e8d08a"/><circle cx="24" cy="6" r="2" fill="#e8d08a"/><circle cx="38" cy="8" r="2" fill="#e8d08a"/></svg>
+            <img class="seat-avatar-img" src="" alt="">
+            <div class="throne-role-badge">Admin</div>
+            <div class="muted-badge"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="1" y1="1" x2="23" y2="23"/></svg></div>
+          </div>
+          <div class="seat-lbl">Admin</div>
+          <div class="seat-nm vacant" id="seat-name-t2">Vago</div>
+        </div>
+      </div>
+
+      <!-- Mic seats (JS-built) -->
+      <div id="seats-grid"></div>
+    </div>
+
+    <!-- Chat -->
+    <div id="chat-area">
+      <div id="chat-messages"></div>
+      <div id="room-action-bar">
+        <button class="action-btn" id="btn-mic-mute" onclick="toggleMic()" title="Microfone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button class="action-btn" id="btn-audio-mute" onclick="toggleAudio()" title="Mutar audio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </button>
+        <input type="text" id="chat-input" placeholder="Diga algo...">
+        <button class="action-btn" id="btn-gift" onclick="openGiftModal()" title="Presente">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#e8d08a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+        </button>
+        <button class="action-btn" id="btn-send" onclick="sendMessage()" title="Enviar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1a0f00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div><!-- /room-view -->
+
+</div><!-- /app -->
+
+<!-- ══ BOTTOM NAV ══ -->
+<div id="nav-backdrop" onclick="closeNavDropdown()"></div>
+<div id="nav-dropdown">
+  <div class="drop-item" onclick="openIframe('Aventura AFK','afk.html')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    <span>Aventura AFK</span>
+  </div>
+  <div class="drop-item" onclick="openIframe('Mineracao','mines.html')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="3" width="6" height="6"/><rect x="16" y="3" width="6" height="6"/><rect x="9" y="14" width="6" height="6"/><line x1="5" y1="9" x2="5" y2="14"/><line x1="19" y1="9" x2="19" y2="14"/><line x1="5" y1="14" x2="12" y2="14"/><line x1="19" y1="14" x2="12" y2="14"/></svg>
+    <span>Mineracao</span>
+  </div>
+  <div class="drop-item" onclick="openIframe('Chefe Mundial','solo_boss.html')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <span>Chefe Mundial</span>
+  </div>
+</div>
+
+<div id="bottom-nav">
+  <a href="index.html" class="nav-item" style="text-decoration:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Inicio
+  </a>
+  <div class="nav-item" id="nav-navegar" onclick="toggleNavDropdown()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+    Navegar
+  </div>
+  <div class="nav-item" onclick="openIframe('Guilda','guild.html')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Guilda
+  </div>
+  <div class="nav-item" onclick="openIframe('Bolsa','inventory.html')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+    Bolsa
+  </div>
+  <div class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Tavernas
+  </div>
+</div>
+
+<!-- ══ IFRAME OVERLAY ══ -->
+<div id="iframe-overlay">
+  <div id="iframe-topbar">
+    <div></div>
+    <span id="iframe-page-title">-</span>
+    <button id="iframe-close" onclick="closeIframe()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <iframe id="iframe-frame" src="" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+</div>
+
+<!-- ══ CONTEXT MENU ══ -->
+<div id="ctx-backdrop" onclick="closeCtxMenu()"></div>
+<div id="ctx-menu"></div>
+
+<!-- ══ PEOPLE MODAL ══ -->
+<div class="modal-backdrop" id="people-modal" onclick="if(event.target===this)closePeopleModal()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Pessoas na Sala</div>
+      <button class="modal-close" onclick="closePeopleModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input class="people-search" type="text" placeholder="Buscar pessoa...">
+      <div id="people-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ GIFT MODAL ══ -->
+<div class="modal-backdrop" id="gift-modal" onclick="if(event.target===this)closeGiftModal()">
+  <div class="modal-sheet" style="max-height:82vh;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Enviar Presente</div>
+      <button class="modal-close" onclick="closeGiftModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="gift-recipient-area">
+      <div class="gift-rec-label">Para quem? (toque para selecionar)</div>
+      <div class="gift-rec-list" id="gift-recipients"></div>
+    </div>
+    <div class="gift-tabs">
+      <div class="gift-tab active" data-tab="geral">Geral</div>
+      <div class="gift-tab" data-tab="bolsa">Bolsa</div>
+    </div>
+    <div class="gift-tab-pane active" id="gift-pane-geral"><div id="gift-grid-geral"></div></div>
+    <div class="gift-tab-pane" id="gift-pane-bolsa"><div id="gift-grid-bolsa"></div></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script src="tavernas.js"></script>
+</body>
+</html>

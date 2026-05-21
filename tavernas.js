@@ -105,7 +105,8 @@ let PLAYER = {
   name:       localStorage.getItem('aden_name') || localStorage.getItem('player_name') || 'Jogador',
   role:       localStorage.getItem('aden_role') || 'member',
   guild:      localStorage.getItem('aden_guild')|| '',
-  avatar_url: null
+  avatar_url: null,
+  nobless:    0
 };
 
 async function initPlayer() {
@@ -123,26 +124,26 @@ async function initPlayer() {
     localStorage.setItem('aden_guild', PLAYER.guild);
   }
   // Se avatar ainda é null, busca direto do Supabase antes de entrar no Ably
-  if (!PLAYER.avatar_url) {
-    try {
-      const sb = getSB();
-      if (sb) {
-        const { data: rows } = await sb
-          .from('players')
-          .select('id, name, avatar_url, guild_id')
-          .eq('id', PLAYER.id)
-          .maybeSingle();
-        if (rows?.avatar_url) {
-          PLAYER.avatar_url = rows.avatar_url;
-          PLAYER.name       = rows.name       || PLAYER.name;
-          PLAYER.guild      = rows.guild_id   || PLAYER.guild;
-          // Salva no cache local para próximas vezes
-          await dbSaveOwners([{ id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url, guild_id: PLAYER.guild }]);
-          ownersCache[PLAYER.id] = { id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url };
-        }
+  // Sempre busca do Supabase para garantir nobless, role e avatar atualizados
+  try {
+    const sb = getSB();
+    if (sb) {
+      const { data: rows } = await sb
+        .from('players')
+        .select('id, name, avatar_url, guild_id, nobless, rank')
+        .eq('id', PLAYER.id)
+        .maybeSingle();
+      if (rows) {
+        PLAYER.avatar_url = rows.avatar_url || PLAYER.avatar_url;
+        PLAYER.name       = rows.name       || PLAYER.name;
+        PLAYER.guild      = rows.guild_id   || PLAYER.guild;
+        PLAYER.nobless    = rows.nobless     || 0;
+        if (rows.rank) PLAYER.role = rows.rank;
+        await dbSaveOwners([{ id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url, guild_id: PLAYER.guild }]);
+        ownersCache[PLAYER.id] = { id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url };
       }
-    } catch(e) { console.warn('initPlayer supabase fallback:', e); }
-  }
+    }
+  } catch(e) { console.warn('initPlayer supabase fetch:', e); }
 }
 
 // Cache de perfis de outros jogadores (owners)
@@ -172,8 +173,52 @@ async function fetchMissingProfiles(ids) {
   } catch (e) { console.warn('fetchMissingProfiles:', e); }
 }
 
+// ── Mapeamento de Tronos por Cidade ──
+// throneNobless[0]=null → líder da guilda dona da cidade
+// throneNobless[N]      → código nobless exigido
+const CITY_THRONE_DATA = {
+  'Taverna da Capital': {
+    cityId: 1,
+    throneNobless: [null, 101, 102, 102],
+    throneLabels:  ['Rei / Rainha', 'Consorte Real', 'Príncipe/Princesa', 'Príncipe/Princesa']
+  },
+  'Taverna de Zion':    { cityId: 2, throneNobless: [null, 201, 202], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
+  'Taverna de Elendor': { cityId: 3, throneNobless: [null, 301, 302], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
+  'Taverna de Mitrar':  { cityId: 4, throneNobless: [null, 401, 402], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
+  'Taverna de Tandra':  { cityId: 5, throneNobless: [null, 501, 502], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
+  'Taverna de Astrax':  { cityId: 6, throneNobless: [null, 601, 602], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
+  'Taverna de Duratar': { cityId: 7, throneNobless: [null, 701, 702], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
+};
+
+// ── Silêncio Local (Sessão) ──
+// Persiste enquanto a aba estiver aberta; limpa ao fechar/reabrir.
+const localMutes = new Set(
+  JSON.parse(sessionStorage.getItem('aden_local_mutes') || '[]')
+);
+function saveLocalMutes()          { sessionStorage.setItem('aden_local_mutes', JSON.stringify([...localMutes])); }
+function isLocallyMuted(id)        { return localMutes.has(id); }
+
+function toggleLocalMute(playerId) {
+  if (localMutes.has(playerId)) localMutes.delete(playerId);
+  else                          localMutes.add(playerId);
+  saveLocalMutes();
+  // Aplica no elemento de áudio
+  const audio = document.getElementById('audio-' + playerId);
+  if (audio) audio.muted = localMutes.has(playerId) || audioMuted;
+  // Atualiza badge visual no assento atual do jogador
+  const mem = roomMembers[playerId];
+  if (mem?.seatId) updateSeatLocalMuteBadge(mem.seatId, playerId);
+  showToast(localMutes.has(playerId) ? 'Silenciado para você.' : 'Silêncio removido.');
+}
+
+function updateSeatLocalMuteBadge(seatId, playerId) {
+  document.getElementById('seat-btn-' + seatId)?.classList.toggle('locally-muted', isLocallyMuted(playerId));
+}
+
 // ── Runtime state ──
 let ablyReady     = false;
+let currentRoomCityMeta = null;   // { cityId, ownerGuildId, throneNobless, throneLabels }
+let currentThroneIds    = [];      // ['t1','t2',...] — dinâmico por cidade
 let ablyClient    = null;
 let globalChannel = null; // 'taverna:global' — presença global para lista
 let roomChannel   = null;
@@ -441,7 +486,30 @@ function openRoom(name, _online, tag) {
   document.getElementById('list-view').classList.remove('active');
   document.getElementById('room-view').classList.add('active', 'fade-in');
 
+  // Resolve metadata de cidade para tronos
+  const cityMeta = CITY_THRONE_DATA[name] ? { ...CITY_THRONE_DATA[name], _playerIsOwnerLeader: false } : null;
+  currentRoomCityMeta = cityMeta;
+  currentThroneIds = [];
+  if (cityMeta) {
+    currentThroneIds = cityMeta.throneNobless.map((_, i) => 't' + (i + 1));
+    // Async: check if this player is the leader of the guild that owns this city
+    (async () => {
+      if (!supabase || !PLAYER.guild) return;
+      const { data: cityRow } = await supabase
+        .from('guild_battle_cities')
+        .select('owner')
+        .eq('id', cityMeta.cityId)
+        .single();
+      if (cityRow?.owner === PLAYER.guild && PLAYER.role === 'leader') {
+        currentRoomCityMeta._playerIsOwnerLeader = true;
+      }
+    })();
+  } else {
+    currentThroneIds = ['t1', 't2'];
+  }
+
   resetSeats();
+  buildThroneRow(name);
   clearChat();
   sysMsg('Bem-vindo a ' + name + ' · max ' + ROOM_CAPACITY + ' pessoas');
   sysMsg('Clique em um assento para entrar com o microfone ativado.');
@@ -501,8 +569,15 @@ function closeRoom() {
 //  ABLY CHANNEL + PRESENCE
 // ══════════════════════════════════════════
 function joinChannel(roomId) {
-  if (roomChannel) { try { roomChannel.detach(); } catch(_){} }
-  if (sigChannel)  { try { sigChannel.detach();  } catch(_){} }
+  if (roomChannel) {
+    try { roomChannel.unsubscribe();          } catch(_){}
+    try { roomChannel.presence.unsubscribe(); } catch(_){}
+    try { roomChannel.detach();               } catch(_){}
+  }
+  if (sigChannel) {
+    try { sigChannel.unsubscribe(); } catch(_){}
+    try { sigChannel.detach();      } catch(_){}
+  }
 
   roomChannel = ablyClient.channels.get('taverna:' + roomId);
 
@@ -560,6 +635,15 @@ function joinChannel(roomId) {
       });
       updateOnlineCount();
       refreshPeopleModal();
+
+      // Espectadores: pede aos membros SENTADOS que iniciem uma conexão WebRTC conosco
+      // (localStream é null aqui pois não estamos sentados, então não podemos iniciar)
+      // Publicamos um evento "spectator-join" para que quem tem microfone ativo
+      // nos envie um offer, permitindo que ouçamos sem estar sentados.
+      if (!localStream) {
+        roomChannel?.publish('spectator-join', { id: PLAYER.id });
+      }
+
       if (idsToFetch.length) {
         fetchMissingProfiles(idsToFetch).then(() => {
           idsToFetch.forEach(id => {
@@ -590,9 +674,12 @@ function joinChannel(roomId) {
 }
 
 function leaveChannel() {
-  try { roomChannel?.presence.leave(); } catch(_){}
-  try { roomChannel?.detach(); }         catch(_){}
-  try { sigChannel?.detach(); }          catch(_){}
+  try { roomChannel?.presence.leave();       } catch(_){}
+  try { roomChannel?.unsubscribe();          } catch(_){}
+  try { roomChannel?.presence.unsubscribe(); } catch(_){}
+  try { roomChannel?.detach();               } catch(_){}
+  try { sigChannel?.unsubscribe();           } catch(_){}
+  try { sigChannel?.detach();                } catch(_){}
   roomChannel = null; sigChannel = null;
   for (const pc of Object.values(peerConns)) { try { pc.close(); } catch(_){} }
   peerConns = {};
@@ -777,6 +864,10 @@ function renderSeat(clientId, seatId, name, muted, avatarUrl) {
   if (!btn) return;
   btn.classList.add('taken');
   btn.classList.toggle('muted', !!muted);
+  // Apply local-mute badge (only relevant for others, not self)
+  if (clientId !== PLAYER.id) {
+    btn.classList.toggle('locally-muted', isLocallyMuted(clientId));
+  }
   const img = btn.querySelector('.seat-avatar-img');
   if (img) {
     const url = avatarUrl || resolveAvatar(clientId, name, 104);
@@ -799,7 +890,8 @@ function clearSeat(seatId) {
 function resetSeats() {
   mySeats = {};
   for (let i = 1; i <= 10; i++) clearSeat(String(i));
-  clearSeat('t1'); clearSeat('t2');
+  // Clear all possible throne seats
+  for (let t = 1; t <= 4; t++) clearSeat('t' + t);
 }
 
 function setSpeaking(seatId, on) {
@@ -809,18 +901,65 @@ function setSpeaking(seatId, on) {
 // ══════════════════════════════════════════
 //  SEAT CLICK / CLAIM
 // ══════════════════════════════════════════
+function isThroneId(seatId) {
+  return /^t\d+$/.test(seatId);
+}
+
+// Returns null if allowed, or a string (toast message) if blocked
+function getThroneAccessDeniedMsg(seatId) {
+  // Bobo da Corte (103) bloqueado em TODOS os assentos de áudio
+  if (PLAYER.nobless === 103) return 'O Bobo da Corte não pode usar assentos de áudio.';
+
+  // Assentos normais (mic 1-10): qualquer jogador pode usar (exceto bobo, já tratado acima)
+  if (!isThroneId(seatId)) return null;
+
+  const meta = currentRoomCityMeta;
+
+  // Sala sem metadado de cidade: apenas owner/admin (salas customizadas de jogadores)
+  if (!meta) {
+    if (PLAYER.role !== 'owner' && PLAYER.role !== 'admin')
+      return 'Apenas o dono e administradores podem usar os tronos.';
+    return null;
+  }
+
+  // ── Sala de cidade oficial ──
+  const throneIdx      = parseInt(seatId.slice(1), 10) - 1;
+  const requiredNobless = meta.throneNobless[throneIdx];
+
+  // Trono do Rei/Rainha / Lord/Lady (requiredNobless === null)
+  // → só o líder da guilda dona da cidade (verificado via _playerIsOwnerLeader)
+  if (requiredNobless === null) {
+    if (currentRoomCityMeta._playerIsOwnerLeader) return null;
+    return 'Este trono é reservado ao Rei/Rainha ou Lord/Lady regente desta cidade.';
+  }
+
+  // Tronos de título (Consorte, Príncipe/Nobre…)
+  // O nobless do jogador deve ser EXATAMENTE o código exigido por ESTE trono
+  // (ex: nobless=101 = Consorte da Capital; nobless=201 = Consorte de Zion — não são intercambiáveis)
+  if (PLAYER.nobless === requiredNobless) return null;
+
+  const cityName = currentRoom?.name || 'desta cidade';
+  const label    = meta.throneLabels[throneIdx] || 'título correspondente';
+  return 'Este trono é exclusivo para ' + label + ' d' + (cityName.includes('Capital') ? 'a' : 'e') + ' ' + cityName.replace('Taverna da ', '').replace('Taverna de ', '') + '.';
+}
+
 function onSeatClick(seatId) {
   const btn = document.getElementById('seat-btn-' + seatId);
   if (!btn) return;
-  const isThrone = seatId === 't1' || seatId === 't2';
   const isTaken  = btn.classList.contains('taken');
   const isMySeat = !!mySeats[seatId];
 
-  if (isThrone && !isTaken && PLAYER.role !== 'owner' && PLAYER.role !== 'admin') {
-    showToast('Apenas o dono e administradores podem usar os tronos.');
+  if (!isTaken) {
+    const deny = getThroneAccessDeniedMsg(seatId);
+    if (deny) { showToast(deny); return; }
+    // Regular seat jester block
+    if (PLAYER.nobless === 103 && !isThroneId(seatId)) {
+      showToast('O Bobo da Corte não pode usar assentos de áudio.');
+      return;
+    }
+    claimSeat(seatId);
     return;
   }
-  if (!isTaken) { claimSeat(seatId); return; }
 
   const rect       = btn.getBoundingClientRect();
   const occupantId = Object.keys(roomMembers).find(id => roomMembers[id].seatId === seatId);
@@ -946,7 +1085,10 @@ function updateMicBtn() {
 function toggleAudio() {
   audioMuted = !audioMuted;
   document.getElementById('btn-audio-mute')?.classList.toggle('audio-off', audioMuted);
-  document.querySelectorAll('.remote-audio').forEach(el => { el.muted = audioMuted; });
+  document.querySelectorAll('.remote-audio').forEach(el => {
+    const pid = el.id.replace('audio-', '');
+    el.muted = audioMuted || isLocallyMuted(pid);
+  });
   showToast(audioMuted ? 'Audio mutado.' : 'Audio reativado.');
 }
 
@@ -1004,7 +1146,25 @@ function startSpeakDetect() {
 //  WEBRTC
 // ══════════════════════════════════════════
 async function initiateCall(peerId) {
-  if (peerConns[peerId] || !localStream) return;
+  if (!localStream) return;
+
+  const existingPc = peerConns[peerId];
+  if (existingPc) {
+    // Conexão existe mas pode não ter nossos tracks de áudio —
+    // ocorre quando recebemos um offer antes de ter o microfone ativo.
+    const senders  = existingPc.getSenders();
+    const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
+    if (!hasAudio) {
+      localStream.getTracks().forEach(t => existingPc.addTrack(t, localStream));
+      try {
+        const offer = await existingPc.createOffer();
+        await existingPc.setLocalDescription(offer);
+        sendSignal(peerId, 'offer', offer);
+      } catch(e) { console.error('renegotiate:', e); }
+    }
+    return;
+  }
+
   const pc = makePeer(peerId);
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   try {
@@ -1046,7 +1206,7 @@ function makePeer(peerId) {
       audio.id       = 'audio-' + peerId;
       audio.className = 'remote-audio';
       audio.autoplay  = true;
-      audio.muted     = audioMuted;
+      audio.muted     = audioMuted || isLocallyMuted(peerId);
       document.body.appendChild(audio);
     }
     audio.srcObject = e.streams[0];
@@ -1130,9 +1290,14 @@ function onNameClick(name) {
 //  MODERATION
 // ══════════════════════════════════════════
 function buildOtherMenu(occupant, isAdmin) {
+  const isMuted = occupant ? isLocallyMuted(occupant.id) : false;
   const items = [
     { icon: iconProfile(), label: 'Ver perfil', danger: false,
-      action: () => showToast('Perfil de ' + (occupant?.name || '?')) }
+      action: () => showToast('Perfil de ' + (occupant?.name || '?')) },
+    { icon: iconLocalMute(isMuted),
+      label: isMuted ? 'Remover silêncio' : 'Silenciar para mim',
+      danger: false,
+      action: () => { if (occupant) toggleLocalMute(occupant.id); } }
   ];
   if (isAdmin && occupant) {
     const canMod = !(occupant.role === 'owner' || (PLAYER.role === 'admin' && occupant.role === 'admin'));
@@ -1384,6 +1549,44 @@ function bindInputs() {
 }
 
 // ══════════════════════════════════════════
+//  THRONE ROW (dynamic per city)
+// ══════════════════════════════════════════
+function buildThroneRow(roomName) {
+  const row = document.getElementById('throne-row');
+  if (!row) return;
+  row.innerHTML = '';
+
+  const meta = CITY_THRONE_DATA[roomName];
+  const count = meta ? meta.throneNobless.length : 2;
+  const labels = meta ? meta.throneLabels : ['Trono', 'Trono'];
+
+  for (let i = 0; i < count; i++) {
+    const tid = 't' + (i + 1);
+    const label = labels[i] || 'Trono';
+    const seat = document.createElement('div');
+    seat.className = 'seat throne-seat';
+    seat.id = 'seat-wrap-' + tid;
+    seat.innerHTML = `
+      <div class="seat-btn" id="seat-btn-${tid}">
+        <svg class="seat-mic-svg" viewBox="0 0 48 48" fill="none"><rect x="10" y="18" width="28" height="20" rx="3" fill="none" stroke="#c9a94a" stroke-width="1.4"/><rect x="8" y="36" width="32" height="5" rx="2" fill="none" stroke="#c9a94a" stroke-width="1.2"/><path d="M10 18 L10 8 L20 14 L24 6 L28 14 L38 8 L38 18" fill="none" stroke="#c9a94a" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="8" r="2" fill="#e8d08a"/><circle cx="24" cy="6" r="2" fill="#e8d08a"/><circle cx="38" cy="8" r="2" fill="#e8d08a"/></svg>
+        <img class="seat-avatar-img" src="" alt="">
+        <div class="throne-role-badge">${label}</div>
+        <div class="muted-badge"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="1" y1="1" x2="23" y2="23"/></svg></div>
+        <div class="local-mute-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+            <line x1="1" y1="1" x2="23" y2="23"/>
+            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+          </svg>
+        </div>
+      </div>
+      <div class="seat-lbl">${label}</div>
+      <div class="seat-nm vacant" id="seat-name-${tid}">Vago</div>`;
+    seat.addEventListener('click', () => onSeatClick(tid));
+    row.appendChild(seat);
+  }
+}
+
+// ══════════════════════════════════════════
 //  SEAT GRID (JS-built)
 // ══════════════════════════════════════════
 function buildSeatsGrid() {
@@ -1409,6 +1612,12 @@ function buildSeatsGrid() {
             <line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
         </div>
+        <div class="local-mute-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+            <line x1="1" y1="1" x2="23" y2="23"/>
+            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+          </svg>
+        </div>
       </div>
       <div class="seat-lbl">Mic ${i}</div>
       <div class="seat-nm vacant" id="seat-name-${i}">Vago</div>`;
@@ -1420,6 +1629,13 @@ function buildSeatsGrid() {
 // ══════════════════════════════════════════
 //  ICONS
 // ══════════════════════════════════════════
+function iconLocalMute(active) {
+  const col = active ? '#e07070' : 'currentColor';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="1.8" stroke-linecap="round">
+    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+    ${active ? '<line x1="1" y1="1" x2="23" y2="23"/>' : '<path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>'}
+  </svg>`;
+}
 function iconLeave()    { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`; }
 function iconProfile()  { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`; }
 function iconMuteUser() { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`; }

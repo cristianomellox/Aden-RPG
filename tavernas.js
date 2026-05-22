@@ -585,6 +585,11 @@ function joinChannel(roomId) {
   roomChannel.subscribe('seat',  onSeat);
   roomChannel.subscribe('mod',   onMod);
   roomChannel.subscribe('speak', onSpeak);
+  roomChannel.subscribe('spectator-join', (msg) => {
+    if (msg.clientId !== PLAYER.id && micOn && localStream) {
+      initiateCall(msg.clientId);
+    }
+  });
 
   // Canal de sinalização WebRTC (pessoal)
   sigChannel = ablyClient.channels.get('sig:' + roomId + ':' + PLAYER.id);
@@ -771,7 +776,12 @@ function onPresence(action, msg) {
 
 
 function onMsg(msg) {
-  const d = msg.data || {};
+  let d = msg.data;
+  // Prevenção caso o Ably entregue como string JSON devido à rede do celular
+  if (typeof d === 'string') {
+    try { d = JSON.parse(d); } catch(e) {}
+  }
+  d = d || {};
   chatMsg(d.name || '?', d.text || '', false, msg.clientId);
 }
 
@@ -1150,12 +1160,15 @@ async function initiateCall(peerId) {
 
   const existingPc = peerConns[peerId];
   if (existingPc) {
-    // Conexão existe mas pode não ter nossos tracks de áudio —
-    // ocorre quando recebemos um offer antes de ter o microfone ativo.
     const senders  = existingPc.getSenders();
     const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
     if (!hasAudio) {
-      localStream.getTracks().forEach(t => existingPc.addTrack(t, localStream));
+      // Correção: Só adiciona a track se ela realmente não estiver lá
+      localStream.getTracks().forEach(t => {
+        if (!senders.some(s => s.track === t)) {
+          existingPc.addTrack(t, localStream);
+        }
+      });
       try {
         const offer = await existingPc.createOffer();
         await existingPc.setLocalDescription(offer);
@@ -1175,13 +1188,27 @@ async function initiateCall(peerId) {
 }
 
 async function handleOffer(fromId, offer) {
-  let pc = peerConns[fromId];
-  if (!pc) pc = makePeer(fromId);
-  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const ans = await pc.createAnswer();
-  await pc.setLocalDescription(ans);
-  sendSignal(fromId, 'answer', ans);
+  try {
+    let pc = peerConns[fromId];
+    if (!pc) pc = makePeer(fromId);
+    
+    if (localStream) {
+      const senders = pc.getSenders();
+      // Correção: Previne o erro "InvalidAccessError" que quebrava o áudio de volta
+      localStream.getTracks().forEach(t => {
+        if (!senders.some(s => s.track === t)) {
+          pc.addTrack(t, localStream);
+        }
+      });
+    }
+    
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    sendSignal(fromId, 'answer', ans);
+  } catch (e) {
+    console.error('handleOffer error:', e);
+  }
 }
 
 async function handleAnswer(fromId, answer) {
@@ -1210,6 +1237,8 @@ function makePeer(peerId) {
       document.body.appendChild(audio);
     }
     audio.srcObject = e.streams[0];
+    // Correção: Força o play para contornar bloqueios de autoplay em webviews mobile
+    audio.play().catch(err => console.warn('Audio play blocked:', err));
   };
   pc.onconnectionstatechange = () => {
     if (['disconnected','failed','closed'].includes(pc.connectionState)) {
@@ -1245,13 +1274,19 @@ function chatMsg(name, text, isMine, clientId) {
   m.className = 'chat-msg';
   m.style.flexDirection = isMine ? 'row-reverse' : 'row';
   const av = clientId ? resolveAvatar(clientId, name, 50) : makeAvatar(name, 50);
+  
+  // Adicionado um balão visual para as mensagens recebidas também (evita parecer "linhas soltas")
+  const textStyle = isMine 
+    ? 'background:rgba(30,50,80,0.55);padding:5px 10px;border-radius:10px 2px 10px 10px;' 
+    : 'background:rgba(60,45,25,0.55);padding:5px 10px;border-radius:2px 10px 10px 10px;border:1px solid rgba(201,169,74,0.15);';
+
   m.innerHTML = `
     <div class="c-av" onclick="onNameClick('${esc(name)}')">
       <img src="${av}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
     </div>
-    <div class="c-body" style="${isMine ? 'align-items:flex-end;' : ''}">
-      <div class="c-name" onclick="onNameClick('${esc(name)}')" style="${isMine ? 'color:var(--blue-light);' : ''}">${esc(name)}</div>
-      <div class="c-text" style="${isMine ? 'background:rgba(30,50,80,0.55);padding:3px 9px;border-radius:10px 2px 10px 10px;' : ''}">${esc(text)}</div>
+    <div class="c-body" style="${isMine ? 'align-items:flex-end;' : 'align-items:flex-start;'}">
+      <div class="c-name" onclick="onNameClick('${esc(name)}')">${esc(name)}</div>
+      <div class="c-text" style="${textStyle}">${esc(text)}</div>
     </div>`;
   c.appendChild(m);
   c.scrollTop = c.scrollHeight;

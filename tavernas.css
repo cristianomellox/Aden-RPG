@@ -131,7 +131,7 @@ html,body {
    THE KEY: room-view is a fixed flex column.
    chat-area gets all remaining space via flex:1 + min-height:0.
    action-bar is always at the bottom. */
-#room-view { position:relative; flex:1 1 0%; min-height:0; }
+#room-view { position:relative; flex:1 1 0%; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
 #room-bg { position:absolute; inset:0; z-index:0; background:radial-gradient(ellipse at 50% 20%,rgba(60,35,10,0.5) 0%,rgba(0,0,0,0) 70%); pointer-events:none; }
 
 #room-header { position:relative; z-index:1; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:rgba(0,0,0,0.45); border-bottom:1px solid rgba(201,169,74,0.18); }
@@ -148,13 +148,13 @@ html,body {
 .orn-row { display:flex; align-items:center; gap:10px; width:100%; max-width:360px; }
 .orn-line { flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--border)); }
 .orn-line.r { background:linear-gradient(90deg,var(--border),transparent); }
-#throne-row { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:wrap; }
-#seats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; width:100%; max-width:380px; }
+#throne-row { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:nowrap; width:100%; }
+#seats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:20px; width:100%; max-width:380px; }
 
 /* Seat */
 .seat { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transition:transform 0.15s; }
 .seat:active { transform:scale(0.92); }
-.seat-btn { width:70px; height:70px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; }
+.seat-btn { width:60px; height:60px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; }
 .seat-btn:not(.taken):hover { border-color:rgba(122,184,255,0.5); background:rgba(30,40,60,0.6); }
 .seat-btn.taken { border-color:var(--gold-dark); background:var(--seat-taken); box-shadow:0 0 10px rgba(201,169,74,0.2); }
 .seat-btn.taken.speaking { border-color:var(--gold); animation:speak-ring 1.2s ease-in-out infinite; }
@@ -192,7 +192,7 @@ html,body {
 #chat-area {
   position:relative; z-index:1;
   flex:1 1 0%;
-  min-height:0;          /* CRITICAL */
+  min-height:130px;  /* CRITICAL — garante que o chat sempre apareça */
   display:flex;
   flex-direction:column;
   overflow:hidden;
@@ -311,7 +311,7 @@ html,body {
 .person-name { font-family:'Cinzel',serif; font-size:0.75rem; color:var(--gold-light); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .person-role { font-size:0.68rem; color:var(--blue-light); font-style:italic; }
 .person-actions { display:flex; gap:6px; }
-.person-act-btn { background:none; border:1px solid var(--border); border-radius:4px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-muted); transition:background 0.15s,color 0.15s; }
+.person-act-btn { background:none; border:1px solid var(--border); border-radius:4px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-muted); transition:background 0.15s,color 0.15s; }
 .person-act-btn:hover { background:rgba(201,169,74,0.1); color:var(--gold); }
 .person-act-btn.danger:hover { background:rgba(192,57,43,0.15); color:#e07070; border-color:rgba(192,57,43,0.4); }
 .person-act-btn svg { width:14px; height:14px; }
@@ -350,3 +350,56 @@ html,body {
 
 @keyframes fadeUp { from{opacity:0;transform:translateY(14px);} to{opacity:1;transform:none;} }
 .fade-in { animation:fadeUp 0.3s ease both; }
+
+/* ══ RESPONSIVIDADE ADAPTATIVA ════════════════
+   Escala os tronos proporcionalmente para que nunca
+   quebrem linha em nenhum tamanho de tela.
+   Fórmula: (largura - padding_scene(20px) - 3×gap) / 4 assentos
+   ════════════════════════════════════════════ */
+
+/* ≤ 400px — tronos 74px, gap 10px  →  4×74+3×10+20=346px ✓ */
+@media (max-width:400px) {
+  .throne-seat .seat-btn { width:74px; height:74px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:34px; height:34px; }
+  #throne-row { gap:10px; }
+}
+
+/* ≤ 370px — tronos 66px, gap 8px  →  4×66+3×8+20=308px ✓ */
+@media (max-width:370px) {
+  .throne-seat .seat-btn { width:66px; height:66px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:30px; height:30px; }
+  #throne-row { gap:8px; }
+  .throne-role-badge { font-size:0.38rem; padding:1px 4px; }
+  .throne-seat .seat-lbl { font-size:0.52rem; }
+  #seats-grid { gap:14px; }
+  .seat-btn { width:52px; height:52px; }
+  .seat-btn svg.seat-mic-svg { width:24px; height:24px; }
+}
+
+/* ≤ 340px — tronos 58px, gap 6px  →  4×58+3×6+20=270px ✓ */
+@media (max-width:340px) {
+  .throne-seat .seat-btn { width:58px; height:58px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:26px; height:26px; }
+  #throne-row { gap:6px; }
+  #room-scene { padding:6px 8px 3px; gap:6px; }
+  #seats-grid { gap:10px; max-width:320px; }
+  .seat-btn { width:48px; height:48px; }
+}
+
+/* ══ ALTURA MÍNIMA DO CHAT — universal ══════
+   Garante que o chat seja sempre visível em
+   qualquer tela, igual a Bigo / StarMaker / Falla */
+@media (max-height:620px) {
+  .throne-seat .seat-btn { width:66px; height:66px; }
+  #throne-row { gap:8px; }
+  #room-scene { padding:5px 10px 2px; gap:5px; }
+  .orn-row { display:none; } /* esconde ornamento se a tela for baixa */
+  #seats-grid { gap:12px; }
+}
+
+@media (max-height:560px) {
+  .throne-seat .seat-btn { width:58px; height:58px; }
+  #room-scene { padding:4px 10px 2px; gap:4px; }
+  #seats-grid { gap:8px; }
+  .seat-btn { width:50px; height:50px; }
+}

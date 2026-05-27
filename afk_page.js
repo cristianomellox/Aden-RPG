@@ -1088,6 +1088,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
                 localStorage.setItem('pending_reward_token', token);
+                sessionStorage.setItem('ad_in_progress', '1');
                 if (triggerAdLink) triggerAdLink.click();
             } catch(e) {
                 resultText.textContent = "Erro ao conectar com o servidor.";
@@ -1097,6 +1098,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
     }
+
+    // ── FALLBACK: redireciona para reward_afk.html se o wrapper não o fez após o ad ──
+    // Em alguns dispositivos Android, o AppCreator24/Unity Ads termina o ad mas não navega
+    // para reward_afk.html, deixando o WebView numa tela branca. Este listener detecta o
+    // retorno ao foco da página e faz o redirecionamento manualmente se necessário.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            const adInProgress = sessionStorage.getItem('ad_in_progress');
+            const pendingToken = localStorage.getItem('pending_reward_token');
+            if (adInProgress && pendingToken) {
+                sessionStorage.removeItem('ad_in_progress');
+                window.location.href = '/reward_afk.html';
+            } else {
+                sessionStorage.removeItem('ad_in_progress');
+            }
+        }
+    });
 
     // Confirm result modal → back to map
     if (confirmBtn) {

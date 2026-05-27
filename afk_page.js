@@ -1088,7 +1088,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
                 localStorage.setItem('pending_reward_token', token);
-                sessionStorage.setItem('ad_in_progress', '1');
+                sessionStorage.setItem('ad_in_progress', String(Date.now()));
                 if (triggerAdLink) triggerAdLink.click();
             } catch(e) {
                 resultText.textContent = "Erro ao conectar com o servidor.";
@@ -1103,16 +1103,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Em alguns dispositivos Android, o AppCreator24/Unity Ads termina o ad mas não navega
     // para reward_afk.html, deixando o WebView numa tela branca. Este listener detecta o
     // retorno ao foco da página e faz o redirecionamento manualmente se necessário.
+    // IMPORTANTE: usa timestamp em vez de booleano para não disparar no fechamento do
+    // alert de confirmação do AppCreator24, que também gera um visibilitychange imediato.
+    const MIN_AD_DURATION_MS = 5000; // ads duram no mínimo ~5s; alert fecha em <2s
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            const adInProgress = sessionStorage.getItem('ad_in_progress');
+            const adStartTime = parseInt(sessionStorage.getItem('ad_in_progress') || '0', 10);
             const pendingToken = localStorage.getItem('pending_reward_token');
-            if (adInProgress && pendingToken) {
+            if (adStartTime && pendingToken && (Date.now() - adStartTime) > MIN_AD_DURATION_MS) {
                 sessionStorage.removeItem('ad_in_progress');
                 window.location.href = '/reward_afk.html';
-            } else {
+            } else if (!pendingToken) {
+                // Token já foi consumido normalmente, limpa a flag
                 sessionStorage.removeItem('ad_in_progress');
             }
+            // Se ainda dentro dos 5s (fechamento do alert), não faz nada
         }
     });
 

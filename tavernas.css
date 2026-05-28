@@ -86,11 +86,6 @@ html,body {
 .list-tab { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.09em; color:var(--text-muted); padding:11px 16px; cursor:pointer; border-bottom:2px solid transparent; transition:color 0.2s,border-color 0.2s; white-space:nowrap; flex:1; text-align:center; }
 .list-tab.active { color:var(--gold-light); border-bottom-color:var(--gold); }
 
-#list-search { padding:9px 12px; flex-shrink:0; background:rgba(0,0,0,0.3); }
-#list-search input { width:100%; background:rgba(20,14,6,0.8); border:1px solid var(--border); border-radius:6px; color:var(--text-main); font-family:'Crimson Pro',serif; font-size:0.95rem; padding:7px 12px; outline:none; transition:border-color 0.2s; }
-#list-search input::placeholder { color:var(--blue-light); font-style:italic; opacity:0.7; }
-#list-search input:focus { border-color:var(--gold-dark); }
-
 .tab-pane { display:none; flex:1 1 0%; min-height:0; overflow-y:auto; flex-direction:column; gap:7px; padding:6px 10px 12px; }
 .tab-pane.active { display:flex; }
 .tab-pane::-webkit-scrollbar { width:3px; }
@@ -131,7 +126,7 @@ html,body {
    THE KEY: room-view is a fixed flex column.
    chat-area gets all remaining space via flex:1 + min-height:0.
    action-bar is always at the bottom. */
-#room-view { position:relative; flex:1 1 0%; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+#room-view { position:relative; flex:1 1 0%; min-height:0; flex-direction:column; overflow:hidden; }
 #room-bg { position:absolute; inset:0; z-index:0; background:radial-gradient(ellipse at 50% 20%,rgba(60,35,10,0.5) 0%,rgba(0,0,0,0) 70%); pointer-events:none; }
 
 #room-header { position:relative; z-index:1; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:rgba(0,0,0,0.45); border-bottom:1px solid rgba(201,169,74,0.18); }
@@ -144,27 +139,27 @@ html,body {
 #capacity-bar-wrap { position:relative; z-index:1; flex-shrink:0; height:2px; background:rgba(0,0,0,0.4); }
 #capacity-bar { height:100%; background:linear-gradient(90deg,var(--green),var(--gold)); transition:width 0.5s; width:0; }
 
-#room-scene { position:relative; z-index:1; flex-shrink:0; padding:8px 10px 4px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+#room-scene { position:relative; z-index:1; flex-shrink:1; padding:8px 10px 4px; display:flex; flex-direction:column; align-items:center; gap:8px; max-height:44vh; overflow:hidden; }
 .orn-row { display:flex; align-items:center; gap:10px; width:100%; max-width:360px; }
 .orn-line { flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--border)); }
 .orn-line.r { background:linear-gradient(90deg,var(--border),transparent); }
 #throne-row { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:nowrap; width:100%; }
-#seats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:20px; width:100%; max-width:380px; }
+#seats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:28px; width:100%; max-width:380px; }
 
 /* Seat */
 .seat { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transition:transform 0.15s; }
 .seat:active { transform:scale(0.92); }
-.seat-btn { width:60px; height:60px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; }
+.seat-btn { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; }
 .seat-btn:not(.taken):hover { border-color:rgba(122,184,255,0.5); background:rgba(30,40,60,0.6); }
 .seat-btn.taken { border-color:var(--gold-dark); background:var(--seat-taken); box-shadow:0 0 10px rgba(201,169,74,0.2); }
 .seat-btn.taken.speaking { border-color:var(--gold); animation:speak-ring 1.2s ease-in-out infinite; }
-@keyframes speak-ring { 0%,100%{box-shadow:0 0 8px rgba(201,169,74,0.3),0 0 3px var(--gold);} 50%{box-shadow:0 0 20px rgba(201,169,74,0.65),0 0 10px var(--gold);} }
-.seat-btn svg.seat-mic-svg { width:28px; height:28px; }
+@keyframes speak-ring { 0%,100%{box-shadow:0 0 16px rgba(201,169,74,0.3),0 0 6px var(--gold);} 50%{box-shadow:0 0 40px rgba(201,169,74,0.65),0 0 20px var(--gold);} }
+.seat-btn svg.seat-mic-svg { width:24px; height:24px; }
 .seat-btn.taken svg.seat-mic-svg { display:none; }
 .seat-avatar-img { display:none; width:100%; height:100%; object-fit:cover; border-radius:50%; overflow: hidden;}
 .seat-btn.taken .seat-avatar-img { display:block; }
-.seat-lbl { font-family:'Cinzel',serif; font-size:0.52rem; letter-spacing:0.06em; color:var(--blue-light); text-align:center; opacity:0.9; }
-.seat-nm { font-size:0.6rem; color:var(--gold-light); max-width:70px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
+.seat-lbl { font-family:'Cinzel',serif; font-size:0.8rem; letter-spacing:0.06em; color:var(--blue-light); text-align:center; opacity:0.9; }
+.seat-nm { font-size:0.9rem; color:var(--gold-light); max-width:70px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
 .seat-nm.vacant { color:var(--blue-light); opacity:0.55; }
 .muted-badge { position:absolute; bottom:1px; right:1px; width:18px; height:18px; border-radius:50%; background:rgba(192,57,43,0.9); display:none; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.2);  z-index: 20;}
 .muted-badge svg { width:8px; height:8px; }
@@ -181,8 +176,8 @@ html,body {
 .local-mute-badge svg { width:8px; height:8px; }
 .seat-btn.locally-muted .local-mute-badge { display:flex; }
 
-.throne-seat .seat-btn { width:82px; height:82px; border-width:2px; background:rgba(40,25,5,0.8); }
-.throne-seat .seat-btn svg.seat-mic-svg { width:40px; height:40px; }
+.throne-seat .seat-btn { width:52px; height:52px; border-width:2px; background:rgba(40,25,5,0.8); }
+.throne-seat .seat-btn svg.seat-mic-svg { width:22px; height:22px; }
 .throne-seat .seat-lbl { font-size:0.58rem; color:var(--gold); }
 .throne-role-badge { position:absolute; top:1px; left:50%; transform:translateX(-50%); font-family:'Cinzel',serif; font-size:0.42rem; letter-spacing:0.06em; color:var(--gold); background:rgba(0,0,0,0.75); padding:1px 5px; border-radius:3px; white-space:nowrap; border:1px solid rgba(201,169,74,0.3); }
 
@@ -192,7 +187,7 @@ html,body {
 #chat-area {
   position:relative; z-index:1;
   flex:1 1 0%;
-  min-height:130px;  /* CRITICAL — garante que o chat sempre apareça */
+  min-height:160px;  /* CRITICAL — garante que o chat sempre apareça em qualquer display size */
   display:flex;
   flex-direction:column;
   overflow:hidden;
@@ -300,8 +295,6 @@ html,body {
 .modal-body::-webkit-scrollbar { width:3px; }
 .modal-body::-webkit-scrollbar-thumb { background:var(--gold-dark); border-radius:4px; }
 
-.people-search { margin:4px 12px 10px; background:rgba(20,14,6,0.8); border:1px solid var(--border); border-radius:6px; color:var(--text-main); font-family:'Crimson Pro',serif; font-size:0.9rem; padding:6px 11px; outline:none; width:calc(100% - 24px); display:block; }
-.people-search::placeholder { color:var(--blue-light); opacity:0.6; font-style:italic; }
 .people-section-lbl { font-family:'Cinzel',serif; font-size:0.6rem; letter-spacing:0.12em; color:var(--gold-dark); padding:6px 14px 4px; text-transform:uppercase; }
 .person-row { display:flex; align-items:center; gap:10px; padding:8px 14px; transition:background 0.15s; cursor:pointer; }
 .person-row:hover { background:rgba(201,169,74,0.06); }
@@ -359,47 +352,202 @@ html,body {
 
 /* ≤ 400px — tronos 74px, gap 10px  →  4×74+3×10+20=346px ✓ */
 @media (max-width:400px) {
-  .throne-seat .seat-btn { width:74px; height:74px; }
-  .throne-seat .seat-btn svg.seat-mic-svg { width:34px; height:34px; }
+  .throne-seat .seat-btn { width:52px; height:52px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:22px; height:22px; }
   #throne-row { gap:10px; }
 }
 
 /* ≤ 370px — tronos 66px, gap 8px  →  4×66+3×8+20=308px ✓ */
 @media (max-width:370px) {
   .throne-seat .seat-btn { width:66px; height:66px; }
-  .throne-seat .seat-btn svg.seat-mic-svg { width:30px; height:30px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:22px; height:22px; }
   #throne-row { gap:8px; }
   .throne-role-badge { font-size:0.38rem; padding:1px 4px; }
   .throne-seat .seat-lbl { font-size:0.52rem; }
-  #seats-grid { gap:14px; }
-  .seat-btn { width:52px; height:52px; }
-  .seat-btn svg.seat-mic-svg { width:24px; height:24px; }
-}
+  #seats-grid { gap:20px; }
+  .seat-btn { width:40px; height:40px; }
+  .seat-btn svg.seat-mic-svg { width:18px; height:18px; }}
 
 /* ≤ 340px — tronos 58px, gap 6px  →  4×58+3×6+20=270px ✓ */
 @media (max-width:340px) {
-  .throne-seat .seat-btn { width:58px; height:58px; }
-  .throne-seat .seat-btn svg.seat-mic-svg { width:26px; height:26px; }
+  .throne-seat .seat-btn { width:40px; height:40px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:18px; height:18px; }
   #throne-row { gap:6px; }
   #room-scene { padding:6px 8px 3px; gap:6px; }
-  #seats-grid { gap:10px; max-width:320px; }
-  .seat-btn { width:48px; height:48px; }
+  #seats-grid { gap:20px; max-width:380px; }
+  .seat-btn { width:40px; height:40px; }
 }
 
 /* ══ ALTURA MÍNIMA DO CHAT — universal ══════
    Garante que o chat seja sempre visível em
-   qualquer tela, igual a Bigo / StarMaker / Falla */
+   qualquer tela, igual a Bigo / StarMaker / Falla
+   
+   No Android com "tamanho de tela grande" nas configurações,
+   o viewport em CSS px fica menor, então os breakpoints
+   de altura entram em ação para encolher a cena.
+   ════════════════════════════════════════════ */
+
+@media (max-height:700px) {
+  #room-scene { max-height:40vh; }
+}
+
 @media (max-height:620px) {
   .throne-seat .seat-btn { width:66px; height:66px; }
   #throne-row { gap:8px; }
-  #room-scene { padding:5px 10px 2px; gap:5px; }
+  #room-scene { padding:5px 10px 2px; gap:5px; max-height:38vh; }
   .orn-row { display:none; } /* esconde ornamento se a tela for baixa */
-  #seats-grid { gap:12px; }
+  #seats-grid { gap:20px; }
 }
 
 @media (max-height:560px) {
   .throne-seat .seat-btn { width:58px; height:58px; }
-  #room-scene { padding:4px 10px 2px; gap:4px; }
-  #seats-grid { gap:8px; }
+  #room-scene { padding:4px 10px 2px; gap:4px; max-height:35vh; }
+  #seats-grid { gap:20px; }
   .seat-btn { width:50px; height:50px; }
+}
+
+@media (max-height:490px) {
+  .throne-seat .seat-btn { width:40px; height:40px; }
+  .throne-seat .seat-btn svg.seat-mic-svg { width:18px; height:18px; }
+  #throne-row { gap:6px; }
+  #room-scene { padding:3px 10px 1px; gap:3px; max-height:32vh; }
+  .seat-btn { width:36px; height:36px; }
+  #seats-grid { gap:14px; }
+}
+
+@media (max-height:420px) {
+  #room-scene { max-height:28vh; }
+  .throne-seat .seat-btn { width:36px; height:36px; }
+  .orn-row { display:none; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   SEAT SKIN FRAMES — Molduras de avatar nos assentos
+   Cálculo: frame = avatar × 1.95  (mesmo ratio do covil/minas)
+   Normal seat 52px → frame 101px
+   Throne = mesmo tamanho que normal = 52px → frame 101px
+   Centralizados via transform: translate(-50%,-50%)
+   ══════════════════════════════════════════════════════════ */
+
+.tav-frame-ol {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 101px; height: 101px;
+  pointer-events: none; z-index: 5;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  display: none;
+}
+.tav-frame-sh {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 101px; height: 101px;
+  pointer-events: none; z-index: 6;
+  display: none;
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  overflow: hidden;
+}
+.tav-frame-sh::after {
+  content: ''; position: absolute; top: -20%; left: -130%;
+  width: 55%; height: 140%;
+  background: linear-gradient(108deg,
+    transparent 0%, rgba(255,255,255,.04) 28%,
+    rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+    rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+  animation: _tavfs 6s ease-in-out infinite;
+}
+@keyframes _tavfs {
+  0%   { left:-130%; opacity:0; }
+  2%   { opacity:1; }
+  98%  { left:155%; opacity:1; }
+  99%  { opacity:0; left:155%; }
+  100% { left:155%; opacity:0; }
+}
+
+/* Trono = mesmo tamanho do assento normal */
+.throne-seat .seat-btn .tav-frame-ol,
+.throne-seat .seat-btn .tav-frame-sh {
+  width: 101px; height: 101px;
+}
+
+/* Responsivo — largura */
+@media (max-width: 370px) {
+  /* normal 44px → frame 86px | throne igual */
+  .seat-btn .tav-frame-ol, .seat-btn .tav-frame-sh,
+  .throne-seat .seat-btn .tav-frame-ol, .throne-seat .seat-btn .tav-frame-sh { width: 86px; height: 86px; }
+}
+@media (max-width: 340px) {
+  /* normal 40px → frame 78px | throne igual */
+  .seat-btn .tav-frame-ol, .seat-btn .tav-frame-sh,
+  .throne-seat .seat-btn .tav-frame-ol, .throne-seat .seat-btn .tav-frame-sh { width: 78px; height: 78px; }
+}
+
+/* Responsivo — altura */
+@media (max-height: 560px) {
+  /* normal 44px → frame 86px */
+  .seat-btn .tav-frame-ol, .seat-btn .tav-frame-sh,
+  .throne-seat .seat-btn .tav-frame-ol, .throne-seat .seat-btn .tav-frame-sh { width: 86px; height: 86px; }
+}
+@media (max-height: 490px) {
+  /* normal 40px → frame 78px */
+  .seat-btn .tav-frame-ol, .seat-btn .tav-frame-sh,
+  .throne-seat .seat-btn .tav-frame-ol, .throne-seat .seat-btn .tav-frame-sh { width: 78px; height: 78px; }
+}
+@media (max-height: 420px) {
+  /* normal 36px → frame 70px */
+  .seat-btn .tav-frame-ol, .seat-btn .tav-frame-sh,
+  .throne-seat .seat-btn .tav-frame-ol, .throne-seat .seat-btn .tav-frame-sh { width: 70px; height: 70px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   PLAYER MODAL — Perfil do Jogador (mesmo estilo da guilda)
+   ══════════════════════════════════════════════════════════ */
+
+#playerModal .pm-equipment-column { display:flex; flex-direction:column; gap:10px; }
+#playerModal .pm-equipment-slot {
+  width:60px; height:60px; background:#444; border:1px solid #666;
+  border-radius:6px; display:flex; justify-content:center; align-items:center;
+  position:relative;
+}
+#playerModal .pm-equipment-slot img { max-width:100%; max-height:100%; object-fit:contain; }
+#playerModal .pm-attr-row { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; }
+#playerModal .pm-attr-item { flex:1; text-align:center; }
+#playerModal .pm-attr-lbl { display:block; font-size:0.5em; color:#fff; }
+#playerModal .pm-attr-val { display:block; font-size:0.6em; font-weight:700; color:#e0dccc; }
+#playerModal .shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.02) 75%);
+  background-size:200% 100%; animation: shimmerAnim 1.1s infinite; color:transparent;
+}
+@keyframes shimmerAnim { from{background-position:-200% 0} to{background-position:200% 0} }
+.pm-item-level {
+  position:absolute; bottom:-15px; left:50%; transform:translateX(-50%);
+  font-size:0.75em; color:#fff; padding:2px 6px; white-space:nowrap; z-index:2;
+}
+/* Garante que os slots tenham overflow visível p/ a badge aparecer embaixo */
+#playerModal .pm-equipment-slot { overflow:visible; }
+/* item-level gerado pelo playerModal.js (classe genérica) dentro do modal */
+#playerModal .item-level {
+  position:absolute; bottom:-15px; left:50%; transform:translateX(-50%);
+  font-size:0.75em; font-weight:bold; color:#fff;
+  padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:2;
+}
+
+/* Sheen da moldura no player modal */
+#tav-frame-sheen::after {
+  content: ''; position: absolute; top: -20%; left: -130%;
+  width: 55%; height: 140%;
+  background: linear-gradient(108deg,
+    transparent 0%, rgba(255,255,255,.04) 28%,
+    rgba(255,255,255,.18) 42%, rgba(255,255,255,.52) 50%,
+    rgba(255,255,255,.18) 58%, rgba(255,255,255,.04) 72%, transparent 100%);
+  animation: _tavmfs 6s ease-in-out infinite;
+}
+@keyframes _tavmfs {
+  0%{left:-130%;opacity:0} 2%{opacity:1}
+  98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
 }

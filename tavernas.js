@@ -9,6 +9,8 @@
 // ── Config ──
 const ABLY_KEY      = '5kVVVQ.Gn1VBA:lN3zK-KKFTZOWm3iBe3FfbPmtwb-oxsMTco_W0A-AZw';
 const ROOM_CAPACITY = 30;
+const MIC_GAIN      = 1.5;   // Amplificação do microfone (1.0 = sem ganho; aumente se ainda estiver baixo)
+const NOISE_GATE    = 20;    // Threshold do noise gate (0–255). Suba se vazar ruído, desça se cortar voz.
 
 // ── Supabase (cliente próprio — tavernas.html não herda o do script.js) ──
 const SB_URL  = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -99,6 +101,19 @@ async function dbSaveOwners(list) {
   } catch (e) { console.warn('dbSaveOwners:', e); }
 }
 
+// ── Auth Store (IDB) — leitura de sessão sem egress de rede ──
+async function getAuthFromDB() {
+  try {
+    const db = await openGlobalDB();
+    return new Promise(resolve => {
+      const tx  = db.transaction('auth_store', 'readonly');
+      const req = tx.objectStore('auth_store').get('current_session');
+      req.onsuccess = () => resolve(req.result?.value || null);
+      req.onerror   = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+
 // ── Player — carregado de forma assíncrona do GlobalDB ──
 let PLAYER = {
   id:         localStorage.getItem('aden_pid')  || localStorage.getItem('player_id')   || ('p_' + Math.random().toString(36).slice(2, 9)),
@@ -110,8 +125,16 @@ let PLAYER = {
 };
 
 async function initPlayer() {
+  // 1. Garante ID correto via auth_store (zero egress, evita ID stale do localStorage)
+  const auth = await getAuthFromDB();
+  if (auth?.user?.id) {
+    PLAYER.id = auth.user.id;
+    localStorage.setItem('aden_pid', PLAYER.id);
+  }
+
   const data = await dbGetPlayer();
   if (data) {
+    // Mantém o ID autenticado se obtido do IDB auth
     PLAYER.id         = data.id         || PLAYER.id;
     PLAYER.name       = data.name       || PLAYER.name;
     PLAYER.role       = data.role       || PLAYER.role;
@@ -230,7 +253,11 @@ let micOn         = false;
 let micMuted      = false;
 let audioMuted    = false;
 let navDropOpen   = false;
-let localStream   = null;
+let localStream   = null;   // stream raw do getUserMedia (usado para mute/detect)
+let processedStream = null; // stream com GainNode aplicado (enviado via WebRTC)
+let micAudioCtx   = null;   // AudioContext do ganho de microfone
+let micGainNode   = null;   // GainNode — controlado pelo noise gate
+let micGateThreshold = parseInt(localStorage.getItem('aden_mic_gate') || '14', 10); // 0–60
 let peerConns     = {};
 let audioCtx      = null;
 let speakLastTs   = 0;
@@ -866,6 +893,86 @@ function resolveAvatar(clientId, name, size) {
 }
 
 // ══════════════════════════════════════════
+//  SEAT SKIN FRAMES
+//  Cache compartilhado: skin_modal_v1_${pid} (24h)
+//  Mesma chave usada por mines, covil, ranking → zero fetch redundante
+// ══════════════════════════════════════════
+const _TAV_SKIN_NS = 'skin_modal_v1_';
+
+function _tavGetSkinCache(pid) {
+  try {
+    const raw = localStorage.getItem(_TAV_SKIN_NS + pid);
+    if (!raw) return undefined;
+    const obj = JSON.parse(raw);
+    if (!obj.e || Date.now() >= obj.e) { localStorage.removeItem(_TAV_SKIN_NS + pid); return undefined; }
+    return obj.v; // { frame_url, video_url }
+  } catch(e) { return undefined; }
+}
+
+function _tavSetSkinCache(pid, data) {
+  try { localStorage.setItem(_TAV_SKIN_NS + pid, JSON.stringify({ v: data, e: Date.now() + 86400000 })); } catch(e) {}
+}
+
+// Aplica / remove moldura num seat-btn pelo seatId
+function _tavApplyFrameToSeat(seatId, frameUrl) {
+  const btn = document.getElementById('seat-btn-' + seatId);
+  if (!btn) return;
+  const fr = btn.querySelector('.tav-frame-ol');
+  const sh = btn.querySelector('.tav-frame-sh');
+  const av = btn.querySelector('.seat-avatar-img');
+  if (!fr || !sh) return;
+  if (frameUrl) {
+    fr.style.backgroundImage = `url('${frameUrl}')`;
+    fr.style.display          = 'block';
+    if (av) av.style.border   = 'none';
+    sh.style.webkitMaskImage  = `url('${frameUrl}')`;
+    sh.style.maskImage        = `url('${frameUrl}')`;
+    sh.style.display          = 'block';
+  } else {
+    fr.style.backgroundImage  = '';
+    fr.style.display          = 'none';
+    sh.style.display          = 'none';
+    if (av) av.style.border   = '';
+  }
+}
+
+// Remove moldura de um assento (chamado em clearSeat)
+function _tavClearFrameFromSeat(seatId) {
+  const btn = document.getElementById('seat-btn-' + seatId);
+  if (!btn) return;
+  const fr = btn.querySelector('.tav-frame-ol');
+  const sh = btn.querySelector('.tav-frame-sh');
+  if (fr) { fr.style.backgroundImage = ''; fr.style.display = 'none'; }
+  if (sh) sh.style.display = 'none';
+  const av = btn.querySelector('.seat-avatar-img');
+  if (av) av.style.border = '';
+}
+
+// Busca e aplica moldura para o jogador num assento
+// Usa cache local (24h); se ausente, busca via RPC get_player_skin_urls
+async function _tavFetchAndApplyFrame(seatId, playerId) {
+  const cached = _tavGetSkinCache(playerId);
+  if (cached !== undefined) {
+    _tavApplyFrameToSeat(seatId, cached?.frame_url || null);
+    return;
+  }
+  try {
+    const sb = getSB();
+    if (!sb) return;
+    const { data, error } = await sb.rpc('get_player_skin_urls', { p_player_id: playerId });
+    if (error) { _tavSetSkinCache(playerId, {}); return; }
+    _tavSetSkinCache(playerId, data || {});
+    // Verifica se o assento ainda pertence ao mesmo jogador antes de aplicar
+    const mem = roomMembers[playerId];
+    if (mem?.seatId === seatId || Object.keys(mySeats)[0] === seatId) {
+      _tavApplyFrameToSeat(seatId, data?.frame_url || null);
+    }
+  } catch(e) {
+    _tavSetSkinCache(playerId, {});
+  }
+}
+
+// ══════════════════════════════════════════
 //  SEAT RENDERING
 // ══════════════════════════════════════════
 function renderSeat(clientId, seatId, name, muted, avatarUrl) {
@@ -885,6 +992,11 @@ function renderSeat(clientId, seatId, name, muted, avatarUrl) {
     img.style.display = 'block';
   }
   if (nm) { nm.textContent = name || '?'; nm.classList.remove('vacant'); }
+  // Esconde a plaquinha do trono quando alguém senta
+  const badge = btn.querySelector('.throne-role-badge');
+  if (badge) badge.style.display = 'none';
+  // Aplica moldura (skin frame) para o avatar
+  _tavFetchAndApplyFrame(seatId, clientId);
 }
 
 function clearSeat(seatId) {
@@ -895,11 +1007,16 @@ function clearSeat(seatId) {
   if (img) { img.src = ''; img.style.display = ''; }
   const nm = document.getElementById('seat-name-' + seatId);
   if (nm) { nm.textContent = 'Vago'; nm.classList.add('vacant'); }
+  // Reexibe a plaquinha do trono ao desocupar
+  const badge = btn.querySelector('.throne-role-badge');
+  if (badge) badge.style.display = '';
+  // Limpa moldura ao desocupar assento
+  _tavClearFrameFromSeat(seatId);
 }
 
 function resetSeats() {
   mySeats = {};
-  for (let i = 1; i <= 10; i++) clearSeat(String(i));
+  for (let i = 1; i <= 8; i++) clearSeat(String(i));
   // Clear all possible throne seats
   for (let t = 1; t <= 4; t++) clearSeat('t' + t);
 }
@@ -1032,7 +1149,44 @@ async function activateMic() {
     return;
   }
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // Constraints otimizados para captação máxima com fone pendurado / voz baixa.
+    // noiseSuppression e echoCancellation DESATIVADOS intencionalmente:
+    // — noiseSuppression descarta voz fraca/distante classificando como ruído → principal causa do problema
+    // — echoCancellation em celular com fone externo é desnecessário e pode cortar o sinal
+    // autoGainControl mantido: o navegador ajusta o nível base do microfone automaticamente
+    const constraints = {
+      audio: {
+        echoCancellation:  false,  // desnecessário com fone externo
+        noiseSuppression:  true,   // limpa ruído ambiente do sinal já aberto pelo gate
+        autoGainControl:   true,
+        sampleRate:        48000,
+        channelCount:      1
+      },
+      video: false
+    };
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    // ── Pipeline de ganho via Web Audio API ──────────────────────
+    // source (mic raw) → GainNode (MIC_GAIN) → MediaStreamDestination
+    // O processedStream resultante é o que vai para os peers WebRTC.
+    // Desativar o track do localStream (mute) interrompe o fluxo na
+    // source, silenciando automaticamente o processedStream também.
+    try {
+      micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src      = micAudioCtx.createMediaStreamSource(localStream);
+      const gainNode = micAudioCtx.createGain();
+      gainNode.gain.value = MIC_GAIN;
+      const dst      = micAudioCtx.createMediaStreamDestination();
+      src.connect(gainNode);
+      gainNode.connect(dst);
+      processedStream = dst.stream;
+      micGainNode = gainNode;  // salva referência para o noise gate controlar
+    } catch (gainErr) {
+      // Fallback: usa o stream direto sem ganho se Web Audio não disponível
+      console.warn('GainNode nao disponivel, usando stream raw:', gainErr);
+      processedStream = localStream;
+    }
+
     micOn    = true;
     micMuted = false;
     updateMicBtn();
@@ -1044,7 +1198,8 @@ async function activateMic() {
       seatId: sid, muted: false, avatar_url: PLAYER.avatar_url || null
     });
   } catch (e) {
-    localStream = null;
+    localStream     = null;
+    processedStream = null;
     const msg = e.name === 'NotAllowedError'  ? 'Permissao de microfone negada. Sente-se e toque no mic para tentar novamente.' :
                 e.name === 'NotFoundError'     ? 'Nenhum microfone encontrado.' :
                 e.name === 'NotReadableError'  ? 'Microfone em uso por outro app.' :
@@ -1104,9 +1259,12 @@ function toggleAudio() {
 
 function stopVoice() {
   localStream?.getTracks().forEach(t => { try { t.stop(); } catch(_){} });
-  localStream = null;
+  localStream     = null;
+  processedStream = null;
   micOn = false; micMuted = false;
   updateMicBtn();
+  try { micAudioCtx?.close(); } catch(_){}
+  micAudioCtx = null;
   try { audioCtx?.close(); } catch(_){}
   audioCtx = null;
   for (const pc of Object.values(peerConns)) { try { pc.close(); } catch(_){} }
@@ -1121,7 +1279,9 @@ function forceMuteSelf() {
   showToast('Voce foi silenciado por um moderador.');
 }
 
-// Speaking detection (AnalyserNode — client-side, sem custo de rede)
+// Speaking detection + Noise Gate (AnalyserNode — client-side, sem custo de rede)
+// O noise gate controla o GainNode: abaixo do threshold o áudio é zerado,
+// evitando que ruído ambiente vaze continuamente para os outros jogadores.
 function startSpeakDetect() {
   if (!localStream) return;
   try {
@@ -1132,11 +1292,32 @@ function startSpeakDetect() {
     src.connect(anl);
     const buf = new Uint8Array(anl.frequencyBinCount);
 
+    let gateOpen    = false;  // estado atual do gate
+    let lastAbove   = 0;      // timestamp da última vez que o sinal ficou acima do threshold
+    const GATE_HOLD = 300;    // ms — mantém o gate aberto após silêncio para não cortar pausas curtas
+
     const tick = () => {
       if (!micOn || !localStream) return;
       anl.getByteFrequencyData(buf);
-      const avg     = buf.reduce((a, b) => a + b, 0) / buf.length;
-      const talking = avg > 16 && !micMuted;
+      const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
+
+      // ── Noise Gate ──────────────────────────────────────────────
+      if (avg >= NOISE_GATE) lastAbove = Date.now();
+      const shouldOpen = (Date.now() - lastAbove) < GATE_HOLD;
+
+      if (shouldOpen !== gateOpen && micGainNode) {
+        gateOpen = shouldOpen;
+        // Transição suave (10ms) para evitar cliques/estouros no áudio
+        micGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+        micGainNode.gain.setTargetAtTime(
+          gateOpen ? MIC_GAIN : 0,
+          audioCtx.currentTime,
+          0.01  // constante de tempo da curva exponencial
+        );
+      }
+
+      // ── Speak detection (anel visual) ───────────────────────────
+      const talking = avg > NOISE_GATE && !micMuted;
       const sid     = Object.keys(mySeats)[0];
       if (sid) setSpeaking(sid, talking);
 
@@ -1156,7 +1337,7 @@ function startSpeakDetect() {
 //  WEBRTC
 // ══════════════════════════════════════════
 async function initiateCall(peerId) {
-  if (!localStream) return;
+  if (!processedStream) return;
 
   const existingPc = peerConns[peerId];
   if (existingPc) {
@@ -1164,9 +1345,9 @@ async function initiateCall(peerId) {
     const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
     if (!hasAudio) {
       // Correção: Só adiciona a track se ela realmente não estiver lá
-      localStream.getTracks().forEach(t => {
+      processedStream.getTracks().forEach(t => {
         if (!senders.some(s => s.track === t)) {
-          existingPc.addTrack(t, localStream);
+          existingPc.addTrack(t, processedStream);
         }
       });
       try {
@@ -1179,7 +1360,7 @@ async function initiateCall(peerId) {
   }
 
   const pc = makePeer(peerId);
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  processedStream.getTracks().forEach(t => pc.addTrack(t, processedStream));
   try {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -1192,12 +1373,12 @@ async function handleOffer(fromId, offer) {
     let pc = peerConns[fromId];
     if (!pc) pc = makePeer(fromId);
     
-    if (localStream) {
+    if (processedStream) {
       const senders = pc.getSenders();
       // Correção: Previne o erro "InvalidAccessError" que quebrava o áudio de volta
-      localStream.getTracks().forEach(t => {
+      processedStream.getTracks().forEach(t => {
         if (!senders.some(s => s.track === t)) {
-          pc.addTrack(t, localStream);
+          pc.addTrack(t, processedStream);
         }
       });
     }
@@ -1316,9 +1497,24 @@ function onNameClick(name) {
   const entry = Object.entries(roomMembers).find(([, v]) => v.name === name);
   if (!entry) return;
   const [id, data] = entry;
-  const isAdmin = PLAYER.role === 'owner' || PLAYER.role === 'admin';
-  const rect = { bottom: 200, top: 160, left: 20, right: 200 };
-  showCtxMenu(rect, buildOtherMenu({ id, ...data }, isAdmin));
+  openPlayerModalFor(id, data.name);
+}
+
+// ══════════════════════════════════════════
+//  PLAYER PROFILE MODAL
+// ══════════════════════════════════════════
+// Abre o modal de perfil do jogador (mesmo padrão da guilda e ranking)
+function openPlayerModalFor(playerId, name) {
+  const modal = document.getElementById('playerModal');
+  if (!modal) { showToast('Perfil de ' + (name || '?')); return; }
+  // Reseta skin anterior imediatamente
+  if (typeof window._tavModalResetSkin === 'function') window._tavModalResetSkin();
+  modal.style.display = 'flex';
+  if (typeof window.clearModalContent === 'function') window.clearModalContent();
+  if (typeof window.fetchPlayerData === 'function') {
+    window._tavModalLastPid = playerId;
+    window.fetchPlayerData(playerId);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1328,7 +1524,7 @@ function buildOtherMenu(occupant, isAdmin) {
   const isMuted = occupant ? isLocallyMuted(occupant.id) : false;
   const items = [
     { icon: iconProfile(), label: 'Ver perfil', danger: false,
-      action: () => showToast('Perfil de ' + (occupant?.name || '?')) },
+      action: () => openPlayerModalFor(occupant?.id, occupant?.name) },
     { icon: iconLocalMute(isMuted),
       label: isMuted ? 'Remover silêncio' : 'Silenciar para mim',
       danger: false,
@@ -1430,7 +1626,10 @@ function renderPeopleSection(container, title, people) {
         </button>` : ''}
       </div>` : ''}`;
     if (!isMe) row.addEventListener('click', e => {
-      if (!e.target.closest('.person-actions')) showToast('Perfil de ' + p.name);
+      if (!e.target.closest('.person-actions')) {
+        closePeopleModal();
+        openPlayerModalFor(p.id, p.name);
+      }
     });
     container.appendChild(row);
   });
@@ -1613,6 +1812,8 @@ function buildThroneRow(roomName) {
             <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
           </svg>
         </div>
+        <div class="tav-frame-ol"></div>
+        <div class="tav-frame-sh"></div>
       </div>
       <div class="seat-lbl">${label}</div>
       <div class="seat-nm vacant" id="seat-name-${tid}">Vago</div>`;
@@ -1627,7 +1828,7 @@ function buildThroneRow(roomName) {
 function buildSeatsGrid() {
   const grid = document.getElementById('seats-grid');
   if (!grid) return;
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 8; i++) {
     const s = document.createElement('div');
     s.className = 'seat';
     s.innerHTML = `
@@ -1653,6 +1854,8 @@ function buildSeatsGrid() {
             <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
           </svg>
         </div>
+        <div class="tav-frame-ol"></div>
+        <div class="tav-frame-sh"></div>
       </div>
       <div class="seat-lbl">Mic ${i}</div>
       <div class="seat-nm vacant" id="seat-name-${i}">Vago</div>`;

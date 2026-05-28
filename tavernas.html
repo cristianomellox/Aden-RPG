@@ -50,10 +50,6 @@
       <div class="list-tab" data-tab="minha">Minha</div>
     </div>
 
-    <div id="list-search">
-      <input type="text" placeholder="Buscar taverna..." id="search-input">
-    </div>
-
     <!-- ── POPULAR ── -->
     <div id="pane-popular" class="tab-pane active">
 
@@ -83,7 +79,7 @@
         <div class="tavern-cover"><img src="https://aden-rpg.pages.dev/assets/zion.webp" alt="Zion" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"></div>
         <div class="tavern-info">
           <div class="tavern-name">Taverna de Zion</div>
-          <div class="tavern-desc">Cidade abencoada pelos magos</div>
+          <div class="tavern-desc">Um grande comércio precisa de uma boa taverna</div>
           <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+6</div></div>
         </div>
         <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>244</div><div class="t-tag city">Zion</div></div>
@@ -93,7 +89,7 @@
         <div class="tavern-cover"><img src="https://aden-rpg.pages.dev/assets/mitrar.webp" alt="Mitrar" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"></div>
         <div class="tavern-info">
           <div class="tavern-name">Taverna de Mitrar</div>
-          <div class="tavern-desc">Forjada nas brasas do deserto</div>
+          <div class="tavern-desc">Forjada nas montanhas geladas</div>
           <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div></div>
         </div>
         <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>98</div><div class="t-tag city">Mitrar</div></div>
@@ -103,7 +99,7 @@
         <div class="tavern-cover"><img src="https://aden-rpg.pages.dev/assets/tandra.webp" alt="Tandra" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"></div>
         <div class="tavern-info">
           <div class="tavern-name">Taverna de Tandra</div>
-          <div class="tavern-desc">Porto das aguas profundas</div>
+          <div class="tavern-desc">A melhor sopa de cogunelos do continente</div>
           <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+3</div></div>
         </div>
         <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>156</div><div class="t-tag city">Tandra</div></div>
@@ -113,7 +109,7 @@
         <div class="tavern-cover"><img src="https://aden-rpg.pages.dev/assets/astrax.webp" alt="Astrax" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"></div>
         <div class="tavern-info">
           <div class="tavern-name">Taverna de Astrax</div>
-          <div class="tavern-desc">Sob os ceus estrelados</div>
+          <div class="tavern-desc">Disciplina e organização humana</div>
           <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div></div>
         </div>
         <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>73</div><div class="t-tag city">Astrax</div></div>
@@ -123,7 +119,7 @@
         <div class="tavern-cover"><img src="https://aden-rpg.pages.dev/assets/duratar.webp" alt="Duratar" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"></div>
         <div class="tavern-info">
           <div class="tavern-name">Taverna de Duratar</div>
-          <div class="tavern-desc">Onde os guerreiros descansam</div>
+          <div class="tavern-desc">Para aqueles com estômago forte</div>
           <div class="tavern-avatars"><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av"><svg viewBox="0 0 24 24" fill="#7ab8ff" opacity="0.7"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><div class="t-av-more">+2</div></div>
         </div>
         <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>115</div><div class="t-tag city">Duratar</div></div>
@@ -289,7 +285,6 @@
       </button>
     </div>
     <div class="modal-body">
-      <input class="people-search" type="text" placeholder="Buscar pessoa...">
       <div id="people-list"></div>
     </div>
   </div>
@@ -318,9 +313,318 @@
   </div>
 </div>
 
+<!-- ══ PLAYER MODAL ══ -->
+<div id="playerModal" style="display:none; position:fixed; z-index:1200; left:0; top:0; width:100%; height:100%; padding:20px; background-color:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
+  <div class="modal-content" style="width:360px; max-width:calc(100% - 40px); background:#2e2e2e; padding:16px; border-radius:10px; border:1px solid #444; box-shadow:0 6px 24px rgba(0,0,0,0.6); color:#e0dccc; position:relative; text-align:center; overflow:hidden;">
+    <!-- Vídeo de fundo cobrindo todo o modal -->
+    <video autoplay muted loop playsinline id="tav-modal-bg-video" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;z-index:0;pointer-events:none;border-radius:10px;"><source src="" type="video/webm"></video>
+    <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1;pointer-events:none;border-radius:10px;"></div>
+
+    <span id="closePlayerModal" style="position:absolute;top:8px;right:10px;font-size:22px;color:#ddd;cursor:pointer;z-index:10;">&times;</span>
+
+    <div style="position:relative;z-index:2;">
+      <h3 id="playerName" style="font-size:1.25em;font-weight:bold;margin:0;color:#fff;">Jogador</h3>
+      <div id="playerLevel" style="font-size:0.95em;color:#dcd6c8;margin-top:4px;display:flex;justify-content:center;">Nv. 0</div>
+
+      <div id="equipmentAndAvatarContainer" style="display:flex;justify-content:space-around;align-items:center;gap:12px;margin-top:6px;margin-bottom:8px;">
+        <div class="pm-equipment-column">
+          <div id="weapon-slot"  class="pm-equipment-slot" data-slot="weapon"></div>
+          <div id="ring-slot"    class="pm-equipment-slot" data-slot="ring"></div>
+          <div id="helm-slot"    class="pm-equipment-slot" data-slot="helm"></div>
+          <div id="special1-slot" class="pm-equipment-slot" data-slot="special1"></div>
+        </div>
+
+        <div id="playerAvatarEquipContainer" style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <div style="display:flex;flex-direction:column;justify-content:center;text-align:center;align-items:center;">
+            <img id="playerGuildFlag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Bandeira" onerror="this.style.display='none'" style="width:50px;height:50px;object-fit:cover;">
+            <div id="playerGuildName" style="font-weight:700;color:#f0e9d6;font-size:0.95em;text-align:center;"></div>
+          </div>
+          <!-- Avatar com moldura e sheen sobrepostos -->
+          <div id="tav-avatar-wrapper" style="position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;">
+            <img id="playerAvatarEquip" src="https://via.placeholder.com/100" alt="Avatar do Jogador" style="width:100px;height:100px;border-radius:50%;border:3px solid #FFD700;object-fit:cover;">
+            <img id="tav-frame-overlay" src="" alt="" style="position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:2;object-fit:contain;display:none;">
+            <div id="tav-frame-sheen" style="position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;"></div>
+          </div>
+          <div style="display:flex;flex-wrap:nowrap;gap:8px;justify-content:center;align-items:center;">
+            <img alt="poder" style="width:18px;height:30px;vertical-align:4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp">
+            <div id="playerCombatPower" style="font-weight:800;color:orange;font-size:1.2em;">0</div>
+          </div>
+        </div>
+
+        <div class="pm-equipment-column">
+          <div id="amulet-slot"  class="pm-equipment-slot" data-slot="amulet"></div>
+          <div id="wing-slot"    class="pm-equipment-slot" data-slot="wing"></div>
+          <div id="armor-slot"   class="pm-equipment-slot" data-slot="armor"></div>
+          <div id="special2-slot" class="pm-equipment-slot" data-slot="special2"></div>
+        </div>
+      </div>
+
+      <div id="attributesSection" style="background:#181818;padding:12px;margin-top:12px;border-radius:8px;">
+        <div class="pm-attr-row">
+          <div class="pm-attr-item"><span class="pm-attr-lbl">ATK</span><span id="playerAttack" class="pm-attr-val">0 - 0</span></div>
+          <div class="pm-attr-item"><span class="pm-attr-lbl">TAXA CRIT</span><span id="playerCritChance" class="pm-attr-val">0%</span></div>
+          <div class="pm-attr-item"><span class="pm-attr-lbl">DANO CRIT</span><span id="playerCritDamage" class="pm-attr-val">0%</span></div>
+        </div>
+        <div class="pm-attr-row">
+          <div class="pm-attr-item"><span class="pm-attr-lbl">HP</span><span id="playerHealth" class="pm-attr-val">0</span></div>
+          <div class="pm-attr-item"><span class="pm-attr-lbl">DEFESA</span><span id="playerDefense" class="pm-attr-val">0</span></div>
+          <div class="pm-attr-item"><span class="pm-attr-lbl">EVASÃO</span><span id="playerEvasion" class="pm-attr-val">0%</span></div>
+        </div>
+        <div class="pm-attr-row">
+          <div class="pm-attr-item"><span class="pm-attr-lbl">REDUÇÃO CRIT</span><span id="playerCritReduction" class="pm-attr-val">0%</span></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;align-items:center;margin-top:10px;">
+        <button id="sendmp" style="display:none;align-items:center;justify-content:center;gap:10px;font-size:1em;padding:0;background:none;border:none;cursor:pointer;color:#e8d08a;">
+          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:35px;height:35px;"> Enviar Mensagem
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 
 <script src="tavernas.js"></script>
+<script type="module" src="playerModal.js"></script>
+<script type="module">
+import { supabase } from './supabaseClient.js';
+
+// ── Player modal: skin (moldura + vídeo) ────────────────────────────
+const _TAV_M_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';
+const _TAV_MFO   = 400, _TAV_MFI = 1200;
+
+function _tavModalVideoSwap(src, skipOut) {
+  const vid = document.getElementById('tav-modal-bg-video');
+  if (!vid) return;
+  const doLoad = () => {
+    const source = vid.querySelector('source');
+    if (source) { source.src = src; source.type = 'video/webm'; }
+    vid.load();
+    const fadeIn = () => { vid.style.transition = `opacity ${_TAV_MFI}ms ease-in`; vid.style.opacity = '0.82'; };
+    if (vid.readyState >= 3) fadeIn();
+    else { vid.addEventListener('canplay', fadeIn, { once: true }); vid.addEventListener('canplaythrough', fadeIn, { once: true }); }
+    vid.play().catch(() => {});
+  };
+  if (skipOut) { doLoad(); return; }
+  vid.style.transition = `opacity ${_TAV_MFO}ms ease-out`;
+  vid.style.opacity = '0';
+  setTimeout(doLoad, _TAV_MFO + 30);
+}
+
+function _tavModalApplySkin(frameUrl, videoUrl) {
+  const frameEl  = document.getElementById('tav-frame-overlay');
+  const sheenEl  = document.getElementById('tav-frame-sheen');
+  const avatarEl = document.getElementById('playerAvatarEquip');
+  if (frameUrl) {
+    if (frameEl)  { frameEl.src = frameUrl; frameEl.style.display = 'block'; }
+    if (avatarEl) avatarEl.style.border = 'none';
+    if (sheenEl) {
+      sheenEl.style.webkitMaskImage = `url('${frameUrl}')`;
+      sheenEl.style.maskImage       = `url('${frameUrl}')`;
+      sheenEl.style.display = 'block';
+    }
+  } else {
+    if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+    if (sheenEl)  sheenEl.style.display = 'none';
+    if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
+  }
+  _tavModalVideoSwap(videoUrl || _TAV_M_VID, true);
+}
+
+window._tavModalResetSkin = function() {
+  const vid     = document.getElementById('tav-modal-bg-video');
+  const frameEl = document.getElementById('tav-frame-overlay');
+  const sheenEl = document.getElementById('tav-frame-sheen');
+  const avatarEl = document.getElementById('playerAvatarEquip');
+  if (vid)      { vid.style.transition = ''; vid.style.opacity = '0'; }
+  if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
+  if (sheenEl)  sheenEl.style.display = 'none';
+  if (avatarEl) avatarEl.style.border = '3px solid #FFD700';
+};
+
+let _tavModalFetching = false;
+async function _tavModalFetchAndApplySkins(playerId) {
+  if (!playerId || _tavModalFetching) return;
+  _tavModalFetching = true;
+  try {
+    const { data, error } = await supabase.rpc('get_player_skin_urls', { p_player_id: playerId });
+    if (error) { _tavModalApplySkin(null, null); return; }
+    _tavModalApplySkin(data?.frame_url || null, data?.video_url || null);
+  } catch(e) {
+    _tavModalApplySkin(null, null);
+  } finally {
+    _tavModalFetching = false;
+  }
+}
+
+// Observe avatar src change → modal populado → aplica skin
+document.addEventListener('DOMContentLoaded', () => {
+  const avatarEl = document.getElementById('playerAvatarEquip');
+  if (!avatarEl) return;
+  new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.attributeName === 'src') {
+        const newSrc = avatarEl.getAttribute('src') || '';
+        if (!newSrc || newSrc.includes('placeholder') || newSrc === 'https://via.placeholder.com/100') continue;
+        const modal = document.getElementById('playerModal');
+        if (!modal || modal.style.display === 'none' || modal.style.display === '') continue;
+        const pid = window._tavModalLastPid;
+        if (pid) _tavModalFetchAndApplySkins(pid);
+      }
+    }
+  }).observe(avatarEl, { attributes: true, attributeFilter: ['src'] });
+
+  // Fecha modal ao clicar no overlay
+  document.getElementById('closePlayerModal')?.addEventListener('click', () => {
+    const modal = document.getElementById('playerModal');
+    if (modal) modal.style.display = 'none';
+    window._tavModalResetSkin?.();
+    window._tavModalLastPid = null;
+  });
+
+  // Botão Enviar Mensagem → redireciona para index com conversa privada aberta (igual à guilda/ranking)
+  document.getElementById('sendmp')?.addEventListener('click', () => {
+    const btn  = document.getElementById('sendmp');
+    const pid  = btn?.dataset?.playerId  || window._tavModalLastPid;
+    const name = btn?.dataset?.playerName || document.getElementById('playerName')?.textContent || '';
+    if (!pid) return;
+    const modal = document.getElementById('playerModal');
+    if (modal) modal.style.display = 'none';
+    window._tavModalResetSkin?.();
+    window._tavModalLastPid = null;
+    window.location.href = `index.html?action=open_pv&target_id=${encodeURIComponent(pid)}&target_name=${encodeURIComponent(name)}`;
+  });
+});
+</script>
+<div id="google_translate_element"></div>
+<script src="auto_translate.js"></script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script>
+(function() {
+    const style = document.createElement('style');
+
+    style.innerHTML = `
+        /* Animação de movimento (serve para ambos) */
+        @keyframes shine {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* --- 1. ESTILO DOS NOBRES (Brilho Azul/Ouro - Intacto) --- */
+        .shiny-icon {
+            display: inline-block;
+            background: linear-gradient(
+                120deg, 
+                #add8e6 0%, 
+                #2b4bf2 30%, 
+                #ffffff 40%, 
+                #2b4bf2 50%, 
+                #add8e6 80%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: shine 8s linear infinite;
+            font-weight: 900;
+            font-size: 1.1em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+        }
+
+        /* --- 2. ESTILO DO JESTER (Palhaço + Fumaça Marrom) --- */
+        .jester-icon {
+            display: inline-block;
+            position: relative; 
+            font-size: 1.2em;
+            line-height: 1;
+            vertical-align: middle;
+            text-shadow: none !important;
+            
+            /* Garante que o emoji original seja visto normalmente */
+            color: inherit !important;
+            -webkit-text-fill-color: inherit !important;
+        }
+
+        /* A "Fumaça/Sujeira" que passa por cima */
+        .jester-icon::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+            
+            /* Texto transparente para mostrar apenas o fundo (a fumaça) */
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            
+            /* Gradiente de Fumaça: Transparente -> Marrom/Cinza -> Transparente */
+            background: linear-gradient(
+                120deg, 
+                transparent 25%, 
+                rgba(101, 67, 33, 0.4) 40%,   /* Marrom Escuro (Dark Brown) bem suave */
+                rgba(139, 69, 19, 0.7) 50%,   /* Marrom Terra (Saddle Brown) mais forte */
+                rgba(80, 80, 80, 0.5) 60%,    /* Cinza fuligem */
+                transparent 75%
+            );
+            background-size: 200% auto;
+            
+            /* Recorta a fumaça no formato do emoji */
+            -webkit-background-clip: text;
+            background-clip: text;
+            
+            /* EFEITO DE GÁS: O Blur deixa o gradiente difuso parecendo fumaça */
+            filter: blur(1.5px);
+            
+            /* Animação lenta arrastada */
+            animation: shine 6s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    const targetIcons = /(\uD83D\uDC51|\u269C\uFE0F?|\uD83E\uDD21|\uD83D\uDEE1\uFE0F?|\uD83D\uDD30)/g;
+    const jesterEmoji = '\uD83E\uDD21'; // 🤡
+
+    function styleTextNodes(node) {
+        if (node.nodeType === 3 && targetIcons.test(node.nodeValue)) {
+            const span = document.createElement('span');
+            span.innerHTML = node.nodeValue.replace(targetIcons, (match) => {
+                
+                // Se for o Palhaço (Jester)
+                if (match.indexOf(jesterEmoji) !== -1 || match === '🤡') {
+                    // Cria o span com o data-text para gerar a fumaça
+                    return `<span class="jester-icon" data-text="${match}">${match}</span>`;
+                }
+                
+                // Se for Nobre (Shiny normal)
+                return `<span class="shiny-icon">${match}</span>`;
+            });
+            node.parentNode.replaceChild(span, node);
+        } else if (node.nodeType === 1 && 
+                   node.tagName !== 'SCRIPT' && 
+                   node.tagName !== 'STYLE' && 
+                   !node.classList.contains('shiny-icon') &&
+                   !node.classList.contains('jester-icon')) {
+            Array.from(node.childNodes).forEach(styleTextNodes);
+        }
+    }
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                styleTextNodes(node);
+            });
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    styleTextNodes(document.body);
+
+})();
+</script>
 </body>
 </html>

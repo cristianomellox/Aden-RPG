@@ -143,27 +143,28 @@
       width: 100%;
       background: rgba(8,18,8,.95);
       border-top: 2px solid #3a6c3a;
-      padding: 10px 16px 12px;
+      padding: 8px 10px 10px;
       box-sizing: border-box;
       transition: max-height 0.3s ease, opacity 0.3s ease;
-      max-height: 160px; overflow: hidden;
-      display: flex; flex-direction: column; gap:6px;
+      max-height: 200px; overflow: hidden;
+      display: flex; flex-direction: column; gap:5px;
     }
-    #hudContent.collapsed { max-height: 0; opacity:0; padding:0 16px; overflow:hidden; pointer-events:none; }
+    #hudContent.collapsed { max-height: 0; opacity:0; padding:0 10px; overflow:hidden; pointer-events:none; }
     .hud-row {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 10px; flex-wrap: wrap;
+      gap: 6px; flex-wrap: nowrap;
     }
     .hud-info-item {
-      display: flex; align-items: center; gap: 6px;
-      color: #ccc; font-family:'Cinzel',serif; font-size:0.85em;
+      display: flex; align-items: center; gap: 4px;
+      color: #ccc; font-family:'Cinzel',serif; font-size: clamp(0.65em, 2.8vw, 0.85em);
       background: rgba(255,255,255,0.05); border-radius:6px;
-      padding: 4px 8px;
+      padding: 4px 6px; flex: 1; min-width: 0; overflow: hidden;
+      white-space: nowrap;
     }
     .hud-info-item span.val { color:#ffd700; font-weight:bold; }
-    .hud-info-item img { width:34px; height:32px; object-fit:contain; vertical-align:middle; }
+    .hud-info-item img { width: clamp(24px, 7vw, 34px); height: clamp(22px, 6.5vw, 32px); object-fit:contain; vertical-align:middle; flex-shrink:0; }
     #hud-collect-btn {
-      flex:1; padding:7px 12px; font-size:0.85em; font-family:'Cinzel',serif;
+      flex:1; padding:7px 8px; font-size: clamp(0.65em, 2.8vw, 0.85em); font-family:'Cinzel',serif;
       background: linear-gradient(135deg, #1a4a1a, #0d2a0d);
       border: 1px solid #4a8a4a; border-radius:8px; color:#8ecf8e;
       cursor:pointer; transition:all 0.2s; min-width:90px;
@@ -171,9 +172,9 @@
     #hud-collect-btn:hover:not(:disabled) { background:linear-gradient(135deg,#2a6a2a,#1a4a1a); box-shadow:0 0 10px rgba(80,200,80,.3); }
     #hud-collect-btn:disabled { opacity:0.45; cursor:not-allowed; }
     #hud-menu-btn {
-      flex:1; padding:7px 12px; font-size:0.85em; font-family:'Cinzel',serif;
+      flex:1; padding:7px 8px; font-size: clamp(0.65em, 2.8vw, 0.85em); font-family:'Cinzel',serif;
       background: rgba(60,60,80,.6); border:1px solid #555; border-radius:8px;
-      color:#bbb; cursor:pointer; transition:all 0.2s; min-width:70px;
+      color:#bbb; cursor:pointer; transition:all 0.2s; min-width:0;
       text-decoration:none; display:flex; align-items:center; justify-content:center;
     }
     #hud-menu-btn:hover { background:rgba(80,80,110,.8); }
@@ -515,7 +516,7 @@
     </div>
     <div class="hud-row">
       <button id="hud-collect-btn" class="btn" disabled>⬇ Coletar XP</button>
-      <div id="hud-wing-info" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 8px;background:rgba(60,40,80,.5);border:1px solid #555;border-radius:8px;font-size:0.78em;font-family:'Cinzel',serif;color:#bba;min-width:70px;cursor:default;">
+      <div id="hud-wing-info" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 6px;background:rgba(60,40,80,.5);border:1px solid #555;border-radius:8px;font-size:clamp(0.65em,2.8vw,0.78em);font-family:'Cinzel',serif;color:#bba;min-width:0;cursor:default;overflow:hidden;white-space:nowrap;">
         <img id="hud-wing-img" src="" alt="" style="width:32px;height:32px;object-fit:contain;display:none;border-radius:4px;">
         <span id="hud-wing-label">Carregando...</span>
       </div>

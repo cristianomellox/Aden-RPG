@@ -551,3 +551,148 @@ html,body {
   0%{left:-130%;opacity:0} 2%{opacity:1}
   98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
 }
+
+/* ══════════════════════════════════════════
+   GIFT SYSTEM — quantity selector, images, animation
+   ══════════════════════════════════════════ */
+
+/* Seletor de quantidade */
+.gift-qty-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 10px;
+}
+.gift-qty-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
+}
+.gift-qty-select {
+  background: rgba(20,14,6,0.85);
+  border: 1px solid var(--gold-dark);
+  border-radius: 6px;
+  color: var(--gold-light);
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  padding: 4px 10px 4px 8px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23c9a94a' stroke-width='1.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  padding-right: 26px;
+}
+.gift-qty-select option { background: #1a120a; }
+
+/* Grid de presentes — 2 colunas para presentes com imagem */
+.gift-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+.gift-icon-img { background: none; }
+.gift-icon-img img { filter: drop-shadow(0 0 6px rgba(201,169,74,0.35)); }
+
+/* Cost com ícone de moeda */
+.gift-cost {
+  display: flex; align-items: center; gap: 4px;
+  font-family: 'Cinzel', serif; font-size: 0.7rem; color: var(--gold);
+}
+
+/* ── Projétil voador ── */
+.gift-projectile {
+  pointer-events: none;
+  z-index: 9999;
+}
+.gift-proj-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(20,14,6,0.85);
+  border: 1px solid var(--gold-dark);
+  border-radius: 20px;
+  padding: 4px 8px 4px 4px;
+  box-shadow: 0 0 12px rgba(201,169,74,0.45);
+}
+.gift-proj-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1.5px solid var(--gold);
+  object-fit: cover; flex-shrink: 0;
+}
+.gift-proj-icon {
+  width: 26px; height: 26px;
+  object-fit: contain; flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(255,220,100,0.6));
+}
+
+/* ── Glow no assento ao receber ── */
+@keyframes giftGlowPulse {
+  0%   { box-shadow: 0 0 0   0   rgba(255,220,80,0); }
+  30%  { box-shadow: 0 0 22px 8px rgba(255,220,80,0.7); }
+  60%  { box-shadow: 0 0 38px 14px rgba(255,180,30,0.55); }
+  100% { box-shadow: 0 0 0   0   rgba(255,220,80,0); }
+}
+.gift-glow-pulse {
+  animation: giftGlowPulse 0.95s ease-out forwards !important;
+  border-radius: 50%;
+}
+
+/* Partícula de chegada */
+@keyframes giftSparkBurst {
+  0%   { transform: scale(0) rotate(0deg);   opacity: 1; }
+  60%  { transform: scale(1.4) rotate(20deg); opacity: 0.8; }
+  100% { transform: scale(0) rotate(40deg);  opacity: 0; }
+}
+.gift-arrive-spark {
+  position: absolute; top: 50%; left: 50%;
+  width: 48px; height: 48px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10;
+  animation: giftSparkBurst 0.85s ease-out forwards;
+}
+.gift-arrive-rosa {
+  background: radial-gradient(circle, rgba(255,120,160,0.85) 0%, rgba(255,80,120,0.4) 55%, transparent 75%);
+  box-shadow: 0 0 18px 6px rgba(255,100,140,0.5);
+}
+.gift-arrive-urso {
+  background: radial-gradient(circle, rgba(255,210,60,0.9) 0%, rgba(255,165,0,0.45) 55%, transparent 75%);
+  box-shadow: 0 0 18px 6px rgba(255,190,30,0.55);
+}
+.gift-arrive-default {
+  background: radial-gradient(circle, rgba(201,169,74,0.8) 0%, rgba(201,169,74,0.3) 55%, transparent 75%);
+  box-shadow: 0 0 16px 5px rgba(201,169,74,0.45);
+}
+
+/* ── Mensagem de presente no chat ── */
+.chat-msg-gift {
+  justify-content: center !important;
+  margin: 4px 0 !important;
+}
+.c-gift-line {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(40,25,8,0.75);
+  border: 1px solid rgba(201,169,74,0.3);
+  border-radius: 20px;
+  padding: 5px 12px 5px 8px;
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.85rem; color: var(--gold-light);
+  max-width: 96%;
+  box-shadow: 0 1px 6px rgba(201,169,74,0.15);
+}
+.c-gift-icon {
+  width: 24px; height: 24px; object-fit: contain; flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(255,200,60,0.5));
+}
+.c-gift-text strong { color: var(--gold); }
+
+/* Toast balão dourado */
+#toast.toast-balloon {
+  background: linear-gradient(135deg, rgba(100,50,0,0.97), rgba(60,30,0,0.97));
+  border: 1.5px solid var(--gold);
+  color: var(--gold-light);
+  font-size: 0.82rem;
+  box-shadow: 0 4px 18px rgba(201,169,74,0.35);
+  border-radius: 12px;
+}

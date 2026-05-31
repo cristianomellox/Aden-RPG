@@ -612,6 +612,7 @@ function joinChannel(roomId) {
   roomChannel.subscribe('seat',  onSeat);
   roomChannel.subscribe('mod',   onMod);
   roomChannel.subscribe('speak', onSpeak);
+  roomChannel.subscribe('gift',  onGiftMsg);
   roomChannel.subscribe('spectator-join', (msg) => {
     if (msg.clientId !== PLAYER.id && micOn && localStream) {
       initiateCall(msg.clientId);
@@ -837,6 +838,35 @@ function onMod(msg) {
     if (d.action === 'kick') { closeRoom(); showToast('Voce foi expulso da sala.'); }
     if (d.action === 'mute') { forceMuteSelf(); }
   }
+}
+
+function onGiftMsg(msg) {
+  // Ignora a própria mensagem (o remetente já ativou a animação localmente)
+  if (msg.clientId === PLAYER.id) return;
+  const d = msg.data || {};
+  if (!d.giftId) return;
+  triggerGiftAnimation({
+    senderId:       d.senderId,
+    senderAvatar:   d.senderAvatar,
+    senderSeatId:   d.senderSeatId,
+    recipientIds:   d.recipientIds   || [],
+    giftImg:        d.giftImg,
+    giftName:       d.giftName,
+    giftId:         d.giftId,
+    qty:            d.qty || 1,
+    senderName:     d.senderName,
+    recipientNames: d.recipientNames || []
+  });
+}
+
+// Toast balão (diferente do showToast normal — posicionado em balão dourado)
+function showBalloonToast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show', 'toast-balloon');
+  clearTimeout(window._btt);
+  window._btt = setTimeout(() => { t.classList.remove('show', 'toast-balloon'); }, 3500);
 }
 
 function updateOnlineCount() {
@@ -1640,16 +1670,30 @@ function roleLabel(r) { return r==='owner'?'Dono':r==='admin'?'Administrador':'M
 // ══════════════════════════════════════════
 //  GIFT MODAL
 // ══════════════════════════════════════════
+// Presentes ordenados do mais barato ao mais caro
+// currency: 'crystals' | 'gold'
 const GIFTS = [
-  { id:'g1', name:'Vela',   cost:50,    svg:gSvg(1) },
-  { id:'g2', name:'Flor',   cost:100,   svg:gSvg(2) },
-  { id:'g3', name:'Pocao',  cost:300,   svg:gSvg(3) },
-  { id:'g4', name:'Calice', cost:500,   svg:gSvg(4) },
-  { id:'g5', name:'Anel',   cost:1000,  svg:gSvg(5) },
-  { id:'g6', name:'Espada', cost:2000,  svg:gSvg(6) },
-  { id:'g7', name:'Coroa',  cost:5000,  svg:gSvg(7) },
-  { id:'g8', name:'Dragao', cost:10000, svg:gSvg(8) },
+  {
+    id: 'rosa', name: 'Rosa',
+    currency: 'crystals', cost: 500,
+    img: 'https://aden-rpg.pages.dev/assets/gift_rosa.webp',
+    famePerUnit: 10, intimacyPerUnit: 5
+  },
+  {
+    id: 'urso', name: 'Urso',
+    currency: 'gold', cost: 3,
+    img: 'https://aden-rpg.pages.dev/assets/gift_urso.webp',
+    famePerUnit: 30, intimacyPerUnit: 10
+  },
 ];
+
+// Ícone de moeda por tipo
+function currencyIcon(currency) {
+  if (currency === 'gold') {
+    return `<img src="https://aden-rpg.pages.dev/assets/goldcoin.webp" style="width:13px;height:13px;object-fit:contain;vertical-align:-2px;">`;
+  }
+  return `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width:13px;height:13px;object-fit:contain;vertical-align:-2px;">`;
+}
 
 function openGiftModal() {
   selectedGiftRecipients = new Set();
@@ -1662,7 +1706,10 @@ function closeGiftModal() { document.getElementById('gift-modal').classList.remo
 function buildGiftRecipients() {
   const c = document.getElementById('gift-recipients');
   c.innerHTML = '';
-  const inSeat = Object.entries(roomMembers).filter(([,v])=>v.seatId).map(([id,v])=>({id,...v}));
+  // Inclui todos com assento (exceto o próprio jogador)
+  const inSeat = Object.entries(roomMembers)
+    .filter(([id, v]) => v.seatId && id !== PLAYER.id)
+    .map(([id, v]) => ({ id, ...v }));
   if (!inSeat.length) {
     c.innerHTML = `<span style="font-family:'Cinzel',serif;font-size:0.7rem;color:var(--text-muted);font-style:italic;">Nenhum membro nos assentos.</span>`;
     return;
@@ -1683,10 +1730,31 @@ function buildGiftRecipients() {
 function buildGiftGrid() {
   const c = document.getElementById('gift-grid-geral');
   c.innerHTML = '';
+
+  // Seletor de quantidade
+  const qtyWrap = document.createElement('div');
+  qtyWrap.className = 'gift-qty-wrap';
+  qtyWrap.innerHTML = `
+    <label class="gift-qty-label">Quantidade:</label>
+    <select id="gift-qty-select" class="gift-qty-select">
+      <option value="1" selected>1</option>
+      <option value="10">10</option>
+      <option value="50">50</option>
+    </select>`;
+  c.appendChild(qtyWrap);
+
   const g = document.createElement('div'); g.className = 'gift-grid';
   GIFTS.forEach(gift => {
     const card = document.createElement('div'); card.className = 'gift-card';
-    card.innerHTML = `<div class="gift-icon">${gift.svg}</div><div class="gift-name">${gift.name}</div><div class="gift-cost"><svg viewBox="0 0 12 12" fill="none" style="width:10px;height:10px;"><circle cx="6" cy="6" r="5" stroke="var(--gold)" stroke-width="1.2"/><text x="6" y="9" text-anchor="middle" font-size="6" fill="var(--gold)" font-family="serif">O</text></svg>${gift.cost.toLocaleString()}</div>`;
+    card.innerHTML = `
+      <div class="gift-icon gift-icon-img">
+        <img src="${gift.img}" alt="${gift.name}" style="width:52px;height:52px;object-fit:contain;">
+      </div>
+      <div class="gift-name">${gift.name}</div>
+      <div class="gift-cost">
+        ${currencyIcon(gift.currency)}
+        <span>${gift.cost.toLocaleString()}</span>
+      </div>`;
     card.addEventListener('click', () => sendGift(gift));
     g.appendChild(card);
   });
@@ -1694,12 +1762,196 @@ function buildGiftGrid() {
   document.getElementById('gift-grid-bolsa').innerHTML = `<div class="gift-empty">Sua bolsa esta vazia.</div>`;
 }
 
-function sendGift(gift) {
-  if (!selectedGiftRecipients.size) { showToast('Selecione ao menos um destinatario.'); return; }
-  const names = [...selectedGiftRecipients].map(id=>roomMembers[id]?.name||'?').join(', ');
-  roomChannel?.publish('msg', { name:'[ Presente ]', text: PLAYER.name + ' enviou ' + gift.name + ' para ' + names + '!' });
-  showToast('Presente enviado para ' + names + '!');
+// Verifica se dois assentos são adjacentes (para intimidade)
+// Adjacentes: 1-2, 2-3, 3-4, 5-6, 6-7, 7-8, 8-9, 9-10 (exceto 4-5)
+function areSeatsAdjacent(seatA, seatB) {
+  const a = parseInt(seatA, 10);
+  const b = parseInt(seatB, 10);
+  if (isNaN(a) || isNaN(b)) return false;           // throne seats (t1, t2…) ignorados
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  if (hi - lo !== 1) return false;
+  if (lo === 4 && hi === 5) return false;            // gap entre grupos
+  return true;
+}
+
+async function sendGift(gift) {
+  if (!selectedGiftRecipients.size) { showBalloonToast('Selecione ao menos um destinatário.'); return; }
+
+  const qty        = parseInt(document.getElementById('gift-qty-select')?.value || '1', 10);
+  const mySeatId   = Object.keys(mySeats)[0] || null;
+
+  const sb = getSB();
+  if (!sb) { showBalloonToast('Erro de conexão.'); return; }
+
+  const recipientIds   = [...selectedGiftRecipients];
+  const recipientNames = recipientIds.map(id => roomMembers[id]?.name || '?');
+  const recipientSeats = recipientIds.map(id => String(roomMembers[id]?.seatId || ''));
+
+  // Um único RPC atômico: deduz moeda, sobe fama e intimidade — SECURITY DEFINER (contorna RLS)
+  const { data, error } = await sb.rpc('tavern_send_gift', {
+    p_sender_id:     PLAYER.id,
+    p_gift_id:       gift.id,
+    p_currency:      gift.currency,
+    p_cost_each:     gift.cost,
+    p_qty:           qty,
+    p_recipient_ids: recipientIds,
+    p_fame_each:     gift.famePerUnit,
+    p_intimacy_each: gift.intimacyPerUnit,
+    p_sender_seat:   String(mySeatId || ''),
+    p_recip_seats:   recipientSeats
+  });
+
+  if (error) {
+    console.error('tavern_send_gift RPC error:', error);
+    showBalloonToast('Erro ao enviar presente. Tente novamente.');
+    return;
+  }
+
+  if (!data?.success) {
+    const curr = gift.currency === 'crystals' ? 'cristais' : 'ouro';
+    showBalloonToast(`Saldo insuficiente! Você precisa de ${(gift.cost * qty).toLocaleString()} ${curr}.`);
+    return;
+  }
+
+  // Publica evento no canal para que todos os clientes executem a animação
+  roomChannel?.publish('gift', {
+    senderId:       PLAYER.id,
+    senderName:     PLAYER.name,
+    senderAvatar:   PLAYER.avatar_url || null,
+    senderSeatId:   mySeatId,
+    recipientIds,
+    recipientNames,
+    giftId:         gift.id,
+    giftName:       gift.name,
+    giftImg:        gift.img,
+    qty
+  });
+
+  // Animação local (remetente vê imediatamente, sem esperar Ably echo)
+  triggerGiftAnimation({
+    senderId:       PLAYER.id,
+    senderAvatar:   PLAYER.avatar_url || null,
+    senderSeatId:   mySeatId,
+    recipientIds,
+    giftImg:        gift.img,
+    giftName:       gift.name,
+    giftId:         gift.id,
+    qty,
+    senderName:     PLAYER.name,
+    recipientNames
+  });
+
   closeGiftModal();
+}
+
+// ══════════════════════════════════════════
+//  GIFT ANIMATION
+// ══════════════════════════════════════════
+function getSeatAvatarRect(seatId) {
+  const btn = document.getElementById('seat-btn-' + seatId);
+  if (!btn) return null;
+  const img = btn.querySelector('.seat-avatar-img');
+  return (img || btn).getBoundingClientRect();
+}
+
+function triggerGiftAnimation(d) {
+  const { senderId, senderAvatar, senderSeatId, recipientIds, giftImg, giftName, giftId, qty, senderName, recipientNames } = d;
+
+  // Log no chat (mensagem de sistema estilizada)
+  const recNamesStr = recipientNames.join(', ');
+  giftChatMsg(senderName, giftImg, giftName, qty, recNamesStr);
+
+  // Para cada destinatário, anima um projétil
+  recipientIds.forEach((recipId, idx) => {
+    const recipSeatId = roomMembers[recipId]?.seatId;
+    if (!senderSeatId || !recipSeatId) return;
+
+    const fromRect = getSeatAvatarRect(senderSeatId);
+    const toRect   = getSeatAvatarRect(recipSeatId);
+    if (!fromRect || !toRect) return;
+
+    // Atraso escalonado se múltiplos destinatários
+    setTimeout(() => flyGift(fromRect, toRect, senderAvatar, giftImg, recipSeatId, giftId), idx * 220);
+  });
+}
+
+function flyGift(fromRect, toRect, senderAvatarUrl, giftImg, recipSeatId, giftId) {
+  const el = document.createElement('div');
+  el.className = 'gift-projectile';
+
+  // Mostra avatar do remetente na bolha voadora
+  const src = senderAvatarUrl || '';
+  el.innerHTML = `
+    <div class="gift-proj-inner">
+      ${src ? `<img src="${src}" class="gift-proj-avatar">` : ''}
+      <img src="${giftImg}" class="gift-proj-icon">
+    </div>`;
+
+  document.body.appendChild(el);
+
+  const startX = fromRect.left + fromRect.width  / 2;
+  const startY = fromRect.top  + fromRect.height / 2;
+  const endX   = toRect.left   + toRect.width    / 2;
+  const endY   = toRect.top    + toRect.height   / 2;
+
+  el.style.cssText = `
+    position:fixed; z-index:9999; pointer-events:none;
+    left:${startX}px; top:${startY}px;
+    transform:translate(-50%,-50%) scale(1);
+    transition: left 0.7s cubic-bezier(.4,0,.2,1),
+                top  0.7s cubic-bezier(.4,0,.2,1),
+                transform 0.7s ease,
+                opacity 0.2s ease 0.65s;
+    opacity:1;
+  `;
+
+  // Força reflow antes de animar
+  void el.offsetWidth;
+
+  el.style.left    = endX + 'px';
+  el.style.top     = endY + 'px';
+  el.style.transform = 'translate(-50%,-50%) scale(0.5)';
+  el.style.opacity = '0';
+
+  setTimeout(() => {
+    el.remove();
+    glowSeat(recipSeatId, giftId);
+  }, 900);
+}
+
+function glowSeat(seatId, giftId) {
+  const btn = document.getElementById('seat-btn-' + seatId);
+  if (!btn) return;
+
+  // Partícula de chegada
+  const spark = document.createElement('div');
+  spark.className = 'gift-arrive-spark gift-arrive-' + (giftId || 'default');
+  btn.style.position = 'relative';
+  btn.appendChild(spark);
+  setTimeout(() => spark.remove(), 900);
+
+  // Glow no avatar
+  btn.classList.add('gift-glow-pulse');
+  setTimeout(() => btn.classList.remove('gift-glow-pulse'), 1000);
+}
+
+// Mensagem especial no chat para presentes
+function giftChatMsg(senderName, giftImg, giftName, qty, recipientNames) {
+  const c = document.getElementById('chat-messages');
+  if (!c) return;
+  const m = document.createElement('div');
+  m.className = 'chat-msg chat-msg-gift';
+  m.innerHTML = `
+    <div class="c-gift-line">
+      <img src="${giftImg}" class="c-gift-icon" alt="${esc(giftName)}">
+      <span class="c-gift-text">
+        <strong>${esc(senderName)}</strong> enviou
+        <strong>${esc(giftName)}</strong>
+        x${qty} para <strong>${esc(recipientNames)}</strong>
+      </span>
+    </div>`;
+  c.appendChild(m);
+  c.scrollTop = c.scrollHeight;
 }
 
 // ══════════════════════════════════════════

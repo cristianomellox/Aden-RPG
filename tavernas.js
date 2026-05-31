@@ -9,8 +9,8 @@
 // ── Config ──
 const ABLY_KEY      = '5kVVVQ.Gn1VBA:lN3zK-KKFTZOWm3iBe3FfbPmtwb-oxsMTco_W0A-AZw';
 const ROOM_CAPACITY = 30;
-const MIC_GAIN      = 1.5;   // Amplificação do microfone (1.0 = sem ganho; aumente se ainda estiver baixo)
-const NOISE_GATE    = 20;    // Threshold do noise gate (0–255). Suba se vazar ruído, desça se cortar voz.
+const MIC_GAIN      = 0.5;   // Amplificação do microfone (1.0 = sem ganho; aumente se ainda estiver baixo)
+const NOISE_GATE    = 15;    // Threshold do noise gate (0–255). Suba se vazar ruído, desça se cortar voz.
 
 // ── Supabase (cliente próprio — tavernas.html não herda o do script.js) ──
 const SB_URL  = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -1223,7 +1223,7 @@ async function activateMic() {
         echoCancellation:  false,  // desnecessário com fone externo
         noiseSuppression:  true,   // limpa ruído ambiente do sinal já aberto pelo gate
         autoGainControl:   true,
-        sampleRate:        48000,
+        sampleRate:        12000,
         channelCount:      1
       },
       video: false

@@ -311,6 +311,40 @@ function initAbly() {
   ablyClient.connection.on('connecting',   () => setConnDot('connecting'));
 }
 
+// ── Reconexão ao voltar para a aba (resolve desconexão ao trocar janelas) ──
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+
+  // 1. Reconecta Ably se a conexão caiu em background
+  if (ablyClient) {
+    const st = ablyClient.connection.state;
+    if (['disconnected', 'suspended', 'failed'].includes(st)) {
+      ablyClient.connect();
+    }
+  }
+
+  // 2. Re-estabelece conexões WebRTC mortas após ~800ms (tempo para Ably reconectar)
+  if (!currentRoom) return;
+  setTimeout(() => {
+    if (!micOn || !processedStream) return;
+    Object.keys(roomMembers).forEach(peerId => {
+      const pc = peerConns[peerId];
+      if (!pc) {
+        // Sem conexão — inicia nova
+        initiateCall(peerId);
+        return;
+      }
+      const state = pc.connectionState || pc.iceConnectionState || '';
+      if (['disconnected', 'failed', 'closed'].includes(state)) {
+        try { pc.close(); } catch(_) {}
+        delete peerConns[peerId];
+        document.getElementById('audio-' + peerId)?.remove();
+        initiateCall(peerId);
+      }
+    });
+  }, 800);
+});
+
 function setConnDot(state) {
   const d = document.getElementById('conn-dot');
   if (d) d.className = 'conn-dot ' + state;
@@ -1845,78 +1879,95 @@ async function sendGift(gift) {
 }
 
 // ══════════════════════════════════════════
-//  GIFT ANIMATION
+//  GIFT ANIMATION — queue + full-seat size
 // ══════════════════════════════════════════
+
+// Fila global de animações de presentes
+const _giftQueue      = [];
+let   _giftQueueBusy  = false;
+
+// Obtém o rect do botão do assento (tamanho real em px)
 function getSeatAvatarRect(seatId) {
   const btn = document.getElementById('seat-btn-' + seatId);
   if (!btn) return null;
-  const img = btn.querySelector('.seat-avatar-img');
-  return (img || btn).getBoundingClientRect();
+  return btn.getBoundingClientRect();
 }
 
+// Adiciona à fila e inicia se livre
 function triggerGiftAnimation(d) {
-  const { senderId, senderAvatar, senderSeatId, recipientIds, giftImg, giftName, giftId, qty, senderName, recipientNames } = d;
-
-  // Log no chat (mensagem de sistema estilizada)
-  const recNamesStr = recipientNames.join(', ');
-  giftChatMsg(senderName, giftImg, giftName, qty, recNamesStr);
-
-  // Para cada destinatário, anima um projétil
-  recipientIds.forEach((recipId, idx) => {
-    const recipSeatId = roomMembers[recipId]?.seatId;
-    if (!senderSeatId || !recipSeatId) return;
-
-    const fromRect = getSeatAvatarRect(senderSeatId);
-    const toRect   = getSeatAvatarRect(recipSeatId);
-    if (!fromRect || !toRect) return;
-
-    // Atraso escalonado se múltiplos destinatários
-    setTimeout(() => flyGift(fromRect, toRect, senderAvatar, giftImg, recipSeatId, giftId), idx * 220);
-  });
+  _giftQueue.push(d);
+  if (!_giftQueueBusy) _processGiftQueue();
 }
 
-function flyGift(fromRect, toRect, senderAvatarUrl, giftImg, recipSeatId, giftId) {
-  const el = document.createElement('div');
-  el.className = 'gift-projectile';
+async function _processGiftQueue() {
+  if (!_giftQueue.length) { _giftQueueBusy = false; return; }
+  _giftQueueBusy = true;
 
-  // Mostra avatar do remetente na bolha voadora
-  const src = senderAvatarUrl || '';
-  el.innerHTML = `
-    <div class="gift-proj-inner">
-      ${src ? `<img src="${src}" class="gift-proj-avatar">` : ''}
-      <img src="${giftImg}" class="gift-proj-icon">
-    </div>`;
+  const item = _giftQueue.shift();
 
-  document.body.appendChild(el);
+  // Log no chat
+  giftChatMsg(item.senderName, item.giftImg, item.giftName, item.qty, (item.recipientNames || []).join(', '));
 
-  const startX = fromRect.left + fromRect.width  / 2;
-  const startY = fromRect.top  + fromRect.height / 2;
-  const endX   = toRect.left   + toRect.width    / 2;
-  const endY   = toRect.top    + toRect.height   / 2;
+  // Todos os destinatários animam em PARALELO (mesmo tempo)
+  const promises = (item.recipientIds || []).map(recipId => {
+    const recipSeatId = roomMembers[recipId]?.seatId;
+    if (!item.senderSeatId || !recipSeatId) return Promise.resolve();
+    const fromRect = getSeatAvatarRect(item.senderSeatId);
+    const toRect   = getSeatAvatarRect(recipSeatId);
+    if (!fromRect || !toRect) return Promise.resolve();
+    return _flyGiftAsync(fromRect, toRect, item.senderAvatar, item.giftImg, recipSeatId, item.giftId);
+  });
 
-  el.style.cssText = `
-    position:fixed; z-index:9999; pointer-events:none;
-    left:${startX}px; top:${startY}px;
-    transform:translate(-50%,-50%) scale(1);
-    transition: left 0.7s cubic-bezier(.4,0,.2,1),
-                top  0.7s cubic-bezier(.4,0,.2,1),
-                transform 0.7s ease,
-                opacity 0.2s ease 0.65s;
-    opacity:1;
-  `;
+  await Promise.all(promises);
 
-  // Força reflow antes de animar
-  void el.offsetWidth;
+  // Pausa entre itens da fila (evita sobreposição visual)
+  await new Promise(r => setTimeout(r, 280));
 
-  el.style.left    = endX + 'px';
-  el.style.top     = endY + 'px';
-  el.style.transform = 'translate(-50%,-50%) scale(0.5)';
-  el.style.opacity = '0';
+  _processGiftQueue();
+}
 
-  setTimeout(() => {
-    el.remove();
-    glowSeat(recipSeatId, giftId);
-  }, 900);
+// Projétil que voa de um assento ao outro — retorna Promise que resolve ao terminar
+function _flyGiftAsync(fromRect, toRect, senderAvatarUrl, giftImg, recipSeatId, giftId) {
+  return new Promise(resolve => {
+    // Tamanho = 100% do círculo do assento de destino
+    const size = Math.round(toRect.width * 2.5);
+    const cx   = size / 2;
+
+    const startX = fromRect.left + fromRect.width  / 2 - cx;
+    const startY = fromRect.top  + fromRect.height / 2 - cx;
+    const endX   = toRect.left   + toRect.width    / 2 - cx;
+    const endY   = toRect.top    + toRect.height   / 2 - cx;
+
+    const el = document.createElement('div');
+    el.style.cssText = `
+      position:fixed; z-index:9999; pointer-events:none;
+      width:${size}px; height:${size}px; border-radius:50%; overflow:hidden;
+      
+      left:${startX}px; top:${startY}px;
+      transition: left 0.72s cubic-bezier(.35,0,.2,1),
+                  top  0.72s cubic-bezier(.35,0,.2,1),
+                  opacity 0.18s ease 0.64s,
+                  transform 0.72s cubic-bezier(.35,0,.2,1);
+      transform: scale(1);
+      opacity: 1;
+    `;
+    el.innerHTML = `<img src="${giftImg}" style="width:100%;height:100%;object-fit:cover;" alt="">`;
+    document.body.appendChild(el);
+
+    // Força reflow para a transição CSS funcionar
+    void el.offsetWidth;
+
+    el.style.left      = endX + 'px';
+    el.style.top       = endY + 'px';
+    el.style.opacity   = '0';
+    el.style.transform = 'scale(0.6)';
+
+    setTimeout(() => {
+      el.remove();
+      glowSeat(recipSeatId, giftId);
+      resolve();
+    }, 940);
+  });
 }
 
 function glowSeat(seatId, giftId) {

@@ -1824,29 +1824,55 @@ signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
 
-// === Login com Google (OAuth) ===
-const googleSignInBtn = document.getElementById('googleSignInBtn');
-if (googleSignInBtn) {
-    googleSignInBtn.addEventListener('click', async () => {
-        authMessage.textContent = 'Redirecionando para o Google...';
+// === Login com Google (One Tap / Popup) ===
+const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
 
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                // Redireciona de volta para o jogo após o login/cadastro
-                redirectTo: window.location.origin
+function initGoogleOneTap() {
+    if (typeof google === 'undefined') return;
+
+    google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+            authMessage.textContent = 'Autenticando com Google...';
+
+            const { data, error } = await supabaseClient.auth.signInWithIdToken({
+                provider: 'google',
+                token: response.credential,
+            });
+
+            if (error) {
+                authMessage.textContent = translateSupabaseError(error.message);
             }
-        });
-
-        if (error) {
-            authMessage.textContent = translateSupabaseError(error.message);
-        }
-        // Em caso de sucesso, o Supabase redireciona automaticamente.
-        // Ao retornar, checkAuthStatus() detecta a sessão e dispara
-        // fetchAndDisplayPlayerInfo(), que cuida do pacote inicial,
-        // do modal de nome/avatar e do tutorial (via perfil_edit.js).
+            // Em sucesso, o onAuthStateChange do Supabase detecta e carrega o perfil normalmente
+        },
+        // Opcional: mostrar o One Tap automaticamente ao carregar a página
+        // auto_select: true,
     });
 }
+
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', () => {
+        if (typeof google === 'undefined') {
+            authMessage.textContent = 'SDK do Google não carregou. Tente novamente.';
+            return;
+        }
+        // Abre o popup/seletor de contas
+        google.accounts.id.prompt((notification) => {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                // Fallback: se o One Tap for bloqueado (ex: usuário já fechou várias vezes),
+                // cai de volta para o redirect tradicional
+                supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: window.location.origin }
+                });
+            }
+        });
+    });
+}
+
+// Inicializa assim que o SDK carregar
+window.addEventListener('load', initGoogleOneTap);
 
 // =======================================================================
 // OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO

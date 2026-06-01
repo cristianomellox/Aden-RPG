@@ -93,28 +93,32 @@
 <button id="signInBtn">Entrar</button>
 <button id="signUpBtn">Registrar</button>
 </div>
-
 <!-- Botão de Login com Google -->
 <div style="width: 100%; margin-top: 15px;">
     <button id="googleSignInBtn" style="
         width: 100%;
-        background: #ffffff;
-        color: #444;
-        padding: 12px;
-        border-radius: 8px;
+        background: #4285F4; /* Azul Oficial do Google */
+        color: #ffffff;      /* Texto Branco */
+        padding: 2px;        /* Padding reduzido para acomodar o ícone */
+        border-radius: 4px;  /* Borda levemente arredondada (padrão Google) */
         font-weight: bold;
+        font-family: 'Roboto', sans-serif; /* Fonte mais limpa para o botão */
+        font-size: 14px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 10px;
-        border: 1px solid #ddd;
-        text-shadow: none;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.25);
         cursor: pointer;
+        transition: background 0.3s;
     ">
-        <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width: 20px; height: 20px;">
-        Entrar com Google
+        <!-- Fundo branco apenas para o ícone -->
+        <div style="background: white; padding: 10px; border-radius: 2px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width: 18px; height: 18px;">
+        </div>
+        <span style="flex-grow: 1; text-align: center; padding-right: 38px;">Entrar com Google</span>
     </button>
 </div>
+
 
 <!-- Botão Esqueceu a senha alinhado à esquerda -->
 <a style="display: inline-block; align-self: flex-start; background-color: rgba(51, 51, 51, 0.8); color: white; border-radius: 10px; padding: 2px 5px; margin-top: 15px; text-decoration: none; font-size: 0.9em; font-weight: bold;" href="#" id="forgotPasswordLink">Esqueceu a senha?</a>
@@ -1549,6 +1553,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.closeAdenShareModal = closeAdenShareModal;
 })();
 </script>
-
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>

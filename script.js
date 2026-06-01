@@ -1843,18 +1843,53 @@ function isWebView() {
 /**
  * Fallback padrão: redireciona para o fluxo OAuth completo do Google.
  * Usado em WebViews e quando o One Tap é bloqueado pelo navegador.
+ *
+ * No WebView (AppCreator24): usa skipBrowserRedirect=true para obter a URL OAuth
+ * e a abre no navegador externo do sistema (_system / Chrome). Isso permite que
+ * o Google acesse as contas salvas no dispositivo, igual ao navegador normal.
+ *
+ * No navegador normal: faz o redirect direto sem etapas extras.
  */
-function googleOAuthRedirect() {
+async function googleOAuthRedirect() {
     authMessage.textContent = 'Redirecionando para o Google...';
-    supabaseClient.auth.signInWithOAuth({
+
+    if (isWebView()) {
+        // Passo 1: obtém a URL OAuth sem redirecionar ainda
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin,
+                skipBrowserRedirect: true  // Recebe a URL em vez de redirecionar
+            }
+        });
+
+        if (error) {
+            authMessage.textContent = translateSupabaseError(error.message);
+            return;
+        }
+
+        if (data?.url) {
+            // Passo 2: abre a URL OAuth no navegador externo do sistema (Chrome).
+            // '_system' é o padrão Cordova/AppCreator24 para abrir fora do WebView.
+            // Isso garante acesso às contas Google salvas no dispositivo.
+            const opened = window.open(data.url, '_system');
+            // Fallback para '_blank' caso '_system' não seja suportado
+            if (!opened) window.open(data.url, '_blank');
+        }
+        // Ao retornar do Chrome para o app, checkAuthStatus() detecta a sessão
+        // e dispara fetchAndDisplayPlayerInfo() normalmente.
+        return;
+    }
+
+    // Navegador normal: redirect direto (Supabase controla o fluxo)
+    const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
             redirectTo: window.location.origin,
             skipBrowserRedirect: false
         }
-    }).then(({ error }) => {
-        if (error) authMessage.textContent = translateSupabaseError(error.message);
     });
+    if (error) authMessage.textContent = translateSupabaseError(error.message);
     // Em caso de sucesso, o Supabase redireciona automaticamente.
     // Ao retornar, checkAuthStatus() detecta a sessão e dispara
     // fetchAndDisplayPlayerInfo(), que cuida do pacote inicial,

@@ -539,7 +539,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
 const SUPABASE_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        // 'implicit': tokens chegam direto na URL hash (#access_token=...).
+        // Evita o fluxo PKCE padrão, que salva um code_verifier no localStorage
+        // ANTES de redirecionar para o Google. Em WebViews (AppCreator24), o
+        // localStorage pode ser perdido durante a navegação externa, fazendo a
+        // troca de token falhar silenciosamente — sessão nunca é criada.
+        // Com implicit, não há code_verifier nem troca de código: os tokens
+        // chegam imediatamente na URL de retorno e são processados na hora.
+        flowType: 'implicit',
+        persistSession: true,        // Garante que a sessão seja salva no localStorage
+        autoRefreshToken: true,      // Renova o token automaticamente antes de expirar
+        detectSessionInUrl: true,    // Detecta e processa tokens da URL hash no retorno OAuth
+    }
+});
 
 // =======================================================================
 // NOVO: ADEN GLOBAL DB (ZERO EGRESS & SURGICAL UPDATE)

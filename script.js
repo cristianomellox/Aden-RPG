@@ -1173,7 +1173,7 @@ async function _executeSignUp() {
     const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: 'https://aden-rpg.pages.dev',
             data: { birth_date: birthDateStr }
         }
     });
@@ -1879,8 +1879,10 @@ function googleOAuthRedirect() {
     supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.origin
-            // skipBrowserRedirect: false (padrão) — Supabase faz window.location.href
+            redirectTo: 'https://aden-rpg.pages.dev'
+            // URL hardcoded (não usa window.location.origin) porque em WebViews o origin
+            // pode retornar uma URL diferente (GitHub Pages ou URL interna do wrapper),
+            // causando redirecionamento errado após OAuth → usuário nunca volta ao app.
             // internamente, carregando a página OAuth no contexto atual (WebView ou
             // navegador). Isso garante que os tokens de retorno sejam processados
             // pelo Supabase e salvos no localStorage/IndexedDB para persistência.

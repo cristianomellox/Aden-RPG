@@ -1961,10 +1961,11 @@ window.authCheckComplete = false;
 async function checkAuthStatus() {
     try {
         // 1. TENTA AUTH VIA GLOBAL DB (ZERO EGRESS)
+        // NOTA: GlobalDB.getAuth() já retorna session diretamente (sem wrapper .value)
         const cachedAuth = await GlobalDB.getAuth();
-        if (cachedAuth && cachedAuth.value && cachedAuth.value.user) {
+        if (cachedAuth && cachedAuth.user) {
              console.log("⚡ [Auth] Sessão válida recuperada do IndexedDB Global.");
-             currentPlayerId = cachedAuth.value.user.id;
+             currentPlayerId = cachedAuth.user.id;
              window.authCheckComplete = true;
 
              // Carrega jogador via DB ou rede se necessário (FALSE para respeitar cache)
@@ -2034,16 +2035,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     checkAuthStatus();
 });
 
-// Escuta mudanças APENAS para Login/Logout explícitos
+// Escuta mudanças de autenticação (login, logout, renovação de token)
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-        // Se já carregou via GlobalDB, ignora esse evento para não duplicar chamadas
-        if (window.initialLoadDone) return;
-
-        // Atualiza Global DB no login
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        // SEMPRE salva a sessão no GlobalDB — independente de initialLoadDone.
+        // Sem isso, o login via Google OAuth nunca persiste no IndexedDB:
+        // a página carrega com dados antigos do cache (initialLoadDone=true),
+        // e o evento SIGNED_IN chegaria tarde, mas o return antecipado impedia
+        // de salvar a nova sessão → usuário fica deslogado ao reabrir o app.
         await GlobalDB.setAuth(session);
-        // CORRIGIDO: Não força o refresh (passa false). Deixa o fetchAndDisplay decidir se usa cache.
-        if(!currentPlayerData) fetchAndDisplayPlayerInfo(false);
+
+        // Só dispara fetchAndDisplayPlayerInfo se ainda não carregou via cache
+        if (!window.initialLoadDone && !currentPlayerData) {
+            fetchAndDisplayPlayerInfo(false);
+        }
+    } else if (event === 'TOKEN_REFRESHED' && session) {
+        // O Supabase renova o access token periodicamente (~1h).
+        // Salva o token renovado no IndexedDB para persistir entre sessões.
+        // Sem isso, o IndexedDB ficaria com um token expirado após algumas horas.
+        await GlobalDB.setAuth(session);
     } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('player_data_cache');
         await GlobalDB.clearAuth();

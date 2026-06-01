@@ -1823,30 +1823,65 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
 signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
-
-// === Login com Google (OAuth) ===
+// === Login com Google (Janelinha Flutuante / One Tap) ===
 const googleSignInBtn = document.getElementById('googleSignInBtn');
+
+// 1. Função que o Google chama quando o usuário escolhe a conta na janelinha
+async function handleGoogleCredentialResponse(response) {
+    authMessage.textContent = 'Autenticando com Google...';
+    
+    // Envia o token gerado pela janelinha para o Supabase
+    const { data, error } = await supabaseClient.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.credential,
+    });
+
+    if (error) {
+        authMessage.textContent = translateSupabaseError(error.message);
+    }
+    // Se der sucesso, o onAuthStateChange do Supabase vai detectar e logar o jogador!
+}
+
+// 2. Inicializa a janelinha do Google quando a página carrega
+window.addEventListener('load', () => {
+    if (window.google) {
+        google.accounts.id.initialize({
+            // COLOQUE SEU CLIENT ID AQUI (O mesmo da sua print do Supabase)
+            client_id: '142797874763-vtsbudfqdico4pse4gtm4v6bv15ud1qr.apps.googleusercontent.com',
+            callback: handleGoogleCredentialResponse,
+            context: 'signin',
+            cancel_on_tap_outside: true
+        });
+    }
+});
+
+// 3. O que acontece ao clicar no botão azul
 if (googleSignInBtn) {
     googleSignInBtn.addEventListener('click', async () => {
-        authMessage.textContent = 'Redirecionando para o Google...';
-
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                // Redireciona de volta para o jogo após o login/cadastro
-                redirectTo: window.location.origin
-            }
-        });
-
-        if (error) {
-            authMessage.textContent = translateSupabaseError(error.message);
+        if (window.google) {
+            // Tenta abrir a janelinha flutuante
+            google.accounts.id.prompt((notification) => {
+                // Se a janelinha for bloqueada (alguns navegadores/WebViews bloqueiam)
+                // Fazemos o fallback para o redirecionamento normal (o que você já tinha feito e funcionava)
+                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                    console.log("Janelinha bloqueada, usando redirecionamento padrão...");
+                    authMessage.textContent = 'Redirecionando para o Google...';
+                    supabaseClient.auth.signInWithOAuth({
+                        provider: 'google',
+                        options: { redirectTo: window.location.origin }
+                    });
+                }
+            });
+        } else {
+            // Fallback caso o script do Google não tenha carregado
+            supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin }
+            });
         }
-        // Em caso de sucesso, o Supabase redireciona automaticamente.
-        // Ao retornar, checkAuthStatus() detecta a sessão e dispara
-        // fetchAndDisplayPlayerInfo(), que cuida do pacote inicial,
-        // do modal de nome/avatar e do tutorial (via perfil_edit.js).
     });
 }
+
 
 // =======================================================================
 // OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO

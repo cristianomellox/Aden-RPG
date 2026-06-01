@@ -1824,55 +1824,116 @@ signInBtn.addEventListener('click', signIn);
 signUpBtn.addEventListener('click', signUp);
 verifyOtpBtn.addEventListener('click', verifyOtp);
 
-// === Login com Google (One Tap / Popup) ===
-const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
+// === Login com Google (One Tap / WebView-aware) ===
 
+// Client ID do Google OAuth (mesmo cadastrado no Supabase Dashboard)
+const GOOGLE_CLIENT_ID = '142797874763-vtsbudfqdico4pse4gtm4v6bv15ud1qr.apps.googleusercontent.com';
+
+/**
+ * Detecta se o app está rodando dentro de um WebView (ex: AppCreator24, wrappers Android).
+ * O Google bloqueia One Tap e OAuth popup em WebViews por segurança.
+ */
+function isWebView() {
+    const ua = navigator.userAgent || '';
+    // 'wv' é a flag oficial do WebView do Android
+    // Ausência de 'Chrome/' em user-agents Android indica WebView nativo
+    return /wv|WebView/.test(ua) || (ua.includes('Android') && !ua.includes('Chrome/'));
+}
+
+/**
+ * Fallback padrão: redireciona para o fluxo OAuth completo do Google.
+ * Usado em WebViews e quando o One Tap é bloqueado pelo navegador.
+ */
+function googleOAuthRedirect() {
+    authMessage.textContent = 'Redirecionando para o Google...';
+    supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin,
+            skipBrowserRedirect: false
+        }
+    }).then(({ error }) => {
+        if (error) authMessage.textContent = translateSupabaseError(error.message);
+    });
+    // Em caso de sucesso, o Supabase redireciona automaticamente.
+    // Ao retornar, checkAuthStatus() detecta a sessão e dispara
+    // fetchAndDisplayPlayerInfo(), que cuida do pacote inicial,
+    // do modal de nome/avatar e do tutorial (via perfil_edit.js).
+}
+
+/**
+ * Callback chamado pelo SDK do Google após o usuário escolher uma conta.
+ * Troca o credential (JWT) por uma sessão Supabase via signInWithIdToken.
+ */
+async function handleGoogleOneTapCredential(response) {
+    authMessage.textContent = 'Autenticando com Google...';
+
+    const { error } = await supabaseClient.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.credential,
+    });
+
+    if (error) {
+        // Conta com esse e-mail já existe com outro provider (email/senha)
+        if (error.message.includes('already registered') ||
+            error.message.includes('provider') ||
+            error.message.includes('already exists')) {
+            authMessage.textContent =
+                '⚠️ Este e-mail já tem cadastro com senha. ' +
+                'Entre com e-mail/senha ou use "Esqueceu a senha?" para vincular o Google.';
+        } else {
+            authMessage.textContent = translateSupabaseError(error.message);
+        }
+    }
+    // Em sucesso, o onAuthStateChange do Supabase detecta e carrega o perfil normalmente.
+}
+
+/**
+ * Inicializa o Google One Tap assim que o SDK carregar.
+ * Só executa em navegadores reais (não em WebViews).
+ */
 function initGoogleOneTap() {
-    if (typeof google === 'undefined') return;
+    if (typeof google === 'undefined' || !google.accounts) return;
+    if (isWebView()) return; // WebViews não suportam One Tap
 
     google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: async (response) => {
-            authMessage.textContent = 'Autenticando com Google...';
-
-            const { data, error } = await supabaseClient.auth.signInWithIdToken({
-                provider: 'google',
-                token: response.credential,
-            });
-
-            if (error) {
-                authMessage.textContent = translateSupabaseError(error.message);
-            }
-            // Em sucesso, o onAuthStateChange do Supabase detecta e carrega o perfil normalmente
-        },
-        // Opcional: mostrar o One Tap automaticamente ao carregar a página
-        // auto_select: true,
+        callback: handleGoogleOneTapCredential,
+        auto_select: false,          // Não seleciona conta automaticamente (evita entrar na conta errada)
+        cancel_on_tap_outside: true,
     });
 }
+
+// Inicializa o One Tap ao carregar a página (aguarda SDK)
+window.addEventListener('load', initGoogleOneTap);
 
 const googleSignInBtn = document.getElementById('googleSignInBtn');
 if (googleSignInBtn) {
     googleSignInBtn.addEventListener('click', () => {
-        if (typeof google === 'undefined') {
-            authMessage.textContent = 'SDK do Google não carregou. Tente novamente.';
+
+        // Em WebViews (AppCreator24, etc.), o Google bloqueia One Tap e popups.
+        // Usa diretamente o redirect OAuth, que abre no navegador externo.
+        if (isWebView()) {
+            googleOAuthRedirect();
             return;
         }
-        // Abre o popup/seletor de contas
+
+        // SDK do Google não carregou (ex: sem internet, bloqueado por extensão)
+        if (typeof google === 'undefined' || !google.accounts) {
+            googleOAuthRedirect();
+            return;
+        }
+
+        // Navegador normal: tenta exibir o seletor One Tap (janelinha de contas)
         google.accounts.id.prompt((notification) => {
+            // One Tap foi bloqueado (usuário fechou muitas vezes, cookie de terceiros bloqueado, etc.)
+            // Cai de volta para o redirect OAuth como fallback
             if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                // Fallback: se o One Tap for bloqueado (ex: usuário já fechou várias vezes),
-                // cai de volta para o redirect tradicional
-                supabaseClient.auth.signInWithOAuth({
-                    provider: 'google',
-                    options: { redirectTo: window.location.origin }
-                });
+                googleOAuthRedirect();
             }
         });
     });
 }
-
-// Inicializa assim que o SDK carregar
-window.addEventListener('load', initGoogleOneTap);
 
 // =======================================================================
 // OTIMIZAÇÃO DE AUTH & INICIALIZAÇÃO

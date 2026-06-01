@@ -1879,13 +1879,17 @@ function googleOAuthRedirect() {
     supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: 'https://aden-rpg.pages.dev'
+            redirectTo: 'https://aden-rpg.pages.dev',
             // URL hardcoded (não usa window.location.origin) porque em WebViews o origin
             // pode retornar uma URL diferente (GitHub Pages ou URL interna do wrapper),
             // causando redirecionamento errado após OAuth → usuário nunca volta ao app.
-            // internamente, carregando a página OAuth no contexto atual (WebView ou
-            // navegador). Isso garante que os tokens de retorno sejam processados
-            // pelo Supabase e salvos no localStorage/IndexedDB para persistência.
+            queryParams: {
+                // Força o Google a SEMPRE exibir o seletor de contas.
+                // Sem isso, após deslogar e clicar em Google novamente, o Google
+                // reentra automaticamente na última conta sem perguntar — o jogador
+                // não conseguiria trocar de conta.
+                prompt: 'select_account'
+            }
         }
     }).then(({ error }) => {
         if (error) authMessage.textContent = translateSupabaseError(error.message);

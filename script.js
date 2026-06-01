@@ -1842,58 +1842,41 @@ function isWebView() {
 
 /**
  * Fallback padrão: redireciona para o fluxo OAuth completo do Google.
- * Usado em WebViews e quando o One Tap é bloqueado pelo navegador.
+ * Usado tanto no navegador quanto no WebView (AppCreator24).
  *
- * No WebView (AppCreator24): usa skipBrowserRedirect=true para obter a URL OAuth
- * e a abre no navegador externo do sistema (_system / Chrome). Isso permite que
- * o Google acesse as contas salvas no dispositivo, igual ao navegador normal.
+ * IMPORTANTE — Por que não usamos _system para abrir no Chrome externo:
+ * O AppCreator24 intercepta todos os window.open() e abre no próprio WebView.
+ * Mesmo que _system funcionasse, os tokens OAuth iriam para o Chrome e NUNCA
+ * voltariam para o WebView, impedindo que o Supabase salvasse a sessão no
+ * localStorage/IndexedDB do app — causando re-login a cada abertura.
  *
- * No navegador normal: faz o redirect direto sem etapas extras.
+ * Solução: abrir o OAuth dentro do próprio WebView (window.location.href).
+ * Após a autenticação, o Google redireciona de volta para o app (redirectTo),
+ * o Supabase detecta os tokens na URL e salva a sessão no localStorage.
+ * Nas próximas aberturas, checkAuthStatus() encontra a sessão no GlobalDB
+ * sem nenhum egress — idêntico ao comportamento do login por email/senha.
+ *
+ * Limitação conhecida: o seletor de contas salvas não aparece no WebView
+ * (WebView não compartilha cookies do Chrome), mas o login ocorre uma única
+ * vez e fica persistido, sem necessidade de re-autenticar nas próximas sessões.
  */
-async function googleOAuthRedirect() {
+function googleOAuthRedirect() {
     authMessage.textContent = 'Redirecionando para o Google...';
-
-    if (isWebView()) {
-        // Passo 1: obtém a URL OAuth sem redirecionar ainda
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin,
-                skipBrowserRedirect: true  // Recebe a URL em vez de redirecionar
-            }
-        });
-
-        if (error) {
-            authMessage.textContent = translateSupabaseError(error.message);
-            return;
-        }
-
-        if (data?.url) {
-            // Passo 2: abre a URL OAuth no navegador externo do sistema (Chrome).
-            // '_system' é o padrão Cordova/AppCreator24 para abrir fora do WebView.
-            // Isso garante acesso às contas Google salvas no dispositivo.
-            const opened = window.open(data.url, '_system');
-            // Fallback para '_blank' caso '_system' não seja suportado
-            if (!opened) window.open(data.url, '_blank');
-        }
-        // Ao retornar do Chrome para o app, checkAuthStatus() detecta a sessão
-        // e dispara fetchAndDisplayPlayerInfo() normalmente.
-        return;
-    }
-
-    // Navegador normal: redirect direto (Supabase controla o fluxo)
-    const { error } = await supabaseClient.auth.signInWithOAuth({
+    supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.origin,
-            skipBrowserRedirect: false
+            redirectTo: window.location.origin
+            // skipBrowserRedirect: false (padrão) — Supabase faz window.location.href
+            // internamente, carregando a página OAuth no contexto atual (WebView ou
+            // navegador). Isso garante que os tokens de retorno sejam processados
+            // pelo Supabase e salvos no localStorage/IndexedDB para persistência.
         }
+    }).then(({ error }) => {
+        if (error) authMessage.textContent = translateSupabaseError(error.message);
     });
-    if (error) authMessage.textContent = translateSupabaseError(error.message);
-    // Em caso de sucesso, o Supabase redireciona automaticamente.
-    // Ao retornar, checkAuthStatus() detecta a sessão e dispara
-    // fetchAndDisplayPlayerInfo(), que cuida do pacote inicial,
-    // do modal de nome/avatar e do tutorial (via perfil_edit.js).
+    // Em caso de sucesso, o Supabase redireciona para o Google automaticamente.
+    // Ao retornar via redirectTo, checkAuthStatus() detecta e persiste a sessão,
+    // disparando fetchAndDisplayPlayerInfo() — igual ao fluxo de email/senha.
 }
 
 /**

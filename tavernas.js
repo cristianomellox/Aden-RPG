@@ -270,8 +270,18 @@ const PROX_MAX_INTERVALS = 3;               // 3 × 50 = 150 pts máx/dia
 const PROX_PTS_INTERVAL  = 50;              // pontos por intervalo
 const PROX_DAILY_LIMIT   = 150;             // limite diário por par
 const _proxPairs         = {};              // pairKey → state object
+const _proxBridges       = {};              // pairKey → { el, seatA, seatB }
 let   _proxTicker        = null;            // setInterval do checker
-let   _heartsTicker      = null;            // setInterval dos corações
+
+// Cores exclusivas por par (mapeadas ao seatA da dupla adjacente)
+const PROX_COLORS = [
+  { fill: '#ff6b9d', glow: 'rgba(255,107,157,0.85)' }, // 1-2 → rosa
+  { fill: '#ffb347', glow: 'rgba(255,179,71,0.85)'  }, // 2-3 → âmbar
+  { fill: '#c3a0ff', glow: 'rgba(195,160,255,0.85)' }, // 3-4 → violeta
+  { fill: '#5dd8f5', glow: 'rgba(93,216,245,0.85)'  }, // 5-6 → céu
+  { fill: '#6bffb8', glow: 'rgba(107,255,184,0.85)' }, // 6-7 → menta
+  { fill: '#ff9f7f', glow: 'rgba(255,159,127,0.85)' }, // 7-8 → pêssego
+];
 
 // ── Confirmação de presente pendente ──
 let _giftConfirmPending = null;             // { gift } aguardando confirm
@@ -637,11 +647,11 @@ function closeRoom() {
   // Limpa estado de proximidade
   Object.keys(_proxPairs).forEach(k => {
     const p = _proxPairs[k];
-    renderAura(p.seatA, p.seatB, false);
+    renderAura(p.seatA, p.seatB, false, k);
     delete _proxPairs[k];
   });
-  if (_proxTicker)   { clearInterval(_proxTicker);   _proxTicker   = null; }
-  if (_heartsTicker) { clearInterval(_heartsTicker); _heartsTicker = null; }
+  Object.keys(_proxBridges).forEach(k => removeProxBridge(k));
+  if (_proxTicker) { clearInterval(_proxTicker); _proxTicker = null; }
 
   // Atualiza a lista com contagens reais (mapa já é mantido pelo onGlobalPresence)
   setTimeout(renderListCards, 400);
@@ -2417,7 +2427,7 @@ function updateProximityPairs() {
       };
 
       if (!_proxPairs[key].done) {
-        renderAura(String(a), String(b), true);
+        renderAura(String(a), String(b), true, key);
         broadcastAuras();
       }
     }
@@ -2427,7 +2437,7 @@ function updateProximityPairs() {
   Object.keys(_proxPairs).forEach(key => {
     if (!activePairKeys.has(key)) {
       const p = _proxPairs[key];
-      renderAura(p.seatA, p.seatB, false);
+      renderAura(p.seatA, p.seatB, false, key);
       clearProxStart(currentRoom?.id, key);
       delete _proxPairs[key];
       broadcastAuras();
@@ -2437,25 +2447,11 @@ function updateProximityPairs() {
   // Gerencia o ticker de verificação de intervalos
   const activePairs = Object.values(_proxPairs).filter(p => !p.done);
   if (activePairs.length > 0 && !_proxTicker) {
-    _proxTicker = setInterval(checkProximityIntervals, 30 * 1000); // checa a cada 30s
-    checkProximityIntervals(); // checa imediatamente ao iniciar
+    _proxTicker = setInterval(checkProximityIntervals, 30 * 1000);
+    checkProximityIntervals();
   }
   if (activePairs.length === 0 && _proxTicker) {
     clearInterval(_proxTicker); _proxTicker = null;
-  }
-
-  // Ticker de corações visuais (a cada 20s spawneia corações nos pares ativos)
-  if (activePairs.length > 0 && !_heartsTicker) {
-    _heartsTicker = setInterval(() => {
-      Object.values(_proxPairs).forEach(p => {
-        if (!p.done) spawnProxHearts(p.seatA, p.seatB);
-      });
-    }, 20 * 1000);
-    // Spawneia imediatamente ao criar
-    activePairs.forEach(p => spawnProxHearts(p.seatA, p.seatB));
-  }
-  if (activePairs.length === 0 && _heartsTicker) {
-    clearInterval(_heartsTicker); _heartsTicker = null;
   }
 }
 
@@ -2496,7 +2492,7 @@ async function checkProximityIntervals() {
 
       if (pair.intervals >= PROX_MAX_INTERVALS) {
         pair.done = true;
-        renderAura(pair.seatA, pair.seatB, false);
+        renderAura(pair.seatA, pair.seatB, false, key);
         clearProxStart(currentRoom?.id, key);
         broadcastAuras();
         // Mensagem sutil no chat
@@ -2568,8 +2564,7 @@ function onIntimacyAura(msg) {
         nameA: p.nameA, nameB: p.nameB,
         startTs, intervals: p.intervals, done: false
       };
-      renderAura(p.seatA, p.seatB, true);
-      spawnProxHearts(p.seatA, p.seatB);
+      renderAura(p.seatA, p.seatB, true, p.key);
 
       // Inicia tickers se necessário
       updateProximityPairs();
@@ -2582,32 +2577,97 @@ function onIntimacyAura(msg) {
   });
 }
 
-// Aplica ou remove o efeito visual de aura nos dois assentos do par
-function renderAura(seatA, seatB, active) {
-  const btnA = document.getElementById('seat-btn-' + seatA);
-  const btnB = document.getElementById('seat-btn-' + seatB);
-  if (btnA) btnA.classList.toggle('intimacy-aura', active);
-  if (btnB) btnB.classList.toggle('intimacy-aura', active);
+// Cores por seatA: cada par adjacente tem sua identidade visual
+function proxColorForSeatA(seatA) {
+  const idx = { '1':0,'2':1,'3':2,'5':3,'6':4,'7':5 }[String(seatA)] ?? 0;
+  return PROX_COLORS[idx];
 }
 
-// Spawnia corações flutuantes em ambos os assentos do par
-function spawnProxHearts(seatA, seatB) {
-  _spawnHeartsOnSeat(seatA);
-  _spawnHeartsOnSeat(seatB);
-}
+// Cria a ponte de corações viajantes entre dois assentos
+function createProxBridge(seatA, seatB, pairKey) {
+  removeProxBridge(pairKey);
+  const color  = proxColorForSeatA(seatA);
+  const bridge = document.createElement('div');
+  bridge.className = 'prox-bridge';
+  bridge.id        = 'prox-bridge-' + pairKey;
+  document.body.appendChild(bridge);
+  _proxBridges[pairKey] = { el: bridge, seatA, seatB, color };
 
-function _spawnHeartsOnSeat(seatId) {
-  const btn = document.getElementById('seat-btn-' + seatId);
-  if (!btn || !btn.classList.contains('intimacy-aura')) return;
-  const count = 2 + Math.floor(Math.random() * 2); // 2 ou 3 corações
-  for (let i = 0; i < count; i++) {
-    const h = document.createElement('div');
-    h.className = 'prox-heart';
+  // 4 corações: 2 indo para a direita, 2 para a esquerda, defasados
+  const defs = [
+    { rev: false, delay: '0s',    dur: '2.4s' },
+    { rev: true,  delay: '0.6s',  dur: '2.4s' },
+    { rev: false, delay: '1.2s',  dur: '2.4s' },
+    { rev: true,  delay: '1.8s',  dur: '2.4s' },
+  ];
+  defs.forEach(d => {
+    const h = document.createElement('span');
+    h.className = 'prox-bh' + (d.rev ? ' prox-bh-rev' : '');
     h.textContent = '♥';
-    h.style.left         = (15 + Math.random() * 70) + '%';
-    h.style.animationDelay = (i * 0.35) + 's';
-    h.style.fontSize     = (9 + Math.random() * 7) + 'px';
-    btn.appendChild(h);
-    setTimeout(() => h.remove(), 1800 + i * 350);
+    h.style.setProperty('--heart-color', color.fill);
+    h.style.setProperty('--heart-glow',  color.glow);
+    h.style.setProperty('--delay',    d.delay);
+    h.style.setProperty('--duration', d.dur);
+    bridge.appendChild(h);
+  });
+
+  // Posiciona após um frame para garantir layout calculado
+  requestAnimationFrame(() => positionProxBridge(pairKey));
+}
+
+function removeProxBridge(pairKey) {
+  const b = _proxBridges[pairKey];
+  if (b) { b.el.remove(); delete _proxBridges[pairKey]; }
+}
+
+// Calcula e aplica posição da ponte baseado nas posições reais dos botões
+function positionProxBridge(pairKey) {
+  const b = _proxBridges[pairKey];
+  if (!b) return;
+  const btnA = document.getElementById('seat-btn-' + b.seatA);
+  const btnB = document.getElementById('seat-btn-' + b.seatB);
+  if (!btnA || !btnB) return;
+
+  const rA = btnA.getBoundingClientRect();
+  const rB = btnB.getBoundingClientRect();
+  if (!rA.width || !rB.width) return; // botões ainda não renderizados
+
+  const cAx = rA.left + rA.width  / 2;
+  const cBx = rB.left + rB.width  / 2;
+  const topY = Math.max(rA.bottom, rB.bottom) + 4;
+
+  const leftX = Math.min(cAx, cBx);
+  const width  = Math.abs(cBx - cAx);
+
+  b.el.style.left  = leftX + 'px';
+  b.el.style.top   = topY  + 'px';
+  b.el.style.width = width + 'px';
+
+  // Dist que cada coração percorre (largura da ponte menos largura do símbolo)
+  const dist = Math.max(0, width - 12);
+  b.el.querySelectorAll('.prox-bh').forEach(h => {
+    h.style.setProperty('--dist', dist + 'px');
+  });
+}
+
+function positionAllProxBridges() {
+  Object.keys(_proxBridges).forEach(positionProxBridge);
+}
+
+// Aplica ou remove o efeito visual de aura/ponte num par de assentos
+function renderAura(seatA, seatB, active, pairKey) {
+  if (active && pairKey) {
+    createProxBridge(seatA, seatB, pairKey);
+  } else if (pairKey) {
+    removeProxBridge(pairKey);
   }
 }
+
+// Mantém compatibilidade com chamada sem pairKey (fallback)
+function spawnProxHearts() {} // obsoleto — substituído pela ponte contínua
+
+// Reposiciona pontes ao redimensionar (orientação do celular, etc.)
+window.addEventListener('resize', () => {
+  clearTimeout(window._proxResizeTimer);
+  window._proxResizeTimer = setTimeout(positionAllProxBridges, 120);
+});

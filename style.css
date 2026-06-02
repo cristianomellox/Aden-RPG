@@ -546,57 +546,384 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     overflow-y: auto;
 }
 
-#caixaLogin {
-    width: 90vw;
-    max-width: 400px;
-    margin-top: 230px;    /* Empurra a caixa para baixo (centraliza) */
-    margin-bottom: auto; /* Empurra o footer para o fundo da tela */
-    
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px 0;
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN AAA — ADEN RPG
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Variáveis ── */
+:root {
+  --gold:        #c9a94a;
+  --gold-dim:    #8a7330;
+  --gold-glow:   rgba(201,169,74,0.35);
+  --dark-glass:  rgba(8,6,4,0.82);
+  --dark-glass2: rgba(14,10,6,0.92);
+  --text-bright: #f5edd8;
+  --text-muted:  #9a8d6e;
+  --border-line: rgba(201,169,74,0.25);
 }
 
-/* =========================================================
-   ADAPTAÇÃO PARA TELA DEITADA (LANDSCAPE) OU TELAS PEQUENAS
-   ========================================================= */
+/* ── Caixa principal (só branding + botões) ── */
+#caixaLogin {
+  width: 88vw;
+  max-width: 360px;
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  /* Posicionamento: empurra para o terço inferior da tela */
+  position: relative;
+  top: 18vh;
+}
+
+/* ── Branding ── */
+#loginBranding {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 28px;
+  gap: 4px;
+  animation: loginFadeDown 0.9s cubic-bezier(.22,.68,0,1.2) both;
+}
+#loginEmblem svg {
+  width: 52px; height: 52px;
+  filter: drop-shadow(0 0 10px var(--gold-glow));
+  margin-bottom: 6px;
+}
+#loginTitle {
+  font-family: 'Cinzel', serif;
+  font-size: 2.6em;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  color: var(--gold);
+  text-shadow:
+    0 0 30px var(--gold-glow),
+    0 2px 4px rgba(0,0,0,0.9);
+  margin: 0;
+  line-height: 1;
+}
+#loginSubtitle {
+  font-family: 'Crimson Text', serif;
+  font-style: italic;
+  font-size: 1em;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  margin: 4px 0 0;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* ── Botões de login principais ── */
+.login-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  transition: filter 0.2s, transform 0.15s;
+  overflow: hidden;
+  margin-bottom: 0;
+  padding: 0;
+  height: 48px;
+  animation: loginFadeUp 0.8s cubic-bezier(.22,.68,0,1.2) both;
+}
+.login-btn:active { transform: scale(0.97); filter: brightness(0.9); }
+
+.login-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+.login-btn-label {
+  flex: 1;
+  text-align: center;
+  padding-right: 48px; /* compensate icon width for true centering */
+}
+
+/* Google */
+.login-btn-google {
+  background: #1e1e1e;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  color: #e8e8e8;
+  border: 1px solid rgba(255,255,255,0.1);
+  animation-delay: 0.05s;
+}
+.login-btn-google .login-btn-icon {
+  background: #fff;
+  border-radius: 5px 0 0 5px;
+}
+.login-btn-google:hover { filter: brightness(1.15); }
+
+/* Email */
+.login-btn-email {
+  background: #777;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+  color: #f0f0f0;
+  border: 1px solid rgba(255,255,255,0.08);
+  animation-delay: 0.18s;
+}
+.login-btn-email .login-btn-icon {
+  background: rgba(0,0,0,0.2);
+  border-radius: 5px 0 0 5px;
+  color: #ddd;
+}
+.login-btn-email:hover { filter: brightness(1.12); }
+
+/* ── Divisor ── */
+.login-divider {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  margin: 14px 0;
+  animation: loginFadeUp 0.8s 0.12s cubic-bezier(.22,.68,0,1.2) both;
+}
+.login-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border-line), transparent);
+}
+.login-divider-text {
+  font-family: 'Crimson Text', serif;
+  font-style: italic;
+  font-size: 0.82em;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+/* ── Termos ── */
+.termos-text {
+  font-size: 0.73em;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 16px;
+  line-height: 1.5;
+  padding: 0 4px;
+  animation: loginFadeUp 0.8s 0.25s cubic-bezier(.22,.68,0,1.2) both;
+}
+.termos-text a {
+  color: var(--gold);
+  text-decoration: none;
+  font-weight: 600;
+}
+.termos-text a:hover { text-decoration: underline; }
+
+/* ── Modal de e-mail ── */
+#emailLoginModal {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 20px;
+  box-sizing: border-box;
+}
+#emailLoginModalBox {
+  position: relative;
+  background: var(--dark-glass2);
+  border: 1px solid var(--border-line);
+  border-radius: 10px;
+  padding: 32px 24px 24px;
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow:
+    0 0 0 1px rgba(201,169,74,0.08),
+    0 20px 60px rgba(0,0,0,0.8),
+    inset 0 1px 0 rgba(201,169,74,0.1);
+  animation: elmSlideIn 0.35s cubic-bezier(.22,.68,0,1.2) both;
+}
+
+/* cantos decorativos */
+.elm-corner {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-color: var(--gold);
+  border-style: solid;
+  opacity: 0.6;
+}
+.elm-tl { top: 7px; left: 7px;  border-width: 1.5px 0 0 1.5px; }
+.elm-tr { top: 7px; right: 7px; border-width: 1.5px 1.5px 0 0; }
+.elm-bl { bottom: 7px; left: 7px;  border-width: 0 0 1.5px 1.5px; }
+.elm-br { bottom: 7px; right: 7px; border-width: 0 1.5px 1.5px 0; }
+
+/* close button */
+#closeEmailLoginModal {
+  position: absolute;
+  top: 10px; right: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.2s, background 0.2s;
+  padding: 0;
+}
+#closeEmailLoginModal:hover { color: var(--text-bright); background: rgba(255,255,255,0.12); }
+
+/* header */
+.elm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.elm-header h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  margin: 0;
+  text-shadow: 0 0 18px var(--gold-glow);
+}
+
+/* inputs dentro do modal */
+#emailLoginModalBox input[type="email"],
+#emailLoginModalBox input[type="password"],
+#emailLoginModalBox input[type="text"] {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(201,169,74,0.2);
+  border-radius: 6px;
+  padding: 11px 14px;
+  color: var(--text-bright);
+  font-size: 0.9em;
+  font-family: 'Crimson Text', serif;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#emailLoginModalBox input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(201,169,74,0.15);
+}
+#emailLoginModalBox input::placeholder { color: var(--text-muted); }
+
+/* botões dentro do modal */
+#btnReg {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.elmbtn-primary, .elmbtn-secondary {
+  flex: 1;
+  padding: 11px 8px;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+.elmbtn-primary:active, .elmbtn-secondary:active { transform: scale(0.97); }
+
+.elmbtn-primary {
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+  color: #0d0a04;
+  box-shadow: 0 2px 10px rgba(201,169,74,0.3);
+}
+.elmbtn-primary:hover { filter: brightness(1.1); }
+
+.elmbtn-secondary {
+  background: rgba(255,255,255,0.07);
+  color: var(--text-bright);
+  border: 1px solid var(--border-line);
+}
+.elmbtn-secondary:hover { background: rgba(255,255,255,0.12); }
+
+/* verifyOtp button */
+#verifyOtpBtn {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+  color: #0d0a04;
+  box-shadow: 0 2px 10px rgba(201,169,74,0.3);
+  transition: filter 0.2s;
+}
+#verifyOtpBtn:hover { filter: brightness(1.1); }
+
+/* OTP input */
+#otpInputContainer {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* forgot password */
+.elmbtn-forgot {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-top: 2px;
+  transition: color 0.2s;
+  font-family: 'Crimson Text', serif;
+  font-style: italic;
+}
+.elmbtn-forgot:hover { color: var(--gold); }
+
+/* auth message */
+#authMessage {
+  font-size: 0.82em;
+  color: #e07070;
+  text-align: center;
+  min-height: 18px;
+  line-height: 1.4;
+  width: 100%;
+}
+
+/* ── Animações ── */
+@keyframes loginFadeDown {
+  from { opacity: 0; transform: translateY(-18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes loginFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes elmSlideIn {
+  from { opacity: 0; transform: scale(0.93) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── Landscape / telas pequenas ── */
 @media (max-height: 500px) {
-    #caixaLogin {
-        padding: 10px 0;
-        margin-top: 20px; /* Dá um respiro no topo quando a tela deita */
-    }
-    #caixaLogin h2 {
-        margin: 5px 0;
-        font-size: 1.2em;
-    }
-    #caixaLogin input[type="email"], 
-    #caixaLogin input[type="password"], 
-    #caixaLogin input[type="text"] {
-        padding: 8px;
-        margin-bottom: 6px;
-    }
-    #btnReg button {
-        padding: 12px 20px !important; 
-        font-size: 0.85em;
-    }
-    #forgotPasswordLink {
-        padding: 6px 12px !important;
-        margin-top: 8px !important;
-    }
-    .termos-text {
-        padding: 6px !important;
-        margin-top: 8px !important;
-        font-size: 0.75em !important;
-    }
-    #authFooter {
-        padding-bottom: 0px !important;
-        margin-top: 20px !important; /* Garante espaço antes do footer na rolagem */
-    }
-    #authCopyrightFooter {
-        padding: 5px 10px !important;
-        font-size: 0.7em !important;
-    }
+  #caixaLogin { top: 4vh; }
+  #loginBranding { margin-bottom: 14px; }
+  #loginTitle { font-size: 2em; }
+  .login-btn { height: 42px; }
+  .login-divider { margin: 8px 0; }
 }
 
 @keyframes pulse {

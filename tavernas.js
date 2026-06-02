@@ -264,6 +264,18 @@ let speakLastTs   = 0;
 let speakLastState = false;
 let selectedGiftRecipients = new Set();
 
+// ── Intimidade por Proximidade (tempo sentado adjacente) ──
+const PROX_INTERVAL_MS   = 5 * 60 * 1000;  // 5 minutos por intervalo
+const PROX_MAX_INTERVALS = 3;               // 3 × 50 = 150 pts máx/dia
+const PROX_PTS_INTERVAL  = 50;              // pontos por intervalo
+const PROX_DAILY_LIMIT   = 150;             // limite diário por par
+const _proxPairs         = {};              // pairKey → state object
+let   _proxTicker        = null;            // setInterval do checker
+let   _heartsTicker      = null;            // setInterval dos corações
+
+// ── Confirmação de presente pendente ──
+let _giftConfirmPending = null;             // { gift } aguardando confirm
+
 // Mapa: roomId → { count, members: [{name, avatar_url}] }
 let globalPresenceMap = {};
 
@@ -622,6 +634,15 @@ function closeRoom() {
   updateMicBtn();
   document.getElementById('btn-audio-mute')?.classList.remove('audio-off');
 
+  // Limpa estado de proximidade
+  Object.keys(_proxPairs).forEach(k => {
+    const p = _proxPairs[k];
+    renderAura(p.seatA, p.seatB, false);
+    delete _proxPairs[k];
+  });
+  if (_proxTicker)   { clearInterval(_proxTicker);   _proxTicker   = null; }
+  if (_heartsTicker) { clearInterval(_heartsTicker); _heartsTicker = null; }
+
   // Atualiza a lista com contagens reais (mapa já é mantido pelo onGlobalPresence)
   setTimeout(renderListCards, 400);
 }
@@ -647,6 +668,7 @@ function joinChannel(roomId) {
   roomChannel.subscribe('mod',   onMod);
   roomChannel.subscribe('speak', onSpeak);
   roomChannel.subscribe('gift',  onGiftMsg);
+  roomChannel.subscribe('intimacy-aura', onIntimacyAura);
   roomChannel.subscribe('spectator-join', (msg) => {
     if (msg.clientId !== PLAYER.id && micOn && localStream) {
       initiateCall(msg.clientId);
@@ -702,6 +724,8 @@ function joinChannel(roomId) {
       });
       updateOnlineCount();
       refreshPeopleModal();
+      // Calcula pares adjacentes após sync inicial de presença
+      setTimeout(updateProximityPairs, 300);
 
       // Espectadores: pede aos membros SENTADOS que iniciem uma conexão WebRTC conosco
       // (localStream é null aqui pois não estamos sentados, então não podemos iniciar)
@@ -786,6 +810,11 @@ function onPresence(action, msg) {
     if (roomMembers[id].seatId) {
       renderSeat(id, roomMembers[id].seatId, roomMembers[id].name, roomMembers[id].muted, roomMembers[id].avatar_url);
     }
+    // Atualiza pares de intimidade e re-transmite auras ao novo membro
+    setTimeout(updateProximityPairs, 200);
+    if (action === 'enter' && Object.keys(_proxPairs).length > 0) {
+      setTimeout(broadcastAuras, 900);
+    }
     // Busca avatar no Supabase se ainda null (último recurso)
     if (!roomMembers[id].avatar_url) {
       fetchMissingProfiles([id]).then(() => {
@@ -810,6 +839,7 @@ function onPresence(action, msg) {
     if (d.avatar_url) cacheAvatarFromPresence(id, d.name, d.avatar_url);
     if (prev && prev !== d.seatId) clearSeat(prev);
     if (d.seatId) renderSeat(id, d.seatId, d.name, d.muted, roomMembers[id].avatar_url);
+    setTimeout(updateProximityPairs, 200);
     if (!roomMembers[id].avatar_url) {
       fetchMissingProfiles([id]).then(() => {
         if (!ownersCache[id]?.avatar_url) return;
@@ -830,6 +860,7 @@ function onPresence(action, msg) {
     delete roomMembers[id];
     peerConns[id]?.close(); delete peerConns[id];
     document.getElementById('audio-' + id)?.remove();
+    setTimeout(updateProximityPairs, 200);
   }
 
   updateOnlineCount();
@@ -857,6 +888,7 @@ function onSeat(msg) {
   }
   if (d.seatId) renderSeat(msg.clientId, d.seatId, d.name, false, d.avatar_url || m?.avatar_url);
   else if (d.prevSeatId) clearSeat(d.prevSeatId);
+  setTimeout(updateProximityPairs, 200);
 }
 
 function onSpeak(msg) {
@@ -1186,6 +1218,9 @@ async function claimSeat(seatId) {
     seatId, muted: false, avatar_url: PLAYER.avatar_url || null
   });
 
+  // Atualiza pares de intimidade por proximidade
+  setTimeout(updateProximityPairs, 200);
+
   // FIX 3: Auto-ativa microfone ao sentar
   await activateMic();
 }
@@ -1201,6 +1236,7 @@ function vacateMySeat(seatId) {
   });
   sysMsg('Voce saiu do assento.');
   if (micOn) stopVoice();
+  setTimeout(updateProximityPairs, 200);
 }
 
 // ══════════════════════════════════════════
@@ -1789,7 +1825,7 @@ function buildGiftGrid() {
         ${currencyIcon(gift.currency)}
         <span>${gift.cost.toLocaleString()}</span>
       </div>`;
-    card.addEventListener('click', () => sendGift(gift));
+    card.addEventListener('click', () => openGiftConfirmModal(gift));
     g.appendChild(card);
   });
   c.appendChild(g);
@@ -2227,5 +2263,351 @@ function scaleFont() {
     const s = document.createElement('style');
     s.textContent = `html{font-size:${16*(16/r)}px!important;}`;
     document.head.appendChild(s);
+  }
+}
+// ══════════════════════════════════════════
+//  GIFT CONFIRMATION MODAL
+// ══════════════════════════════════════════
+
+function openGiftConfirmModal(gift) {
+  if (!selectedGiftRecipients.size) {
+    showBalloonToast('Selecione ao menos um destinatário.');
+    return;
+  }
+
+  const qty = parseInt(document.getElementById('gift-qty-select')?.value || '1', 10);
+  const recipNames = [...selectedGiftRecipients]
+    .map(id => roomMembers[id]?.name || '?')
+    .join(', ');
+
+  // Monta a frase de destinatários
+  const recipLabel = [...selectedGiftRecipients].size === 1
+    ? recipNames
+    : recipNames;
+
+  // Intimidade total que será adicionada (por destinatário)
+  const intimacyTotal = gift.intimacyPerUnit * qty;
+
+  // Preenche o modal
+  document.getElementById('gift-confirm-question').textContent =
+    `Deseja enviar ${gift.name} para ${recipLabel}?`;
+  const imgEl = document.getElementById('gift-confirm-img');
+  imgEl.src = gift.img;
+  imgEl.alt = gift.name;
+
+  const intimacyEl = document.getElementById('gift-confirm-intimacy');
+  if (intimacyTotal > 0) {
+    intimacyEl.textContent = `Isso aumentará a Intimidade de vocês em ${intimacyTotal} pontos`;
+    intimacyEl.style.display = '';
+  } else {
+    intimacyEl.style.display = 'none';
+  }
+
+  // Guarda o presente para quando confirmar
+  _giftConfirmPending = gift;
+
+  // Mostra o modal
+  document.getElementById('gift-confirm-modal').classList.add('open');
+}
+
+function closeGiftConfirmModal() {
+  document.getElementById('gift-confirm-modal').classList.remove('open');
+  _giftConfirmPending = null;
+}
+
+function confirmGiftSend() {
+  if (!_giftConfirmPending) return;
+  const gift = _giftConfirmPending;
+  closeGiftConfirmModal();
+  sendGift(gift);
+}
+
+// ══════════════════════════════════════════
+//  PROXIMITY INTIMACY — Intimidade por Tempo
+// ══════════════════════════════════════════
+
+// Chave única e ordenada para o par de jogadores
+function proxPairKey(pidA, pidB) {
+  return pidA < pidB ? `${pidA}__${pidB}` : `${pidB}__${pidA}`;
+}
+
+// Chave de localStorage para limite diário
+function getProxDailyKey(pairKey) {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return `prox_daily_${today}_${pairKey}`;
+}
+
+// Pontos já concedidos hoje para este par
+function getDailyProxPoints(pairKey) {
+  return parseInt(localStorage.getItem(getProxDailyKey(pairKey)) || '0', 10);
+}
+function addDailyProxPoints(pairKey, pts) {
+  const current = getDailyProxPoints(pairKey);
+  localStorage.setItem(getProxDailyKey(pairKey), current + pts);
+}
+
+// Persiste o startTs de um par na sessão (para sobreviver a re-renders)
+function getProxStoredStart(roomId, pairKey) {
+  try {
+    const raw = sessionStorage.getItem(`prox_start_${roomId}_${pairKey}`);
+    return raw ? parseInt(raw, 10) : null;
+  } catch (_) { return null; }
+}
+function saveProxStart(roomId, pairKey, ts) {
+  try { sessionStorage.setItem(`prox_start_${roomId}_${pairKey}`, String(ts)); } catch (_) {}
+}
+function clearProxStart(roomId, pairKey) {
+  try { sessionStorage.removeItem(`prox_start_${roomId}_${pairKey}`); } catch (_) {}
+}
+
+// Mapa de assentos atualmente ocupados: seatId → { playerId, name }
+function getCurrentSeatMap() {
+  const map = {};
+  Object.keys(mySeats).forEach(sid => {
+    map[sid] = { playerId: PLAYER.id, name: PLAYER.name };
+  });
+  Object.entries(roomMembers).forEach(([id, m]) => {
+    if (m.seatId) map[m.seatId] = { playerId: id, name: m.name };
+  });
+  return map;
+}
+
+// Lista canônica de pares adjacentes (grupos separados pelo gap 4→5)
+const ADJACENT_PAIRS = [[1,2],[2,3],[3,4],[5,6],[6,7],[7,8]];
+
+// Recalcula quais pares estão ativos e inicia/encerra efeitos
+function updateProximityPairs() {
+  if (!currentRoom) return;
+  const seatMap = getCurrentSeatMap();
+  const now     = Date.now();
+  const activePairKeys = new Set();
+
+  ADJACENT_PAIRS.forEach(([a, b]) => {
+    const oA = seatMap[String(a)];
+    const oB = seatMap[String(b)];
+    if (!oA || !oB || oA.playerId === oB.playerId) return;
+
+    const key = proxPairKey(oA.playerId, oB.playerId);
+    activePairKeys.add(key);
+
+    if (!_proxPairs[key]) {
+      // Verifica limite diário antes de iniciar
+      if (getDailyProxPoints(key) >= PROX_DAILY_LIMIT) {
+        _proxPairs[key] = { seatA: String(a), seatB: String(b),
+          pidA: oA.playerId, pidB: oB.playerId,
+          nameA: oA.name, nameB: oB.name,
+          startTs: now, intervals: PROX_MAX_INTERVALS, done: true };
+        return; // Limite atingido hoje, sem efeito
+      }
+
+      // Par novo! Recupera startTs salvo ou usa agora
+      const stored = getProxStoredStart(currentRoom.id, key);
+      const startTs = stored || now;
+      if (!stored) saveProxStart(currentRoom.id, key, startTs);
+
+      const dailyPts   = getDailyProxPoints(key);
+      const doneIntervals = Math.floor(dailyPts / PROX_PTS_INTERVAL);
+
+      _proxPairs[key] = {
+        seatA: String(a), seatB: String(b),
+        pidA: oA.playerId, pidB: oB.playerId,
+        nameA: oA.name, nameB: oB.name,
+        startTs, intervals: doneIntervals,
+        done: doneIntervals >= PROX_MAX_INTERVALS
+      };
+
+      if (!_proxPairs[key].done) {
+        renderAura(String(a), String(b), true);
+        broadcastAuras();
+      }
+    }
+  });
+
+  // Remove pares que não são mais adjacentes
+  Object.keys(_proxPairs).forEach(key => {
+    if (!activePairKeys.has(key)) {
+      const p = _proxPairs[key];
+      renderAura(p.seatA, p.seatB, false);
+      clearProxStart(currentRoom?.id, key);
+      delete _proxPairs[key];
+      broadcastAuras();
+    }
+  });
+
+  // Gerencia o ticker de verificação de intervalos
+  const activePairs = Object.values(_proxPairs).filter(p => !p.done);
+  if (activePairs.length > 0 && !_proxTicker) {
+    _proxTicker = setInterval(checkProximityIntervals, 30 * 1000); // checa a cada 30s
+    checkProximityIntervals(); // checa imediatamente ao iniciar
+  }
+  if (activePairs.length === 0 && _proxTicker) {
+    clearInterval(_proxTicker); _proxTicker = null;
+  }
+
+  // Ticker de corações visuais (a cada 20s spawneia corações nos pares ativos)
+  if (activePairs.length > 0 && !_heartsTicker) {
+    _heartsTicker = setInterval(() => {
+      Object.values(_proxPairs).forEach(p => {
+        if (!p.done) spawnProxHearts(p.seatA, p.seatB);
+      });
+    }, 20 * 1000);
+    // Spawneia imediatamente ao criar
+    activePairs.forEach(p => spawnProxHearts(p.seatA, p.seatB));
+  }
+  if (activePairs.length === 0 && _heartsTicker) {
+    clearInterval(_heartsTicker); _heartsTicker = null;
+  }
+}
+
+// Verifica se algum par completou um novo intervalo de 5 minutos
+async function checkProximityIntervals() {
+  if (!currentRoom) return;
+  const now = Date.now();
+
+  for (const [key, pair] of Object.entries(_proxPairs)) {
+    if (pair.done) continue;
+
+    const elapsed        = now - pair.startTs;
+    const totalIntervals = Math.floor(elapsed / PROX_INTERVAL_MS);
+    const capped         = Math.min(PROX_MAX_INTERVALS, totalIntervals);
+
+    if (capped > pair.intervals) {
+      const newCount = capped - pair.intervals;
+
+      // Apenas o jogador "primário" (menor UUID) faz a chamada ao Supabase
+      // para evitar dupla-contagem quando ambos estão na mesma sala
+      const imInPair = pair.pidA === PLAYER.id || pair.pidB === PLAYER.id;
+      const primary  = pair.pidA < pair.pidB ? pair.pidA : pair.pidB;
+      const imPrimary = PLAYER.id === primary;
+
+      if (imInPair && imPrimary) {
+        const dailyPts  = getDailyProxPoints(key);
+        const remaining = PROX_DAILY_LIMIT - dailyPts;
+        const raw       = newCount * PROX_PTS_INTERVAL;
+        const ptsToGive = Math.min(raw, remaining);
+
+        if (ptsToGive > 0) {
+          await awardProximityRPC(pair.pidA, pair.pidB, ptsToGive);
+          addDailyProxPoints(key, ptsToGive);
+        }
+      }
+
+      pair.intervals = capped;
+
+      if (pair.intervals >= PROX_MAX_INTERVALS) {
+        pair.done = true;
+        renderAura(pair.seatA, pair.seatB, false);
+        clearProxStart(currentRoom?.id, key);
+        broadcastAuras();
+        // Mensagem sutil no chat
+        const otherName = pair.pidA === PLAYER.id ? pair.nameB : pair.nameA;
+        if (pair.pidA === PLAYER.id || pair.pidB === PLAYER.id) {
+          sysMsg(`✨ Sua intimidade com ${otherName} cresceu ao máximo hoje!`);
+        }
+      }
+    }
+  }
+}
+
+// Chama o RPC de intimidade por proximidade
+async function awardProximityRPC(pidA, pidB, pts) {
+  const sb = getSB();
+  if (!sb) return;
+  try {
+    const { error } = await sb.rpc('tavern_proximity_intimacy', {
+      p_player_a_id: pidA,
+      p_player_b_id: pidB,
+      p_points: pts
+    });
+    if (error) console.warn('tavern_proximity_intimacy RPC error:', error);
+  } catch (e) { console.warn('awardProximityRPC:', e); }
+}
+
+// Transmite os pares ativos via Ably para que outros clientes sincronizem
+function broadcastAuras() {
+  if (!roomChannel || !currentRoom) return;
+  const pairs = Object.entries(_proxPairs)
+    .filter(([, p]) => !p.done)
+    .map(([key, p]) => ({
+      key, seatA: p.seatA, seatB: p.seatB,
+      pidA: p.pidA, pidB: p.pidB,
+      nameA: p.nameA, nameB: p.nameB,
+      startTs: p.startTs, intervals: p.intervals
+    }));
+  roomChannel.publish('intimacy-aura', { action: 'sync', pairs });
+}
+
+// Recebe transmissão de auras de outros clientes
+function onIntimacyAura(msg) {
+  if (msg.clientId === PLAYER.id) return; // ignora o próprio echo
+  const d = msg.data || {};
+  if (d.action !== 'sync' || !Array.isArray(d.pairs)) return;
+
+  const seatMap = getCurrentSeatMap();
+
+  d.pairs.forEach(p => {
+    const existing = _proxPairs[p.key];
+
+    // Verifica se o par ainda está sentado (validação local)
+    const occupantA = seatMap[p.seatA];
+    const occupantB = seatMap[p.seatB];
+    const valid = occupantA?.playerId === p.pidA && occupantB?.playerId === p.pidB;
+
+    if (!valid) return;
+    if (getDailyProxPoints(p.key) >= PROX_DAILY_LIMIT) return;
+
+    if (!existing) {
+      // Novo par recebido via Ably → cria localmente com o startTs recebido
+      const stored = getProxStoredStart(currentRoom?.id, p.key);
+      const startTs = stored || p.startTs;
+      if (!stored) saveProxStart(currentRoom?.id, p.key, startTs);
+
+      _proxPairs[p.key] = {
+        seatA: p.seatA, seatB: p.seatB,
+        pidA: p.pidA, pidB: p.pidB,
+        nameA: p.nameA, nameB: p.nameB,
+        startTs, intervals: p.intervals, done: false
+      };
+      renderAura(p.seatA, p.seatB, true);
+      spawnProxHearts(p.seatA, p.seatB);
+
+      // Inicia tickers se necessário
+      updateProximityPairs();
+
+    } else {
+      // Sincroniza: usa o startTs mais antigo e o maior número de intervalos
+      if (p.startTs < existing.startTs) existing.startTs = p.startTs;
+      if (p.intervals > existing.intervals) existing.intervals = p.intervals;
+    }
+  });
+}
+
+// Aplica ou remove o efeito visual de aura nos dois assentos do par
+function renderAura(seatA, seatB, active) {
+  const btnA = document.getElementById('seat-btn-' + seatA);
+  const btnB = document.getElementById('seat-btn-' + seatB);
+  if (btnA) btnA.classList.toggle('intimacy-aura', active);
+  if (btnB) btnB.classList.toggle('intimacy-aura', active);
+}
+
+// Spawnia corações flutuantes em ambos os assentos do par
+function spawnProxHearts(seatA, seatB) {
+  _spawnHeartsOnSeat(seatA);
+  _spawnHeartsOnSeat(seatB);
+}
+
+function _spawnHeartsOnSeat(seatId) {
+  const btn = document.getElementById('seat-btn-' + seatId);
+  if (!btn || !btn.classList.contains('intimacy-aura')) return;
+  const count = 2 + Math.floor(Math.random() * 2); // 2 ou 3 corações
+  for (let i = 0; i < count; i++) {
+    const h = document.createElement('div');
+    h.className = 'prox-heart';
+    h.textContent = '♥';
+    h.style.left         = (15 + Math.random() * 70) + '%';
+    h.style.animationDelay = (i * 0.35) + 's';
+    h.style.fontSize     = (9 + Math.random() * 7) + 'px';
+    btn.appendChild(h);
+    setTimeout(() => h.remove(), 1800 + i * 350);
   }
 }

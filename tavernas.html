@@ -383,6 +383,33 @@
   </div>
 </div>
 
+<!-- ══ GIFT CONFIRMATION MODAL ══ -->
+<div class="modal-backdrop" id="gift-confirm-modal" onclick="if(event.target===this)closeGiftConfirmModal()">
+  <div class="modal-sheet gift-confirm-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Confirmar Envio</div>
+      <button class="modal-close" onclick="closeGiftConfirmModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="gift-confirm-body">
+      <p class="gift-confirm-question" id="gift-confirm-question"></p>
+      <div class="gift-confirm-img-wrap">
+        <img id="gift-confirm-img" src="" alt="" class="gift-confirm-img">
+      </div>
+      <p class="gift-confirm-intimacy" id="gift-confirm-intimacy"></p>
+      <div class="gift-confirm-actions">
+        <button class="gift-confirm-btn cancel" onclick="closeGiftConfirmModal()">Cancelar</button>
+        <button class="gift-confirm-btn send" onclick="confirmGiftSend()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Enviar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 

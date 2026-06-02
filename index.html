@@ -29,6 +29,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="maintenance2.js"></script>
 <link href="style.css" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -83,47 +86,102 @@
   </a>
 </div>
 <div id="caixaLogin">
-<h2>Login / Cadastro</h2>
-<input id="emailInput" placeholder="Seu e-mail" type="email"/>
-<input id="passwordInput" placeholder="Sua senha" type="password"/>
-<div id="otpInputContainer" style="display:none;">
-<input id="otpInput" placeholder="Código de confirmação" type="text"/>
-<button id="verifyOtpBtn">Confirmar Código</button>
-</div>
-<div id="btnReg">
-<button id="signInBtn">Entrar</button>
-<button id="signUpBtn">Registrar</button>
-</div>
 
-<!-- Botão de Login com Google -->
-<div style="width: 100%; margin-top: 15px;">
-    <button id="googleSignInBtn" style="
-        width: 100%;
-        background: #4285F4!important; /* Azul Oficial do Google */
-        color: #ffffff;      /* Texto Branco */
-        padding: 2px;        /* Padding reduzido para acomodar o ícone */
-        border-radius: 4px;  /* Borda levemente arredondada (padrão Google) */
-        font-weight: bold;
-        font-family: 'Roboto', sans-serif; /* Fonte mais limpa para o botão */
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.25);
-        cursor: pointer;
-        transition: background 0.3s;
-    ">
-        <!-- Fundo branco apenas para o ícone -->
-        <div style="background: white!important; padding: 10px; border-radius: 2px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width: 18px; height: 18px;">
-        </div>
-        <span style="flex-grow: 1; text-align: center; padding-right: 38px;">Entrar com Google</span>
+  <!-- ═══ TÍTULO DO JOGO ═══ -->
+  <div id="loginBranding">
+    <div id="loginEmblem">
+      <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="30,4 56,18 56,42 30,56 4,42 4,18" stroke="#c9a94a" stroke-width="1.5" fill="none" opacity="0.6"/>
+        <polygon points="30,10 50,21 50,39 30,50 10,39 10,21" stroke="#c9a94a" stroke-width="1" fill="none" opacity="0.4"/>
+        <path d="M30 16 L38 28 L30 44 L22 28 Z" fill="#c9a94a" opacity="0.9"/>
+        <circle cx="30" cy="30" r="3" fill="#fff8e7"/>
+      </svg>
+    </div>
+    <h1 id="loginTitle">ADEN</h1>
+    <p id="loginSubtitle">Forje seu Legado</p>
+  </div>
+
+  <!-- ═══ BOTÃO GOOGLE ═══ -->
+  <button id="googleSignInBtn" class="login-btn login-btn-google">
+    <span class="login-btn-icon">
+      <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width:20px;height:20px;">
+    </span>
+    <span class="login-btn-label">Entrar com Google</span>
+  </button>
+
+  <!-- ═══ DIVISOR ═══ -->
+  <div class="login-divider">
+    <span class="login-divider-line"></span>
+    <span class="login-divider-text">ou</span>
+    <span class="login-divider-line"></span>
+  </div>
+
+  <!-- ═══ BOTÃO E-MAIL ═══ -->
+  <button id="emailLoginOpenBtn" class="login-btn login-btn-email">
+    <span class="login-btn-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M2 7l10 7 10-7"/>
+      </svg>
+    </span>
+    <span class="login-btn-label">Logar com E-mail</span>
+  </button>
+
+  <!-- ═══ TERMOS ═══ -->
+  <p class="termos-text">
+    Ao se registrar você concorda com os <a href="termos_de_uso.html">Termos de Uso</a> e <a href="politica_de_privacidade.html">Política de Privacidade</a>.
+  </p>
+
+</div> <!-- FIM DO #caixaLogin -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL DE LOGIN POR E-MAIL
+     Todos os IDs originais mantidos para compatibilidade com script.js
+     ═══════════════════════════════════════════════════════════ -->
+<div id="emailLoginModal" style="display:none;">
+  <div id="emailLoginModalBox">
+
+    <!-- Cantos decorativos -->
+    <span class="elm-corner elm-tl"></span>
+    <span class="elm-corner elm-tr"></span>
+    <span class="elm-corner elm-bl"></span>
+    <span class="elm-corner elm-br"></span>
+
+    <button id="closeEmailLoginModal" aria-label="Fechar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
     </button>
+
+    <div class="elm-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.5" width="22" height="22">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M2 7l10 7 10-7"/>
+      </svg>
+      <h2>Acessar Conta</h2>
+    </div>
+
+    <input id="emailInput" placeholder="Seu e-mail" type="email" autocomplete="email"/>
+    <input id="passwordInput" placeholder="Sua senha" type="password" autocomplete="current-password"/>
+
+    <div id="otpInputContainer" style="display:none;">
+      <input id="otpInput" placeholder="Código de confirmação" type="text"/>
+      <button id="verifyOtpBtn" class="elmbtn-primary">Confirmar Código</button>
+    </div>
+
+    <div id="btnReg">
+      <button id="signInBtn" class="elmbtn-primary">Entrar</button>
+      <button id="signUpBtn" class="elmbtn-secondary">Registrar</button>
+    </div>
+
+    <a href="#" id="forgotPasswordLink" class="elmbtn-forgot">Esqueceu a senha?</a>
+
+    <p id="authMessage"></p>
+
+  </div>
 </div>
 
-<!-- Botão Esqueceu a senha alinhado à esquerda -->
-<a style="display: inline-block; align-self: flex-start; background-color: rgba(51, 51, 51, 0.8); color: white; border-radius: 10px; padding: 2px 5px; margin-top: 15px; text-decoration: none; font-size: 0.9em; font-weight: bold;" href="#" id="forgotPasswordLink">Esqueceu a senha?</a>
-
+<!-- Modais de recuperação de senha (mantidos) -->
 <div id="forgotPasswordModal" class="modal-container" style="display: none;">
     <div class="modal-content">
         <h2>Recuperação de Senha</h2>
@@ -148,14 +206,24 @@
     </div>
 </div>
 
-<p id="authMessage"></p>
-
-<!-- Termos de uso (Fica colado no login) -->
-<p class="termos-text" style="background-color: rgba(51, 51, 51, 0.8); text-align: center; border-radius: 10px; padding: 5px 6px; width: 100%; box-sizing: border-box; margin-top: 1px; line-height: 1.4; font-size: 0.85em;">
-    Ao se registrar você concorda com os <a href="termos_de_uso.html" style="color: #fff; font-weight: bold;">Termos de Uso</a> e <a href="politica_de_privacidade.html" style="color: #fff; font-weight: bold;">Política de Privacidade</a>.
-</p>
-
-</div> <!-- FIM DO #caixaLogin -->
+<script>
+// Abre o modal de e-mail
+document.getElementById('emailLoginOpenBtn').addEventListener('click', function() {
+  document.getElementById('emailLoginModal').style.display = 'flex';
+});
+// Fecha o modal de e-mail
+document.getElementById('closeEmailLoginModal').addEventListener('click', function() {
+  document.getElementById('emailLoginModal').style.display = 'none';
+  document.getElementById('authMessage').textContent = '';
+});
+// Fecha clicando fora do box
+document.getElementById('emailLoginModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    this.style.display = 'none';
+    document.getElementById('authMessage').textContent = '';
+  }
+});
+</script>
 
 <!-- Footer TOTALMENTE SEPARADO, preso ao fundo -->
 <div id="authFooter" style="width: 100%; text-align: center; padding-bottom: 0;">

@@ -1187,6 +1187,9 @@ async function _executeSignUp() {
         passwordInput.style.display = 'none';
         const _googleBtn = document.getElementById('googleSignInBtn');
         if (_googleBtn) _googleBtn.style.display = 'none';
+        // Abre o modal de e-mail automaticamente para o usuário ver o campo OTP
+        const _emlModal = document.getElementById('emailLoginModal');
+        if (_emlModal && _emlModal.style.display === 'none') _emlModal.style.display = 'flex';
         otpInputContainer.style.display = 'block';
     }
 }
@@ -1816,17 +1819,23 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
     authContainer.style.display = 'none';
     footerMenu.style.display = 'flex';
     welcomeContainer.style.display = 'block';
+    // Fecha o modal de e-mail caso esteja aberto (ex: login bem-sucedido)
+    const _emlModal = document.getElementById('emailLoginModal');
+    if (_emlModal) _emlModal.style.display = 'none';
   } else {
-    // ALTERAÇÃO: Usa flex em vez de block para manter a centralização
     authContainer.style.display = 'flex'; 
     welcomeContainer.style.display = 'none';
     footerMenu.style.display = 'none';
+    // signInBtn/signUpBtn/passwordInput estão dentro do modal de e-mail.
+    // Restauramos o estado padrão deles para a próxima vez que o modal abrir.
     signInBtn.style.display = 'block';
     signUpBtn.style.display = 'block';
     passwordInput.style.display = 'block';
     otpInputContainer.style.display = 'none';
     const _googleSignInBtn = document.getElementById('googleSignInBtn');
     if (_googleSignInBtn) _googleSignInBtn.style.display = 'flex';
+    const _emailOpenBtn = document.getElementById('emailLoginOpenBtn');
+    if (_emailOpenBtn) _emailOpenBtn.style.display = 'flex';
     authMessage.textContent = '';
   }
 };

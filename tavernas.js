@@ -2430,6 +2430,19 @@ function updateProximityPairs() {
         renderAura(String(a), String(b), true, key);
         broadcastAuras();
       }
+
+    } else {
+      // Par já existe — verifica se os jogadores mudaram de assento adjacente
+      // (ex: A estava em 1, B em 2; A foi para 3 → mesma chave, assentos 2-3 agora)
+      const p = _proxPairs[key];
+      if (p.seatA !== String(a) || p.seatB !== String(b)) {
+        p.seatA = String(a);
+        p.seatB = String(b);
+        p.nameA = oA.name;
+        p.nameB = oB.name;
+        // Reposiciona a ponte localmente — sem broadcast Ably (cada cliente recalcula)
+        if (!p.done) renderAura(String(a), String(b), true, key);
+      }
     }
   });
 

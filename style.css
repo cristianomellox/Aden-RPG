@@ -559,7 +559,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
   --dark-glass2: rgba(14,10,6,0.92);
   --text-bright: #f5edd8;
   --text-muted:  #9a8d6e;
-  --border-line: rgba(201,169,74,0.25);
+  --border-line: lightblue;
 }
 
 /* ── Caixa principal (só branding + botões) ── */
@@ -608,7 +608,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
   font-family: 'Crimson Text', serif;
   font-style: italic;
   font-size: 1em;
-  color: var(--text-muted);
+  color: white;
   letter-spacing: 0.12em;
   margin: 4px 0 0;
   text-shadow: 0 1px 3px rgba(0,0,0,0.8);
@@ -653,7 +653,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 
 /* Google */
 .login-btn-google {
-  background: #1e1e1e;
+  background: #333!important;
   box-shadow: 0 2px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
   color: #e8e8e8;
   border: 1px solid rgba(255,255,255,0.1);
@@ -667,7 +667,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 
 /* Email */
 .login-btn-email {
-  background: #777;
+  background: #444!important;
   box-shadow: 0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
   color: #f0f0f0;
   border: 1px solid rgba(255,255,255,0.08);
@@ -697,20 +697,34 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 .login-divider-text {
   font-family: 'Crimson Text', serif;
   font-style: italic;
-  font-size: 0.82em;
-  color: var(--text-muted);
+  font-size: 1.6em;
+  color: lightblue;
   letter-spacing: 0.1em;
   white-space: nowrap;
+  text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
 }
 
 /* ── Termos ── */
 .termos-text {
-  font-size: 0.73em;
-  color: var(--text-muted);
+  font-size: 0.9em;
+  color: lightblue;
   text-align: center;
   margin-top: 16px;
   line-height: 1.5;
   padding: 0 4px;
+  text-shadow:
+        1px 1px 2px black,
+        -1px -1px 2px black,
+        1px -1px 2px black,
+        -1px 1px 2px black, 
+        0 0 2px black,
+        0 0 4px black;
   animation: loginFadeUp 0.8s 0.25s cubic-bezier(.22,.68,0,1.2) both;
 }
 .termos-text a {
@@ -884,7 +898,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
 /* forgot password */
 .elmbtn-forgot {
   font-size: 0.78em;
-  color: var(--text-muted);
+  color: lightblue;
   text-decoration: none;
   margin-top: 2px;
   transition: color 0.2s;

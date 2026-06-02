@@ -681,63 +681,54 @@ html,body {
 }
 
 /* ══════════════════════════════════════════
-   PROXIMITY INTIMACY — Efeito Aura nos Assentos
+   PROXIMITY INTIMACY — Ponte de Corações
+   Corações viajam horizontalmente abaixo dos
+   avatares dos dois assentos adjacentes,
+   em cores únicas por par.
    ══════════════════════════════════════════ */
 
-/* Anel pulsante rose-gold nos assentos do par */
-@keyframes intimacyAuraPulse {
-  0%, 100% {
-    box-shadow:
-      0 0 0   0   rgba(255, 140, 180, 0),
-      0 0 0   0   rgba(255, 200, 220, 0);
-  }
-  50% {
-    box-shadow:
-      0 0 14px  5px rgba(255, 120, 170, 0.55),
-      0 0 28px 12px rgba(255, 160, 200, 0.22);
-  }
-}
-
-/* Anel externo animado via ::after */
-@keyframes intimacyRingBreath {
-  0%, 100% { opacity: 0.5; transform: scale(1);    border-color: rgba(255, 130, 175, 0.55); }
-  50%       { opacity: 0.9; transform: scale(1.1);  border-color: rgba(255, 170, 210, 0.8);  }
-}
-
-.seat-btn.intimacy-aura {
-  animation: intimacyAuraPulse 2.8s ease-in-out infinite;
-  /* Mantém outras animações já presentes (ex: speaking) */
-}
-
-.seat-btn.intimacy-aura::after {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 140, 185, 0.6);
-  animation: intimacyRingBreath 2.8s ease-in-out infinite;
+/* Container da ponte — posicionado via JS (fixed, entre os dois assentos) */
+.prox-bridge {
+  position: fixed;
   pointer-events: none;
-  z-index: 6;
+  z-index: 25;
+  height: 20px;
+  /* left, top, width definidos pelo JS */
 }
 
-/* Corações flutuantes */
-@keyframes proxHeartFloat {
-  0%   { transform: translateY(0)  scale(1);    opacity: 0.9; }
-  60%  { transform: translateY(-28px) scale(1.15); opacity: 0.7; }
-  100% { transform: translateY(-52px) scale(0.7);  opacity: 0;   }
+/* Coração individual viajante */
+@keyframes proxBhFwd {
+  0%   { transform: translateX(0px)            scale(0.55); opacity: 0;    }
+  10%  { transform: translateX(6px)            scale(1.15); opacity: 1;    }
+  88%  { transform: translateX(calc(var(--dist, 40px) - 6px)) scale(1);   opacity: 0.9; }
+  100% { transform: translateX(var(--dist, 40px)) scale(0.55); opacity: 0; }
 }
 
-.prox-heart {
+@keyframes proxBhRev {
+  0%   { transform: translateX(var(--dist, 40px)) scale(0.55); opacity: 0;    }
+  10%  { transform: translateX(calc(var(--dist, 40px) - 6px)) scale(1.15); opacity: 1; }
+  88%  { transform: translateX(6px)            scale(1);   opacity: 0.9; }
+  100% { transform: translateX(0px)            scale(0.55); opacity: 0;  }
+}
+
+.prox-bh {
   position: absolute;
-  bottom: 0;
+  top: 4px;
+  left: 0;
   font-size: 11px;
-  color: #ff80ab;
-  pointer-events: none;
-  z-index: 15;
   line-height: 1;
-  animation: proxHeartFloat 1.6s ease-out forwards;
-  text-shadow: 0 0 5px rgba(255, 100, 160, 0.7);
   user-select: none;
+  color: var(--heart-color, #ff6b9d);
+  text-shadow:
+    0 0 6px  var(--heart-glow, rgba(255,107,157,0.9)),
+    0 0 12px var(--heart-glow, rgba(255,107,157,0.6)),
+    0 0 20px var(--heart-glow, rgba(255,107,157,0.3));
+  animation: proxBhFwd var(--duration, 2.4s) ease-in-out var(--delay, 0s) infinite;
+  filter: drop-shadow(0 0 3px var(--heart-glow, rgba(255,107,157,0.8)));
+}
+
+.prox-bh-rev {
+  animation-name: proxBhRev;
 }
 
 /* ══════════════════════════════════════════

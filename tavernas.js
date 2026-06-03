@@ -325,7 +325,7 @@ function initAbly() {
     key:          ABLY_KEY,
     clientId:     PLAYER.id,
     echoMessages: false,
-    recover:      (_, cb) => cb(true)
+    recover:      (_, cb) => cb(false)  // FIX: nunca reutiliza estado antigo; evita replay de sinalizações WebRTC obsoletas
   });
   ablyClient.connection.on('connected',    () => { ablyReady = true;  setConnDot('on');  joinGlobalPresence(); });
   ablyClient.connection.on('disconnected', () => { ablyReady = false; setConnDot('off'); });
@@ -1451,22 +1451,31 @@ async function initiateCall(peerId) {
 
   const existingPc = peerConns[peerId];
   if (existingPc) {
-    const senders  = existingPc.getSenders();
-    const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
-    if (!hasAudio) {
-      // Correção: Só adiciona a track se ela realmente não estiver lá
-      processedStream.getTracks().forEach(t => {
-        if (!senders.some(s => s.track === t)) {
-          existingPc.addTrack(t, processedStream);
-        }
-      });
-      try {
-        const offer = await existingPc.createOffer();
-        await existingPc.setLocalDescription(offer);
-        sendSignal(peerId, 'offer', offer);
-      } catch(e) { console.error('renegotiate:', e); }
+    const state = existingPc.connectionState || existingPc.iceConnectionState || '';
+    if (['disconnected', 'failed', 'closed'].includes(state)) {
+      // FIX: conexão morta — fecha e recria em vez de ignorar
+      try { existingPc.close(); } catch(_) {}
+      delete peerConns[peerId];
+      document.getElementById('audio-' + peerId)?.remove();
+      // cai no bloco abaixo para criar novo peer
+    } else {
+      const senders  = existingPc.getSenders();
+      const hasAudio = senders.some(s => s.track && s.track.kind === 'audio');
+      if (!hasAudio) {
+        // Correção: Só adiciona a track se ela realmente não estiver lá
+        processedStream.getTracks().forEach(t => {
+          if (!senders.some(s => s.track === t)) {
+            existingPc.addTrack(t, processedStream);
+          }
+        });
+        try {
+          const offer = await existingPc.createOffer();
+          await existingPc.setLocalDescription(offer);
+          sendSignal(peerId, 'offer', offer);
+        } catch(e) { console.error('renegotiate:', e); }
+      }
+      return;
     }
-    return;
   }
 
   const pc = makePeer(peerId);
@@ -1481,6 +1490,17 @@ async function initiateCall(peerId) {
 async function handleOffer(fromId, offer) {
   try {
     let pc = peerConns[fromId];
+
+    // FIX: Glare resolution — ambos os lados podem enviar offer simultaneamente.
+    // O lado "polite" (maior UUID) rola de volta seu próprio offer e aceita o do parceiro.
+    // O lado "impolite" (menor UUID) ignora o offer de entrada e aguarda o answer.
+    if (pc && pc.signalingState === 'have-local-offer') {
+      const imPolite = PLAYER.id > fromId;
+      if (!imPolite) return;  // lado impolite vence o glare: descarta offer de entrada
+      // lado polite: desfaz o próprio offer e aceita o do parceiro
+      await pc.setLocalDescription({ type: 'rollback' });
+    }
+
     if (!pc) pc = makePeer(fromId);
     
     if (processedStream) {
@@ -1956,7 +1976,10 @@ async function _processGiftQueue() {
 
   // Todos os destinatários animam em PARALELO (mesmo tempo)
   const promises = (item.recipientIds || []).map(recipId => {
-    const recipSeatId = roomMembers[recipId]?.seatId;
+    // FIX: roomMembers não contém o próprio jogador; se o destinatário sou eu, busco em mySeats
+    const recipSeatId = recipId === PLAYER.id
+      ? (Object.keys(mySeats)[0] || null)
+      : roomMembers[recipId]?.seatId;
     if (!item.senderSeatId || !recipSeatId) return Promise.resolve();
     const fromRect = getSeatAvatarRect(item.senderSeatId);
     const toRect   = getSeatAvatarRect(recipSeatId);

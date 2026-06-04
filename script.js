@@ -1915,7 +1915,7 @@ function googleOAuthRedirect() {
 async function handleGoogleOneTapCredential(response) {
     authMessage.textContent = 'Autenticando com Google...';
 
-    const { error } = await supabaseClient.auth.signInWithIdToken({
+    const { data, error } = await supabaseClient.auth.signInWithIdToken({
         provider: 'google',
         token: response.credential,
     });
@@ -1931,8 +1931,20 @@ async function handleGoogleOneTapCredential(response) {
         } else {
             authMessage.textContent = translateSupabaseError(error.message);
         }
+        return;
     }
-    // Em sucesso, o onAuthStateChange do Supabase detecta e carrega o perfil normalmente.
+
+    // Sucesso: processa o login diretamente aqui.
+    // NÃO depende do onAuthStateChange — ele pode ser bloqueado pelo guard
+    // initialLoadDone=true quando há um jogador em cache de sessão anterior.
+    if (data?.session) {
+        await GlobalDB.setAuth(data.session);
+        currentPlayerId = data.session.user.id;
+        // Reseta os guards de cache para forçar busca fresca dos dados do jogador
+        window.initialLoadDone = false;
+        window.isPlayerLoading = false;
+        fetchAndDisplayPlayerInfo(true);
+    }
 }
 
 /**
@@ -2076,17 +2088,16 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
 
         if (event === 'SIGNED_IN') {
             // Login real (One Tap, email/senha ou retorno OAuth).
-            // Força o carregamento do jogador SEMPRE, pois pode haver um player
-            // em cache de sessão anterior com initialLoadDone=true — sem esse
-            // force, o One Tap autentica mas a UI fica presa na tela de login.
-            // O guard isPlayerLoading dentro de fetchAndDisplayPlayerInfo
-            // evita chamadas duplicadas se checkAuthStatus já estiver rodando.
+            // Garante que fetchAndDisplayPlayerInfo seja chamado se o usuário
+            // está na tela de login, mesmo que initialLoadDone=true por cache anterior.
+            // O guard isPlayerLoading previne chamadas duplicadas.
             const onLoginScreen = authContainer && authContainer.style.display !== 'none';
             if (onLoginScreen || !currentPlayerData) {
+                window.initialLoadDone = false;
                 fetchAndDisplayPlayerInfo(true);
             }
         } else if (event === 'INITIAL_SESSION') {
-            // Sessão restaurada na inicialização: só carrega se ainda não veio do cache
+            // Sessão restaurada na inicialização: só carrega se o cache não resolveu
             if (!window.initialLoadDone && !currentPlayerData) {
                 fetchAndDisplayPlayerInfo(false);
             }

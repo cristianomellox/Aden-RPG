@@ -1913,12 +1913,19 @@ function googleOAuthRedirect() {
  * Troca o credential (JWT) por uma sessão Supabase via signInWithIdToken.
  */
 async function handleGoogleOneTapCredential(response) {
+    // Marca que o credential foi recebido — impede que o fallback de redirect
+    // do prompt() conflite com este fluxo (problema FedCM / Chrome 131+).
+    window._googleCredentialReceived = true;
+    console.log('[OneTap] ✅ Credential recebido. Iniciando signInWithIdToken...');
+
     authMessage.textContent = 'Autenticando com Google...';
 
     const { data, error } = await supabaseClient.auth.signInWithIdToken({
         provider: 'google',
         token: response.credential,
     });
+
+    console.log('[OneTap] Resultado:', { hasSession: !!data?.session, error: error?.message });
 
     if (error) {
         // Conta com esse e-mail já existe com outro provider (email/senha)
@@ -1934,16 +1941,26 @@ async function handleGoogleOneTapCredential(response) {
         return;
     }
 
-    // Sucesso: processa o login diretamente aqui.
-    // NÃO depende do onAuthStateChange — ele pode ser bloqueado pelo guard
-    // initialLoadDone=true quando há um jogador em cache de sessão anterior.
     if (data?.session) {
+        console.log('[OneTap] 🎉 Sessão criada! Carregando jogador...');
+        // Trata o sucesso diretamente — não depende do onAuthStateChange,
+        // que pode ser bloqueado pelo guard initialLoadDone=true de cache anterior.
         await GlobalDB.setAuth(data.session);
         currentPlayerId = data.session.user.id;
-        // Reseta os guards de cache para forçar busca fresca dos dados do jogador
         window.initialLoadDone = false;
         window.isPlayerLoading = false;
         fetchAndDisplayPlayerInfo(true);
+    } else {
+        console.warn('[OneTap] ⚠️ Sem erro mas também sem sessão. Tentando getSession...');
+        // Fallback: o Supabase pode ter a sessão mesmo que data.session venha null
+        const { data: sd } = await supabaseClient.auth.getSession();
+        if (sd?.session) {
+            await GlobalDB.setAuth(sd.session);
+            currentPlayerId = sd.session.user.id;
+            window.initialLoadDone = false;
+            window.isPlayerLoading = false;
+            fetchAndDisplayPlayerInfo(true);
+        }
     }
 }
 
@@ -1983,13 +2000,40 @@ if (googleSignInBtn) {
             return;
         }
 
-        // Navegador normal: tenta exibir o seletor One Tap (janelinha de contas)
+        // Navegador normal: tenta exibir o seletor One Tap / FedCM
+        window._googleCredentialReceived = false; // Reseta a flag a cada tentativa
         google.accounts.id.prompt((notification) => {
-            // One Tap foi bloqueado (usuário fechou muitas vezes, cookie de terceiros bloqueado, etc.)
-            // Cai de volta para o redirect OAuth como fallback
-            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            console.log('[OneTap] Notification type:', notification.getMomentType(),
+                '| notDisplayed:', notification.isNotDisplayed(),
+                '| skipped:', notification.isSkippedMoment(),
+                '| dismissed:', notification.isDismissedMoment());
+
+            if (notification.isNotDisplayed()) {
+                // One Tap genuinamente não pôde exibir (bloqueado por extensão, etc.)
+                console.log('[OneTap] Não exibido — usando OAuth redirect.');
                 googleOAuthRedirect();
+                return;
             }
+
+            if (notification.isSkippedMoment()) {
+                // ATENÇÃO: Em modo FedCM (Chrome 131+), isSkippedMoment() dispara
+                // ANTES do credential callback, enquanto o card nativo ainda está
+                // aberto. Chamar googleOAuthRedirect() aqui conflitaria com o FedCM.
+                // Aguardamos 600ms: se o credential callback disparar nesse intervalo,
+                // _googleCredentialReceived=true e o redirect é cancelado.
+                console.log('[OneTap] Skipped — aguardando credential callback (FedCM race)...');
+                setTimeout(() => {
+                    if (!window._googleCredentialReceived) {
+                        console.log('[OneTap] Nenhum credential recebido — usando OAuth redirect.');
+                        googleOAuthRedirect();
+                    } else {
+                        console.log('[OneTap] Credential já recebido — redirect cancelado.');
+                    }
+                }, 600);
+                return;
+            }
+            // isDismissedMoment com 'credential_returned' = FedCM entregou o token.
+            // O handleGoogleOneTapCredential já foi chamado, nada a fazer aqui.
         });
     });
 }
@@ -2087,17 +2131,15 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
         await GlobalDB.setAuth(session);
 
         if (event === 'SIGNED_IN') {
-            // Login real (One Tap, email/senha ou retorno OAuth).
-            // Garante que fetchAndDisplayPlayerInfo seja chamado se o usuário
-            // está na tela de login, mesmo que initialLoadDone=true por cache anterior.
-            // O guard isPlayerLoading previne chamadas duplicadas.
+            // Login real. Garante carregamento mesmo quando initialLoadDone=true
+            // por cache de sessão anterior (ex.: sessão expirou, usuário logou de novo).
             const onLoginScreen = authContainer && authContainer.style.display !== 'none';
             if (onLoginScreen || !currentPlayerData) {
                 window.initialLoadDone = false;
                 fetchAndDisplayPlayerInfo(true);
             }
         } else if (event === 'INITIAL_SESSION') {
-            // Sessão restaurada na inicialização: só carrega se o cache não resolveu
+            // Restauração de sessão na inicialização: respeita o cache se já carregou.
             if (!window.initialLoadDone && !currentPlayerData) {
                 fetchAndDisplayPlayerInfo(false);
             }

@@ -2074,9 +2074,22 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
         // de salvar a nova sessão → usuário fica deslogado ao reabrir o app.
         await GlobalDB.setAuth(session);
 
-        // Só dispara fetchAndDisplayPlayerInfo se ainda não carregou via cache
-        if (!window.initialLoadDone && !currentPlayerData) {
-            fetchAndDisplayPlayerInfo(false);
+        if (event === 'SIGNED_IN') {
+            // Login real (One Tap, email/senha ou retorno OAuth).
+            // Força o carregamento do jogador SEMPRE, pois pode haver um player
+            // em cache de sessão anterior com initialLoadDone=true — sem esse
+            // force, o One Tap autentica mas a UI fica presa na tela de login.
+            // O guard isPlayerLoading dentro de fetchAndDisplayPlayerInfo
+            // evita chamadas duplicadas se checkAuthStatus já estiver rodando.
+            const onLoginScreen = authContainer && authContainer.style.display !== 'none';
+            if (onLoginScreen || !currentPlayerData) {
+                fetchAndDisplayPlayerInfo(true);
+            }
+        } else if (event === 'INITIAL_SESSION') {
+            // Sessão restaurada na inicialização: só carrega se ainda não veio do cache
+            if (!window.initialLoadDone && !currentPlayerData) {
+                fetchAndDisplayPlayerInfo(false);
+            }
         }
     } else if (event === 'TOKEN_REFRESHED' && session) {
         // O Supabase renova o access token periodicamente (~1h).

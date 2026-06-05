@@ -1087,12 +1087,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                         : rpcError.message;
                     if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
                     resultModal.style.display = "flex";
-                    // Não esconde o botão permanentemente: o WebView do AppCreator24
-                    // mantém a página na memória entre sessões, e display:none persistia
-                    // por dias até o jogador forçar um reload. O backend já é o guardião
-                    // do limite; aqui apenas desabilitamos até o próximo foco na página.
-                    watchAdAttemptBtn.disabled = false;
-                    watchAdAttemptBtn.textContent = "📺 Assistir Anúncio (+1 tentativa)";
+                    // Esconde o botão e atualiza o modal para mostrar "anúncios esgotados".
+                    // O visibilitychange restaura o botão quando o jogador retornar ao app
+                    // no dia seguinte, resolvendo o bug de travamento de 3 dias.
+                    if (watchAdAttemptBtn) watchAdAttemptBtn.style.display = 'none';
+                    if (adventureModalDesc) adventureModalDesc.textContent =
+                        'Você atingiu o limite diário de tentativas e anúncios. Volte amanhã!';
                     return;
                 }
                 localStorage.setItem('pending_reward_token', token);
@@ -1142,11 +1142,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         confirmBtn.addEventListener("click", () => {
             if (resultModal) resultModal.style.display = "none";
             showMapScreen();
-            // Se o jogador ficou sem tentativas, abre automaticamente o modal
-            // de anúncio para que ele não precise clicar no estágio de novo.
-            if ((playerAfkData.daily_attempts_left ?? 0) <= 0) {
-                setTimeout(() => handleStageClick(playerAfkData.current_afk_stage || 1), 150);
-            }
         });
     }
 

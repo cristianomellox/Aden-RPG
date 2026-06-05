@@ -1080,9 +1080,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                         : rpcError.message;
                     if (adventureOptionsModal) adventureOptionsModal.style.display = "none";
                     resultModal.style.display = "flex";
-                    if (rpcError.message.toLowerCase().includes('limite') && watchAdAttemptBtn) {
-                        watchAdAttemptBtn.style.display = 'none';
-                    }
+                    // Não esconde o botão permanentemente: o WebView do AppCreator24
+                    // mantém a página na memória entre sessões, e display:none persistia
+                    // por dias até o jogador forçar um reload. O backend já é o guardião
+                    // do limite; aqui apenas desabilitamos até o próximo foco na página.
                     watchAdAttemptBtn.disabled = false;
                     watchAdAttemptBtn.textContent = "📺 Assistir Anúncio (+1 tentativa)";
                     return;
@@ -1117,7 +1118,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // Token já foi consumido normalmente, limpa a flag
                 sessionStorage.removeItem('ad_in_progress');
             }
-            // Se ainda dentro dos 5s (fechamento do alert), não faz nada
+            // Sempre restaura o botão de anúncio ao voltar para a página.
+            // Isso garante que, mesmo que o WebView mantenha a página na memória
+            // por dias, o botão fique visível e o backend (check_daily_reset) possa
+            // fazer o reset corretamente na próxima interação.
+            if (watchAdAttemptBtn) {
+                watchAdAttemptBtn.style.display = '';
+                watchAdAttemptBtn.disabled = false;
+                watchAdAttemptBtn.textContent = '📺 Assistir Anúncio (+1 tentativa)';
+            }
         }
     });
 

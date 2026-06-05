@@ -537,7 +537,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const { data: resetData, error: resetError } = await supabase.rpc('check_daily_reset', { p_player_id: userId });
                 if (!resetError && resetData) {
                     playerAfkData.daily_attempts_left = resetData.daily_attempts_left;
-                    if (resetData.reset_performed) playerAfkData.last_attempt_reset = new Date().toISOString();
+                    if (resetData.reset_performed) {
+                        playerAfkData.last_attempt_reset = new Date().toISOString();
+                        // Limpa o daily_rewards_log do cache local para que
+                        // videoLimitReached seja recalculado corretamente.
+                        // Sem isso, um log stale de dias anteriores mantinha
+                        // o botão de anúncio escondido mesmo após o reset no backend.
+                        playerAfkData.daily_rewards_log = null;
+                    }
                     saveToCache(playerAfkData);
                 }
             }
@@ -1135,6 +1142,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         confirmBtn.addEventListener("click", () => {
             if (resultModal) resultModal.style.display = "none";
             showMapScreen();
+            // Se o jogador ficou sem tentativas, abre automaticamente o modal
+            // de anúncio para que ele não precise clicar no estágio de novo.
+            if ((playerAfkData.daily_attempts_left ?? 0) <= 0) {
+                setTimeout(() => handleStageClick(playerAfkData.current_afk_stage || 1), 150);
+            }
         });
     }
 

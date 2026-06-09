@@ -2904,11 +2904,28 @@ function _tavUpdateFollowBtn(btn, targetId, targetName) {
   }
 }
 
+// Cooldown anti-flood: key = targetId, value = timestamp da última ação
+const _tavFollowCooldowns = {};
+const _TAV_FOLLOW_COOLDOWN_MS = 30_000; // 30 segundos
+
 async function _tavToggleFollow(targetId, targetName) {
   if (!PLAYER.id || !targetId || targetId === PLAYER.id) return;
+
+  // ── Anti-flood: bloqueia se tentou mudar o estado nos últimos 30s ──
+  const now = Date.now();
+  const lastAction = _tavFollowCooldowns[targetId] || 0;
+  const remaining = Math.ceil((_TAV_FOLLOW_COOLDOWN_MS - (now - lastAction)) / 1000);
+  if (now - lastAction < _TAV_FOLLOW_COOLDOWN_MS) {
+    showToast(`Aguarde ${remaining}s antes de alterar novamente.`);
+    return;
+  }
+
   const following = _tavGetFollowing();
   const idx = following.findIndex(f => f.id === targetId);
   const btn = document.getElementById('pm-follow-btn');
+
+  // Registra o timestamp da ação
+  _tavFollowCooldowns[targetId] = now;
 
   if (idx >= 0) {
     // Deixar de seguir
@@ -2919,39 +2936,44 @@ async function _tavToggleFollow(targetId, targetName) {
   } else {
     // Seguir
     const targetAv = document.getElementById('playerAvatarEquip')?.src || '';
-    following.push({ id: targetId, name: targetName, avatar_url: targetAv, followedAt: Date.now() });
+    following.push({ id: targetId, name: targetName, avatar_url: targetAv, followedAt: now });
     _tavSaveFollowing(following);
     _tavUpdateFollowBtn(btn, targetId, targetName);
     chatMsg('Sistema', `Você seguiu ${targetName}.`, false, 'system');
 
-    // Salva notificação para o outro jogador (cache local)
+    // Salva notificação para o outro jogador apenas se não enviou nos últimos 5 min
     const notifKey = 'tav_notifs_' + targetId;
     let targetNotifs = [];
     try { targetNotifs = JSON.parse(localStorage.getItem(notifKey) || '[]'); } catch(e) {}
-    targetNotifs.unshift({
-      id: 'follow_' + PLAYER.id + '_' + Date.now(),
-      type: 'follow',
-      fromId: PLAYER.id,
-      fromName: PLAYER.name,
-      fromAvatar: PLAYER.avatar_url || '',
-      readAt: null,
-      at: Date.now()
-    });
-    try { localStorage.setItem(notifKey, JSON.stringify(targetNotifs.slice(0, 50))); } catch(e) {}
 
-    // Se o próprio usuário é o alvo (self-notification demo), mostra log
-    if (targetId === PLAYER.id) {
-      chatMsg('Sistema', `${targetName} seguiu você.`, false, 'system');
+    // Dedup: ignora se já existe notificação desse mesmo seguidor nas últimas 24h
+    const recentDup = targetNotifs.find(n =>
+      n.type === 'follow' && n.fromId === PLAYER.id && (now - n.at) < 24 * 3600_000
+    );
+    if (!recentDup) {
+      targetNotifs.unshift({
+        id: 'follow_' + PLAYER.id + '_' + now,
+        type: 'follow',
+        fromId: PLAYER.id,
+        fromName: PLAYER.name,
+        fromAvatar: PLAYER.avatar_url || '',
+        readAt: null,
+        at: now
+      });
+      try { localStorage.setItem(notifKey, JSON.stringify(targetNotifs.slice(0, 50))); } catch(e) {}
     }
 
-    // Emite evento para mostrar notif para o alvo se online (via presence channel)
-    try {
-      if (roomChannel) {
-        roomChannel.publish('follow_notif', {
+    // Emite evento Ably apenas se não enviou nos últimos 5 min (dedup de canal)
+    const channelDedupKey = 'tav_follow_sent_' + targetId;
+    const lastSent = Number(sessionStorage.getItem(channelDedupKey) || 0);
+    if (now - lastSent > 5 * 60_000) {
+      try {
+        if (roomChannel) roomChannel.publish('follow_notif', {
           toId: targetId, fromId: PLAYER.id, fromName: PLAYER.name
         });
-      }
-    } catch(e) {}
+        sessionStorage.setItem(channelDedupKey, String(now));
+      } catch(e) {}
+    }
   }
 }
 
@@ -2960,15 +2982,22 @@ function _tavHandleFollowNotif(msg) {
   try {
     const { toId, fromId, fromName } = msg.data || {};
     if (!toId || toId !== PLAYER.id) return;
-    // Adiciona notificação
+
+    // Dedup: ignora se já existe notificação desse seguidor nas últimas 5 min (evita flood Ably)
     const notifs = _tavGetNotifications();
+    const now = Date.now();
+    const dup = notifs.find(n =>
+      n.type === 'follow' && n.fromId === fromId && (now - n.at) < 5 * 60_000
+    );
+    if (dup) return;
+
     notifs.unshift({
-      id: 'follow_' + fromId + '_' + Date.now(),
+      id: 'follow_' + fromId + '_' + now,
       type: 'follow',
       fromId, fromName,
       fromAvatar: ownersCache[fromId]?.avatar_url || '',
       readAt: null,
-      at: Date.now()
+      at: now
     });
     _tavSaveNotifications(notifs.slice(0, 50));
     chatMsg('Sistema', `${fromName} seguiu você.`, false, 'system');

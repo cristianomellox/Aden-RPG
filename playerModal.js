@@ -173,16 +173,18 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const SLOT_MAP = { arma: 'weapon', anel: 'ring', elmo: 'helm', colar: 'amulet', asa: 'wing', armadura: 'armor' };
 
-    // Format Number
+    // Format Number — max 1 decimal (ex: 53.1K, não 53.00K)
     const formatNumberCompact = window.formatNumberCompact || ((n) => {
         try {
-            if (n === 0) return "0";
-            if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + "B";
-            if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + "M";
-            if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + "K";
+            n = Number(n) || 0;
+            if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '') + "B";
+            if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + "M";
+            if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + "K";
             return String(n);
         } catch (e) { return String(n); }
     });
+    // Formata número inteiro sem compactar (para atributos do modal)
+    const formatRaw = (n) => { try { return String(Number(n) || 0); } catch(e) { return '0'; } };
 
     // LocalStorage Cache Helper
     function setCache(key, data, ttl) {
@@ -263,16 +265,18 @@ document.addEventListener("DOMContentLoaded", () => {
             // Guild Info
             let gName = guildData?.name || player.guild_name || '';
             let gFlag = guildData?.flag_url || "https://aden-rpg.pages.dev/assets/guildaflag.webp";
+            let gId   = guildData?.id || player.guild_id || null;
+            window._tavModalCurrentGuildId = gId; // para clique na bandeira/nome
             if(ui.flag) ui.flag.src = gFlag;
             if(ui.guildName) ui.guildName.textContent = gName;
             
             // Avatar
             if(ui.avatar) ui.avatar.src = stats.avatar_url || 'https://via.placeholder.com/100';
 
-            // Stats Render
-            if(ui.stats.atk) ui.stats.atk.textContent = `${formatNumberCompact(stats.min_attack)} - ${formatNumberCompact(stats.attack)}`;
-            if(ui.stats.def) ui.stats.def.textContent = formatNumberCompact(stats.defense);
-            if(ui.stats.hp) ui.stats.hp.textContent = formatNumberCompact(stats.health);
+            // Stats Render — atributos sem compactar (ex: 12345 em vez de 12.3K)
+            if(ui.stats.atk) ui.stats.atk.textContent = `${formatRaw(stats.min_attack)} - ${formatRaw(stats.attack)}`;
+            if(ui.stats.def) ui.stats.def.textContent = formatRaw(stats.defense);
+            if(ui.stats.hp) ui.stats.hp.textContent = formatRaw(stats.health);
             if(ui.stats.critChance) ui.stats.critChance.textContent = `${stats.crit_chance}%`;
             if(ui.stats.critDmg) ui.stats.critDmg.textContent = `${stats.crit_damage}%`;
             if(ui.stats.evasion) ui.stats.evasion.textContent = `${stats.evasion}%`;

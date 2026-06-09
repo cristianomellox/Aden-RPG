@@ -2954,14 +2954,14 @@ async function _tavToggleFollow(targetId, targetName) {
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
     try { await sb.rpc('unfollow_player', { p_following_id: targetId }); } catch(e) {}
     // Atualiza contagem no modal
-    _tavRefreshSocialCount('following', -1);
+    _tavRefreshSocialCount(-1);
   } else {
     // ── Seguir ──
     window._tavFollowingSet.add(targetId);
     _tavUpdateFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você seguiu ${targetName}.`, false, 'system');
     try { await sb.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
-    _tavRefreshSocialCount('following', +1);
+    _tavRefreshSocialCount(+1);
 
     // Notificação in-app (cache localStorage) com dedup de 24h
     const notifKey = 'tav_notifs_' + PLAYER.id;
@@ -2995,14 +2995,13 @@ async function _tavToggleFollow(targetId, targetName) {
 }
 
 // Ajusta otimistamente a contagem exibida no modal aberto (evita re-fetch)
-function _tavRefreshSocialCount(type, delta) {
-  // modal do jogador (pm)
-  const pmId  = type === 'following' ? 'pm-following-val' : 'pm-followers-val';
-  const pmEl  = document.getElementById(pmId);
+function _tavRefreshSocialCount(delta) {
+  // No modal do jogador (pm) estamos vendo o perfil do ALVO:
+  // quem sofre a mudança é o contador de seguidores dele.
+  const pmEl = document.getElementById('pm-followers-val');
   if (pmEl) pmEl.textContent = Math.max(0, (parseInt(pmEl.textContent) || 0) + delta);
-  // modal "Eu" (mpm)
-  const mpmId = type === 'following' ? 'mpm-following' : 'mpm-followers';
-  const mpmEl = document.getElementById(mpmId);
+  // No modal "Eu" (mpm) quem muda é o nosso próprio "seguindo".
+  const mpmEl = document.getElementById('mpm-following');
   if (mpmEl) mpmEl.textContent = Math.max(0, (parseInt(mpmEl.textContent) || 0) + delta);
 }
 

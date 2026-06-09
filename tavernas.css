@@ -517,7 +517,7 @@ html,body {
 #playerModal .pm-equipment-slot img { max-width:100%; max-height:100%; object-fit:contain; }
 #playerModal .pm-attr-row { display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; }
 #playerModal .pm-attr-item { flex:1; text-align:center; }
-#playerModal .pm-attr-lbl { display:block; font-size:0.5em; color:#fff; }
+#playerModal .pm-attr-lbl { display:block; font-size:0.7em; color:#fff; }
 #playerModal .pm-attr-val { display:block; font-size:0.6em; font-weight:700; color:#e0dccc; }
 #playerModal .shimmer {
   background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.02) 75%);

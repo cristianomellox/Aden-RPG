@@ -233,6 +233,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
     <span>Chefe Mundial</span>
   </div>
+  <div class="drop-item" onclick="openIframe('Bolsa','inventory.html')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+    <span>Bolsa</span>
+  </div>
 </div>
 
 <div id="bottom-nav">
@@ -248,9 +252,12 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V6L12 2z"/></svg>
     Guilda
   </div>
-  <div class="nav-item" onclick="openIframe('Bolsa','inventory.html')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-    Bolsa
+  <div class="nav-item nav-notif-wrap" onclick="openNotifModal()">
+    <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <div id="nav-notif-dot" style="display:none;position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:#e53e3e;border-radius:50%;border:2px solid #1e1004;"></div>
+    </div>
+    Notificações
   </div>
   <div class="nav-item active" onclick="openMyProfileModal()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.58-7 8-7s8 3 8 7"/></svg>
@@ -399,6 +406,10 @@
 
       <!-- Action buttons -->
       <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:12px;">
+        <button id="pm-follow-btn" style="display:none;flex-direction:column;align-items:center;gap:4px;font-size:0.65em;font-family:'Cinzel',serif;padding:8px 14px;background:rgba(122,184,255,0.08);border:1px solid rgba(122,184,255,0.3);border-radius:8px;cursor:pointer;color:#7ab8ff;letter-spacing:0.06em;transition:background 0.2s;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Seguir
+        </button>
         <button id="pm-mention-btn" style="display:none;flex-direction:column;align-items:center;gap:4px;font-size:0.65em;font-family:'Cinzel',serif;padding:8px 14px;background:rgba(122,184,255,0.12);border:1px solid rgba(122,184,255,0.35);border-radius:8px;cursor:pointer;color:#7ab8ff;letter-spacing:0.06em;transition:background 0.2s;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
           Mencionar
@@ -536,6 +547,32 @@
         </button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ══ NOTIFICATION MODAL ══ -->
+<div id="tav-notif-modal" class="tav-side-modal" onclick="if(event.target===this)closeNotifModal()">
+  <div class="tav-side-inner">
+    <div class="tav-side-topbar">
+      <span class="tav-side-title">Notificações</span>
+      <button class="tav-side-close" onclick="closeNotifModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="tav-notif-list" class="tav-side-list"></div>
+  </div>
+</div>
+
+<!-- ══ SOCIAL LIST MODAL (seguidores/seguindo) ══ -->
+<div id="tav-social-list-modal" class="tav-side-modal" onclick="if(event.target===this)closeSocialListModal()">
+  <div class="tav-side-inner">
+    <div class="tav-side-topbar">
+      <span id="tsl-title" class="tav-side-title">Seguidores</span>
+      <button class="tav-side-close" onclick="closeSocialListModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="tsl-list" class="tav-side-list"></div>
   </div>
 </div>
 

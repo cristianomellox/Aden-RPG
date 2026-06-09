@@ -304,6 +304,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadOwnersCache();
   initAbly();
   scaleFont();
+  // Inicializa ponto de notificação
+  _tavUpdateNotifDot();
+  // Social stats clicáveis no modal do jogador
+  const pmFollEl = document.getElementById('pm-followers-val')?.parentElement;
+  const pmFollgEl = document.getElementById('pm-following-val')?.parentElement;
+  if (pmFollEl) pmFollEl.style.cursor = 'pointer', pmFollEl.onclick = () => openSocialListModal('followers', window._tavModalLastPid);
+  if (pmFollgEl) pmFollgEl.style.cursor = 'pointer', pmFollgEl.onclick = () => openSocialListModal('following', window._tavModalLastPid);
+  // Social stats clicáveis no modal "Eu"
+  const mpmFollEl = document.getElementById('mpm-followers')?.parentElement;
+  const mpmFollgEl = document.getElementById('mpm-following')?.parentElement;
+  if (mpmFollEl) mpmFollEl.style.cursor = 'pointer', mpmFollEl.onclick = () => openSocialListModal('followers', PLAYER.id);
+  if (mpmFollgEl) mpmFollgEl.style.cursor = 'pointer', mpmFollgEl.onclick = () => openSocialListModal('following', PLAYER.id);
 });
 
 // Zera contagens e avatares dos cards antes do Ably conectar
@@ -682,6 +694,7 @@ function joinChannel(roomId) {
   roomChannel.subscribe('speak', onSpeak);
   roomChannel.subscribe('gift',  onGiftMsg);
   roomChannel.subscribe('intimacy-aura', onIntimacyAura);
+  roomChannel.subscribe('follow_notif', _tavHandleFollowNotif);
   roomChannel.subscribe('spectator-join', (msg) => {
     if (msg.clientId !== PLAYER.id && micOn && localStream) {
       initiateCall(msg.clientId);
@@ -1582,10 +1595,10 @@ function sendMessage() {
 }
 
 function formatCompact(n) {
-  n = parseInt(n, 10) || 0;
+  n = Number(n) || 0;
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-  if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return String(n);
+  if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(Math.round(n));
 }
 
 function renderMentions(rawText) {
@@ -1675,7 +1688,17 @@ function openPlayerModalFor(playerId, name) {
   modal.style.display = 'flex';
   window._tavModalLastPid = playerId;
 
-  // @Mention button: show only if inside a room and not self
+  // Guild flag/name → abre modal de guilda do jogador
+  const guildFlagEl = document.getElementById('playerGuildFlag');
+  const guildNameEl = document.getElementById('playerGuildName');
+  const _openGuildFromModal = () => {
+    const gid = window._tavModalCurrentGuildId;
+    if (gid) { modal.style.display = 'none'; window._tavModalResetSkin?.(); openTavGuildModal(gid); }
+  };
+  if (guildFlagEl) { guildFlagEl.onclick = _openGuildFromModal; guildFlagEl.style.cursor = 'pointer'; }
+  if (guildNameEl) { guildNameEl.onclick = _openGuildFromModal; guildNameEl.style.cursor = 'pointer'; }
+
+  // @Mention button
   const mentionBtn = document.getElementById('pm-mention-btn');
   const sendmpBtn  = document.getElementById('sendmp');
   if (mentionBtn) {
@@ -1693,16 +1716,29 @@ function openPlayerModalFor(playerId, name) {
     };
   }
 
+  // Follow button — mostra apenas se não é o próprio jogador
+  const followBtn = document.getElementById('pm-follow-btn');
+  if (followBtn) {
+    if (playerId === PLAYER.id) {
+      followBtn.style.display = 'none';
+    } else {
+      followBtn.style.display = 'flex';
+      _tavUpdateFollowBtn(followBtn, playerId, name);
+      followBtn.onclick = () => _tavToggleFollow(playerId, name);
+    }
+  }
+
   const isSelf = (playerId === PLAYER.id);
 
   if (isSelf) {
-    // Próprio jogador: tavFetchPlayerData busca guilda via guild_id + Supabase autenticado
     tavFetchPlayerData(playerId, sendmpBtn);
   } else if (typeof window.fetchPlayerData === 'function') {
-    // Outro jogador: playerModal.js usa o cliente supabase autenticado (mesmo do ranking_cp)
     window.fetchPlayerData(playerId);
+    // Garante que social stats (fame, followers, following) sempre carregam
+    setTimeout(() => {
+      if (window._tavModalLastPid === playerId) _tavLoadSocialStats(playerId);
+    }, 300);
   } else {
-    // Fallback se playerModal.js ainda não carregou
     tavFetchPlayerData(playerId, sendmpBtn);
   }
 }
@@ -1785,12 +1821,16 @@ function _tavPopulateModal(ui, player, items, guildData) {
 
   const gName = guildData?.name || player.guild_name || '';
   const gFlag = guildData?.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+  const gId   = guildData?.id || player.guild_id || null;
+  window._tavModalCurrentGuildId = gId; // para o clique na bandeira/nome
   if (ui.flag)  ui.flag.src = gFlag;
   if (ui.guild) ui.guild.textContent = gName;
 
-  if (ui.stats.atk)          ui.stats.atk.textContent          = `${fmt(stats.min_attack)} - ${fmt(stats.attack)}`;
-  if (ui.stats.def)          ui.stats.def.textContent          = fmt(stats.defense);
-  if (ui.stats.hp)           ui.stats.hp.textContent           = fmt(stats.health);
+  // Atributos sem compactar (exibe número inteiro)
+  const fmtRaw = (n) => String(Number(n) || 0);
+  if (ui.stats.atk)          ui.stats.atk.textContent          = `${fmtRaw(stats.min_attack)} - ${fmtRaw(stats.attack)}`;
+  if (ui.stats.def)          ui.stats.def.textContent          = fmtRaw(stats.defense);
+  if (ui.stats.hp)           ui.stats.hp.textContent           = fmtRaw(stats.health);
   if (ui.stats.critChance)   ui.stats.critChance.textContent   = `${stats.crit_chance}%`;
   if (ui.stats.critDmg)      ui.stats.critDmg.textContent      = `${stats.crit_damage}%`;
   if (ui.stats.evasion)      ui.stats.evasion.textContent      = `${stats.evasion}%`;
@@ -2826,6 +2866,259 @@ async function openTavGuildModal(guildId) {
 function closeTavGuildModal() {
   document.getElementById('tav-guild-modal')?.classList.remove('open');
 }
+
+// ══════════════════════════════════════════
+//  SISTEMA DE SEGUIR / SEGUIDORES
+// ══════════════════════════════════════════
+
+function _tavGetFollowing() {
+  try { return JSON.parse(localStorage.getItem('tav_following_' + PLAYER.id) || '[]'); } catch(e) { return []; }
+}
+function _tavSaveFollowing(list) {
+  try { localStorage.setItem('tav_following_' + PLAYER.id, JSON.stringify(list)); } catch(e) {}
+}
+function _tavGetNotifications() {
+  try { return JSON.parse(localStorage.getItem('tav_notifs_' + PLAYER.id) || '[]'); } catch(e) { return []; }
+}
+function _tavSaveNotifications(list) {
+  try { localStorage.setItem('tav_notifs_' + PLAYER.id, JSON.stringify(list)); } catch(e) {}
+}
+
+function _tavIsFollowing(targetId) {
+  return _tavGetFollowing().some(f => f.id === targetId);
+}
+
+function _tavUpdateFollowBtn(btn, targetId, targetName) {
+  if (!btn) return;
+  const following = _tavIsFollowing(targetId);
+  if (following) {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M20 6L9 17l-5-5"/></svg>Seguindo`;
+    btn.style.background = 'rgba(122,184,255,0.22)';
+    btn.style.borderColor = 'rgba(122,184,255,0.6)';
+    btn.style.color = '#7ab8ff';
+  } else {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>Seguir`;
+    btn.style.background = 'rgba(122,184,255,0.08)';
+    btn.style.borderColor = 'rgba(122,184,255,0.3)';
+    btn.style.color = '#7ab8ff';
+  }
+}
+
+async function _tavToggleFollow(targetId, targetName) {
+  if (!PLAYER.id || !targetId || targetId === PLAYER.id) return;
+  const following = _tavGetFollowing();
+  const idx = following.findIndex(f => f.id === targetId);
+  const btn = document.getElementById('pm-follow-btn');
+
+  if (idx >= 0) {
+    // Deixar de seguir
+    following.splice(idx, 1);
+    _tavSaveFollowing(following);
+    _tavUpdateFollowBtn(btn, targetId, targetName);
+    chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
+  } else {
+    // Seguir
+    const targetAv = document.getElementById('playerAvatarEquip')?.src || '';
+    following.push({ id: targetId, name: targetName, avatar_url: targetAv, followedAt: Date.now() });
+    _tavSaveFollowing(following);
+    _tavUpdateFollowBtn(btn, targetId, targetName);
+    chatMsg('Sistema', `Você seguiu ${targetName}.`, false, 'system');
+
+    // Salva notificação para o outro jogador (cache local)
+    const notifKey = 'tav_notifs_' + targetId;
+    let targetNotifs = [];
+    try { targetNotifs = JSON.parse(localStorage.getItem(notifKey) || '[]'); } catch(e) {}
+    targetNotifs.unshift({
+      id: 'follow_' + PLAYER.id + '_' + Date.now(),
+      type: 'follow',
+      fromId: PLAYER.id,
+      fromName: PLAYER.name,
+      fromAvatar: PLAYER.avatar_url || '',
+      readAt: null,
+      at: Date.now()
+    });
+    try { localStorage.setItem(notifKey, JSON.stringify(targetNotifs.slice(0, 50))); } catch(e) {}
+
+    // Se o próprio usuário é o alvo (self-notification demo), mostra log
+    if (targetId === PLAYER.id) {
+      chatMsg('Sistema', `${targetName} seguiu você.`, false, 'system');
+    }
+
+    // Emite evento para mostrar notif para o alvo se online (via presence channel)
+    try {
+      if (roomChannel) {
+        roomChannel.publish('follow_notif', {
+          toId: targetId, fromId: PLAYER.id, fromName: PLAYER.name
+        });
+      }
+    } catch(e) {}
+  }
+}
+
+// Recebe notificação de seguimento em tempo real
+function _tavHandleFollowNotif(msg) {
+  try {
+    const { toId, fromId, fromName } = msg.data || {};
+    if (!toId || toId !== PLAYER.id) return;
+    // Adiciona notificação
+    const notifs = _tavGetNotifications();
+    notifs.unshift({
+      id: 'follow_' + fromId + '_' + Date.now(),
+      type: 'follow',
+      fromId, fromName,
+      fromAvatar: ownersCache[fromId]?.avatar_url || '',
+      readAt: null,
+      at: Date.now()
+    });
+    _tavSaveNotifications(notifs.slice(0, 50));
+    chatMsg('Sistema', `${fromName} seguiu você.`, false, 'system');
+    _tavUpdateNotifDot();
+  } catch(e) {}
+}
+
+function _tavGetUnreadCount() {
+  return _tavGetNotifications().filter(n => !n.readAt).length;
+}
+
+function _tavUpdateNotifDot() {
+  const dot = document.getElementById('nav-notif-dot');
+  if (!dot) return;
+  const count = _tavGetUnreadCount();
+  dot.style.display = count > 0 ? 'block' : 'none';
+}
+
+function openNotifModal() {
+  const modal = document.getElementById('tav-notif-modal');
+  if (!modal) return;
+  modal.classList.add('open');
+  _tavRenderNotifs();
+  // Marca todas como lidas
+  const notifs = _tavGetNotifications().map(n => ({ ...n, readAt: Date.now() }));
+  _tavSaveNotifications(notifs);
+  _tavUpdateNotifDot();
+}
+
+function closeNotifModal() {
+  document.getElementById('tav-notif-modal')?.classList.remove('open');
+}
+
+function _tavRenderNotifs() {
+  const listEl = document.getElementById('tav-notif-list');
+  if (!listEl) return;
+  const notifs = _tavGetNotifications();
+  if (!notifs.length) {
+    listEl.innerHTML = '<div class="tav-notif-empty">Nenhuma notificação.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  notifs.forEach(n => {
+    if (n.type !== 'follow') return;
+    const timeAgo = _tavTimeAgo(n.at);
+    const av = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
+    const row = document.createElement('div');
+    row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');
+    row.innerHTML = `
+      <div class="tav-notif-av"><img src="${esc(av)}" onerror="this.src='${makeAvatar(n.fromName||'?',40)}'"></div>
+      <div class="tav-notif-text">
+        <strong>${esc(n.fromName)}</strong> começou a te seguir.
+        <div class="tav-notif-time">${timeAgo}</div>
+      </div>`;
+    row.onclick = () => {
+      closeNotifModal();
+      openPlayerModalFor(n.fromId, n.fromName);
+    };
+    listEl.appendChild(row);
+  });
+}
+
+function _tavTimeAgo(ts) {
+  const diff = Date.now() - (ts || 0);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'agora';
+  if (m < 60) return `${m}m atrás`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h atrás`;
+  return `${Math.floor(h / 24)}d atrás`;
+}
+
+// ══════════════════════════════════════════
+//  MODAL DE LISTA: SEGUIDORES / SEGUINDO
+// ══════════════════════════════════════════
+
+function openSocialListModal(type, targetPlayerId) {
+  // type = 'followers' | 'following'
+  const modal = document.getElementById('tav-social-list-modal');
+  const titleEl = document.getElementById('tsl-title');
+  const listEl  = document.getElementById('tsl-list');
+  if (!modal || !listEl) return;
+
+  const isSelf = (!targetPlayerId || targetPlayerId === PLAYER.id);
+  const label = type === 'following' ? 'Seguindo' : 'Seguidores';
+  if (titleEl) titleEl.textContent = label;
+  listEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
+  modal.classList.add('open');
+
+  let entries = [];
+  if (type === 'following') {
+    // Quem o jogador está seguindo (sempre disponível via localStorage do jogador)
+    const pid = isSelf ? PLAYER.id : targetPlayerId;
+    try { entries = JSON.parse(localStorage.getItem('tav_following_' + pid) || '[]'); } catch(e) {}
+  } else {
+    // Seguidores: quem tem pid na lista de seguindo deles (apenas disponível localmente para o próprio)
+    if (isSelf) {
+      // Varre todas as chaves localStorage procurando quem segue PLAYER.id
+      entries = [];
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k || !k.startsWith('tav_following_')) continue;
+          const list = JSON.parse(localStorage.getItem(k) || '[]');
+          const found = list.find(f => f.id === PLAYER.id);
+          if (found) {
+            const followerId = k.replace('tav_following_', '');
+            entries.push({ id: followerId, name: found.fromName || followerId, avatar_url: '' });
+          }
+        }
+        // Também usa notificações para preencher lista de seguidores
+        const notifs = _tavGetNotifications().filter(n => n.type === 'follow');
+        notifs.forEach(n => {
+          if (!entries.find(e => e.id === n.fromId)) {
+            entries.push({ id: n.fromId, name: n.fromName, avatar_url: n.fromAvatar || '' });
+          }
+        });
+      } catch(e) {}
+    } else {
+      listEl.innerHTML = '<div class="tav-notif-empty">Dados não disponíveis.</div>';
+      return;
+    }
+  }
+
+  if (!entries.length) {
+    listEl.innerHTML = `<div class="tav-notif-empty">${type === 'following' ? 'Não está seguindo ninguém.' : 'Nenhum seguidor.'}</div>`;
+    return;
+  }
+  listEl.innerHTML = '';
+  entries.forEach(e => {
+    const av = e.avatar_url || makeAvatar(e.name || '?', 40);
+    const row = document.createElement('div');
+    row.className = 'tav-notif-row';
+    row.style.cursor = 'pointer';
+    row.innerHTML = `
+      <div class="tav-notif-av"><img src="${esc(av)}" onerror="this.src='${makeAvatar(e.name||'?',40)}'"></div>
+      <div class="tav-notif-text"><strong>${esc(e.name || '?')}</strong></div>`;
+    row.onclick = () => {
+      closeSocialListModal();
+      openPlayerModalFor(e.id, e.name);
+    };
+    listEl.appendChild(row);
+  });
+}
+
+function closeSocialListModal() {
+  document.getElementById('tav-social-list-modal')?.classList.remove('open');
+}
+
+
 
 async function tavGuildJoinRequest() {
   const guildId = window._tgmGuildId;

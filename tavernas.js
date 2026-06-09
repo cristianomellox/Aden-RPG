@@ -17,12 +17,15 @@ const SB_URL  = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SB_KEY  = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 let   sbClient = null;
 function getSB() {
+  // Prioridade 1: cliente autenticado exposto pelo módulo supabaseClient.js (mais confiável)
+  if (window.__tavSB) { sbClient = window.__tavSB; return sbClient; }
   if (sbClient) return sbClient;
   try {
-    // Reutiliza cliente do script.js se disponível na mesma tab
     if (window.supabaseClient) { sbClient = window.supabaseClient; return sbClient; }
     if (window.supabase?.createClient) {
-      sbClient = window.supabase.createClient(SB_URL, SB_KEY);
+      sbClient = window.supabase.createClient(SB_URL, SB_KEY, {
+        auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
       return sbClient;
     }
   } catch(_) {}
@@ -1578,6 +1581,36 @@ function sendMessage() {
   roomChannel.publish('msg', { name: PLAYER.name, text });
 }
 
+function formatCompact(n) {
+  n = parseInt(n, 10) || 0;
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return String(n);
+}
+
+function renderMentions(rawText) {
+  // Only renders @Name as bold yellow if Name matches an actual room member or self
+  const parts = rawText.split(/(@\S+)/g);
+  return parts.map(part => {
+    if (!part.startsWith('@')) return esc(part);
+    const name = part.slice(1);
+    if (!name) return esc(part);
+
+    // Check self
+    if (name === PLAYER.name) {
+      return `<span class="c-mention">${esc(part)}</span>`;
+    }
+    // Check room members
+    const entry = Object.entries(roomMembers).find(([, v]) => v.name === name);
+    if (entry) {
+      const [id] = entry;
+      return `<span class="c-mention" onclick="openPlayerModalFor('${esc(id)}','${esc(name)}')">${esc(part)}</span>`;
+    }
+    // Not a real member — render as plain text
+    return esc(part);
+  }).join('');
+}
+
 function chatMsg(name, text, isMine, clientId) {
   const c = document.getElementById('chat-messages');
   if (!c) return;
@@ -1597,7 +1630,7 @@ function chatMsg(name, text, isMine, clientId) {
     </div>
     <div class="c-body" style="${isMine ? 'align-items:flex-end;' : 'align-items:flex-start;'}">
       <div class="c-name" onclick="onNameClick('${esc(name)}')">${esc(name)}</div>
-      <div class="c-text" style="${textStyle}">${esc(text)}</div>
+      <div class="c-text" style="${textStyle}">${renderMentions(text)}</div>
     </div>`;
   c.appendChild(m);
   c.scrollTop = c.scrollHeight;
@@ -1620,6 +1653,7 @@ function modMsg(text) {
 function clearChat() {
   const c = document.getElementById('chat-messages');
   if (c) c.innerHTML = '';
+  closeMentionPicker();
 }
 
 function onNameClick(name) {
@@ -1637,14 +1671,409 @@ function onNameClick(name) {
 function openPlayerModalFor(playerId, name) {
   const modal = document.getElementById('playerModal');
   if (!modal) { showToast('Perfil de ' + (name || '?')); return; }
-  // Reseta skin anterior imediatamente
   if (typeof window._tavModalResetSkin === 'function') window._tavModalResetSkin();
   modal.style.display = 'flex';
-  if (typeof window.clearModalContent === 'function') window.clearModalContent();
-  if (typeof window.fetchPlayerData === 'function') {
-    window._tavModalLastPid = playerId;
-    window.fetchPlayerData(playerId);
+  window._tavModalLastPid = playerId;
+
+  // @Mention button: show only if inside a room and not self
+  const mentionBtn = document.getElementById('pm-mention-btn');
+  const sendmpBtn  = document.getElementById('sendmp');
+  if (mentionBtn) {
+    const isInRoom = !!currentRoom && playerId !== PLAYER.id;
+    mentionBtn.style.display = isInRoom ? 'flex' : 'none';
+    mentionBtn.onclick = () => {
+      modal.style.display = 'none';
+      window._tavModalResetSkin?.();
+      window._tavModalLastPid = null;
+      const inp = document.getElementById('chat-input');
+      if (inp) {
+        inp.value = (inp.value.trimEnd() + ' @' + (name || '') + ' ');
+        inp.focus();
+      }
+    };
   }
+
+  const isSelf = (playerId === PLAYER.id);
+
+  if (isSelf) {
+    // Próprio jogador: tavFetchPlayerData busca guilda via guild_id + Supabase autenticado
+    tavFetchPlayerData(playerId, sendmpBtn);
+  } else if (typeof window.fetchPlayerData === 'function') {
+    // Outro jogador: playerModal.js usa o cliente supabase autenticado (mesmo do ranking_cp)
+    window.fetchPlayerData(playerId);
+  } else {
+    // Fallback se playerModal.js ainda não carregou
+    tavFetchPlayerData(playerId, sendmpBtn);
+  }
+}
+
+// ══════════════════════════════════════════
+//  TAV PLAYER MODAL — busca e popula inline
+//  Segue o mesmo padrão do playerModal.js
+//  mas com correções para o contexto das tavernas
+// ══════════════════════════════════════════
+const _TAV_SLOT_MAP = { arma:'weapon', anel:'ring', elmo:'helm', colar:'amulet', asa:'wing', armadura:'armor' };
+const _TAV_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function _tavGetModalEls() {
+  return {
+    name:    document.getElementById('playerName'),
+    level:   document.getElementById('playerLevel'),
+    flag:    document.getElementById('playerGuildFlag'),
+    guild:   document.getElementById('playerGuildName'),
+    avatar:  document.getElementById('playerAvatarEquip'),
+    cp:      document.getElementById('playerCombatPower'),
+    stats: {
+      atk:          document.getElementById('playerAttack'),
+      def:          document.getElementById('playerDefense'),
+      hp:           document.getElementById('playerHealth'),
+      critChance:   document.getElementById('playerCritChance'),
+      critDmg:      document.getElementById('playerCritDamage'),
+      evasion:      document.getElementById('playerEvasion'),
+      critReduction:document.getElementById('playerCritReduction'),
+    },
+    slots: {
+      weapon:  document.getElementById('weapon-slot'),
+      ring:    document.getElementById('ring-slot'),
+      helm:    document.getElementById('helm-slot'),
+      special1:document.getElementById('special1-slot'),
+      amulet:  document.getElementById('amulet-slot'),
+      wing:    document.getElementById('wing-slot'),
+      armor:   document.getElementById('armor-slot'),
+      special2:document.getElementById('special2-slot'),
+    }
+  };
+}
+
+function _tavClearModal(ui) {
+  if (ui.name)  { ui.name.textContent  = 'Carregando...'; }
+  if (ui.level) { ui.level.textContent = ''; }
+  if (ui.flag)  { ui.flag.src = 'https://aden-rpg.pages.dev/assets/guildaflag.webp'; }
+  if (ui.guild) { ui.guild.textContent = ''; }
+  if (ui.avatar){ ui.avatar.src = 'https://via.placeholder.com/100'; }
+  if (ui.cp)    { ui.cp.textContent = ''; }
+  Object.values(ui.stats).forEach(el => { if(el) { el.textContent = ''; el.classList.add('shimmer'); } });
+  Object.values(ui.slots).forEach(el => { if(el) { el.innerHTML = '';   el.classList.add('shimmer'); } });
+  // Reset social stats
+  ['pm-followers-val','pm-following-val','pm-fame-val','pm-gifts-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = '—'; el.style.opacity = '0.4'; }
+  });
+}
+
+function _tavPopulateModal(ui, player, items, guildData) {
+  if (!player) return;
+
+  const cachedStats = player.calculated_local_stats || player.cached_combat_stats || player;
+  const fmt = window.formatNumberCompact || formatCompact;
+
+  const stats = {
+    min_attack:     cachedStats.min_attack     || 0,
+    attack:         cachedStats.attack         || 0,
+    defense:        cachedStats.defense        || 0,
+    health:         cachedStats.health         || 0,
+    crit_chance:    cachedStats.crit_chance    || 0,
+    crit_damage:    cachedStats.crit_damage    || 0,
+    evasion:        cachedStats.evasion        || 0,
+    crit_reduction: cachedStats.crit_reduction || 0,
+  };
+
+  if (ui.name)  ui.name.textContent  = player.name  || 'Jogador';
+  if (ui.level) ui.level.textContent = `Nv. ${player.level || 1}`;
+  if (ui.avatar) ui.avatar.src = player.avatar_url || 'https://via.placeholder.com/100';
+  if (ui.cp)    ui.cp.textContent = fmt(Number(player.combat_power || 0));
+
+  const gName = guildData?.name || player.guild_name || '';
+  const gFlag = guildData?.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+  if (ui.flag)  ui.flag.src = gFlag;
+  if (ui.guild) ui.guild.textContent = gName;
+
+  if (ui.stats.atk)          ui.stats.atk.textContent          = `${fmt(stats.min_attack)} - ${fmt(stats.attack)}`;
+  if (ui.stats.def)          ui.stats.def.textContent          = fmt(stats.defense);
+  if (ui.stats.hp)           ui.stats.hp.textContent           = fmt(stats.health);
+  if (ui.stats.critChance)   ui.stats.critChance.textContent   = `${stats.crit_chance}%`;
+  if (ui.stats.critDmg)      ui.stats.critDmg.textContent      = `${stats.crit_damage}%`;
+  if (ui.stats.evasion)      ui.stats.evasion.textContent      = `${stats.evasion}%`;
+  if (ui.stats.critReduction)ui.stats.critReduction.textContent= `${stats.crit_reduction}%`;
+
+  // Remove shimmer
+  document.querySelectorAll('#playerModal .shimmer').forEach(el => el.classList.remove('shimmer'));
+
+  // Render equipped items
+  Object.values(ui.slots).forEach(s => { if(s) s.innerHTML = ''; });
+  (items || []).forEach(invItem => {
+    // Hidratação: se o join FK falhou, tenta window.itemDefinitions
+    if (!invItem.items && invItem.item_id && window.itemDefinitions) {
+      const def = window.itemDefinitions.get(invItem.item_id);
+      if (def) invItem.items = def;
+    }
+    const mapped = _TAV_SLOT_MAP[invItem.equipped_slot] || invItem.equipped_slot;
+    const slotDiv = ui.slots[mapped];
+    if (!slotDiv || !invItem.items) return;
+    const totalStars = (invItem.items.stars || 0) + (invItem.refine_level || 0);
+    const safeName   = invItem.items.name || 'unknown';
+    const imgSrc     = invItem.items.image_url
+      || `https://aden-rpg.pages.dev/assets/itens/${safeName}_${totalStars}estrelas.webp`;
+    let html = `<img src="${imgSrc}" alt="${invItem.items.display_name || ''}">`;
+    if (invItem.level >= 1) html += `<div class="item-level">Nv. ${invItem.level}</div>`;
+    slotDiv.innerHTML = html;
+  });
+}
+
+async function tavFetchPlayerData(playerId, sendmpBtn) {
+  const ui = _tavGetModalEls();
+  _tavClearModal(ui);
+
+  try {
+    // ── Identify current user via existing helpers ──
+    const auth = await getAuthFromDB();
+    const currentUserId = auth?.user?.id || PLAYER.id || null;
+
+    // ── CASO A: próprio jogador (zero egress) ──
+    if (currentUserId && playerId === currentUserId) {
+      if (sendmpBtn) sendmpBtn.style.display = 'none';
+
+      const localPlayer = await dbGetPlayer();
+
+      // InventoryDB items
+      const localItems = await (async () => {
+        try {
+          const db = await new Promise((res, rej) => {
+            const r = indexedDB.open('aden_inventory_db');
+            r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+          });
+          if (!db.objectStoreNames.contains('inventory_store')) return [];
+          return new Promise(res => {
+            const tx  = db.transaction('inventory_store', 'readonly');
+            const req = tx.objectStore('inventory_store').getAll();
+            req.onsuccess = () => res((req.result || []).filter(i => i.equipped_slot !== null && i.quantity > 0));
+            req.onerror = () => res([]);
+          });
+        } catch(e) { return []; }
+      })();
+
+      // Meta store (calculated stats)
+      const localStats = await (async () => {
+        try {
+          const db = await new Promise((res, rej) => {
+            const r = indexedDB.open('aden_inventory_db');
+            r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+          });
+          if (!db.objectStoreNames.contains('meta_store')) return null;
+          return new Promise(res => {
+            const tx  = db.transaction('meta_store', 'readonly');
+            const req = tx.objectStore('meta_store').get('player_stats');
+            req.onsuccess = () => res(req.result?.value || null); req.onerror = () => res(null);
+          });
+        } catch(e) { return null; }
+      })();
+
+      if (localPlayer) {
+        if (localStats) localPlayer.calculated_local_stats = localStats;
+
+        // Hydrate items when itemDefinitions not available (tavernas context)
+        let finalItems = localItems;
+        if (window.itemDefinitions) {
+          finalItems = localItems.map(i => {
+            if (!i.items?.name) {
+              const def = window.itemDefinitions.get(i.item_id || i.id);
+              if (def) return { ...i, items: def };
+            }
+            return i;
+          });
+        } else {
+          const needsHydration = localItems.filter(i => !i.items?.name);
+          if (needsHydration.length > 0) {
+            try {
+              const sb  = getSB();
+              const ids = [...new Set(needsHydration.map(i => i.item_id || i.id).filter(Boolean))];
+              if (sb && ids.length) {
+                const { data: defs } = await sb.from('items').select('id,name,display_name,stars').in('id', ids);
+                if (defs?.length) {
+                  const defMap = Object.fromEntries(defs.map(d => [d.id, d]));
+                  finalItems = localItems.map(i => {
+                    if (!i.items?.name) { const def = defMap[i.item_id || i.id]; if (def) return { ...i, items: def }; }
+                    return i;
+                  });
+                }
+              }
+            } catch(e) {}
+          }
+        }
+
+        // Guild data: prefer stored guild_name; otherwise fetch via guild_id (w/ sessionStorage cache)
+        let guildData = null;
+        if (localPlayer.guild_name) {
+          guildData = { name: localPlayer.guild_name, flag_url: localPlayer.guild_flag || '' };
+        } else if (localPlayer.guild_id) {
+          try {
+            const gCacheKey = 'tav_guild_' + localPlayer.guild_id;
+            const gc = sessionStorage.getItem(gCacheKey);
+            if (gc) {
+              const p = JSON.parse(gc);
+              guildData = { name: p.n || '', flag_url: p.f || '' };
+            } else {
+              const sb = getSB();
+              if (sb) {
+                const { data: g } = await sb.from('guilds').select('name,flag_url').eq('id', localPlayer.guild_id).maybeSingle();
+                if (g) {
+                  guildData = g;
+                  sessionStorage.setItem(gCacheKey, JSON.stringify({ n: g.name, f: g.flag_url, t: Date.now() }));
+                }
+              }
+            }
+          } catch(e) {}
+        }
+        _tavPopulateModal(ui, localPlayer, finalItems, guildData);
+        _tavLoadSocialStats(playerId);
+        return;
+      }
+    }
+
+    // ── CASO B: outro jogador ──
+    if (sendmpBtn) {
+      sendmpBtn.setAttribute('data-player-id',   playerId);
+      sendmpBtn.setAttribute('data-player-name', '...');
+      sendmpBtn.style.display = 'flex';
+    }
+
+    // UI otimista via IDB owners_store (zero egress)
+    try {
+      const cachedOwner = await (async () => {
+        const db = await openGlobalDB();
+        return new Promise(res => {
+          const tx = db.transaction(OWNERS_STORE, 'readonly');
+          const req = tx.objectStore(OWNERS_STORE).get(playerId);
+          req.onsuccess = () => res(req.result || null);
+          req.onerror  = () => res(null);
+        });
+      })();
+      if (cachedOwner && cachedOwner.name) {
+        if (ui.name)   ui.name.textContent = cachedOwner.name;
+        if (ui.avatar) ui.avatar.src = cachedOwner.avatar_url || 'https://via.placeholder.com/100';
+        if (sendmpBtn) sendmpBtn.setAttribute('data-player-name', cachedOwner.name);
+      }
+    } catch(e) {}
+
+    // Cache local (24h)
+    const cacheKey = `tav_player_modal_v2_${playerId}`;
+    const cached   = (() => {
+      try {
+        const it = JSON.parse(localStorage.getItem(cacheKey));
+        if (!it || Date.now() > it.expiry) { localStorage.removeItem(cacheKey); return null; }
+        return it.data;
+      } catch(e) { return null; }
+    })();
+    if (cached) {
+      _tavPopulateModal(ui, cached.player, cached.items, cached.guildData);
+      if (sendmpBtn) sendmpBtn.setAttribute('data-player-name', cached.player?.name || '');
+      _tavLoadSocialStats(playerId);
+      return;
+    }
+
+    const sb = getSB();
+    if (!sb) throw new Error('sem conexão');
+
+    // Player — sem fame (pode não existir ainda na tabela)
+    const { data: player, error: pErr } = await sb
+      .from('players')
+      .select('id,name,level,avatar_url,guild_id,combat_power,cached_combat_stats')
+      .eq('id', playerId)
+      .maybeSingle();
+
+    if (pErr) throw pErr;
+    if (!player) throw new Error('Jogador não encontrado');
+    if (sendmpBtn) sendmpBtn.setAttribute('data-player-name', player.name || '');
+
+    // Items — usa inventory_items (mesmo padrão de playerModal.js)
+    let items = [];
+    try {      const { data: inv, error: invErr } = await sb
+        .from('inventory_items')
+        .select('id,item_id,equipped_slot,level,refine_level,items:items!inventory_items_item_id_fkey(name,display_name,stars)')
+        .eq('player_id', playerId)
+        .not('equipped_slot', 'is', null)
+        .gt('quantity', 0);
+      if (!invErr) items = inv || [];
+    } catch(e) { items = []; }
+
+    // Guilda: cache local primeiro, Supabase como fallback
+    let guildData = null;
+    if (player.guild_id) {
+      try {
+        // 1. localStorage do guild.js
+        const glsRaw = localStorage.getItem('guild_info_' + player.guild_id);
+        if (glsRaw) {
+          const p = JSON.parse(glsRaw);
+          if (p?.data?.name && Date.now() < p.expiry)
+            guildData = { name: p.data.name, flag_url: p.data.flag_url || '' };
+        }
+        // 2. sessionStorage da taverna
+        if (!guildData) {
+          const ssRaw = sessionStorage.getItem('tav_guild_' + player.guild_id);
+          if (ssRaw) {
+            const p = JSON.parse(ssRaw);
+            if (p?.n) guildData = { name: p.n, flag_url: p.f || '' };
+          }
+        }
+        // 3. Supabase
+        if (!guildData) {
+          const { data: g } = await sb.from('guilds').select('name,flag_url').eq('id', player.guild_id).maybeSingle();
+          if (g) {
+            guildData = g;
+            sessionStorage.setItem('tav_guild_' + player.guild_id,
+              JSON.stringify({ n: g.name, f: g.flag_url || '', t: Date.now() }));
+          }
+        }
+      } catch(e) {}
+    }
+
+    _tavPopulateModal(ui, player, items, guildData);
+    _tavLoadSocialStats(playerId);
+
+    // Salva em cache local (24h) e no IDB owners_store para UI otimista futura
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ data: { player, items, guildData }, expiry: Date.now() + _TAV_CACHE_TTL }));
+    } catch(e) {}
+    try {
+      await dbSaveOwners([{ id: player.id, name: player.name, avatar_url: player.avatar_url, guild_id: player.guild_id }]);
+    } catch(e) {}
+
+  } catch(e) {
+    console.warn('[tavFetchPlayerData]', e);
+    if (ui.name) ui.name.textContent = 'Indisponível';
+    document.querySelectorAll('#playerModal .shimmer').forEach(el => el.classList.remove('shimmer'));
+  }
+}
+
+
+async function _tavLoadSocialStats(playerId, knownFame) {
+  // Fame
+  let fameVal = knownFame ?? null;
+  if (fameVal === null) {
+    try {
+      const cacheKey = 'tav_pfame_' + playerId;
+      const cached   = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 5 * 60 * 1000) fameVal = v;
+      }
+      if (fameVal === null) {
+        const sb = getSB();
+        if (sb) {
+          const { data } = await sb.from('players').select('fame').eq('id', playerId).maybeSingle();
+          fameVal = data?.fame || 0;
+          sessionStorage.setItem(cacheKey, JSON.stringify({ v: fameVal, t: Date.now() }));
+        }
+      }
+    } catch(e) { fameVal = 0; }
+  }
+  if (window._tavModalLastPid !== playerId) return;
+  const fEl = document.getElementById('pm-fame-val');
+  if (fEl) { fEl.textContent = formatCompact(fameVal || 0); fEl.style.opacity = '1'; }
+  ['pm-followers-val','pm-following-val','pm-gifts-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = '0'; el.style.opacity = '1'; }
+  });
 }
 
 // ══════════════════════════════════════════
@@ -2102,6 +2531,326 @@ function closeCtxMenu() {
 }
 
 // ══════════════════════════════════════════
+//  @MENTION PICKER
+// ══════════════════════════════════════════
+function showMentionPicker(query) {
+  if (!currentRoom) { closeMentionPicker(); return; }
+  const picker = document.getElementById('mention-picker');
+  const inner  = document.getElementById('mention-picker-inner');
+  if (!picker || !inner) return;
+
+  // Build list: all room members + self, filtered by query
+  const q = query.toLowerCase();
+  const members = Object.entries(roomMembers)
+    .map(([id, v]) => ({ id, ...v }))
+    .filter(m => !q || m.name.toLowerCase().includes(q));
+
+  if (!members.length) { closeMentionPicker(); return; }
+
+  inner.innerHTML = '';
+  members.forEach(m => {
+    const av = resolveAvatar(m.id, m.name, 64);
+    const seatLabel = m.seatId ? 'Assento ' + m.seatId : 'Plateia';
+    const row = document.createElement('div');
+    row.className = 'mention-row';
+    row.innerHTML = `
+      <div class="mention-row-av"><img src="${av}" alt=""></div>
+      <span class="mention-row-name">${esc(m.name)}</span>
+      <span class="mention-row-seat">${seatLabel}</span>`;
+    row.addEventListener('click', () => insertMention(m.name));
+    inner.appendChild(row);
+  });
+
+  picker.style.display = 'block';
+}
+
+function closeMentionPicker() {
+  const picker = document.getElementById('mention-picker');
+  if (picker) picker.style.display = 'none';
+}
+
+function insertMention(name) {
+  const inp = document.getElementById('chat-input');
+  if (!inp) return;
+  const val    = inp.value;
+  const cursor = inp.selectionStart;
+  const before = val.slice(0, cursor);
+  const after  = val.slice(cursor);
+  // Replace the partial @word with full @Name + space
+  const newBefore = before.replace(/@(\S*)$/, '@' + name + ' ');
+  inp.value = newBefore + after;
+  inp.focus();
+  const newPos = newBefore.length;
+  inp.setSelectionRange(newPos, newPos);
+  closeMentionPicker();
+}
+
+// ══════════════════════════════════════════
+//  MY PROFILE MODAL
+// ══════════════════════════════════════════
+async function openMyProfileModal() {
+  const modal = document.getElementById('my-profile-modal');
+  if (!modal) return;
+  modal.classList.add('open');
+
+  // 1. Use PLAYER data already in memory
+  const name      = PLAYER.name       || 'Aventureiro';
+  const avatarUrl = PLAYER.avatar_url || '';
+
+  // 2. Full player data from IDB for level + cp
+  const idbData = await dbGetPlayer();
+  const level   = idbData?.level        || 1;
+  const cp      = idbData?.combat_power || 0;
+  let guildId = idbData?.guild_id || PLAYER.guild || null;
+  // Fallback: se IDB não tiver guild_id (primeira vez ou sessão nova), busca do Supabase
+  if (!guildId && PLAYER.id && !PLAYER.id.startsWith('p_')) {
+    try {
+      const sb = getSB();
+      if (sb) {
+        const { data: pd } = await sb.from('players').select('guild_id').eq('id', PLAYER.id).maybeSingle();
+        if (pd?.guild_id) guildId = pd.guild_id;
+      }
+    } catch(e) {}
+  }
+  window._mpmGuildId = guildId || null;
+
+  // 3. Cover photo (the avatar itself, full-visible)
+  const coverEl = document.getElementById('mpm-cover');
+  if (coverEl && avatarUrl) coverEl.style.backgroundImage = `url('${avatarUrl}')`;
+
+  // 4. Avatar
+  const avEl = document.getElementById('mpm-avatar');
+  if (avEl) avEl.src = avatarUrl || makeAvatar(name, 180);
+
+  // 5. Apply frame if cached
+  const skinCache = _tavGetSkinCache(PLAYER.id);
+  const frameEl   = document.getElementById('mpm-frame');
+  if (frameEl) {
+    if (skinCache?.frame_url) {
+      frameEl.src           = skinCache.frame_url;
+      frameEl.style.display = 'block';
+      if (avEl) avEl.style.border = 'none';
+    } else {
+      frameEl.style.display = 'none';
+    }
+  }
+
+  // 6. Text fields
+  const nameEl = document.getElementById('mpm-name');
+  if (nameEl) nameEl.textContent = name;
+
+  const lvlEl = document.getElementById('mpm-level');
+  if (lvlEl) lvlEl.textContent = 'Nível ' + level;
+
+  const cpEl = document.getElementById('mpm-cp-val');
+  if (cpEl) cpEl.textContent = formatCompact(cp);
+
+  // 7. Fame from Supabase (sessionStorage cache 5 min)
+  const fameCacheKey = 'mpm_fame_' + PLAYER.id;
+  let fameVal = 0;
+  try {
+    const cached = sessionStorage.getItem(fameCacheKey);
+    if (cached) {
+      const { v, t } = JSON.parse(cached);
+      if (Date.now() - t < 5 * 60 * 1000) fameVal = v;
+    }
+    if (!fameVal) {
+      const sb = getSB();
+      if (sb) {
+        const { data } = await sb.from('players').select('fame').eq('id', PLAYER.id).maybeSingle();
+        fameVal = data?.fame || 0;
+        sessionStorage.setItem(fameCacheKey, JSON.stringify({ v: fameVal, t: Date.now() }));
+      }
+    }
+  } catch(e) {}
+
+  const fameEl = document.getElementById('mpm-fame');
+  if (fameEl) fameEl.textContent = formatCompact(fameVal);
+
+  // Stubs
+  ['mpm-followers','mpm-following','mpm-gifts'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '0';
+  });
+
+  // 8. Guild row
+  const guildDiv = document.getElementById('mpm-guild');
+  if (guildDiv && guildId) {
+    guildDiv.style.display = 'block';
+    const gCacheKey = 'mpm_guild_' + guildId;
+    let guildName = '', guildFlag = 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+    try {
+      // 1. sessionStorage da taverna
+      const gc = sessionStorage.getItem(gCacheKey);
+      if (gc) { const p = JSON.parse(gc); guildName = p.n || ''; guildFlag = p.f || guildFlag; }
+      // 2. localStorage do guild.js (formato { data:{name,flag_url,...}, expiry:ts })
+      if (!guildName) {
+        const glsRaw = localStorage.getItem('guild_info_' + guildId);
+        if (glsRaw) {
+          const p = JSON.parse(glsRaw);
+          if (p?.data?.name && Date.now() < p.expiry) {
+            guildName = p.data.name;
+            guildFlag = p.data.flag_url || guildFlag;
+            // Propaga para sessionStorage para próximas chamadas
+            sessionStorage.setItem(gCacheKey, JSON.stringify({ n: guildName, f: guildFlag }));
+          }
+        }
+      }
+      // 3. Supabase (fallback de rede)
+      if (!guildName) {
+        const sb = getSB();
+        if (sb) {
+          const { data } = await sb.from('guilds').select('name, flag_url').eq('id', guildId).maybeSingle();
+          if (data) {
+            guildName = data.name || '';
+            guildFlag = data.flag_url || guildFlag;
+            sessionStorage.setItem(gCacheKey, JSON.stringify({ n: guildName, f: guildFlag }));
+          }
+        }
+      }
+    } catch(e) {}
+    const gNameEl = document.getElementById('mpm-guild-name');
+    const gFlagEl = document.getElementById('mpm-guild-flag');
+    if (gNameEl) gNameEl.textContent = guildName;
+    if (gFlagEl) gFlagEl.src         = guildFlag;
+  } else if (guildDiv) {
+    guildDiv.style.display = 'none';
+  }
+}
+
+function closeMyProfileModal() {
+  document.getElementById('my-profile-modal')?.classList.remove('open');
+}
+
+// ══════════════════════════════════════════
+//  TAV GUILD MODAL
+// ══════════════════════════════════════════
+async function openTavGuildModal(guildId) {
+  if (!guildId) return;
+  const modal = document.getElementById('tav-guild-modal');
+  if (!modal) return;
+  modal.classList.add('open');
+
+  // Reset state
+  const nameEl    = document.getElementById('tgm-name');
+  const descEl    = document.getElementById('tgm-desc');
+  const lvlEl     = document.getElementById('tgm-level');
+  const membEl    = document.getElementById('tgm-members');
+  const flagEl    = document.getElementById('tgm-flag');
+  const listEl    = document.getElementById('tgm-member-list');
+  const joinRow   = document.getElementById('tgm-join-row');
+
+  if (nameEl) nameEl.textContent = 'Carregando...';
+  if (descEl) descEl.textContent = '';
+  if (listEl) listEl.innerHTML   = '';
+  if (joinRow) joinRow.style.display = 'none';
+  window._tgmGuildId = guildId;
+
+  const cacheKey = 'tgm_guild_' + guildId;
+  let guildData  = null;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      const { v, t } = JSON.parse(cached);
+      if (Date.now() - t < 10 * 60 * 1000) guildData = v;
+    }
+    if (!guildData) {
+      const sb = getSB();
+      if (!sb) throw new Error('no sb');
+
+      // Tenta com o nome do FK explícito, fallback sem FK name
+      let gRes = await sb.from('guilds')
+        .select('id,name,description,level,flag_url,max_members,players:players_guild_id_fkey(id,name,avatar_url,rank,level,combat_power)')
+        .eq('id', guildId).maybeSingle();
+
+      if (gRes.error || !gRes.data?.players) {
+        // Fallback: busca membros separadamente
+        gRes = await sb.from('guilds')
+          .select('id,name,description,level,flag_url,max_members')
+          .eq('id', guildId).maybeSingle();
+        if (gRes.data) {
+          const { data: members } = await sb.from('players')
+            .select('id,name,avatar_url,rank,level,combat_power')
+            .eq('guild_id', guildId);
+          gRes.data.players = members || [];
+        }
+      }
+      if (gRes.error && !gRes.data) throw gRes.error || new Error('Guilda não encontrada');
+      guildData = gRes.data;
+      sessionStorage.setItem(cacheKey, JSON.stringify({ v: guildData, t: Date.now() }));
+    }
+  } catch(e) {
+    if (nameEl) nameEl.textContent = 'Erro ao carregar guilda.';
+    return;
+  }
+  if (!guildData) { if (nameEl) nameEl.textContent = 'Guilda não encontrada.'; return; }
+
+  const allMembers  = (guildData.players || []).filter(p => p.rank !== 'admin');
+  const maxM        = guildData.max_members || 30;
+
+  // Populate header
+  if (flagEl) flagEl.src         = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+  if (nameEl) nameEl.textContent = guildData.name || '';
+  if (descEl) descEl.textContent = guildData.description || '';
+  if (lvlEl)  lvlEl.textContent  = 'Nv. ' + (guildData.level || 1);
+  if (membEl) membEl.textContent = allMembers.length + ' / ' + maxM + ' membros';
+  document.getElementById('tgm-title').textContent = guildData.name || 'Guilda';
+
+  // Join button — show if player has no guild
+  const idbPlayer = await dbGetPlayer();
+  const hasGuild  = !!(idbPlayer?.guild_id || PLAYER.guild);
+  const isInThisGuild = (idbPlayer?.guild_id === guildId || PLAYER.guild === guildId);
+  if (joinRow && !hasGuild && !isInThisGuild) joinRow.style.display = 'flex';
+
+  // Members list
+  const ROLE_LABEL = { leader: 'Líder', 'co-leader': 'Co-Líder', member: 'Membro' };
+  const ROLE_ORDER = { leader: 0, 'co-leader': 1, member: 2 };
+  const sorted = allMembers.slice().sort((a,b) => (ROLE_ORDER[a.rank]??2) - (ROLE_ORDER[b.rank]??2));
+  if (listEl) {
+    sorted.forEach(m => {
+      const av = m.avatar_url || makeAvatar(m.name || '?', 72);
+      const row = document.createElement('div');
+      row.className = 'tgm-member-row';
+      row.innerHTML = `
+        <div class="tgm-member-av"><img src="${esc(av)}" onerror="this.src='${makeAvatar(m.name||'?',72)}'"></div>
+        <div class="tgm-member-info">
+          <div class="tgm-member-name">${esc(m.name || '?')}</div>
+          <div class="tgm-member-sub">Nv. ${m.level || 1} · PC ${formatCompact(m.combat_power || 0)}</div>
+        </div>
+        <div class="tgm-member-role">${ROLE_LABEL[m.rank] || 'Membro'}</div>`;
+      listEl.appendChild(row);
+    });
+  }
+}
+
+function closeTavGuildModal() {
+  document.getElementById('tav-guild-modal')?.classList.remove('open');
+}
+
+async function tavGuildJoinRequest() {
+  const guildId = window._tgmGuildId;
+  if (!guildId) return;
+  const sb = getSB();
+  if (!sb) { showToast('Sem conexão.'); return; }
+  const btn = document.getElementById('tgm-join-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const { error } = await sb.rpc('create_guild_join_request', {
+      p_guild_id:  guildId,
+      p_player_id: PLAYER.id,
+      p_message:   ''
+    });
+    if (error) throw error;
+    showToast('Solicitação enviada com sucesso!');
+    const joinRow = document.getElementById('tgm-join-row');
+    if (joinRow) joinRow.style.display = 'none';
+  } catch(e) {
+    showToast('Erro: ' + (e.message || 'Tente novamente.'));
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════
 //  NAV
 // ══════════════════════════════════════════
 function toggleNavDropdown() {
@@ -2149,9 +2898,25 @@ function bindTabs() {
 }
 function bindInputs() {
   document.getElementById('btn-back')?.addEventListener('click', closeRoom);
-  document.getElementById('chat-input')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  });
+  const chatInp = document.getElementById('chat-input');
+  if (chatInp) {
+    chatInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); closeMentionPicker(); sendMessage(); }
+      if (e.key === 'Escape') closeMentionPicker();
+    });
+    chatInp.addEventListener('input', () => {
+      const val = chatInp.value;
+      const cursor = chatInp.selectionStart;
+      // Find if we're in the middle of typing an @mention
+      const before = val.slice(0, cursor);
+      const atMatch = before.match(/@(\S*)$/);
+      if (atMatch) {
+        showMentionPicker(atMatch[1]);
+      } else {
+        closeMentionPicker();
+      }
+    });
+  }
 }
 
 // ══════════════════════════════════════════

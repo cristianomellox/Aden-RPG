@@ -245,16 +245,16 @@
     Navegar
   </div>
   <div class="nav-item" onclick="openIframe('Guilda','guild.html')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V6L12 2z"/></svg>
     Guilda
   </div>
   <div class="nav-item" onclick="openIframe('Bolsa','inventory.html')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
     Bolsa
   </div>
-  <div class="nav-item active">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    Tavernas
+  <div class="nav-item active" onclick="openMyProfileModal()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.58-7 8-7s8 3 8 7"/></svg>
+    Eu
   </div>
 </div>
 
@@ -340,14 +340,14 @@
             <div id="playerGuildName" style="font-weight:700;color:#f0e9d6;font-size:0.95em;text-align:center;"></div>
           </div>
           <!-- Avatar com moldura e sheen sobrepostos -->
-          <div id="tav-avatar-wrapper" style="position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;">
+          <div id="tav-avatar-wrapper" style="position:relative;width:160px;height:160px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
             <img id="playerAvatarEquip" src="https://via.placeholder.com/100" alt="Avatar do Jogador" style="width:100px;height:100px;border-radius:50%;border:3px solid #FFD700;object-fit:cover;">
-            <img id="tav-frame-overlay" src="" alt="" style="position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:2;object-fit:contain;display:none;">
-            <div id="tav-frame-sheen" style="position:absolute;top:-5px;left:0;width:160px;height:160px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;"></div>
+            <img id="tav-frame-overlay" src="" alt="" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:160px;height:160px;pointer-events:none;z-index:2;object-fit:contain;display:none;">
+            <div id="tav-frame-sheen" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:160px;height:160px;pointer-events:none;z-index:3;display:none;-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;overflow:hidden;"></div>
           </div>
           <div style="display:flex;flex-wrap:nowrap;gap:8px;justify-content:center;align-items:center;">
             <img alt="poder" style="width:18px;height:30px;vertical-align:4px;" src="https://aden-rpg.pages.dev/assets/CPicon.webp">
-            <div id="playerCombatPower" style="font-weight:800;color:orange;font-size:1.2em;">0</div>
+            <div id="playerCombatPower" style="font-weight:800;font-size:3.2em;background:linear-gradient(to bottom,#ffffff,#ff9900,#ff6600);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 6px rgba(255,140,0,0.4));">0</div>
           </div>
         </div>
 
@@ -374,13 +374,142 @@
           <div class="pm-attr-item"><span class="pm-attr-lbl">REDUÇÃO CRIT</span><span id="playerCritReduction" class="pm-attr-val">0%</span></div>
         </div>
       </div>
-      <div style="display:flex;justify-content:center;align-items:center;margin-top:10px;">
-        <button id="sendmp" style="display:none;align-items:center;justify-content:center;gap:10px;font-size:1em;padding:0;background:none;border:none;cursor:pointer;color:#e8d08a;">
-          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:35px;height:35px;"> Enviar Mensagem
+      <!-- Social stats row -->
+      <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">0</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">0</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-fame-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;">0</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Fama</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-gifts-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;">0</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Presentes</span>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:12px;">
+        <button id="pm-mention-btn" style="display:none;flex-direction:column;align-items:center;gap:4px;font-size:0.65em;font-family:'Cinzel',serif;padding:8px 14px;background:rgba(122,184,255,0.12);border:1px solid rgba(122,184,255,0.35);border-radius:8px;cursor:pointer;color:#7ab8ff;letter-spacing:0.06em;transition:background 0.2s;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
+          Mencionar
+        </button>
+        <button id="sendmp" style="display:none;flex-direction:column;align-items:center;gap:4px;font-size:0.65em;font-family:'Cinzel',serif;padding:8px 14px;background:rgba(201,169,74,0.12);border:1px solid rgba(201,169,74,0.35);border-radius:8px;cursor:pointer;color:#e8d08a;letter-spacing:0.06em;transition:background 0.2s;">
+          <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;">
+          Mensagem
         </button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- ══ MY PROFILE MODAL ══ -->
+<div id="my-profile-modal">
+  <div id="mpm-inner">
+    <button id="mpm-close" onclick="closeMyProfileModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><polyline points="12 5 5 12 12 19"/></svg>
+    </button>
+
+    <!-- Cover photo (visible, not blurred) -->
+    <div id="mpm-cover"></div>
+    <div id="mpm-cover-fade"></div>
+
+    <!-- Hero row: avatar left, info right -->
+    <div id="mpm-hero">
+      <div id="mpm-avatar-wrap">
+        <img id="mpm-avatar" src="" alt="Avatar">
+        <img id="mpm-frame"  src="" alt="" style="display:none;">
+      </div>
+      <div id="mpm-hero-info">
+        <div id="mpm-name"></div>
+        <div id="mpm-level"></div>
+        <div id="mpm-cp">
+          <img src="https://aden-rpg.pages.dev/assets/CPicon.webp" id="mpm-cp-icon" alt="CP">
+          <span id="mpm-cp-val">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div id="mpm-stats-row">
+      <div class="mpm-stat">
+        <span class="mpm-stat-val" id="mpm-followers">0</span>
+        <span class="mpm-stat-lbl">Seguidores</span>
+      </div>
+      <div class="mpm-stat-divider"></div>
+      <div class="mpm-stat">
+        <span class="mpm-stat-val" id="mpm-following">0</span>
+        <span class="mpm-stat-lbl">Seguindo</span>
+      </div>
+      <div class="mpm-stat-divider"></div>
+      <div class="mpm-stat">
+        <span class="mpm-stat-val" id="mpm-fame">0</span>
+        <span class="mpm-stat-lbl">Fama</span>
+      </div>
+      <div class="mpm-stat-divider"></div>
+      <div class="mpm-stat">
+        <span class="mpm-stat-val" id="mpm-gifts">0</span>
+        <span class="mpm-stat-lbl">Presentes</span>
+      </div>
+    </div>
+
+    <!-- Guild row (clickable) -->
+    <div id="mpm-guild" style="display:none;" onclick="openTavGuildModal(window._mpmGuildId)">
+      <div id="mpm-guild-inner">
+        <img id="mpm-guild-flag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guilda">
+        <div id="mpm-guild-texts">
+          <span id="mpm-guild-label">Guilda</span>
+          <span id="mpm-guild-name"></span>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="mpm-guild-arrow"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAV GUILD MODAL (informações da guilda dentro das tavernas) ══ -->
+<div id="tav-guild-modal">
+  <div id="tgm-inner">
+    <div id="tgm-topbar">
+      <span id="tgm-title">Guilda</span>
+      <button id="tgm-close" onclick="closeTavGuildModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="tgm-scroll">
+      <div id="tgm-header">
+        <img id="tgm-flag" src="" alt="">
+        <div id="tgm-header-info">
+          <div id="tgm-name"></div>
+          <div id="tgm-desc"></div>
+          <div id="tgm-meta">
+            <span id="tgm-level"></span>
+            <span id="tgm-members"></span>
+          </div>
+        </div>
+      </div>
+      <div id="tgm-join-row" style="display:none;">
+        <button id="tgm-join-btn" onclick="tavGuildJoinRequest()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Solicitar Entrada
+        </button>
+      </div>
+      <div id="tgm-member-label">Membros</div>
+      <div id="tgm-member-list"></div>
+    </div>
+  </div>
+</div>
+<div id="mention-picker" style="display:none;">
+  <div id="mention-picker-inner"></div>
 </div>
 
 <!-- ══ GIFT CONFIRMATION MODAL ══ -->
@@ -417,6 +546,9 @@
 <script type="module" src="playerModal.js"></script>
 <script type="module">
 import { supabase } from './supabaseClient.js';
+
+// Expõe o cliente autenticado para getSB() em tavernas.js
+window.__tavSB = supabase;
 
 // ── Player modal: skin (moldura + vídeo) ────────────────────────────
 const _TAV_M_VID = 'https://aden-rpg.pages.dev/assets/divbolsa.webm';

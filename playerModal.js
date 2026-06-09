@@ -198,6 +198,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+    // Tenta obter dados da guilda de qualquer cache disponível (guild.js LS → tavernas.js SS)
+    function getGuildFromAnyCache(guildId) {
+        if (!guildId) return null;
+        try {
+            // 1. Cache principal do guild.js (localStorage, formato { data: {...}, expiry: ts })
+            const glsRaw = localStorage.getItem('guild_info_' + guildId);
+            if (glsRaw) {
+                const p = JSON.parse(glsRaw);
+                if (p?.data?.name && Date.now() < p.expiry)
+                    return { name: p.data.name, flag_url: p.data.flag_url || '' };
+            }
+        } catch(e) {}
+        try {
+            // 2. Cache da taverna (sessionStorage, formato { n, f, t })
+            const ssRaw = sessionStorage.getItem('tav_guild_' + guildId);
+            if (ssRaw) {
+                const p = JSON.parse(ssRaw);
+                if (p?.n) return { name: p.n, flag_url: p.f || '' };
+            }
+        } catch(e) {}
+        return null;
+    }
+
     function clearModalContent() {
         if(ui.name) ui.name.textContent = 'Carregando...';
         if(ui.level) ui.level.textContent = '';
@@ -262,6 +285,11 @@ document.addEventListener("DOMContentLoaded", () => {
             // Items Render
             Object.values(equipmentSlots).forEach(s => s ? s.innerHTML = '' : null);
             (equippedItems || []).forEach(invItem => {
+                // Hidratação: se o join FK falhou, tenta window.itemDefinitions
+                if (!invItem.items && invItem.item_id && window.itemDefinitions) {
+                    const def = window.itemDefinitions.get(invItem.item_id);
+                    if (def) invItem.items = def;
+                }
                 const mapped = SLOT_MAP[invItem.equipped_slot] || invItem.equipped_slot;
                 const slotDiv = equipmentSlots[mapped];
                 if (slotDiv && invItem.items) {
@@ -324,12 +352,28 @@ document.addEventListener("DOMContentLoaded", () => {
                         localPlayer.calculated_local_stats = localStats;
                     }
                     
+                    // Busca guilda: cache local → cache taverna → Supabase
                     let guildData = null;
                     if (localPlayer.guild_name) {
                         guildData = { name: localPlayer.guild_name, flag_url: localPlayer.guild_flag || '' };
+                    } else if (localPlayer.guild_id) {
+                        guildData = getGuildFromAnyCache(localPlayer.guild_id);
+                        if (!guildData) {
+                            try {
+                                const { data: g } = await supabase
+                                    .from('guilds').select('name, flag_url')
+                                    .eq('id', localPlayer.guild_id).maybeSingle();
+                                if (g) {
+                                    guildData = g;
+                                    // Guarda no sessionStorage para próximas chamadas
+                                    sessionStorage.setItem('tav_guild_' + localPlayer.guild_id,
+                                        JSON.stringify({ n: g.name, f: g.flag_url || '', t: Date.now() }));
+                                }
+                            } catch(e) {}
+                        }
                     }
-                    if (sendMpButton) sendMpButton.style.display = 'none';
 
+                    if (sendMpButton) sendMpButton.style.display = 'none';
                     populateModal(localPlayer, localItems, guildData);
                     return; 
                 }
@@ -372,9 +416,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const itemsPromise = supabase
                 .from('inventory_items')
-                .select(`id, equipped_slot, level, refine_level, items (name, display_name, stars)`)
+                .select(`id, item_id, equipped_slot, level, refine_level, items:items!inventory_items_item_id_fkey (name, display_name, stars)`)
                 .eq('player_id', playerId)
-                .not('equipped_slot', 'is', null);
+                .not('equipped_slot', 'is', null)
+                .gt('quantity', 0);
 
             const [playerRes, itemsRes] = await Promise.all([playerPromise, itemsPromise]);
 
@@ -384,14 +429,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
             let guildData = null;
             if (player.guild_id) {
-                try {
-                    const { data: guild } = await supabase
-                        .from('guilds')
-                        .select('name, flag_url')
-                        .eq('id', player.guild_id)
-                        .single();
-                    guildData = guild;
-                } catch (e) {}
+                // Tenta cache local antes de ir ao Supabase
+                guildData = getGuildFromAnyCache(player.guild_id);
+                if (!guildData) {
+                    try {
+                        const { data: guild } = await supabase
+                            .from('guilds')
+                            .select('name, flag_url')
+                            .eq('id', player.guild_id)
+                            .maybeSingle();
+                        if (guild) {
+                            guildData = guild;
+                            sessionStorage.setItem('tav_guild_' + player.guild_id,
+                                JSON.stringify({ n: guild.name, f: guild.flag_url || '', t: Date.now() }));
+                        }
+                    } catch (e) {}
+                }
             }
 
             if (sendMpButton) sendMpButton.setAttribute('data-player-name', player.name);

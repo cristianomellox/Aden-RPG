@@ -881,7 +881,7 @@ html,body {
 
 #mpm-close {
   position: fixed;
-  top: calc(var(--topbar-h) + 8px);
+  top: 5px;
   left: 14px;
   z-index: 10;
   background: rgba(10, 6, 2, 0.75);
@@ -945,9 +945,9 @@ html,body {
 }
 #mpm-frame {
   position: absolute;
-  top: 0; left: 0;
-  width: 140px;
-  height: 140px;
+  top: -36px; left: -26px;
+  width: 192px;
+  height: 192px;
   pointer-events: none;
   object-fit: contain;
   z-index: 3;
@@ -958,9 +958,10 @@ html,body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 1px;
   padding-bottom: 4px;
   min-width: 0;
+  margin-left: -7px;
 }
 #mpm-name {
   font-family: 'Cinzel', serif;
@@ -986,10 +987,10 @@ html,body {
   gap: 5px;
   margin-top: 1px;
 }
-#mpm-cp-icon { width: 14px; height: 24px; object-fit: contain; }
+#mpm-cp-icon { width: 18px; height: 42px; object-fit: contain; margin-top: -5px;}
 #mpm-cp-val {
   font-family: 'Cinzel', serif;
-  font-size: 2.7rem;
+  font-size: 1.8rem;
   font-weight: 800;
   background: linear-gradient(to bottom, #ffffff, #ff9900, #ff6600);
   -webkit-background-clip: text;
@@ -1025,7 +1026,7 @@ html,body {
   color: var(--blue-light);
 }
 .mpm-stat-lbl {
-  font-size: 0.53rem;
+  font-size: 0.70rem;
   color: var(--text-muted);
   letter-spacing: 0.07em;
   text-transform: uppercase;

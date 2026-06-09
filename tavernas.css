@@ -719,6 +719,7 @@ html,body {
   line-height: 1;
   user-select: none;
   color: var(--heart-color, #ff6b9d);
+  -webkit-text-stroke: 1.5px #000;
   text-shadow:
     0 0 6px  var(--heart-glow, rgba(255,107,157,0.9)),
     0 0 12px var(--heart-glow, rgba(255,107,157,0.6)),
@@ -840,3 +841,517 @@ html,body {
   width: 13px;
   height: 13px;
 }
+
+
+/* ══════════════════════════════════════════════════════════
+   MY PROFILE MODAL — Perfil Social do Próprio Jogador
+   ══════════════════════════════════════════════════════════ */
+#my-profile-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.92);
+  overflow-y: auto;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0 calc(var(--nav-h) + 16px);
+  animation: mpm-fade-in 0.25s ease;
+}
+#my-profile-modal.open { display: flex; }
+
+@keyframes mpm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+#mpm-inner {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  animation: mpm-slide-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes mpm-slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+#mpm-close {
+  position: fixed;
+  top: calc(var(--topbar-h) + 8px);
+  left: 14px;
+  z-index: 10;
+  background: rgba(10, 6, 2, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.2s, border-color 0.2s;
+}
+#mpm-close:hover { color: var(--gold); border-color: var(--gold-dark); }
+#mpm-close svg { width: 20px; height: 20px; }
+
+/* Cover photo — full visible, not blurred */
+#mpm-cover {
+  width: 100%;
+  height: 220px;
+  background-size: cover;
+  background-position: center top;
+  flex-shrink: 0;
+}
+#mpm-cover-fade {
+  width: 100%;
+  height: 80px;
+  margin-top: -80px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.92) 100%);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Hero row: avatar LEFT + info block RIGHT */
+#mpm-hero {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 0 16px 16px;
+  margin-top: -70px;
+}
+
+#mpm-avatar-wrap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#mpm-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 20px rgba(201, 169, 74, 0.45), 0 4px 14px rgba(0,0,0,0.7);
+}
+#mpm-frame {
+  position: absolute;
+  top: 0; left: 0;
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
+  object-fit: contain;
+  z-index: 3;
+}
+
+/* Info block (name / level / CP) */
+#mpm-hero-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding-bottom: 4px;
+  min-width: 0;
+}
+#mpm-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 210px;
+}
+#mpm-level {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  color: var(--blue-light);
+  letter-spacing: 0.09em;
+}
+#mpm-cp {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+}
+#mpm-cp-icon { width: 14px; height: 24px; object-fit: contain; }
+#mpm-cp-val {
+  font-family: 'Cinzel', serif;
+  font-size: 2.7rem;
+  font-weight: 800;
+  background: linear-gradient(to bottom, #ffffff, #ff9900, #ff6600);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 6px rgba(255, 140, 0, 0.4));
+  line-height: 1;
+}
+
+/* Stats row */
+#mpm-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  margin: 0 14px 12px;
+  background: rgba(14, 9, 3, 0.82);
+  border: 1px solid var(--border-mid);
+  border-radius: 14px;
+  padding: 13px 8px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(201,169,74,0.06);
+}
+.mpm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+}
+.mpm-stat-val {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--blue-light);
+}
+.mpm-stat-lbl {
+  font-size: 0.53rem;
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.mpm-stat-divider {
+  width: 1px;
+  height: 30px;
+  background: rgba(201, 169, 74, 0.2);
+  flex-shrink: 0;
+}
+
+/* Guild section — clickable row */
+#mpm-guild {
+  margin: 0 14px 14px;
+  background: rgba(14, 9, 3, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+#mpm-guild:hover {
+  background: rgba(30, 20, 8, 0.88);
+  border-color: var(--gold-dark);
+}
+#mpm-guild-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#mpm-guild-flag {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-mid);
+  flex-shrink: 0;
+}
+#mpm-guild-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+#mpm-guild-label {
+  font-size: 0.56rem;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+#mpm-guild-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gold-light);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#mpm-guild-arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--gold-dark);
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TAV GUILD MODAL — Info da Guilda nas Tavernas
+   ══════════════════════════════════════════════════════════ */
+#tav-guild-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: mpm-fade-in 0.22s ease;
+}
+#tav-guild-modal.open { display: flex; }
+
+#tgm-inner {
+  background: linear-gradient(160deg, #110d05 0%, #1a1408 60%, #0e0a04 100%);
+  border: 1px solid var(--border-mid);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8), 0 0 0 1px rgba(201,169,74,0.06) inset;
+  animation: mpm-slide-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#tgm-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#tgm-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--gold-light);
+  letter-spacing: 0.07em;
+}
+#tgm-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+#tgm-close:hover { color: var(--gold); }
+#tgm-close svg { width: 18px; height: 18px; }
+
+#tgm-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 14px 16px;
+}
+#tgm-scroll::-webkit-scrollbar { width: 3px; }
+#tgm-scroll::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 4px; }
+
+#tgm-header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+#tgm-flag {
+  width: 72px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+  flex-shrink: 0;
+}
+#tgm-header-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#tgm-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gold-light);
+  letter-spacing: 0.04em;
+}
+#tgm-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+#tgm-meta {
+  display: flex;
+  gap: 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  color: var(--blue-light);
+  letter-spacing: 0.05em;
+}
+
+#tgm-join-row {
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: center;
+}
+#tgm-join-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(100,70,10,0.9), rgba(60,40,6,0.9));
+  border: 1px solid var(--gold-dark);
+  border-radius: 10px;
+  color: var(--gold-light);
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  box-shadow: 0 2px 10px rgba(201,169,74,0.2);
+}
+#tgm-join-btn:hover {
+  background: linear-gradient(135deg, rgba(130,90,15,0.95), rgba(80,55,8,0.95));
+  border-color: var(--gold);
+}
+#tgm-join-btn svg { width: 16px; height: 16px; }
+
+#tgm-member-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: var(--gold-dark);
+  text-transform: uppercase;
+  padding: 6px 0 8px;
+  border-top: 1px solid var(--border);
+}
+#tgm-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tgm-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.tgm-member-row:hover { background: rgba(201,169,74,0.05); }
+.tgm-member-av {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tgm-member-av img { width: 100%; height: 100%; object-fit: cover; }
+.tgm-member-info { flex: 1; min-width: 0; }
+.tgm-member-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.74rem;
+  color: var(--gold-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tgm-member-sub {
+  font-size: 0.62rem;
+  color: var(--blue-light);
+  font-style: italic;
+}
+.tgm-member-role {
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  text-align: right;
+  flex-shrink: 0;
+}
+/* ══════════════════════════════════════════════════════════
+   @MENTION — Bold yellow in chat + clickable
+   ══════════════════════════════════════════════════════════ */
+.c-mention {
+  font-weight: 700;
+  color: #ffd700;
+  cursor: pointer;
+  display: inline;
+}
+.c-mention:hover { text-decoration: underline; }
+
+
+/* ══════════════════════════════════════════════════════════
+   @MENTION PICKER — popup above chat input
+   ══════════════════════════════════════════════════════════ */
+#mention-picker {
+  position: fixed;
+  bottom: calc(var(--nav-h) + 56px);
+  left: 10px;
+  right: 10px;
+  z-index: 600;
+  background: rgba(10, 6, 2, 0.97);
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.8);
+  animation: sheet-up 0.18s ease;
+  max-height: 240px;
+  overflow-y: auto;
+}
+#mention-picker-inner {
+  display: flex;
+  flex-direction: column;
+}
+.mention-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--border);
+}
+.mention-row:last-child { border-bottom: none; }
+.mention-row:hover { background: rgba(201, 169, 74, 0.09); }
+.mention-row-av {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mention-row-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.mention-row-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.76rem;
+  color: var(--gold-light);
+  letter-spacing: 0.04em;
+}
+.mention-row-seat {
+  font-size: 0.62rem;
+  color: var(--blue-light);
+  font-style: italic;
+  margin-left: auto;
+}
+
+/* pm-mention-btn hover */
+#pm-mention-btn:hover { background: rgba(122,184,255,0.2) !important; }
+#sendmp:hover { background: rgba(201,169,74,0.22) !important; }

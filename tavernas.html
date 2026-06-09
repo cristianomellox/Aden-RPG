@@ -550,6 +550,26 @@
   </div>
 </div>
 
+<!-- ══ FAME MODAL ══ -->
+<div id="tav-fame-modal" class="tav-side-modal" onclick="if(event.target===this)closeFameModal()">
+  <div class="tav-side-inner" style="max-height:80vh;">
+    <div class="tav-side-topbar">
+      <span class="tav-side-title">⭐ Histórico de Fama</span>
+      <button class="tav-side-close" onclick="closeFameModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <!-- Abas -->
+    <div class="tav-fame-tabs">
+      <button id="fame-tab-monthly" class="tav-fame-tab active" onclick="switchFameTab('monthly')">Fama Mensal</button>
+      <button id="fame-tab-total"   class="tav-fame-tab"        onclick="switchFameTab('total')">Fama Total</button>
+    </div>
+    <!-- Listas -->
+    <div id="fame-list-monthly" class="tav-side-list"></div>
+    <div id="fame-list-total"   class="tav-side-list" style="display:none;"></div>
+  </div>
+</div>
+
 <!-- ══ NOTIFICATION MODAL ══ -->
 <div id="tav-notif-modal" class="tav-side-modal" onclick="if(event.target===this)closeNotifModal()">
   <div class="tav-side-inner">

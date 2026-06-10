@@ -135,6 +135,12 @@ async function initPlayer() {
     localStorage.setItem('aden_pid', PLAYER.id);
   }
 
+  // Sem sessão autenticada → volta para o index
+  if (!PLAYER.id) {
+    window.location.replace('index.html');
+    return;
+  }
+
   const data = await dbGetPlayer();
   if (data) {
     // Mantém o ID autenticado se obtido do IDB auth
@@ -159,15 +165,18 @@ async function initPlayer() {
         .select('id, name, avatar_url, guild_id, nobless, rank')
         .eq('id', PLAYER.id)
         .maybeSingle();
-      if (rows) {
-        PLAYER.avatar_url = rows.avatar_url || PLAYER.avatar_url;
-        PLAYER.name       = rows.name       || PLAYER.name;
-        PLAYER.guild      = rows.guild_id   || PLAYER.guild;
-        PLAYER.nobless    = rows.nobless     || 0;
-        if (rows.rank) PLAYER.role = rows.rank;
-        await dbSaveOwners([{ id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url, guild_id: PLAYER.guild }]);
-        ownersCache[PLAYER.id] = { id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url };
+      if (!rows) {
+        // Jogador não encontrado no banco (conta desativada ou inexistente) → index
+        window.location.replace('index.html');
+        return;
       }
+      PLAYER.avatar_url = rows.avatar_url || PLAYER.avatar_url;
+      PLAYER.name       = rows.name       || PLAYER.name;
+      PLAYER.guild      = rows.guild_id   || PLAYER.guild;
+      PLAYER.nobless    = rows.nobless    || 0;
+      if (rows.rank) PLAYER.role = rows.rank;
+      await dbSaveOwners([{ id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url, guild_id: PLAYER.guild }]);
+      ownersCache[PLAYER.id] = { id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url };
     }
   } catch(e) { console.warn('initPlayer supabase fetch:', e); }
 }

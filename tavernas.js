@@ -117,10 +117,10 @@ async function getAuthFromDB() {
   } catch(e) { return null; }
 }
 
-// ── Player — carregado de forma assíncrona do GlobalDB ──
+// ── Player — id começa null; só é preenchido após validar sessão no IDB ──
 let PLAYER = {
-  id:         localStorage.getItem('aden_pid')  || localStorage.getItem('player_id')   || ('p_' + Math.random().toString(36).slice(2, 9)),
-  name:       localStorage.getItem('aden_name') || localStorage.getItem('player_name') || 'Jogador',
+  id:         null,   // preenchido em initPlayer() após validar auth — nunca lê localStorage direto
+  name:       localStorage.getItem('aden_name') || 'Jogador',
   role:       localStorage.getItem('aden_role') || 'member',
   guild:      localStorage.getItem('aden_guild')|| '',
   avatar_url: null,
@@ -128,18 +128,36 @@ let PLAYER = {
 };
 
 async function initPlayer() {
-  // 1. Garante ID correto via auth_store (zero egress, evita ID stale do localStorage)
+  // 1. Tenta pegar sessão do IDB (zero egress)
   const auth = await getAuthFromDB();
   if (auth?.user?.id) {
     PLAYER.id = auth.user.id;
-    localStorage.setItem('aden_pid', PLAYER.id);
   }
 
-  // Sem sessão autenticada → volta para o index
+  // 2. Se IDB não tem sessão, confirma com Supabase (cobre logout recente ou IDB limpo)
   if (!PLAYER.id) {
+    try {
+      const sb = getSB();
+      if (sb) {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session?.user?.id) {
+          PLAYER.id = session.user.id;
+        }
+      }
+    } catch(e) {}
+  }
+
+  // 3. Sem sessão válida em nenhuma fonte → redireciona, limpa localStorage stale
+  if (!PLAYER.id) {
+    localStorage.removeItem('aden_pid');
+    localStorage.removeItem('aden_name');
+    localStorage.removeItem('aden_role');
+    localStorage.removeItem('aden_guild');
     window.location.replace('index.html');
     return;
   }
+
+  localStorage.setItem('aden_pid', PLAYER.id);
 
   const data = await dbGetPlayer();
   if (data) {

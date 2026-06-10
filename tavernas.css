@@ -144,10 +144,10 @@ html,body {
 .orn-line { flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--border)); }
 .orn-line.r { background:linear-gradient(90deg,var(--border),transparent); }
 #throne-row { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:nowrap; width:100%; }
-#seats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:28px; width:100%; max-width:380px; }
+#seats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 16px; width:100%; max-width:380px; }
 
 /* Seat */
-.seat { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transition:transform 0.15s; }
+.seat { display:flex; flex-direction:column; align-items:center; gap:1px; cursor:pointer; transition:transform 0.15s; }
 .seat:active { transform:scale(0.92); }
 .seat-btn { width:52px; height:52px; border-radius:50%; border:1.5px solid var(--border); background:var(--seat-empty); display:flex; align-items:center; justify-content:center; position:relative; transition:border-color 0.25s,background 0.25s,box-shadow 0.25s; }
 .seat-btn:not(.taken):hover { border-color:rgba(122,184,255,0.5); background:rgba(30,40,60,0.6); }
@@ -364,7 +364,7 @@ html,body {
   #throne-row { gap:8px; }
   .throne-role-badge { font-size:0.38rem; padding:1px 4px; }
   .throne-seat .seat-lbl { font-size:0.52rem; }
-  #seats-grid { gap:20px; }
+  #seats-grid { gap:8px 14px; }
   .seat-btn { width:40px; height:40px; }
   .seat-btn svg.seat-mic-svg { width:18px; height:18px; }}
 
@@ -374,7 +374,7 @@ html,body {
   .throne-seat .seat-btn svg.seat-mic-svg { width:18px; height:18px; }
   #throne-row { gap:6px; }
   #room-scene { padding:6px 8px 3px; gap:6px; }
-  #seats-grid { gap:20px; max-width:380px; }
+  #seats-grid { gap:8px 14px; max-width:380px; }
   .seat-btn { width:40px; height:40px; }
 }
 
@@ -396,13 +396,13 @@ html,body {
   #throne-row { gap:8px; }
   #room-scene { padding:5px 10px 2px; gap:5px; max-height:38vh; }
   .orn-row { display:none; } /* esconde ornamento se a tela for baixa */
-  #seats-grid { gap:20px; }
+  #seats-grid { gap:8px 14px; }
 }
 
 @media (max-height:560px) {
   .throne-seat .seat-btn { width:58px; height:58px; }
   #room-scene { padding:4px 10px 2px; gap:4px; max-height:35vh; }
-  #seats-grid { gap:20px; }
+  #seats-grid { gap:8px 14px; }
   .seat-btn { width:50px; height:50px; }
 }
 
@@ -412,7 +412,7 @@ html,body {
   #throne-row { gap:6px; }
   #room-scene { padding:3px 10px 1px; gap:3px; max-height:32vh; }
   .seat-btn { width:36px; height:36px; }
-  #seats-grid { gap:14px; }
+  #seats-grid { gap:6px 12px; }
 }
 
 @media (max-height:420px) {
@@ -1512,4 +1512,59 @@ html,body {
   color: #e8d08a;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+/* ══ SHIMMER OVERLAY — lista de tavernas ══ */
+#tavs-shimmer-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg-deep, #0e0800);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  pointer-events: all;
+  overflow: hidden;
+}
+.tav-shimmer-card {
+  height: 72px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerAnim 1.3s infinite;
+  flex-shrink: 0;
+  border: 1px solid rgba(201,169,74,0.08);
+}
+
+/* ══ EQUIPMENT CUTOFF FIX — telas estreitas ══ */
+@media (max-width: 370px) {
+  #tav-avatar-wrapper {
+    width: 120px !important;
+    height: 120px !important;
+  }
+  #tav-frame-overlay,
+  #tav-frame-sheen {
+    width: 120px !important;
+    height: 120px !important;
+  }
+  #playerAvatarEquip {
+    width: 78px !important;
+    height: 78px !important;
+  }
+  #playerModal .pm-equipment-slot {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  #playerCombatPower {
+    font-size: 2.5em !important;
+  }
+  #equipmentAndAvatarContainer {
+    gap: 6px !important;
+  }
 }

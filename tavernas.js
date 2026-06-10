@@ -513,6 +513,14 @@ function removeFromGlobalMap(clientId) {
 
 
 function renderListCards() {
+  // Remove shimmer overlay na primeira chamada real (Ably já conectado + presença recebida)
+  const overlay = document.getElementById('tavs-shimmer-overlay');
+  if (overlay) {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.35s';
+    setTimeout(() => overlay.remove(), 360);
+  }
+
   // Atualiza os cards na tela de lista
   document.querySelectorAll('.tavern-card').forEach(card => {
       const onclick = card.getAttribute('onclick') || '';
@@ -3431,7 +3439,6 @@ function buildThroneRow(roomName) {
         <div class="tav-frame-ol"></div>
         <div class="tav-frame-sh"></div>
       </div>
-      <div class="seat-lbl">${label}</div>
       <div class="seat-nm vacant" id="seat-name-${tid}">Vago</div>`;
     seat.addEventListener('click', () => onSeatClick(tid));
     row.appendChild(seat);
@@ -3473,7 +3480,6 @@ function buildSeatsGrid() {
         <div class="tav-frame-ol"></div>
         <div class="tav-frame-sh"></div>
       </div>
-      <div class="seat-lbl">Mic ${i}</div>
       <div class="seat-nm vacant" id="seat-name-${i}">Vago</div>`;
     s.addEventListener('click', () => onSeatClick(String(i)));
     grid.appendChild(s);

@@ -1771,8 +1771,9 @@ function openPlayerModalFor(playerId, name) {
       followBtn.style.display = 'none';
     } else {
       followBtn.style.display = 'flex';
-      // Garante que o set de seguidos está carregado antes de renderizar o botão
-      _tavEnsureFollowingSet().then(() => _tavUpdateFollowBtn(followBtn, playerId));
+      // Garante que ambos os sets estão carregados antes de renderizar o botão
+      Promise.all([_tavEnsureFollowingSet(), _tavEnsureFollowersSet()])
+        .then(() => _tavUpdateFollowBtn(followBtn, playerId));
       followBtn.onclick = () => _tavToggleFollow(playerId, name);
     }
   }
@@ -2927,6 +2928,8 @@ function closeTavGuildModal() {
 
 // ── Cache em memória (sessão) dos IDs que o jogador atual segue ──
 window._tavFollowingSet = null; // null = ainda não carregado
+// ── Cache em memória dos IDs que me seguem (para detectar seguimento mútuo) ──
+window._tavFollowersSet = null;
 
 async function _tavEnsureFollowingSet() {
   if (window._tavFollowingSet !== null) return;
@@ -2939,14 +2942,38 @@ async function _tavEnsureFollowingSet() {
   } catch(e) { console.warn('_tavEnsureFollowingSet:', e); }
 }
 
+async function _tavEnsureFollowersSet() {
+  if (window._tavFollowersSet !== null) return;
+  window._tavFollowersSet = new Set();
+  try {
+    const sb = getSB();
+    if (!sb || !PLAYER.id) return;
+    // Quem ME segue: busca follower_id onde following_id = eu
+    const { data } = await sb
+      .from('player_follows')
+      .select('follower_id')
+      .eq('following_id', PLAYER.id);
+    (data || []).forEach(r => window._tavFollowersSet.add(r.follower_id));
+  } catch(e) { console.warn('_tavEnsureFollowersSet:', e); }
+}
+
 function _tavIsFollowing(targetId) {
   return window._tavFollowingSet?.has(targetId) ?? false;
 }
 
 function _tavUpdateFollowBtn(btn, targetId) {
   if (!btn) return;
-  const isF = _tavIsFollowing(targetId);
-  if (isF) {
+  const isF       = _tavIsFollowing(targetId);
+  const followsMe = window._tavFollowersSet?.has(targetId) ?? false;
+  const isMutual  = isF && followsMe;
+
+  if (isMutual) {
+    // Seguimento mútuo — ícone de dois V (double-checkmark) azul
+    btn.innerHTML = `<svg viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:14px;"><path d="M1 7l3.5 3.5L9 3"/><path d="M8 7l3.5 3.5L16 3"/></svg>Amigos`;
+    btn.style.background   = 'rgba(80,200,160,0.22)';
+    btn.style.borderColor  = 'rgba(80,200,160,0.65)';
+    btn.style.color        = '#3fcfa8';
+  } else if (isF) {
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M20 6L9 17l-5-5"/></svg>Seguindo`;
     btn.style.background   = 'rgba(122,184,255,0.22)';
     btn.style.borderColor  = 'rgba(122,184,255,0.6)';

@@ -144,7 +144,7 @@ html,body {
 .orn-line { flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--border)); }
 .orn-line.r { background:linear-gradient(90deg,var(--border),transparent); }
 #throne-row { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:nowrap; width:100%; }
-#seats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 16px; width:100%; max-width:380px; }
+#seats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px 28px; width:100%; max-width:380px; }
 
 /* Seat */
 .seat { display:flex; flex-direction:column; align-items:center; gap:1px; cursor:pointer; transition:transform 0.15s; }
@@ -364,7 +364,7 @@ html,body {
   #throne-row { gap:8px; }
   .throne-role-badge { font-size:0.38rem; padding:1px 4px; }
   .throne-seat .seat-lbl { font-size:0.52rem; }
-  #seats-grid { gap:8px 14px; }
+  #seats-grid { gap:8px 20px; }
   .seat-btn { width:40px; height:40px; }
   .seat-btn svg.seat-mic-svg { width:18px; height:18px; }}
 
@@ -374,7 +374,7 @@ html,body {
   .throne-seat .seat-btn svg.seat-mic-svg { width:18px; height:18px; }
   #throne-row { gap:6px; }
   #room-scene { padding:6px 8px 3px; gap:6px; }
-  #seats-grid { gap:8px 14px; max-width:380px; }
+  #seats-grid { gap:8px 20px; max-width:380px; }
   .seat-btn { width:40px; height:40px; }
 }
 
@@ -396,13 +396,13 @@ html,body {
   #throne-row { gap:8px; }
   #room-scene { padding:5px 10px 2px; gap:5px; max-height:38vh; }
   .orn-row { display:none; } /* esconde ornamento se a tela for baixa */
-  #seats-grid { gap:8px 14px; }
+  #seats-grid { gap:8px 20px; }
 }
 
 @media (max-height:560px) {
   .throne-seat .seat-btn { width:58px; height:58px; }
   #room-scene { padding:4px 10px 2px; gap:4px; max-height:35vh; }
-  #seats-grid { gap:8px 14px; }
+  #seats-grid { gap:8px 20px; }
   .seat-btn { width:50px; height:50px; }
 }
 
@@ -412,7 +412,7 @@ html,body {
   #throne-row { gap:6px; }
   #room-scene { padding:3px 10px 1px; gap:3px; max-height:32vh; }
   .seat-btn { width:36px; height:36px; }
-  #seats-grid { gap:6px 12px; }
+  #seats-grid { gap:6px 14px; }
 }
 
 @media (max-height:420px) {

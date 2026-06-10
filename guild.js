@@ -1386,3 +1386,215 @@ function updateGuildXpBar(guildData){
     console.error('updateGuildXpBar error', e); 
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  SOCIAL STATS + FOLLOW SYSTEM — Player Modal (guild.html)
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  const SB_URL = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
+  const SB_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
+
+  function getSBClient() {
+    if (window.__guildSB) return window.__guildSB;
+    if (window.supabase?.createClient) {
+      window.__guildSB = window.supabase.createClient(SB_URL, SB_KEY, {
+        auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true }
+      });
+      return window.__guildSB;
+    }
+    return null;
+  }
+
+  // Compact number formatter
+  function fmtCompact(n) {
+    n = Number(n) || 0;
+    if (n >= 1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'') + 'B';
+    if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+    if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K';
+    return String(n);
+  }
+
+  // Current player ID (resolved after auth)
+  let _guildMyId = null;
+  async function getMyId() {
+    if (_guildMyId) return _guildMyId;
+    // GlobalDB
+    const GLOBAL_DB_NAME = 'aden_global_db';
+    try {
+      const db = await new Promise((res,rej) => {
+        const r = indexedDB.open(GLOBAL_DB_NAME, 6);
+        r.onsuccess = () => res(r.result);
+        r.onerror   = () => rej(r.error);
+      });
+      const val = await new Promise(res => {
+        const tx  = db.transaction('auth_store','readonly');
+        const req = tx.objectStore('auth_store').get('current_session');
+        req.onsuccess = () => res(req.result?.value || null);
+        req.onerror   = () => res(null);
+      });
+      if (val?.user?.id) { _guildMyId = val.user.id; return _guildMyId; }
+    } catch(e) {}
+    // localStorage fallback
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          const s = JSON.parse(localStorage.getItem(k));
+          if (s?.user?.id) { _guildMyId = s.user.id; return _guildMyId; }
+        }
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  // Following / Followers sets (session cache)
+  let _gFollowingSet = null;
+  let _gFollowersSet = null;
+  const _gFollowCooldowns = {};
+  const _FOLLOW_CD_MS = 30_000;
+
+  async function ensureFollowSets() {
+    const sb = getSBClient();
+    const myId = await getMyId();
+    if (!sb || !myId) return;
+    if (_gFollowingSet === null) {
+      _gFollowingSet = new Set();
+      try {
+        const { data } = await sb.rpc('get_following_ids', { p_player_id: myId });
+        (data || []).forEach(r => _gFollowingSet.add(r.id));
+      } catch(e) {}
+    }
+    if (_gFollowersSet === null) {
+      _gFollowersSet = new Set();
+      try {
+        const { data } = await sb.from('player_follows').select('follower_id').eq('following_id', myId);
+        (data || []).forEach(r => _gFollowersSet.add(r.follower_id));
+      } catch(e) {}
+    }
+  }
+
+  function updateFollowBtn(btn, targetId) {
+    if (!btn) return;
+    const isF      = _gFollowingSet?.has(targetId) ?? false;
+    const followsMe= _gFollowersSet?.has(targetId) ?? false;
+    const isMutual = isF && followsMe;
+    if (isMutual) {
+      btn.innerHTML = `<svg viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:14px;flex-shrink:0;"><path d="M1 7l3.5 3.5L9 3"/><path d="M8 7l3.5 3.5L16 3"/></svg>Amigos`;
+      btn.style.background  = 'rgba(80,200,160,0.22)';
+      btn.style.borderColor = 'rgba(80,200,160,0.65)';
+      btn.style.color       = '#3fcfa8';
+    } else if (isF) {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M20 6L9 17l-5-5"/></svg>Seguindo`;
+      btn.style.background  = 'rgba(122,184,255,0.22)';
+      btn.style.borderColor = 'rgba(122,184,255,0.6)';
+      btn.style.color       = '#7ab8ff';
+    } else {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>Seguir`;
+      btn.style.background  = 'rgba(122,184,255,0.08)';
+      btn.style.borderColor = 'rgba(122,184,255,0.3)';
+      btn.style.color       = '#7ab8ff';
+    }
+  }
+
+  async function toggleFollow(targetId, targetName) {
+    const sb   = getSBClient();
+    const myId = await getMyId();
+    if (!sb || !myId || !targetId || targetId === myId) return;
+    const now  = Date.now();
+    const last = _gFollowCooldowns[targetId] || 0;
+    if (now - last < _FOLLOW_CD_MS) return;
+    _gFollowCooldowns[targetId] = now;
+
+    await ensureFollowSets();
+    const btn = document.getElementById('pm-follow-btn');
+    const isF = _gFollowingSet?.has(targetId);
+
+    if (isF) {
+      _gFollowingSet.delete(targetId);
+      updateFollowBtn(btn, targetId);
+      try { await sb.rpc('unfollow_player', { p_following_id: targetId }); } catch(e) {}
+    } else {
+      _gFollowingSet.add(targetId);
+      updateFollowBtn(btn, targetId);
+      try { await sb.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
+    }
+    // Atualiza o contador de seguidores no modal
+    const foEl = document.getElementById('pm-followers-val');
+    if (foEl) {
+      const cur = parseInt(foEl.textContent.replace(/\D/g,'')) || 0;
+      foEl.textContent = fmtCompact(Math.max(0, isF ? cur - 1 : cur + 1));
+    }
+  }
+
+  // Load social stats for a player
+  async function loadSocialStats(playerId) {
+    const sb = getSBClient();
+    if (!sb || !playerId) return;
+
+    const cacheKey = 'guild_sstats_' + playerId;
+    let stats = { fame: 0, followers: 0, following: 0 };
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 3 * 60_000) stats = v;
+      }
+      if (!stats.fame && !stats.followers) {
+        const { data } = await sb.rpc('get_social_stats', { p_player_id: playerId });
+        if (data) {
+          stats = { fame: data.fame || 0, followers: data.followers || 0, following: data.following || 0 };
+          sessionStorage.setItem(cacheKey, JSON.stringify({ v: stats, t: Date.now() }));
+        }
+      }
+    } catch(e) {}
+
+    // Only update if this modal is still open for the same player
+    if (window._guildModalLastPid !== playerId) return;
+    const foEl  = document.getElementById('pm-followers-val');
+    const figEl = document.getElementById('pm-following-val');
+    const fmEl  = document.getElementById('pm-fame-val');
+    if (foEl)  { foEl.textContent  = fmtCompact(stats.followers); foEl.style.opacity = '1'; }
+    if (figEl) { figEl.textContent = fmtCompact(stats.following); figEl.style.opacity = '1'; }
+    if (fmEl)  { fmEl.textContent  = fmtCompact(stats.fame);      fmEl.style.opacity  = '1'; }
+  }
+
+  // Reset social section to loading state
+  function resetSocialSection() {
+    ['pm-followers-val','pm-following-val','pm-fame-val','pm-gifts-val'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = '—'; el.style.opacity = '0.4'; }
+    });
+  }
+
+  // Main: hook into player modal opens
+  document.addEventListener('DOMContentLoaded', async () => {
+    const myId = await getMyId();
+
+    // Intercept every click that opens the player modal
+    document.addEventListener('click', async (e) => {
+      const link = e.target.closest('.player-link');
+      if (!link) return;
+      const playerId = link.dataset.playerId;
+      if (!playerId) return;
+
+      window._guildModalLastPid = playerId;
+      resetSocialSection();
+
+      const followBtn = document.getElementById('pm-follow-btn');
+      if (followBtn) {
+        if (!myId || playerId === myId) {
+          followBtn.style.display = 'none';
+        } else {
+          followBtn.style.display = 'flex';
+          ensureFollowSets().then(() => updateFollowBtn(followBtn, playerId));
+          followBtn.onclick = () => toggleFollow(playerId, link.dataset.playerName || '');
+        }
+      }
+
+      // Load social stats with small delay to avoid racing playerModal.js
+      setTimeout(() => {
+        if (window._guildModalLastPid === playerId) loadSocialStats(playerId);
+      }, 200);
+    });
+  });
+})();

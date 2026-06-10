@@ -390,6 +390,37 @@
       <a id="sendmp" href="#" style="display:none;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;font-size:1em;padding:10px;">
         <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:35px;height:35px;"> Enviar Mensagem
       </a>
+
+      <!-- Social stats row -->
+      <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-fame-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Fama</span>
+        </div>
+        <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <span id="pm-gifts-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;opacity:0.4;">—</span>
+          <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Presentes</span>
+        </div>
+      </div>
+
+      <!-- Follow button -->
+      <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:12px;">
+        <button id="pm-follow-btn" style="display:none;flex-direction:row;align-items:center;gap:6px;font-size:0.72em;font-family:'Cinzel',serif;padding:8px 16px;background:rgba(122,184,255,0.08);border:1px solid rgba(122,184,255,0.3);border-radius:8px;cursor:pointer;color:#7ab8ff;letter-spacing:0.06em;transition:background 0.2s;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Seguir
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -1473,6 +1504,166 @@ document.addEventListener("DOMContentLoaded",()=>{
   }
   new MutationObserver(muts=>muts.forEach(m=>m.addedNodes.forEach(styleNodes))).observe(document.body,{childList:true,subtree:true});
   styleNodes(document.body);
+})();
+</script>
+<!-- ═══ SOCIAL STATS + FOLLOW SYSTEM — Player Modal (ranking_cp) ═══ -->
+<script type="module">
+import { supabase as _sbRank } from './supabaseClient.js';
+
+(function() {
+  // Compact number formatter
+  function fmtC(n) {
+    n = Number(n) || 0;
+    if (n >= 1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'') + 'B';
+    if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+    if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K';
+    return String(n);
+  }
+
+  let _rankMyId   = null;
+  let _rankFollowingSet = null;
+  let _rankFollowersSet = null;
+  const _rankCooldowns  = {};
+  const _RANK_CD_MS     = 30_000;
+
+  async function getRankMyId() {
+    if (_rankMyId) return _rankMyId;
+    _rankMyId = await getLocalUserId().catch(() => null);
+    return _rankMyId;
+  }
+
+  async function ensureRankSets() {
+    const myId = await getRankMyId();
+    if (!myId) return;
+    if (_rankFollowingSet === null) {
+      _rankFollowingSet = new Set();
+      try {
+        const { data } = await _sbRank.rpc('get_following_ids', { p_player_id: myId });
+        (data || []).forEach(r => _rankFollowingSet.add(r.id));
+      } catch(e) {}
+    }
+    if (_rankFollowersSet === null) {
+      _rankFollowersSet = new Set();
+      try {
+        const { data } = await _sbRank.from('player_follows').select('follower_id').eq('following_id', myId);
+        (data || []).forEach(r => _rankFollowersSet.add(r.follower_id));
+      } catch(e) {}
+    }
+  }
+
+  function updateRankFollowBtn(btn, targetId) {
+    if (!btn) return;
+    const isF      = _rankFollowingSet?.has(targetId) ?? false;
+    const followsMe= _rankFollowersSet?.has(targetId) ?? false;
+    const isMutual = isF && followsMe;
+    if (isMutual) {
+      btn.innerHTML = `<svg viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:14px;flex-shrink:0;"><path d="M1 7l3.5 3.5L9 3"/><path d="M8 7l3.5 3.5L16 3"/></svg>Amigos`;
+      btn.style.background  = 'rgba(80,200,160,0.22)';
+      btn.style.borderColor = 'rgba(80,200,160,0.65)';
+      btn.style.color       = '#3fcfa8';
+    } else if (isF) {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M20 6L9 17l-5-5"/></svg>Seguindo`;
+      btn.style.background  = 'rgba(122,184,255,0.22)';
+      btn.style.borderColor = 'rgba(122,184,255,0.6)';
+      btn.style.color       = '#7ab8ff';
+    } else {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>Seguir`;
+      btn.style.background  = 'rgba(122,184,255,0.08)';
+      btn.style.borderColor = 'rgba(122,184,255,0.3)';
+      btn.style.color       = '#7ab8ff';
+    }
+  }
+
+  async function rankToggleFollow(targetId) {
+    const myId = await getRankMyId();
+    if (!myId || !targetId || targetId === myId) return;
+    const now  = Date.now();
+    if (now - (_rankCooldowns[targetId] || 0) < _RANK_CD_MS) return;
+    _rankCooldowns[targetId] = now;
+
+    await ensureRankSets();
+    const btn = document.getElementById('pm-follow-btn');
+    const isF = _rankFollowingSet?.has(targetId);
+
+    if (isF) {
+      _rankFollowingSet.delete(targetId);
+      updateRankFollowBtn(btn, targetId);
+      try { await _sbRank.rpc('unfollow_player', { p_following_id: targetId }); } catch(e) {}
+    } else {
+      _rankFollowingSet.add(targetId);
+      updateRankFollowBtn(btn, targetId);
+      try { await _sbRank.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
+    }
+    const foEl = document.getElementById('pm-followers-val');
+    if (foEl) {
+      const cur = parseInt(foEl.textContent.replace(/\D/g,'')) || 0;
+      foEl.textContent = fmtC(Math.max(0, isF ? cur - 1 : cur + 1));
+      foEl.style.opacity = '1';
+    }
+  }
+
+  async function rankLoadSocialStats(playerId) {
+    if (!playerId) return;
+    const cacheKey = 'rank_sstats_' + playerId;
+    let stats = { fame: 0, followers: 0, following: 0 };
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 3 * 60_000) stats = v;
+      }
+      if (!stats.fame && !stats.followers) {
+        const { data } = await _sbRank.rpc('get_social_stats', { p_player_id: playerId });
+        if (data) {
+          stats = { fame: data.fame||0, followers: data.followers||0, following: data.following||0 };
+          sessionStorage.setItem(cacheKey, JSON.stringify({ v: stats, t: Date.now() }));
+        }
+      }
+    } catch(e) {}
+    if (window._rankModalLastPid !== playerId) return;
+    const foEl  = document.getElementById('pm-followers-val');
+    const figEl = document.getElementById('pm-following-val');
+    const fmEl  = document.getElementById('pm-fame-val');
+    if (foEl)  { foEl.textContent  = fmtC(stats.followers); foEl.style.opacity = '1'; }
+    if (figEl) { figEl.textContent = fmtC(stats.following); figEl.style.opacity = '1'; }
+    if (fmEl)  { fmEl.textContent  = fmtC(stats.fame);      fmEl.style.opacity  = '1'; }
+  }
+
+  function resetRankSocial() {
+    ['pm-followers-val','pm-following-val','pm-fame-val','pm-gifts-val'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = '—'; el.style.opacity = '0.4'; }
+    });
+    const btn = document.getElementById('pm-follow-btn');
+    if (btn) btn.style.display = 'none';
+  }
+
+  // Hook: wrap openPlayerModal to inject social behaviour
+  document.addEventListener('DOMContentLoaded', async () => {
+    const myId = await getRankMyId();
+    await setTimeout(async () => {
+      const origOpen = window.openPlayerModal;
+      window.openPlayerModal = async function(pid) {
+        resetRankSocial();
+        window._rankModalLastPid = pid;
+        if (origOpen) origOpen(pid);
+
+        const followBtn = document.getElementById('pm-follow-btn');
+        if (followBtn) {
+          if (!myId || pid === myId) {
+            followBtn.style.display = 'none';
+          } else {
+            followBtn.style.display = 'flex';
+            ensureRankSets().then(() => updateRankFollowBtn(followBtn, pid));
+            followBtn.onclick = () => rankToggleFollow(pid);
+          }
+        }
+        setTimeout(() => {
+          if (window._rankModalLastPid === pid) rankLoadSocialStats(pid);
+        }, 250);
+      };
+    }, 0);
+  });
 })();
 </script>
 </body>

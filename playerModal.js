@@ -355,6 +355,23 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (localStats) {
                         localPlayer.calculated_local_stats = localStats;
                     }
+
+                    // Se items do InventoryDB não têm hidratação (window.itemDefinitions ausente
+                    // nesta página), busca os items diretamente do Supabase como fallback
+                    let finalItems = localItems;
+                    const needsFallback = !localItems.length ||
+                        localItems.every(i => !i.items || !i.items.name);
+                    if (needsFallback && localPlayer.id) {
+                        try {
+                            const { data: sbItems } = await supabase
+                                .from('inventory_items')
+                                .select(`id, item_id, equipped_slot, level, refine_level, items:items!inventory_items_item_id_fkey (name, display_name, stars)`)
+                                .eq('player_id', localPlayer.id)
+                                .not('equipped_slot', 'is', null)
+                                .gt('quantity', 0);
+                            if (sbItems && sbItems.length > 0) finalItems = sbItems;
+                        } catch(e) { console.warn('[playerModal] Fallback equip fetch:', e); }
+                    }
                     
                     // Busca guilda: cache local → cache taverna → Supabase
                     let guildData = null;
@@ -378,7 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
 
                     if (sendMpButton) sendMpButton.style.display = 'none';
-                    populateModal(localPlayer, localItems, guildData);
+                    populateModal(localPlayer, finalItems, guildData);
                     return; 
                 }
             }

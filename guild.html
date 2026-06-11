@@ -538,18 +538,14 @@ if ('serviceWorker' in navigator) {
         </div>
       </div>
     </div>
-    <div style="display: flex; justify-content: center; align-items: center;">
-      <button id="sendmp" style="display: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1em; padding: 0 0;"><img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width: 35px; height: 35px;"> Enviar Mensagem</button> 
-    </div>
-
     <!-- Social stats row -->
     <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-followers-wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;" id="pm-followers-wrap">
         <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">—</span>
         <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
       </div>
       <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-following-wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;" id="pm-following-wrap">
         <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">—</span>
         <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
       </div>
@@ -565,12 +561,13 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
-    <!-- Action buttons -->
+    <!-- Action buttons (Seguir / Mensagem) -->
     <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:12px;">
-      <button id="pm-follow-btn" style="display:none;flex-direction:row;align-items:center;gap:6px;font-size:0.72em;font-family:'Cinzel',serif;padding:8px 16px;background:rgba(122,184,255,0.08);border:1px solid rgba(122,184,255,0.3);border-radius:8px;cursor:pointer;color:#7ab8ff;letter-spacing:0.06em;transition:background 0.2s;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+      <button id="pm-follow-btn" class="pm-action-btn pm-action-follow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
         Seguir
       </button>
+      <button id="sendmp" class="pm-action-btn pm-action-sendmp"><img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;"> Mensagem</button>
     </div>
   </div>
 </div>

@@ -335,6 +335,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   _tavUpdateNotifDot();
   // Pré-carrega set de IDs seguidos
   _tavEnsureFollowingSet().catch(() => {});
+  // Limpeza lazy semanal: mensagens antigas das tavernas (>7 dias)
+  _tavLazyCleanupOldMessages().catch(() => {});
   // Social stats clicáveis no modal do jogador
   const pmFollEl  = document.getElementById('pm-followers-val')?.parentElement;
   const pmFollgEl = document.getElementById('pm-following-val')?.parentElement;
@@ -3132,6 +3134,44 @@ function _tavRenderNotifs() {
     row.onclick = () => { closeNotifModal(); openPlayerModalFor(n.fromId, n.fromName); };
     listEl.appendChild(row);
   });
+}
+
+// ══════════════════════════════════════════
+//  LIMPAR NOTIFICAÇÕES (botão no modal)
+//  As notificações de seguidores são armazenadas apenas localmente
+//  (localStorage), portanto a limpeza é local. Caso no futuro passem
+//  a ser persistidas em uma tabela, adicionar aqui a chamada RPC
+//  correspondente para apagar os registros do jogador no banco.
+// ══════════════════════════════════════════
+function clearAllNotifications() {
+  _tavSaveNotifications([]);
+  _tavRenderNotifs();
+  _tavUpdateNotifDot();
+}
+
+// ══════════════════════════════════════════
+//  LIMPEZA LAZY SEMANAL: mensagens antigas das tavernas
+//  Roda no máximo 1x por semana (por navegador), sem cron job.
+// ══════════════════════════════════════════
+function _tavGetIsoWeekKey(d = new Date()) {
+  // Calcula ano/semana ISO-8601 para usar como chave de controle
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7; // 0 = segunda
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${date.getUTCFullYear()}_w${week}`;
+}
+
+async function _tavLazyCleanupOldMessages() {
+  const sb = getSB();
+  if (!sb) return;
+  const ck = `tav_msgcleanup_${_tavGetIsoWeekKey()}`;
+  if (localStorage.getItem(ck)) return; // já rodou esta semana
+  try {
+    await sb.rpc('cleanup_old_tavern_messages');
+    localStorage.setItem(ck, '1');
+  } catch(e) { console.warn('cleanup_old_tavern_messages:', e); }
 }
 
 function _tavTimeAgo(ts) {

@@ -1657,10 +1657,42 @@ font-size: 0.9em;
 #playerModal #playerLevel,
 #playerModal #equipmentAndAvatarContainer,
 #playerModal #attributesSection,
+#playerModal #pm-social-stats,
+#playerModal #pm-follow-btn,
 #playerModal #sendmp {
     position: relative;
     z-index: 2;
 }
+
+/* ── Botões de ação (Seguir / Mensagem) — padrão taverna ── */
+#playerModal .pm-action-btn {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.65em;
+    font-family: 'Cinzel', serif;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: background 0.2s;
+    width: auto;
+    margin-top: 0;
+    text-decoration: none;
+}
+#playerModal .pm-action-follow {
+    background: rgba(122,184,255,0.08);
+    border: 1px solid rgba(122,184,255,0.3);
+    color: #7ab8ff;
+}
+#playerModal .pm-action-follow:hover { background: rgba(122,184,255,0.22); }
+#playerModal .pm-action-sendmp {
+    background: rgba(201,169,74,0.12);
+    border: 1px solid rgba(201,169,74,0.35);
+    color: #e8d08a;
+}
+#playerModal .pm-action-sendmp:hover { background: rgba(201,169,74,0.22); }
 
 /* Ocultar bandeira e nome de guilda */
 #playerModal .guild-header { display: none !important; }

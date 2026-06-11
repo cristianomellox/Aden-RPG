@@ -2992,6 +2992,28 @@ function _tavUpdateFollowBtn(btn, targetId) {
 const _tavFollowCooldowns = {};
 const _TAV_FOLLOW_COOLDOWN_MS = 30_000;
 
+// ══════════════════════════════════════════
+//  CONFIRMAÇÃO: deixar de seguir
+// ══════════════════════════════════════════
+function _tavShowUnfollowConfirm(targetName) {
+  return new Promise(resolve => {
+    const modal  = document.getElementById('pm-unfollow-confirm');
+    const txt    = document.getElementById('pm-unfollow-text');
+    const yesBtn = document.getElementById('pm-unfollow-yes');
+    const noBtn  = document.getElementById('pm-unfollow-no');
+    if (!modal || !yesBtn || !noBtn) { resolve(true); return; }
+    txt.textContent = `Tem certeza que deseja deixar de seguir ${targetName}?`;
+    modal.style.display = 'flex';
+    const cleanup = (val) => {
+      modal.style.display = 'none';
+      yesBtn.onclick = null; noBtn.onclick = null;
+      resolve(val);
+    };
+    yesBtn.onclick = () => cleanup(true);
+    noBtn.onclick  = () => cleanup(false);
+  });
+}
+
 async function _tavToggleFollow(targetId, targetName) {
   if (!PLAYER.id || !targetId || targetId === PLAYER.id) return;
 
@@ -3008,6 +3030,12 @@ async function _tavToggleFollow(targetId, targetName) {
   const isF      = _tavIsFollowing(targetId);
   const sb       = getSB();
   if (!sb) { showToast('Sem conexão.'); return; }
+
+  if (isF) {
+    // ── Confirmação antes de deixar de seguir ──
+    const confirmed = await _tavShowUnfollowConfirm(targetName);
+    if (!confirmed) return;
+  }
 
   _tavFollowCooldowns[targetId] = now;
 

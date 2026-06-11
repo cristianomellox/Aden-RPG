@@ -460,6 +460,17 @@
   </div>
 </div>
 
+<!-- ══ CONFIRMAÇÃO: Deixar de seguir ══ -->
+<div id="pm-unfollow-confirm" style="display:none;position:fixed;inset:0;z-index:1600;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(160deg,#1f1b2e,#15131f);border:1px solid rgba(201,169,74,0.35);border-radius:12px;padding:22px 20px;max-width:300px;width:85%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+    <p id="pm-unfollow-text" style="color:#e8d08a;font-family:'Cinzel',serif;font-size:0.95em;line-height:1.5;margin:0 0 18px;"></p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="pm-unfollow-no" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:#ddd;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Não</button>
+      <button id="pm-unfollow-yes" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(220,90,90,0.45);background:rgba(220,90,90,0.18);color:#ff9a9a;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Sim</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── SCRIPTS EXTERNOS ── -->
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script type="module" src="playerModal.js"></script>
@@ -1634,16 +1645,82 @@ import { supabase as _sbRank } from './supabaseClient.js';
     }
   }
 
+  // ── Confirmação: deixar de seguir ──
+  function showUnfollowConfirm(targetName) {
+    return new Promise(resolve => {
+      const modal  = document.getElementById('pm-unfollow-confirm');
+      const txt    = document.getElementById('pm-unfollow-text');
+      const yesBtn = document.getElementById('pm-unfollow-yes');
+      const noBtn  = document.getElementById('pm-unfollow-no');
+      if (!modal || !yesBtn || !noBtn) { resolve(true); return; }
+      const name = targetName || document.getElementById('playerName')?.textContent || 'este jogador';
+      txt.textContent = `Tem certeza que deseja deixar de seguir ${name}?`;
+      modal.style.display = 'flex';
+      const cleanup = (val) => {
+        modal.style.display = 'none';
+        yesBtn.onclick = null; noBtn.onclick = null;
+        resolve(val);
+      };
+      yesBtn.onclick = () => cleanup(true);
+      noBtn.onclick  = () => cleanup(false);
+    });
+  }
+
+  // ── Dados do jogador atual (para registrar notificação de follow) ──
+  async function getMyPlayerInfo() {
+    try {
+      const cached = localStorage.getItem('player_data_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.data?.id) {
+          return { name: parsed.data.name || '', avatar_url: parsed.data.avatar_url || '' };
+        }
+      }
+    } catch(e) {}
+    try {
+      const myId = await getRankMyId();
+      if (myId) {
+        const { data } = await _sbRank.from('players').select('name, avatar_url').eq('id', myId).single();
+        if (data) return { name: data.name || '', avatar_url: data.avatar_url || '' };
+      }
+    } catch(e) {}
+    return { name: '', avatar_url: '' };
+  }
+
+  // ── Registra notificação local de "novo seguidor" para o alvo ──
+  function registerFollowNotification(targetId, fromId, fromName, fromAvatar) {
+    try {
+      const targetKey = 'tav_notifs_' + targetId;
+      let targetNotifs = [];
+      try { targetNotifs = JSON.parse(localStorage.getItem(targetKey) || '[]'); } catch(e) {}
+      const now = Date.now();
+      const dup24h = targetNotifs.find(n =>
+        n.type === 'follow' && n.fromId === fromId && (now - n.at) < 86_400_000
+      );
+      if (!dup24h) {
+        targetNotifs.unshift({ id:'f_'+fromId+'_'+now, type:'follow',
+          fromId, fromName, fromAvatar: fromAvatar || '', readAt: null, at: now });
+        localStorage.setItem(targetKey, JSON.stringify(targetNotifs.slice(0, 50)));
+      }
+    } catch(e) {}
+  }
+
   async function rankToggleFollow(targetId) {
     const myId = await getRankMyId();
     if (!myId || !targetId || targetId === myId) return;
     const now  = Date.now();
     if (now - (_rankCooldowns[targetId] || 0) < _RANK_CD_MS) return;
-    _rankCooldowns[targetId] = now;
 
     await ensureRankSets();
     const btn = document.getElementById('pm-follow-btn');
     const isF = _rankFollowingSet?.has(targetId);
+
+    if (isF) {
+      const confirmed = await showUnfollowConfirm();
+      if (!confirmed) return;
+    }
+
+    _rankCooldowns[targetId] = now;
 
     if (isF) {
       _rankFollowingSet.delete(targetId);
@@ -1653,6 +1730,9 @@ import { supabase as _sbRank } from './supabaseClient.js';
       _rankFollowingSet.add(targetId);
       updateRankFollowBtn(btn, targetId);
       try { await _sbRank.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
+      // Registra notificação de novo seguidor para o alvo
+      const me = await getMyPlayerInfo();
+      registerFollowNotification(targetId, myId, me.name, me.avatar_url);
     }
     const foEl = document.getElementById('pm-followers-val');
     if (foEl) {

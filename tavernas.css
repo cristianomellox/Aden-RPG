@@ -1409,6 +1409,7 @@ html,body {
   align-items: center;
 }
 .tav-side-close svg { width: 18px; height: 18px; }
+#tav-notif-clear:hover { background: rgba(201,169,74,0.18) !important; }
 .tav-side-list {
   flex: 1;
   overflow-y: auto;

@@ -253,6 +253,61 @@
     }
     #playerModal .pm-action-sendmp:hover { background: rgba(201,169,74,0.22); }
 
+    /* ── Modais auxiliares: Lista social (Seguidores/Seguindo) e Info da Guilda ── */
+    .pmx-modal {
+      display: none; position: fixed; inset: 0; z-index: 1700;
+      background: rgba(0,0,0,0.65); align-items: flex-end; justify-content: center;
+    }
+    .pmx-modal.open { display: flex; }
+    .pmx-inner {
+      width: 100%; max-width: 420px; max-height: 72vh;
+      background: linear-gradient(180deg, #1a0f02 0%, #110900 100%);
+      border: 1px solid rgba(201,169,74,0.55);
+      border-radius: 16px 16px 0 0;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .pmx-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 10px; border-bottom: 1px solid rgba(201,169,74,0.3);
+    }
+    .pmx-title { font-family: 'Cinzel', serif; font-size: 0.9rem; color: #e8d08a; letter-spacing: 0.06em; }
+    .pmx-close { background: none; border: none; cursor: pointer; color: #b0a890; padding: 4px; display: flex; align-items: center; }
+    .pmx-close svg { width: 18px; height: 18px; }
+    .pmx-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .pmx-empty { text-align: center; color: #b0a890; font-size: 0.8rem; padding: 32px 16px; }
+    .pmx-row {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-bottom: 1px solid rgba(201,169,74,0.08); cursor: pointer; transition: background 0.15s;
+    }
+    .pmx-row:hover { background: rgba(255,255,255,0.04); }
+    .pmx-av { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1.5px solid rgba(201,169,74,0.55); }
+    .pmx-av img { width: 100%; height: 100%; object-fit: cover; }
+    .pmx-text { flex: 1; font-size: 0.8rem; color: #cfc7b8; line-height: 1.4; }
+    .pmx-text strong { color: #e8d08a; }
+    .pmx-time { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+    .pmx-guild-header { display: flex; gap: 12px; padding: 14px 16px; align-items: center; }
+    .pmx-guild-flag { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: rgba(0,0,0,0.3); }
+    .pmx-guild-name { font-family: 'Cinzel', serif; font-size: 1rem; color: #e8d08a; font-weight: 700; }
+    .pmx-guild-desc { font-size: 0.75rem; color: #b0a890; margin-top: 2px; }
+    .pmx-guild-meta { font-size: 0.7rem; color: #cfc7b8; margin-top: 4px; display: flex; gap: 10px; }
+    .pmx-join-row { padding: 0 16px 12px; }
+    .pmx-join-btn {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px;
+      border-radius: 8px; border: 1px solid rgba(122,184,255,0.35); background: rgba(122,184,255,0.12);
+      color: #7ab8ff; font-family: 'Cinzel', serif; font-size: 0.8em; letter-spacing: 0.05em; cursor: pointer;
+    }
+    .pmx-join-btn svg { width: 18px; height: 18px; }
+    .pmx-join-btn:hover { background: rgba(122,184,255,0.22); }
+    .pmx-join-btn:disabled { opacity: 0.5; cursor: default; }
+    .pmx-member-label {
+      padding: 10px 16px 4px; font-family: 'Cinzel', serif; font-size: 0.78rem;
+      color: #b0a890; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .pmx-member-role {
+      font-size: 0.65rem; color: #e8d08a; padding: 3px 8px;
+      border: 1px solid rgba(201,169,74,0.3); border-radius: 6px; white-space: nowrap;
+    }
+
     /* ===================================================================
        MENU LATERAL  (intacto)
     =================================================================== */
@@ -425,12 +480,12 @@
       </div>
       <!-- Social stats row -->
       <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-followers-wrap">
           <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;opacity:0.4;">—</span>
           <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
         </div>
         <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-following-wrap">
           <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;opacity:0.4;">—</span>
           <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
         </div>
@@ -467,6 +522,49 @@
     <div style="display:flex;gap:12px;justify-content:center;">
       <button id="pm-unfollow-no" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:#ddd;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Não</button>
       <button id="pm-unfollow-yes" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(220,90,90,0.45);background:rgba(220,90,90,0.18);color:#ff9a9a;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Sim</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SOCIAL LIST MODAL (Seguidores / Seguindo) ══ -->
+<div id="pm-social-list-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span id="psl-title" class="pmx-title">Seguidores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-social-list-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="psl-list" class="pmx-list"></div>
+  </div>
+</div>
+
+<!-- ══ GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador) ══ -->
+<div id="pm-guild-info-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner" style="max-height:80vh;">
+    <div class="pmx-topbar">
+      <span id="pgi-title" class="pmx-title">Guilda</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-guild-info-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      <div class="pmx-guild-header">
+        <img id="pgi-flag" class="pmx-guild-flag" src="" alt="">
+        <div>
+          <div id="pgi-name" class="pmx-guild-name"></div>
+          <div id="pgi-desc" class="pmx-guild-desc"></div>
+          <div class="pmx-guild-meta"><span id="pgi-level"></span><span id="pgi-members"></span></div>
+        </div>
+      </div>
+      <div id="pgi-join-row" class="pmx-join-row" style="display:none;">
+        <button id="pgi-join-btn" class="pmx-join-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Solicitar Entrada
+        </button>
+      </div>
+      <div class="pmx-member-label">Membros</div>
+      <div id="pgi-member-list"></div>
     </div>
   </div>
 </div>
@@ -1566,6 +1664,19 @@ import { supabase as _sbRank } from './supabaseClient.js';
     return String(n);
   }
 
+  function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Avatar de fallback (iniciais coloridas), igual ao padrão das tavernas
+  function avatarFallback(name) {
+    const n = name || '?';
+    const letter = n.charAt(0).toUpperCase();
+    const hue = [...n].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="hsl(${hue},45%,35%)"/><text x="50%" y="56%" font-size="18" fill="#fff" text-anchor="middle" font-family="sans-serif" font-weight="bold">${letter}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+
   let _rankMyId   = null;
   let _rankFollowingSet = null;
   let _rankFollowersSet = null;
@@ -1778,6 +1889,240 @@ import { supabase as _sbRank } from './supabaseClient.js';
     if (btn) btn.style.display = 'none';
   }
 
+  // ══════════════════════════════════════════
+  //  SOCIAL LIST MODAL (Seguidores / Seguindo)
+  // ══════════════════════════════════════════
+  const _psl = { type:'followers', pid:null, page:0, loading:false, exhausted:false };
+
+  async function openSocialListModal(type, pid) {
+    const modal   = document.getElementById('pm-social-list-modal');
+    const titleEl = document.getElementById('psl-title');
+    const listEl  = document.getElementById('psl-list');
+    if (!modal || !listEl || !pid) return;
+
+    Object.assign(_psl, { type, pid, page:0, loading:false, exhausted:false });
+    if (titleEl) titleEl.textContent = type === 'following' ? 'Seguindo' : 'Seguidores';
+    listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
+    modal.classList.add('open');
+
+    listEl.onscroll = () => {
+      if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 60) {
+        loadSocialListPage(listEl);
+      }
+    };
+    await loadSocialListPage(listEl, true);
+  }
+
+  async function loadSocialListPage(listEl, isFirst = false) {
+    if (_psl.loading || _psl.exhausted) return;
+    _psl.loading = true;
+
+    const empty = _psl.type === 'following' ? 'Não está seguindo ninguém.' : 'Nenhum seguidor.';
+    const rpc   = _psl.type === 'following' ? 'get_following' : 'get_followers';
+
+    try {
+      const { data, error } = await _sbRank.rpc(rpc, {
+        p_player_id: _psl.pid,
+        p_limit:     10,
+        p_offset:    _psl.page * 10
+      });
+      if (error) throw error;
+
+      if (isFirst) listEl.innerHTML = '';
+      const rows = data || [];
+      if (!rows.length && isFirst) {
+        listEl.innerHTML = `<div class="pmx-empty">${empty}</div>`;
+        _psl.exhausted = true;
+        _psl.loading   = false;
+        return;
+      }
+      if (rows.length < 10) _psl.exhausted = true;
+
+      rows.forEach(p => {
+        const av  = p.avatar_url || avatarFallback(p.name || '?');
+        const row = document.createElement('div');
+        row.className = 'pmx-row';
+        row.innerHTML = `
+          <div class="pmx-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(p.name||'?')}'"></div>
+          <div class="pmx-text">
+            <strong>${escHtml(p.name||'?')}</strong>
+            <div class="pmx-time">${fmtC(p.combat_power||0)} CP</div>
+          </div>`;
+        row.onclick = () => {
+          document.getElementById('pm-social-list-modal')?.classList.remove('open');
+          openPlayerModalById(p.id);
+        };
+        listEl.appendChild(row);
+      });
+
+      _psl.page++;
+    } catch(e) {
+      console.warn('loadSocialListPage:', e);
+      if (isFirst) listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
+    }
+    _psl.loading = false;
+  }
+
+  // ══════════════════════════════════════════
+  //  GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador)
+  // ══════════════════════════════════════════
+  async function openGuildInfoModal(guildId) {
+    if (!guildId) return;
+    const modal  = document.getElementById('pm-guild-info-modal');
+    if (!modal) return;
+    modal.classList.add('open');
+
+    const nameEl  = document.getElementById('pgi-name');
+    const descEl  = document.getElementById('pgi-desc');
+    const lvlEl   = document.getElementById('pgi-level');
+    const membEl  = document.getElementById('pgi-members');
+    const flagEl  = document.getElementById('pgi-flag');
+    const listEl  = document.getElementById('pgi-member-list');
+    const joinRow = document.getElementById('pgi-join-row');
+    const titleEl = document.getElementById('pgi-title');
+
+    if (nameEl)  nameEl.textContent = 'Carregando...';
+    if (descEl)  descEl.textContent = '';
+    if (listEl)  listEl.innerHTML   = '';
+    if (joinRow) joinRow.style.display = 'none';
+    window._pgiGuildId = guildId;
+
+    const cacheKey = 'tgm_guild_' + guildId;
+    let guildData = null;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 10 * 60 * 1000) guildData = v;
+      }
+      if (!guildData) {
+        let gRes = await _sbRank.from('guilds')
+          .select('id,name,description,level,flag_url,max_members,players:players_guild_id_fkey(id,name,avatar_url,rank,level,combat_power)')
+          .eq('id', guildId).maybeSingle();
+
+        if (gRes.error || !gRes.data?.players) {
+          gRes = await _sbRank.from('guilds')
+            .select('id,name,description,level,flag_url,max_members')
+            .eq('id', guildId).maybeSingle();
+          if (gRes.data) {
+            const { data: members } = await _sbRank.from('players')
+              .select('id,name,avatar_url,rank,level,combat_power')
+              .eq('guild_id', guildId);
+            gRes.data.players = members || [];
+          }
+        }
+        if (gRes.error && !gRes.data) throw gRes.error || new Error('Guilda não encontrada');
+        guildData = gRes.data;
+        sessionStorage.setItem(cacheKey, JSON.stringify({ v: guildData, t: Date.now() }));
+      }
+    } catch(e) {
+      if (nameEl) nameEl.textContent = 'Erro ao carregar guilda.';
+      return;
+    }
+    if (!guildData) { if (nameEl) nameEl.textContent = 'Guilda não encontrada.'; return; }
+
+    const allMembers = (guildData.players || []).filter(p => p.rank !== 'admin');
+    const maxM       = guildData.max_members || 30;
+
+    if (flagEl) flagEl.src         = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+    if (nameEl) nameEl.textContent = guildData.name || '';
+    if (descEl) descEl.textContent = guildData.description || '';
+    if (lvlEl)  lvlEl.textContent  = 'Nv. ' + (guildData.level || 1);
+    if (membEl) membEl.textContent = allMembers.length + ' / ' + maxM + ' membros';
+    if (titleEl) titleEl.textContent = guildData.name || 'Guilda';
+
+    // Botão de solicitar entrada — mostra se o jogador atual não tem guilda
+    try {
+      const myId = await getRankMyId();
+      let myGuildId = null;
+      try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) myGuildId = JSON.parse(cached)?.data?.guild_id || null;
+      } catch(e) {}
+      if (!myGuildId && myId) {
+        const { data } = await _sbRank.from('players').select('guild_id').eq('id', myId).maybeSingle();
+        myGuildId = data?.guild_id || null;
+      }
+      const isInThisGuild = myGuildId === guildId;
+      if (joinRow && !myGuildId && !isInThisGuild) joinRow.style.display = 'flex';
+    } catch(e) {}
+
+    // Lista de membros
+    const ROLE_LABEL = { leader: 'Líder', 'co-leader': 'Co-Líder', member: 'Membro' };
+    const ROLE_ORDER = { leader: 0, 'co-leader': 1, member: 2 };
+    const sorted = allMembers.slice().sort((a,b) => (ROLE_ORDER[a.rank]??2) - (ROLE_ORDER[b.rank]??2));
+    if (listEl) {
+      sorted.forEach(m => {
+        const av  = m.avatar_url || avatarFallback(m.name || '?');
+        const row = document.createElement('div');
+        row.className = 'pmx-row';
+        row.innerHTML = `
+          <div class="pmx-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(m.name||'?')}'"></div>
+          <div class="pmx-text">
+            <strong>${escHtml(m.name || '?')}</strong>
+            <div class="pmx-time">Nv. ${m.level || 1} · PC ${fmtC(m.combat_power || 0)}</div>
+          </div>
+          <div class="pmx-member-role">${ROLE_LABEL[m.rank] || 'Membro'}</div>`;
+        row.onclick = () => {
+          modal.classList.remove('open');
+          openPlayerModalById(m.id);
+        };
+        listEl.appendChild(row);
+      });
+    }
+  }
+
+  async function guildInfoJoinRequest() {
+    const guildId = window._pgiGuildId;
+    if (!guildId) return;
+    const myId = await getRankMyId();
+    if (!myId) return;
+    const btn = document.getElementById('pgi-join-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const { error } = await _sbRank.rpc('create_guild_join_request', {
+        p_guild_id:  guildId,
+        p_player_id: myId,
+        p_message:   ''
+      });
+      if (error) throw error;
+      const joinRow = document.getElementById('pgi-join-row');
+      if (joinRow) joinRow.style.display = 'none';
+    } catch(e) {
+      if (btn) btn.disabled = false;
+      console.warn('guildInfoJoinRequest:', e);
+    }
+  }
+
+  // ══════════════════════════════════════════
+  //  Abre o modal de perfil para outro jogador (a partir de uma lista)
+  // ══════════════════════════════════════════
+  function openPlayerModalById(pid) {
+    if (!pid) return;
+    const playerModal = document.getElementById('playerModal');
+    if (playerModal) playerModal.style.display = 'flex';
+    if (typeof window.fetchPlayerData === 'function') window.fetchPlayerData(pid);
+  }
+
+  // ══════════════════════════════════════════
+  //  Configura links de Seguidores/Seguindo e da guilda do jogador
+  // ══════════════════════════════════════════
+  function setupModalSocialLinks(playerId) {
+    const followersWrap = document.getElementById('pm-followers-wrap');
+    const followingWrap = document.getElementById('pm-following-wrap');
+    if (followersWrap) followersWrap.onclick = () => openSocialListModal('followers', playerId);
+    if (followingWrap) followingWrap.onclick = () => openSocialListModal('following', playerId);
+
+    const guildFlagEl = document.getElementById('playerGuildFlag');
+    const guildNameEl = document.getElementById('playerGuildName');
+    const openGuild = () => {
+      const gid = window._tavModalCurrentGuildId;
+      if (gid) openGuildInfoModal(gid);
+    };
+    if (guildFlagEl) { guildFlagEl.onclick = openGuild; guildFlagEl.style.cursor = 'pointer'; }
+    if (guildNameEl) { guildNameEl.onclick = openGuild; guildNameEl.style.cursor = 'pointer'; }
+  }
+
   // Hook: wrap window.fetchPlayerData (exposto por playerModal.js / wrapper
   // existente) para injetar o comportamento social ao abrir o modal.
   document.addEventListener('DOMContentLoaded', async () => {
@@ -1799,11 +2144,15 @@ import { supabase as _sbRank } from './supabaseClient.js';
             followBtn.onclick = () => rankToggleFollow(pid);
           }
         }
+        setupModalSocialLinks(pid);
         setTimeout(() => {
           if (window._rankModalLastPid === pid) rankLoadSocialStats(pid);
         }, 250);
       };
       window.fetchPlayerDetailsWithCache = window.fetchPlayerData;
+
+      const joinBtn = document.getElementById('pgi-join-btn');
+      if (joinBtn) joinBtn.onclick = guildInfoJoinRequest;
     }, 0);
   });
 })();

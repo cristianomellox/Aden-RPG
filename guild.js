@@ -1414,6 +1414,19 @@ function updateGuildXpBar(guildData){
     return String(n);
   }
 
+  function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Avatar de fallback (iniciais coloridas), igual ao padrão das tavernas
+  function avatarFallback(name) {
+    const n = name || '?';
+    const letter = n.charAt(0).toUpperCase();
+    const hue = [...n].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="hsl(${hue},45%,35%)"/><text x="50%" y="56%" font-size="18" fill="#fff" text-anchor="middle" font-family="sans-serif" font-weight="bold">${letter}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+
   // Current player ID (resolved after auth)
   let _guildMyId = null;
   async function getMyId() {
@@ -1638,12 +1651,284 @@ function updateGuildXpBar(guildData){
     });
   }
 
-  // Main: hook into player modal opens
-  document.addEventListener('DOMContentLoaded', async () => {
+  // ══════════════════════════════════════════
+  //  SOCIAL LIST MODAL (Seguidores / Seguindo)
+  // ══════════════════════════════════════════
+  const _psl = { type:'followers', pid:null, page:0, loading:false, exhausted:false };
+
+  async function openSocialListModal(type, pid) {
+    const modal   = document.getElementById('pm-social-list-modal');
+    const titleEl = document.getElementById('psl-title');
+    const listEl  = document.getElementById('psl-list');
+    if (!modal || !listEl || !pid) return;
+
+    Object.assign(_psl, { type, pid, page:0, loading:false, exhausted:false });
+    if (titleEl) titleEl.textContent = type === 'following' ? 'Seguindo' : 'Seguidores';
+    listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
+    modal.classList.add('open');
+
+    listEl.onscroll = () => {
+      if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 60) {
+        loadSocialListPage(listEl);
+      }
+    };
+    await loadSocialListPage(listEl, true);
+  }
+
+  async function loadSocialListPage(listEl, isFirst = false) {
+    if (_psl.loading || _psl.exhausted) return;
+    _psl.loading = true;
+
+    const sb = getSBClient();
+    if (!sb) {
+      if (isFirst) listEl.innerHTML = '<div class="pmx-empty">Sem conexão.</div>';
+      _psl.loading = false;
+      return;
+    }
+
+    const rpc   = _psl.type === 'following' ? 'get_following' : 'get_followers';
+    const empty = _psl.type === 'following' ? 'Não está seguindo ninguém.' : 'Nenhum seguidor.';
+
+    try {
+      const { data, error } = await sb.rpc(rpc, {
+        p_player_id: _psl.pid,
+        p_limit:     10,
+        p_offset:    _psl.page * 10
+      });
+      if (error) throw error;
+
+      if (isFirst) listEl.innerHTML = '';
+      const rows = data || [];
+      if (!rows.length && isFirst) {
+        listEl.innerHTML = `<div class="pmx-empty">${empty}</div>`;
+        _psl.exhausted = true;
+        _psl.loading   = false;
+        return;
+      }
+      if (rows.length < 10) _psl.exhausted = true;
+
+      rows.forEach(p => {
+        const av  = p.avatar_url || avatarFallback(p.name || '?');
+        const row = document.createElement('div');
+        row.className = 'pmx-row';
+        row.innerHTML = `
+          <div class="pmx-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(p.name||'?')}'"></div>
+          <div class="pmx-text">
+            <strong>${escHtml(p.name||'?')}</strong>
+            <div class="pmx-time">${fmtCompact(p.combat_power||0)} CP</div>
+          </div>`;
+        row.onclick = () => {
+          document.getElementById('pm-social-list-modal')?.classList.remove('open');
+          openPlayerModalById(p.id);
+        };
+        listEl.appendChild(row);
+      });
+
+      _psl.page++;
+    } catch(e) {
+      console.warn('loadSocialListPage:', e);
+      if (isFirst) listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
+    }
+    _psl.loading = false;
+  }
+
+  // ══════════════════════════════════════════
+  //  GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador)
+  // ══════════════════════════════════════════
+  async function openGuildInfoModal(guildId) {
+    if (!guildId) return;
+    const modal  = document.getElementById('pm-guild-info-modal');
+    if (!modal) return;
+    modal.classList.add('open');
+
+    const nameEl  = document.getElementById('pgi-name');
+    const descEl  = document.getElementById('pgi-desc');
+    const lvlEl   = document.getElementById('pgi-level');
+    const membEl  = document.getElementById('pgi-members');
+    const flagEl  = document.getElementById('pgi-flag');
+    const listEl  = document.getElementById('pgi-member-list');
+    const joinRow = document.getElementById('pgi-join-row');
+    const titleEl = document.getElementById('pgi-title');
+
+    if (nameEl)  nameEl.textContent = 'Carregando...';
+    if (descEl)  descEl.textContent = '';
+    if (listEl)  listEl.innerHTML   = '';
+    if (joinRow) joinRow.style.display = 'none';
+    window._pgiGuildId = guildId;
+
+    const cacheKey = 'tgm_guild_' + guildId;
+    let guildData = null;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < 10 * 60 * 1000) guildData = v;
+      }
+      if (!guildData) {
+        const sb = getSBClient();
+        if (!sb) throw new Error('no sb');
+
+        let gRes = await sb.from('guilds')
+          .select('id,name,description,level,flag_url,max_members,players:players_guild_id_fkey(id,name,avatar_url,rank,level,combat_power)')
+          .eq('id', guildId).maybeSingle();
+
+        if (gRes.error || !gRes.data?.players) {
+          gRes = await sb.from('guilds')
+            .select('id,name,description,level,flag_url,max_members')
+            .eq('id', guildId).maybeSingle();
+          if (gRes.data) {
+            const { data: members } = await sb.from('players')
+              .select('id,name,avatar_url,rank,level,combat_power')
+              .eq('guild_id', guildId);
+            gRes.data.players = members || [];
+          }
+        }
+        if (gRes.error && !gRes.data) throw gRes.error || new Error('Guilda não encontrada');
+        guildData = gRes.data;
+        sessionStorage.setItem(cacheKey, JSON.stringify({ v: guildData, t: Date.now() }));
+      }
+    } catch(e) {
+      if (nameEl) nameEl.textContent = 'Erro ao carregar guilda.';
+      return;
+    }
+    if (!guildData) { if (nameEl) nameEl.textContent = 'Guilda não encontrada.'; return; }
+
+    const allMembers = (guildData.players || []).filter(p => p.rank !== 'admin');
+    const maxM       = guildData.max_members || 30;
+
+    if (flagEl) flagEl.src         = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+    if (nameEl) nameEl.textContent = guildData.name || '';
+    if (descEl) descEl.textContent = guildData.description || '';
+    if (lvlEl)  lvlEl.textContent  = 'Nv. ' + (guildData.level || 1);
+    if (membEl) membEl.textContent = allMembers.length + ' / ' + maxM + ' membros';
+    if (titleEl) titleEl.textContent = guildData.name || 'Guilda';
+
+    // Botão de solicitar entrada — mostra se o jogador atual não tem guilda
+    try {
+      const myId = await getMyId();
+      let myGuildId = null;
+      try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) myGuildId = JSON.parse(cached)?.data?.guild_id || null;
+      } catch(e) {}
+      if (!myGuildId && myId) {
+        const sb = getSBClient();
+        const { data } = await sb.from('players').select('guild_id').eq('id', myId).maybeSingle();
+        myGuildId = data?.guild_id || null;
+      }
+      const isInThisGuild = myGuildId === guildId;
+      if (joinRow && !myGuildId && !isInThisGuild) joinRow.style.display = 'flex';
+    } catch(e) {}
+
+    // Lista de membros
+    const ROLE_LABEL = { leader: 'Líder', 'co-leader': 'Co-Líder', member: 'Membro' };
+    const ROLE_ORDER = { leader: 0, 'co-leader': 1, member: 2 };
+    const sorted = allMembers.slice().sort((a,b) => (ROLE_ORDER[a.rank]??2) - (ROLE_ORDER[b.rank]??2));
+    if (listEl) {
+      sorted.forEach(m => {
+        const av  = m.avatar_url || avatarFallback(m.name || '?');
+        const row = document.createElement('div');
+        row.className = 'pmx-row';
+        row.style.cursor = 'pointer';
+        row.innerHTML = `
+          <div class="pmx-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(m.name||'?')}'"></div>
+          <div class="pmx-text">
+            <strong>${escHtml(m.name || '?')}</strong>
+            <div class="pmx-time">Nv. ${m.level || 1} · PC ${fmtCompact(m.combat_power || 0)}</div>
+          </div>
+          <div class="pmx-member-role">${ROLE_LABEL[m.rank] || 'Membro'}</div>`;
+        row.onclick = () => {
+          modal.classList.remove('open');
+          openPlayerModalById(m.id);
+        };
+        listEl.appendChild(row);
+      });
+    }
+  }
+
+  async function guildInfoJoinRequest() {
+    const guildId = window._pgiGuildId;
+    if (!guildId) return;
+    const sb = getSBClient();
+    const myId = await getMyId();
+    if (!sb || !myId) return;
+    const btn = document.getElementById('pgi-join-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const { error } = await sb.rpc('create_guild_join_request', {
+        p_guild_id:  guildId,
+        p_player_id: myId,
+        p_message:   ''
+      });
+      if (error) throw error;
+      const joinRow = document.getElementById('pgi-join-row');
+      if (joinRow) joinRow.style.display = 'none';
+    } catch(e) {
+      if (btn) btn.disabled = false;
+      console.warn('guildInfoJoinRequest:', e);
+    }
+  }
+
+  // ══════════════════════════════════════════
+  //  Abre o modal de perfil para outro jogador (a partir de uma lista)
+  // ══════════════════════════════════════════
+  function openPlayerModalById(pid) {
+    if (!pid) return;
+    const playerModal = document.getElementById('playerModal');
+    if (playerModal) playerModal.style.display = 'flex';
+    window._guildModalLastPid = pid;
+    resetSocialSection();
+    setupModalSocial(pid);
+    if (typeof window.fetchPlayerData === 'function') window.fetchPlayerData(pid);
+  }
+
+  // ══════════════════════════════════════════
+  //  Configura botão de seguir + stats sociais + link p/ guilda do jogador
+  // ══════════════════════════════════════════
+  async function setupModalSocial(playerId) {
     const myId = await getMyId();
 
+    const followBtn = document.getElementById('pm-follow-btn');
+    if (followBtn) {
+      if (!myId || playerId === myId) {
+        followBtn.style.display = 'none';
+      } else {
+        followBtn.style.display = 'flex';
+        ensureFollowSets().then(() => updateFollowBtn(followBtn, playerId));
+        followBtn.onclick = () => toggleFollow(playerId);
+      }
+    }
+
+    // Seguidores / Seguindo → abre lista
+    const followersWrap = document.getElementById('pm-followers-wrap');
+    const followingWrap = document.getElementById('pm-following-wrap');
+    if (followersWrap) followersWrap.onclick = () => openSocialListModal('followers', playerId);
+    if (followingWrap) followingWrap.onclick = () => openSocialListModal('following', playerId);
+
+    // Bandeira/nome da guilda → abre modal de informações da guilda
+    const guildFlagEl = document.getElementById('playerGuildFlag');
+    const guildNameEl = document.getElementById('playerGuildName');
+    const openGuild = () => {
+      const gid = window._tavModalCurrentGuildId;
+      if (gid) openGuildInfoModal(gid);
+    };
+    if (guildFlagEl) { guildFlagEl.onclick = openGuild; guildFlagEl.style.cursor = 'pointer'; }
+    if (guildNameEl) { guildNameEl.onclick = openGuild; guildNameEl.style.cursor = 'pointer'; }
+
+    setTimeout(() => {
+      if (window._guildModalLastPid === playerId) loadSocialStats(playerId);
+    }, 200);
+  }
+
+  // Expõe globalmente para o botão "Solicitar Entrada" do modal de guilda
+  window.guildInfoJoinRequest = guildInfoJoinRequest;
+
+  // Main: hook into player modal opens
+  document.addEventListener('DOMContentLoaded', async () => {
+    await getMyId();
+
     // Intercept every click that opens the player modal
-    document.addEventListener('click', async (e) => {
+    document.addEventListener('click', (e) => {
       const link = e.target.closest('.player-link');
       if (!link) return;
       const playerId = link.dataset.playerId;
@@ -1651,22 +1936,10 @@ function updateGuildXpBar(guildData){
 
       window._guildModalLastPid = playerId;
       resetSocialSection();
-
-      const followBtn = document.getElementById('pm-follow-btn');
-      if (followBtn) {
-        if (!myId || playerId === myId) {
-          followBtn.style.display = 'none';
-        } else {
-          followBtn.style.display = 'flex';
-          ensureFollowSets().then(() => updateFollowBtn(followBtn, playerId));
-          followBtn.onclick = () => toggleFollow(playerId, link.dataset.playerName || '');
-        }
-      }
-
-      // Load social stats with small delay to avoid racing playerModal.js
-      setTimeout(() => {
-        if (window._guildModalLastPid === playerId) loadSocialStats(playerId);
-      }, 200);
+      setupModalSocial(playerId);
     });
+
+    const joinBtn = document.getElementById('pgi-join-btn');
+    if (joinBtn) joinBtn.onclick = guildInfoJoinRequest;
   });
 })();

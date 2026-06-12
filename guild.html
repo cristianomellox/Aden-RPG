@@ -540,12 +540,12 @@ if ('serviceWorker' in navigator) {
     </div>
     <!-- Social stats row -->
     <div id="pm-social-stats" style="display:flex;justify-content:space-around;align-items:center;background:rgba(0,0,0,0.35);border-radius:8px;padding:10px 6px;margin-top:10px;border:1px solid rgba(201,169,74,0.18);">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;" id="pm-followers-wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-followers-wrap">
         <span id="pm-followers-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">—</span>
         <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguidores</span>
       </div>
       <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;" id="pm-following-wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-following-wrap">
         <span id="pm-following-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#7ab8ff;">—</span>
         <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Seguindo</span>
       </div>
@@ -571,6 +571,50 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 </div>
+
+<!-- ══ SOCIAL LIST MODAL (Seguidores / Seguindo) ══ -->
+<div id="pm-social-list-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span id="psl-title" class="pmx-title">Seguidores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-social-list-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="psl-list" class="pmx-list"></div>
+  </div>
+</div>
+
+<!-- ══ GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador) ══ -->
+<div id="pm-guild-info-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner" style="max-height:80vh;">
+    <div class="pmx-topbar">
+      <span id="pgi-title" class="pmx-title">Guilda</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-guild-info-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      <div class="pmx-guild-header">
+        <img id="pgi-flag" class="pmx-guild-flag" src="" alt="">
+        <div>
+          <div id="pgi-name" class="pmx-guild-name"></div>
+          <div id="pgi-desc" class="pmx-guild-desc"></div>
+          <div class="pmx-guild-meta"><span id="pgi-level"></span><span id="pgi-members"></span></div>
+        </div>
+      </div>
+      <div id="pgi-join-row" class="pmx-join-row" style="display:none;">
+        <button id="pgi-join-btn" class="pmx-join-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Solicitar Entrada
+        </button>
+      </div>
+      <div class="pmx-member-label">Membros</div>
+      <div id="pgi-member-list"></div>
+    </div>
+  </div>
+</div>
+
 <div id="buyModal" class="modal" style="display: none; z-index: 13501;">
   <div class="modal-content">
     <h3>Confirmar Compra</h3>

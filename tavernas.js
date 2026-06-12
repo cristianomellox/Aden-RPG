@@ -2855,25 +2855,19 @@ async function openTavGuildModal(guildId) {
       const sb = getSB();
       if (!sb) throw new Error('no sb');
 
-      // Tenta com o nome do FK explícito, fallback sem FK name
-      let gRes = await sb.from('guilds')
-        .select('id,name,description,level,flag_url,max_members,players:players_guild_id_fkey(id,name,avatar_url,rank,level,combat_power)')
+      const gRes = await sb.from('guilds')
+        .select('id,name,description,level,flag_url,max_members')
         .eq('id', guildId).maybeSingle();
+      if (gRes.error || !gRes.data) throw gRes.error || new Error('Guilda não encontrada');
 
-      if (gRes.error || !gRes.data?.players) {
-        // Fallback: busca membros separadamente
-        gRes = await sb.from('guilds')
-          .select('id,name,description,level,flag_url,max_members')
-          .eq('id', guildId).maybeSingle();
-        if (gRes.data) {
-          const { data: members } = await sb.from('players')
-            .select('id,name,avatar_url,rank,level,combat_power')
-            .eq('guild_id', guildId);
-          gRes.data.players = members || [];
-        }
-      }
-      if (gRes.error && !gRes.data) throw gRes.error || new Error('Guilda não encontrada');
+      // get_guild_members é SECURITY DEFINER e contorna as RLS de
+      // public.players, garantindo a lista de membros mesmo quando o
+      // jogador atual não pertence a esta guilda.
+      const { data: members, error: mErr } = await sb.rpc('get_guild_members', { p_guild_id: guildId });
+      if (mErr) console.warn('get_guild_members:', mErr);
+
       guildData = gRes.data;
+      guildData.players = members || [];
       sessionStorage.setItem(cacheKey, JSON.stringify({ v: guildData, t: Date.now() }));
     }
   } catch(e) {

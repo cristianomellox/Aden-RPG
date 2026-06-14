@@ -590,6 +590,20 @@
   </div>
 </div>
 
+<!-- ══ GIFTERS MODAL (Top Presenteadores) ══ -->
+<div id="tav-gifters-modal" class="tav-side-modal" onclick="if(event.target===this)closeGiftersModal()">
+  <div class="tav-side-inner" style="max-height:80vh;">
+    <div class="tav-side-topbar">
+      <span class="tav-side-title">🎁 Top Presenteadores</span>
+      <button class="tav-side-close" onclick="closeGiftersModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="tav-gifters-list" class="tav-side-list"></div>
+  </div>
+</div>
+
+
 <!-- ══ NOTIFICATION MODAL ══ -->
 <div id="tav-notif-modal" class="tav-side-modal" onclick="if(event.target===this)closeNotifModal()">
   <div class="tav-side-inner">

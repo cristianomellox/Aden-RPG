@@ -344,16 +344,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pmFollEl  = document.getElementById('pm-followers-val')?.parentElement;
   const pmFollgEl = document.getElementById('pm-following-val')?.parentElement;
   const pmFameEl  = document.getElementById('pm-fame-val')?.parentElement;
+  const pmGiftsEl = document.getElementById('pm-gifts-val')?.parentElement;
   if (pmFollEl)  { pmFollEl.style.cursor  = 'pointer'; pmFollEl.onclick  = () => openSocialListModal('followers', window._tavModalLastPid); }
   if (pmFollgEl) { pmFollgEl.style.cursor = 'pointer'; pmFollgEl.onclick = () => openSocialListModal('following', window._tavModalLastPid); }
   if (pmFameEl)  { pmFameEl.style.cursor  = 'pointer'; pmFameEl.onclick  = () => openFameModal(window._tavModalLastPid); }
+  if (pmGiftsEl) { pmGiftsEl.style.cursor = 'pointer'; pmGiftsEl.onclick = () => openGiftersModal(window._tavModalLastPid); }
   // Social stats clicáveis no modal "Eu"
   const mpmFollEl  = document.getElementById('mpm-followers')?.parentElement;
   const mpmFollgEl = document.getElementById('mpm-following')?.parentElement;
   const mpmFameEl  = document.getElementById('mpm-fame')?.parentElement;
+  const mpmGiftsEl = document.getElementById('mpm-gifts')?.parentElement;
   if (mpmFollEl)  { mpmFollEl.style.cursor  = 'pointer'; mpmFollEl.onclick  = () => openSocialListModal('followers', PLAYER.id); }
   if (mpmFollgEl) { mpmFollgEl.style.cursor = 'pointer'; mpmFollgEl.onclick = () => openSocialListModal('following', PLAYER.id); }
   if (mpmFameEl)  { mpmFameEl.style.cursor  = 'pointer'; mpmFameEl.onclick  = () => openFameModal(PLAYER.id); }
+  if (mpmGiftsEl) { mpmGiftsEl.style.cursor = 'pointer'; mpmGiftsEl.onclick = () => openGiftersModal(PLAYER.id); }
   // Scroll infinito para o modal de lista de fama
   ['fame-list-monthly', 'fame-list-total'].forEach(id => {
     const el = document.getElementById(id);
@@ -2145,8 +2149,8 @@ async function _tavLoadSocialStats(playerId) {
   const sb = getSB();
   if (!sb) return;
 
-  // 1 única chamada ao banco em vez de 3 queries separadas
-  let stats = { fame: 0, followers: 0, following: 0 };
+  // 1 única chamada ao banco em vez de 4 queries separadas
+  let stats = { fame: 0, followers: 0, following: 0, gifts: 0 };
   const cacheKey = 'tav_sstats_' + playerId;
   try {
     const cached = sessionStorage.getItem(cacheKey);
@@ -2154,10 +2158,10 @@ async function _tavLoadSocialStats(playerId) {
       const { v, t } = JSON.parse(cached);
       if (Date.now() - t < 3 * 60_000) { stats = v; }
     }
-    if (!stats.fame && !stats.followers) {
+    if (!stats.fame && !stats.followers && !stats.gifts) {
       const { data } = await sb.rpc('get_social_stats', { p_player_id: playerId });
       if (data) {
-        stats = { fame: data.fame || 0, followers: data.followers || 0, following: data.following || 0 };
+        stats = { fame: data.fame || 0, followers: data.followers || 0, following: data.following || 0, gifts: data.gifts || 0 };
         sessionStorage.setItem(cacheKey, JSON.stringify({ v: stats, t: Date.now() }));
       }
     }
@@ -2168,9 +2172,11 @@ async function _tavLoadSocialStats(playerId) {
   const fEl   = document.getElementById('pm-fame-val');
   const foEl  = document.getElementById('pm-followers-val');
   const figEl = document.getElementById('pm-following-val');
+  const giEl  = document.getElementById('pm-gifts-val');
   if (fEl)   { fEl.textContent   = formatCompact(stats.fame);      fEl.style.opacity   = '1'; }
   if (foEl)  { foEl.textContent  = formatCompact(stats.followers);  foEl.style.opacity  = '1'; }
   if (figEl) { figEl.textContent = formatCompact(stats.following);  figEl.style.opacity = '1'; }
+  if (giEl)  { giEl.textContent  = formatCompact(stats.gifts);      giEl.style.opacity  = '1'; }
 }
 
 // ══════════════════════════════════════════
@@ -2742,21 +2748,21 @@ async function openMyProfileModal() {
   const cpEl = document.getElementById('mpm-cp-val');
   if (cpEl) cpEl.textContent = formatCompact(cp);
 
-  // 7. Social stats (fame, followers, following) — 1 chamada via RPC
+  // 7. Social stats (fame, followers, following, gifts) — 1 chamada via RPC
   const sCacheKey = 'tav_sstats_' + PLAYER.id;
-  let sStats = { fame: 0, followers: 0, following: 0 };
+  let sStats = { fame: 0, followers: 0, following: 0, gifts: 0 };
   try {
     const cached = sessionStorage.getItem(sCacheKey);
     if (cached) {
       const { v, t } = JSON.parse(cached);
       if (Date.now() - t < 3 * 60_000) sStats = v;
     }
-    if (!sStats.fame && !sStats.followers) {
+    if (!sStats.fame && !sStats.followers && !sStats.gifts) {
       const sb = getSB();
       if (sb) {
         const { data } = await sb.rpc('get_social_stats', { p_player_id: PLAYER.id });
         if (data) {
-          sStats = { fame: data.fame||0, followers: data.followers||0, following: data.following||0 };
+          sStats = { fame: data.fame||0, followers: data.followers||0, following: data.following||0, gifts: data.gifts||0 };
           sessionStorage.setItem(sCacheKey, JSON.stringify({ v: sStats, t: Date.now() }));
         }
       }
@@ -2769,6 +2775,8 @@ async function openMyProfileModal() {
   if (follEl) follEl.textContent = formatCompact(sStats.followers);
   const folwEl = document.getElementById('mpm-following');
   if (folwEl) folwEl.textContent = formatCompact(sStats.following);
+  const giftsEl = document.getElementById('mpm-gifts');
+  if (giftsEl) giftsEl.textContent = formatCompact(sStats.gifts);
 
   // Carrega set de IDs seguidos (para botão Seguir em outros modais)
   _tavEnsureFollowingSet().catch(() => {});
@@ -3455,6 +3463,89 @@ async function _tavLoadFamePage(tab, isFirst = false) {
     if (isFirst) listEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
   }
   state.loading = false;
+}
+
+// ══════════════════════════════════════════
+//  MODAL DE PRESENTES (Top Presenteadores)
+//  Top 10 — quem mais deu fama em presentes
+//  para o jogador alvo. Cache leve (3 min)
+//  + ownersCache/IDB para avatares/nomes.
+// ══════════════════════════════════════════
+
+const _GIFTERS_CACHE_TTL = 3 * 60_000; // 3 minutos
+
+async function openGiftersModal(targetPlayerId) {
+  const modal  = document.getElementById('tav-gifters-modal');
+  const listEl = document.getElementById('tav-gifters-list');
+  if (!modal || !listEl) return;
+
+  const pid = targetPlayerId || PLAYER.id;
+  listEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
+  modal.classList.add('open');
+
+  // Cache leve em sessionStorage (evita re-leitura ao reabrir o modal)
+  const cacheKey = 'tav_gifters_' + pid;
+  let rows = null;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      const { v, t } = JSON.parse(cached);
+      if (Date.now() - t < _GIFTERS_CACHE_TTL) rows = v;
+    }
+  } catch(e) {}
+
+  if (!rows) {
+    const sb = getSB();
+    if (!sb) {
+      listEl.innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
+      return;
+    }
+    try {
+      const { data, error } = await sb.rpc('get_tavern_gifters', { p_player_id: pid, p_limit: 10 });
+      if (error) throw error;
+      rows = data || [];
+      sessionStorage.setItem(cacheKey, JSON.stringify({ v: rows, t: Date.now() }));
+    } catch(e) {
+      console.warn('get_tavern_gifters:', e);
+      listEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
+      return;
+    }
+  }
+
+  _tavRenderGiftersList(listEl, rows);
+}
+
+function _tavRenderGiftersList(listEl, rows) {
+  if (!rows.length) {
+    listEl.innerHTML = '<div class="tav-notif-empty">Nenhum presente recebido ainda.</div>';
+    return;
+  }
+
+  // Cacheia perfis (nome/avatar) no ownersCache + IDB para reuso em outros modais
+  dbSaveOwners(rows);
+
+  listEl.innerHTML = '';
+  rows.forEach((g, i) => {
+    const pos = i + 1;
+    const av  = g.avatar_url || ownersCache[g.id]?.avatar_url || makeAvatar(g.name || '?', 40);
+    const qty = g.total_qty || 0;
+    const row = document.createElement('div');
+    row.className = 'tav-gifter-row' + (pos <= 3 ? ' top-' + pos : '');
+    row.innerHTML = `
+      <div class="tav-gifter-pos">${pos}</div>
+      <div class="tav-gifter-av"><img src="${esc(av)}" onerror="this.src='${makeAvatar(g.name||'?',40)}'"></div>
+      <div class="tav-gifter-info">
+        <span class="tav-gifter-name">${esc(g.name || '?')}</span>
+        <div class="tav-gifter-sub">${formatCompact(qty)} presente${qty === 1 ? '' : 's'} enviado${qty === 1 ? '' : 's'}</div>
+      </div>
+      <div class="tav-gifter-fame">+${formatCompact(g.total_fame || 0)}</div>`;
+    row.onclick = () => { closeGiftersModal(); openPlayerModalFor(g.id, g.name); };
+    listEl.appendChild(row);
+  });
+}
+
+function closeGiftersModal() {
+  document.getElementById('tav-gifters-modal')?.classList.remove('open');
 }
 
 

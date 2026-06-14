@@ -333,6 +333,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   scaleFont();
   // Inicializa ponto de notificação
   _tavUpdateNotifDot();
+  // Busca notificações de "novo seguidor" registradas via Supabase
+  // (ex.: follows feitos na guilda/ranking, ou enquanto offline)
+  _tavFetchPendingNotifications().catch(() => {});
   // Pré-carrega set de IDs seguidos
   _tavEnsureFollowingSet().catch(() => {});
   // Limpeza lazy semanal: mensagens antigas das tavernas (>7 dias)
@@ -3049,22 +3052,9 @@ async function _tavToggleFollow(targetId, targetName) {
     try { await sb.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
     _tavRefreshSocialCount(+1);
 
-    // Notificação in-app (cache localStorage) com dedup de 24h
-    const notifKey = 'tav_notifs_' + PLAYER.id;
-    const myNotifs = _tavGetNotifications();
-    // Notificação para o alvo — guardamos no cache deles
-    const targetKey = 'tav_notifs_' + targetId;
-    let targetNotifs = [];
-    try { targetNotifs = JSON.parse(localStorage.getItem(targetKey) || '[]'); } catch(e) {}
-    const dup24h = targetNotifs.find(n =>
-      n.type === 'follow' && n.fromId === PLAYER.id && (now - n.at) < 86_400_000
-    );
-    if (!dup24h) {
-      targetNotifs.unshift({ id:'f_'+PLAYER.id+'_'+now, type:'follow',
-        fromId: PLAYER.id, fromName: PLAYER.name,
-        fromAvatar: PLAYER.avatar_url || '', readAt: null, at: now });
-      try { localStorage.setItem(targetKey, JSON.stringify(targetNotifs.slice(0, 50))); } catch(e) {}
-    }
+    // Notificação persistida (Supabase) — entregue quando o alvo
+    // entrar nas tavernas, mesmo que esteja offline agora
+    try { await sb.rpc('register_follow_notification', { p_target_id: targetId }); } catch(e) {}
 
     // Ably: publica apenas se não enviou nos últimos 5 min (dedup sessão)
     const ablyDedupKey = 'tav_follow_ably_' + targetId;
@@ -3097,6 +3087,45 @@ function _tavGetNotifications() {
 }
 function _tavSaveNotifications(list) {
   try { localStorage.setItem('tav_notifs_' + PLAYER.id, JSON.stringify(list)); } catch(e) {}
+}
+
+// ── Busca notificações pendentes registradas via Supabase (ex.: follows
+// feitos pela página de guilda/ranking, ou enquanto o jogador estava
+// offline) e mescla no cache local de notificações ──
+async function _tavFetchPendingNotifications() {
+  try {
+    const sb = getSB();
+    if (!sb || !PLAYER.id) return;
+    const { data, error } = await sb.rpc('get_and_clear_follow_notifications');
+    if (error || !data?.length) return;
+
+    const notifs = _tavGetNotifications();
+    const now = Date.now();
+    let changed = false;
+
+    data.forEach(n => {
+      if (n.type !== 'follow') return;
+      const at = new Date(n.created_at).getTime();
+      // Evita duplicar se já existir uma notificação recente do mesmo
+      // seguidor (ex.: já recebida via Ably nesta mesma sessão)
+      if (notifs.find(x => x.type === 'follow' && x.fromId === n.from_id && Math.abs(now - x.at) < 300_000)) return;
+      notifs.unshift({
+        id: 'f_' + n.from_id + '_' + at,
+        type: 'follow',
+        fromId: n.from_id,
+        fromName: n.from_name || '',
+        fromAvatar: n.from_avatar || ownersCache[n.from_id]?.avatar_url || '',
+        readAt: null,
+        at
+      });
+      changed = true;
+    });
+
+    if (changed) {
+      _tavSaveNotifications(notifs.slice(0, 50));
+      _tavUpdateNotifDot();
+    }
+  } catch(e) {}
 }
 
 function _tavHandleFollowNotif(msg) {

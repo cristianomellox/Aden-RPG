@@ -1530,48 +1530,6 @@ function updateGuildXpBar(guildData){
     });
   }
 
-  // ── Dados do jogador atual (para registrar notificação de follow) ──
-  async function getMyPlayerInfo() {
-    try {
-      const cached = localStorage.getItem('player_data_cache');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed?.data?.id) {
-          return { name: parsed.data.name || '', avatar_url: parsed.data.avatar_url || '' };
-        }
-      }
-    } catch(e) {}
-    try {
-      const sb = getSBClient();
-      const myId = await getMyId();
-      if (sb && myId) {
-        const { data } = await sb.from('players').select('name, avatar_url').eq('id', myId).single();
-        if (data) return { name: data.name || '', avatar_url: data.avatar_url || '' };
-      }
-    } catch(e) {}
-    return { name: '', avatar_url: '' };
-  }
-
-  // ── Registra notificação local de "novo seguidor" para o alvo ──
-  // (mesmo mecanismo usado em tavernas.js: cache em localStorage,
-  // lido por _tavGetNotifications no modal de notificações)
-  function registerFollowNotification(targetId, fromId, fromName, fromAvatar) {
-    try {
-      const targetKey = 'tav_notifs_' + targetId;
-      let targetNotifs = [];
-      try { targetNotifs = JSON.parse(localStorage.getItem(targetKey) || '[]'); } catch(e) {}
-      const now = Date.now();
-      const dup24h = targetNotifs.find(n =>
-        n.type === 'follow' && n.fromId === fromId && (now - n.at) < 86_400_000
-      );
-      if (!dup24h) {
-        targetNotifs.unshift({ id:'f_'+fromId+'_'+now, type:'follow',
-          fromId, fromName, fromAvatar: fromAvatar || '', readAt: null, at: now });
-        localStorage.setItem(targetKey, JSON.stringify(targetNotifs.slice(0, 50)));
-      }
-    } catch(e) {}
-  }
-
   async function toggleFollow(targetId, targetName) {
     const sb   = getSBClient();
     const myId = await getMyId();
@@ -1599,9 +1557,9 @@ function updateGuildXpBar(guildData){
       _gFollowingSet.add(targetId);
       updateFollowBtn(btn, targetId);
       try { await sb.rpc('follow_player', { p_following_id: targetId }); } catch(e) {}
-      // Registra notificação de novo seguidor para o alvo
-      const me = await getMyPlayerInfo();
-      registerFollowNotification(targetId, myId, me.name, me.avatar_url);
+      // Registra notificação persistida (Supabase) para o alvo —
+      // entregue quando ele entrar nas tavernas, mesmo offline agora
+      try { await sb.rpc('register_follow_notification', { p_target_id: targetId }); } catch(e) {}
     }
     // Atualiza o contador de seguidores no modal
     const foEl = document.getElementById('pm-followers-val');

@@ -1515,6 +1515,84 @@ html,body {
   flex-shrink: 0;
 }
 
+/* ══ GIFTERS MODAL (Top Presenteadores) ══ */
+.tav-gifter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(201,169,74,0.07);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tav-gifter-row:hover { background: rgba(255,255,255,0.04); }
+.tav-gifter-pos {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gold-light);
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.tav-gifter-av {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-mid);
+}
+.tav-gifter-av img { width: 100%; height: 100%; object-fit: cover; }
+.tav-gifter-info { flex: 1; min-width: 0; }
+.tav-gifter-name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gold-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tav-gifter-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.tav-gifter-fame {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: #e8d08a;
+  font-weight: 700;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Top 3 — ouro / prata / bronze (mesmo padrão do ranking) */
+.tav-gifter-row.top-1 {
+  background: linear-gradient(90deg, rgba(183,156,9,.42) 0%, rgba(90,68,0,.18) 100%);
+  border-left: 4px solid #FFD700;
+}
+.tav-gifter-row.top-1 .tav-gifter-pos,
+.tav-gifter-row.top-1 .tav-gifter-fame { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.6); }
+.tav-gifter-row.top-1 .tav-gifter-av { border-color: #FFD700; box-shadow: 0 0 10px rgba(255,215,0,.65); }
+
+.tav-gifter-row.top-2 {
+  background: linear-gradient(90deg, rgba(168,140,140,.36) 0%, rgba(80,60,60,.16) 100%);
+  border-left: 4px solid silver;
+}
+.tav-gifter-row.top-2 .tav-gifter-pos,
+.tav-gifter-row.top-2 .tav-gifter-fame { color: silver; text-shadow: 0 0 8px rgba(192,192,192,.6); }
+.tav-gifter-row.top-2 .tav-gifter-av { border-color: silver; box-shadow: 0 0 8px rgba(192,192,192,.55); }
+
+.tav-gifter-row.top-3 {
+  background: linear-gradient(90deg, rgba(173,99,26,.32) 0%, rgba(80,40,8,.16) 100%);
+  border-left: 4px solid #CD7F32;
+}
+.tav-gifter-row.top-3 .tav-gifter-pos,
+.tav-gifter-row.top-3 .tav-gifter-fame { color: #CD7F32; text-shadow: 0 0 8px rgba(205,127,50,.6); }
+.tav-gifter-row.top-3 .tav-gifter-av { border-color: #CD7F32; box-shadow: 0 0 8px rgba(205,127,50,.5); }
+
 /* ══ SHIMMER OVERLAY — lista de tavernas ══ */
 #tavs-shimmer-overlay {
   position: absolute;

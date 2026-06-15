@@ -1575,17 +1575,17 @@ function updateGuildXpBar(guildData){
     if (!sb || !playerId) return;
 
     const cacheKey = 'guild_sstats_' + playerId;
-    let stats = { fame: 0, followers: 0, following: 0 };
+    let stats = { fame: 0, followers: 0, following: 0, gifts: 0 };
     try {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const { v, t } = JSON.parse(cached);
         if (Date.now() - t < 3 * 60_000) stats = v;
       }
-      if (!stats.fame && !stats.followers) {
+      if (!stats.fame && !stats.followers && !stats.gifts) {
         const { data } = await sb.rpc('get_social_stats', { p_player_id: playerId });
         if (data) {
-          stats = { fame: data.fame || 0, followers: data.followers || 0, following: data.following || 0 };
+          stats = { fame: data.fame || 0, followers: data.followers || 0, following: data.following || 0, gifts: data.gifts || 0 };
           sessionStorage.setItem(cacheKey, JSON.stringify({ v: stats, t: Date.now() }));
         }
       }
@@ -1596,9 +1596,11 @@ function updateGuildXpBar(guildData){
     const foEl  = document.getElementById('pm-followers-val');
     const figEl = document.getElementById('pm-following-val');
     const fmEl  = document.getElementById('pm-fame-val');
+    const giEl  = document.getElementById('pm-gifts-val');
     if (foEl)  { foEl.textContent  = fmtCompact(stats.followers); foEl.style.opacity = '1'; }
     if (figEl) { figEl.textContent = fmtCompact(stats.following); figEl.style.opacity = '1'; }
     if (fmEl)  { fmEl.textContent  = fmtCompact(stats.fame);      fmEl.style.opacity  = '1'; }
+    if (giEl)  { giEl.textContent  = fmtCompact(stats.gifts);     giEl.style.opacity  = '1'; }
   }
 
   // Reset social section to loading state
@@ -1688,6 +1690,77 @@ function updateGuildXpBar(guildData){
       if (isFirst) listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
     }
     _psl.loading = false;
+  }
+
+  // ══════════════════════════════════════════
+  //  GIFTERS MODAL (Top Presenteadores)
+  //  Top 10 — quem mais deu fama em presentes
+  //  para o jogador alvo. Cache leve (3 min).
+  // ══════════════════════════════════════════
+  const _GIFTERS_CACHE_TTL = 3 * 60_000;
+
+  async function openGiftersModal(pid) {
+    const modal  = document.getElementById('pm-gifters-modal');
+    const listEl = document.getElementById('pgf-list');
+    if (!modal || !listEl || !pid) return;
+
+    listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
+    modal.classList.add('open');
+
+    const cacheKey = 'guild_gifters_' + pid;
+    let rows = null;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < _GIFTERS_CACHE_TTL) rows = v;
+      }
+    } catch(e) {}
+
+    if (!rows) {
+      const sb = getSBClient();
+      if (!sb) {
+        listEl.innerHTML = '<div class="pmx-empty">Sem conexão.</div>';
+        return;
+      }
+      try {
+        const { data, error } = await sb.rpc('get_tavern_gifters', { p_player_id: pid, p_limit: 10 });
+        if (error) throw error;
+        rows = data || [];
+        sessionStorage.setItem(cacheKey, JSON.stringify({ v: rows, t: Date.now() }));
+      } catch(e) {
+        console.warn('get_tavern_gifters:', e);
+        listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
+        return;
+      }
+    }
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="pmx-empty">Nenhum presente recebido ainda.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    rows.forEach((g, i) => {
+      const pos = i + 1;
+      const av  = g.avatar_url || avatarFallback(g.name || '?');
+      const qty = g.total_qty || 0;
+      const row = document.createElement('div');
+      row.className = 'pmx-gifter-row' + (pos <= 3 ? ' top-' + pos : '');
+      row.innerHTML = `
+        <div class="pmx-gifter-pos">${pos}</div>
+        <div class="pmx-gifter-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(g.name||'?')}'"></div>
+        <div class="pmx-gifter-info">
+          <span class="pmx-gifter-name">${escHtml(g.name || '?')}</span>
+          <div class="pmx-gifter-sub">${fmtCompact(qty)} presente${qty === 1 ? '' : 's'} enviado${qty === 1 ? '' : 's'}</div>
+        </div>
+        <div class="pmx-gifter-fame">+${fmtCompact(g.total_fame || 0)}</div>`;
+      row.onclick = () => {
+        modal.classList.remove('open');
+        openPlayerModalById(g.id);
+      };
+      listEl.appendChild(row);
+    });
   }
 
   // ══════════════════════════════════════════
@@ -1858,6 +1931,10 @@ function updateGuildXpBar(guildData){
     const followingWrap = document.getElementById('pm-following-wrap');
     if (followersWrap) followersWrap.onclick = () => openSocialListModal('followers', playerId);
     if (followingWrap) followingWrap.onclick = () => openSocialListModal('following', playerId);
+
+    // Presentes → abre ranking de presenteadores
+    const giftsWrap = document.getElementById('pm-gifts-wrap');
+    if (giftsWrap) giftsWrap.onclick = () => openGiftersModal(playerId);
 
     // Bandeira/nome da guilda → abre modal de informações da guilda
     const guildFlagEl = document.getElementById('playerGuildFlag');

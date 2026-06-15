@@ -555,7 +555,7 @@ if ('serviceWorker' in navigator) {
         <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Fama</span>
       </div>
       <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-gifts-wrap">
         <span id="pm-gifts-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;">—</span>
         <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Presentes</span>
       </div>
@@ -584,6 +584,20 @@ if ('serviceWorker' in navigator) {
     <div id="psl-list" class="pmx-list"></div>
   </div>
 </div>
+
+<!-- ══ GIFTERS MODAL (Top Presenteadores) ══ -->
+<div id="pm-gifters-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span class="pmx-title">🎁 Top Presenteadores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-gifters-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="pgf-list" class="pmx-list"></div>
+  </div>
+</div>
+
 
 <!-- ══ GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador) ══ -->
 <div id="pm-guild-info-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">

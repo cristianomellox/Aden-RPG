@@ -285,6 +285,36 @@
     .pmx-text { flex: 1; font-size: 0.8rem; color: #cfc7b8; line-height: 1.4; }
     .pmx-text strong { color: #e8d08a; }
     .pmx-time { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+
+    /* ── Top Presenteadores (ranking de quem mais deu presentes) ── */
+    .pmx-gifter-row {
+      display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+      border-bottom: 1px solid rgba(201,169,74,0.08); cursor: pointer; transition: background 0.15s;
+    }
+    .pmx-gifter-row:hover { background: rgba(255,255,255,0.04); }
+    .pmx-gifter-pos { font-family: 'Cinzel', serif; font-size: 0.85rem; font-weight: 700; color: #e8d08a; width: 22px; flex-shrink: 0; text-align: center; }
+    .pmx-gifter-av { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; flex-shrink: 0; border: 1.5px solid rgba(201,169,74,0.55); }
+    .pmx-gifter-av img { width: 100%; height: 100%; object-fit: cover; }
+    .pmx-gifter-info { flex: 1; min-width: 0; }
+    .pmx-gifter-name { display: block; font-size: 0.85rem; font-weight: 700; color: #e8d08a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pmx-gifter-sub { font-size: 0.68rem; color: #b0a890; margin-top: 2px; }
+    .pmx-gifter-fame { font-family: 'Cinzel', serif; font-size: 0.85rem; color: #e8d08a; font-weight: 700; flex-shrink: 0; text-align: right; }
+
+    /* Top 3 — ouro / prata / bronze (mesmo padrão do .rli.top-X) */
+    .pmx-gifter-row.top-1 { background: linear-gradient(90deg, rgba(183,156,9,.42) 0%, rgba(90,68,0,.18) 100%); border-left: 4px solid #FFD700; }
+    .pmx-gifter-row.top-1 .pmx-gifter-pos,
+    .pmx-gifter-row.top-1 .pmx-gifter-fame { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.6); }
+    .pmx-gifter-row.top-1 .pmx-gifter-av { border-color: #FFD700; box-shadow: 0 0 10px rgba(255,215,0,.65); }
+
+    .pmx-gifter-row.top-2 { background: linear-gradient(90deg, rgba(168,140,140,.36) 0%, rgba(80,60,60,.16) 100%); border-left: 4px solid silver; }
+    .pmx-gifter-row.top-2 .pmx-gifter-pos,
+    .pmx-gifter-row.top-2 .pmx-gifter-fame { color: silver; text-shadow: 0 0 8px rgba(192,192,192,.6); }
+    .pmx-gifter-row.top-2 .pmx-gifter-av { border-color: silver; box-shadow: 0 0 8px rgba(192,192,192,.55); }
+
+    .pmx-gifter-row.top-3 { background: linear-gradient(90deg, rgba(173,99,26,.32) 0%, rgba(80,40,8,.16) 100%); border-left: 4px solid #CD7F32; }
+    .pmx-gifter-row.top-3 .pmx-gifter-pos,
+    .pmx-gifter-row.top-3 .pmx-gifter-fame { color: #CD7F32; text-shadow: 0 0 8px rgba(205,127,50,.6); }
+    .pmx-gifter-row.top-3 .pmx-gifter-av { border-color: #CD7F32; box-shadow: 0 0 8px rgba(205,127,50,.5); }
     .pmx-guild-header { display: flex; gap: 12px; padding: 14px 16px; align-items: center; }
     .pmx-guild-flag { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: rgba(0,0,0,0.3); }
     .pmx-guild-name { font-family: 'Cinzel', serif; font-size: 1rem; color: #e8d08a; font-weight: 700; }
@@ -495,7 +525,7 @@
           <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Fama</span>
         </div>
         <div style="width:1px;height:28px;background:rgba(201,169,74,0.2);"></div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;" id="pm-gifts-wrap">
           <span id="pm-gifts-val" style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;color:#e8d08a;opacity:0.4;">—</span>
           <span style="font-size:0.55em;color:#b0a890;letter-spacing:0.06em;text-transform:uppercase;">Presentes</span>
         </div>
@@ -538,6 +568,20 @@
     <div id="psl-list" class="pmx-list"></div>
   </div>
 </div>
+
+<!-- ══ GIFTERS MODAL (Top Presenteadores) ══ -->
+<div id="pm-gifters-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="pmx-inner">
+    <div class="pmx-topbar">
+      <span class="pmx-title">🎁 Top Presenteadores</span>
+      <button class="pmx-close" onclick="document.getElementById('pm-gifters-modal').classList.remove('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="pgf-list" class="pmx-list"></div>
+  </div>
+</div>
+
 
 <!-- ══ GUILD INFO MODAL (clique na bandeira/nome da guilda do jogador) ══ -->
 <div id="pm-guild-info-modal" class="pmx-modal" onclick="if(event.target===this) this.classList.remove('open')">
@@ -1817,17 +1861,17 @@ import { supabase as _sbRank } from './supabaseClient.js';
   async function rankLoadSocialStats(playerId) {
     if (!playerId) return;
     const cacheKey = 'rank_sstats_' + playerId;
-    let stats = { fame: 0, followers: 0, following: 0 };
+    let stats = { fame: 0, followers: 0, following: 0, gifts: 0 };
     try {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const { v, t } = JSON.parse(cached);
         if (Date.now() - t < 3 * 60_000) stats = v;
       }
-      if (!stats.fame && !stats.followers) {
+      if (!stats.fame && !stats.followers && !stats.gifts) {
         const { data } = await _sbRank.rpc('get_social_stats', { p_player_id: playerId });
         if (data) {
-          stats = { fame: data.fame||0, followers: data.followers||0, following: data.following||0 };
+          stats = { fame: data.fame||0, followers: data.followers||0, following: data.following||0, gifts: data.gifts||0 };
           sessionStorage.setItem(cacheKey, JSON.stringify({ v: stats, t: Date.now() }));
         }
       }
@@ -1836,9 +1880,11 @@ import { supabase as _sbRank } from './supabaseClient.js';
     const foEl  = document.getElementById('pm-followers-val');
     const figEl = document.getElementById('pm-following-val');
     const fmEl  = document.getElementById('pm-fame-val');
+    const giEl  = document.getElementById('pm-gifts-val');
     if (foEl)  { foEl.textContent  = fmtC(stats.followers); foEl.style.opacity = '1'; }
     if (figEl) { figEl.textContent = fmtC(stats.following); figEl.style.opacity = '1'; }
     if (fmEl)  { fmEl.textContent  = fmtC(stats.fame);      fmEl.style.opacity  = '1'; }
+    if (giEl)  { giEl.textContent  = fmtC(stats.gifts);     giEl.style.opacity  = '1'; }
   }
 
   function resetRankSocial() {
@@ -1922,6 +1968,72 @@ import { supabase as _sbRank } from './supabaseClient.js';
       if (isFirst) listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
     }
     _psl.loading = false;
+  }
+
+  // ══════════════════════════════════════════
+  //  GIFTERS MODAL (Top Presenteadores)
+  //  Top 10 — quem mais deu fama em presentes
+  //  para o jogador alvo. Cache leve (3 min).
+  // ══════════════════════════════════════════
+  const _GIFTERS_CACHE_TTL = 3 * 60_000;
+
+  async function openGiftersModal(pid) {
+    const modal  = document.getElementById('pm-gifters-modal');
+    const listEl = document.getElementById('pgf-list');
+    if (!modal || !listEl || !pid) return;
+
+    listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
+    modal.classList.add('open');
+
+    const cacheKey = 'rank_gifters_' + pid;
+    let rows = null;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { v, t } = JSON.parse(cached);
+        if (Date.now() - t < _GIFTERS_CACHE_TTL) rows = v;
+      }
+    } catch(e) {}
+
+    if (!rows) {
+      try {
+        const { data, error } = await _sbRank.rpc('get_tavern_gifters', { p_player_id: pid, p_limit: 10 });
+        if (error) throw error;
+        rows = data || [];
+        sessionStorage.setItem(cacheKey, JSON.stringify({ v: rows, t: Date.now() }));
+      } catch(e) {
+        console.warn('get_tavern_gifters:', e);
+        listEl.innerHTML = '<div class="pmx-empty">Erro ao carregar.</div>';
+        return;
+      }
+    }
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="pmx-empty">Nenhum presente recebido ainda.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    rows.forEach((g, i) => {
+      const pos = i + 1;
+      const av  = g.avatar_url || avatarFallback(g.name || '?');
+      const qty = g.total_qty || 0;
+      const row = document.createElement('div');
+      row.className = 'pmx-gifter-row' + (pos <= 3 ? ' top-' + pos : '');
+      row.innerHTML = `
+        <div class="pmx-gifter-pos">${pos}</div>
+        <div class="pmx-gifter-av"><img src="${escHtml(av)}" onerror="this.src='${avatarFallback(g.name||'?')}'"></div>
+        <div class="pmx-gifter-info">
+          <span class="pmx-gifter-name">${escHtml(g.name || '?')}</span>
+          <div class="pmx-gifter-sub">${fmtC(qty)} presente${qty === 1 ? '' : 's'} enviado${qty === 1 ? '' : 's'}</div>
+        </div>
+        <div class="pmx-gifter-fame">+${fmtC(g.total_fame || 0)}</div>`;
+      row.onclick = () => {
+        modal.classList.remove('open');
+        openPlayerModalById(g.id);
+      };
+      listEl.appendChild(row);
+    });
   }
 
   // ══════════════════════════════════════════
@@ -2069,6 +2181,9 @@ import { supabase as _sbRank } from './supabaseClient.js';
     const followingWrap = document.getElementById('pm-following-wrap');
     if (followersWrap) followersWrap.onclick = () => openSocialListModal('followers', playerId);
     if (followingWrap) followingWrap.onclick = () => openSocialListModal('following', playerId);
+
+    const giftsWrap = document.getElementById('pm-gifts-wrap');
+    if (giftsWrap) giftsWrap.onclick = () => openGiftersModal(playerId);
 
     const guildFlagEl = document.getElementById('playerGuildFlag');
     const guildNameEl = document.getElementById('playerGuildName');

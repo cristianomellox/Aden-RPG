@@ -1978,6 +1978,7 @@ import { supabase as _sbRank } from './supabaseClient.js';
   const _GIFTERS_CACHE_TTL = 3 * 60_000;
 
   async function openGiftersModal(pid) {
+    alert('pid recebido: ' + pid); 
     const modal  = document.getElementById('pm-gifters-modal');
     const listEl = document.getElementById('pgf-list');
     if (!modal || !listEl || !pid) return;
@@ -1985,7 +1986,7 @@ import { supabase as _sbRank } from './supabaseClient.js';
     listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
     modal.classList.add('open');
 
-    const cacheKey = 'tav_gifters_' + pid;
+    const cacheKey = 'rank_gifters_' + pid;
     let rows = null;
     try {
       const cached = sessionStorage.getItem(cacheKey);

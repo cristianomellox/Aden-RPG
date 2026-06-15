@@ -1985,7 +1985,7 @@ import { supabase as _sbRank } from './supabaseClient.js';
     listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
     modal.classList.add('open');
 
-    const cacheKey = 'rank_gifters_' + pid;
+    const cacheKey = 'tav_gifters_' + pid;
     let rows = null;
     try {
       const cached = sessionStorage.getItem(cacheKey);

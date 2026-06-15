@@ -1707,7 +1707,7 @@ function updateGuildXpBar(guildData){
     listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
     modal.classList.add('open');
 
-    const cacheKey = 'guild_gifters_' + pid;
+    const cacheKey = 'tav_gifters_' + pid;
     let rows = null;
     try {
       const cached = sessionStorage.getItem(cacheKey);

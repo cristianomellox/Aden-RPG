@@ -1395,6 +1395,8 @@ function updateGuildXpBar(guildData){
   const SB_KEY = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
 
   function getSBClient() {
+    // Prioridade 1: cliente autenticado exposto pelo supabaseClient.js (mesmo padrão do tavernas.js)
+    if (window.__guildAuthSB) return window.__guildAuthSB;
     if (window.__guildSB) return window.__guildSB;
     if (window.supabase?.createClient) {
       window.__guildSB = window.supabase.createClient(SB_URL, SB_KEY, {
@@ -1707,7 +1709,7 @@ function updateGuildXpBar(guildData){
     listEl.innerHTML = '<div class="pmx-empty">Carregando...</div>';
     modal.classList.add('open');
 
-    const cacheKey = 'tav_gifters_' + pid;
+    const cacheKey = 'guild_gifters_' + pid;
     let rows = null;
     try {
       const cached = sessionStorage.getItem(cacheKey);

@@ -1756,6 +1756,9 @@ function onNameClick(name, e) {
 // Abre o modal de perfil do jogador (mesmo padrão da guilda e ranking)
 // Em tavernas: redireciona para a página de perfil completa (igual ao "Eu")
 function openPlayerModalFor(playerId, name) {
+  closeMyProfileModal();
+  closePlayerProfilePage();
+
   if (playerId === PLAYER.id) { openMyProfileModal(); return; }
   openPlayerProfilePage(playerId, name);
 }

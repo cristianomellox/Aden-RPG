@@ -649,6 +649,7 @@ function openRoom(name, _online, tag) {
   document.getElementById('conn-dot').style.display        = 'block';
   document.getElementById('room-header-name').textContent  = name;
   document.getElementById('room-people-count').textContent = '–';
+  startRoomNameSlide();
 
   document.getElementById('list-view').classList.remove('active');
   document.getElementById('room-view').classList.add('active', 'fade-in');
@@ -722,6 +723,10 @@ function closeRoom() {
   document.getElementById('conn-dot').style.display    = 'none';
   document.getElementById('room-view').classList.remove('active', 'fade-in');
   document.getElementById('list-view').classList.add('active', 'fade-in');
+  // Stop room name slide
+  clearTimeout(window._rnsTimer);
+  const _rnsEl = document.getElementById('room-header-name');
+  if (_rnsEl) { _rnsEl.style.transition = 'none'; _rnsEl.style.transform = ''; }
 
   currentRoom = null;
   micOn = false; micMuted = false; audioMuted = false;
@@ -3167,7 +3172,16 @@ async function openTavGuildModal(guildId) {
   const idbPlayer = await dbGetPlayer();
   const hasGuild  = !!(idbPlayer?.guild_id || PLAYER.guild);
   const isInThisGuild = (idbPlayer?.guild_id === guildId || PLAYER.guild === guildId);
-  if (joinRow && !hasGuild && !isInThisGuild) joinRow.style.display = 'flex';
+  if (joinRow && !hasGuild && !isInThisGuild) {
+    joinRow.style.display = 'flex';
+    // Check if already requested (persisted across modal close/reopen)
+    try {
+      const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+      if (reqs[guildId]) {
+        _tavSetGuildJoinRequested(document.getElementById('tgm-join-btn'));
+      }
+    } catch(_) {}
+  }
 
   // Members list
   const ROLE_LABEL = { leader: 'Líder', 'co-leader': 'Co-Líder', member: 'Membro' };
@@ -3818,6 +3832,14 @@ function closeGiftersModal() {
 
 
 
+// ── Guild join request persistence ──
+function _tavSetGuildJoinRequested(btn) {
+  if (!btn) return;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><polyline points="20 6 9 17 4 12"/></svg> Solicitado`;
+  btn.disabled = true;
+  btn.classList.add('requested');
+}
+
 async function tavGuildJoinRequest() {
   const guildId = window._tgmGuildId;
   if (!guildId) return;
@@ -3833,8 +3855,13 @@ async function tavGuildJoinRequest() {
     });
     if (error) throw error;
     showToast('Solicitação enviada com sucesso!');
-    const joinRow = document.getElementById('tgm-join-row');
-    if (joinRow) joinRow.style.display = 'none';
+    // Persist request so it survives modal close/reopen
+    try {
+      const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+      reqs[guildId] = true;
+      localStorage.setItem('tav_guild_requests', JSON.stringify(reqs));
+    } catch(_) {}
+    _tavSetGuildJoinRequested(btn);
   } catch(e) {
     showToast('Erro: ' + (e.message || 'Tente novamente.'));
     if (btn) btn.disabled = false;
@@ -3942,6 +3969,7 @@ function buildThroneRow(roomName) {
         </div>
         <div class="tav-frame-ol"></div>
         <div class="tav-frame-sh"></div>
+        <div class="speak-ring-overlay"></div>
       </div>
       <div class="seat-nm vacant" id="seat-name-${tid}">Vago</div>`;
     seat.addEventListener('click', () => onSeatClick(tid));
@@ -3983,6 +4011,7 @@ function buildSeatsGrid() {
         </div>
         <div class="tav-frame-ol"></div>
         <div class="tav-frame-sh"></div>
+        <div class="speak-ring-overlay"></div>
       </div>
       <div class="seat-nm vacant" id="seat-name-${i}">Vago</div>`;
     s.addEventListener('click', () => onSeatClick(String(i)));
@@ -4530,3 +4559,105 @@ window.addEventListener('resize', () => {
   clearTimeout(window._proxResizeTimer);
   window._proxResizeTimer = setTimeout(positionAllProxBridges, 120);
 });
+
+// ══════════════════════════════════════════
+//  ROOM NAME SLIDE MARQUEE
+//  Inicia após 5s se o nome ultrapassar 200px.
+//  Desliza à esquerda, volta pela direita, pausa 5s, repete.
+// ══════════════════════════════════════════
+function startRoomNameSlide() {
+  clearTimeout(window._rnsTimer);
+  clearTimeout(window._rnsTickTimer);
+  const el = document.getElementById('room-header-name');
+  if (!el) return;
+
+  // Reset to initial position
+  el.style.transition = 'none';
+  el.style.transform  = 'translateX(0)';
+
+  const CONTAINER_W = 200; // max-width do wrapper (px)
+
+  // Precisa esperar 1 frame p/ o browser calcular scrollWidth com o texto novo
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const textW = el.scrollWidth;
+      if (textW <= CONTAINER_W + 4) return; // cabe sem slide
+
+      const dist = textW - CONTAINER_W + 14; // px a percorrer à esquerda
+      const slideMs = Math.max(3500, dist * 24); // velocidade ~24ms/px
+
+      function cycle() {
+        // Fase 1: reposição instantânea na posição 0
+        el.style.transition = 'none';
+        el.style.transform  = 'translateX(0)';
+
+        // Fase 2: aguarda 5s e desliza à esquerda
+        window._rnsTimer = setTimeout(() => {
+          el.style.transition = `transform ${slideMs}ms linear`;
+          el.style.transform  = `translateX(-${dist}px)`;
+
+          // Fase 3: após o slide, pula para a direita e desliza de volta ao 0
+          window._rnsTickTimer = setTimeout(() => {
+            el.style.transition = 'none';
+            el.style.transform  = `translateX(${CONTAINER_W + 10}px)`; // fora de cena à direita
+
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              const returnMs = Math.max(1200, (dist + CONTAINER_W) * 9);
+              el.style.transition = `transform ${returnMs}ms ease-out`;
+              el.style.transform  = 'translateX(0)';
+
+              // Fase 4: aguarda 5s e repete
+              window._rnsTimer = setTimeout(cycle, returnMs + 5000);
+            }));
+          }, slideMs + 600); // pausa mínima no fim do slide
+        }, 5000);
+      }
+
+      cycle();
+    });
+  });
+}
+
+// ══════════════════════════════════════════
+//  TAVERN SHARE MODAL
+// ══════════════════════════════════════════
+const _TAV_SHARE_BASE_URL = 'https://aden-rpg.pages.dev/tavernas';
+
+function openTavernShareModal() {
+  if (!currentRoom) return;
+  const roomName = currentRoom.name || 'esta Taverna';
+  const shareText = `Meus amigos e eu estamos reunidos conversando na ${roomName}. Venha se juntar a nós!`;
+  const shareUrl  = _TAV_SHARE_BASE_URL;
+
+  // Popula subtítulo
+  const subEl = document.getElementById('tav-share-sub');
+  if (subEl) subEl.textContent = `"${shareText}"`;
+
+  // Monta links
+  const enc  = encodeURIComponent;
+  const txt  = enc(shareText);
+  const url  = enc(shareUrl);
+
+  const set = (id, href) => { const a = document.getElementById(id); if (a) a.href = href; };
+  set('tav-share-whatsapp', `https://wa.me/?text=${txt}%20${url}`);
+  set('tav-share-telegram', `https://t.me/share/url?url=${url}&text=${txt}`);
+  set('tav-share-twitter',  `https://twitter.com/intent/tweet?text=${txt}&url=${url}`);
+  set('tav-share-facebook', `https://www.facebook.com/sharer/sharer.php?u=${url}`);
+  set('tav-share-reddit',   `https://www.reddit.com/submit?url=${url}&title=${txt}`);
+
+  document.getElementById('tav-share-modal')?.classList.add('open');
+}
+
+function closeTavernShareModal() {
+  document.getElementById('tav-share-modal')?.classList.remove('open');
+}
+
+function copyTavernLink() {
+  navigator.clipboard.writeText(_TAV_SHARE_BASE_URL).then(() => {
+    const lbl = document.getElementById('tav-share-copy-label');
+    if (!lbl) return;
+    const orig = lbl.textContent;
+    lbl.textContent = 'Copiado!';
+    setTimeout(() => { lbl.textContent = orig; }, 2000);
+  }).catch(() => { showToast('Não foi possível copiar.'); });
+}

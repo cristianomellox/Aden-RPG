@@ -1075,6 +1075,11 @@ document.addEventListener("DOMContentLoaded", () => {
    <script src="number_format.js"></script>
     <script src="guild.js"></script>
     <script type="module" src="playerModal.js"></script>
+    <script type="module">
+import { supabase } from './supabaseClient.js';
+// Expõe o cliente autenticado para getSBClient() em guild.js
+window.__guildAuthSB = supabase;
+</script>
 <script src="guild_pv.js"></script>
 <script type="module">
 import { supabase } from './supabaseClient.js';

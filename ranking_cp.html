@@ -1924,6 +1924,9 @@ import { supabase as _sbRank } from './supabaseClient.js';
     if (_psl.loading || _psl.exhausted) return;
     _psl.loading = true;
 
+    // Garante que a sessão foi restaurada antes de chamar RPC (mesmo padrão do tavernas.js/__tavSB)
+    try { await _sbRank.auth.getSession(); } catch(_) {}
+
     const empty = _psl.type === 'following' ? 'Não está seguindo ninguém.' : 'Nenhum seguidor.';
     const rpc   = _psl.type === 'following' ? 'get_following' : 'get_followers';
 
@@ -1978,7 +1981,6 @@ import { supabase as _sbRank } from './supabaseClient.js';
   const _GIFTERS_CACHE_TTL = 3 * 60_000;
 
   async function openGiftersModal(pid) {
-    alert('pid recebido: ' + pid); 
     const modal  = document.getElementById('pm-gifters-modal');
     const listEl = document.getElementById('pgf-list');
     if (!modal || !listEl || !pid) return;
@@ -1998,6 +2000,7 @@ import { supabase as _sbRank } from './supabaseClient.js';
 
     if (!rows) {
       try {
+        try { await _sbRank.auth.getSession(); } catch(_) {}
         const { data, error } = await _sbRank.rpc('get_tavern_gifters', { p_player_id: pid, p_limit: 10 });
         if (error) throw error;
         rows = data || [];

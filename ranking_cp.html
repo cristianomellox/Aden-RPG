@@ -1715,10 +1715,13 @@ import { supabase as _sbRank } from './supabaseClient.js';
   // Avatar de fallback (iniciais coloridas), igual ao padrão das tavernas
   function avatarFallback(name) {
     const n = name || '?';
-    const letter = n.charAt(0).toUpperCase();
+    // [...n][0] respeita surrogate pairs (emojis), ao contrário de charAt(0)
+    const rawLetter = ([...n][0] || '?').toUpperCase();
+    // Se for emoji ou caractere não-ASCII, usa '?' para não quebrar encodeURIComponent
+    const letter = /^[\x00-\x7F]$/.test(rawLetter) ? rawLetter : '?';
     const hue = [...n].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="hsl(${hue},45%,35%)"/><text x="50%" y="56%" font-size="18" fill="#fff" text-anchor="middle" font-family="sans-serif" font-weight="bold">${letter}</text></svg>`;
-    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    try { return `data:image/svg+xml,${encodeURIComponent(svg)}`; } catch(_) { return ''; }
   }
 
   let _rankMyId   = null;

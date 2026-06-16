@@ -190,7 +190,7 @@ async function initPlayer() {
       }
       PLAYER.avatar_url = rows.avatar_url || PLAYER.avatar_url;
       PLAYER.name       = rows.name       || PLAYER.name;
-      PLAYER.guild      = rows.guild_id   || PLAYER.guild;
+      PLAYER.guild      = rows.guild_id   || '';   // '' quando null (evita valor stale do localStorage)
       PLAYER.nobless    = rows.nobless    || 0;
       if (rows.rank) PLAYER.role = rows.rank;
       await dbSaveOwners([{ id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url, guild_id: PLAYER.guild }]);
@@ -336,8 +336,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Busca notificações de "novo seguidor" registradas via Supabase
   // (ex.: follows feitos na guilda/ranking, ou enquanto offline)
   _tavFetchPendingNotifications().catch(() => {});
-  // Pré-carrega set de IDs seguidos
+  // Pré-carrega sets de seguindo / seguidores (necessário para verificação de amizade mútua)
   _tavEnsureFollowingSet().catch(() => {});
+  _tavEnsureFollowersSet().catch(() => {});
   // Limpeza lazy semanal: mensagens antigas das tavernas (>7 dias)
   _tavLazyCleanupOldMessages().catch(() => {});
   // Social stats clicáveis no modal do jogador
@@ -4119,9 +4120,11 @@ function proxPairKey(pidA, pidB) {
 }
 
 // Chave de localStorage para limite diário
+// Usa data LOCAL do dispositivo → reset à meia-noite no horário do jogador
 function getProxDailyKey(pairKey) {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  return `prox_daily_${today}_${pairKey}`;
+  const now = new Date();
+  const localDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  return `prox_daily_${localDate}_${pairKey}`;
 }
 
 // Pontos já concedidos hoje para este par
@@ -4162,6 +4165,37 @@ function getCurrentSeatMap() {
 // Lista canônica de pares adjacentes (grupos separados pelo gap 4→5)
 const ADJACENT_PAIRS = [[1,2],[2,3],[3,4],[5,6],[6,7],[7,8]];
 
+// ── Verifica amizade mútua envolvendo PLAYER.id ──
+// Retorna true somente se pid1 e pid2 se seguem mutuamente E
+// um deles é PLAYER.id (caso contrário não temos os dados localmente).
+function areMutualFriends(pid1, pid2) {
+  const followingSet = window._tavFollowingSet;
+  const followersSet = window._tavFollowersSet;
+  if (!followingSet || !followersSet) return false; // sets ainda não carregados → aguarda
+
+  let other = null;
+  if (pid1 === PLAYER.id)      other = pid2;
+  else if (pid2 === PLAYER.id) other = pid1;
+  else return false; // nenhum é PLAYER.id → não conseguimos verificar localmente
+
+  // Amizade mútua: eu sigo "other" E "other" me segue
+  return followingSet.has(other) && followersSet.has(other);
+}
+
+// ── Reset de dia: verifica se o par precisa ser reativado porque virou o dia ──
+// Retorna true se o par foi resetado (pode ser reativado).
+function _checkDayResetForPair(key, pair, now) {
+  if (!pair.done) return false; // nada a fazer — par ainda ativo
+  const currentDailyPts = getDailyProxPoints(key);
+  if (currentDailyPts >= PROX_DAILY_LIMIT) return false; // limite de hoje já atingido
+  // O dia virou e o limite ainda não foi atingido hoje → reativa o par
+  pair.done      = false;
+  pair.intervals = Math.floor(currentDailyPts / PROX_PTS_INTERVAL);
+  pair.startTs   = now;
+  saveProxStart(currentRoom?.id, key, now);
+  return true;
+}
+
 // Recalcula quais pares estão ativos e inicia/encerra efeitos
 function updateProximityPairs() {
   if (!currentRoom) return;
@@ -4173,6 +4207,21 @@ function updateProximityPairs() {
     const oA = seatMap[String(a)];
     const oB = seatMap[String(b)];
     if (!oA || !oB || oA.playerId === oB.playerId) return;
+
+    // ── Verifica amizade mútua quando PLAYER.id está no par ──
+    // Se PLAYER.id não está no par, deixamos para os clientes dos jogadores envolvidos verificarem.
+    const imInPair = (oA.playerId === PLAYER.id || oB.playerId === PLAYER.id);
+    if (imInPair && !areMutualFriends(oA.playerId, oB.playerId)) {
+      // Não são amigos mútuos → garante que o par não existe localmente
+      const keySkip = proxPairKey(oA.playerId, oB.playerId);
+      if (_proxPairs[keySkip]) {
+        renderAura(_proxPairs[keySkip].seatA, _proxPairs[keySkip].seatB, false, keySkip);
+        clearProxStart(currentRoom?.id, keySkip);
+        delete _proxPairs[keySkip];
+        broadcastAuras();
+      }
+      return; // não cria o par
+    }
 
     const key = proxPairKey(oA.playerId, oB.playerId);
     activePairKeys.add(key);
@@ -4209,9 +4258,15 @@ function updateProximityPairs() {
       }
 
     } else {
-      // Par já existe — verifica se os jogadores mudaram de assento adjacente
-      // (ex: A estava em 1, B em 2; A foi para 3 → mesma chave, assentos 2-3 agora)
+      // Par já existe — verifica se o dia virou (pode reativar o par)
       const p = _proxPairs[key];
+      const wasReset = _checkDayResetForPair(key, p, now);
+      if (wasReset) {
+        renderAura(String(a), String(b), true, key);
+        broadcastAuras();
+      }
+
+      // Verifica se os jogadores mudaram de assento adjacente
       if (p.seatA !== String(a) || p.seatB !== String(b)) {
         p.seatA = String(a);
         p.seatB = String(b);
@@ -4251,7 +4306,21 @@ async function checkProximityIntervals() {
   const now = Date.now();
 
   for (const [key, pair] of Object.entries(_proxPairs)) {
-    if (pair.done) continue;
+    // ── Verifica reset de dia: se o limite foi zerado, reativa o par ──
+    if (pair.done) {
+      const wasReset = _checkDayResetForPair(key, pair, now);
+      if (wasReset) {
+        renderAura(pair.seatA, pair.seatB, true, key);
+        broadcastAuras();
+        // Mensagem sutil no chat
+        const otherName = pair.pidA === PLAYER.id ? pair.nameB : pair.nameA;
+        if (pair.pidA === PLAYER.id || pair.pidB === PLAYER.id) {
+          sysMsg(`💕 Novo dia! Sua intimidade com ${otherName} pode crescer novamente.`);
+        }
+      } else {
+        continue; // ainda no limite → próximo par
+      }
+    }
 
     const elapsed        = now - pair.startTs;
     const totalIntervals = Math.floor(elapsed / PROX_INTERVAL_MS);

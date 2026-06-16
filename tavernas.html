@@ -328,6 +328,95 @@
   </div>
 </div>
 
+<!-- ══ PLAYER PROFILE PAGE (view de outro jogador, igual ao "Eu") ══ -->
+<div id="player-profile-page">
+  <div id="ppp-inner">
+    <button id="ppp-close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><polyline points="12 5 5 12 12 19"/></svg>
+    </button>
+
+    <div id="ppp-cover"></div>
+    <div id="ppp-cover-fade"></div>
+
+    <div id="ppp-hero">
+      <div id="ppp-avatar-wrap">
+        <img id="ppp-avatar" src="" alt="Avatar">
+        <img id="ppp-frame"  src="" alt="" style="display:none;">
+      </div>
+      <div id="ppp-hero-info">
+        <div id="ppp-name"></div>
+        <div id="ppp-level"></div>
+        <div id="ppp-cp">
+          <img src="https://aden-rpg.pages.dev/assets/CPicon.webp" id="ppp-cp-icon" alt="CP">
+          <span id="ppp-cp-val">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="ppp-stats-row">
+      <div class="mpm-stat" id="ppp-stat-followers">
+        <span class="mpm-stat-val" id="ppp-followers">—</span>
+        <span class="mpm-stat-lbl">Seguidores</span>
+      </div>
+      <div class="mpm-stat-divider"></div>
+      <div class="mpm-stat" id="ppp-stat-following">
+        <span class="mpm-stat-val" id="ppp-following">—</span>
+        <span class="mpm-stat-lbl">Seguindo</span>
+      </div>
+      <div class="mpm-stat-divider"></div>
+      <div class="mpm-stat" id="ppp-stat-fame">
+        <span class="mpm-stat-val" id="ppp-fame">—</span>
+        <span class="mpm-stat-lbl">Fama</span>
+      </div>
+      <div class="mpm-stat-divider"></div>
+      <div class="mpm-stat" id="ppp-stat-gifts">
+        <span class="mpm-stat-val" id="ppp-gifts">—</span>
+        <span class="mpm-stat-lbl">Presentes</span>
+      </div>
+    </div>
+
+    <!-- Guild row (clicável) -->
+    <div id="ppp-guild" style="display:none;">
+      <div id="ppp-guild-inner">
+        <img id="ppp-guild-flag" src="https://aden-rpg.pages.dev/assets/guildaflag.webp" alt="Guilda">
+        <div id="ppp-guild-texts">
+          <span id="ppp-guild-label">Guilda</span>
+          <span id="ppp-guild-name"></span>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="ppp-guild-arrow"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+    <!-- Ver Equipamentos -->
+    <div id="ppp-equip-row">
+      <div id="ppp-equip-inner">
+        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+          <path d="M 6 16 L 19 3 H 21 V 5 L 8 18 Z M 4 14 L 10 20 M 7 17 L 3 21 M 2 20 L 4 22"/>
+          <path d="M 8 10 L 3 5 V 3 H 5 L 10 8 M 14 16 L 16 18 L 18 16 L 16 14 M 14 20 L 20 14 M 17 17 L 21 21 M 20 22 L 22 20"/>
+        </svg>
+        <div id="ppp-equip-texts">
+          <span id="ppp-equip-label">Equipamentos</span>
+          <span id="ppp-equip-sub">Ver armas e armaduras</span>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px;color:var(--gold-dark);flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+  </div><!-- /#ppp-inner -->
+
+  <!-- Footer fixo com Seguir + Mensagem -->
+  <div id="ppp-footer">
+    <button id="ppp-follow-btn" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+      <span>Seguir</span>
+    </button>
+    <button id="ppp-msg-btn" style="display:none;">
+      <img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;">
+      <span>Mensagem</span>
+    </button>
+  </div>
+</div><!-- /#player-profile-page -->
+
 <!-- ══ PLAYER MODAL ══ -->
 <div id="playerModal" style="display:none; position:fixed; z-index:1200; left:0; top:0; width:100%; height:100%; padding:20px; background-color:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
   <div class="modal-content" style="width:360px; max-width:calc(100% - 40px); background:#2e2e2e; padding:16px; border-radius:10px; border:1px solid #444; box-shadow:0 6px 24px rgba(0,0,0,0.6); color:#e0dccc; position:relative; text-align:center; overflow:hidden;">
@@ -736,6 +825,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modal) modal.style.display = 'none';
     window._tavModalResetSkin?.();
     window._tavModalLastPid = null;
+    // Se estava em modo equipamentos, restaura elementos ocultos
+    if (window._tavModalEquipOnly) {
+      window._tavModalEquipOnly = false;
+      const socialEl = document.getElementById('pm-social-stats');
+      if (socialEl) socialEl.style.display = '';
+    }
   });
 
   // Botão Enviar Mensagem → redireciona para index com conversa privada aberta (igual à guilda/ranking)

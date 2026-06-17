@@ -1118,13 +1118,13 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(0,0,0,0.65) 50%, rgba(0,0,0,0.1) 100%);
+  background: linear-gradient(90deg, rgba(0,0,0,0.65) 10%, rgba(0,0,0,0.1) 50%);
   z-index: 1;
   pointer-events: none;
 }
 
 .tdd_desc {
-  font-size: 0.78em;
+  font-size: 0.68em;
   text-shadow:
     1px 1px 2px black,
     -1px -1px 2px black,
@@ -1134,14 +1134,14 @@ body {
     0 0 4px black;
   position: absolute !important;
   left: 10px !important;
-  top: 36px !important;
+  top: 26px !important;
   margin-left: 0 !important;
   background: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   z-index: 3;
-  max-width: 52%;
-  line-height: 1.4;
+  max-width: 62%;
+  line-height: 1.2;
 }
 #tddbuttons {
   position: absolute !important;
@@ -1170,7 +1170,7 @@ body {
   text-align: left;
   left: 10px;
   margin-left: 0;
-  top: 8px;
+  top: 3px;
   margin-top: 0;
   margin-bottom: 0;
   z-index: 3;
@@ -1545,13 +1545,13 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(0,0,0,0.65) 50%, rgba(0,0,0,0.1) 100%);
+  background: linear-gradient(90deg, rgba(0,0,0,0.65) 10%, rgba(0,0,0,0.1) 50%);
   z-index: 1;
   pointer-events: none;
 }
 
 .gvgt_desc {
-  font-size: 0.78em;
+  font-size: 0.68em;
   text-shadow:
     1px 1px 2px black,
     -1px -1px 2px black,
@@ -1561,13 +1561,13 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
     0 0 4px black;
   position: absolute !important;
   left: 10px !important;
-  top: 36px !important;
+  top: 30px !important;
   margin-left: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   z-index: 3;
-  max-width: 52%;
-  line-height: 1.4;
+  max-width: 62%;
+  line-height: 1.2;
 }
 #gvgtbuttons {
   position: absolute !important;
@@ -1596,7 +1596,7 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   text-align: left;
   left: 10px;
   margin-left: 0;
-  top: 8px;
+  top: 3px;
   margin-top: 0;
   margin-bottom: 0;
   z-index: 3;

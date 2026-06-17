@@ -143,11 +143,25 @@ html,body {
   overflow:hidden;
   position:relative;
   flex-shrink:1;
-  /* Padding lateral: garante que o início e o fim do texto não sejam cortados */
-  padding:0 5px;
-  /* Fade suave só nas extremidades, começando após o padding */
-  -webkit-mask-image:linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%);
-  mask-image:linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%);
+  /* Sem mask-image: pseudo-elementos fazem o fade sem cortar letras */
+}
+/* Fade decorativo nas bordas via overlay — não interfere no texto */
+#room-header-name-wrap::before,
+#room-header-name-wrap::after {
+  content:'';
+  position:absolute;
+  top:0; bottom:0;
+  width:8px;
+  pointer-events:none;
+  z-index:1;
+}
+#room-header-name-wrap::before {
+  left:0;
+  background:linear-gradient(to right, rgba(0,0,0,0.55) 0%, transparent 100%);
+}
+#room-header-name-wrap::after {
+  right:0;
+  background:linear-gradient(to left, rgba(0,0,0,0.55) 0%, transparent 100%);
 }
 #room-header-name { font-family:'Cinzel',serif; font-size:0.82rem; font-weight:600; color:var(--gold-light); letter-spacing:0.05em; white-space:nowrap; display:inline-block; }
 

@@ -143,9 +143,11 @@ html,body {
   overflow:hidden;
   position:relative;
   flex-shrink:1;
-  /* Soft fade mask on edges to hint that the name is sliding */
-  -webkit-mask-image:linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
-  mask-image:linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+  /* Padding lateral: garante que o início e o fim do texto não sejam cortados */
+  padding:0 5px;
+  /* Fade suave só nas extremidades, começando após o padding */
+  -webkit-mask-image:linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%);
+  mask-image:linear-gradient(to right, transparent 0%, black 14%, black 86%, transparent 100%);
 }
 #room-header-name { font-family:'Cinzel',serif; font-size:0.82rem; font-weight:600; color:var(--gold-light); letter-spacing:0.05em; white-space:nowrap; display:inline-block; }
 

@@ -28,7 +28,7 @@
     max-width: 600px;
     min-width: 90vw;
     margin: 20px auto;
-    padding: 20px;
+    padding: 20px 20px 100px;
     background-color: #2e2e2e;
     border-radius: 8px;
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
@@ -172,9 +172,10 @@
 #monsterImage {
     display: block;
     width: 380px;
-    height: 380px;
-    margin-top: -40px;
-    
+    max-width: 90%;
+    height: auto;
+    min-height: 260px;
+    margin: -40px auto 0;
     object-fit: contain;
     filter: none;
     /* Animação de flutuação */

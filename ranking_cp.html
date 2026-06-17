@@ -87,10 +87,10 @@
     .rank-player-info-cp{flex-grow:1;text-align:left;}
     .rank-player-name-wrapper{display:flex;align-items:center;gap:8px;}
     .rank-player-name-cp{display:block;font-size:1em;font-weight:bold;color:#e0dccc;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;cursor:pointer;}
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;cursor:pointer;}
     .rank-player-name-cp:hover{color:gold;text-decoration:underline;}
     .rank-guild-name-cp{display:block;font-size:.85em;color:lightblue;font-weight:bold;}
-    .rank-power-cp{font-size:1.1em;font-weight:bold;color:#4CAF50;text-align:right;min-width:120px;flex-shrink:0;}
+    .rank-power-cp{font-size:1em;font-weight:bold;color:#4CAF50;text-align:right;min-width:70px;flex-shrink:0;}
     .rank-eye-icon{width:20px;height:20px;fill:#fff;cursor:pointer;opacity:.8;transition:opacity .2s,transform .2s;flex-shrink:0;}
     .rank-eye-icon:hover{opacity:1;transform:scale(1.1);filter:drop-shadow(0 0 2px gold);}
     /* Top 3 CP */
@@ -104,10 +104,16 @@
     #rankingListCP li:nth-child(3) .rank-position-cp,#rankingListCP li:nth-child(3) .rank-power-cp{color:#CD7F32;font-size:1.1em;text-shadow:0 0 8px #CD7F32;}
     #rankingListCP li:nth-child(3) .rank-avatar-cp{border:6px solid #CD7F32;box-shadow:0 0 10px rgba(205,127,50,.7);}
     @media(max-width:700px){
-      .rank-player-name-cp{max-width:120px;font-size:.9em}
-      .rank-guild-name-cp{font-size:.75em}
-      .rank-power-cp{font-size:1em;min-width:90px}
-      #rankingListCP li{padding:8px 10px}}
+      .rank-player-name-cp{max-width:90px;font-size:.85em}
+      .rank-guild-name-cp{font-size:.72em}
+      .rank-power-cp{font-size:.9em;min-width:62px}
+      #rankingListCP li{padding:8px 8px}}
+    @media(max-width:400px){
+      .rank-player-name-cp{max-width:70px;font-size:.8em}
+      .rank-power-cp{font-size:.85em;min-width:55px}
+      .rank-position-cp{width:28px;font-size:.95em}
+      .rank-avatar-cp{width:38px;height:38px}
+      #rankingListCP li{padding:6px 6px}}
 
     /* ===================================================================
        LISTA UNIVERSAL  (Arena & Ruínas)
@@ -182,7 +188,8 @@
     #playerModal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;
       background-color:rgba(0,0,0,.8);align-items:center;justify-content:center;}
     .modal-content-player{background-color:#1a1a1a;border:1px solid #c9a94a;width:90%;max-width:500px;
-      border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,.5);color:#e0dccc;position:relative;overflow:hidden;}
+      border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,.5);color:#e0dccc;position:relative;overflow:hidden;
+      max-height:92vh;overflow-y:auto;}
     #modal-bg-video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;
       background-color:black;z-index:0;pointer-events:none;}
     #modal-bg-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none;}

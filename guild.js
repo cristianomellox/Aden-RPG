@@ -1849,7 +1849,24 @@ function updateGuildXpBar(guildData){
         myGuildId = data?.guild_id || null;
       }
       const isInThisGuild = myGuildId === guildId;
-      if (joinRow && !myGuildId && !isInThisGuild) joinRow.style.display = 'flex';
+      if (joinRow && !myGuildId && !isInThisGuild) {
+        joinRow.style.display = 'flex';
+        // Verifica localStorage: já solicitou antes?
+        try {
+          const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+          if (reqs[guildId]) {
+            _pgiSetJoinRequested(document.getElementById('pgi-join-btn'));
+            // Verifica se o líder já rejeitou (async, não bloqueia render)
+            _pgiVerifyRequest(guildId, myId, getSBClient()).then(stillPending => {
+              if (!stillPending) {
+                try { const r = JSON.parse(localStorage.getItem('tav_guild_requests')||'{}'); delete r[guildId]; localStorage.setItem('tav_guild_requests', JSON.stringify(r)); } catch(_) {}
+                const b = document.getElementById('pgi-join-btn');
+                if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Solicitar Entrada`; b.disabled = false; b.classList.remove('pgi-requested'); }
+              }
+            });
+          }
+        } catch(_) {}
+      }
     } catch(e) {}
 
     // Lista de membros
@@ -1893,12 +1910,33 @@ function updateGuildXpBar(guildData){
         p_message:   ''
       });
       if (error) throw error;
-      const joinRow = document.getElementById('pgi-join-row');
-      if (joinRow) joinRow.style.display = 'none';
+      // Persiste estado no localStorage compartilhado com tavernas/ranking
+      try {
+        const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+        reqs[guildId] = true;
+        localStorage.setItem('tav_guild_requests', JSON.stringify(reqs));
+      } catch(_) {}
+      _pgiSetJoinRequested(btn);
     } catch(e) {
       if (btn) btn.disabled = false;
       console.warn('guildInfoJoinRequest:', e);
     }
+  }
+
+  // ── Helpers de solicitação de guilda (compartilhados c/ tavernas/ranking) ──
+  function _pgiSetJoinRequested(btn) {
+    if (!btn) return;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><polyline points="20 6 9 17 4 12"/></svg> Solicitado`;
+    btn.disabled = true;
+    btn.classList.add('pgi-requested');
+  }
+
+  async function _pgiVerifyRequest(guildId, myId, sb) {
+    try {
+      if (!sb || !myId) return true;
+      const { data } = await sb.from('guild_join_requests').select('id').eq('guild_id', guildId).eq('player_id', myId).maybeSingle();
+      return !!data;
+    } catch(_) { return true; }
   }
 
   // ══════════════════════════════════════════

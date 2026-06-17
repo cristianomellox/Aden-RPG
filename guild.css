@@ -1918,3 +1918,13 @@ font-size: 0.9em;
     0%{left:-130%;opacity:0} 2%{opacity:1}
     98%{left:155%;opacity:1} 99%{opacity:0;left:155%} 100%{left:155%;opacity:0}
 }
+
+/* Estado "já solicitado" no botão de entrada na guilda */
+.pmx-join-btn.pgi-requested {
+  opacity: 0.75;
+  cursor: default;
+  pointer-events: none;
+  background: rgba(39,174,96,0.12);
+  border-color: rgba(39,174,96,0.4);
+  color: #6ce6a0;
+}

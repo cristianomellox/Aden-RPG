@@ -131,12 +131,18 @@ html,body {
 
 #room-header { position:relative; z-index:1; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:rgba(0,0,0,0.45); border-bottom:1px solid rgba(201,169,74,0.18); gap:6px; }
 
+/* Left group: name + share button side-by-side */
+#room-header-left {
+  display:flex; align-items:center; gap:6px;
+  flex:1; min-width:0;
+}
+
 /* Wrapper that clips overflowing room name text and fades edges */
 #room-header-name-wrap {
-  flex:1;
   max-width:200px;
   overflow:hidden;
   position:relative;
+  flex-shrink:1;
   /* Soft fade mask on edges to hint that the name is sliding */
   -webkit-mask-image:linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
   mask-image:linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
@@ -206,6 +212,8 @@ html,body {
 .seat-lbl { font-family:'Cinzel',serif; font-size:0.8rem; letter-spacing:0.06em; color:var(--blue-light); text-align:center; opacity:0.9; }
 .seat-nm { font-size:0.9rem; color:var(--gold-light); max-width:70px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; position:relative; z-index:10; }
 .seat-nm.vacant { color:var(--blue-light); opacity:0.55; }
+/* When the avatar has an active frame, push the name down to clear the overflow */
+.seat-btn.has-frame ~ .seat-nm { margin-top:10px; }
 .muted-badge { position:absolute; bottom:1px; right:1px; width:18px; height:18px; border-radius:50%; background:rgba(192,57,43,0.9); display:none; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.2);  z-index: 20;}
 .muted-badge svg { width:8px; height:8px; }
 .seat-btn.muted .muted-badge { display:flex; }
@@ -1911,10 +1919,10 @@ html,body {
 #ppp-guild-arrow { width: 16px; height: 16px; color: var(--gold-dark); flex-shrink: 0; }
 
 /* Ver Equipamentos row */
-#ppp-equip-row {
+#ppp-equip-row, #mpm-equip-row {
   margin: 0 14px 10px;
 }
-#ppp-equip-inner {
+#ppp-equip-inner, #mpm-equip-inner {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1925,22 +1933,22 @@ html,body {
   cursor: pointer;
   transition: background 0.18s, border-color 0.18s;
 }
-#ppp-equip-inner:hover { background: rgba(30,20,8,0.88); border-color: var(--gold-dark); }
-#ppp-equip-texts {
+#ppp-equip-inner:hover, #mpm-equip-inner:hover { background: rgba(30,20,8,0.88); border-color: var(--gold-dark); }
+#ppp-equip-texts, #mpm-equip-texts {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: 1;
   min-width: 0;
 }
-#ppp-equip-label {
+#ppp-equip-label, #mpm-equip-label {
   font-family: 'Cinzel', serif;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--gold-light);
   letter-spacing: 0.04em;
 }
-#ppp-equip-sub {
+#ppp-equip-sub, #mpm-equip-sub {
   font-size: 0.64rem;
   color: var(--text-muted);
   font-style: italic;

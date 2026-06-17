@@ -1081,13 +1081,17 @@ body {
   background-color: black;
 }
 #tddimg {
-  z-index: 1!important;
-  max-width: 360px;
-    background: none;
-    border-radius: 8px;
-    box-shadow: 
-        0 0 5px 5px gold,
-        inset 0 0 10px 2px rgba(255, 255, 255, 0.5);
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+  background: none;
 }
 #raid_1 {
   position: relative!important;
@@ -1100,13 +1104,27 @@ body {
 #tdd {
   position: relative !important;
   display: block;
-  width: fit-content;
+  width: 90vw;
+  height: 180px;
   margin: 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 5px 5px gold, inset 0 0 10px 2px rgba(255,255,255,0.5);
   z-index: 2 !important;
 }
 
+/* Overlay escuro para legibilidade do texto */
+#tdd::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0.65) 50%, rgba(0,0,0,0.1) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
 .tdd_desc {
-  font-size: 0.8em;
+  font-size: 0.78em;
   text-shadow:
     1px 1px 2px black,
     -1px -1px 2px black,
@@ -1115,30 +1133,32 @@ body {
     0 0 2px black,
     0 0 4px black;
   position: absolute !important;
-  left: 12px !important;
-  top: 38px !important;
+  left: 10px !important;
+  top: 36px !important;
   margin-left: 0 !important;
   background: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  z-index: 2;
-  max-width: 55%;
+  z-index: 3;
+  max-width: 52%;
+  line-height: 1.4;
 }
 #tddbuttons {
   position: absolute !important;
   z-index: 4;
-  bottom: 10px !important;
+  bottom: 8px !important;
   top: auto !important;
   background: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  left: 12px;
-  gap: 20px;
+  left: 10px;
+  gap: 14px;
   display: flex;
+  align-items: center;
 }
 
 .tdd_h3 {
-  font-size: 0.9em;
+  font-size: 0.88em;
   text-shadow:
     1px 1px 2px black,
     -1px -1px 2px black,
@@ -1148,10 +1168,12 @@ body {
     0 0 4px black;
   position: absolute;
   text-align: left;
-  left: 12px;
+  left: 10px;
   margin-left: 0;
-  top: 10px;
-  z-index: 2;
+  top: 8px;
+  margin-top: 0;
+  margin-bottom: 0;
+  z-index: 3;
 }
 #raidCombatModal .modal-content {
 background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/tdd_andar.webp');
@@ -1486,13 +1508,17 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
         text-decoration: none; /* Estilizar como botão, mas é um link */
     }
   #gvgtimg {
-  z-index: 1!important;
-  max-width: 360px;
-    background: none;
-    border-radius: 8px;
-    box-shadow: 
-        0 0 5px 5px lightblue,
-        inset 0 0 10px 2px rgba(255, 255, 255, 0.5);
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+  background: none;
 }
 #gvg_1 {
   position: relative!important;
@@ -1505,13 +1531,27 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
 #gvgt {
   position: relative !important;
   display: block;
-  width: fit-content;
+  width: 90vw;
+  height: 180px;
   margin: 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 5px 5px lightblue, inset 0 0 10px 2px rgba(255,255,255,0.5);
   z-index: 2 !important;
 }
 
+/* Overlay escuro para legibilidade */
+#gvgt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0.65) 50%, rgba(0,0,0,0.1) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
 .gvgt_desc {
-  font-size: 0.8em;
+  font-size: 0.78em;
   text-shadow:
     1px 1px 2px black,
     -1px -1px 2px black,
@@ -1520,29 +1560,31 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
     0 0 2px black,
     0 0 4px black;
   position: absolute !important;
-  left: 12px !important;
-  top: 38px !important;
+  left: 10px !important;
+  top: 36px !important;
   margin-left: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  z-index: 2;
-  max-width: 55%;
+  z-index: 3;
+  max-width: 52%;
+  line-height: 1.4;
 }
 #gvgtbuttons {
   position: absolute !important;
   z-index: 4;
-  bottom: 10px !important;
+  bottom: 8px !important;
   top: auto !important;
   background: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  left: 12px;
-  gap: 20px;
+  left: 10px;
+  gap: 14px;
   display: flex;
+  align-items: center;
 }
 
 .gvgt_h3 {
-  font-size: 0.9em;
+  font-size: 0.88em;
   text-shadow:
     1px 1px 2px black,
     -1px -1px 2px black,
@@ -1552,10 +1594,12 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
     0 0 4px black;
   position: absolute;
   text-align: left;
-  left: 12px;
+  left: 10px;
   margin-left: 0;
-  top: 10px;
-  z-index: 2;
+  top: 8px;
+  margin-top: 0;
+  margin-bottom: 0;
+  z-index: 3;
 }
 .modal-content2 {
   padding: 8px!important;

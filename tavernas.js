@@ -366,9 +366,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('ppp-stat-gifts')?.addEventListener('click',     () => openGiftersModal(window._pppPlayerId));
   // Botão fechar da página de perfil (ppp)
   document.getElementById('ppp-close')?.addEventListener('click', closePlayerProfilePage);
-  // Botão "Ver Equipamentos" na página de perfil
+  // Botão "Ver Equipamentos" na página de perfil de outro jogador
   document.getElementById('ppp-equip-inner')?.addEventListener('click', () => {
     if (window._pppPlayerId) openEquipmentModal(window._pppPlayerId);
+  });
+  // Botão "Ver Equipamentos" no próprio perfil (modal "Eu")
+  document.getElementById('mpm-equip-inner')?.addEventListener('click', () => {
+    closeMyProfileModal();
+    openEquipmentModal(PLAYER.id);
   });
   // Scroll infinito para o modal de lista de fama
   ['fame-list-monthly', 'fame-list-total'].forEach(id => {
@@ -1124,11 +1129,13 @@ function _tavApplyFrameToSeat(seatId, frameUrl) {
     sh.style.webkitMaskImage  = `url('${frameUrl}')`;
     sh.style.maskImage        = `url('${frameUrl}')`;
     sh.style.display          = 'block';
+    btn.classList.add('has-frame');       // Fix 2: push name down 10px via CSS
   } else {
     fr.style.backgroundImage  = '';
     fr.style.display          = 'none';
     sh.style.display          = 'none';
     if (av) av.style.border   = '';
+    btn.classList.remove('has-frame');
   }
 }
 
@@ -1142,6 +1149,7 @@ function _tavClearFrameFromSeat(seatId) {
   if (sh) sh.style.display = 'none';
   const av = btn.querySelector('.seat-avatar-img');
   if (av) av.style.border = '';
+  btn.classList.remove('has-frame');   // Fix 2: restore normal name gap
 }
 
 // Busca e aplica moldura para o jogador num assento
@@ -3179,6 +3187,23 @@ async function openTavGuildModal(guildId) {
       const reqs = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
       if (reqs[guildId]) {
         _tavSetGuildJoinRequested(document.getElementById('tgm-join-btn'));
+        // Verify server-side: if leader rejected, the row no longer exists → clear localStorage
+        _tavVerifyGuildRequest(guildId).then(stillPending => {
+          if (!stillPending) {
+            try {
+              const r = JSON.parse(localStorage.getItem('tav_guild_requests') || '{}');
+              delete r[guildId];
+              localStorage.setItem('tav_guild_requests', JSON.stringify(r));
+            } catch(_) {}
+            // Restore "Solicitar Entrada" button
+            const btn2 = document.getElementById('tgm-join-btn');
+            if (btn2) {
+              btn2.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Solicitar Entrada`;
+              btn2.disabled = false;
+              btn2.classList.remove('requested');
+            }
+          }
+        });
       }
     } catch(_) {}
   }
@@ -3838,6 +3863,22 @@ function _tavSetGuildJoinRequested(btn) {
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><polyline points="20 6 9 17 4 12"/></svg> Solicitado`;
   btn.disabled = true;
   btn.classList.add('requested');
+}
+
+// Verifica se a solicitação ainda está pendente no servidor.
+// Retorna true se pendente, false se foi rejeitada/aceita/inexistente.
+async function _tavVerifyGuildRequest(guildId) {
+  try {
+    const sb = getSB();
+    if (!sb || !PLAYER.id) return true; // sem conexão → assume pendente
+    const { data } = await sb
+      .from('guild_join_requests')
+      .select('id')
+      .eq('guild_id', guildId)
+      .eq('player_id', PLAYER.id)
+      .maybeSingle();
+    return !!data; // true = ainda existe (pendente)
+  } catch(_) { return true; } // erro de rede → assume pendente
 }
 
 async function tavGuildJoinRequest() {

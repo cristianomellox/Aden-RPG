@@ -198,15 +198,17 @@
 
     <!-- Header -->
     <div id="room-header">
-      <div id="room-header-name-wrap">
-        <div id="room-header-name">Nome da Taverna</div>
+      <div id="room-header-left">
+        <div id="room-header-name-wrap">
+          <div id="room-header-name">Nome da Taverna</div>
+        </div>
+        <button id="room-share-btn" onclick="openTavernShareModal()" title="Compartilhar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+        </button>
       </div>
-      <button id="room-share-btn" onclick="openTavernShareModal()" title="Compartilhar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-        </svg>
-      </button>
       <div id="room-people-btn" onclick="openPeopleModal()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span id="room-people-count">0</span>
@@ -621,8 +623,23 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="mpm-guild-arrow"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
     </div>
-  </div>
-</div>
+
+    <!-- Ver Equipamentos do próprio jogador -->
+    <div id="mpm-equip-row">
+      <div id="mpm-equip-inner">
+        <svg width="40" height="50" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+          <path d="M 6 16 L 19 3 H 21 V 5 L 8 18 Z M 4 14 L 10 20 M 7 17 L 3 21 M 2 20 L 4 22"/>
+          <path d="M 8 10 L 3 5 V 3 H 5 L 10 8 M 14 16 L 16 18 L 18 16 L 16 14 M 14 20 L 20 14 M 17 17 L 21 21 M 20 22 L 22 20"/>
+        </svg>
+        <div id="mpm-equip-texts">
+          <span id="mpm-equip-label">Equipamentos</span>
+          <span id="mpm-equip-sub">Ver armas e armaduras</span>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px;color:var(--gold-dark);flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>
+
+  </div><!-- /#mpm-inner -->
 
 <!-- ══ TAV GUILD MODAL (informações da guilda dentro das tavernas) ══ -->
 <div id="tav-guild-modal">

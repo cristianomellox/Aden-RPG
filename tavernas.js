@@ -5060,9 +5060,9 @@ function closeBondInviteConfirm() {
 //  ENVIAR CONVITE
 // ══════════════════════════════════════════
 async function _bondsSendInvite() {
-  closeBondInviteConfirm();
-  const p = _bondConfirmPending;
+  const p = _bondConfirmPending;   // ← salva ANTES de fechar (closeBondInviteConfirm zera a variável)
   _bondConfirmPending = null;
+  closeBondInviteConfirm();
   if (!p) return;
 
   const sb = getSB();

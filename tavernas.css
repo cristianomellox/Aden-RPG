@@ -2068,3 +2068,240 @@ html,body {
   border-color:rgba(39,174,96,0.4);
   color:#6ce6a0;
 }
+
+/* ══════════════════════════════════════════════════════════
+   RELACIONAMENTOS (Bonds) — Linhas de menu
+   ══════════════════════════════════════════════════════════ */
+#mpm-bonds-row, #ppp-bonds-row {
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  transition: background 0.18s;
+}
+#mpm-bonds-row:hover, #ppp-bonds-row:hover { background: rgba(201,169,74,0.06); }
+#mpm-bonds-inner, #ppp-bonds-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+}
+#mpm-bonds-texts, #ppp-bonds-texts {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+#mpm-bonds-label, #ppp-bonds-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: var(--gold-light);
+  letter-spacing: 0.05em;
+}
+#mpm-bonds-sub, #ppp-bonds-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════════════
+   BONDS MODAL — cards de laços
+   ══════════════════════════════════════════════════════════ */
+.bonds-side-inner { max-height: 85vh; }
+
+.bonds-cards-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Card de laço individual */
+.bond-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(20,14,6,0.7);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.bond-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(201,169,74,0.05) 0%, transparent 60%);
+  pointer-events: none;
+}
+.bond-card:hover { background: rgba(30,20,8,0.85); border-color: var(--border-mid); }
+
+/* Card de Casal tem borda rosada */
+.bond-card.bond-couple { border-color: rgba(255,130,180,0.45); }
+.bond-card.bond-couple::before { background: linear-gradient(135deg, rgba(255,130,180,0.07) 0%, transparent 60%); }
+.bond-card.bond-couple:hover { border-color: rgba(255,130,180,0.75); }
+
+/* Círculo do avatar do laço */
+.bond-card-circle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 2px solid var(--border-mid);
+  background: rgba(15,10,4,0.8);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.bond-card.bond-couple .bond-card-circle { border-color: rgba(255,130,180,0.7); }
+.bond-card-circle img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+/* Ícone + para slot vazio */
+.bond-card-plus {
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bond-card-plus svg { width: 26px; height: 26px; }
+/* Ícone ampulheta para convite pendente */
+.bond-card-hourglass {
+  color: var(--gold-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: hourglass-pulse 2s ease-in-out infinite;
+}
+.bond-card-hourglass svg { width: 24px; height: 24px; }
+@keyframes hourglass-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Infos do card */
+.bond-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bond-card-type {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bond-card.bond-couple .bond-card-type { color: rgba(255,130,180,0.85); }
+.bond-card-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: var(--gold-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.bond-card-name:hover { color: #fff; text-decoration: underline; }
+.bond-card-name.empty { color: var(--text-muted); font-style: italic; font-size: 0.78rem; }
+
+.bond-card-level {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+.bond-card-level .bond-lv-num {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* Timer do convite pendente */
+.bond-card-timer {
+  font-size: 0.66rem;
+  color: var(--gold-dark);
+  margin-top: 2px;
+}
+
+/* ── Confirmação genérica de laço ──────────────────────── */
+.bond-confirm-box {
+  background: linear-gradient(160deg, #1f1b2e, #15131f);
+  border: 1px solid rgba(201,169,74,0.35);
+  border-radius: 14px;
+  padding: 24px 22px;
+  max-width: 310px;
+  width: 88%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+}
+.bond-confirm-text {
+  font-family: 'Cinzel', serif;
+  font-size: 0.9em;
+  color: #e8d08a;
+  line-height: 1.55;
+  text-align: center;
+  margin: 0;
+}
+.bond-confirm-btn {
+  flex: 1;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82em;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.bond-confirm-cancel {
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: #ddd;
+}
+.bond-confirm-cancel:hover { background: rgba(255,255,255,0.12); }
+.bond-confirm-send {
+  border: 1px solid rgba(201,169,74,0.55);
+  background: rgba(201,169,74,0.18);
+  color: var(--gold-light);
+}
+.bond-confirm-send:hover { background: rgba(201,169,74,0.3); }
+
+/* ── Lista de elegíveis (picker) ────────────────────────── */
+.bond-eligible-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(201,169,74,0.08);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.bond-eligible-row:hover { background: rgba(255,255,255,0.04); }
+.bond-eligible-av {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-mid);
+}
+.bond-eligible-av img { width: 100%; height: 100%; object-fit: cover; }
+.bond-eligible-info { flex: 1; min-width: 0; }
+.bond-eligible-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  color: var(--gold-light);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bond-eligible-intimacy {
+  font-size: 0.65rem;
+  color: var(--blue-light);
+  margin-top: 2px;
+}
+.bond-eligible-arrow {
+  color: var(--gold-dark);
+  flex-shrink: 0;
+}
+.bond-eligible-arrow svg { width: 16px; height: 16px; }

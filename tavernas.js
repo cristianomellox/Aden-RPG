@@ -4709,3 +4709,605 @@ function copyTavernLink() {
     setTimeout(() => { lbl.textContent = orig; }, 2000);
   }).catch(() => { showToast('Não foi possível copiar.'); });
 }
+
+// ══════════════════════════════════════════
+//  SISTEMA DE LAÇOS (Bonds)
+//  Fase 1: 0–1000 pts (sem laço)
+//  Fase 2: com laço, níveis 1–20
+// ══════════════════════════════════════════
+
+// Limiar de pontos para cada nível (índice 0 = nível 1)
+const BOND_LEVEL_THRESHOLDS = [
+  0,     // Nível 1
+  1800,  // Nível 2
+  2600,  // Nível 3
+  3400,  // Nível 4
+  4200,  // Nível 5
+  5400,  // Nível 6
+  6600,  // Nível 7
+  7800,  // Nível 8
+  9000,  // Nível 9
+  11000, // Nível 10
+  13000, // Nível 11
+  15000, // Nível 12
+  17000, // Nível 13
+  19800, // Nível 14
+  22600, // Nível 15
+  25400, // Nível 16
+  28200, // Nível 17
+  31700, // Nível 18
+  35200, // Nível 19
+  38700, // Nível 20
+];
+
+function getBondLevel(points) {
+  let lv = 1;
+  for (let i = 0; i < BOND_LEVEL_THRESHOLDS.length; i++) {
+    if (points >= BOND_LEVEL_THRESHOLDS[i]) lv = i + 1;
+    else break;
+  }
+  return Math.min(lv, 20);
+}
+
+function getBondLevelProgress(points) {
+  const lv = getBondLevel(points);
+  if (lv >= 20) return { level: 20, pct: 100, current: points, needed: 0 };
+  const current = BOND_LEVEL_THRESHOLDS[lv - 1] || 0;
+  const next    = BOND_LEVEL_THRESHOLDS[lv]    || current;
+  const pct     = next > current ? Math.round(((points - current) / (next - current)) * 100) : 100;
+  return { level: lv, pct, current: points - current, needed: next - current };
+}
+
+// ── Estado do modal de laços ──
+const _bonds = {
+  targetId:  null,
+  isSelf:    false,
+  data:      null,      // resultado de get_player_bonds
+  loading:   false
+};
+
+// ── Cache sessionStorage para dados de laços ──
+function _bondsGetCacheKey(pid) { return 'tav_bonds_' + pid; }
+function _bondsClearCache(pid)  {
+  try { sessionStorage.removeItem(_bondsGetCacheKey(pid)); } catch(_) {}
+}
+
+// Timer humanizado para expiração de convite
+function _bondsTimeLeft(expiresAt) {
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 'Expirado';
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// ══════════════════════════════════════════
+//  ABRIR MODAL DE LAÇOS
+// ══════════════════════════════════════════
+async function openBondsModal(targetId, isSelf) {
+  if (!targetId) return;
+  const modal = document.getElementById('tav-bonds-modal');
+  if (!modal) return;
+
+  _bonds.targetId = targetId;
+  _bonds.isSelf   = isSelf;
+  _bonds.data     = null;
+
+  modal.classList.add('open');
+
+  const titleEl = document.getElementById('tav-bonds-title');
+  const cardsEl = document.getElementById('tav-bonds-cards');
+  if (titleEl) titleEl.textContent = isSelf ? '❤ Meus Relacionamentos' : '❤ Relacionamentos';
+  if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
+
+  // Cache rápido (60s)
+  const ck = _bondsGetCacheKey(targetId);
+  try {
+    const cached = sessionStorage.getItem(ck);
+    if (cached) {
+      const { v, t } = JSON.parse(cached);
+      if (Date.now() - t < 60_000) { _bonds.data = v; _bondsRenderCards(); return; }
+    }
+  } catch(_) {}
+
+  const sb = getSB();
+  if (!sb) {
+    if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
+    return;
+  }
+  try {
+    const { data, error } = await sb.rpc('get_player_bonds', { p_player_id: targetId });
+    if (error) throw error;
+    _bonds.data = data;
+    try { sessionStorage.setItem(ck, JSON.stringify({ v: data, t: Date.now() })); } catch(_) {}
+    _bondsRenderCards();
+  } catch(e) {
+    console.warn('get_player_bonds:', e);
+    if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
+  }
+}
+
+function closeBondsModal() {
+  document.getElementById('tav-bonds-modal')?.classList.remove('open');
+}
+
+// ── Renderiza os 6 cards (1 casal + 5 amigos) ──────────────────
+function _bondsRenderCards() {
+  const cardsEl = document.getElementById('tav-bonds-cards');
+  if (!cardsEl) return;
+  const d = _bonds.data || {};
+  const couple       = d.couple      || null;
+  const friends      = d.friends     || [];
+  const pendingSent  = d.pending_sent || [];
+
+  cardsEl.innerHTML = '';
+
+  // ── Card de Casal ─────────────────────────────────────────
+  const pendingCouple = pendingSent.find(p => p.bond_type === 'couple');
+  cardsEl.appendChild(_bondsBuildCard({
+    slotType:    'couple',
+    bondData:    couple,
+    pending:     pendingCouple || null,
+    isSelf:      _bonds.isSelf,
+    slotIndex:   0
+  }));
+
+  // ── 5 Cards de Amigo(a) ───────────────────────────────────
+  const pendingFriends = pendingSent.filter(p => p.bond_type === 'friend');
+  for (let i = 0; i < 5; i++) {
+    const bondData = friends[i] || null;
+    const pending  = !bondData ? (pendingFriends[i - friends.length] || null) : null;
+    cardsEl.appendChild(_bondsBuildCard({
+      slotType:  'friend',
+      bondData,
+      pending,
+      isSelf:    _bonds.isSelf,
+      slotIndex: i
+    }));
+  }
+}
+
+// Constrói um card de laço
+function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
+  const div = document.createElement('div');
+  div.className = 'bond-card' + (slotType === 'couple' ? ' bond-couple' : '');
+
+  const label = slotType === 'couple' ? 'Casal' : 'Amigo(a)';
+
+  // ── Slot com laço confirmado ─────────────────────────────
+  if (bondData) {
+    const av   = bondData.partner_avatar || makeAvatar(bondData.partner_name || '?', 58);
+    const lv   = getBondLevel(bondData.intimacy_points || 0);
+    div.innerHTML = `
+      <div class="bond-card-circle"><img src="${esc(av)}" onerror="this.src='${makeAvatar(bondData.partner_name||'?',58)}'"></div>
+      <div class="bond-card-info">
+        <div class="bond-card-type">${label}</div>
+        <div class="bond-card-name" data-pid="${esc(bondData.partner_id)}" data-pname="${esc(bondData.partner_name)}">${esc(bondData.partner_name)}</div>
+        <div class="bond-card-level">Nível <span class="bond-lv-num">${lv}</span></div>
+      </div>`;
+    // Clicar no nome/avatar: se for próprio jogador → opções; se for visitante → abrir perfil
+    const nameEl = div.querySelector('.bond-card-name');
+    const circEl = div.querySelector('.bond-card-circle');
+    if (isSelf) {
+      const openOptions = () => _bondsOpenOwnOptions(bondData.partner_id, bondData.partner_name, av);
+      if (nameEl) nameEl.onclick = openOptions;
+      if (circEl) circEl.onclick = openOptions;
+    } else {
+      const openProfile = () => { closeBondsModal(); openPlayerModalFor(bondData.partner_id, bondData.partner_name); };
+      if (nameEl) nameEl.onclick = openProfile;
+      if (circEl) { circEl.style.cursor = 'pointer'; circEl.onclick = openProfile; }
+    }
+    return div;
+  }
+
+  // ── Slot com convite pendente (só para o próprio jogador) ─
+  if (pending && isSelf) {
+    const av = pending.to_avatar || makeAvatar(pending.to_name || '?', 58);
+    div.innerHTML = `
+      <div class="bond-card-circle">
+        <div class="bond-card-hourglass">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M5 2h14M5 22h14M6 2v4l5 6-5 6v4M18 2v4l-5 6 5 6v4"/>
+          </svg>
+        </div>
+      </div>
+      <div class="bond-card-info">
+        <div class="bond-card-type">${label}</div>
+        <div class="bond-card-name empty">Convite enviado para ${esc(pending.to_name)}</div>
+        <div class="bond-card-timer">Expira em: ${_bondsTimeLeft(pending.expires_at)}</div>
+      </div>`;
+    return div;
+  }
+
+  // ── Slot vazio ───────────────────────────────────────────
+  if (isSelf) {
+    div.innerHTML = `
+      <div class="bond-card-circle bond-card-plus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+      <div class="bond-card-info">
+        <div class="bond-card-type">${label}</div>
+        <div class="bond-card-name empty">Vaga disponível</div>
+        <div class="bond-card-level" style="color:var(--text-muted);font-style:italic;font-size:0.65rem;">Toque para convidar</div>
+      </div>`;
+    div.onclick = () => _bondsOpenEligiblePicker(slotType);
+  } else {
+    div.innerHTML = `
+      <div class="bond-card-circle" style="opacity:0.4;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--gold-dark)" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.58-7 8-7s8 3 8 7"/></svg>
+      </div>
+      <div class="bond-card-info">
+        <div class="bond-card-type">${label}</div>
+        <div class="bond-card-name empty">Vaga livre</div>
+      </div>`;
+  }
+  return div;
+}
+
+// ══════════════════════════════════════════
+//  OPÇÕES DO PRÓPRIO CARD (ver perfil / desfazer)
+// ══════════════════════════════════════════
+function _bondsOpenOwnOptions(partnerId, partnerName, partnerAv) {
+  const modal  = document.getElementById('tav-bond-own-options');
+  const avImg  = document.getElementById('boo-avatar');
+  const nameEl = document.getElementById('boo-name');
+  const viewBtn= document.getElementById('boo-view-btn');
+  if (!modal) return;
+
+  if (avImg)  avImg.src         = partnerAv || makeAvatar(partnerName || '?', 64);
+  if (nameEl) nameEl.textContent = partnerName || '';
+
+  if (viewBtn) viewBtn.onclick = () => {
+    closeBondOwnOptions();
+    closeBondsModal();
+    openPlayerModalFor(partnerId, partnerName);
+  };
+
+  modal.style.display = 'flex';
+}
+function closeBondOwnOptions() {
+  const m = document.getElementById('tav-bond-own-options');
+  if (m) m.style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+//  PICKER DE ELEGÍVEIS
+// ══════════════════════════════════════════
+let _bondEligibleType = 'friend';
+
+async function _bondsOpenEligiblePicker(bondType) {
+  _bondEligibleType = bondType;
+  const modal   = document.getElementById('tav-bond-eligible-modal');
+  const titleEl = document.getElementById('tav-bond-eligible-title');
+  const listEl  = document.getElementById('tav-bond-eligible-list');
+  if (!modal || !listEl) return;
+
+  const label = bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+  if (titleEl) titleEl.textContent = `Convidar para ${label}`;
+  listEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
+  modal.classList.add('open');
+
+  const sb = getSB();
+  if (!sb) { listEl.innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>'; return; }
+
+  try {
+    const { data, error } = await sb.rpc('get_bond_eligible', {
+      p_player_id: PLAYER.id,
+      p_bond_type: bondType
+    });
+    if (error) throw error;
+    const rows = data || [];
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="tav-notif-empty">Nenhum amigo elegível encontrado.<br><small style="font-size:0.7em;color:var(--text-muted);">É preciso ter 1000 de intimidade com seguidores mútuos sem laço já formado.</small></div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    rows.forEach(r => {
+      const av  = r.avatar_url || makeAvatar(r.name || '?', 44);
+      const row = document.createElement('div');
+      row.className = 'bond-eligible-row';
+      row.innerHTML = `
+        <div class="bond-eligible-av"><img src="${esc(av)}" onerror="this.src='${makeAvatar(r.name||'?',44)}'"></div>
+        <div class="bond-eligible-info">
+          <div class="bond-eligible-name">${esc(r.name)}</div>
+          <div class="bond-eligible-intimacy">Intimidade: ${(r.intimacy||0).toLocaleString()}</div>
+        </div>
+        <div class="bond-eligible-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>`;
+      row.onclick = () => _bondsAskConfirm(r.id, r.name, bondType);
+      listEl.appendChild(row);
+    });
+  } catch(e) {
+    console.warn('get_bond_eligible:', e);
+    listEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
+  }
+}
+
+function closeBondEligibleModal() {
+  document.getElementById('tav-bond-eligible-modal')?.classList.remove('open');
+}
+
+// ══════════════════════════════════════════
+//  CONFIRMAÇÃO DE CONVITE
+// ══════════════════════════════════════════
+let _bondConfirmPending = null;
+
+function _bondsAskConfirm(toId, toName, bondType) {
+  const modal   = document.getElementById('tav-bond-invite-confirm');
+  const textEl  = document.getElementById('bond-confirm-text');
+  const yesBtn  = document.getElementById('bond-confirm-yes');
+  if (!modal) return;
+
+  const label = bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+  if (textEl) textEl.textContent = `Deseja convidar ${toName} para ser seu ${label}?`;
+
+  _bondConfirmPending = { toId, toName, bondType };
+
+  if (yesBtn) yesBtn.onclick = _bondsSendInvite;
+
+  modal.style.display = 'flex';
+}
+
+function closeBondInviteConfirm() {
+  const m = document.getElementById('tav-bond-invite-confirm');
+  if (m) m.style.display = 'none';
+  _bondConfirmPending = null;
+}
+
+// ══════════════════════════════════════════
+//  ENVIAR CONVITE
+// ══════════════════════════════════════════
+async function _bondsSendInvite() {
+  closeBondInviteConfirm();
+  const p = _bondConfirmPending;
+  _bondConfirmPending = null;
+  if (!p) return;
+
+  const sb = getSB();
+  if (!sb) { showToast('Sem conexão.'); return; }
+
+  try {
+    const { data, error } = await sb.rpc('send_bond_invite', {
+      p_to_id:    p.toId,
+      p_bond_type: p.bondType
+    });
+    if (error) throw error;
+
+    if (data?.success) {
+      // Sucesso
+      _bondsClearCache(PLAYER.id);
+      closeBondEligibleModal();
+      const expiresAt = data.expires_at;
+      _bondsShowResult(true, `Convite enviado para ${p.toName}!`, expiresAt);
+
+      // Atualiza dados locais e re-abre modal de laços
+      setTimeout(() => openBondsModal(PLAYER.id, true), 1400);
+    } else {
+      const errMap = {
+        'caller_couple_full':   'Você já tem um Casal.',
+        'caller_friends_full':  'Você já tem 5 Amigos(as).',
+        'target_couple_full':   `${p.toName} já tem um Casal.`,
+        'target_friends_full':  `${p.toName} já tem 5 Amigos(as).`,
+        'invite_already_pending': 'Já existe um convite pendente entre vocês.',
+        'already_bonded':       'Vocês já têm um laço deste tipo.',
+        'intimacy_too_low':     'Intimidade insuficiente (mínimo 1000).',
+        'not_mutual_friends':   'Vocês precisam se seguir mutuamente.',
+      };
+      const msg = errMap[data?.error] || 'Não foi possível enviar o convite.';
+      _bondsShowResult(false, msg, null);
+    }
+  } catch(e) {
+    console.warn('send_bond_invite:', e);
+    _bondsShowResult(false, 'Erro ao enviar convite.', null);
+  }
+}
+
+function _bondsShowResult(success, msg, expiresAt) {
+  const modal   = document.getElementById('tav-bond-invite-result');
+  const iconEl  = document.getElementById('bond-result-icon');
+  const textEl  = document.getElementById('bond-result-text');
+  const timerEl = document.getElementById('bond-result-timer');
+  if (!modal) return;
+
+  if (iconEl)  iconEl.textContent  = success ? '✅' : '❌';
+  if (textEl)  textEl.textContent  = msg;
+  if (timerEl) {
+    if (success && expiresAt) {
+      timerEl.textContent = `O convite expira em: ${_bondsTimeLeft(expiresAt)}`;
+      timerEl.style.display = 'block';
+    } else {
+      timerEl.style.display = 'none';
+    }
+  }
+  modal.style.display = 'flex';
+}
+
+function closeBondInviteResult() {
+  const m = document.getElementById('tav-bond-invite-result');
+  if (m) m.style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+//  RECEBER CONVITE (notificação bond_invite)
+// ══════════════════════════════════════════
+function _bondsShowInviteReceived(notif) {
+  const modal   = document.getElementById('tav-bond-invite-received');
+  const avImg   = document.getElementById('bir-avatar');
+  const textEl  = document.getElementById('bir-text');
+  const bondImg = document.getElementById('bir-bond-img');
+  const decBtn  = document.getElementById('bir-decline-btn');
+  const accBtn  = document.getElementById('bir-accept-btn');
+  if (!modal) return;
+
+  const bondLabel = notif.bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+  const imgUrl    = notif.bondType === 'couple'
+    ? 'https://aden-rpg.pages.dev/assets/laco_casal1.webp'
+    : 'https://aden-rpg.pages.dev/assets/laco_amigo1.webp';
+
+  if (avImg)   avImg.src         = notif.fromAvatar || makeAvatar(notif.fromName || '?', 70);
+  if (textEl)  textEl.textContent = `${notif.fromName} está te convidando para ser ${bondLabel}!`;
+  if (bondImg) { bondImg.src = imgUrl; bondImg.style.display = 'block'; }
+
+  if (decBtn) decBtn.onclick = async () => {
+    modal.style.display = 'none';
+    await _bondsRespondInvite(notif.inviteId, false, notif.fromName);
+  };
+  if (accBtn) accBtn.onclick = async () => {
+    modal.style.display = 'none';
+    await _bondsRespondInvite(notif.inviteId, true, notif.fromName);
+  };
+
+  modal.style.display = 'flex';
+}
+
+async function _bondsRespondInvite(inviteId, accept, fromName) {
+  const sb = getSB();
+  if (!sb) { showToast('Sem conexão.'); return; }
+  try {
+    const { data, error } = await sb.rpc('respond_bond_invite', {
+      p_invite_id: inviteId,
+      p_accept:    accept
+    });
+    if (error) throw error;
+
+    if (accept && data?.success) {
+      _bondsClearCache(PLAYER.id);
+      showToast(`Laço formado com ${fromName}! ❤`);
+      // Remove a notificação do localStorage
+      _tavRemoveBondNotif(inviteId);
+      _tavUpdateNotifDot();
+    } else if (!accept) {
+      showToast('Convite recusado.');
+      _tavRemoveBondNotif(inviteId);
+      _tavUpdateNotifDot();
+    } else {
+      const errMap = {
+        'no_slot_available': 'Não há mais vaga disponível.',
+        'invite_expired':    'Este convite expirou.',
+      };
+      showToast(errMap[data?.error] || 'Não foi possível responder ao convite.');
+    }
+  } catch(e) {
+    console.warn('respond_bond_invite:', e);
+    showToast('Erro ao responder convite.');
+  }
+}
+
+function _tavRemoveBondNotif(inviteId) {
+  try {
+    let notifs = _tavGetNotifications();
+    notifs = notifs.filter(n => !(n.type === 'bond_invite' && n.inviteId === inviteId));
+    _tavSaveNotifications(notifs);
+  } catch(_) {}
+}
+
+// ══════════════════════════════════════════
+//  INTEGRAÇÃO COM NOTIFICAÇÕES (bond_invite)
+// ══════════════════════════════════════════
+// Sobrescreve _tavFetchPendingNotifications para também processar bond_invites
+const _origFetchPendingNotifications = _tavFetchPendingNotifications;
+_tavFetchPendingNotifications = async function() {
+  try {
+    const sb = getSB();
+    if (!sb || !PLAYER.id) return;
+    const { data, error } = await sb.rpc('get_and_clear_follow_notifications');
+    if (error || !data?.length) return;
+
+    const notifs = _tavGetNotifications();
+    const now    = Date.now();
+    let changed  = false;
+
+    data.forEach(n => {
+      if (n.type === 'follow') {
+        const at = new Date(n.created_at).getTime();
+        if (notifs.find(x => x.type === 'follow' && x.fromId === n.from_id && Math.abs(now - x.at) < 300_000)) return;
+        notifs.unshift({
+          id: 'f_' + n.from_id + '_' + at,
+          type: 'follow',
+          fromId: n.from_id,
+          fromName: n.from_name || '',
+          fromAvatar: n.from_avatar || ownersCache[n.from_id]?.avatar_url || '',
+          readAt: null,
+          at
+        });
+        changed = true;
+      } else if (n.type === 'bond_invite' && n.invite_id) {
+        const at = new Date(n.created_at).getTime();
+        // Dedup por invite_id
+        if (notifs.find(x => x.type === 'bond_invite' && x.inviteId === n.invite_id)) return;
+        notifs.unshift({
+          id: 'bi_' + n.invite_id + '_' + at,
+          type: 'bond_invite',
+          fromId: n.from_id,
+          fromName: n.from_name || '',
+          fromAvatar: n.from_avatar || ownersCache[n.from_id]?.avatar_url || '',
+          bondType: n.bond_type,
+          inviteId: n.invite_id,
+          expiresAt: n.expires_at,
+          readAt: null,
+          at
+        });
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      _tavSaveNotifications(notifs.slice(0, 50));
+      _tavUpdateNotifDot();
+    }
+  } catch(e) {}
+};
+
+// Sobrescreve _tavRenderNotifs para incluir bond_invite
+const _origRenderNotifs = _tavRenderNotifs;
+_tavRenderNotifs = function() {
+  const listEl = document.getElementById('tav-notif-list');
+  if (!listEl) return;
+  const notifs = _tavGetNotifications();
+  if (!notifs.length) { listEl.innerHTML = '<div class="tav-notif-empty">Nenhuma notificação.</div>'; return; }
+  listEl.innerHTML = '';
+
+  notifs.forEach(n => {
+    if (n.type === 'follow') {
+      const av  = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
+      const row = document.createElement('div');
+      row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');
+      row.innerHTML = `
+        <div class="tav-notif-av"><img src="${esc(av)}" onerror="this.src='${makeAvatar(n.fromName||'?',40)}'"></div>
+        <div class="tav-notif-text">
+          <strong>${esc(n.fromName)}</strong> começou a te seguir.
+          <div class="tav-notif-time">${_tavTimeAgo(n.at)}</div>
+        </div>`;
+      row.onclick = () => { closeNotifModal(); openPlayerModalFor(n.fromId, n.fromName); };
+      listEl.appendChild(row);
+
+    } else if (n.type === 'bond_invite') {
+      // Verifica se expirou
+      const expired = n.expiresAt && new Date(n.expiresAt).getTime() < Date.now();
+      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+      const av  = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
+      const row = document.createElement('div');
+      row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');
+      row.innerHTML = `
+        <div class="tav-notif-av" style="border-color:${n.bondType==='couple'?'rgba(255,130,180,0.7)':'var(--border-mid)'};">
+          <img src="${esc(av)}" onerror="this.src='${makeAvatar(n.fromName||'?',40)}'">
+        </div>
+        <div class="tav-notif-text">
+          <strong>${esc(n.fromName)}</strong> — Convite de relacionamento!
+          <div class="tav-notif-time">${expired ? '❌ Expirado' : `Expira em: ${_bondsTimeLeft(n.expiresAt)} · ${_tavTimeAgo(n.at)}`}</div>
+        </div>`;
+      if (!expired) {
+        row.onclick = () => {
+          closeNotifModal();
+          _bondsShowInviteReceived(n);
+        };
+      }
+      listEl.appendChild(row);
+    }
+  });
+};
+
+// Nota: openNotifModal() já chama _tavRenderNotifs() internamente,
+// portanto a substituição acima de _tavRenderNotifs é suficiente.

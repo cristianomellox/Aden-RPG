@@ -2072,32 +2072,39 @@ html,body {
 /* ══════════════════════════════════════════════════════════
    RELACIONAMENTOS (Bonds) — Linhas de menu
    ══════════════════════════════════════════════════════════ */
+/* Outer row: só a margem, idêntico ao equip-row */
 #mpm-bonds-row, #ppp-bonds-row {
-  cursor: pointer;
-  border-top: 1px solid var(--border);
-  transition: background 0.18s;
+  margin: 0 14px 10px;
 }
-#mpm-bonds-row:hover, #ppp-bonds-row:hover { background: rgba(201,169,74,0.06); }
+/* Inner: card com border/background, cursor e hover — igual ao equip-inner */
 #mpm-bonds-inner, #ppp-bonds-inner {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
+  gap: 12px;
+  background: rgba(14,9,3,0.72);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
 }
+#mpm-bonds-inner:hover, #ppp-bonds-inner:hover { background: rgba(30,20,8,0.88); border-color: var(--gold-dark); }
 #mpm-bonds-texts, #ppp-bonds-texts {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 #mpm-bonds-label, #ppp-bonds-label {
   font-family: 'Cinzel', serif;
   font-size: 0.85rem;
+  font-weight: 600;
   color: var(--gold-light);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 #mpm-bonds-sub, #ppp-bonds-sub {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   color: var(--text-muted);
   font-style: italic;
 }

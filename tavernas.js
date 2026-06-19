@@ -4874,17 +4874,33 @@ async function _bondsFetchAndCache(targetId) {
     if (cardsEl && !_bonds.data) cardsEl.innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
     return;
   }
+
+  // ── Fase 1: fetch da rede ──────────────────────────────────
+  let fetchedData = null;
   try {
     const { data, error } = await sb.rpc('get_player_bonds', { p_player_id: targetId });
     if (error) throw error;
-    _bonds.data = data;
-    // Salva em IDB — fire-and-forget, não bloqueia o render
-    dbSaveBonds(targetId, data).catch(() => {});
-    try { sessionStorage.setItem('tav_bonds_' + targetId, JSON.stringify({ v: data, t: Date.now() })); } catch(_) {}
-    if (_bonds.targetId === targetId) _bondsRenderCards();
+    fetchedData = data;
   } catch(e) {
-    console.warn('get_player_bonds:', e);
-    if (cardsEl && !_bonds.data) cardsEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
+    console.warn('[bonds] fetch error:', e);
+    if (cardsEl && !_bonds.data)
+      cardsEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar laços.</div>';
+    return;
+  }
+
+  _bonds.data = fetchedData;
+  dbSaveBonds(targetId, fetchedData).catch(() => {});
+  try { sessionStorage.setItem('tav_bonds_' + targetId, JSON.stringify({ v: fetchedData, t: Date.now() })); } catch(_) {}
+
+  // ── Fase 2: render (erro separado para não silenciar bugs) ─
+  if (_bonds.targetId === targetId) {
+    try {
+      _bondsRenderCards();
+    } catch(renderErr) {
+      console.error('[bonds] render error:', renderErr);
+      if (cardsEl)
+        cardsEl.innerHTML = `<div class="tav-notif-empty">Erro ao exibir laços.<br><small style="font-size:0.65em;opacity:0.6;">${renderErr.message}</small></div>`;
+    }
   }
 }
 

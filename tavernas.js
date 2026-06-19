@@ -38,7 +38,7 @@ const ICE_SERVERS   = [
 
 // ── IndexedDB (mesma instância do jogo principal) ──
 const GLOBAL_DB_NAME    = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6;
+const GLOBAL_DB_VERSION = 7;
 const PLAYER_STORE      = 'player_store';
 const OWNERS_STORE      = 'owners_store';
 const OWNERS_CACHE_TTL  = 24 * 60 * 60 * 1000; // 24h
@@ -51,6 +51,7 @@ function openGlobalDB() {
       if (!db.objectStoreNames.contains('auth_store'))   db.createObjectStore('auth_store',   { keyPath: 'key' });
       if (!db.objectStoreNames.contains(PLAYER_STORE))   db.createObjectStore(PLAYER_STORE,   { keyPath: 'key' });
       if (!db.objectStoreNames.contains(OWNERS_STORE))   db.createObjectStore(OWNERS_STORE,   { keyPath: 'id'  });
+      if (!db.objectStoreNames.contains('bonds_store'))  db.createObjectStore('bonds_store',  { keyPath: 'id'  });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror   = () => reject(req.error);
@@ -4740,6 +4741,8 @@ const BOND_LEVEL_THRESHOLDS = [
   38700, // Nível 20
 ];
 
+const BONDS_CACHE_TTL = 5 * 60 * 1000; // 5 min (laços mudam raramente)
+
 function getBondLevel(points) {
   let lv = 1;
   for (let i = 0; i < BOND_LEVEL_THRESHOLDS.length; i++) {
@@ -4758,19 +4761,57 @@ function getBondLevelProgress(points) {
   return { level: lv, pct, current: points - current, needed: next - current };
 }
 
+// ── Cache de laços — IDB bonds_store (TTL 5 min) ───────────────
+// Padrão idêntico ao owners_store: IDB para persistência entre reloads,
+// invalidação explícita quando laços mudam.
+
+async function dbGetBonds(playerId) {
+  try {
+    const db = await openGlobalDB();
+    return new Promise(resolve => {
+      const tx  = db.transaction('bonds_store', 'readonly');
+      const req = tx.objectStore('bonds_store').get(playerId);
+      req.onsuccess = () => {
+        const rec = req.result;
+        if (!rec || !rec.data || (Date.now() - rec.timestamp) > BONDS_CACHE_TTL) {
+          resolve(null);
+        } else {
+          resolve(rec.data);
+        }
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+
+async function dbSaveBonds(playerId, data) {
+  try {
+    const db = await openGlobalDB();
+    const tx  = db.transaction('bonds_store', 'readwrite');
+    tx.objectStore('bonds_store').put({ id: playerId, data, timestamp: Date.now() });
+  } catch(e) { console.warn('dbSaveBonds:', e); }
+}
+
+async function dbClearBonds(playerId) {
+  try {
+    const db = await openGlobalDB();
+    const tx  = db.transaction('bonds_store', 'readwrite');
+    tx.objectStore('bonds_store').delete(playerId);
+  } catch(e) {}
+}
+
+// Invalida cache de laços de um jogador em todas as camadas
+async function _bondsClearCache(pid) {
+  try { sessionStorage.removeItem('tav_bonds_' + pid); } catch(_) {}
+  await dbClearBonds(pid);
+}
+
 // ── Estado do modal de laços ──
 const _bonds = {
-  targetId:  null,
-  isSelf:    false,
-  data:      null,      // resultado de get_player_bonds
-  loading:   false
+  targetId: null,
+  isSelf:   false,
+  data:     null,
 };
-
-// ── Cache sessionStorage para dados de laços ──
-function _bondsGetCacheKey(pid) { return 'tav_bonds_' + pid; }
-function _bondsClearCache(pid)  {
-  try { sessionStorage.removeItem(_bondsGetCacheKey(pid)); } catch(_) {}
-}
 
 // Timer humanizado para expiração de convite
 function _bondsTimeLeft(expiresAt) {
@@ -4801,30 +4842,39 @@ async function openBondsModal(targetId, isSelf) {
   if (titleEl) titleEl.textContent = isSelf ? '❤ Meus Relacionamentos' : '❤ Relacionamentos';
   if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
 
-  // Cache rápido (60s)
-  const ck = _bondsGetCacheKey(targetId);
-  try {
-    const cached = sessionStorage.getItem(ck);
-    if (cached) {
-      const { v, t } = JSON.parse(cached);
-      if (Date.now() - t < 60_000) { _bonds.data = v; _bondsRenderCards(); return; }
-    }
-  } catch(_) {}
+  // ── Camada 1: IDB (zero egress, persiste entre reloads) ──────
+  const cached = await dbGetBonds(targetId);
+  if (cached) {
+    _bonds.data = cached;
+    _bondsRenderCards();
+    // Atualiza em background sem bloquear a UI
+    _bondsFetchAndCache(targetId).catch(() => {});
+    return;
+  }
 
+  // ── Camada 2: rede (Supabase) ─────────────────────────────
+  await _bondsFetchAndCache(targetId);
+}
+
+// Busca laços da rede, salva no IDB e renderiza
+async function _bondsFetchAndCache(targetId) {
+  const cardsEl = document.getElementById('tav-bonds-cards');
   const sb = getSB();
   if (!sb) {
-    if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
+    if (cardsEl && !_bonds.data) cardsEl.innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
     return;
   }
   try {
     const { data, error } = await sb.rpc('get_player_bonds', { p_player_id: targetId });
     if (error) throw error;
     _bonds.data = data;
-    try { sessionStorage.setItem(ck, JSON.stringify({ v: data, t: Date.now() })); } catch(_) {}
-    _bondsRenderCards();
+    // Salva em IDB (5 min TTL) e sessionStorage (fallback leve)
+    await dbSaveBonds(targetId, data);
+    try { sessionStorage.setItem('tav_bonds_' + targetId, JSON.stringify({ v: data, t: Date.now() })); } catch(_) {}
+    if (_bonds.targetId === targetId) _bondsRenderCards();
   } catch(e) {
     console.warn('get_player_bonds:', e);
-    if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
+    if (cardsEl && !_bonds.data) cardsEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar.</div>';
   }
 }
 
@@ -5076,8 +5126,8 @@ async function _bondsSendInvite() {
     if (error) throw error;
 
     if (data?.success) {
-      // Sucesso
-      _bondsClearCache(PLAYER.id);
+      // Sucesso — invalida cache do próprio jogador
+      await _bondsClearCache(PLAYER.id);
       closeBondEligibleModal();
       const expiresAt = data.expires_at;
       _bondsShowResult(true, `Convite enviado para ${p.toName}!`, expiresAt);
@@ -5152,17 +5202,17 @@ function _bondsShowInviteReceived(notif) {
 
   if (decBtn) decBtn.onclick = async () => {
     modal.style.display = 'none';
-    await _bondsRespondInvite(notif.inviteId, false, notif.fromName);
+    await _bondsRespondInvite(notif.inviteId, false, notif.fromName, notif);
   };
   if (accBtn) accBtn.onclick = async () => {
     modal.style.display = 'none';
-    await _bondsRespondInvite(notif.inviteId, true, notif.fromName);
+    await _bondsRespondInvite(notif.inviteId, true, notif.fromName, notif);
   };
 
   modal.style.display = 'flex';
 }
 
-async function _bondsRespondInvite(inviteId, accept, fromName) {
+async function _bondsRespondInvite(inviteId, accept, fromName, notif) {
   const sb = getSB();
   if (!sb) { showToast('Sem conexão.'); return; }
   try {
@@ -5173,9 +5223,10 @@ async function _bondsRespondInvite(inviteId, accept, fromName) {
     if (error) throw error;
 
     if (accept && data?.success) {
-      _bondsClearCache(PLAYER.id);
+      // Invalida cache de ambos os jogadores
+      await _bondsClearCache(PLAYER.id);
+      if (notif.fromId) await _bondsClearCache(notif.fromId);
       showToast(`Laço formado com ${fromName}! ❤`);
-      // Remove a notificação do localStorage
       _tavRemoveBondNotif(inviteId);
       _tavUpdateNotifDot();
     } else if (!accept) {
@@ -5204,49 +5255,61 @@ function _tavRemoveBondNotif(inviteId) {
 }
 
 // ══════════════════════════════════════════
-//  INTEGRAÇÃO COM NOTIFICAÇÕES (bond_invite)
+//  FETCH AUTÔNOMO DE NOTIFICAÇÕES DE LAÇO
+//  Chama get_pending_bond_notifications() separadamente,
+//  sem sobrescrever _tavFetchPendingNotifications.
 // ══════════════════════════════════════════
-// Sobrescreve _tavFetchPendingNotifications para também processar bond_invites
-const _origFetchPendingNotifications = _tavFetchPendingNotifications;
-_tavFetchPendingNotifications = async function() {
+async function _bondsFetchPendingNotifications() {
+  // Aguarda PLAYER.id estar disponível (auth assíncrona)
+  let attempts = 0;
+  while (!PLAYER.id && attempts < 12) {
+    await new Promise(r => setTimeout(r, 500));
+    attempts++;
+  }
+  if (!PLAYER.id) return;
+
+  const sb = getSB();
+  if (!sb) return;
+
   try {
-    const sb = getSB();
-    if (!sb || !PLAYER.id) return;
-    const { data, error } = await sb.rpc('get_and_clear_follow_notifications');
+    const { data, error } = await sb.rpc('get_pending_bond_notifications');
     if (error || !data?.length) return;
 
-    const notifs = _tavGetNotifications();
-    const now    = Date.now();
-    let changed  = false;
+    const notifs  = _tavGetNotifications();
+    let changed   = false;
 
     data.forEach(n => {
-      if (n.type === 'follow') {
+      if (n.type === 'bond_invite') {
+        if (!n.invite_id) return;
+        if (notifs.find(x => x.type === 'bond_invite' && x.inviteId === n.invite_id)) return;
         const at = new Date(n.created_at).getTime();
-        if (notifs.find(x => x.type === 'follow' && x.fromId === n.from_id && Math.abs(now - x.at) < 300_000)) return;
         notifs.unshift({
-          id: 'f_' + n.from_id + '_' + at,
-          type: 'follow',
-          fromId: n.from_id,
-          fromName: n.from_name || '',
+          id:         'bi_' + n.invite_id + '_' + at,
+          type:       'bond_invite',
+          fromId:     n.from_id,
+          fromName:   n.from_name  || '',
           fromAvatar: n.from_avatar || ownersCache[n.from_id]?.avatar_url || '',
-          readAt: null,
+          bondType:   n.bond_type,
+          inviteId:   n.invite_id,
+          expiresAt:  n.expires_at,
+          readAt:     null,
           at
         });
         changed = true;
-      } else if (n.type === 'bond_invite' && n.invite_id) {
+      } else if (n.type === 'bond_response') {
+        // Dedup por notif_id
+        if (notifs.find(x => x.type === 'bond_response' && x.notifId === n.notif_id)) return;
         const at = new Date(n.created_at).getTime();
-        // Dedup por invite_id
-        if (notifs.find(x => x.type === 'bond_invite' && x.inviteId === n.invite_id)) return;
         notifs.unshift({
-          id: 'bi_' + n.invite_id + '_' + at,
-          type: 'bond_invite',
-          fromId: n.from_id,
-          fromName: n.from_name || '',
+          id:         'br_' + n.notif_id + '_' + at,
+          type:       'bond_response',
+          notifId:    n.notif_id,
+          fromId:     n.from_id,
+          fromName:   n.from_name  || '',
           fromAvatar: n.from_avatar || ownersCache[n.from_id]?.avatar_url || '',
-          bondType: n.bond_type,
-          inviteId: n.invite_id,
-          expiresAt: n.expires_at,
-          readAt: null,
+          bondType:   n.bond_type,
+          accepted:   n.accepted,
+          readAt:     null,
           at
         });
         changed = true;
@@ -5257,8 +5320,13 @@ _tavFetchPendingNotifications = async function() {
       _tavSaveNotifications(notifs.slice(0, 50));
       _tavUpdateNotifDot();
     }
-  } catch(e) {}
-};
+  } catch(e) { console.warn('_bondsFetchPendingNotifications:', e); }
+}
+
+// Dispara o fetch de bond notifications na carga da página
+document.addEventListener('DOMContentLoaded', () => {
+  _bondsFetchPendingNotifications().catch(() => {});
+});
 
 // Sobrescreve _tavRenderNotifs para incluir bond_invite
 const _origRenderNotifs = _tavRenderNotifs;
@@ -5304,6 +5372,26 @@ _tavRenderNotifs = function() {
           _bondsShowInviteReceived(n);
         };
       }
+      listEl.appendChild(row);
+
+    } else if (n.type === 'bond_response') {
+      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+      const av  = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
+      const row = document.createElement('div');
+      row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');
+      const icon   = n.accepted ? '💚' : '💔';
+      const result = n.accepted
+        ? `aceitou seu convite de <strong>${bondLabel}</strong>!`
+        : `recusou seu convite de <strong>${bondLabel}</strong>.`;
+      row.innerHTML = `
+        <div class="tav-notif-av" style="border-color:${n.bondType==='couple'?'rgba(255,130,180,0.7)':'var(--border-mid)'};">
+          <img src="${esc(av)}" onerror="this.src='${makeAvatar(n.fromName||'?',40)}'">
+        </div>
+        <div class="tav-notif-text">
+          ${icon} <strong>${esc(n.fromName)}</strong> ${result}
+          <div class="tav-notif-time">${_tavTimeAgo(n.at)}</div>
+        </div>`;
+      row.onclick = () => { closeNotifModal(); openPlayerModalFor(n.fromId, n.fromName); };
       listEl.appendChild(row);
     }
   });

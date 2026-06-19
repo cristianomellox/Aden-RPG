@@ -4854,9 +4854,7 @@ async function openBondsModal(targetId, isSelf) {
   if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
 
   // ── Camada 1: IDB (zero egress, persiste entre reloads) ──────
-  let cached = null;
-
-try { cached = await dbGetBonds(targetId); } catch(_) {} = await dbGetBonds(targetId);
+  const cached = await dbGetBonds(targetId);
   if (cached) {
     _bonds.data = cached;
     _bondsRenderCards();

@@ -45,7 +45,8 @@ const OWNERS_CACHE_TTL  = 24 * 60 * 60 * 1000; // 24h
 
 function openGlobalDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+    const req     = indexedDB.open(GLOBAL_DB_NAME, GLOBAL_DB_VERSION);
+    const timeout = setTimeout(() => reject(new Error('idb_timeout')), 800);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('auth_store'))   db.createObjectStore('auth_store',   { keyPath: 'key' });
@@ -54,14 +55,13 @@ function openGlobalDB() {
       if (!db.objectStoreNames.contains('bonds_store'))  db.createObjectStore('bonds_store',  { keyPath: 'id'  });
     };
     req.onsuccess = () => {
+      clearTimeout(timeout);
       const db = req.result;
-      // Fecha esta conexão se outra aba pedir upgrade (evita bloqueio futuro)
       db.onversionchange = () => db.close();
       resolve(db);
     };
-    req.onerror   = () => reject(req.error);
-    // Se outra aba bloqueou o upgrade, rejeita rápido (cai no fallback de rede)
-    req.onblocked = () => reject(new Error('idb_blocked'));
+    req.onerror   = () => { clearTimeout(timeout); reject(req.error); };
+    req.onblocked = () => { clearTimeout(timeout); reject(new Error('idb_blocked')); };
   });
 }
 
@@ -4878,8 +4878,8 @@ async function _bondsFetchAndCache(targetId) {
     const { data, error } = await sb.rpc('get_player_bonds', { p_player_id: targetId });
     if (error) throw error;
     _bonds.data = data;
-    // Salva em IDB (5 min TTL) e sessionStorage (fallback leve)
-    await dbSaveBonds(targetId, data);
+    // Salva em IDB — fire-and-forget, não bloqueia o render
+    dbSaveBonds(targetId, data).catch(() => {});
     try { sessionStorage.setItem('tav_bonds_' + targetId, JSON.stringify({ v: data, t: Date.now() })); } catch(_) {}
     if (_bonds.targetId === targetId) _bondsRenderCards();
   } catch(e) {

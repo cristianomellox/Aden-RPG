@@ -501,9 +501,10 @@ function joinGlobalPresence() {
   });
 
   // Após o canal ser attached (SYNC completo), faz refresh completo como segurança
-  const doFullRefresh = () => {
-    globalChannel.presence.get((err, members) => {
-      if (err || !members) return;
+  const doFullRefresh = async () => {
+    try {
+      const members = await globalChannel.presence.get();
+      if (!members) return;
       globalPresenceMap = {};
       members.forEach(m => {
         const d = m.data || {};
@@ -515,7 +516,9 @@ function joinGlobalPresence() {
       renderListCards();
       // Busca avatares faltantes após SYNC
       refreshGlobalAvatars();
-    });
+    } catch(err) {
+      console.warn('[Ably] presence.get error:', err);
+    }
   };
 
   if (globalChannel.state === 'attached') {
@@ -806,10 +809,11 @@ function joinChannel(roomId) {
 
   // Aguarda o SYNC completo (canal 'attached') antes de buscar membros
   // Evita presence.get() retornar lista incompleta ou erro
-  const doGetMembers = () => {
-    roomChannel.presence.get((err, members) => {
-      // Sempre atualiza o contador, mesmo em erro (mostra pelo menos o próprio)
-      if (err || !members) { updateOnlineCount(); return; }
+  const doGetMembers = async () => {
+    try {
+      const members = await roomChannel.presence.get();
+      // Sempre atualiza o contador, mesmo sem membros
+      if (!members) { updateOnlineCount(); return; }
       const idsToFetch = [];
       members.forEach(m => {
         if (m.clientId === PLAYER.id) return;
@@ -867,7 +871,10 @@ function joinChannel(roomId) {
           renderListCards();
         });
       }
-    });
+    } catch(err) {
+      console.warn('[Ably] presence.get error:', err);
+      updateOnlineCount();
+    }
   };
 
   if (roomChannel.state === 'attached') {

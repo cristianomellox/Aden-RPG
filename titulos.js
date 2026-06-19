@@ -33,7 +33,7 @@ let activeEdit = null;
 
 // --- Configuração do DB Global (Para Invalidação de Cache) ---
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6; // Mesma versão usada no mines.js e script.js
+const GLOBAL_DB_VERSION = 7; // Mesma versão usada no mines.js e script.js
 const OWNERS_STORE = 'owners_store';
 const PLAYER_STORE = 'player_store';
 

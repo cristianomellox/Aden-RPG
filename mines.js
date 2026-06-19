@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient.js'
 // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS + CACHE DE DONOS V3)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6; 
+const GLOBAL_DB_VERSION = 7; 
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 const OWNERS_STORE = 'owners_store'; 

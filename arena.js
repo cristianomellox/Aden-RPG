@@ -58,7 +58,7 @@ async function _arFetchAndApplyFrame(pid, containerEl) {
 // 1. ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS & SYNC COM CACHE COMPARTILHADO)
 // =======================================================================
 const GLOBAL_DB_NAME = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6; // Versão alinhada com mines.js
+const GLOBAL_DB_VERSION = 7; // Versão alinhada com mines.js
 const AUTH_STORE = 'auth_store';
 const PLAYER_STORE = 'player_store';
 const OWNERS_STORE = 'owners_store'; // Store compartilhada de perfis

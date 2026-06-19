@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // NOVO: ADEN GLOBAL DB (INTEGRAÇÃO ZERO EGRESS)
   // =======================================================================
   const GLOBAL_DB_NAME = 'aden_global_db';
-  const GLOBAL_DB_VERSION = 6;
+  const GLOBAL_DB_VERSION = 7;
   const AUTH_STORE = 'auth_store';
   const PLAYER_STORE = 'player_store';
   

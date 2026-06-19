@@ -51,7 +51,7 @@ async function _rnFetchAndApplyFrame(pid, containerEl) {
 
 
 const GLOBAL_DB_NAME    = 'aden_global_db';
-const GLOBAL_DB_VERSION = 6;
+const GLOBAL_DB_VERSION = 7;
 const OWNERS_STORE      = 'owners_store';
 
 const GlobalDB = {

@@ -1,10 +1,3 @@
-/* ═══════════════════════════════════════════
-   TAVERNAS — Aden RPG Online  |  tavernas.js
-   Ably pub/sub (chat + presence) + WebRTC voice
-   v2 — Fixes: avatar real, presença real na lista,
-        mic auto ao sentar, desconexão ao voltar,
-        sem rewind de mensagens.
-═══════════════════════════════════════════ */
 
 // ── Config ──
 const ABLY_KEY      = '5kVVVQ.Gn1VBA:lN3zK-KKFTZOWm3iBe3FfbPmtwb-oxsMTco_W0A-AZw';
@@ -4785,9 +4778,10 @@ async function dbGetBonds(playerId) {
       openGlobalDB(),
       new Promise((_, rej) => setTimeout(() => rej(new Error('idb_timeout')), 600))
     ]);
-    return new Promise(resolve => {
-      const tx  = db.transaction('bonds_store', 'readonly');
-      const req = tx.objectStore('bonds_store').get(playerId);
+    // ← Envolve o new Promise no try para capturar DOMException do transaction
+    const tx  = db.transaction('bonds_store', 'readonly');
+    const req = tx.objectStore('bonds_store').get(playerId);
+    return await new Promise(resolve => {
       req.onsuccess = () => {
         const rec = req.result;
         if (!rec || !rec.data || (Date.now() - rec.timestamp) > BONDS_CACHE_TTL) {
@@ -4860,7 +4854,9 @@ async function openBondsModal(targetId, isSelf) {
   if (cardsEl) cardsEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
 
   // ── Camada 1: IDB (zero egress, persiste entre reloads) ──────
-  const cached = await dbGetBonds(targetId);
+  let cached = null;
+
+try { cached = await dbGetBonds(targetId); } catch(_) {} = await dbGetBonds(targetId);
   if (cached) {
     _bonds.data = cached;
     _bondsRenderCards();

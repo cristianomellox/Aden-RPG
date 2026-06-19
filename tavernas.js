@@ -337,6 +337,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Busca notificações de "novo seguidor" registradas via Supabase
   // (ex.: follows feitos na guilda/ranking, ou enquanto offline)
   _tavFetchPendingNotifications().catch(() => {});
+  // Busca notificações de laço (bond_invite recebido + bond_response do remetente)
+  // chamado aqui, após initPlayer(), para garantir que auth.uid() no SQL retorna corretamente
+  _bondsFetchPendingNotifications().catch(() => {});
   // Pré-carrega sets de seguindo / seguidores (necessário para verificação de amizade mútua)
   _tavEnsureFollowingSet().catch(() => {});
   _tavEnsureFollowersSet().catch(() => {});
@@ -5287,12 +5290,7 @@ function _tavRemoveBondNotif(inviteId) {
 //  sem sobrescrever _tavFetchPendingNotifications.
 // ══════════════════════════════════════════
 async function _bondsFetchPendingNotifications() {
-  // Aguarda PLAYER.id estar disponível (auth assíncrona)
-  let attempts = 0;
-  while (!PLAYER.id && attempts < 12) {
-    await new Promise(r => setTimeout(r, 500));
-    attempts++;
-  }
+  // Chamada após initPlayer() — PLAYER.id e sessão Supabase já garantidos
   if (!PLAYER.id) return;
 
   const sb = getSB();
@@ -5350,10 +5348,6 @@ async function _bondsFetchPendingNotifications() {
   } catch(e) { console.warn('_bondsFetchPendingNotifications:', e); }
 }
 
-// Dispara o fetch de bond notifications na carga da página
-document.addEventListener('DOMContentLoaded', () => {
-  _bondsFetchPendingNotifications().catch(() => {});
-});
 
 // Sobrescreve _tavRenderNotifs para incluir bond_invite
 const _origRenderNotifs = _tavRenderNotifs;

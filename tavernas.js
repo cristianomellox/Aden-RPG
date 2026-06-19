@@ -53,8 +53,15 @@ function openGlobalDB() {
       if (!db.objectStoreNames.contains(OWNERS_STORE))   db.createObjectStore(OWNERS_STORE,   { keyPath: 'id'  });
       if (!db.objectStoreNames.contains('bonds_store'))  db.createObjectStore('bonds_store',  { keyPath: 'id'  });
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Fecha esta conexão se outra aba pedir upgrade (evita bloqueio futuro)
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror   = () => reject(req.error);
+    // Se outra aba bloqueou o upgrade, rejeita rápido (cai no fallback de rede)
+    req.onblocked = () => reject(new Error('idb_blocked'));
   });
 }
 
@@ -4767,7 +4774,10 @@ function getBondLevelProgress(points) {
 
 async function dbGetBonds(playerId) {
   try {
-    const db = await openGlobalDB();
+    const db = await Promise.race([
+      openGlobalDB(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('idb_timeout')), 600))
+    ]);
     return new Promise(resolve => {
       const tx  = db.transaction('bonds_store', 'readonly');
       const req = tx.objectStore('bonds_store').get(playerId);

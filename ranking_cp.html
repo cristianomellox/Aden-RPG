@@ -732,7 +732,25 @@ const GlobalDB = {
       const tx    = db.transaction(OWNERS_STORE,'readwrite');
       const store = tx.objectStore(OWNERS_STORE);
       const now   = Date.now();
-      list.forEach(o => store.put({id:o.id, name:o.name, avatar_url:o.avatar_url, guild_id:o.guild_id, timestamp:now}));
+      // CORREÇÃO: merge com o registro existente em vez de put() cego.
+      // Chamadores parciais (ex: ranking de Ruínas, que só manda guild_name)
+      // não devem apagar o guild_id já cacheado por outras telas.
+      await Promise.all(list.map(o => new Promise(resolve=>{
+        if(!o.id){ resolve(); return; }
+        const getReq = store.get(o.id);
+        getReq.onsuccess = () => {
+          const existing = getReq.result || {};
+          store.put({
+            id: o.id,
+            name:       o.name       !== undefined ? o.name       : existing.name,
+            avatar_url: o.avatar_url !== undefined ? o.avatar_url : existing.avatar_url,
+            guild_id:   o.guild_id   !== undefined ? o.guild_id   : existing.guild_id,
+            timestamp: now
+          });
+          resolve();
+        };
+        getReq.onerror = () => resolve();
+      })));
       return new Promise(r=>{ tx.oncomplete = ()=>r(); tx.onerror = ()=>r(); });
     }catch(e){}
   }

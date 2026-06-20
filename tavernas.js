@@ -98,10 +98,32 @@ async function dbSaveOwners(list) {
     const tx  = db.transaction(OWNERS_STORE, 'readwrite');
     const st  = tx.objectStore(OWNERS_STORE);
     const now = Date.now();
-    list.forEach(o => {
+
+    // CORREÇÃO: merge com o registro já cacheado em vez de put() cego.
+    // Listas parciais (ex: seguidores, presenteadores) não trazem guild_id —
+    // sem o merge, isso sobrescrevia e apagava o guild_id já conhecido
+    // de jogadores cacheados por outras páginas (ranking, playerModal etc.),
+    // já que o owners_store é compartilhado globalmente entre todas as telas.
+    await Promise.all(list.map(o => new Promise(resolve => {
       const id = o.id || o.i;
-      if (id) st.put({ id, name: o.name || o.n, avatar_url: o.avatar_url || o.a, guild_id: o.guild_id || o.g, timestamp: now });
-    });
+      if (!id) { resolve(); return; }
+      const getReq = st.get(id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result || {};
+        const incomingName   = o.name       !== undefined ? o.name       : o.n;
+        const incomingAvatar = o.avatar_url !== undefined ? o.avatar_url : o.a;
+        const incomingGuild  = o.guild_id   !== undefined ? o.guild_id   : o.g;
+        st.put({
+          id,
+          name:       incomingName   !== undefined ? incomingName   : existing.name,
+          avatar_url: incomingAvatar !== undefined ? incomingAvatar : existing.avatar_url,
+          guild_id:   incomingGuild  !== undefined ? incomingGuild  : existing.guild_id,
+          timestamp: now
+        });
+        resolve();
+      };
+      getReq.onerror = () => resolve();
+    })));
   } catch (e) { console.warn('dbSaveOwners:', e); }
 }
 

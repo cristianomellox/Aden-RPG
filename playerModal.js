@@ -65,16 +65,26 @@ const GlobalDB = {
             const store = tx.objectStore(OWNERS_STORE);
             const now = Date.now();
 
-            ownersList.forEach(o => {
-                const cacheObj = {
-                    id: o.id,
-                    name: o.name,
-                    avatar_url: o.avatar_url,
-                    guild_id: o.guild_id,
-                    timestamp: now // Atualiza timestamp (24h TTL logic em outros scripts)
+            // CORREÇÃO 2: merge com o registro existente em vez de put() cego.
+            // Evita que uma chamada parcial (sem guild_id) apague o guild_id
+            // já cacheado por outra tela no mesmo owners_store compartilhado.
+            await Promise.all(ownersList.map(o => new Promise(resolve => {
+                if (!o.id) { resolve(); return; }
+                const getReq = store.get(o.id);
+                getReq.onsuccess = () => {
+                    const existing = getReq.result || {};
+                    const cacheObj = {
+                        id: o.id,
+                        name:       o.name       !== undefined ? o.name       : existing.name,
+                        avatar_url: o.avatar_url !== undefined ? o.avatar_url : existing.avatar_url,
+                        guild_id:   o.guild_id   !== undefined ? o.guild_id   : existing.guild_id,
+                        timestamp: now // Atualiza timestamp (24h TTL logic em outros scripts)
+                    };
+                    store.put(cacheObj);
+                    resolve();
                 };
-                store.put(cacheObj);
-            });
+                getReq.onerror = () => resolve();
+            })));
             return new Promise(resolve => { tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); });
         } catch(e) { console.warn("Erro ao salvar donos no cache global:", e); }
     }

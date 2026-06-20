@@ -5290,21 +5290,24 @@ function _tavRemoveBondNotif(inviteId) {
 //  sem sobrescrever _tavFetchPendingNotifications.
 // ══════════════════════════════════════════
 async function _bondsFetchPendingNotifications() {
-  // Chamada após initPlayer() — PLAYER.id e sessão Supabase já garantidos
-  if (!PLAYER.id) return;
+  // Chamada após initPlayer() — PLAYER.id e sessão Supabase garantidos
+  if (!PLAYER.id) { console.warn('[bonds] PLAYER.id nulo, abortando'); return; }
 
   const sb = getSB();
-  if (!sb) return;
+  if (!sb) { console.warn('[bonds] getSB() retornou null'); return; }
 
+  const notifs = _tavGetNotifications();
+  let changed  = false;
+
+  // ── 1. Convites recebidos: consulta player_bond_invites diretamente ──
+  //  Função simples, sem JOIN em player_notifications, sem coluna meta.
   try {
-    const { data, error } = await sb.rpc('get_pending_bond_notifications');
-    if (error || !data?.length) return;
-
-    const notifs  = _tavGetNotifications();
-    let changed   = false;
-
-    data.forEach(n => {
-      if (n.type === 'bond_invite') {
+    const { data: invites, error: invErr } = await sb.rpc('get_my_pending_bond_invites');
+    if (invErr) {
+      console.warn('[bonds] get_my_pending_bond_invites erro:', invErr);
+    } else {
+      console.log('[bonds] convites recebidos:', invites?.length ?? 0, invites);
+      (invites || []).forEach(n => {
         if (!n.invite_id) return;
         if (notifs.find(x => x.type === 'bond_invite' && x.inviteId === n.invite_id)) return;
         const at = new Date(n.created_at).getTime();
@@ -5321,8 +5324,19 @@ async function _bondsFetchPendingNotifications() {
           at
         });
         changed = true;
-      } else if (n.type === 'bond_response') {
-        // Dedup por notif_id
+      });
+    }
+  } catch(e) { console.warn('[bonds] exceção em get_my_pending_bond_invites:', e); }
+
+  // ── 2. Respostas a convites enviados ──
+  //  Função separada, sem coluna meta.
+  try {
+    const { data: responses, error: respErr } = await sb.rpc('get_and_clear_bond_responses');
+    if (respErr) {
+      console.warn('[bonds] get_and_clear_bond_responses erro:', respErr);
+    } else {
+      console.log('[bonds] respostas recebidas:', responses?.length ?? 0, responses);
+      (responses || []).forEach(n => {
         if (notifs.find(x => x.type === 'bond_response' && x.notifId === n.notif_id)) return;
         const at = new Date(n.created_at).getTime();
         notifs.unshift({
@@ -5338,14 +5352,14 @@ async function _bondsFetchPendingNotifications() {
           at
         });
         changed = true;
-      }
-    });
-
-    if (changed) {
-      _tavSaveNotifications(notifs.slice(0, 50));
-      _tavUpdateNotifDot();
+      });
     }
-  } catch(e) { console.warn('_bondsFetchPendingNotifications:', e); }
+  } catch(e) { console.warn('[bonds] exceção em get_and_clear_bond_responses:', e); }
+
+  if (changed) {
+    _tavSaveNotifications(notifs.slice(0, 50));
+    _tavUpdateNotifDot();
+  }
 }
 
 

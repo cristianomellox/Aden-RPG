@@ -367,6 +367,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   _tavEnsureFollowersSet().catch(() => {});
   // Limpeza lazy semanal: mensagens antigas das tavernas (>7 dias)
   _tavLazyCleanupOldMessages().catch(() => {});
+  // Limpeza lazy semanal: notificações antigas (>30 dias)
+  _tavLazyCleanupOldNotifications().catch(() => {});
   // Social stats clicáveis no modal do jogador
   const pmFollEl  = document.getElementById('pm-followers-val')?.parentElement;
   const pmFollgEl = document.getElementById('pm-following-val')?.parentElement;
@@ -425,6 +427,11 @@ function resetListCards() {
   });
 }
 
+// Libera o #bottom-nav travado por .nav-locked (idempotente)
+function _tavUnlockFooterNav() {
+  document.getElementById('bottom-nav')?.classList.remove('nav-locked');
+}
+
 function initAbly() {
   if (typeof Ably === 'undefined') { setTimeout(initAbly, 2000); return; }
   setConnDot('connecting');
@@ -436,8 +443,16 @@ function initAbly() {
   });
   ablyClient.connection.on('connected',    () => { ablyReady = true;  setConnDot('on');  joinGlobalPresence(); });
   ablyClient.connection.on('disconnected', () => { ablyReady = false; setConnDot('off'); });
-  ablyClient.connection.on('failed',       () => { ablyReady = false; setConnDot('err'); });
+  // Se a conexão falhar, libera o footer mesmo assim — senão um problema
+  // de rede/Ably trancaria o jogador na página sem nem conseguir navegar
+  // de volta pelo menu inferior.
+  ablyClient.connection.on('failed',       () => { ablyReady = false; setConnDot('err'); _tavUnlockFooterNav(); });
   ablyClient.connection.on('connecting',   () => setConnDot('connecting'));
+
+  // Rede de segurança: se por algum motivo o carregamento (presence.get
+  // completo + renderListCards) nunca disparar, libera o footer depois
+  // de 15s de qualquer jeito, para nunca prender o jogador na página.
+  setTimeout(_tavUnlockFooterNav, 15000);
 }
 
 // ── Reconexão ao voltar para a aba (resolve desconexão ao trocar janelas) ──
@@ -601,6 +616,11 @@ function renderListCards() {
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.35s';
     setTimeout(() => overlay.remove(), 360);
+
+    // Libera o menu do footer no mesmo instante do shimmer principal —
+    // evita que o jogador clique em Navegar/Guilda/Notificações/Eu
+    // antes do Ably e do fluxo da página terminarem de carregar.
+    _tavUnlockFooterNav();
   }
 
   // Atualiza os cards na tela de lista
@@ -3544,15 +3564,17 @@ function _tavRenderNotifs() {
 
 // ══════════════════════════════════════════
 //  LIMPAR NOTIFICAÇÕES (botão no modal)
-//  As notificações de seguidores são armazenadas apenas localmente
-//  (localStorage), portanto a limpeza é local. Caso no futuro passem
-//  a ser persistidas em uma tabela, adicionar aqui a chamada RPC
-//  correspondente para apagar os registros do jogador no banco.
+//  Limpa o cache local (localStorage) E as linhas em
+//  player_notifications no banco via clear_my_notifications().
 // ══════════════════════════════════════════
-function clearAllNotifications() {
+async function clearAllNotifications() {
   _tavSaveNotifications([]);
   _tavRenderNotifs();
   _tavUpdateNotifDot();
+  try {
+    const sb = getSB();
+    if (sb) await sb.rpc('clear_my_notifications');
+  } catch(e) { console.warn('clear_my_notifications:', e); }
 }
 
 // ══════════════════════════════════════════
@@ -3578,6 +3600,20 @@ async function _tavLazyCleanupOldMessages() {
     await sb.rpc('cleanup_old_tavern_messages');
     localStorage.setItem(ck, '1');
   } catch(e) { console.warn('cleanup_old_tavern_messages:', e); }
+}
+
+// ══════════════════════════════════════════
+//  LIMPEZA LAZY SEMANAL: notificações antigas (player_notifications)
+// ══════════════════════════════════════════
+async function _tavLazyCleanupOldNotifications() {
+  const sb = getSB();
+  if (!sb) return;
+  const ck = `tav_notifcleanup_${_tavGetIsoWeekKey()}`;
+  if (localStorage.getItem(ck)) return; // já rodou esta semana
+  try {
+    await sb.rpc('cleanup_old_player_notifications');
+    localStorage.setItem(ck, '1');
+  } catch(e) { console.warn('cleanup_old_player_notifications:', e); }
 }
 
 function _tavTimeAgo(ts) {
@@ -3714,8 +3750,11 @@ async function openFameModal(targetPlayerId) {
     } catch(e) { console.warn('reconcile_fame_log:', e); }
   }
 
-  // ── Cleanup lazy no dia 1: remove entradas com mais de 2 meses ──
-  if (now.getDate() === 1 && pid === PLAYER.id && sb) {
+  // ── Cleanup lazy BIMESTRAL (dia 1, meses pares): remove fama com
+  // mais de 2 meses E convites de laço esquecidos/nunca respondidos.
+  // getMonth()%2===0 garante que só dispara a cada 2 meses (antes
+  // disparava todo dia 1 de TODO mês — mensal, não bimestral).
+  if (now.getDate() === 1 && now.getMonth() % 2 === 0 && pid === PLAYER.id && sb) {
     const ck = `tav_fame_cleanup_${now.getFullYear()}_${now.getMonth()+1}`;
     if (!localStorage.getItem(ck)) {
       try {

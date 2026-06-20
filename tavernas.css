@@ -1671,6 +1671,33 @@ html,body {
   border: 1px solid rgba(201,169,74,0.08);
 }
 
+/* ══ FOOTER NAV LOCK — bloqueia o menu inferior até o Ably/fluxo da
+   página carregarem por completo (mesmo gatilho do shimmer da lista).
+   Evita que o jogador entre apressadamente em algo (Navegar/Guilda/
+   Notificações/Eu) antes dos dados estarem prontos. ══ */
+#bottom-nav.nav-locked {
+  pointer-events: none;
+  position: relative;
+}
+#bottom-nav.nav-locked .nav-item {
+  opacity: 0.4;
+  filter: grayscale(0.4);
+}
+#bottom-nav.nav-locked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.02) 25%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.02) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerAnim 1.3s infinite;
+  pointer-events: none;
+}
+
 /* ══ EQUIPMENT CUTOFF FIX — telas estreitas ══ */
 @media (max-width: 370px) {
   #tav-avatar-wrapper {

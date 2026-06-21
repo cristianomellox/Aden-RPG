@@ -869,6 +869,10 @@ function enableMapInteraction() {
     const map = document.getElementById('map');
     if (!map || !mapContainer) return;
 
+    // Tamanho real da imagem do mapa (definido no CSS de #map)
+    const mapNaturalWidth = 1500;
+    const mapNaturalHeight = 1700;
+
     let isDragging = false;
     let startX, startY;
     let currentX = 0;
@@ -877,72 +881,52 @@ function enableMapInteraction() {
     let velocityY = 0;
     let lastMoveTime = 0;
 
-    // Calcula os limites de movimento do mapa
+    // Escala atual do mapa. É a ÚNICA fonte de verdade sobre o zoom.
+    // (Antes, o código tentava "adivinhar" a escala relendo o transform via
+    // getComputedStyle e procurando o texto "scale(...)" nele — mas o navegador
+    // sempre devolve transforms computados no formato matrix(...), nunca como
+    // "scale(...)". Essa busca falhava silenciosamente e caía num valor fixo de
+    // emergência (scale(1.1)) toda vez que o mapa era arrastado, anulando o ajuste
+    // de tela calculado no carregamento. Guardar a escala numa variável evita esse problema.)
+    let currentScale = 1.1;
+
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
+    // Calcula os limites de movimento do mapa para a escala atual
     function recalcLimits() {
-        const containerRect = mapContainer.getBoundingClientRect();
-        
-        // Fator de escala atual
-        const style = window.getComputedStyle(map);
-        const transformMatrix = style.getPropertyValue('transform');
-        let scaleX = 1;
+        const cr = mapContainer.getBoundingClientRect();
+        const scaledMapWidth = mapNaturalWidth * currentScale;
+        const scaledMapHeight = mapNaturalHeight * currentScale;
 
-        if (transformMatrix && transformMatrix !== 'none') {
-            const matrix = transformMatrix.match(/matrix.*\((.+)\)/);
-            if(matrix && matrix[1]) {
-                scaleX = parseFloat(matrix[1].split(', ')[0]);
-            }
-        } else {
-             const initialTransform = map.style.transform;
-             const scaleMatch = initialTransform.match(/scale\(([^)]+)\)/);
-             if (scaleMatch) {
-                 scaleX = parseFloat(scaleMatch[1]);
-             }
-        }
-        
-        const mapNaturalWidth = 1500; // Largura da imagem original em px (style.css)
-        const mapNaturalHeight = 1500; // Altura da imagem original em px (style.css)
-        
-        // Tamanho atual do mapa escalado
-        const scaledMapWidth = mapNaturalWidth * scaleX;
-        const scaledMapHeight = mapNaturalHeight * scaleX;
-
-        // Limites de deslocamento (X/Y)
-        const maxMoveX = 0;
-        const minMoveX = containerRect.width - scaledMapWidth;
-        const maxMoveY = 0;
-        const minMoveY = containerRect.height - scaledMapHeight;
-        
-        return {
-            minX: Math.min(maxMoveX, minMoveX),
-            maxX: Math.max(maxMoveX, minMoveX),
-            minY: Math.min(maxMoveY, minMoveY),
-            maxY: Math.max(maxMoveY, minMoveY)
-        };
+        maxX = 0;
+        minX = Math.min(0, cr.width - scaledMapWidth);
+        maxY = 0;
+        minY = Math.min(0, cr.height - scaledMapHeight);
     }
 
-    // Aplica a transformação do mapa, respeitando os limites
-    function setMapPosition(x, y) {
-        const limits = recalcLimits();
-        currentX = Math.max(limits.minX, Math.min(x, limits.maxX));
-        currentY = Math.max(limits.minY, Math.min(y, limits.maxY));
-        
-        const style = window.getComputedStyle(map);
-        const transformMatrix = style.getPropertyValue('transform');
-        let scale = 'scale(1.1)';
+    function applyTransform() {
+        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+    }
 
-        if (transformMatrix && transformMatrix !== 'none') {
-            const match = transformMatrix.match(/scale\(([^)]+)\)/);
-            if (match) {
-                scale = `scale(${match[1]})`;
-            }
-        } else if (map.style.transform) {
-             const match = map.style.transform.match(/scale\(([^)]+)\)/);
-             if (match) {
-                scale = `scale(${match[1]})`;
-            }
-        }
-        
-        map.style.transform = `translate(${currentX}px, ${currentY}px) ${scale}`;
+    // Aplica a posição do mapa, respeitando os limites
+    function setMapPosition(x, y) {
+        recalcLimits();
+        currentX = Math.max(minX, Math.min(x, maxX));
+        currentY = Math.max(minY, Math.min(y, maxY));
+        applyTransform();
+    }
+
+    // Ajusta a escala mínima para cobrir 100% da tela, sem sobras de fundo preto.
+    // Roda de forma robusta: imediatamente, no próximo frame, em alguns instantes
+    // seguintes, e sempre que o viewport mudar de tamanho. Isso cobre o caso comum em
+    // celulares/WebViews onde o tamanho real da tela só se estabiliza um pouco depois
+    // do carregamento (ex: barra de endereço do navegador recolhendo).
+    function fitMapToScreen() {
+        const cr = mapContainer.getBoundingClientRect();
+        if (!cr.width || !cr.height) return; // container ainda sem tamanho válido
+        currentScale = Math.max(cr.width / mapNaturalWidth, cr.height / mapNaturalHeight);
+        recalcLimits();
+        applyTransform();
     }
 
     // Animação de inércia (movimento pós-arrasto)
@@ -957,7 +941,7 @@ function enableMapInteraction() {
         }
 
         // Reduz a velocidade (fricção)
-        velocityX *= 0.95; 
+        velocityX *= 0.95;
         velocityY *= 0.95;
 
         // Aplica o movimento
@@ -978,23 +962,23 @@ function enableMapInteraction() {
 
         isDragging = true;
         map.style.cursor = 'grabbing';
-        
+
         // Coordenadas de início (considera toque ou mouse)
         startX = e.clientX || e.touches[0].clientX;
         startY = e.clientY || e.touches[0].clientY;
-        
+
         velocityX = 0;
         velocityY = 0;
         lastMoveTime = performance.now();
-        cancelAnimationFrame(animationFrameId); 
+        cancelAnimationFrame(animationFrameId);
     }
 
     // Durante o arrasto
     function onDrag(e) {
         if (!isDragging) return;
-        
-        e.preventDefault(); 
-        
+
+        e.preventDefault();
+
         const newX = e.clientX || e.touches[0].clientX;
         const newY = e.clientY || e.touches[0].clientY;
         const dx = newX - startX;
@@ -1008,7 +992,7 @@ function enableMapInteraction() {
             velocityX = dx / deltaTime;
             velocityY = dy / deltaTime;
         }
-        
+
         setMapPosition(currentX + dx, currentY + dy);
 
         // Atualiza as posições de início para o próximo movimento
@@ -1021,10 +1005,10 @@ function enableMapInteraction() {
     function endDrag() {
         isDragging = false;
         map.style.cursor = 'grab';
-        
+
         if (Math.abs(velocityX) > 0.2 || Math.abs(velocityY) > 0.2) {
             // Multiplicamos a velocidade para dar um "empurrão" de inércia
-            velocityX *= 10; 
+            velocityX *= 10;
             velocityY *= 10;
             inertiaAnimation();
         } else {
@@ -1043,21 +1027,6 @@ function enableMapInteraction() {
     window.addEventListener('touchend', endDrag, { passive: true });
 
     map.style.cursor = 'grab';
-
-    // Ajusta a escala do mapa para cobrir 100% da tela, sem sobras de fundo preto.
-    // Em vez de confiar em um único "chute" de tempo (setTimeout fixo), a função roda
-    // de forma robusta: imediatamente, no próximo frame, em alguns instantes seguintes,
-    // e sempre que o viewport mudar de tamanho. Isso cobre o caso comum em celulares/
-    // WebViews onde o tamanho real da tela só se estabiliza um pouco depois do load
-    // (ex: barra de endereço do navegador recolhendo) — antes, isso só era corrigido
-    // quando o jogador arrastava o mapa (o que disparava um evento de resize).
-    function fitMapToScreen() {
-        const cr = mapContainer.getBoundingClientRect();
-        if (!cr.width || !cr.height) return; // container ainda sem tamanho válido
-        const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
-        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${minScale})`;
-        recalcLimits();
-    }
 
     fitMapToScreen();
     requestAnimationFrame(fitMapToScreen);

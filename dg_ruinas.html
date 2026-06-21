@@ -588,10 +588,32 @@ function enableMapInteraction() {
 
     map.style.cursor = 'grab';
 
+    // Aplica o ajuste assim que possível.
     fitMapToScreen();
     requestAnimationFrame(fitMapToScreen);
-    [50, 150, 300, 600, 1000].forEach(delay => setTimeout(fitMapToScreen, delay));
+
+    // Em vez de "chutar" momentos no tempo (setTimeout fixos), observamos de verdade
+    // quando o tamanho real do container muda — isso cobre o caso comum em celulares,
+    // onde a barra de endereço do navegador recolhe sozinha pouco depois do carregamento,
+    // mudando o viewport. Um setTimeout fixo podia capturar essa transição pela metade
+    // e aplicar uma escala errada bem nesse momento; o ResizeObserver só reage a
+    // mudanças reais e sempre usa a medida mais atual, então se autocorrige sempre.
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => fitMapToScreen());
+        ro.observe(mapContainer);
+    } else {
+        // Fallback para navegadores muito antigos sem ResizeObserver
+        [100, 300, 600, 1200].forEach(delay => setTimeout(fitMapToScreen, delay));
+    }
+
+    // visualViewport é o jeito correto/moderno de detectar mudanças de UI do
+    // navegador (barra de endereço, teclado virtual) em dispositivos móveis.
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', fitMapToScreen);
+    }
+
     window.addEventListener('load', fitMapToScreen);
+    window.addEventListener('pageshow', fitMapToScreen);
     window.addEventListener('resize', fitMapToScreen);
     window.addEventListener('orientationchange', () => setTimeout(fitMapToScreen, 200));
 }

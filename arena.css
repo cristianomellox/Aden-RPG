@@ -341,7 +341,8 @@ body, html {
     margin-bottom: 15px;
 }
 #rankingListContainer {
-  width: 98vw;
+  width: 100%;
+    box-sizing: border-box;
     overflow-y: auto;
     background: none;
 
@@ -350,11 +351,13 @@ body, html {
     list-style: none;
     padding: 2px;
     margin: 0;
-    width: 88vw;
+    width: 100%;
+    box-sizing: border-box;
 }
 #rankingList li {
     display: flex;
     align-items: center;
+    gap: 8px;
     padding: 8px;
     border-bottom: 1px solid #777;
 }
@@ -432,17 +435,35 @@ body, html {
 
 .ranking-tabs {
   display: flex;
-  justify-content: space-around;
+  justify-content: center;
+  align-items: stretch;
+  gap: 8px;
   margin-bottom: 10px;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
 }
 .ranking-tab {
   background: none;
   border: 1px solid #c9a94a!important;
   color: #e0dccc;
   font-weight: bold;
-  padding: 6px 12px;
+  padding: 6px 8px;
   border-radius: 8px;
   cursor: pointer;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 0.95em;
+}
+@media (max-width: 380px) {
+  .ranking-tab {
+    padding: 6px 4px;
+    font-size: 0.85em;
+  }
 }
 .ranking-tab.active {
   background-color: #c9a94a!important;
@@ -538,13 +559,15 @@ body, html {
   list-style: none;
   padding: 0;
   margin: 0;
-  width: 88vw;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 #rankingListPast li {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid #777;
   background: rgba(20, 20, 20, 0.4);

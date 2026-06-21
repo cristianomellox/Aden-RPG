@@ -435,41 +435,30 @@ body, html {
 }
 
 .ranking-tabs {
-  display: flex;
-  justify-content: space-between;
-  align-items: stretch;
-  gap: 4px;
-  margin-bottom: 10px;
-  flex-wrap: nowrap;
-  width: 100%;
-  box-sizing: border-box;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  margin-bottom: 10px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
+
 .ranking-tab {
   background: none;
-  border: 1px solid #c9a94a!important;
+  border: 1px solid #c9a94a !important;
   color: #e0dccc;
-  font-weight: bold;
-  padding: 6px 2px;
-  border-radius: 8px;
+  font-weight: bold !important;
+  padding: 8px 0 !important;
+  border-radius: 8px !important;
   cursor: pointer;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-  font-size: 0.80em !important;
-  -webkit-text-size-adjust: 100% !important;
-  text-size-adjust: 100% !important;
-}
-@media (max-width: 380px) {
-  .ranking-modal-content {
-    padding: 14px 10px;
-  }
-  .ranking-tab {
-    padding: 5px 1px;
-    font-size: 0.75em !important;
-  }
+  flex: 1 1 0px !important; 
+  text-align: center !important;
+  white-space: nowrap !important; 
+  overflow: visible !important; 
+  text-overflow: clip !important; 
+  font-size: clamp(11px, 3.5vw, 15px) !important; 
+  letter-spacing: -0.3px !important;
 }
 .ranking-tab.active {
   background-color: #c9a94a!important;

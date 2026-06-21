@@ -326,6 +326,21 @@ async function hydrateProfiles(skeletonList) {
     return hydratedList;
 }
 
+/**
+ * Prepara linhas de arena_attack_logs para hydrateProfiles().
+ * As linhas têm seu próprio "id" (chave primária do log), que não é
+ * o ID do jogador. Isso fazia hydrateProfiles() usar item.id (id do log)
+ * em vez de attacker_id, nunca encontrando o perfil e caindo em "Desconhecido".
+ * Aqui guardamos o id do log em log_id e expomos attacker_id como "id"
+ * para que a hidratação busque o jogador correto.
+ */
+function mapLogsForHydration(logs) {
+    return (logs || []).map(l => {
+        const { id: log_id, ...rest } = l;
+        return { ...rest, log_id, id: l.attacker_id };
+    });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     // =======================================================================
     // 4. CONFIGURAÇÃO E VARIÁVEIS GLOBAIS
@@ -1968,7 +1983,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const defAv = 'https://aden-rpg.pages.dev/avatar01.webp';
                 d.forEach((p, i) => {
                     const av = p.avatar_url || p.avatar || defAv;
-                    rankingListPast.innerHTML += `<li id="rankingListPast" style="width: 82vw;"><span style="width:40px;font-weight:bold;color:#FFC107;">${i+1}.</span><img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%"><div style="flex-grow:1;text-align:left;"><div class="rank-player-name">${esc(p.name)}</div><div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div></div><div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div></li>`;
+                    rankingListPast.innerHTML += `<li id="rankingListPast" style="width: 82vw;"><span style="width:40px;flex-shrink:0;font-weight:bold;color:#FFC107;">${i+1}.</span><img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%;flex-shrink:0;"><div style="flex-grow:1;min-width:0;text-align:left;"><div class="rank-player-name">${esc(p.name)}</div><div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div></div><div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div></li>`;
                 });
 
                 // === LÓGICA DO RODAPÉ FIXO (PASSADO) ===
@@ -2144,6 +2159,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             const res = normalizeRpcResult(data);
 
             if (error || !res?.success) {
+                if (res?.already_claimed) {
+                    // Já havia sido resgatado antes (ex: jogador limpou o cache/localStorage).
+                    // Apenas sincroniza o estado local — não é um erro de verdade,
+                    // então não trava o jogador no modal nem mantém o glow ativo.
+                    markArenaRewardDone();
+                    removeArenaRewardGlow();
+                    if (modal) modal.style.display = 'none';
+                    return;
+                }
                 showModalAlert(res?.message || 'Erro ao resgatar recompensas.');
                 if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
                 return;
@@ -2204,19 +2228,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             if (seasonInfoContainer) seasonInfoContainer.style.display = 'none';
             if (rankingHistoryList) rankingHistoryList.innerHTML = "";
-            const cacheKey = 'arena_attack_history';
+            const cacheKey = 'arena_attack_history_v2';
             let h = getCache(cacheKey);
             if (!h) {
                 supabase.rpc('cleanup_old_arena_logs').then(()=>{});
                 const { data } = await supabase.rpc('get_arena_attack_logs');
                 const r = normalizeRpcResult(data);
                 if (r?.success && Array.isArray(r.logs) && r.logs.length) {
-                    h = await hydrateProfiles(r.logs); // Hidrata logs
+                    h = await hydrateProfiles(mapLogsForHydration(r.logs)); // Hidrata logs
                     setCache(cacheKey, h, getMinutesToMidnightUTC());
                 } else if (userId) {
                     const { data: logsDirect } = await supabase.from('arena_attack_logs').select('*').eq('defender_id', userId).order('created_at', { ascending: false }).limit(5);
                     if (logsDirect) { 
-                        h = await hydrateProfiles(logsDirect); // Hidrata logs
+                        h = await hydrateProfiles(mapLogsForHydration(logsDirect)); // Hidrata logs
                         setCache(cacheKey, h, getMinutesToMidnightUTC()); 
                     }
                 }

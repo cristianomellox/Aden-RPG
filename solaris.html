@@ -553,19 +553,27 @@ function enableMapInteraction() {
 
     map.style.cursor = 'grab';
 
-    setTimeout(() => {
-        // Escala mínima para preencher a tela sem fundo preto (mesma lógica do forte.js)
+    // Ajusta a escala do mapa para cobrir 100% da tela, sem sobras de fundo preto.
+    // Em vez de confiar em um único "chute" de tempo (setTimeout fixo), a função roda
+    // de forma robusta: imediatamente, no próximo frame, em alguns instantes seguintes,
+    // e sempre que o viewport mudar de tamanho. Isso cobre o caso comum em celulares/
+    // WebViews onde o tamanho real da tela só se estabiliza um pouco depois do load
+    // (ex: barra de endereço do navegador recolhendo) — antes, isso só era corrigido
+    // quando o jogador arrastava o mapa (o que disparava um evento de resize).
+    function fitMapToScreen() {
         const cr = mapContainer.getBoundingClientRect();
+        if (!cr.width || !cr.height) return; // container ainda sem tamanho válido
         const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
-        map.style.transform = `translate(0px, 0px) scale(${minScale})`;
+        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${minScale})`;
         recalcLimits();
-    }, 100);
-    window.addEventListener("resize", () => {
-        const cr = mapContainer.getBoundingClientRect();
-        const minScale = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1700));
-        map.style.transform = `translate(0px, 0px) scale(${minScale})`;
-        recalcLimits();
-    });
+    }
+
+    fitMapToScreen();
+    requestAnimationFrame(fitMapToScreen);
+    [50, 150, 300, 600, 1000].forEach(delay => setTimeout(fitMapToScreen, delay));
+    window.addEventListener('load', fitMapToScreen);
+    window.addEventListener('resize', fitMapToScreen);
+    window.addEventListener('orientationchange', () => setTimeout(fitMapToScreen, 200));
 }
 
 // Lógica de UI (Menu e Modais)

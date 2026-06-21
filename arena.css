@@ -436,9 +436,9 @@ body, html {
 
 .ranking-tabs {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 10px;
   flex-wrap: nowrap;
   width: 100%;
@@ -449,16 +449,16 @@ body, html {
   border: 1px solid #c9a94a!important;
   color: #e0dccc;
   font-weight: bold;
-  padding: 6px 10px;
+  padding: 6px 2px;
   border-radius: 8px;
   cursor: pointer;
-  flex: 0 1 auto;
+  flex: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
-  font-size: 0.92em !important;
+  font-size: 0.80em !important;
   -webkit-text-size-adjust: 100% !important;
   text-size-adjust: 100% !important;
 }
@@ -467,8 +467,8 @@ body, html {
     padding: 14px 10px;
   }
   .ranking-tab {
-    padding: 5px 7px;
-    font-size: 0.82em !important;
+    padding: 5px 1px;
+    font-size: 0.75em !important;
   }
 }
 .ranking-tab.active {

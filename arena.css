@@ -321,6 +321,9 @@ body, html {
 /* --- Modal de Ranking --- */
 .ranking-modal-content {
     width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 .close-btn {
     color: #aaa;
@@ -363,6 +366,7 @@ body, html {
     font-weight: bold;
     color: #FFC107;
     width: 40px;
+    flex-shrink: 0;
 }
 .rank-avatar {
     width: 45px;
@@ -370,9 +374,11 @@ body, html {
     border-radius: 50%;
     border: 2px solid #888;
     margin-right: 10px;
+    flex-shrink: 0;
 }
 .rank-player-info {
     flex-grow: 1;
+    min-width: 0;
     text-align: left;
 }
 .rank-player-name {
@@ -381,9 +387,9 @@ body, html {
     font-weight: bold;
     color: #e0dccc;
     white-space: nowrap; 
-    overflow-x: hidden;
+    overflow: hidden;
     text-overflow: ellipsis; 
-    max-width: 150px;
+    max-width: 100%;
     text-shadow:
         1px 1px 2px black,
         -1px -1px 2px black,
@@ -397,6 +403,10 @@ body, html {
     font-size: 0.8em;
     color: lightblue;
     font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
     text-shadow:
         1px 1px 2px black,
         -1px -1px 2px black,
@@ -409,6 +419,8 @@ body, html {
     font-size: 0.9em;
     font-weight: bold;
     color: gold;
+    flex-shrink: 0;
+    white-space: nowrap;
     text-shadow:
         1px 1px 2px black,
         -1px -1px 2px black,
@@ -564,6 +576,7 @@ body, html {
 
 #rankingListPast .rank-player-info {
   flex-grow: 1;
+  min-width: 0;
   text-align: left;
 }
 
@@ -571,11 +584,20 @@ body, html {
   font-weight: bold;
   color: #e0dccc;
   display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 #rankingListPast .rank-guild-name {
   font-size: 0.8em;
   color: #aaa;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 #rankingListPast .rank-points {

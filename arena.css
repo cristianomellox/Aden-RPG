@@ -5,6 +5,8 @@ body, html {
     background-color: #121212;
     color: #e0dccc;
     font-family: 'Cinzel', serif;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 #playerTopBar {

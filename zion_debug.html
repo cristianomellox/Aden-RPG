@@ -1,0 +1,2009 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" 
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <meta name="robots" content="index, follow">
+    <meta name="googlebot" content="index, follow">
+    <title>Zion - Aden RPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="maintenance.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="zion.css" /> 
+
+</head>
+<style>
+  /* 1. Esconde o banner principal e o wrapper 'skiptranslate' */
+.goog-te-banner-frame.skiptranslate, 
+.skiptranslate {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+body {
+    top: 0px !important; 
+    margin-top: 0px !important;
+    position: static !important; 
+}
+.goog-te-balloon-frame {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.goog-te-gadget {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+font > font {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    position: static !important;
+}
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+/* Estilos gerais (Baseado em style.css) */
+body, p, span, div, button {
+    font-family: 'Cinzel', serif;
+}
+h1, h2 {
+    font-family: 'Cinzel', serif;
+    color: #e0dccc;
+    text-shadow: 2px 2px 4px #000;
+    letter-spacing: 1.5px;
+}
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0; /* Removido padding-bottom */
+    background-color: #121212;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* TopBar (Baseado em style.css e guild.html) */
+#playerTopBar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #333;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.top-bar-link {
+    color: white;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+.top-bar-link svg {
+    width: 30px;
+    height: 30px;
+}
+#pageTitle {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #4CAF50; /* Cor para Área Pacífica */
+    text-shadow: 1px 1px 2px #000;
+}
+
+
+/* 3. Estilos para o Mapa em Tela Cheia */
+#mapContainer {
+    position: fixed; /* Fixa no viewport */
+    top: 0;
+    left: 0;
+    width: 100vw; 
+    height: 100vh; 
+    overflow: hidden;
+    margin: 0;
+    z-index: 1; /* Abaixo da TopBar e do Conteúdo */
+    box-shadow: none;
+    background-color: #121212; 
+}
+
+#map {
+    background-image: url('https://aden-rpg.pages.dev/assets/zion.webp');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: top left;
+    width: 1500px; 
+    height: 1700px; 
+    position: absolute;
+    cursor: grab;
+    transform-origin: top left;
+    transition: transform 0.05s linear;
+    transform: scale(1.1); /* Escala inicial para visualização em dispositivos móveis */
+}
+
+/* Container do Conteúdo Flutuante */
+#contentOverlay {
+    position: absolute; /* Posiciona sobre o mapa */
+    top: 50px; /* Abaixo da TopBar */
+    left: 0;
+    width: 100%;
+    min-height: 95vh; /* Ocupa o restante da tela */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Empurra o footer para baixo */
+    align-items: center;
+    z-index: 10; /* Acima do mapa */
+    /* Permite que o mapa receba eventos de clique, exceto nos filhos */
+    pointer-events: none; 
+}
+
+#zionContent {
+    width: 95%;
+    max-width: 600px;
+    margin-top: 2px; 
+    padding: 10px;
+    box-sizing: border-box;
+    text-align: center;
+    background-color: rgba(18, 18, 18, 0.5); /* Fundo semi-transparente para legibilidade */
+    border-radius: 8px;
+    pointer-events: auto; 
+    
+}
+
+#zionContent h2 {
+    margin-top: -13px;
+    margin-bottom: 5px;
+    color: gold; 
+    text-shadow: 2px 2px 6px black; /* Melhor contraste sobre o mapa */
+}
+
+/* 2. Guilda Regente (Estilo e Posição) */
+#guildreg-container {
+    color: #e0dccc; 
+    font-weight: bold; 
+    margin-top: -10px;
+    margin-bottom: 10px;
+    pointer-events: auto;
+}
+#guildreg {
+    color: orange; 
+    font-size: 1em;
+    text-shadow: 1px 1px 3px black;
+}
+
+/* Rodapé específico da página e botão */
+#zionFooter {
+    margin-top: auto; /* Empurra para o final do #contentOverlay */
+    padding: 10px;
+    pointer-events: auto;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Botão História (Baseado em style.css) */
+.action-btn {
+    background-image: url('https://aden-rpg.pages.dev/assets/botao.webp'); 
+    background-repeat: no-repeat;
+    background-position: center center; 
+    background-size: cover;
+    box-sizing: border-box;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color: #e0dccc;
+    font-weight: bold;
+    padding: 15px 40px; 
+    font-size: 1.2em;
+    text-shadow: 1px 1px 2px #000;
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+
+/* Estilos do Modal (Mantidos) */
+.modal-container {
+    display: none; 
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: rgba(0,0,0,0.8);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #2e2e2e;
+    padding: 20px;
+    border: 3px solid #c9a94a;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    max-height: 90vh; 
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    z-index: 2001;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: #e0dccc;
+    text-decoration: none;
+}
+
+#historyText {
+    overflow-y: auto;
+    max-height: 70vh;
+    padding-right: 10px; 
+    text-align: left;
+    color: #ccc;
+}
+
+/* === ESTILOS DO SUBMENU (Adicionado estilo Solaris/Capital) === */
+.footer-submenu {
+    position: fixed;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 5px;
+    background-color: rgba(30, 30, 30, 0.95);
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 5px;
+    z-index: 9998;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
+    min-width: 180px;
+}
+
+.footer-submenu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    color: #e0dccc;
+    text-decoration: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    font-weight: bold;
+    background: #1e1e1e; 
+    border: 1px solid #555;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
+    white-space: nowrap;      
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.footer-submenu-btn:hover {
+    background-color: #333;
+    border-color: gold;
+    color: #fff;
+}
+
+.submenu-icon {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+    display: block;
+}
+
+/* === MODAL FULLSCREEN MERCANTES === */
+#merchantsModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/mercantes_zion.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 3000;
+    flex-direction: column;
+    justify-content: center; /* Conteúdo no fundo */
+    align-items: center;
+}
+
+/* Footer dentro do Modal Mercantes */
+#merchantsFooter {
+    width: 100%;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+/* ================================================================= */
+/* === ESTILOS LOJA MESTRE DE POÇÕES =============================== */
+/* ================================================================= */
+#potionMasterModal {
+    background-image: linear-gradient(
+      rgba(0, 0, 30, 0.2),
+      rgba(0, 0, 0, 0)
+    ),
+    url('https://aden-rpg.pages.dev/assets/mdp_zion.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    align-items: flex-start; 
+    padding-top: 0;
+}
+
+.potion-master-content {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding: 20px 10px;
+}
+
+.pm-title {
+    color: gold;
+    font-size: 1.6em;
+    text-shadow: 2px 2px 4px #000;
+    margin-top: 40px;
+    margin-bottom: 20px;
+    text-align: center;
+    padding: 5px 5px;
+    border-radius: 8px;
+    border: 1px solid #555;
+    width: 90%;
+}
+
+/* --- BARRA DE RECURSOS (BASE) --- */
+#userResourcesDisplay {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 8px 5px;
+    color: #e0dccc;
+    font-size: 0.9em;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+
+    /* --- ANIMAÇÃO IGUAL AOS CARDS --- */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.res-item-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.res-icon-display {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(1px 1px 2px black);
+}
+/* ------------------------------------- */
+
+.potion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    width: 100%;
+    max-width: 1200px;
+    padding-bottom: 600px; /* Espaço para scroll */
+    padding-top: 10px; /* Ajustado para dar espaço a barra de recursos */
+}
+
+/* Animação de Fade In para os cards */
+@keyframes fadeCardIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.potion-card {
+    background: linear-gradient(180deg, #2a2a2aBF, #1a1a1aBF);
+    border: 1px solid #c9a94a;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    
+    /* Configuração da Animação */
+    opacity: 0; /* Começa invisível */
+    animation: fadeCardIn 10s ease-out forwards;
+}
+
+.potion-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+.potion-img {
+    width: 64px;
+    height: 64px;
+    margin-right: 15px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background: #000;
+}
+
+.potion-info h4 {
+    margin: 0;
+    color: #e0dccc;
+    font-size: 1.1em;
+    text-align: left;
+}
+
+.cost-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: #ccc;
+    margin-top: 5px;
+}
+
+.cost-icon {
+    width: 40px;
+    height: 40px;
+    vertical-align: middle;
+}
+
+.pm-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.pm-qty-selector {
+    display: flex;
+    align-items: center;
+    background: #333;
+    border-radius: 5px;
+    padding: 2px;
+}
+
+.pm-qty-btn {
+    width: 35px;
+    height: 35px;
+    font-size: 1.2em;
+    background: #444;
+    border: 1px solid #555;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+.pm-qty-btn:hover { background: #555; }
+
+.pm-qty-val {
+    width: 40px;
+    text-align: center;
+    font-weight: bold;
+    color: white;
+}
+
+.total-price-display {
+    font-size: 0.9em;
+    color: orange;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.4);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.pm-buy-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(145deg, #7a5c1c, #c9a94a);
+    border: 1px solid #ffd700;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 1em;
+    text-shadow: none;
+    border-radius: 4px;
+}
+.pm-buy-btn:hover { filter: brightness(1.1); }
+.pm-buy-btn:disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.7; }
+
+/* Estilo para a mensagem flutuante */
+#floatingMessage {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #e0dccc;
+    padding: 15px 25px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-size: 1.1em;
+    border: 2px solid gold;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* === MERCHANT DISTRICT CARDS === */
+@keyframes merchantFadeIn {
+    0%   { opacity: 0; transform: translateY(30px) scale(0.95); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.merchant-card-grid {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding: 20px 10px 30px;
+    flex-wrap: wrap;
+}
+
+.merchant-card {
+    background: rgba(30, 20, 5, 0.88);
+    border: 2px solid #c9a94a;
+    border-radius: 10px;
+    padding: 12px 10px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-width: 90px;
+    max-width: 110px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+    opacity: 0;
+    animation: merchantFadeIn 0.6s ease-out forwards;
+}
+
+.merchant-card:hover, .merchant-card:active {
+    border-color: gold;
+    background: rgba(60, 40, 0, 0.95);
+    transform: scale(1.05);
+    box-shadow: 0 6px 18px rgba(200,160,0,0.3);
+}
+
+.merchant-card-img {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    filter: drop-shadow(1px 1px 3px black);
+}
+
+.merchant-card-name {
+    color: #e0dccc;
+    font-size: 0.71em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    line-height: 1.2;
+}
+
+</style>
+<body>
+
+    <div id="playerTopBar">
+        <button id="menuToggleBtn" class="top-bar-link" style="background:none; border:none; cursor:pointer; color:inherit; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+</button>
+       <div> <span id="pageTitle">Área Pacífica</span></div>
+        <img src="https://aden-rpg.pages.dev/assets/sobre.webp" id="btnOpenHistory" style="width:50px; height:35px;">
+    </div>
+
+    <div id="mapContainer">
+        <div id="map">
+            </div>
+    </div>
+
+    <div id="contentOverlay">
+        
+        <div id="zionContent">
+            <h2>Zion</h2>
+            
+            <p id="guildreg-container">
+    Guilda Regente:<br>
+    <span id="guildreg_zion">
+        <img id="guild_flag_zion" src="" alt="Bandeira da Guilda" 
+            style="width: 40px; height: 42px; margin-right: 5px; border-radius: 3px; vertical-align: middle; object-fit: cover; display: none;">
+        <span id="guild_name_zion">Nenhuma.</span>
+        </span>
+</p>
+        </div>
+
+        <div id="zionFooter">
+            <button id="zionMenuBtn" class="action-btn">Menu</button>
+        </div>
+
+    </div>
+
+    <!-- zionSubmenu removed - Menu now opens merchantsModal directly -->
+    
+    <div id="merchantsModal">
+        <span class="close-btn" id="closeMerchantsModal" style="color:white; top:20px; right:20px; font-size:40px;">&times;</span>
+        
+                <div id="merchantsFooter">
+            <div class="merchant-card-grid">
+                <div class="merchant-card" id="btnPotionMaster" style="animation-delay:0.1s;">
+                    <img src="https://aden-rpg.pages.dev/assets/mdp.webp" class="merchant-card-img">
+                    <span class="merchant-card-name">Poções</span>
+                </div>
+                <div class="merchant-card" id="btnOficina" style="animation-delay:0.25s;">
+                    <img src="https://aden-rpg.pages.dev/assets/ferreiro.webp" class="merchant-card-img">
+                    <span class="merchant-card-name">Oficina</span>
+                </div>
+                <div class="merchant-card" id="btnMercador" style="animation-delay:0.4s;">
+                    <img src="https://aden-rpg.pages.dev/assets/escambo.webp" class="merchant-card-img">
+                    <span class="merchant-card-name">Mercador</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="shopsSubmenu" class="footer-submenu" style="display:none;"><!-- Moved to merchantsModal as cards --></div>
+    
+    <!-- Modal Mestre de Poções -->
+    <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content potion-master-content">
+            <span class="close-btn" id="closePotionMasterBtn">&times;</span>
+            
+            <h3 class="pm-title">Troque Cartões por Poções</h3>
+
+            <!-- Mostra Recursos do Jogador (Apenas os Base) -->
+            <div id="userResourcesDisplay">
+                <span style="width:100%; text-align:center; color:gold;">Você tem:</span>
+                Carregando recursos...
+            </div>
+            
+            <div id="potionShopGrid" class="potion-grid">
+                <!-- Itens gerados via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Mercador -->
+    <div id="mercadorModal" class="modal-container" style="display:none; z-index: 3005;">
+        <div class="modal-content" id="mercadorModalContent" style="width:100%;height:100%;max-width:100%;max-height:100vh;background:transparent!important;border:none!important;box-shadow:none!important;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:20px 10px 80px;">
+            <span class="close-btn" id="closeMercadorBtn" style="position:fixed;top:12px;right:18px;z-index:10;">&times;</span>
+            <h3 class="pm-title" style="margin-top:40px;">Mercador Ambulante</h3>
+            <div id="mercadorContent" style="width:100%;max-width:680px;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;animation:fadeCardIn 4s ease-out forwards;">
+                Carregando...
+            </div>
+        </div>
+    </div>
+
+    <div id="historyModal" class="modal-container" style="display: none;">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>História de Zion</h2>
+            <div id="historyText">
+                <p>Zion é uma das cidades mais antigas de Aden, fundada por mercadores que buscavam um ponto neutro e seguro para o comércio entre as facções do continente. Sua localização estratégica a transformou rapidamente no principal centro econômico do reino.</p>
+                <p>A cidade é governada por um conselho de mercadores, embora o título honorífico de "Guilda Regente" seja concedido à guilda mais forte na disputa, para a segurança e prosperidade do local. O controle da cidade não é militar, mas sim uma disputa de influência econômica e social, o que garante a sua natureza pacífica.</p>
+                <p>O lema de Zion é "Paz e Lucro", e qualquer conflito interno é rapidamente resolvido pelo Conselho, que preza acima de tudo a estabilidade para os negócios. Isso a torna um refúgio para aventureiros que buscam um lugar seguro para descansar e negociar seus espólios.</p>
+            </div>
+        </div>
+    </div>
+
+<script>
+  let musicStarted = false;
+let backgroundMusic;
+
+document.addEventListener("DOMContentLoaded", () => {
+  backgroundMusic = new Audio("https://aden-rpg.pages.dev/assets/zion.mp3");
+  backgroundMusic.volume = 0.3;
+  backgroundMusic.loop = true;
+
+  function startBackgroundMusic() {
+    if (musicStarted) return;
+    backgroundMusic.play().then(() => {
+      musicStarted = true;
+      console.log("🎵 Música de fundo iniciada!");
+    }).catch(err => console.warn("⚠️ Falha ao iniciar música:", err));
+  }
+
+  // Função utilitária para registrar listeners com opções comuns
+  function addCapturedListener(target, evt, handler, opts = {}) {
+    try {
+      target.addEventListener(evt, handler, Object.assign({ capture: true, passive: true, once: false }, opts));
+    } catch (e) {
+      // alguns targets (ex: null) podem falhar, silenciosamente ignoramos
+    }
+  }
+
+  // 1) Eventos primários que normalmente desbloqueiam áudio
+  const primaryEvents = ["click", "pointerdown", "touchstart", "mousedown", "keydown"];
+  for (const ev of primaryEvents) {
+    addCapturedListener(window, ev, function onPrimary(e) {
+      startBackgroundMusic();
+      // remover listener é opcional; play() verifica musicStarted
+    });
+    addCapturedListener(document.body, ev, function onPrimary2(e) {
+      startBackgroundMusic();
+    });
+  }
+
+  // 2) Tentar capturar ARRASTO — só inicia se houver um toque/pointer real associado
+  let moveArmed = false; // armará o gatilho quando detectarmos um pointerdown/touchstart
+  function armMove() { moveArmed = true; /* breve timeout para evitar ficar armado indefinidamente */ setTimeout(()=> moveArmed = false, 1200); }
+
+  addCapturedListener(window, "pointerdown", armMove);
+  addCapturedListener(window, "touchstart", armMove);
+  addCapturedListener(document.body, "pointerdown", armMove);
+  addCapturedListener(document.body, "touchstart", armMove);
+
+  function handleMoveForMusic(e) {
+    if (musicStarted || !moveArmed) return;
+    // Verifica se o movimento tem dedos ou pressão (sinal de arraste real)
+    const isTouchMove = (e.touches && e.touches.length > 0);
+    const hasPressure = (e.pressure && e.pressure > 0) || (e.buttons && e.buttons > 0);
+    if (isTouchMove || hasPressure || e.pointerType) {
+      startBackgroundMusic();
+      moveArmed = false;
+    }
+  }
+  addCapturedListener(window, "touchmove", handleMoveForMusic);
+  addCapturedListener(window, "pointermove", handleMoveForMusic);
+  addCapturedListener(document.body, "touchmove", handleMoveForMusic);
+  addCapturedListener(document.body, "pointermove", handleMoveForMusic);
+
+  // 3) Especial: anexa listeners diretamente aos elementos de mapa mais comuns
+  // Busca por ids/classes que costumam ser usadas por mapas (ajuste se seu mapa usa outro seletor)
+  const mapSelectors = [
+    "#mapContainer",
+    "#map",
+    ".map",
+    ".leaflet-container",
+    ".mapboxgl-canvas",
+    ".mapboxgl-map"
+  ];
+  for (const sel of mapSelectors) {
+    document.querySelectorAll(sel).forEach(el => {
+      addCapturedListener(el, "pointerdown", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchstart", () => { startBackgroundMusic(); armMove(); });
+      addCapturedListener(el, "touchmove", handleMoveForMusic);
+      addCapturedListener(el, "pointermove", handleMoveForMusic);
+    });
+  }
+
+  // 4) Fallbacks adicionais: se usuário soltar (pointerup / touchend) após arrastar, tente tocar
+  function tryOnUp(e) { if (!musicStarted) startBackgroundMusic(); }
+  addCapturedListener(window, "pointerup", tryOnUp);
+  addCapturedListener(window, "touchend", tryOnUp);
+  addCapturedListener(document.body, "pointerup", tryOnUp);
+  addCapturedListener(document.body, "touchend", tryOnUp);
+
+  // 5) Fallback temporizado (após pequena interação) — evita tentar tocar muitas vezes
+  setTimeout(() => {
+    if (!musicStarted) {
+      // última tentativa silenciosa
+      try { startBackgroundMusic(); } catch(e) {}
+    }
+  }, 6000);
+
+  // Expor para debug / chamadas manuais
+  window.startBackgroundMusic = startBackgroundMusic;
+  window.__musicDebug = { isStarted: () => musicStarted };
+});
+// FIM DA MÚSICA DE FUNDO
+  
+function enableMapInteraction() {
+    const mapContainer = document.getElementById('mapContainer');
+    const map = document.getElementById('map');
+    if (!map || !mapContainer) return;
+
+    // Tamanho real da imagem do mapa (definido no CSS de #map)
+    const mapNaturalWidth = 1500;
+    const mapNaturalHeight = 1700;
+
+    let isDragging = false;
+    let startX, startY;
+    let currentX = 0;
+    let currentY = 0;
+    let velocityX = 0;
+    let velocityY = 0;
+    let lastMoveTime = 0;
+
+    // Escala atual do mapa. É a ÚNICA fonte de verdade sobre o zoom.
+    // (Antes, o código tentava "adivinhar" a escala relendo o transform via
+    // getComputedStyle e procurando o texto "scale(...)" nele — mas o navegador
+    // sempre devolve transforms computados no formato matrix(...), nunca como
+    // "scale(...)". Essa busca falhava silenciosamente e caía num valor fixo de
+    // emergência (scale(1.1)) toda vez que o mapa era arrastado, anulando o ajuste
+    // de tela calculado no carregamento. Guardar a escala numa variável evita esse problema.)
+    let currentScale = 1.1;
+
+    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
+    // Calcula os limites de movimento do mapa para a escala atual
+    function recalcLimits() {
+        const cr = mapContainer.getBoundingClientRect();
+        const scaledMapWidth = mapNaturalWidth * currentScale;
+        const scaledMapHeight = mapNaturalHeight * currentScale;
+
+        maxX = 0;
+        minX = Math.min(0, cr.width - scaledMapWidth);
+        maxY = 0;
+        minY = Math.min(0, cr.height - scaledMapHeight);
+    }
+
+    function applyTransform() {
+        map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+    }
+
+    // Aplica a posição do mapa, respeitando os limites
+    function setMapPosition(x, y) {
+        recalcLimits();
+        currentX = Math.max(minX, Math.min(x, maxX));
+        currentY = Math.max(minY, Math.min(y, maxY));
+        applyTransform();
+    }
+
+    // Ajusta a escala mínima para cobrir 100% da tela, sem sobras de fundo preto.
+    // Roda de forma robusta: imediatamente, no próximo frame, em alguns instantes
+    // seguintes, e sempre que o viewport mudar de tamanho. Isso cobre o caso comum em
+    // celulares/WebViews onde o tamanho real da tela só se estabiliza um pouco depois
+    // do carregamento (ex: barra de endereço do navegador recolhendo).
+    function fitMapToScreen() {
+        const cr = mapContainer.getBoundingClientRect();
+        if (!cr.width || !cr.height) return; // container ainda sem tamanho válido
+        currentScale = Math.max(cr.width / mapNaturalWidth, cr.height / mapNaturalHeight);
+        recalcLimits();
+        applyTransform();
+    }
+
+    // Animação de inércia (movimento pós-arrasto)
+    let animationFrameId = null;
+    function inertiaAnimation() {
+        cancelAnimationFrame(animationFrameId);
+
+        if (isDragging) {
+            velocityX = 0;
+            velocityY = 0;
+            return;
+        }
+
+        // Reduz a velocidade (fricção)
+        velocityX *= 0.95;
+        velocityY *= 0.95;
+
+        // Aplica o movimento
+        setMapPosition(currentX + velocityX, currentY + velocityY);
+
+        // Se a velocidade for muito baixa, para a inércia
+        if (Math.abs(velocityX) > 0.5 || Math.abs(velocityY) > 0.5) {
+            animationFrameId = requestAnimationFrame(inertiaAnimation);
+        } else {
+            velocityX = 0;
+            velocityY = 0;
+        }
+    }
+
+    // Início do arrasto
+    function startDrag(e) {
+        if (e.touches && e.touches.length > 1) return;
+
+        isDragging = true;
+        map.style.cursor = 'grabbing';
+
+        // Coordenadas de início (considera toque ou mouse)
+        startX = e.clientX || e.touches[0].clientX;
+        startY = e.clientY || e.touches[0].clientY;
+
+        velocityX = 0;
+        velocityY = 0;
+        lastMoveTime = performance.now();
+        cancelAnimationFrame(animationFrameId);
+    }
+
+    // Durante o arrasto
+    function onDrag(e) {
+        if (!isDragging) return;
+
+        e.preventDefault();
+
+        const newX = e.clientX || e.touches[0].clientX;
+        const newY = e.clientY || e.touches[0].clientY;
+        const dx = newX - startX;
+        const dy = newY - startY;
+
+        // Calcula a velocidade para a inércia
+        const currentTime = performance.now();
+        const deltaTime = currentTime - lastMoveTime;
+
+        if (deltaTime > 0) {
+            velocityX = dx / deltaTime;
+            velocityY = dy / deltaTime;
+        }
+
+        setMapPosition(currentX + dx, currentY + dy);
+
+        // Atualiza as posições de início para o próximo movimento
+        startX = newX;
+        startY = newY;
+        lastMoveTime = currentTime;
+    }
+
+    // Fim do arrasto
+    function endDrag() {
+        isDragging = false;
+        map.style.cursor = 'grab';
+
+        if (Math.abs(velocityX) > 0.2 || Math.abs(velocityY) > 0.2) {
+            // Multiplicamos a velocidade para dar um "empurrão" de inércia
+            velocityX *= 10;
+            velocityY *= 10;
+            inertiaAnimation();
+        } else {
+            velocityX = 0;
+            velocityY = 0;
+        }
+    }
+
+    // Adiciona os event listeners
+    map.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag, { passive: false });
+    window.addEventListener('mouseup', endDrag, { passive: true });
+
+    map.addEventListener('touchstart', startDrag, { passive: true });
+    window.addEventListener('touchmove', onDrag, { passive: false });
+    window.addEventListener('touchend', endDrag, { passive: true });
+
+    map.style.cursor = 'grab';
+
+    // Aplica o ajuste assim que possível.
+    fitMapToScreen();
+    requestAnimationFrame(fitMapToScreen);
+
+    // Em vez de "chutar" momentos no tempo (setTimeout fixos), observamos de verdade
+    // quando o tamanho real do container muda — isso cobre o caso comum em celulares,
+    // onde a barra de endereço do navegador recolhe sozinha pouco depois do carregamento,
+    // mudando o viewport. Um setTimeout fixo podia capturar essa transição pela metade
+    // e aplicar uma escala errada bem nesse momento; o ResizeObserver só reage a
+    // mudanças reais e sempre usa a medida mais atual, então se autocorrige sempre.
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => fitMapToScreen());
+        ro.observe(mapContainer);
+    } else {
+        // Fallback para navegadores muito antigos sem ResizeObserver
+        [100, 300, 600, 1200].forEach(delay => setTimeout(fitMapToScreen, delay));
+    }
+
+    // visualViewport é o jeito correto/moderno de detectar mudanças de UI do
+    // navegador (barra de endereço, teclado virtual) em dispositivos móveis.
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', fitMapToScreen);
+    }
+
+    window.addEventListener('load', fitMapToScreen);
+    window.addEventListener('pageshow', fitMapToScreen);
+    window.addEventListener('resize', fitMapToScreen);
+    window.addEventListener('orientationchange', () => setTimeout(fitMapToScreen, 200));
+}
+
+// =======================================================================
+// Lógica de UI (Menus, Submenus e Modais) - ATUALIZADO PARA ZION
+// =======================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- 1. Menu Principal ---
+    const menuBtn = document.getElementById('zionMenuBtn');
+
+    if (menuBtn) {
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const merchantsModal = document.getElementById('merchantsModal');
+            if (merchantsModal) {
+                merchantsModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                // Re-trigger card animations on each open
+                document.querySelectorAll('.merchant-card').forEach(card => {
+                    card.style.animation = 'none';
+                    card.offsetHeight; // reflow
+                    card.style.animation = '';
+                });
+            }
+        });
+    }
+
+    // --- 2. Modal de História ---
+    // Gatilho agora é o botão dentro do submenu
+    const openHistoryBtn = document.getElementById('btnOpenHistory');
+    const historyModal = document.getElementById('historyModal');
+    const closeHistoryBtn = historyModal.querySelector('.close-btn');
+
+    if (openHistoryBtn && historyModal) {
+        openHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if(submenu) submenu.style.display = 'none'; // Fecha o submenu
+        });
+
+        closeHistoryBtn.addEventListener('click', () => {
+            historyModal.style.display = 'none';
+            document.body.style.overflow = '';
+        });
+        
+        // Fecha ao clicar fora
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                historyModal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
+    }
+
+    // --- 3. Modal de Mercantes (Tela Cheia) ---
+    const merchantsModal = document.getElementById('merchantsModal');
+    const closeMerchantsBtn = document.getElementById('closeMerchantsModal');
+
+    if (closeMerchantsBtn && merchantsModal) {
+        closeMerchantsBtn.addEventListener('click', () => {
+            merchantsModal.style.display = 'none';
+            document.body.style.overflow = '';
+            const shopsSubmenu = document.getElementById('shopsSubmenu');
+            if(shopsSubmenu) shopsSubmenu.style.display = 'none';
+        });
+    }
+
+    // --- 4. Submenu de Lojas (Dentro do Modal Mercantes) ---
+    const shopsMenuBtn = document.getElementById('shopsMenuBtn');
+    const shopsSubmenu = document.getElementById('shopsSubmenu');
+
+    if (shopsMenuBtn && shopsSubmenu) {
+        shopsMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = shopsSubmenu.style.display === 'flex';
+            
+            if (!isVisible) {
+                shopsSubmenu.style.display = 'flex';
+                // Calcula posição baseado no botão dentro do modal
+                const btnRect = shopsMenuBtn.getBoundingClientRect();
+                const submenuRect = shopsSubmenu.getBoundingClientRect();
+                
+                let newLeft = (btnRect.left + (btnRect.width / 2) - (submenuRect.width / 2));
+                let newTop = btnRect.top - submenuRect.height - 10;
+                
+                // Aplica z-index alto para ficar acima do modal fullscreen
+                shopsSubmenu.style.zIndex = '3002'; 
+                shopsSubmenu.style.top = newTop + 'px';
+                shopsSubmenu.style.left = newLeft + 'px';
+            } else {
+                shopsSubmenu.style.display = 'none';
+            }
+        });
+    }
+
+    // Listener global para fechar submenus ao clicar fora
+    document.addEventListener('click', (e) => {
+        // Fechar submenu principal
+        if (submenu && submenu.style.display === 'flex') {
+            // (city submenu removed - now using merchantsModal directly)
+        }
+        // Fechar submenu de lojas
+        if (shopsSubmenu && shopsSubmenu.style.display === 'flex') {
+            if (!e.target.closest('#shopsSubmenu') && !e.target.closest('#shopsMenuBtn')) {
+                shopsSubmenu.style.display = 'none';
+            }
+        }
+    });
+
+    // Habilita o mapa arrastável após o carregamento da página
+    enableMapInteraction();
+});
+</script>
+
+<script type="module">
+  import { supabase } from './supabaseClient.js'
+
+
+// --- HELPER DE AUTH OTIMISTA (ZERO EGRESS) ---
+function getLocalUserId() {
+    try {
+        const cached = localStorage.getItem('player_data_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.data && parsed.data.id && (parsed.expires > Date.now() || !parsed.expires)) {
+                return parsed.data.id;
+            }
+        }
+    } catch (e) {}
+
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                const sessionStr = localStorage.getItem(k);
+                const session = JSON.parse(sessionStr);
+                if (session && session.user && session.user.id) {
+                    return session.user.id;
+                }
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
+async function fetchAndDisplayCityOwner(cityName) {
+    const cityNameLower = cityName.toLowerCase();
+    const cacheKey = `city_owner_cache_${cityNameLower}`;
+    
+    // IDs dos elementos DOM
+    const nameSpan = document.getElementById(`guild_name_${cityNameLower}`);
+    const flagImg = document.getElementById(`guild_flag_${cityNameLower}`);
+    const defaultText = 'Nenhuma.';
+
+    if (!nameSpan || !flagImg) {
+        console.error(`Elementos de guilda para ${cityName} não encontrados.`);
+        return;
+    }
+
+    const updateUI = (name, flagUrl) => {
+        if (name && flagUrl) {
+            flagImg.setAttribute('src', flagUrl);
+            flagImg.style.display = 'inline-block';
+            flagImg.setAttribute('alt', `Bandeira da Guilda ${name}`);
+            nameSpan.textContent = name;
+        } else {
+            flagImg.style.display = 'none';
+            nameSpan.textContent = defaultText;
+        }
+    };
+
+    try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw);
+            const now = new Date().getTime();
+            if (cached && cached.expiry && now < cached.expiry) {
+                console.log(`[Cache] Carregando dono de ${cityName} do cache local.`);
+                updateUI(cached.guildName, cached.guildFlag);
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn("Erro ao ler cache da cidade:", e);
+    }
+
+    try {
+        console.log(`[Network] Buscando dono de ${cityName} no Supabase...`);
+        const { data: ownersData, error } = await supabase.rpc('get_city_owners');
+
+        if (error) {
+            console.error('Erro Supabase ao buscar donos das cidades:', error);
+            return;
+        }
+
+        const cityOwnerData = ownersData?.find(city => city.city_name.toLowerCase() === cityNameLower);
+        
+        let guildName = null;
+        let guildFlag = null;
+
+        if (cityOwnerData && cityOwnerData.owner_guild_id) {
+            guildName = cityOwnerData.owner_guild_name || 'Guilda Desconhecida';
+            guildFlag = cityOwnerData.owner_guild_flag || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
+        }
+
+        updateUI(guildName, guildFlag);
+
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setUTCDate(now.getUTCDate() + 1);
+        tomorrow.setUTCHours(0, 0, 0, 0);
+        
+        const expiryTimestamp = tomorrow.getTime();
+
+        const cacheData = {
+            guildName: guildName,
+            guildFlag: guildFlag,
+            expiry: expiryTimestamp
+        };
+
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+
+    } catch (err) {
+        console.error('Erro inesperado na função fetchAndDisplayCityOwner:', err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const pageTitle = document.title;
+    const cityNames = ['Astrax', 'Capital', 'Duratar', 'Elendor', 'Mitrar', 'Tandra', 'Zion'];
+    const cityName = cityNames.find(c => pageTitle.toLowerCase().includes(c.toLowerCase()));
+
+    if (cityName) {
+        fetchAndDisplayCityOwner(cityName);
+    } else {
+        console.warn('Não foi possível determinar o nome da cidade a partir do título.');
+    }
+});
+
+
+/* ================================================================= */
+/* === LÓGICA MESTRE DE POÇÕES (ZION) ============================== */
+/* ================================================================= */
+
+// Lista de Receitas do Mestre de Poções de ZION
+// R = Cartão Espiral Comum (41) | SR = Cartão Espiral Avançado (42)
+const potionRecipes = [
+    // --- RANK R (Frag 41) ---
+    {
+        id: 43, name: "Poção de Cura R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_r.webp",
+        resId: 51, resName: "Elora", resCost: 5, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        fragId: 41, fragCost: 1, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    {
+        id: 47, name: "Poção de Destreza R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_r.webp",
+        resId: 52, resName: "Lumina", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        fragId: 41, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    {
+        id: 45, name: "Poção de Fúria R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_r.webp", 
+        resId: 53, resName: "Rutus", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        fragId: 41, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    {
+        id: 49, name: "Poção de Ataque R", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_r.webp", 
+        resId: 54, resName: "Galdra", resCost: 10, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        fragId: 41, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp"
+    },
+    // --- RANK SR (Frag 42) ---
+    {
+        id: 44, name: "Poção de Cura SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_cura_sr.webp",
+        resId: 51, resName: "Elora", resCost: 15, resImg: "https://aden-rpg.pages.dev/assets/itens/elora.webp",
+        fragId: 42, fragCost: 1, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    },
+    {
+        id: 48, name: "Poção de Destreza SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_destreza_sr.webp",
+        resId: 52, resName: "Lumina", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/lumina.webp",
+        fragId: 42, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    },
+    {
+        id: 46, name: "Poção de Fúria SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_furia_sr.webp",
+        resId: 53, resName: "Rutus", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/rutus.webp",
+        fragId: 42, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    },
+    {
+        id: 50, name: "Poção de Ataque SR", 
+        img: "https://aden-rpg.pages.dev/assets/itens/pocao_de_ataque_sr.webp",
+        resId: 54, resName: "Galdra", resCost: 25, resImg: "https://aden-rpg.pages.dev/assets/itens/galdra.webp",
+        fragId: 42, fragCost: 5, fragImg: "https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp"
+    }
+];
+
+const fmt = (num) => new Intl.NumberFormat('pt-BR').format(num);
+
+// --- Carregar Recursos Base do Cache IDB ---
+async function loadResourcesFromCache() {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 47; 
+
+    const resourceMap = {
+        51: { count: 0, name: 'Elora', img: 'https://aden-rpg.pages.dev/assets/itens/elora.webp' },
+        52: { count: 0, name: 'Lumina', img: 'https://aden-rpg.pages.dev/assets/itens/lumina.webp' },
+        53: { count: 0, name: 'Rutus', img: 'https://aden-rpg.pages.dev/assets/itens/rutus.webp' },
+        54: { count: 0, name: 'Galdra', img: 'https://aden-rpg.pages.dev/assets/itens/galdra.webp' }
+    };
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onerror = () => resolve(resourceMap); 
+
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                resolve(resourceMap); return;
+            }
+
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const getAllReq = store.getAll();
+
+            getAllReq.onsuccess = () => {
+                const items = getAllReq.result || [];
+                items.forEach(invItem => {
+                    const itemId = invItem.items?.item_id;
+                    if (resourceMap[itemId]) {
+                        resourceMap[itemId].count += (invItem.quantity || 0);
+                    }
+                });
+                resolve(resourceMap);
+            };
+            getAllReq.onerror = () => resolve(resourceMap);
+        };
+    });
+}
+
+// Atualizar Cache Local (Com fix de String ID)
+async function updateResourceCache(resId, resQty, fragId, fragQty) {
+    const DB_NAME = "aden_inventory_db";
+    const STORE_NAME = "inventory_store";
+    const DB_VERSION = 47;
+
+    return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) { resolve(); return; }
+            
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            const getAll = store.getAll();
+
+            getAll.onsuccess = () => {
+                const items = getAll.result;
+                const targets = [
+                    { id: String(resId), qty: resQty },
+                    { id: String(fragId), qty: fragQty }
+                ];
+
+                for (const item of items) {
+                    if (!item.items || !item.items.item_id) continue;
+                    
+                    const currentId = String(item.items.item_id);
+                    const targetIndex = targets.findIndex(t => t.id === currentId);
+                    
+                    if (targetIndex !== -1) {
+                        const target = targets[targetIndex];
+                        if (item.quantity >= target.qty) {
+                            item.quantity -= target.qty;
+                            target.qty = 0;
+                            if (item.quantity <= 0) store.delete(item.id);
+                            else store.put(item);
+                        } else {
+                            target.qty -= item.quantity;
+                            store.delete(item.id);
+                        }
+                    }
+                }
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve(); 
+        };
+        req.onerror = () => resolve();
+    });
+}
+
+// Renderiza a grade de itens
+function renderPotionShop() {
+    const grid = document.getElementById('potionShopGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    potionRecipes.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'potion-card';
+        card.innerHTML = `
+            <div class="potion-header">
+                <img src="${item.img}" class="potion-img" alt="${item.name}">
+                <div class="potion-info">
+                    <h4>${item.name}</h4>
+                    <div class="cost-row">
+                        <img src="${item.resImg}" class="cost-icon" title="${item.resName}">
+                        <span>x${item.resCost}</span>
+                        <img src="${item.fragImg}" class="cost-icon" style="margin-left:5px;" title="Fragmento">
+                        <span>x${item.fragCost}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pm-controls">
+                <div class="pm-qty-selector">
+                    <button class="pm-qty-btn minus" data-id="${item.id}">-</button>
+                    <span class="pm-qty-val" id="qty-${item.id}">1</span>
+                    <button class="pm-qty-btn plus" data-id="${item.id}">+</button>
+                </div>
+                
+                <div class="total-price-display">
+                    Total: 
+                    <img src="${item.resImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-res-${item.id}">${item.resCost}</span> + 
+                    <img src="${item.fragImg}" class="cost-icon" style="width:16px;height:16px;">
+                    <span id="tot-frag-${item.id}">${item.fragCost}</span>
+                </div>
+
+                <button class="pm-buy-btn" id="buy-btn-${item.id}" data-id="${item.id}">Trocar</button>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    // Event Listeners
+    document.querySelectorAll('.pm-qty-btn.plus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, 1)));
+    document.querySelectorAll('.pm-qty-btn.minus').forEach(b => b.addEventListener('click', (e) => updateQty(e.target.closest('.pm-qty-btn').dataset.id, -1)));
+    document.querySelectorAll('.pm-buy-btn').forEach(b => b.addEventListener('click', (e) => buyPotion(e.target.dataset.id)));
+}
+
+// Atualiza quantidade e preço total na UI
+function updateQty(id, delta) {
+    id = parseInt(id);
+    const qtySpan = document.getElementById(`qty-${id}`);
+    if(!qtySpan) return;
+
+    let currentQty = parseInt(qtySpan.textContent);
+    let newQty = currentQty + delta;
+    if (newQty < 1) newQty = 1;
+    if (newQty > 99) newQty = 99; 
+
+    qtySpan.textContent = newQty;
+
+    // Atualiza totais visuais
+    const recipe = potionRecipes.find(r => r.id === id);
+    if (recipe) {
+        document.getElementById(`tot-res-${id}`).textContent = fmt(recipe.resCost * newQty);
+        document.getElementById(`tot-frag-${id}`).textContent = fmt(recipe.fragCost * newQty);
+    }
+}
+
+function showMsg(msg) {
+    const floatDiv = document.getElementById('floatingMessage');
+    if (floatDiv) {
+        floatDiv.textContent = msg;
+        floatDiv.style.display = 'block';
+        floatDiv.style.opacity = '1';
+        setTimeout(() => { floatDiv.style.opacity = '0'; setTimeout(()=>floatDiv.style.display='none', 500); }, 3000);
+    } else {
+        alert(msg);
+    }
+}
+
+// Função de Compra (Chama RPC Específica de Zion)
+async function buyPotion(id) {
+    id = parseInt(id);
+    const btn = document.getElementById(`buy-btn-${id}`);
+    const qty = parseInt(document.getElementById(`qty-${id}`).textContent);
+    const recipe = potionRecipes.find(r => r.id === id);
+
+    if (!recipe) return;
+
+    btn.disabled = true;
+    btn.textContent = "Trocando...";
+
+    try {
+        // CHAMA A NOVA FUNÇÃO RPC PARA ZION
+        const { data, error } = await supabase.rpc('exchange_potion_zion', {
+            p_potion_id: id,
+            p_quantity: qty
+        });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.message);
+
+        showMsg(`Sucesso! Você recebeu ${qty}x ${recipe.name}.`);
+        
+        // Atualizar visualmente o Recurso Base
+        const currentSpan = document.getElementById(`res-display-count-${recipe.resId}`);
+        if(currentSpan) {
+            let val = parseInt(currentSpan.textContent.replace('X','')) || 0;
+            val = Math.max(0, val - (recipe.resCost * qty));
+            currentSpan.textContent = `X${val}`;
+        }
+        
+        // Atualizar IndexedDB para ambos os itens consumidos
+        await updateResourceCache(recipe.resId, recipe.resCost * qty, recipe.fragId, recipe.fragCost * qty);
+
+    } catch (err) {
+        console.error(err);
+        showMsg(`Erro: ${err.message || "Falha na troca."}`);
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.textContent = "Trocar";
+        }
+    }
+}
+
+// Inicialização do Modal
+document.addEventListener('DOMContentLoaded', () => {
+    const openBtn = document.getElementById('btnPotionMaster');
+    const modal = document.getElementById('potionMasterModal');
+    const closeBtn = document.getElementById('closePotionMasterBtn');
+
+    if (openBtn && modal) {
+        openBtn.addEventListener('click', async () => {
+            renderPotionShop();
+            modal.style.display = 'flex';
+            
+            // --- Carrega Recursos (Somente Base) ---
+            const resContainer = document.getElementById('userResourcesDisplay');
+            if (resContainer) {
+                resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span> Carregando...';
+                
+                try {
+                    const counts = await loadResourcesFromCache();
+                    resContainer.innerHTML = '<span style="width:100%; text-align:center; color:gold; margin-bottom:5px;">Você tem:</span>';
+                    
+                    [51, 52, 53, 54].forEach(id => {
+                        const data = counts[id];
+                        const div = document.createElement('div');
+                        div.className = 'res-item-display';
+                        div.innerHTML = `
+                            <img src="${data.img}" class="res-icon-display" alt="${data.name}">
+                            <span style="font-weight:bold; color: #fff;" id="res-display-count-${id}">X${data.count}</span>
+                        `;
+                        resContainer.appendChild(div);
+                    });
+                } catch (e) {
+                    resContainer.innerHTML = 'Não foi possível carregar os recursos.';
+                }
+            }
+
+            const shopsSub = document.getElementById('shopsSubmenu');
+            const merchModal = document.getElementById('merchantsModal');
+            
+            if(shopsSub) shopsSub.style.display = 'none';
+            if(merchModal) merchModal.style.display = 'none'; 
+        });
+    }
+
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // cria um elemento para medir o tamanho real de 1rem
+  const testEl = document.createElement("div");
+  testEl.style.cssText = "position:absolute;visibility:hidden;font-size:1rem;line-height:1;";
+  testEl.textContent = "M";
+  document.body.appendChild(testEl);
+
+  const actualRem = testEl.getBoundingClientRect().height;
+  document.body.removeChild(testEl);
+
+  console.log("[scale-lock] 1rem real:", actualRem, "px");
+
+  // queremos sempre 16px como base (modo padrão)
+  const targetRem = 16;
+  const correction = targetRem / actualRem;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    html { font-size: ${16 * correction}px !important; }
+    body { font-size: 1rem !important; }
+  `;
+  document.head.appendChild(style);
+
+  console.log("[scale-lock] Correção aplicada, fator:", correction.toFixed(2));
+});
+</script>
+<div id="google_translate_element"></div>
+
+<script src="auto_translate.js"></script>
+
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<div id="leftSideMenu">
+    <div class="menu-header">
+        <button id="closeMenuBtn" class="close-menu-btn">
+             </button>
+        <h3>Menu</h3>
+        <div style="width: 28px;"></div> 
+    </div>
+    <ul id="menuList" class="menu-list">
+        </ul>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // --- CONFIGURAÇÃO MANUAL ---
+    // Mude isso em cada arquivo (ex: "mines.html", "capital.html", "afk.html")
+    const MANUAL_CURRENT_PAGE = "zion.html"; 
+
+    const assetBase = "https://aden-rpg.pages.dev/assets/";
+
+    const menuItems = [
+        { name: "Tela inicial", url: "index.html", icon: assetBase + "homeic.webp" },
+        { name: "Aventura AFK", url: "afk.html", icon: assetBase + "expm.webp", key: 'afk' },
+        { name: "Mineração", url: "mines.html", icon: assetBase + "recursos.webp" }, 
+        { 
+            name: "Áreas de Caça", 
+            icon: assetBase + "mapicon.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Covil de Kelts", url: "covil_de_kelts.html" },
+               { name: "Desfiladeiro", url: "desfiladeiro.html" },
+               { name: "Enclave Etéreo", url: "enclave_etereo.html" },
+               { name: "Erbária", url: "erbaria.html" },
+                { name: "Floresta Mística", url: "floresta_mistica.html" },
+                { name: "Pântano de Molinar", url: "pantano_de_molinar.html" },
+                { name: "Penumbra Uivante", url: "penumbra_uivante.html" },
+                { name: "Queda Fontana", url: "queda_fontana.html" },
+                { name: "Razar", url: "razar.html" },
+                { name: "Vale Arcano", url: "vale_arcano.html" },
+            ]
+        },
+        { 
+            name: "Instâncias", 
+            icon: assetBase + "dgs.webp", // Reutilizei o ícone de mapa, altere se tiver um específico
+            isDropdown: true,
+            subItems: [
+                { name: "Ruínas Ancestrais", url: "ruins.html" }
+            ]
+        },
+        { name: "Arena PvP", url: "arena.html", icon: assetBase + "pvp.webp", key: 'arena' },
+        { name: "Chefe Mundial", url: "solo_boss.html", icon: assetBase + "bossm.webp", key: 'boss' },
+        { name: "Guilda", url: "guild.html", icon: assetBase + "guilda.webp", key: 'guild' },
+        { name: "Bolsa", url: "inventory.html", icon: assetBase + "iconbolsa.webp" },
+        { name: "Ranking", url: "ranking_cp.html", icon: assetBase + "iconranking.webp" },
+        { name: "Títulos", url: "titulos.html", icon: assetBase + "icontitulos.webp" },
+        
+        // --- NOVO MENU CIDADES (DROPDOWN) ---
+        { 
+            name: "Cidades", 
+            icon: assetBase + "mapicon.webp",
+            isDropdown: true, // Flag para indicar que é dropdown
+            subItems: [
+                { name: "Capital", url: "capital.html" },
+                { name: "Astrax", url: "astrax.html" },
+                { name: "Duratar", url: "duratar.html" },
+                { name: "Elendor", url: "elendor.html" },
+                { name: "Mitrar", url: "mitrar.html" },
+                { name: "Tandra", url: "tandra.html" },
+                { name: "Zion", url: "zion.html" }
+            ]
+        }
+    ];
+
+    const menuList = document.getElementById("menuList");
+    const sideMenu = document.getElementById("leftSideMenu");
+    const overlay = document.getElementById("sideMenuOverlay");
+    const openBtn = document.getElementById("menuToggleBtn");
+    const closeBtn = document.getElementById("closeMenuBtn");
+
+    const hamburgerSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    `;
+    
+    // Ícone de Seta para baixo (Chevron Down)
+    const chevronDownSVG = `
+        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    if(closeBtn) closeBtn.innerHTML = hamburgerSVG;
+
+    if (menuList) {
+        menuList.innerHTML = ""; 
+
+        menuItems.forEach(item => {
+            const li = document.createElement("li");
+            li.className = "menu-item";
+
+            // === CASO 1: É UM MENU DROPDOWN (CIDADES) ===
+            if (item.isDropdown) {
+                // Verifica se alguma sub-página é a atual (para abrir o menu automaticamente)
+                const isSubItemActive = item.subItems.some(sub => sub.url === MANUAL_CURRENT_PAGE);
+                
+                // Link principal do Dropdown (apenas abre/fecha)
+                const a = document.createElement("a");
+                a.className = "menu-link dropdown-toggle";
+                a.style.cursor = "pointer";
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                    ${chevronDownSVG}
+                `;
+
+                // Container dos Sub-itens
+                const subUl = document.createElement("ul");
+                subUl.className = `submenu-list ${isSubItemActive ? 'open' : ''}`; // Abre se estiver dentro
+
+                if(isSubItemActive) li.classList.add('dropdown-active');
+
+                // Toggle ao clicar no pai
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // Não fecha o menu lateral
+                    subUl.classList.toggle("open");
+                    li.classList.toggle("dropdown-active");
+                });
+
+                // Renderiza os Sub-itens
+                item.subItems.forEach(sub => {
+                    const isMatch = (sub.url === MANUAL_CURRENT_PAGE);
+                    const subLi = document.createElement("li");
+                    subLi.className = `menu-item ${isMatch ? 'active' : ''}`; // Aplica active no li filho
+
+                    const subA = document.createElement("a");
+                    subA.className = "menu-link submenu-link"; // Classe extra para padding
+                    subA.innerHTML = `<span>${sub.name}</span>`; // Sub-itens sem ícone por enquanto
+
+                    if (isMatch) {
+                        // Bloqueio Total (igual ao código anterior)
+                        subA.removeAttribute("href");
+                        subA.style.cursor = "default";
+                        subA.style.pointerEvents = "none";
+                        subA.style.opacity = "1";
+                        subA.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }, true);
+                    } else {
+                        subA.href = sub.url;
+                        subA.addEventListener("click", () => {
+                            setTimeout(closeMenu, 100);
+                        });
+                    }
+
+                    subLi.appendChild(subA);
+                    subUl.appendChild(subLi);
+                });
+
+                li.appendChild(a);
+                li.appendChild(subUl);
+
+            } else {
+                // === CASO 2: É UM MENU NORMAL ===
+                const isMatch = (item.url === MANUAL_CURRENT_PAGE);
+                if(isMatch) li.classList.add('active');
+
+                const a = document.createElement("a");
+                a.className = "menu-link";
+                a.dataset.menuKey = item.key || '';
+
+                a.innerHTML = `
+                    <img src="${item.icon}" class="menu-icon" alt="ícone" onerror="this.style.display='none'">
+                    <span>${item.name}</span>
+                `;
+
+                if (isMatch) {
+                    a.removeAttribute("href");
+                    a.style.cursor = "default";
+                    a.style.pointerEvents = "none";
+                    a.style.opacity = "1";
+                    a.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }, true);
+                } else {
+                    a.href = item.url;
+                    a.addEventListener("click", () => {
+                         setTimeout(closeMenu, 100);
+                    });
+                }
+                li.appendChild(a);
+            }
+
+            menuList.appendChild(li);
+        });
+    }
+
+    // --- FUNÇÕES DE CONTROLE DO MENU ---
+    const toggleMenuRotation = (isOpening) => {
+        if (!openBtn) return;
+        const svg = openBtn.querySelector('svg');
+        if (svg) {
+            if (isOpening) svg.classList.add('icon-vertical');
+            else svg.classList.remove('icon-vertical');
+        }
+    };
+
+    const openMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.add("open");
+        if(overlay) overlay.style.display = "block";
+        toggleMenuRotation(true);
+        setTimeout(() => {
+            if(overlay) {
+                overlay.style.opacity = "1";
+                overlay.style.pointerEvents = "auto";
+            }
+        }, 10);
+    };
+
+    const closeMenu = () => {
+        if(!sideMenu) return;
+        sideMenu.classList.remove("open");
+        if(overlay) {
+            overlay.style.opacity = "0";
+            overlay.style.pointerEvents = "none";
+        }
+        toggleMenuRotation(false);
+        setTimeout(() => {
+            if(overlay) overlay.style.display = "none";
+        }, 300);
+    };
+
+    if(openBtn) openBtn.addEventListener("click", openMenu);
+    if(closeBtn) closeBtn.addEventListener("click", closeMenu);
+    if(overlay) overlay.addEventListener("click", closeMenu);
+
+    // --- RENDERIZAR NOTIFICAÇÕES (Mantido igual) ---
+    const renderSideMenuNotifications = () => {
+        const STORAGE_KEY_ACTIONS = 'aden_daily_actions_status';
+        let dailyStatus = {};
+        try { dailyStatus = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIONS) || '{}'); } catch(e) {}
+
+        let showGuildDot = false;
+        const now = new Date();
+        const day = now.getUTCDay(); 
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const KEY_SAT = 'aden_guild_notif_seen_saturday';
+        const KEY_SUN = 'aden_guild_notif_seen_sunday';
+
+        if (day === 1) { 
+             localStorage.removeItem(KEY_SAT); 
+             localStorage.removeItem(KEY_SUN); 
+        }
+        if (day === 6 && !localStorage.getItem(KEY_SAT)) showGuildDot = true;
+        if (day === 0 && (hours === 23 && minutes >= 30) && !localStorage.getItem(KEY_SUN)) showGuildDot = true;
+
+        const links = menuList.querySelectorAll('.menu-link');
+        links.forEach(link => {
+            const key = link.dataset.menuKey;
+            let shouldShow = false;
+
+            if (key && dailyStatus[key] === true) shouldShow = true;
+            if (key === 'guild' && showGuildDot) shouldShow = true;
+
+            const existingDot = link.querySelector('.menu-notification-dot');
+            if (existingDot) existingDot.remove();
+
+            if (shouldShow) {
+                const dot = document.createElement('div');
+                dot.className = 'menu-notification-dot';
+                link.appendChild(dot);
+            }
+        });
+    };
+
+    renderSideMenuNotifications();
+});
+</script>
+
+<script>window.MERCHANT_CITY = "Zion";</script>
+<script type="module" src="mercador.js"></script>
+<script type="module" src="oficina.js"></script>
+<script src="browser-guard.js"></script>
+
+<!-- DEBUG PANEL -->
+<div id="__debug_panel" style="
+    position: fixed; bottom: 80px; left: 0; right: 0;
+    background: rgba(0,0,0,0.88); color: #0f0; font: 11px monospace;
+    z-index: 99999; padding: 8px; max-height: 45vh; overflow-y: auto;
+    pointer-events: none; border-top: 2px solid lime;
+"></div>
+<script>
+(function(){
+    const log = (msg) => {
+        const p = document.getElementById('__debug_panel');
+        if (!p) return;
+        const t = ((performance.now())/1000).toFixed(2) + 's';
+        p.innerHTML = `<div>[${t}] ${msg}</div>` + p.innerHTML;
+    };
+
+    // Intercept map.style.transform changes using MutationObserver + property descriptor trick
+    function hookMap() {
+        const map = document.getElementById('map');
+        if (!map) { setTimeout(hookMap, 50); return; }
+        const container = document.getElementById('mapContainer');
+
+        // Log initial state
+        const cr = container ? container.getBoundingClientRect() : {};
+        log(`CONTAINER: ${Math.round(cr.width)}x${Math.round(cr.height)} | visualVP: ${window.visualViewport ? Math.round(window.visualViewport.width)+'x'+Math.round(window.visualViewport.height) : 'n/a'} | 100vh: ${window.innerHeight}`);
+        log(`MAP CSS: ${map.style.transform || '(none inline)'} | computed: ${getComputedStyle(map).transform}`);
+
+        // Hook map.style.transform via MutationObserver on attribute changes
+        const obs = new MutationObserver((muts) => {
+            for (const m of muts) {
+                if (m.attributeName === 'style') {
+                    const t = map.style.transform;
+                    const cr2 = container ? container.getBoundingClientRect() : {};
+                    // Try to get call stack to find who changed it
+                    let caller = '';
+                    try { throw new Error(); } catch(e) {
+                        const lines = e.stack.split('\n');
+                        caller = lines.slice(1,4).map(l=>l.trim().replace(/.*\/(.+):.+:.+/,'$1').substring(0,40)).join(' | ');
+                    }
+                    log(`TRANSFORM SET: ${t} | container: ${Math.round(cr2.width)}x${Math.round(cr2.height)} | from: ${caller}`);
+                }
+            }
+        });
+        obs.observe(map, { attributes: true });
+
+        // Log every second for 8 seconds
+        let i = 0;
+        const iv = setInterval(() => {
+            const cr2 = container ? container.getBoundingClientRect() : {};
+            const vp = window.visualViewport;
+            log(`TICK ${++i}s | container: ${Math.round(cr2.width)}x${Math.round(cr2.height)} | vVP: ${vp?Math.round(vp.width)+'x'+Math.round(vp.height):'?'} | transform: ${map.style.transform}`);
+            if (i >= 8) clearInterval(iv);
+        }, 1000);
+    }
+    document.addEventListener('DOMContentLoaded', hookMap);
+    if (document.readyState !== 'loading') hookMap();
+})();
+</script>
+
+</body>
+</html>

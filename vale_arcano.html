@@ -463,7 +463,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
 document.addEventListener("DOMContentLoaded",()=>{
     const t=document.createElement("div");t.style.cssText="position:absolute;visibility:hidden;font-size:1rem;line-height:1;";t.textContent="M";document.body.appendChild(t);
     const r=t.getBoundingClientRect().height;document.body.removeChild(t);
-    const s=document.createElement("style");s.textContent=`html{font-size:${16*(16/r)}px!important;}body{font-size:1.3rem!important;}`;document.head.appendChild(s);
+    const s=document.createElement("style");s.textContent=`html{font-size:${16*(16/r)}px!important;}body{font-size:1rem!important;}`;document.head.appendChild(s);
 });
 </script>
 

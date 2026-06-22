@@ -1945,5 +1945,65 @@ document.addEventListener("DOMContentLoaded", () => {
 <script type="module" src="mercador.js"></script>
 <script type="module" src="oficina.js"></script>
 <script src="browser-guard.js"></script>
+
+<!-- DEBUG PANEL -->
+<div id="__debug_panel" style="
+    position: fixed; bottom: 80px; left: 0; right: 0;
+    background: rgba(0,0,0,0.88); color: #0f0; font: 11px monospace;
+    z-index: 99999; padding: 8px; max-height: 45vh; overflow-y: auto;
+    pointer-events: none; border-top: 2px solid lime;
+"></div>
+<script>
+(function(){
+    const log = (msg) => {
+        const p = document.getElementById('__debug_panel');
+        if (!p) return;
+        const t = ((performance.now())/1000).toFixed(2) + 's';
+        p.innerHTML = `<div>[${t}] ${msg}</div>` + p.innerHTML;
+    };
+
+    // Intercept map.style.transform changes using MutationObserver + property descriptor trick
+    function hookMap() {
+        const map = document.getElementById('map');
+        if (!map) { setTimeout(hookMap, 50); return; }
+        const container = document.getElementById('mapContainer');
+
+        // Log initial state
+        const cr = container ? container.getBoundingClientRect() : {};
+        log(`CONTAINER: ${Math.round(cr.width)}x${Math.round(cr.height)} | visualVP: ${window.visualViewport ? Math.round(window.visualViewport.width)+'x'+Math.round(window.visualViewport.height) : 'n/a'} | 100vh: ${window.innerHeight}`);
+        log(`MAP CSS: ${map.style.transform || '(none inline)'} | computed: ${getComputedStyle(map).transform}`);
+
+        // Hook map.style.transform via MutationObserver on attribute changes
+        const obs = new MutationObserver((muts) => {
+            for (const m of muts) {
+                if (m.attributeName === 'style') {
+                    const t = map.style.transform;
+                    const cr2 = container ? container.getBoundingClientRect() : {};
+                    // Try to get call stack to find who changed it
+                    let caller = '';
+                    try { throw new Error(); } catch(e) {
+                        const lines = e.stack.split('\n');
+                        caller = lines.slice(1,4).map(l=>l.trim().replace(/.*\/(.+):.+:.+/,'$1').substring(0,40)).join(' | ');
+                    }
+                    log(`TRANSFORM SET: ${t} | container: ${Math.round(cr2.width)}x${Math.round(cr2.height)} | from: ${caller}`);
+                }
+            }
+        });
+        obs.observe(map, { attributes: true });
+
+        // Log every second for 8 seconds
+        let i = 0;
+        const iv = setInterval(() => {
+            const cr2 = container ? container.getBoundingClientRect() : {};
+            const vp = window.visualViewport;
+            log(`TICK ${++i}s | container: ${Math.round(cr2.width)}x${Math.round(cr2.height)} | vVP: ${vp?Math.round(vp.width)+'x'+Math.round(vp.height):'?'} | transform: ${map.style.transform}`);
+            if (i >= 8) clearInterval(iv);
+        }, 1000);
+    }
+    document.addEventListener('DOMContentLoaded', hookMap);
+    if (document.readyState !== 'loading') hookMap();
+})();
+</script>
+
 </body>
 </html>

@@ -5014,7 +5014,7 @@ function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
   const div = document.createElement('div');
   div.className = 'bond-card' + (slotType === 'couple' ? ' bond-couple' : '');
 
-  const label = slotType === 'couple' ? 'Casal' : 'Amigo(a)';
+  const label = slotType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
 
   // ── Slot com laço confirmado ─────────────────────────────
   if (bondData) {
@@ -5031,7 +5031,7 @@ function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
     const nameEl = div.querySelector('.bond-card-name');
     const circEl = div.querySelector('.bond-card-circle');
     if (isSelf) {
-      const openOptions = () => _bondsOpenOwnOptions(bondData.partner_id, bondData.partner_name, av);
+      const openOptions = () => _bondsOpenOwnOptions(bondData.partner_id, bondData.partner_name, av, bondData.bond_id, slotType);
       if (nameEl) nameEl.onclick = openOptions;
       if (circEl) circEl.onclick = openOptions;
     } else {
@@ -5091,12 +5091,17 @@ function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
 // ══════════════════════════════════════════
 //  OPÇÕES DO PRÓPRIO CARD (ver perfil / desfazer)
 // ══════════════════════════════════════════
-function _bondsOpenOwnOptions(partnerId, partnerName, partnerAv) {
+// Armazena dados do card aberto para uso pelo botão de rompimento
+let _booCurrentBond = null;
+
+function _bondsOpenOwnOptions(partnerId, partnerName, partnerAv, bondId, bondType) {
   const modal  = document.getElementById('tav-bond-own-options');
   const avImg  = document.getElementById('boo-avatar');
   const nameEl = document.getElementById('boo-name');
   const viewBtn= document.getElementById('boo-view-btn');
   if (!modal) return;
+
+  _booCurrentBond = { partnerId, partnerName, bondId, bondType };
 
   if (avImg)  avImg.src         = partnerAv || makeAvatar(partnerName || '?', 64);
   if (nameEl) nameEl.textContent = partnerName || '';
@@ -5115,6 +5120,66 @@ function closeBondOwnOptions() {
 }
 
 // ══════════════════════════════════════════
+//  DESFAZER LAÇO (Break Bond)
+// ══════════════════════════════════════════
+
+function _bondsShowBreakConfirm() {
+  // Chamado pelo onclick do botão no modal de opções — usa _booCurrentBond
+  const bond = _booCurrentBond;
+  if (!bond) return;
+
+  const modal   = document.getElementById('tav-bond-break-confirm');
+  const textEl  = document.getElementById('bond-break-text');
+  const warnEl  = document.getElementById('bond-break-warning');
+  const yesBtn  = document.getElementById('bond-break-yes');
+  if (!modal) return;
+
+  if (textEl) textEl.textContent = `Tem certeza que deseja desfazer o laço com ${bond.partnerName}?`;
+  if (warnEl) warnEl.textContent = 'Atenção: a intimidade de vocês retornará para 1000 e o progresso do laço será perdido.';
+  if (yesBtn) yesBtn.onclick = _bondExecuteBreak;
+
+  modal.style.display = 'flex';
+}
+
+function closeBondBreakConfirm() {
+  const m = document.getElementById('tav-bond-break-confirm');
+  if (m) m.style.display = 'none';
+}
+
+async function _bondExecuteBreak() {
+  closeBondBreakConfirm();
+  closeBondOwnOptions();
+
+  const bond = _booCurrentBond;
+  _booCurrentBond = null;
+  if (!bond?.bondId) { showToast('Laço não identificado.'); return; }
+
+  const sb = getSB();
+  if (!sb) { showToast('Sem conexão.'); return; }
+
+  try {
+    const { data, error } = await sb.rpc('break_bond', { p_bond_id: bond.bondId });
+    if (error) throw error;
+
+    if (data?.success) {
+      await _bondsClearCache(PLAYER.id);
+      if (bond.partnerId) await _bondsClearCache(bond.partnerId);
+      showToast(`Laço com ${bond.partnerName} foi desfeito.`);
+      closeBondsModal();
+      setTimeout(() => openBondsModal(PLAYER.id, true), 700);
+    } else {
+      const errMap = {
+        'bond_not_found': 'Laço não encontrado (pode já ter sido desfeito).',
+      };
+      showToast(errMap[data?.error] || 'Não foi possível desfazer o laço.');
+    }
+  } catch(e) {
+    console.warn('break_bond:', e);
+    showToast('Erro ao desfazer laço.');
+  }
+}
+
+// ══════════════════════════════════════════
 //  PICKER DE ELEGÍVEIS
 // ══════════════════════════════════════════
 let _bondEligibleType = 'friend';
@@ -5126,7 +5191,7 @@ async function _bondsOpenEligiblePicker(bondType) {
   const listEl  = document.getElementById('tav-bond-eligible-list');
   if (!modal || !listEl) return;
 
-  const label = bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+  const label = bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
   if (titleEl) titleEl.textContent = `Convidar para ${label}`;
   listEl.innerHTML = '<div class="tav-notif-empty">Carregando...</div>';
   modal.classList.add('open');
@@ -5181,7 +5246,7 @@ function _bondsAskConfirm(toId, toName, bondType) {
   const yesBtn  = document.getElementById('bond-confirm-yes');
   if (!modal) return;
 
-  const label = bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+  const label = bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
   if (textEl) textEl.textContent = `Deseja convidar ${toName} para ser seu ${label}?`;
 
   _bondConfirmPending = { toId, toName, bondType };
@@ -5282,7 +5347,7 @@ function _bondsShowInviteReceived(notif) {
   const accBtn  = document.getElementById('bir-accept-btn');
   if (!modal) return;
 
-  const bondLabel = notif.bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+  const bondLabel = notif.bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
   const imgUrl    = notif.bondType === 'couple'
     ? 'https://aden-rpg.pages.dev/assets/laco_casal1.webp'
     : 'https://aden-rpg.pages.dev/assets/laco_amigo1.webp';
@@ -5417,6 +5482,31 @@ async function _bondsFetchPendingNotifications() {
     }
   } catch(e) { console.warn('[bonds] exceção em get_and_clear_bond_responses:', e); }
 
+  // ── 3. Rompimentos de laço recebidos (bond_break) ────────────
+  try {
+    const { data: breaks, error: breakErr } = await sb.rpc('get_and_clear_bond_break_notifications');
+    if (breakErr) {
+      console.warn('[bonds] get_and_clear_bond_break_notifications erro:', breakErr);
+    } else {
+      (breaks || []).forEach(n => {
+        if (notifs.find(x => x.type === 'bond_break' && x.notifId === n.notif_id)) return;
+        const at = new Date(n.created_at).getTime();
+        notifs.unshift({
+          id:         'bb_' + n.notif_id + '_' + at,
+          type:       'bond_break',
+          notifId:    n.notif_id,
+          fromId:     n.from_id,
+          fromName:   n.from_name  || '',
+          fromAvatar: n.from_avatar || ownersCache[n.from_id]?.avatar_url || '',
+          bondType:   n.bond_type,
+          readAt:     null,
+          at
+        });
+        changed = true;
+      });
+    }
+  } catch(e) { console.warn('[bonds] exceção em get_and_clear_bond_break_notifications:', e); }
+
   if (changed) {
     _tavSaveNotifications(notifs.slice(0, 50));
     _tavUpdateNotifDot();
@@ -5450,7 +5540,7 @@ _tavRenderNotifs = function() {
     } else if (n.type === 'bond_invite') {
       // Verifica se expirou
       const expired = n.expiresAt && new Date(n.expiresAt).getTime() < Date.now();
-      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
       const av  = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
       const row = document.createElement('div');
       row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');
@@ -5470,8 +5560,24 @@ _tavRenderNotifs = function() {
       }
       listEl.appendChild(row);
 
+    } else if (n.type === 'bond_break') {
+      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+      const av  = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
+      const row = document.createElement('div');
+      row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');
+      row.innerHTML = `
+        <div class="tav-notif-av" style="border-color:rgba(220,80,80,0.55);">
+          <img src="${esc(av)}" onerror="this.src='${makeAvatar(n.fromName||'?',40)}'">
+        </div>
+        <div class="tav-notif-text">
+          💔 <strong>${esc(n.fromName)}</strong> desfez o laço de <strong>${bondLabel}</strong> com você.
+          <div class="tav-notif-time">${_tavTimeAgo(n.at)}</div>
+        </div>`;
+      row.onclick = () => { closeNotifModal(); openPlayerModalFor(n.fromId, n.fromName); };
+      listEl.appendChild(row);
+
     } else if (n.type === 'bond_response') {
-      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Amigo(a)';
+      const bondLabel = n.bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
       const av  = n.fromAvatar || makeAvatar(n.fromName || '?', 40);
       const row = document.createElement('div');
       row.className = 'tav-notif-row' + (n.readAt ? '' : ' unread');

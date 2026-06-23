@@ -4994,7 +4994,7 @@ function _bondsRenderCards() {
     slotIndex:   0
   }));
 
-  // ── 5 Cards de Amigo(a) ───────────────────────────────────
+  // ── 5 Cards de Melhor Amigo(a) ───────────────────────────────
   const pendingFriends = pendingSent.filter(p => p.bond_type === 'friend');
   for (let i = 0; i < 5; i++) {
     const bondData = friends[i] || null;
@@ -5007,6 +5007,50 @@ function _bondsRenderCards() {
       slotIndex: i
     }));
   }
+
+  // ── Seção "Nossa intimidade" para visitantes ──────────────
+  if (!_bonds.isSelf && PLAYER?.id && _bonds.targetId !== PLAYER.id) {
+    _bondsMaybeShowMutualIntimacy(cardsEl, _bonds.targetId, d);
+  }
+}
+
+// Busca e exibe seção "Nossa intimidade" para visitante sem laço com o alvo
+async function _bondsMaybeShowMutualIntimacy(containerEl, targetId, bondsData) {
+  if (!PLAYER?.id || !targetId || targetId === PLAYER.id) return;
+
+  // Se o VIEWER já tem laço com o alvo, a XP bar do card cobre tudo — não duplicar
+  const couple  = bondsData?.couple;
+  const friends = bondsData?.friends || [];
+  const alreadyBonded =
+    (couple  && couple.partner_id === PLAYER.id) ||
+    friends.some(f => f.partner_id === PLAYER.id);
+  if (alreadyBonded) return;
+
+  const sb = getSB();
+  if (!sb) return;
+
+  try {
+    const { data, error } = await sb.rpc('get_mutual_intimacy', { p_target_id: targetId });
+    if (error) { console.warn('[bonds] get_mutual_intimacy:', error); return; }
+
+    const pts = data?.points ?? 0;
+    if (pts >= 1000) return; // já elegíveis, não precisa mostrar
+
+    const pct = Math.min(100, Math.round((pts / 1000) * 100));
+
+    // Garante que o container ainda pertence ao mesmo targetId
+    if (_bonds.targetId !== targetId) return;
+
+    const sec = document.createElement('div');
+    sec.className = 'bond-mutual-intimacy';
+    sec.innerHTML = `
+      <div class="bond-mutual-label">Nossa intimidade</div>
+      <div class="bond-mutual-bar-track">
+        <div class="bond-mutual-bar-fill" style="width:${pct}%;"></div>
+        <span class="bond-mutual-bar-label">${pts.toLocaleString('pt-BR')} / 1.000</span>
+      </div>`;
+    containerEl.appendChild(sec);
+  } catch(e) { console.warn('[bonds] mutual intimacy exception:', e); }
 }
 
 // Constrói um card de laço
@@ -5018,14 +5062,27 @@ function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
 
   // ── Slot com laço confirmado ─────────────────────────────
   if (bondData) {
-    const av   = bondData.partner_avatar || makeAvatar(bondData.partner_name || '?', 58);
-    const lv   = getBondLevel(bondData.intimacy_points || 0);
+    const av      = bondData.partner_avatar || makeAvatar(bondData.partner_name || '?', 58);
+    const pts     = bondData.intimacy_points || 0;
+    const prog    = getBondLevelProgress(pts);
+    const isMax   = prog.level >= 20;
+    const xpLabel = isMax
+      ? 'Nível Máximo'
+      : `${prog.current.toLocaleString('pt-BR')} / ${prog.needed.toLocaleString('pt-BR')}`;
+    const xpPct   = isMax ? 100 : prog.pct;
+
     div.innerHTML = `
       <div class="bond-card-circle"><img src="${esc(av)}" onerror="this.src='${makeAvatar(bondData.partner_name||'?',58)}'"></div>
       <div class="bond-card-info">
         <div class="bond-card-type">${label}</div>
         <div class="bond-card-name" data-pid="${esc(bondData.partner_id)}" data-pname="${esc(bondData.partner_name)}">${esc(bondData.partner_name)}</div>
-        <div class="bond-card-level">Nível <span class="bond-lv-num">${lv}</span></div>
+        <div class="bond-card-level">Nível <span class="bond-lv-num">${prog.level}</span></div>
+        <div class="bond-card-xpbar-wrap">
+          <div class="bond-card-xpbar-track${isMax ? ' xpbar-max' : ''}">
+            <div class="bond-card-xpbar-fill" style="width:${xpPct}%;"></div>
+            <span class="bond-card-xpbar-label">${xpLabel}</span>
+          </div>
+        </div>
       </div>`;
     // Clicar no nome/avatar: se for próprio jogador → opções; se for visitante → abrir perfil
     const nameEl = div.querySelector('.bond-card-name');

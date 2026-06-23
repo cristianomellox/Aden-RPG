@@ -2262,6 +2262,95 @@ html,body {
   margin-top: 2px;
 }
 
+/* ── Barra de XP do nível do laço ─────────────────────── */
+.bond-card-xpbar-wrap {
+  margin-top: 5px;
+}
+.bond-card-xpbar-track {
+  position: relative;
+  height: 17px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(201,169,74,0.18);
+}
+.bond-card-xpbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(140,110,30,0.65) 0%, rgba(201,169,74,0.75) 100%);
+  border-radius: 9px;
+  transition: width 0.55s cubic-bezier(.4,0,.2,1);
+}
+.bond-card.bond-couple .bond-card-xpbar-fill {
+  background: linear-gradient(90deg, rgba(180,80,130,0.55) 0%, rgba(255,130,180,0.72) 100%);
+}
+.bond-card-xpbar-track.xpbar-max .bond-card-xpbar-fill {
+  background: linear-gradient(90deg, rgba(201,169,74,0.5) 0%, rgba(255,210,90,0.9) 100%);
+}
+.bond-card.bond-couple .bond-card-xpbar-track.xpbar-max .bond-card-xpbar-fill {
+  background: linear-gradient(90deg, rgba(220,100,160,0.6) 0%, rgba(255,160,200,0.9) 100%);
+}
+.bond-card-xpbar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-family: 'Cinzel', serif;
+  color: rgba(255,255,255,0.92);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Seção "Nossa intimidade" (visitante sem laço) ─────── */
+.bond-mutual-intimacy {
+  margin-top: 10px;
+  padding: 11px 13px 12px;
+  background: rgba(14,10,4,0.6);
+  border: 1px solid rgba(201,169,74,0.18);
+  border-radius: 10px;
+}
+.bond-mutual-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.63rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+}
+.bond-mutual-bar-track {
+  position: relative;
+  height: 17px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(100,160,255,0.18);
+}
+.bond-mutual-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(60,100,200,0.45) 0%, rgba(100,160,255,0.65) 100%);
+  border-radius: 9px;
+  transition: width 0.55s cubic-bezier(.4,0,.2,1);
+}
+.bond-mutual-bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-family: 'Cinzel', serif;
+  color: rgba(255,255,255,0.92);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* ── Confirmação genérica de laço ──────────────────────── */
 .bond-confirm-box {
   background: linear-gradient(160deg, #1f1b2e, #15131f);

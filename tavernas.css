@@ -2336,7 +2336,10 @@ html,body {
   border-radius: 9px;
   transition: width 0.55s cubic-bezier(.4,0,.2,1);
 }
-.bond-mutual-bar-label {
+.bond-mutual-bar-track.bond-mutual-full .bond-mutual-bar-fill {
+  background: linear-gradient(90deg, rgba(60,160,80,0.55) 0%, rgba(100,220,120,0.75) 100%);
+}
+
   position: absolute;
   inset: 0;
   display: flex;

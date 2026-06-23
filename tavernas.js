@@ -5034,9 +5034,14 @@ async function _bondsMaybeShowMutualIntimacy(containerEl, targetId, bondsData) {
     if (error) { console.warn('[bonds] get_mutual_intimacy:', error); return; }
 
     const pts = data?.points ?? 0;
-    if (pts >= 1000) return; // já elegíveis, não precisa mostrar
 
-    const pct = Math.min(100, Math.round((pts / 1000) * 100));
+    // Exibe a seção sempre que não há laço, seja qual for a intimidade
+    const cap   = 1000;
+    const shown = Math.min(pts, cap);
+    const pct   = Math.round((shown / cap) * 100);
+    const label = pts >= cap
+      ? `${cap.toLocaleString('pt-BR')} / ${cap.toLocaleString('pt-BR')} ✓`
+      : `${pts.toLocaleString('pt-BR')} / ${cap.toLocaleString('pt-BR')}`;
 
     // Garante que o container ainda pertence ao mesmo targetId
     if (_bonds.targetId !== targetId) return;
@@ -5045,9 +5050,9 @@ async function _bondsMaybeShowMutualIntimacy(containerEl, targetId, bondsData) {
     sec.className = 'bond-mutual-intimacy';
     sec.innerHTML = `
       <div class="bond-mutual-label">Nossa intimidade</div>
-      <div class="bond-mutual-bar-track">
+      <div class="bond-mutual-bar-track${pts >= cap ? ' bond-mutual-full' : ''}">
         <div class="bond-mutual-bar-fill" style="width:${pct}%;"></div>
-        <span class="bond-mutual-bar-label">${pts.toLocaleString('pt-BR')} / 1.000</span>
+        <span class="bond-mutual-bar-label">${label}</span>
       </div>`;
     containerEl.appendChild(sec);
   } catch(e) { console.warn('[bonds] mutual intimacy exception:', e); }

@@ -1294,6 +1294,19 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 <script src="browser-guard.js"></script>
+
+<!-- ══ CONFIRMAÇÃO: Deixar de seguir ══ -->
+<div id="pm-unfollow-confirm" style="display:none;position:fixed;inset:0;z-index:1600;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(160deg,#1f1b2e,#15131f);border:1px solid rgba(201,169,74,0.35);border-radius:12px;padding:22px 20px;max-width:300px;width:85%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+    <p id="pm-unfollow-text" style="color:#e8d08a;font-family:'Cinzel',serif;font-size:0.95em;line-height:1.5;margin:0 0 10px;"></p>
+    <p style="color:#f5c842;font-size:0.75em;line-height:1.5;margin:0 0 18px;padding:7px 10px;background:rgba(245,200,66,0.08);border-radius:8px;border:1px solid rgba(245,200,66,0.2);">Atenção: se vocês possuírem um laço, ele também será desfeito e a intimidade retornará para 1000.</p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="pm-unfollow-no" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:#ddd;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Não</button>
+      <button id="pm-unfollow-yes" style="flex:1;padding:10px 0;border-radius:8px;border:1px solid rgba(220,90,90,0.45);background:rgba(220,90,90,0.18);color:#ff9a9a;font-family:'Cinzel',serif;font-size:0.85em;letter-spacing:0.05em;cursor:pointer;">Sim</button>
+    </div>
+  </div>
+</div>
+
 </body>
 <script defer type="module" src="guild_tavern.js"></script>
 

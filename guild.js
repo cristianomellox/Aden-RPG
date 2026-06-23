@@ -1557,7 +1557,13 @@ function updateGuildXpBar(guildData){
     if (isF) {
       _gFollowingSet.delete(targetId);
       updateFollowBtn(btn, targetId);
-      try { await sb.rpc('unfollow_player', { p_following_id: targetId }); } catch(e) {}
+      try {
+        const { data: ufRes } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+        if (ufRes?.had_bond) {
+          const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+          if (typeof showToast === 'function') showToast(`Laço de ${lbl} com ${targetName || 'jogador'} foi desfeito.`);
+        }
+      } catch(e) {}
     } else {
       _gFollowingSet.add(targetId);
       updateFollowBtn(btn, targetId);

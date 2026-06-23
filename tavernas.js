@@ -2058,19 +2058,27 @@ async function _tavTogglePppFollow(targetId, targetName) {
   }
   _tavFollowCooldowns[targetId] = now;
   if (isF) {
+    // ── RPC PRIMEIRO — só atualiza UI se o banco confirmar ──
+    let ufRes = null;
+    try {
+      const { data, error } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+      if (error) throw error;
+      ufRes = data;
+    } catch(e) {
+      console.error('[unfollow] RPC falhou:', e);
+      showToast('Erro ao deixar de seguir. Tente novamente.');
+      return; // aborta — não atualiza UI
+    }
     window._tavFollowingSet.delete(targetId);
     _tavUpdatePppFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
-    try {
-      const { data: ufRes } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
-      if (ufRes?.had_bond) {
-        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
-        chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
-        await _bondsClearCache(PLAYER.id);
-        await _bondsClearCache(targetId);
-      }
-    } catch(e) {}
     _tavRefreshSocialCount(-1);
+    if (ufRes?.had_bond) {
+      const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+      chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
+      await _bondsClearCache(PLAYER.id);
+      await _bondsClearCache(targetId);
+    }
   } else {
     window._tavFollowingSet.add(targetId);
     _tavUpdatePppFollowBtn(btn, targetId);
@@ -3417,21 +3425,28 @@ async function _tavToggleFollow(targetId, targetName) {
   _tavFollowCooldowns[targetId] = now;
 
   if (isF) {
-    // ── Deixar de seguir ──
+    // ── RPC PRIMEIRO — só atualiza UI se o banco confirmar ──
+    let ufRes = null;
+    try {
+      const { data, error } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+      if (error) throw error;
+      ufRes = data;
+    } catch(e) {
+      console.error('[unfollow] RPC falhou:', e);
+      showToast('Erro ao deixar de seguir. Tente novamente.');
+      return; // aborta — não atualiza UI
+    }
+    // ── Banco confirmou: atualiza UI ──
     window._tavFollowingSet.delete(targetId);
     _tavUpdateFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
-    try {
-      const { data: ufRes } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
-      if (ufRes?.had_bond) {
-        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
-        chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
-        await _bondsClearCache(PLAYER.id);
-        await _bondsClearCache(targetId);
-      }
-    } catch(e) {}
-    // Atualiza contagem no modal
     _tavRefreshSocialCount(-1);
+    if (ufRes?.had_bond) {
+      const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+      chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
+      await _bondsClearCache(PLAYER.id);
+      await _bondsClearCache(targetId);
+    }
   } else {
     // ── Seguir ──
     window._tavFollowingSet.add(targetId);

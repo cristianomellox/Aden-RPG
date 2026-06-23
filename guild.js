@@ -1555,15 +1555,23 @@ function updateGuildXpBar(guildData){
     _gFollowCooldowns[targetId] = now;
 
     if (isF) {
+      // ── RPC PRIMEIRO — só atualiza UI se o banco confirmar ──
+      let ufRes = null;
+      try {
+        const { data, error } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+        if (error) throw error;
+        ufRes = data;
+      } catch(e) {
+        console.error('[unfollow] RPC falhou:', e);
+        if (typeof showToast === 'function') showToast('Erro ao deixar de seguir. Tente novamente.');
+        return;
+      }
       _gFollowingSet.delete(targetId);
       updateFollowBtn(btn, targetId);
-      try {
-        const { data: ufRes } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
-        if (ufRes?.had_bond) {
-          const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
-          if (typeof showToast === 'function') showToast(`Laço de ${lbl} com ${targetName || 'jogador'} foi desfeito.`);
-        }
-      } catch(e) {}
+      if (ufRes?.had_bond) {
+        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+        if (typeof showToast === 'function') showToast(`Laço de ${lbl} com ${targetName || 'jogador'} foi desfeito.`);
+      }
     } else {
       _gFollowingSet.add(targetId);
       updateFollowBtn(btn, targetId);

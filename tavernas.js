@@ -2061,7 +2061,15 @@ async function _tavTogglePppFollow(targetId, targetName) {
     window._tavFollowingSet.delete(targetId);
     _tavUpdatePppFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
-    try { await sb.rpc('unfollow_player', { p_following_id: targetId }); } catch(e) {}
+    try {
+      const { data: ufRes } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+      if (ufRes?.had_bond) {
+        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+        chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
+        await _bondsClearCache(PLAYER.id);
+        await _bondsClearCache(targetId);
+      }
+    } catch(e) {}
     _tavRefreshSocialCount(-1);
   } else {
     window._tavFollowingSet.add(targetId);
@@ -3413,7 +3421,15 @@ async function _tavToggleFollow(targetId, targetName) {
     window._tavFollowingSet.delete(targetId);
     _tavUpdateFollowBtn(btn, targetId);
     chatMsg('Sistema', `Você deixou de seguir ${targetName}.`, false, 'system');
-    try { await sb.rpc('unfollow_player', { p_following_id: targetId }); } catch(e) {}
+    try {
+      const { data: ufRes } = await sb.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+      if (ufRes?.had_bond) {
+        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+        chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
+        await _bondsClearCache(PLAYER.id);
+        await _bondsClearCache(targetId);
+      }
+    } catch(e) {}
     // Atualiza contagem no modal
     _tavRefreshSocialCount(-1);
   } else {
@@ -5033,7 +5049,11 @@ async function _bondsMaybeShowMutualIntimacy(containerEl, targetId, bondsData) {
     const { data, error } = await sb.rpc('get_mutual_intimacy', { p_target_id: targetId });
     if (error) { console.warn('[bonds] get_mutual_intimacy:', error); return; }
 
-    const pts = data?.points ?? 0;
+    const pts          = data?.points        ?? 0;
+    const mutualFollow = data?.mutual_follow ?? false;
+
+    // Sem seguimento mútuo → sem intimidade ativa; não exibe a seção
+    if (!mutualFollow) return;
 
     // Exibe a seção sempre que não há laço, seja qual for a intimidade
     const cap   = 1000;

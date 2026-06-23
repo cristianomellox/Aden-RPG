@@ -2292,10 +2292,9 @@ html,body {
 }
 .bond-card-xpbar-label {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: 0; left: 0; right: 0; bottom: 0;
+  line-height: 17px;
+  text-align: center;
   font-size: 0.6rem;
   font-family: 'Cinzel', serif;
   color: rgba(255,255,255,0.92);
@@ -2303,6 +2302,8 @@ html,body {
   letter-spacing: 0.04em;
   pointer-events: none;
   z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* ── Seção "Nossa intimidade" (visitante sem laço) ─────── */
@@ -2339,12 +2340,11 @@ html,body {
 .bond-mutual-bar-track.bond-mutual-full .bond-mutual-bar-fill {
   background: linear-gradient(90deg, rgba(60,160,80,0.55) 0%, rgba(100,220,120,0.75) 100%);
 }
-
+.bond-mutual-bar-label {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  top: 0; left: 0; right: 0; bottom: 0;
+  line-height: 17px;
+  text-align: center;
   font-size: 0.6rem;
   font-family: 'Cinzel', serif;
   color: rgba(255,255,255,0.92);
@@ -2352,6 +2352,8 @@ html,body {
   letter-spacing: 0.04em;
   pointer-events: none;
   z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* ── Confirmação genérica de laço ──────────────────────── */

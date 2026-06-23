@@ -1875,16 +1875,24 @@ import { supabase as _sbRank } from './supabaseClient.js';
     _rankCooldowns[targetId] = now;
 
     if (isF) {
+      // ── RPC PRIMEIRO — só atualiza UI se o banco confirmar ──
+      let ufRes = null;
+      try {
+        const { data, error } = await _sbRank.rpc('unfollow_with_bond_check', { p_target_id: targetId });
+        if (error) throw error;
+        ufRes = data;
+      } catch(e) {
+        console.error('[unfollow] RPC falhou:', e);
+        if (typeof showToast === 'function') showToast('Erro ao deixar de seguir. Tente novamente.');
+        return;
+      }
       _rankFollowingSet.delete(targetId);
       updateRankFollowBtn(btn, targetId);
-      try {
-        const { data: ufRes } = await _sbRank.rpc('unfollow_with_bond_check', { p_target_id: targetId });
-        if (ufRes?.had_bond) {
-          const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
-          const tgtName = document.getElementById('playerName')?.textContent || 'jogador';
-          if (typeof showToast === 'function') showToast(`Laço de ${lbl} com ${tgtName} foi desfeito.`);
-        }
-      } catch(e) {}
+      if (ufRes?.had_bond) {
+        const lbl = ufRes.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+        const tgtName = document.getElementById('playerName')?.textContent || 'jogador';
+        if (typeof showToast === 'function') showToast(`Laço de ${lbl} com ${tgtName} foi desfeito.`);
+      }
     } else {
       _rankFollowingSet.add(targetId);
       updateRankFollowBtn(btn, targetId);

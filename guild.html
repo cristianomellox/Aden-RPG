@@ -455,7 +455,7 @@ if ('serviceWorker' in navigator) {
 </div>
 
 
-<div id="playerModal" class="modal" style="display:none; width: 92%;">
+<div id="playerModal" class="modal" style="display:none;">
   <div class="modal-content">
     <!-- Vídeo de fundo cobrindo todo o modal -->
     <video autoplay muted loop playsinline id="guild-modal-bg-video"><source src="" type="video/webm"></video>
@@ -463,8 +463,9 @@ if ('serviceWorker' in navigator) {
 
     <span id="closePlayerModal" class="close-btn">&times;</span>
 
+    <div class="modal-inner">
     <h3 id="playerName">Jogador</h3>
-    <div style="position: absolute; top: 12%; display: flex; align-items: center; justify-content: center;" id="playerLevel">Nv. 0</div>
+    <div style="display: flex; align-items: center; justify-content: center;" id="playerLevel">Nv. 0</div>
 
     <div id="equipmentAndAvatarContainer">
       <div class="equipment-column">
@@ -569,6 +570,7 @@ if ('serviceWorker' in navigator) {
       </button>
       <button id="sendmp" class="pm-action-btn pm-action-sendmp"><img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;"> Mensagem</button>
     </div>
+    </div><!-- /modal-inner -->
   </div>
 </div>
 

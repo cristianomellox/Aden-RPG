@@ -2046,3 +2046,13 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   width: 100%;
   margin: 0 auto 8px;
 }
+
+/* FIX DEFINITIVO: !important sobrepõe o inline style position:absolute;top:12% do HTML */
+#playerModal #playerLevel {
+  position: relative !important;
+  top: auto !important;
+  display: block !important;
+  text-align: center !important;
+  width: 100% !important;
+  margin: 0 auto 8px !important;
+}

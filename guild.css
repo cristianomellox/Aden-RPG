@@ -2030,3 +2030,19 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   right: 15px;
   z-index: 10;
 }
+
+/* 5. Nome e nível: centralização explícita no modal-inner */
+#playerModal .modal-inner {
+  text-align: center;
+}
+#playerModal h3#playerName {
+  text-align: center;
+  width: 100%;
+  margin: 0 auto 4px;
+}
+#playerModal #playerLevel {
+  display: block;
+  text-align: center;
+  width: 100%;
+  margin: 0 auto 8px;
+}

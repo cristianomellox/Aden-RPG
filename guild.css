@@ -1999,13 +1999,12 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
 }
 
 /* 2. Caixa do modal: overflow:hidden para o vídeo cobrir 100% do container.
-      NÃO colocar scroll aqui — o scroll fica no .modal-inner abaixo. */
+      NÃO colocar scroll aqui — o scroll fica no .modal-inner abaixo.
+      Width/max-width ficam com a regra da linha 752 (360px / calc(100%-40px)). */
 #playerModal > .modal-content {
   overflow: hidden;
   max-height: 90vh;
-  border: 1px solid #c9a94a;  /* bordas douradas (= ranking_cp) */
-  width: 90%;
-  max-width: 500px;
+  border: 1px solid #c9a94a;
 }
 
 /* 3. Inner wrapper: aqui o conteúdo rola. O vídeo (position:absolute no

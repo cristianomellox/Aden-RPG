@@ -177,7 +177,7 @@ max-width: 120px;
     left: 0!important;
     top: 0;
     width: 100vw;
-    height: 95vh;
+    height: 100vh;
     overflow: auto;
     background-color: rgba(0, 0, 0, 0.6);
     justify-content: center;
@@ -1998,12 +1998,31 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   height: 100vh !important;   /* sobrescreve o 95vh do .modal */
 }
 
-/* 2. Caixa do modal: limitada a 90vh e com scroll interno.
-      O vídeo (position:absolute) fica fixo; o conteúdo em fluxo
-      normal (position:static/relative) rola normalmente sobre ele. */
+/* 2. Caixa do modal: overflow:hidden para o vídeo cobrir 100% do container.
+      NÃO colocar scroll aqui — o scroll fica no .modal-inner abaixo. */
 #playerModal > .modal-content {
+  overflow: hidden;
+  max-height: 90vh;
+  border: 1px solid #c9a94a;  /* bordas douradas (= ranking_cp) */
+  width: 90%;
+  max-width: 500px;
+}
+
+/* 3. Inner wrapper: aqui o conteúdo rola. O vídeo (position:absolute no
+      .modal-content) fica fixo como fundo enquanto este div rola por cima. */
+#playerModal .modal-inner {
   max-height: 90vh;
   overflow-y: auto;
   overflow-x: hidden;
-  border: 1px solid #c9a94a;  /* bordas douradas (= ranking_cp) */
+  position: relative;
+  z-index: 2;
+  padding: 20px;
+}
+
+/* 4. closePlayerModal fica fora do modal-inner, precisa de z-index explícito */
+#playerModal #closePlayerModal {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  z-index: 10;
 }

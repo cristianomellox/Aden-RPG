@@ -455,11 +455,14 @@ if ('serviceWorker' in navigator) {
 </div>
 
 
-<div id="playerModal" class="modal" style="display:none; width: 92%;">
+<div id="playerModal" class="modal" style="display:none;">
   <div class="modal-content">
-    <!-- Vídeo de fundo cobrindo todo o modal -->
+    <!-- Vídeo de fundo cobrindo todo o modal (posição absoluta, fora do scroll) -->
     <video autoplay muted loop playsinline id="guild-modal-bg-video"><source src="" type="video/webm"></video>
     <div id="guild-modal-bg-overlay"></div>
+
+    <!-- Wrapper de scroll: todo conteúdo visível fica aqui, acima do vídeo -->
+    <div id="guild-modal-scroll">
 
     <span id="closePlayerModal" class="close-btn">&times;</span>
 
@@ -569,6 +572,8 @@ if ('serviceWorker' in navigator) {
       </button>
       <button id="sendmp" class="pm-action-btn pm-action-sendmp"><img src="https://aden-rpg.pages.dev/assets/iconsender.webp" style="width:18px;height:18px;object-fit:contain;"> Mensagem</button>
     </div>
+
+    </div><!-- /#guild-modal-scroll -->
   </div>
 </div>
 

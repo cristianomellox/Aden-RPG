@@ -1979,3 +1979,37 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   border-color: rgba(39,174,96,0.4);
   color: #6ce6a0;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   FIX: Modal de jogador — centralizado e contido no viewport
+   Problema: .modal usava height:95vh (overlay incompleto) e
+   .modal-content não tinha max-height, deixando o conteúdo
+   ultrapassar o rodapé. Solução espelha o ranking_cp.html.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 1. O overlay do playerModal precisa cobrir 100% do viewport */
+#playerModal {
+  height: 100vh !important;   /* sobrescreve o 95vh do .modal */
+  width: 100vw !important;    /* garante cobertura total (inline style tem 92%) */
+  left: 0 !important;
+  top: 0 !important;
+}
+
+/* 2. A caixa do modal: limitada a 92vh, sem vazar no rodapé.
+      overflow: hidden recorta o vídeo nos cantos arredondados;
+      o scroll do conteúdo é feito pelo wrapper interno (#guild-modal-scroll). */
+#playerModal .modal-content {
+  max-height: 92vh;
+  overflow: hidden;           /* recorta o vídeo de fundo */
+  border: 1px solid #c9a94a; /* bordas douradas (= ranking_cp) */
+}
+
+/* 3. Wrapper de scroll interno — envolve TODO o conteúdo exceto o vídeo/overlay.
+      Posicionado acima do vídeo (z-index 2) e rola de forma independente. */
+#guild-modal-scroll {
+  position: relative;
+  z-index: 2;
+  max-height: 92vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}

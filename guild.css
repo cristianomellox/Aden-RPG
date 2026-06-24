@@ -1993,32 +1993,37 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
    mesmo comportamento do .modal-inner do ranking_cp.
    ═══════════════════════════════════════════════════════════════ */
 
-/* 1. Overlay cobre 100% do viewport */
+/* 1. Overlay: cobre 100% do viewport, sem padding (padding roubava largura) */
 #playerModal {
-  height: 100vh !important;   /* sobrescreve o 95vh do .modal */
+  padding: 0 !important;
+  height: 100vh !important;
 }
 
-/* 2. Caixa do modal: overflow:hidden para o vídeo cobrir 100% do container.
-      NÃO colocar scroll aqui — o scroll fica no .modal-inner abaixo.
-      Width/max-width ficam com a regra da linha 752 (360px / calc(100%-40px)). */
+/* 2. Caixa do modal:
+      - overflow:hidden => video position:absolute cobre 100% do container
+      - padding:0 => elimina o duplo-padding (linha 752 tinha padding:16px)
+      - todo padding fica so no .modal-inner */
 #playerModal > .modal-content {
   overflow: hidden;
   max-height: 90vh;
   border: 1px solid #c9a94a;
+  width: 92%;
+  max-width: 420px;
+  padding: 0 !important;
 }
 
-/* 3. Inner wrapper: aqui o conteúdo rola. O vídeo (position:absolute no
-      .modal-content) fica fixo como fundo enquanto este div rola por cima. */
+/* 3. Inner wrapper: aqui o conteudo rola com o unico padding.
+      Video (position:absolute no .modal-content) fica fixo como fundo. */
 #playerModal .modal-inner {
   max-height: 90vh;
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
   z-index: 2;
-  padding: 20px;
+  padding: 16px;
 }
 
-/* 4. closePlayerModal fica fora do modal-inner, precisa de z-index explícito */
+/* 4. closePlayerModal fica fora do modal-inner, precisa de z-index explicito */
 #playerModal #closePlayerModal {
   position: absolute;
   top: 10px;

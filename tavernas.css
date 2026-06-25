@@ -2433,3 +2433,269 @@ html,body {
   flex-shrink: 0;
 }
 .bond-eligible-arrow svg { width: 16px; height: 16px; }
+
+/* ════════════════════════════════════════════════════
+   FEATURED BOND HEADER
+   ════════════════════════════════════════════════════ */
+
+/* Bond header block (sits between cover-fade and hero row) */
+#ppp-bond-header,
+#mpm-bond-header {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 8px;
+  margin-top: -60px; /* overlaps the cover-fade like the hero does */
+  position: relative;
+  z-index: 2;
+}
+
+/* Level + type label above the avatars */
+.fbond-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-light);
+  text-shadow: 0 0 12px rgba(201,169,74,0.7), 0 2px 8px rgba(0,0,0,0.9);
+  background: rgba(0,0,0,0.45);
+  padding: 3px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(201,169,74,0.25);
+}
+
+/* Row containing player av + bond icon + partner av */
+.fbond-avatars-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Individual avatar wrapper */
+.fbond-av-wrap {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Avatar image */
+.fbond-av {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2.5px solid var(--gold);
+  box-shadow: 0 0 18px rgba(201,169,74,0.4), 0 4px 14px rgba(0,0,0,0.7);
+}
+
+/* Frame overlay on player avatar inside bond header */
+.fbond-frame-overlay {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 160px;
+  height: 160px;
+  pointer-events: none;
+  object-fit: contain;
+  z-index: 3; /* above avatar border but below bond icon */
+}
+
+/* Bond icon image (centered between avatars) */
+.fbond-icon {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  position: relative;
+  z-index: 10; /* above both avatar frames */
+  margin: 0 -14px; /* overlaps both avatar sides */
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.7));
+  flex-shrink: 0;
+}
+
+/* Clickable partner wrapper (for own profile: opens mini card) */
+.fbond-partner-wrap {
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.fbond-partner-wrap:active { transform: scale(0.94); }
+
+/* + Add button circle (shown next to player avatar when has bonds but none featured) */
+.fbond-add-btn {
+  position: absolute;
+  right: -10px;
+  bottom: 2px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(14,9,3,0.9);
+  border: 1.5px solid var(--gold-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+.fbond-add-btn:active { transform: scale(0.9); }
+.fbond-add-btn svg { width: 13px; height: 13px; color: var(--gold-dark); }
+
+/* When bond is active: hide the original avatar-wrap + reshape hero to column */
+#ppp-hero.fbond-active,
+#mpm-hero.fbond-active {
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 6px;
+  gap: 0;
+}
+#ppp-hero.fbond-active #ppp-avatar-wrap,
+#mpm-hero.fbond-active #mpm-avatar-wrap {
+  display: none;
+}
+#ppp-hero.fbond-active #ppp-hero-info,
+#mpm-hero.fbond-active #mpm-hero-info {
+  margin-left: 0;
+  width: 100%;
+  text-align: center;
+  align-items: center;
+}
+#ppp-hero.fbond-active #ppp-name,
+#mpm-hero.fbond-active #mpm-name {
+  text-align: center;
+  max-width: 100%;
+}
+
+/* ────────────────────────────────────────────────────
+   Featured Bond Picker Modal (JS-built, bottom sheet)
+   ──────────────────────────────────────────────────── */
+#fbond-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  background: rgba(0,0,0,0.62);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+#fbond-picker-inner {
+  background: linear-gradient(160deg,#1c1510,#120d08);
+  border: 1px solid var(--border-mid);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+#fbond-picker-handle {
+  width: 36px; height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  margin: 12px auto 0;
+}
+#fbond-picker-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.88rem;
+  color: var(--gold-light);
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 10px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.fbond-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid rgba(201,169,74,0.07);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.fbond-picker-item:active { background: rgba(255,255,255,0.05); }
+.fbond-picker-av {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold-dark);
+  flex-shrink: 0;
+}
+.fbond-picker-info { flex: 1; min-width: 0; }
+.fbond-picker-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: var(--gold-light);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fbond-picker-meta {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.fbond-picker-bond-icon {
+  width: 38px; height: 38px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ────────────────────────────────────────────────────
+   Partner mini card (shown on tapping partner av)
+   ──────────────────────────────────────────────────── */
+#fbond-partner-card {
+  position: fixed;
+  z-index: 1800;
+  background: linear-gradient(160deg,#1f1a12,#13100a);
+  border: 1px solid var(--border-mid);
+  border-radius: 12px;
+  padding: 14px 0 6px;
+  min-width: 190px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+  animation: fbond-card-pop 0.14s ease;
+}
+@keyframes fbond-card-pop {
+  from { opacity:0; transform: scale(0.92); }
+  to   { opacity:1; transform: scale(1); }
+}
+#fbond-partner-card .fpc-avatar-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+#fbond-partner-card .fpc-avatar-row img {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold-dark);
+}
+#fbond-partner-card .fpc-pname {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  color: var(--gold-light);
+}
+.fpc-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  color: #e0dccc;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.fpc-btn:last-child { border-bottom: none; }
+.fpc-btn:active { background: rgba(255,255,255,0.06); }
+.fpc-btn svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--gold-dark); }
+.fpc-btn.danger { color: #ff9a9a; }
+.fpc-btn.danger svg { color: #ff9a9a; }

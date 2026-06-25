@@ -1863,6 +1863,10 @@ async function openPlayerProfilePage(playerId, name) {
     const el = document.getElementById(id);
     if (el) { el.textContent = '—'; el.style.opacity = '0.4'; }
   });
+  // Reset featured bond section
+  _featuredBondClearUI('ppp');
+  const pppAddBtn = document.getElementById('ppp-bond-add-btn');
+  if (pppAddBtn) pppAddBtn.style.display = 'none';
 
   // Follow button
   const followBtn = document.getElementById('ppp-follow-btn');
@@ -1938,7 +1942,7 @@ async function _pppLoadPlayerData(playerId) {
       const sb = getSB();
       if (!sb) return;
       const { data: p } = await sb.from('players')
-        .select('id,name,level,avatar_url,guild_id,combat_power')
+        .select('id,name,level,avatar_url,guild_id,combat_power,featured_bond_id')
         .eq('id', playerId).maybeSingle();
       if (!p) return;
       player = p;
@@ -1997,6 +2001,12 @@ async function _pppLoadPlayerData(playerId) {
       if (flagEl)  flagEl.src        = guildData.flag_url || 'https://aden-rpg.pages.dev/assets/guildaflag.webp';
       if (gnameEl) gnameEl.textContent = guildData.name;
       guildDiv.onclick = () => openTavGuildModal(window._pppGuildId);
+    }
+
+    // ── Featured bond (runs for any visitor, incl. own profile via ppp) ──
+    if (window._pppPlayerId === playerId) {
+      const isSelf = (playerId === PLAYER.id);
+      _featuredBondLoad(playerId, player, 'ppp', isSelf).catch(() => {});
     }
 
   } catch(e) { console.warn('[_pppLoadPlayerData]', e); }
@@ -2078,6 +2088,7 @@ async function _tavTogglePppFollow(targetId, targetName) {
       chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
       await _bondsClearCache(PLAYER.id);
       await _bondsClearCache(targetId);
+      _featuredBondHandleBrokenByPartner(targetId);
     }
   } else {
     window._tavFollowingSet.add(targetId);
@@ -3171,6 +3182,20 @@ async function openMyProfileModal() {
   } else if (guildDiv) {
     guildDiv.style.display = 'none';
   }
+
+  // ── Featured bond (own profile) ──────────────────────────────────────────
+  if (PLAYER.id) {
+    _featuredBondClearUI('mpm');
+    const mpmAddBtn = document.getElementById('mpm-bond-add-btn');
+    if (mpmAddBtn) mpmAddBtn.style.display = 'none';
+    const sb2 = getSB();
+    if (sb2) {
+      sb2.from('players').select('id,name,avatar_url,featured_bond_id').eq('id', PLAYER.id).maybeSingle()
+        .then(({ data: pd }) => {
+          if (pd) _featuredBondLoad(PLAYER.id, pd, 'mpm', true).catch(() => {});
+        }).catch(() => {});
+    }
+  }
 }
 
 function closeMyProfileModal() {
@@ -3446,6 +3471,7 @@ async function _tavToggleFollow(targetId, targetName) {
       chatMsg('Sistema', `Laço de ${lbl} com ${targetName} foi desfeito.`, false, 'system');
       await _bondsClearCache(PLAYER.id);
       await _bondsClearCache(targetId);
+      _featuredBondHandleBrokenByPartner(targetId);
     }
   } else {
     // ── Seguir ──
@@ -4845,6 +4871,333 @@ const BOND_LEVEL_THRESHOLDS = [
 
 const BONDS_CACHE_TTL = 5 * 60 * 1000; // 5 min (laços mudam raramente)
 
+// ── Bond image URL by type + level ────────────────────────────────────────────
+function getBondImage(bondType, level) {
+  const type = bondType === 'couple' ? 'casal' : 'amigo';
+  let n;
+  if      (level <= 3)  n = '01';
+  else if (level <= 6)  n = '02';
+  else if (level <= 9)  n = '03';
+  else if (level <= 12) n = '04';
+  else if (level <= 15) n = '05';
+  else if (level <= 18) n = '06';
+  else                   n = '07';
+  return `https://aden-rpg.pages.dev/assets/laco_${type}_${n}.webp`;
+}
+
+// ── Featured Bond ─────────────────────────────────────────────────────────────
+// prefix = 'ppp' | 'mpm'
+// Renders the featured bond header for a profile (own or other player's).
+// bondRow: { bond_id, bond_type, partner_id, partner_name, partner_avatar, intimacy_points }
+// playerAv, playerFrame: URLs for the profile owner's avatar/frame
+function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf) {
+  const headerEl = document.getElementById(prefix + '-bond-header');
+  const heroEl   = document.getElementById(prefix === 'ppp' ? 'ppp-hero' : 'mpm-hero');
+  if (!headerEl || !heroEl) return;
+
+  const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
+  const level    = prog.level;
+  const typeName = bondRow.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+  const bondImg  = getBondImage(bondRow.bond_type, level);
+
+  // Label
+  const labelEl = document.getElementById(prefix + '-fbond-label');
+  if (labelEl) labelEl.textContent = `Nível ${level} · ${typeName}`;
+
+  // Player avatar
+  const playerAvEl    = document.getElementById(prefix + '-fbond-player-av');
+  const playerFrameEl = document.getElementById(prefix + '-fbond-player-frame');
+  if (playerAvEl) playerAvEl.src = playerAv || '';
+  if (playerFrameEl) {
+    if (playerFrame) { playerFrameEl.src = playerFrame; playerFrameEl.style.display = 'block'; }
+    else               playerFrameEl.style.display = 'none';
+  }
+
+  // Bond icon
+  const iconEl = document.getElementById(prefix + '-fbond-icon');
+  if (iconEl) iconEl.src = bondImg;
+
+  // Partner avatar
+  const partnerAvEl   = document.getElementById(prefix + '-fbond-partner-av');
+  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
+  if (partnerAvEl) partnerAvEl.src = bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 74);
+
+  // Tap on partner avatar (own profile only) → mini card
+  if (partnerWrapEl) {
+    if (isSelf) {
+      partnerWrapEl.style.cursor = 'pointer';
+      partnerWrapEl.onclick = (e) => {
+        e.stopPropagation();
+        _showFeaturedPartnerCard(
+          bondRow.partner_id,
+          bondRow.partner_name,
+          bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 74),
+          bondRow.bond_id || bondRow.id,
+          prefix
+        );
+      };
+    } else {
+      partnerWrapEl.style.cursor = 'pointer';
+      partnerWrapEl.onclick = () => openPlayerModalFor(bondRow.partner_id, bondRow.partner_name);
+    }
+  }
+
+  // Show header, switch hero to column mode
+  headerEl.style.display = 'flex';
+  heroEl.classList.add('fbond-active');
+  // Hide the "+" add button (a bond is already featured)
+  const addBtn = document.getElementById(prefix === 'ppp' ? 'ppp-bond-add-btn' : 'mpm-bond-add-btn');
+  if (addBtn) addBtn.style.display = 'none';
+}
+
+function _featuredBondClearUI(prefix) {
+  const headerEl = document.getElementById(prefix + '-bond-header');
+  const heroEl   = document.getElementById(prefix === 'ppp' ? 'ppp-hero' : 'mpm-hero');
+  if (headerEl) headerEl.style.display = 'none';
+  if (heroEl)   heroEl.classList.remove('fbond-active');
+}
+
+// Show "+" button next to avatar (when player has bonds but none featured)
+function _featuredBondShowAddBtn(prefix) {
+  const addBtn = document.getElementById(prefix === 'ppp' ? 'ppp-bond-add-btn' : 'mpm-bond-add-btn');
+  if (!addBtn) return;
+  addBtn.style.display = 'flex';
+  addBtn.onclick = () => _featuredBondOpenPicker(prefix);
+}
+
+// ── Picker modal: choose which bond to feature ─────────────────────────────
+async function _featuredBondOpenPicker(prefix) {
+  // Remove any existing picker
+  document.getElementById('fbond-picker-modal')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'fbond-picker-modal';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const inner = document.createElement('div');
+  inner.id = 'fbond-picker-inner';
+  inner.innerHTML = `
+    <div id="fbond-picker-handle"></div>
+    <div id="fbond-picker-title">Escolher Laço em Destaque</div>
+    <div id="fbond-picker-list"><div class="tav-notif-empty">Carregando...</div></div>`;
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+
+  // Load bonds
+  const sb = getSB();
+  if (!sb) {
+    document.getElementById('fbond-picker-list').innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
+    return;
+  }
+  try {
+    const { data, error } = await sb.rpc('get_player_bonds', { p_player_id: PLAYER.id });
+    if (error) throw error;
+    const bonds = [];
+    if (data?.couple) bonds.push({ ...data.couple, bond_type: 'couple' });
+    (data?.friends || []).forEach(f => bonds.push({ ...f, bond_type: 'friend' }));
+
+    const listEl = document.getElementById('fbond-picker-list');
+    if (!listEl) return;
+    if (!bonds.length) {
+      listEl.innerHTML = '<div class="tav-notif-empty">Nenhum laço ativo encontrado.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    bonds.forEach(b => {
+      const prog     = getBondLevelProgress(b.intimacy_points || 0);
+      const bondImg  = getBondImage(b.bond_type, prog.level);
+      const typeName = b.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+      const av       = b.partner_avatar || makeAvatar(b.partner_name || '?', 50);
+      const row = document.createElement('div');
+      row.className = 'fbond-picker-item';
+      row.innerHTML = `
+        <img class="fbond-picker-av" src="${esc(av)}" onerror="this.src='${makeAvatar(b.partner_name||'?',50)}'">
+        <div class="fbond-picker-info">
+          <div class="fbond-picker-name">${esc(b.partner_name || '?')}</div>
+          <div class="fbond-picker-meta">${typeName} · Nível ${prog.level}</div>
+        </div>
+        <img class="fbond-picker-bond-icon" src="${esc(bondImg)}" alt="">`;
+      row.onclick = () => {
+        overlay.remove();
+        _featuredBondSave(b.bond_id || b.id, b, prefix);
+      };
+      listEl.appendChild(row);
+    });
+  } catch(e) {
+    console.warn('[featured bond picker]', e);
+    const listEl = document.getElementById('fbond-picker-list');
+    if (listEl) listEl.innerHTML = '<div class="tav-notif-empty">Erro ao carregar laços.</div>';
+  }
+}
+
+// ── Save featured bond to DB and render ────────────────────────────────────
+async function _featuredBondSave(bondId, bondRow, prefix) {
+  const sb = getSB();
+  if (!sb || !PLAYER.id) return;
+  try {
+    await sb.from('players').update({ featured_bond_id: bondId }).eq('id', PLAYER.id);
+    // Invalidate player cache so next load picks up the change
+    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
+  } catch(e) { console.warn('[featured bond save]', e); }
+
+  // Render immediately using data we already have
+  const playerAv    = PLAYER.avatar_url || '';
+  const skinCache   = _tavGetSkinCache(PLAYER.id);
+  const playerFrame = skinCache?.frame_url || '';
+  _featuredBondClearUI(prefix);
+  _featuredBondRender(prefix, playerAv, playerFrame, bondRow, true);
+  showToast('Laço em destaque atualizado!');
+}
+
+// ── Remove featured bond from DB and clear UI ──────────────────────────────
+async function _featuredBondRemove(prefix) {
+  const sb = getSB();
+  if (!sb || !PLAYER.id) return;
+  try {
+    await sb.from('players').update({ featured_bond_id: null }).eq('id', PLAYER.id);
+    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
+  } catch(e) { console.warn('[featured bond remove]', e); }
+  _featuredBondClearUI(prefix);
+  showToast('Destaque removido.');
+}
+
+// ── Mini-card shown when tapping partner avatar on own profile ─────────────
+function _showFeaturedPartnerCard(partnerId, partnerName, partnerAv, bondId, prefix) {
+  document.getElementById('fbond-partner-card')?.remove();
+  const card = document.createElement('div');
+  card.id = 'fbond-partner-card';
+
+  const avSrc = partnerAv || makeAvatar(partnerName || '?', 48);
+  card.innerHTML = `
+    <div class="fpc-avatar-row">
+      <img src="${esc(avSrc)}" onerror="this.src='${makeAvatar(partnerName||'?',48)}'">
+      <div class="fpc-pname">${esc(partnerName || '?')}</div>
+    </div>
+    <div class="fpc-btn" id="fpc-view">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/></svg>
+      Ver perfil
+    </div>
+    <div class="fpc-btn danger" id="fpc-remove">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Remover destaque
+    </div>`;
+
+  // Position roughly in center screen
+  card.style.left = '50%';
+  card.style.top  = '50%';
+  card.style.transform = 'translate(-50%, -50%)';
+  document.body.appendChild(card);
+
+  card.querySelector('#fpc-view').onclick = () => {
+    card.remove();
+    if (prefix === 'ppp') { closePlayerProfilePage(); openPlayerModalFor(partnerId, partnerName); }
+    else { closeMyProfileModal(); openPlayerModalFor(partnerId, partnerName); }
+  };
+  card.querySelector('#fpc-remove').onclick = () => {
+    card.remove();
+    _featuredBondRemove(prefix);
+  };
+
+  // Close on outside click
+  const _close = (e) => { if (!card.contains(e.target)) { card.remove(); document.removeEventListener('click', _close); } };
+  setTimeout(() => document.addEventListener('click', _close), 10);
+}
+
+// ── Called when the local player breaks a bond by bond ID ─────────────────
+async function _featuredBondHandleBroken(bondId) {
+  const prefixes = ["mpm", "ppp"];
+  for (const prefix of prefixes) {
+    const headerEl = document.getElementById(prefix + "-bond-header");
+    if (headerEl && headerEl.style.display !== "none") {
+      await _featuredBondRemove(prefix);
+      return;
+    }
+  }
+  const sb = getSB();
+  if (sb && PLAYER.id) {
+    sb.from("players").update({ featured_bond_id: null }).eq("id", PLAYER.id).catch(() => {});
+    try { localStorage.removeItem("tav_player_modal_v2_" + PLAYER.id); } catch(_) {}
+  }
+}
+
+// ── Called when a bond is broken via unfollow (partnerId known) ─────────────
+async function _featuredBondHandleBrokenByPartner(partnerId) {
+  const prefixes = ["mpm", "ppp"];
+  for (const prefix of prefixes) {
+    const h = document.getElementById(prefix + "-bond-header");
+    if (h && h.style.display !== "none") { _featuredBondClearUI(prefix); }
+  }
+  const sb = getSB();
+  if (sb && PLAYER.id) {
+    sb.from("players").update({ featured_bond_id: null }).eq("id", PLAYER.id).catch(() => {});
+    try { localStorage.removeItem("tav_player_modal_v2_" + PLAYER.id); } catch(_) {}
+  }
+}
+
+// ── Load and render featured bond for a given player profile ───────────────
+// playerData: the players row (must include featured_bond_id)
+// prefix: 'ppp' | 'mpm'   isSelf: bool
+async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
+  const featuredBondId = playerData?.featured_bond_id;
+  if (!featuredBondId) {
+    _featuredBondClearUI(prefix);
+    // Show "+" if own profile and has bonds
+    if (isSelf) {
+      const sb = getSB();
+      if (!sb) return;
+      try {
+        const { data } = await sb.rpc('get_player_bonds', { p_player_id: playerId });
+        const hasBonds = data && (data.couple || (data.friends && data.friends.length > 0));
+        if (hasBonds) _featuredBondShowAddBtn(prefix);
+      } catch(_) {}
+    }
+    return;
+  }
+
+  // Fetch bond details
+  const sb = getSB();
+  if (!sb) return;
+  try {
+    const { data: bond } = await sb
+      .from('player_bonds')
+      .select('id,bond_type,player_a_id,player_b_id,created_at')
+      .eq('id', featuredBondId)
+      .maybeSingle();
+    if (!bond) { _featuredBondClearUI(prefix); return; }
+
+    const partnerId = bond.player_a_id === playerId ? bond.player_b_id : bond.player_a_id;
+
+    // Get partner + intimacy in parallel
+    const [partnerRes, intimacyRes] = await Promise.all([
+      sb.from('players').select('id,name,avatar_url').eq('id', partnerId).maybeSingle(),
+      sb.from('player_intimacy')
+        .select('points')
+        .eq('player_a_id', [playerId, partnerId].sort()[0])
+        .eq('player_b_id', [playerId, partnerId].sort()[1])
+        .maybeSingle()
+    ]);
+
+    const partner       = partnerRes.data;
+    const intimacyPts   = intimacyRes.data?.points || 0;
+
+    const bondRow = {
+      bond_id:         bond.id,
+      id:              bond.id,
+      bond_type:       bond.bond_type,
+      partner_id:      partnerId,
+      partner_name:    partner?.name    || '?',
+      partner_avatar:  partner?.avatar_url || '',
+      intimacy_points: intimacyPts
+    };
+
+    const playerAv    = playerData.avatar_url || '';
+    const skinCache   = _tavGetSkinCache(playerId);
+    const playerFrame = skinCache?.frame_url || '';
+
+    _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf);
+  } catch(e) { console.warn('[featured bond load]', e); _featuredBondClearUI(prefix); }
+}
+
 function getBondLevel(points) {
   let lv = 1;
   for (let i = 0; i < BOND_LEVEL_THRESHOLDS.length; i++) {
@@ -5262,6 +5615,8 @@ async function _bondExecuteBreak() {
       await _bondsClearCache(PLAYER.id);
       if (bond.partnerId) await _bondsClearCache(bond.partnerId);
       showToast(`Laço com ${bond.partnerName} foi desfeito.`);
+      // If the broken bond was the featured one, clear it from DB + UI
+      _featuredBondHandleBroken(bond.bondId);
       closeBondsModal();
       setTimeout(() => openBondsModal(PLAYER.id, true), 700);
     } else {
@@ -5446,8 +5801,8 @@ function _bondsShowInviteReceived(notif) {
 
   const bondLabel = notif.bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
   const imgUrl    = notif.bondType === 'couple'
-    ? 'https://aden-rpg.pages.dev/assets/laco_casal1.webp'
-    : 'https://aden-rpg.pages.dev/assets/laco_amigo1.webp';
+    ? 'https://aden-rpg.pages.dev/assets/laco_casal_01.webp'
+    : 'https://aden-rpg.pages.dev/assets/laco_amigo_01.webp';
 
   if (avImg)   avImg.src         = notif.fromAvatar || makeAvatar(notif.fromName || '?', 70);
   if (textEl)  textEl.textContent = `${notif.fromName} está te convidando para ser ${bondLabel}!`;

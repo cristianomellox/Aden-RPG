@@ -2470,7 +2470,7 @@ html,body {
   z-index: 2;
 }
 
-/* Level + type label */
+/* Level + type label — centered above avatars */
 .fbond-label {
   font-family: 'Cinzel', serif;
   font-size: 0.68rem;
@@ -2483,6 +2483,7 @@ html,body {
   padding: 3px 14px;
   border-radius: 20px;
   border: 1px solid rgba(201,169,74,0.28);
+  align-self: center;
 }
 
 /* Row: player av | bond icon | partner av (or + circle) */

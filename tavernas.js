@@ -2006,6 +2006,9 @@ async function _pppLoadPlayerData(playerId) {
     // ── Featured bond (runs for any visitor, incl. own profile via ppp) ──
     if (window._pppPlayerId === playerId) {
       const isSelf = (playerId === PLAYER.id);
+      // If skin was fetched async in this function (skinCache was undefined),
+      // the #ppp-frame src is already set since the await above completed.
+      // No extra delay needed — proceed directly.
       _featuredBondLoad(playerId, player, 'ppp', isSelf).catch(() => {});
     }
 
@@ -3083,7 +3086,7 @@ async function openMyProfileModal() {
   const avEl = document.getElementById('mpm-avatar');
   if (avEl) avEl.src = avatarUrl || makeAvatar(name, 180);
 
-  // 5. Apply frame if cached
+  // 5. Apply frame — use cache if available, else fetch async
   const skinCache = _tavGetSkinCache(PLAYER.id);
   const frameEl   = document.getElementById('mpm-frame');
   if (frameEl) {
@@ -3091,6 +3094,20 @@ async function openMyProfileModal() {
       frameEl.src           = skinCache.frame_url;
       frameEl.style.display = 'block';
       if (avEl) avEl.style.border = 'none';
+    } else if (skinCache === undefined) {
+      // Not cached yet — fetch async so frame shows even on first open
+      frameEl.style.display = 'none';
+      const _sb = getSB();
+      if (_sb) {
+        _sb.rpc('get_player_skin_urls', { p_player_id: PLAYER.id }).then(({ data }) => {
+          _tavSetSkinCache(PLAYER.id, data || {});
+          if (data?.frame_url && document.getElementById('mpm-frame')) {
+            const el = document.getElementById('mpm-frame');
+            el.src = data.frame_url; el.style.display = 'block';
+            if (avEl) avEl.style.border = 'none';
+          }
+        }).catch(() => { _tavSetSkinCache(PLAYER.id, {}); });
+      }
     } else {
       frameEl.style.display = 'none';
     }
@@ -3186,13 +3203,16 @@ async function openMyProfileModal() {
   // ── Featured bond (own profile) ──────────────────────────────────────────
   if (PLAYER.id) {
     _featuredBondClearUI('mpm');
-    const mpmAddBtn = document.getElementById('mpm-bond-add-btn');
-    if (mpmAddBtn) mpmAddBtn.style.display = 'none';
     const sb2 = getSB();
     if (sb2) {
       sb2.from('players').select('id,name,avatar_url,featured_bond_id,featured_bond_style').eq('id', PLAYER.id).maybeSingle()
-        .then(({ data: pd }) => {
-          if (pd) _featuredBondLoad(PLAYER.id, pd, 'mpm', true).catch(() => {});
+        .then(async ({ data: pd }) => {
+          if (!pd) return;
+          // If skin was fetched async, wait a tick so #mpm-frame src is set
+          if (_tavGetSkinCache(PLAYER.id) === undefined) {
+            await new Promise(r => setTimeout(r, 350));
+          }
+          _featuredBondLoad(PLAYER.id, pd, 'mpm', true).catch(() => {});
         }).catch(() => {});
     }
   }
@@ -5207,8 +5227,9 @@ async function _featuredBondSave(bondId, bondRow, prefix) {
   } catch(e) { console.warn('[featured bond save]', e); }
 
   const playerAv    = PLAYER.avatar_url || '';
-  const skinCache   = _tavGetSkinCache(PLAYER.id);
-  const playerFrame = skinCache?.frame_url || '';
+  const frameImgEl  = document.getElementById(prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame');
+  const playerFrame = (frameImgEl?.style.display === 'block' && frameImgEl.src)
+    ? frameImgEl.src : _tavGetSkinCache(PLAYER.id)?.frame_url || '';
   _featuredBondClearUI(prefix);
   const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
   const autoTier = getBondTier(prog.level);
@@ -5294,8 +5315,35 @@ async function _featuredBondHandleBrokenByPartner(partnerId) {
 
 // ── Load and render featured bond for a given player profile ───────────────
 async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
-  const featuredBondId    = playerData?.featured_bond_id;
-  const featuredBondStyle = playerData?.featured_bond_style || null;
+  // ── Frame: read from the actual DOM element set by skin-loading code ──────
+  // This is more reliable than skin cache which may not be populated yet.
+  const frameImgId = prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame';
+  const frameDomEl = document.getElementById(frameImgId);
+  // The frame img has display:'block' when a frame is active (even if parent is hidden)
+  const playerFrame = (frameDomEl?.style.display === 'block' && frameDomEl.src)
+    ? frameDomEl.src
+    : _tavGetSkinCache(playerId)?.frame_url || '';
+
+  // ── featured_bond_id may be missing if player data came from a shared cache ─
+  // (tavFetchPlayerData saves to the same key but without featured_bond_id)
+  let featuredBondId    = playerData?.featured_bond_id;
+  let featuredBondStyle = playerData?.featured_bond_style ?? null;
+
+  if (featuredBondId === undefined) {
+    // Fetch just the bond fields live — lightweight, 2 columns only
+    try {
+      const sb0 = getSB();
+      if (sb0) {
+        const { data: bf } = await sb0
+          .from('players')
+          .select('featured_bond_id,featured_bond_style')
+          .eq('id', playerId)
+          .maybeSingle();
+        featuredBondId    = bf?.featured_bond_id    ?? null;
+        featuredBondStyle = bf?.featured_bond_style  ?? null;
+      }
+    } catch(_) {}
+  }
 
   if (!featuredBondId) {
     _featuredBondClearUI(prefix);
@@ -5306,9 +5354,7 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
         const { data } = await sb.rpc('get_player_bonds', { p_player_id: playerId });
         const hasBonds  = data && (data.couple || (data.friends && data.friends.length > 0));
         if (hasBonds) {
-          const playerAv    = playerData.avatar_url || '';
-          const skinCache   = _tavGetSkinCache(playerId);
-          const playerFrame = skinCache?.frame_url || '';
+          const playerAv = playerData.avatar_url || '';
           _featuredBondShowAddState(prefix, playerAv, playerFrame);
         }
       } catch(_) {}
@@ -5334,8 +5380,8 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
       sb.from('player_intimacy').select('points').eq('player_a_id', sorted[0]).eq('player_b_id', sorted[1]).maybeSingle()
     ]);
 
-    const partner      = partnerRes.data;
-    const intimacyPts  = intimacyRes.data?.points || 0;
+    const partner     = partnerRes.data;
+    const intimacyPts = intimacyRes.data?.points || 0;
 
     const bondRow = {
       bond_id:         bond.id,
@@ -5347,10 +5393,7 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
       intimacy_points: intimacyPts
     };
 
-    const playerAv    = playerData.avatar_url || '';
-    const skinCache   = _tavGetSkinCache(playerId);
-    const playerFrame = skinCache?.frame_url || '';
-
+    const playerAv = playerData.avatar_url || '';
     _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, featuredBondStyle);
   } catch(e) { console.warn('[featured bond load]', e); _featuredBondClearUI(prefix); }
 }

@@ -1863,10 +1863,8 @@ async function openPlayerProfilePage(playerId, name) {
     const el = document.getElementById(id);
     if (el) { el.textContent = '—'; el.style.opacity = '0.4'; }
   });
-  // Reset featured bond section
+  // Reset featured bond section (bond-header is now inside ppp-hero)
   _featuredBondClearUI('ppp');
-  const pppAddBtn = document.getElementById('ppp-bond-add-btn');
-  if (pppAddBtn) pppAddBtn.style.display = 'none';
 
   // Follow button
   const followBtn = document.getElementById('ppp-follow-btn');
@@ -1938,6 +1936,22 @@ async function _pppLoadPlayerData(playerId) {
     if (cached) {
       player    = cached.player;
       guildData = cached.guildData;
+
+      // Cache may have been written by a context that didn't include featured_bond_id
+      // (e.g. generic player modal). Always fetch these two fields live to guarantee
+      // the bond section renders correctly for any visitor.
+      if (player) {
+        try {
+          const _sb = getSB();
+          if (_sb) {
+            const { data: bf } = await _sb.from('players')
+              .select('featured_bond_id,featured_bond_style')
+              .eq('id', playerId).maybeSingle();
+            player.featured_bond_id    = bf?.featured_bond_id    ?? null;
+            player.featured_bond_style = bf?.featured_bond_style ?? null;
+          }
+        } catch(_) {}
+      }
     } else {
       const sb = getSB();
       if (!sb) return;

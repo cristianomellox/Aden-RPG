@@ -2457,17 +2457,17 @@ html,body {
    FEATURED BOND HEADER
    ════════════════════════════════════════════════════ */
 
-/* Bond header block — LEFT aligned */
+/* Bond header block — inside #ppp-hero / #mpm-hero as first child */
 #ppp-bond-header,
 #mpm-bond-header {
   display: none;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  padding: 0 16px 8px;
-  margin-top: -60px;
+  /* No margin-top or padding — hero provides them */
   position: relative;
   z-index: 2;
+  width: 100%;
 }
 
 /* Level + type label — centered above avatars */
@@ -2591,21 +2591,33 @@ html,body {
 .fbond-add-circle:active { transform: scale(0.94); }
 .fbond-add-circle svg { width: 30px; height: 30px; color: rgba(201,169,74,0.65); }
 
-/* When bond header is active: hide original avatar-wrap, info flows below */
+/* When bond active: hero becomes column — bond-header is first child, info below */
 #ppp-hero.fbond-active,
 #mpm-hero.fbond-active {
   flex-direction: column;
   align-items: flex-start;
-  margin-top: 4px;
-  gap: 0;
-  padding-left: 16px;
+  /* KEEP same margin-top as normal (-70px) so cover overlap is identical */
+  gap: 6px;
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,
 #mpm-hero.fbond-active #mpm-avatar-wrap { display: none; }
+
+/* Hero-info: raised z-index so name/level render above frame overlay */
+#ppp-hero-info,
+#mpm-hero-info {
+  position: relative;
+  z-index: 8;
+}
 #ppp-hero.fbond-active #ppp-hero-info,
-#mpm-hero.fbond-active #mpm-hero-info { margin-left: 0; align-items: flex-start; }
+#mpm-hero.fbond-active #mpm-hero-info {
+  margin-left: 0;
+  align-items: flex-start;
+}
 #ppp-hero.fbond-active #ppp-name,
 #mpm-hero.fbond-active #mpm-name { text-align: left; max-width: 100%; }
+
+/* Name row: also above frame */
+.hero-name-row { position: relative; z-index: 9; }
 
 /* ────────────────────────────────────────────────────
    Bond Style Picker Modal

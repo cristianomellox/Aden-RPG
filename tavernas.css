@@ -2596,7 +2596,10 @@ html,body {
 #mpm-hero.fbond-active {
   flex-direction: column;
   align-items: flex-start;
-  /* KEEP same margin-top as normal (-70px) so cover overlap is identical */
+  /* ↓ More negative than the normal -70px to compensate for the
+       label (~28px) + avatars (88px) + gap (6px) above the info.
+       Adjust this value if the info appears too high or too low. */
+  margin-top: -132px;
   gap: 6px;
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,

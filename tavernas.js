@@ -5144,10 +5144,11 @@ async function _openBondStylePicker(bondType, bondLevel, currentTier, bondId, pr
         card.onclick = async () => {
           if (selectedTier === td.tier) return;
           selectedTier = td.tier;
-          // Save to DB
           const sb = getSB();
           if (sb && PLAYER.id) {
-            await sb.from('players').update({ featured_bond_style: td.tier }).eq('id', PLAYER.id).catch(() => {});
+            sb.from('players').update({ featured_bond_style: td.tier }).eq('id', PLAYER.id)
+              .then(({ error }) => { if (error) console.warn('[bond style save]', error); })
+              .catch(() => {});
           }
           // Update icon immediately
           const iconWrapEl = document.getElementById(prefix + '-fbond-icon-wrap');
@@ -5234,9 +5235,22 @@ async function _featuredBondSave(bondId, bondRow, prefix) {
   const sb = getSB();
   if (!sb || !PLAYER.id) return;
   try {
+    // Save featured_bond_id first — critical field, must succeed.
+    const { error: e1 } = await sb.from('players')
+      .update({ featured_bond_id: bondId })
+      .eq('id', PLAYER.id);
+    if (e1) console.warn('[featured bond save - id]', e1);
+
+    // Save featured_bond_style separately — optional (requires migration).
+    // Fails silently if the column doesn't exist yet.
     const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
     const autoTier = getBondTier(prog.level);
-    await sb.from('players').update({ featured_bond_id: bondId, featured_bond_style: autoTier }).eq('id', PLAYER.id);
+    sb.from('players')
+      .update({ featured_bond_style: autoTier })
+      .eq('id', PLAYER.id)
+      .then(({ error: e2 }) => { if (e2) console.warn('[featured bond save - style]', e2); })
+      .catch(() => {});
+
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond save]', e); }
 
@@ -5256,7 +5270,8 @@ async function _featuredBondRemove(prefix) {
   const sb = getSB();
   if (!sb || !PLAYER.id) return;
   try {
-    await sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id);
+    await sb.from('players').update({ featured_bond_id: null }).eq('id', PLAYER.id);
+    sb.from('players').update({ featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond remove]', e); }
   _featuredBondClearUI(prefix);

@@ -368,37 +368,34 @@
     <div id="ppp-cover"></div>
     <div id="ppp-cover-fade"></div>
 
-    <!-- ── Featured Bond Header ── -->
-    <div id="ppp-bond-header" style="display:none;">
-      <div class="fbond-label" id="ppp-fbond-label" style="display:none;"></div>
-      <div class="fbond-avatars-row">
-        <!-- Player avatar -->
-        <div class="fbond-av-wrap">
-          <img class="fbond-av" id="ppp-fbond-player-av" src="" alt="">
-          <img class="fbond-frame-overlay" id="ppp-fbond-player-frame" src="" alt="" style="display:none;">
-        </div>
-        <!-- Bond icon (shown when bond is featured) -->
-        <div class="fbond-icon-wrap" id="ppp-fbond-icon-wrap" style="display:none;" title="Aparência do laço">
-          <img class="fbond-icon" id="ppp-fbond-icon" src="" alt="">
-        </div>
-        <!-- Partner avatar (shown when bond is featured) -->
-        <div class="fbond-av-wrap fbond-partner-wrap" id="ppp-fbond-partner-wrap" style="display:none;">
-          <img class="fbond-av" id="ppp-fbond-partner-av" src="" alt="">
-        </div>
-        <!-- Add circle (shown for owner when has bonds but none featured) -->
-        <div class="fbond-add-circle" id="ppp-fbond-add-circle" style="display:none;" title="Destacar um laço">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
+    <div id="ppp-hero">
+      <!-- ── Featured Bond Header (inside hero, inherits margin-top) ── -->
+      <div id="ppp-bond-header" style="display:none;">
+        <div class="fbond-label" id="ppp-fbond-label" style="display:none;"></div>
+        <div class="fbond-avatars-row">
+          <div class="fbond-av-wrap">
+            <img class="fbond-av" id="ppp-fbond-player-av" src="" alt="">
+            <img class="fbond-frame-overlay" id="ppp-fbond-player-frame" src="" alt="" style="display:none;">
+          </div>
+          <div class="fbond-icon-wrap" id="ppp-fbond-icon-wrap" style="display:none;" title="Aparência do laço">
+            <img class="fbond-icon" id="ppp-fbond-icon" src="" alt="">
+          </div>
+          <div class="fbond-av-wrap fbond-partner-wrap" id="ppp-fbond-partner-wrap" style="display:none;">
+            <img class="fbond-av" id="ppp-fbond-partner-av" src="" alt="">
+          </div>
+          <div class="fbond-add-circle" id="ppp-fbond-add-circle" style="display:none;" title="Destacar um laço">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </div>
         </div>
       </div>
-    </div>
-
-    <div id="ppp-hero">
+      <!-- Normal avatar wrap (hidden when bond active) -->
       <div id="ppp-avatar-wrap">
         <img id="ppp-avatar" src="" alt="Avatar">
         <img id="ppp-frame"  src="" alt="" style="display:none;">
       </div>
+      <!-- Hero info -->
       <div id="ppp-hero-info">
         <div class="hero-name-row">
           <div id="ppp-name"></div>
@@ -619,33 +616,34 @@
     <div id="mpm-cover-fade"></div>
 
     <!-- Hero row: avatar left, info right -->
-    <!-- ── Featured Bond Header ── -->
-    <div id="mpm-bond-header" style="display:none;">
-      <div class="fbond-label" id="mpm-fbond-label" style="display:none;"></div>
-      <div class="fbond-avatars-row">
-        <div class="fbond-av-wrap">
-          <img class="fbond-av" id="mpm-fbond-player-av" src="" alt="">
-          <img class="fbond-frame-overlay" id="mpm-fbond-player-frame" src="" alt="" style="display:none;">
-        </div>
-        <div class="fbond-icon-wrap" id="mpm-fbond-icon-wrap" style="display:none;" title="Aparência do laço">
-          <img class="fbond-icon" id="mpm-fbond-icon" src="" alt="">
-        </div>
-        <div class="fbond-av-wrap fbond-partner-wrap" id="mpm-fbond-partner-wrap" style="display:none;">
-          <img class="fbond-av" id="mpm-fbond-partner-av" src="" alt="">
-        </div>
-        <div class="fbond-add-circle" id="mpm-fbond-add-circle" style="display:none;" title="Destacar um laço">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
+    <div id="mpm-hero">
+      <!-- ── Featured Bond Header (inside hero, inherits margin-top) ── -->
+      <div id="mpm-bond-header" style="display:none;">
+        <div class="fbond-label" id="mpm-fbond-label" style="display:none;"></div>
+        <div class="fbond-avatars-row">
+          <div class="fbond-av-wrap">
+            <img class="fbond-av" id="mpm-fbond-player-av" src="" alt="">
+            <img class="fbond-frame-overlay" id="mpm-fbond-player-frame" src="" alt="" style="display:none;">
+          </div>
+          <div class="fbond-icon-wrap" id="mpm-fbond-icon-wrap" style="display:none;" title="Aparência do laço">
+            <img class="fbond-icon" id="mpm-fbond-icon" src="" alt="">
+          </div>
+          <div class="fbond-av-wrap fbond-partner-wrap" id="mpm-fbond-partner-wrap" style="display:none;">
+            <img class="fbond-av" id="mpm-fbond-partner-av" src="" alt="">
+          </div>
+          <div class="fbond-add-circle" id="mpm-fbond-add-circle" style="display:none;" title="Destacar um laço">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </div>
         </div>
       </div>
-    </div>
-
-    <div id="mpm-hero">
+      <!-- Normal avatar wrap (hidden when bond active) -->
       <div id="mpm-avatar-wrap">
         <img id="mpm-avatar" src="" alt="Avatar">
         <img id="mpm-frame"  src="" alt="" style="display:none;">
       </div>
+      <!-- Hero info -->
       <div id="mpm-hero-info">
         <div class="hero-name-row">
           <div id="mpm-name"></div>

@@ -2438,20 +2438,20 @@ html,body {
    FEATURED BOND HEADER
    ════════════════════════════════════════════════════ */
 
-/* Bond header block (sits between cover-fade and hero row) */
+/* Bond header block — LEFT aligned */
 #ppp-bond-header,
 #mpm-bond-header {
   display: none;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 10px;
   padding: 0 16px 8px;
-  margin-top: -60px; /* overlaps the cover-fade like the hero does */
+  margin-top: -60px;
   position: relative;
   z-index: 2;
 }
 
-/* Level + type label above the avatars */
+/* Level + type label */
 .fbond-label {
   font-family: 'Cinzel', serif;
   font-size: 0.68rem;
@@ -2460,242 +2460,328 @@ html,body {
   text-transform: uppercase;
   color: var(--gold-light);
   text-shadow: 0 0 12px rgba(201,169,74,0.7), 0 2px 8px rgba(0,0,0,0.9);
-  background: rgba(0,0,0,0.45);
+  background: rgba(0,0,0,0.5);
   padding: 3px 14px;
   border-radius: 20px;
-  border: 1px solid rgba(201,169,74,0.25);
+  border: 1px solid rgba(201,169,74,0.28);
 }
 
-/* Row containing player av + bond icon + partner av */
+/* Row: player av | bond icon | partner av (or + circle) */
 .fbond-avatars-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  gap: 18px;
 }
 
-/* Individual avatar wrapper */
+/* Individual avatar circle */
 .fbond-av-wrap {
   position: relative;
-  width: 82px;
-  height: 82px;
+  width: 88px;
+  height: 88px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-/* Avatar image */
 .fbond-av {
-  width: 74px;
-  height: 74px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   object-fit: cover;
   border: 2.5px solid var(--gold);
   box-shadow: 0 0 18px rgba(201,169,74,0.4), 0 4px 14px rgba(0,0,0,0.7);
 }
 
-/* Frame overlay on player avatar inside bond header */
+/* Frame overlay inside bond header avatar */
 .fbond-frame-overlay {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 160px;
-  height: 160px;
+  width: 180px;
+  height: 180px;
   pointer-events: none;
   object-fit: contain;
-  z-index: 3; /* above avatar border but below bond icon */
+  z-index: 3;
 }
 
-/* Bond icon image (centered between avatars) */
+/* Bond icon wrapper — receives glow via JS */
+.fbond-icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.3s;
+  position: relative;
+  z-index: 5;
+}
+.fbond-icon-wrap:active { transform: scale(0.92); }
 .fbond-icon {
-  width: 58px;
-  height: 58px;
+  width: 72px;
+  height: 72px;
   object-fit: contain;
   position: relative;
-  z-index: 10; /* above both avatar frames */
-  margin: 0 -14px; /* overlaps both avatar sides */
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.7));
-  flex-shrink: 0;
+  z-index: 2;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
 }
 
-/* Clickable partner wrapper (for own profile: opens mini card) */
-.fbond-partner-wrap {
-  cursor: pointer;
-  transition: transform 0.15s;
+/* Prismatic tier-7 glow animation */
+@keyframes fbond-prismatic {
+  0%   { box-shadow: 0 0 22px 8px rgba(255,100,100,0.55), 0 0 44px 16px rgba(255,100,100,0.2); }
+  16%  { box-shadow: 0 0 22px 8px rgba(255,200,50,0.55),  0 0 44px 16px rgba(255,200,50,0.2);  }
+  33%  { box-shadow: 0 0 22px 8px rgba(100,255,120,0.55), 0 0 44px 16px rgba(100,255,120,0.2); }
+  50%  { box-shadow: 0 0 22px 8px rgba(50,200,255,0.55),  0 0 44px 16px rgba(50,200,255,0.2);  }
+  66%  { box-shadow: 0 0 22px 8px rgba(150,80,255,0.55),  0 0 44px 16px rgba(150,80,255,0.2);  }
+  83%  { box-shadow: 0 0 22px 8px rgba(255,60,180,0.55),  0 0 44px 16px rgba(255,60,180,0.2);  }
+  100% { box-shadow: 0 0 22px 8px rgba(255,100,100,0.55), 0 0 44px 16px rgba(255,100,100,0.2); }
 }
-.fbond-partner-wrap:active { transform: scale(0.94); }
+.fbond-icon-wrap.tier-7 {
+  animation: fbond-prismatic 3s linear infinite;
+}
 
-/* + Add button circle (shown next to player avatar when has bonds but none featured) */
-.fbond-add-btn {
-  position: absolute;
-  right: -10px;
-  bottom: 2px;
-  width: 26px;
-  height: 26px;
+/* Partner avatar (clickable) */
+.fbond-partner-wrap { cursor: pointer; transition: transform 0.15s; }
+.fbond-partner-wrap:active { transform: scale(0.93); }
+
+/* + Add circle — same dimensions as avatar */
+.fbond-add-circle {
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
-  background: rgba(14,9,3,0.9);
-  border: 1.5px solid var(--gold-dark);
+  background: rgba(14,9,3,0.55);
+  border: 2px dashed rgba(201,169,74,0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 6;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  flex-shrink: 0;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
 }
-.fbond-add-btn:active { transform: scale(0.9); }
-.fbond-add-btn svg { width: 13px; height: 13px; color: var(--gold-dark); }
+.fbond-add-circle:hover { border-color: rgba(201,169,74,0.75); background: rgba(30,20,8,0.7); }
+.fbond-add-circle:active { transform: scale(0.94); }
+.fbond-add-circle svg { width: 30px; height: 30px; color: rgba(201,169,74,0.65); }
 
-/* When bond is active: hide the original avatar-wrap + reshape hero to column */
+/* When bond header is active: hide original avatar-wrap, info flows below */
 #ppp-hero.fbond-active,
 #mpm-hero.fbond-active {
   flex-direction: column;
   align-items: flex-start;
-  margin-top: 6px;
+  margin-top: 4px;
   gap: 0;
+  padding-left: 16px;
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,
-#mpm-hero.fbond-active #mpm-avatar-wrap {
-  display: none;
-}
+#mpm-hero.fbond-active #mpm-avatar-wrap { display: none; }
 #ppp-hero.fbond-active #ppp-hero-info,
-#mpm-hero.fbond-active #mpm-hero-info {
-  margin-left: 0;
-  width: 100%;
-  text-align: center;
-  align-items: center;
-}
+#mpm-hero.fbond-active #mpm-hero-info { margin-left: 0; align-items: flex-start; }
 #ppp-hero.fbond-active #ppp-name,
-#mpm-hero.fbond-active #mpm-name {
-  text-align: center;
-  max-width: 100%;
-}
+#mpm-hero.fbond-active #mpm-name { text-align: left; max-width: 100%; }
 
 /* ────────────────────────────────────────────────────
-   Featured Bond Picker Modal (JS-built, bottom sheet)
+   Bond Style Picker Modal
    ──────────────────────────────────────────────────── */
-#fbond-picker-modal {
+#bond-style-picker {
   position: fixed;
   inset: 0;
   z-index: 1700;
-  background: rgba(0,0,0,0.62);
+  background: rgba(0,0,0,0.65);
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
-#fbond-picker-inner {
+#bsp-inner {
   background: linear-gradient(160deg,#1c1510,#120d08);
   border: 1px solid var(--border-mid);
   border-bottom: none;
   border-radius: 18px 18px 0 0;
   width: 100%;
   max-width: 480px;
-  padding: 0 0 env(safe-area-inset-bottom, 0);
-  max-height: 70vh;
+  max-height: 82vh;
   overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
-#fbond-picker-handle {
+#bsp-handle {
   width: 36px; height: 4px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.14);
   border-radius: 2px;
   margin: 12px auto 0;
 }
-#fbond-picker-title {
+#bsp-title {
   font-family: 'Cinzel', serif;
   font-size: 0.88rem;
   color: var(--gold-light);
   letter-spacing: 0.08em;
   text-align: center;
-  padding: 10px 20px 14px;
+  padding: 10px 20px 4px;
+}
+#bsp-subtitle {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0 20px 14px;
   border-bottom: 1px solid var(--border);
 }
-.fbond-picker-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 13px 18px;
-  border-bottom: 1px solid rgba(201,169,74,0.07);
-  cursor: pointer;
-  transition: background 0.15s;
+.bsp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 14px;
 }
-.fbond-picker-item:active { background: rgba(255,255,255,0.05); }
-.fbond-picker-av {
-  width: 50px; height: 50px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--gold-dark);
-  flex-shrink: 0;
-}
-.fbond-picker-info { flex: 1; min-width: 0; }
-.fbond-picker-name {
-  font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
-  color: var(--gold-light);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.fbond-picker-meta {
-  font-size: 0.62rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-.fbond-picker-bond-icon {
-  width: 38px; height: 38px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-/* ────────────────────────────────────────────────────
-   Partner mini card (shown on tapping partner av)
-   ──────────────────────────────────────────────────── */
-#fbond-partner-card {
-  position: fixed;
-  z-index: 1800;
-  background: linear-gradient(160deg,#1f1a12,#13100a);
-  border: 1px solid var(--border-mid);
-  border-radius: 12px;
-  padding: 14px 0 6px;
-  min-width: 190px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.7);
-  animation: fbond-card-pop 0.14s ease;
-}
-@keyframes fbond-card-pop {
-  from { opacity:0; transform: scale(0.92); }
-  to   { opacity:1; transform: scale(1); }
-}
-#fbond-partner-card .fpc-avatar-row {
+.bsp-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 0 14px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: 7px;
+  border-radius: 14px;
+  padding: 14px 8px 10px;
+  border: 2px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
 }
-#fbond-partner-card .fpc-avatar-row img {
-  width: 48px; height: 48px;
+.bsp-card:active { transform: scale(0.96); }
+.bsp-card.selected {
+  border-color: var(--gold);
+  background: rgba(201,169,74,0.1);
+  box-shadow: 0 0 14px 2px rgba(201,169,74,0.18);
+}
+.bsp-card.locked { cursor: default; }
+.bsp-card-img-wrap {
+  position: relative;
+  width: 82px;
+  height: 82px;
   border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--gold-dark);
-}
-#fbond-partner-card .fpc-pname {
-  font-family: 'Cinzel', serif;
-  font-size: 0.78rem;
-  color: var(--gold-light);
-}
-.fpc-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 16px;
+  justify-content: center;
+  /* glow bg via inline style */
+}
+.bsp-card-img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  position: relative;
+  z-index: 2;
+  transition: filter 0.2s;
+}
+.bsp-card.locked .bsp-card-img { filter: grayscale(1) brightness(0.55); }
+.bsp-card-lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  pointer-events: none;
+}
+.bsp-card-lock svg { width: 26px; height: 26px; color: rgba(255,255,255,0.65); filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8)); }
+.bsp-card-check {
+  position: absolute;
+  top: 5px; right: 8px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #1a0f00; font-weight: 900;
+  z-index: 5;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.bsp-card-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-align: center;
+}
+.bsp-card.selected .bsp-card-label { color: var(--gold-light); }
+.bsp-card.locked .bsp-card-label   { color: rgba(255,255,255,0.28); }
+
+/* ────────────────────────────────────────────────────
+   Featured Bond picker (choose which bond to feature)
+   ──────────────────────────────────────────────────── */
+#fbond-picker-modal {
+  position: fixed; inset: 0; z-index: 1700;
+  background: rgba(0,0,0,0.62);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+#fbond-picker-inner {
+  background: linear-gradient(160deg,#1c1510,#120d08);
+  border: 1px solid var(--border-mid);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  width: 100%; max-width: 480px;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+  max-height: 70vh; overflow-y: auto;
+}
+#fbond-picker-handle { width:36px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:12px auto 0; }
+#fbond-picker-title  { font-family:'Cinzel',serif;font-size:0.88rem;color:var(--gold-light);letter-spacing:0.08em;text-align:center;padding:10px 20px 14px;border-bottom:1px solid var(--border); }
+.fbond-picker-item   { display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid rgba(201,169,74,0.07);cursor:pointer;transition:background 0.15s; }
+.fbond-picker-item:active { background:rgba(255,255,255,0.05); }
+.fbond-picker-av     { width:50px;height:50px;border-radius:50%;object-fit:cover;border:2px solid var(--gold-dark);flex-shrink:0; }
+.fbond-picker-info   { flex:1;min-width:0; }
+.fbond-picker-name   { font-family:'Cinzel',serif;font-size:0.85rem;color:var(--gold-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.fbond-picker-meta   { font-size:0.62rem;color:var(--text-muted);margin-top:2px; }
+.fbond-picker-bond-icon { width:38px;height:38px;object-fit:contain;flex-shrink:0; }
+
+/* ────────────────────────────────────────────────────
+   Partner mini card
+   ──────────────────────────────────────────────────── */
+#fbond-partner-card {
+  position:fixed;z-index:1800;
+  background:linear-gradient(160deg,#1f1a12,#13100a);
+  border:1px solid var(--border-mid);border-radius:12px;
+  padding:14px 0 6px;min-width:190px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.7);
+  animation:fbond-card-pop 0.14s ease;
+}
+@keyframes fbond-card-pop { from{opacity:0;transform:scale(0.92)} to{opacity:1;transform:scale(1)} }
+#fbond-partner-card .fpc-avatar-row { display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 14px 10px;border-bottom:1px solid var(--border); }
+#fbond-partner-card .fpc-avatar-row img { width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--gold-dark); }
+#fbond-partner-card .fpc-pname { font-family:'Cinzel',serif;font-size:0.78rem;color:var(--gold-light); }
+.fpc-btn { display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;transition:background 0.15s;font-family:'Cinzel',serif;font-size:0.78rem;color:#e0dccc;border-bottom:1px solid rgba(255,255,255,0.04); }
+.fpc-btn:last-child { border-bottom:none; }
+.fpc-btn:active { background:rgba(255,255,255,0.06); }
+.fpc-btn svg { width:15px;height:15px;flex-shrink:0;color:var(--gold-dark); }
+.fpc-btn.danger { color:#ff9a9a; }
+.fpc-btn.danger svg { color:#ff9a9a; }
+
+.bond-eligible-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(201,169,74,0.08);
   cursor: pointer;
   transition: background 0.15s;
-  font-family: 'Cinzel', serif;
-  font-size: 0.78rem;
-  color: #e0dccc;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
-.fpc-btn:last-child { border-bottom: none; }
-.fpc-btn:active { background: rgba(255,255,255,0.06); }
-.fpc-btn svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--gold-dark); }
-.fpc-btn.danger { color: #ff9a9a; }
-.fpc-btn.danger svg { color: #ff9a9a; }
+.bond-eligible-row:hover { background: rgba(255,255,255,0.04); }
+.bond-eligible-av {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-mid);
+}
+.bond-eligible-av img { width: 100%; height: 100%; object-fit: cover; }
+.bond-eligible-info { flex: 1; min-width: 0; }
+.bond-eligible-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  color: var(--gold-light);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bond-eligible-intimacy {
+  font-size: 0.65rem;
+  color: var(--blue-light);
+  margin-top: 2px;
+}
+.bond-eligible-arrow {
+  color: var(--gold-dark);
+  flex-shrink: 0;
+}
+.bond-eligible-arrow svg { width: 16px; height: 16px; }

@@ -1942,7 +1942,7 @@ async function _pppLoadPlayerData(playerId) {
       const sb = getSB();
       if (!sb) return;
       const { data: p } = await sb.from('players')
-        .select('id,name,level,avatar_url,guild_id,combat_power,featured_bond_id')
+        .select('id,name,level,avatar_url,guild_id,combat_power,featured_bond_id,featured_bond_style')
         .eq('id', playerId).maybeSingle();
       if (!p) return;
       player = p;
@@ -3190,7 +3190,7 @@ async function openMyProfileModal() {
     if (mpmAddBtn) mpmAddBtn.style.display = 'none';
     const sb2 = getSB();
     if (sb2) {
-      sb2.from('players').select('id,name,avatar_url,featured_bond_id').eq('id', PLAYER.id).maybeSingle()
+      sb2.from('players').select('id,name,avatar_url,featured_bond_id,featured_bond_style').eq('id', PLAYER.id).maybeSingle()
         .then(({ data: pd }) => {
           if (pd) _featuredBondLoad(PLAYER.id, pd, 'mpm', true).catch(() => {});
         }).catch(() => {});
@@ -4871,38 +4871,84 @@ const BOND_LEVEL_THRESHOLDS = [
 
 const BONDS_CACHE_TTL = 5 * 60 * 1000; // 5 min (laços mudam raramente)
 
-// ── Bond image URL by type + level ────────────────────────────────────────────
-function getBondImage(bondType, level) {
+// ── Tier data & glow colors ───────────────────────────────────────────────────
+const BOND_TIER_DATA = [
+  { tier: 1, unlockLevel: 1,  imgNum: '01', label: 'Nv. 1'  },
+  { tier: 2, unlockLevel: 4,  imgNum: '02', label: 'Nv. 4'  },
+  { tier: 3, unlockLevel: 7,  imgNum: '03', label: 'Nv. 7'  },
+  { tier: 4, unlockLevel: 10, imgNum: '04', label: 'Nv. 10' },
+  { tier: 5, unlockLevel: 13, imgNum: '05', label: 'Nv. 13' },
+  { tier: 6, unlockLevel: 16, imgNum: '06', label: 'Nv. 16' },
+  { tier: 7, unlockLevel: 19, imgNum: '07', label: 'Nv. 19' },
+];
+
+const BOND_TIER_GLOWS = [
+  null, // 0 unused
+  { bg: 'rgba(150,105,30,0.5)',  shadow: 'rgba(201,149,44,0.7)',  color: '#c9a94a' }, // tier 1 bronze
+  { bg: 'rgba(140,155,185,0.4)', shadow: 'rgba(180,195,220,0.7)', color: '#b8c8e8' }, // tier 2 silver
+  { bg: 'rgba(180,148,0,0.5)',   shadow: 'rgba(255,210,0,0.75)',  color: '#ffd700' }, // tier 3 gold
+  { bg: 'rgba(30,100,210,0.5)',  shadow: 'rgba(60,150,255,0.75)', color: '#4a9eff' }, // tier 4 sapphire
+  { bg: 'rgba(110,40,200,0.5)',  shadow: 'rgba(180,80,255,0.75)', color: '#b05fff' }, // tier 5 amethyst
+  { bg: 'rgba(190,25,25,0.5)',   shadow: 'rgba(255,50,50,0.75)',  color: '#ff5050' }, // tier 6 ruby
+  { bg: 'rgba(200,180,255,0.3)', shadow: 'rgba(255,255,255,0.8)', color: '#ffffff' }, // tier 7 prismatic
+];
+
+// Return tier (1-7) for a given bond level
+function getBondTier(level) {
+  if (level >= 19) return 7;
+  if (level >= 16) return 6;
+  if (level >= 13) return 5;
+  if (level >= 10) return 4;
+  if (level >= 7)  return 3;
+  if (level >= 4)  return 2;
+  return 1;
+}
+
+// Get bond image URL from type + tier number
+function getBondImageByTier(bondType, tier) {
   const type = bondType === 'couple' ? 'casal' : 'amigo';
-  let n;
-  if      (level <= 3)  n = '01';
-  else if (level <= 6)  n = '02';
-  else if (level <= 9)  n = '03';
-  else if (level <= 12) n = '04';
-  else if (level <= 15) n = '05';
-  else if (level <= 18) n = '06';
-  else                   n = '07';
-  return `https://aden-rpg.pages.dev/assets/laco_${type}_${n}.webp`;
+  const num  = String(Math.max(1, Math.min(7, tier))).padStart(2, '0');
+  return `https://aden-rpg.pages.dev/assets/laco_${type}_${num}.webp`;
+}
+
+// Legacy helper (kept for backwards compatibility)
+function getBondImage(bondType, level) {
+  return getBondImageByTier(bondType, getBondTier(level));
+}
+
+// Apply glow to a .fbond-icon-wrap or .bsp-card-img-wrap element
+function _applyBondGlow(el, tier) {
+  if (!el) return;
+  const g = BOND_TIER_GLOWS[tier] || BOND_TIER_GLOWS[1];
+  el.style.background  = `radial-gradient(circle at 50% 50%, ${g.bg} 0%, transparent 72%)`;
+  if (tier === 7) {
+    el.classList.add('tier-7');
+    el.style.boxShadow = '';
+  } else {
+    el.classList.remove('tier-7');
+    el.style.boxShadow = `0 0 18px 6px ${g.shadow}, 0 0 36px 12px ${g.shadow.replace('0.7','0.18').replace('0.75','0.18')}`;
+  }
 }
 
 // ── Featured Bond ─────────────────────────────────────────────────────────────
-// prefix = 'ppp' | 'mpm'
-// Renders the featured bond header for a profile (own or other player's).
+// Renders the full featured bond header (label + both avatars + bond icon).
 // bondRow: { bond_id, bond_type, partner_id, partner_name, partner_avatar, intimacy_points }
-// playerAv, playerFrame: URLs for the profile owner's avatar/frame
-function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf) {
+// currentStyle: int 1-7 (chosen tier), or null → auto from level
+function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, currentStyle) {
   const headerEl = document.getElementById(prefix + '-bond-header');
   const heroEl   = document.getElementById(prefix === 'ppp' ? 'ppp-hero' : 'mpm-hero');
   if (!headerEl || !heroEl) return;
 
-  const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
-  const level    = prog.level;
-  const typeName = bondRow.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
-  const bondImg  = getBondImage(bondRow.bond_type, level);
+  const prog      = getBondLevelProgress(bondRow.intimacy_points || 0);
+  const level     = prog.level;
+  const maxTier   = getBondTier(level);
+  const useTier   = (currentStyle && currentStyle >= 1 && currentStyle <= maxTier) ? currentStyle : maxTier;
+  const typeName  = bondRow.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+  const bondImg   = getBondImageByTier(bondRow.bond_type, useTier);
 
   // Label
   const labelEl = document.getElementById(prefix + '-fbond-label');
-  if (labelEl) labelEl.textContent = `Nível ${level} · ${typeName}`;
+  if (labelEl) { labelEl.textContent = `Nível ${level} · ${typeName}`; labelEl.style.display = ''; }
 
   // Player avatar
   const playerAvEl    = document.getElementById(prefix + '-fbond-player-av');
@@ -4914,40 +4960,83 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf) {
   }
 
   // Bond icon
-  const iconEl = document.getElementById(prefix + '-fbond-icon');
-  if (iconEl) iconEl.src = bondImg;
-
-  // Partner avatar
-  const partnerAvEl   = document.getElementById(prefix + '-fbond-partner-av');
-  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
-  if (partnerAvEl) partnerAvEl.src = bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 74);
-
-  // Tap on partner avatar (own profile only) → mini card
-  if (partnerWrapEl) {
-    if (isSelf) {
-      partnerWrapEl.style.cursor = 'pointer';
-      partnerWrapEl.onclick = (e) => {
-        e.stopPropagation();
-        _showFeaturedPartnerCard(
-          bondRow.partner_id,
-          bondRow.partner_name,
-          bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 74),
-          bondRow.bond_id || bondRow.id,
-          prefix
-        );
-      };
-    } else {
-      partnerWrapEl.style.cursor = 'pointer';
-      partnerWrapEl.onclick = () => openPlayerModalFor(bondRow.partner_id, bondRow.partner_name);
-    }
+  const iconWrapEl = document.getElementById(prefix + '-fbond-icon-wrap');
+  const iconEl     = document.getElementById(prefix + '-fbond-icon');
+  if (iconEl)     iconEl.src = bondImg;
+  if (iconWrapEl) {
+    iconWrapEl.style.display = 'flex';
+    _applyBondGlow(iconWrapEl, useTier);
+    // Click → open style picker
+    iconWrapEl.onclick = (e) => {
+      e.stopPropagation();
+      if (isSelf) _openBondStylePicker(bondRow.bond_type, level, useTier, bondRow.bond_id || bondRow.id, prefix, bondRow);
+    };
+    iconWrapEl.style.cursor = isSelf ? 'pointer' : 'default';
   }
 
-  // Show header, switch hero to column mode
+  // Partner avatar
+  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
+  const partnerAvEl   = document.getElementById(prefix + '-fbond-partner-av');
+  if (partnerAvEl) partnerAvEl.src = bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 80);
+  if (partnerWrapEl) {
+    partnerWrapEl.style.display = 'flex';
+    partnerWrapEl.onclick = (e) => {
+      e.stopPropagation();
+      if (isSelf) {
+        _showFeaturedPartnerCard(
+          bondRow.partner_id, bondRow.partner_name,
+          bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 80),
+          bondRow.bond_id || bondRow.id, prefix
+        );
+      } else {
+        openPlayerModalFor(bondRow.partner_id, bondRow.partner_name);
+      }
+    };
+  }
+
+  // Hide add-circle
+  const addCircle = document.getElementById(prefix + '-fbond-add-circle');
+  if (addCircle) addCircle.style.display = 'none';
+
+  // Activate header + hero
   headerEl.style.display = 'flex';
   heroEl.classList.add('fbond-active');
-  // Hide the "+" add button (a bond is already featured)
-  const addBtn = document.getElementById(prefix === 'ppp' ? 'ppp-bond-add-btn' : 'mpm-bond-add-btn');
-  if (addBtn) addBtn.style.display = 'none';
+}
+
+// Render the "add" state: player avatar + dashed "+" circle (own profile only)
+function _featuredBondShowAddState(prefix, playerAv, playerFrame) {
+  const headerEl = document.getElementById(prefix + '-bond-header');
+  const heroEl   = document.getElementById(prefix === 'ppp' ? 'ppp-hero' : 'mpm-hero');
+  if (!headerEl || !heroEl) return;
+
+  // Hide label
+  const labelEl = document.getElementById(prefix + '-fbond-label');
+  if (labelEl) labelEl.style.display = 'none';
+
+  // Player avatar
+  const playerAvEl    = document.getElementById(prefix + '-fbond-player-av');
+  const playerFrameEl = document.getElementById(prefix + '-fbond-player-frame');
+  if (playerAvEl) playerAvEl.src = playerAv || '';
+  if (playerFrameEl) {
+    if (playerFrame) { playerFrameEl.src = playerFrame; playerFrameEl.style.display = 'block'; }
+    else               playerFrameEl.style.display = 'none';
+  }
+
+  // Hide icon and partner
+  const iconWrapEl    = document.getElementById(prefix + '-fbond-icon-wrap');
+  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
+  if (iconWrapEl)    iconWrapEl.style.display    = 'none';
+  if (partnerWrapEl) partnerWrapEl.style.display = 'none';
+
+  // Show add circle
+  const addCircle = document.getElementById(prefix + '-fbond-add-circle');
+  if (addCircle) {
+    addCircle.style.display = 'flex';
+    addCircle.onclick = () => _featuredBondOpenPicker(prefix);
+  }
+
+  headerEl.style.display = 'flex';
+  heroEl.classList.add('fbond-active');
 }
 
 function _featuredBondClearUI(prefix) {
@@ -4957,17 +5046,87 @@ function _featuredBondClearUI(prefix) {
   if (heroEl)   heroEl.classList.remove('fbond-active');
 }
 
-// Show "+" button next to avatar (when player has bonds but none featured)
-function _featuredBondShowAddBtn(prefix) {
-  const addBtn = document.getElementById(prefix === 'ppp' ? 'ppp-bond-add-btn' : 'mpm-bond-add-btn');
-  if (!addBtn) return;
-  addBtn.style.display = 'flex';
-  addBtn.onclick = () => _featuredBondOpenPicker(prefix);
+// ── Bond Style Picker — choose which unlocked tier image to display ──────────
+async function _openBondStylePicker(bondType, bondLevel, currentTier, bondId, prefix, bondRow) {
+  document.getElementById('bond-style-picker')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'bond-style-picker';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const typeName = bondType === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+  const maxTier  = getBondTier(bondLevel);
+
+  const inner = document.createElement('div');
+  inner.id = 'bsp-inner';
+  inner.innerHTML = `
+    <div id="bsp-handle"></div>
+    <div id="bsp-title">Aparência do Laço</div>
+    <div id="bsp-subtitle">${typeName} · Nível ${bondLevel} — escolha a imagem que deseja exibir</div>
+    <div class="bsp-grid" id="bsp-grid"></div>`;
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+
+  const grid = inner.querySelector('#bsp-grid');
+  let selectedTier = currentTier;
+
+  function buildCards() {
+    grid.innerHTML = '';
+    BOND_TIER_DATA.forEach(td => {
+      const isUnlocked = td.tier <= maxTier;
+      const isSelected = td.tier === selectedTier;
+      const imgUrl     = getBondImageByTier(bondType, td.tier);
+      const glow       = BOND_TIER_GLOWS[td.tier];
+      const glowBg     = isUnlocked ? `radial-gradient(circle at 50% 50%, ${glow.bg} 0%, transparent 72%)` : '';
+      const glowShadow = isUnlocked && td.tier < 7 ? `box-shadow:0 0 14px 4px ${glow.shadow};` : '';
+
+      const card = document.createElement('div');
+      card.className = `bsp-card${isSelected ? ' selected' : ''}${!isUnlocked ? ' locked' : ''}`;
+      card.innerHTML = `
+        <div class="bsp-card-img-wrap${td.tier === 7 && isUnlocked ? ' tier-7' : ''}"
+             style="background:${glowBg};${glowShadow}border-radius:50%;">
+          <img class="bsp-card-img" src="${esc(imgUrl)}" alt="">
+          ${!isUnlocked ? `<div class="bsp-card-lock">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg></div>` : ''}
+          ${isSelected ? '<div class="bsp-card-check">✓</div>' : ''}
+        </div>
+        <div class="bsp-card-label">${isUnlocked ? td.label : td.label}</div>`;
+
+      if (isUnlocked) {
+        card.onclick = async () => {
+          if (selectedTier === td.tier) return;
+          selectedTier = td.tier;
+          // Save to DB
+          const sb = getSB();
+          if (sb && PLAYER.id) {
+            await sb.from('players').update({ featured_bond_style: td.tier }).eq('id', PLAYER.id).catch(() => {});
+          }
+          // Update icon immediately
+          const iconWrapEl = document.getElementById(prefix + '-fbond-icon-wrap');
+          const iconEl     = document.getElementById(prefix + '-fbond-icon');
+          if (iconEl)     iconEl.src = getBondImageByTier(bondType, td.tier);
+          if (iconWrapEl) _applyBondGlow(iconWrapEl, td.tier);
+          // Update onclick with new tier
+          if (iconWrapEl) {
+            iconWrapEl.onclick = (e) => {
+              e.stopPropagation();
+              _openBondStylePicker(bondType, bondLevel, td.tier, bondId, prefix, bondRow);
+            };
+          }
+          // Rebuild cards to update selection
+          buildCards();
+        };
+      }
+      grid.appendChild(card);
+    });
+  }
+  buildCards();
 }
 
 // ── Picker modal: choose which bond to feature ─────────────────────────────
 async function _featuredBondOpenPicker(prefix) {
-  // Remove any existing picker
   document.getElementById('fbond-picker-modal')?.remove();
 
   const overlay = document.createElement('div');
@@ -4983,12 +5142,8 @@ async function _featuredBondOpenPicker(prefix) {
   overlay.appendChild(inner);
   document.body.appendChild(overlay);
 
-  // Load bonds
   const sb = getSB();
-  if (!sb) {
-    document.getElementById('fbond-picker-list').innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>';
-    return;
-  }
+  if (!sb) { document.getElementById('fbond-picker-list').innerHTML = '<div class="tav-notif-empty">Sem conexão.</div>'; return; }
   try {
     const { data, error } = await sb.rpc('get_player_bonds', { p_player_id: PLAYER.id });
     if (error) throw error;
@@ -4998,16 +5153,14 @@ async function _featuredBondOpenPicker(prefix) {
 
     const listEl = document.getElementById('fbond-picker-list');
     if (!listEl) return;
-    if (!bonds.length) {
-      listEl.innerHTML = '<div class="tav-notif-empty">Nenhum laço ativo encontrado.</div>';
-      return;
-    }
+    if (!bonds.length) { listEl.innerHTML = '<div class="tav-notif-empty">Nenhum laço ativo.</div>'; return; }
     listEl.innerHTML = '';
     bonds.forEach(b => {
-      const prog     = getBondLevelProgress(b.intimacy_points || 0);
-      const bondImg  = getBondImage(b.bond_type, prog.level);
+      const prog    = getBondLevelProgress(b.intimacy_points || 0);
+      const tier    = getBondTier(prog.level);
+      const bondImg = getBondImageByTier(b.bond_type, tier);
       const typeName = b.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
-      const av       = b.partner_avatar || makeAvatar(b.partner_name || '?', 50);
+      const av      = b.partner_avatar || makeAvatar(b.partner_name || '?', 50);
       const row = document.createElement('div');
       row.className = 'fbond-picker-item';
       row.innerHTML = `
@@ -5035,17 +5188,19 @@ async function _featuredBondSave(bondId, bondRow, prefix) {
   const sb = getSB();
   if (!sb || !PLAYER.id) return;
   try {
-    await sb.from('players').update({ featured_bond_id: bondId }).eq('id', PLAYER.id);
-    // Invalidate player cache so next load picks up the change
+    const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
+    const autoTier = getBondTier(prog.level);
+    await sb.from('players').update({ featured_bond_id: bondId, featured_bond_style: autoTier }).eq('id', PLAYER.id);
     try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond save]', e); }
 
-  // Render immediately using data we already have
   const playerAv    = PLAYER.avatar_url || '';
   const skinCache   = _tavGetSkinCache(PLAYER.id);
   const playerFrame = skinCache?.frame_url || '';
   _featuredBondClearUI(prefix);
-  _featuredBondRender(prefix, playerAv, playerFrame, bondRow, true);
+  const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
+  const autoTier = getBondTier(prog.level);
+  _featuredBondRender(prefix, playerAv, playerFrame, bondRow, true, autoTier);
   showToast('Laço em destaque atualizado!');
 }
 
@@ -5054,7 +5209,7 @@ async function _featuredBondRemove(prefix) {
   const sb = getSB();
   if (!sb || !PLAYER.id) return;
   try {
-    await sb.from('players').update({ featured_bond_id: null }).eq('id', PLAYER.id);
+    await sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id);
     try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond remove]', e); }
   _featuredBondClearUI(prefix);
@@ -5066,7 +5221,6 @@ function _showFeaturedPartnerCard(partnerId, partnerName, partnerAv, bondId, pre
   document.getElementById('fbond-partner-card')?.remove();
   const card = document.createElement('div');
   card.id = 'fbond-partner-card';
-
   const avSrc = partnerAv || makeAvatar(partnerName || '?', 48);
   card.innerHTML = `
     <div class="fpc-avatar-row">
@@ -5081,80 +5235,75 @@ function _showFeaturedPartnerCard(partnerId, partnerName, partnerAv, bondId, pre
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       Remover destaque
     </div>`;
-
-  // Position roughly in center screen
   card.style.left = '50%';
   card.style.top  = '50%';
   card.style.transform = 'translate(-50%, -50%)';
   document.body.appendChild(card);
-
   card.querySelector('#fpc-view').onclick = () => {
     card.remove();
     if (prefix === 'ppp') { closePlayerProfilePage(); openPlayerModalFor(partnerId, partnerName); }
     else { closeMyProfileModal(); openPlayerModalFor(partnerId, partnerName); }
   };
-  card.querySelector('#fpc-remove').onclick = () => {
-    card.remove();
-    _featuredBondRemove(prefix);
-  };
-
-  // Close on outside click
+  card.querySelector('#fpc-remove').onclick = () => { card.remove(); _featuredBondRemove(prefix); };
   const _close = (e) => { if (!card.contains(e.target)) { card.remove(); document.removeEventListener('click', _close); } };
   setTimeout(() => document.addEventListener('click', _close), 10);
 }
 
 // ── Called when the local player breaks a bond by bond ID ─────────────────
 async function _featuredBondHandleBroken(bondId) {
-  const prefixes = ["mpm", "ppp"];
+  const prefixes = ['mpm', 'ppp'];
   for (const prefix of prefixes) {
-    const headerEl = document.getElementById(prefix + "-bond-header");
-    if (headerEl && headerEl.style.display !== "none") {
+    const headerEl = document.getElementById(prefix + '-bond-header');
+    if (headerEl && headerEl.style.display !== 'none') {
       await _featuredBondRemove(prefix);
       return;
     }
   }
   const sb = getSB();
   if (sb && PLAYER.id) {
-    sb.from("players").update({ featured_bond_id: null }).eq("id", PLAYER.id).catch(() => {});
-    try { localStorage.removeItem("tav_player_modal_v2_" + PLAYER.id); } catch(_) {}
+    sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
+    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
   }
 }
 
 // ── Called when a bond is broken via unfollow (partnerId known) ─────────────
 async function _featuredBondHandleBrokenByPartner(partnerId) {
-  const prefixes = ["mpm", "ppp"];
+  const prefixes = ['mpm', 'ppp'];
   for (const prefix of prefixes) {
-    const h = document.getElementById(prefix + "-bond-header");
-    if (h && h.style.display !== "none") { _featuredBondClearUI(prefix); }
+    const h = document.getElementById(prefix + '-bond-header');
+    if (h && h.style.display !== 'none') { _featuredBondClearUI(prefix); }
   }
   const sb = getSB();
   if (sb && PLAYER.id) {
-    sb.from("players").update({ featured_bond_id: null }).eq("id", PLAYER.id).catch(() => {});
-    try { localStorage.removeItem("tav_player_modal_v2_" + PLAYER.id); } catch(_) {}
+    sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
+    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
   }
 }
 
 // ── Load and render featured bond for a given player profile ───────────────
-// playerData: the players row (must include featured_bond_id)
-// prefix: 'ppp' | 'mpm'   isSelf: bool
 async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
-  const featuredBondId = playerData?.featured_bond_id;
+  const featuredBondId    = playerData?.featured_bond_id;
+  const featuredBondStyle = playerData?.featured_bond_style || null;
+
   if (!featuredBondId) {
     _featuredBondClearUI(prefix);
-    // Show "+" if own profile and has bonds
     if (isSelf) {
       const sb = getSB();
       if (!sb) return;
       try {
         const { data } = await sb.rpc('get_player_bonds', { p_player_id: playerId });
-        const hasBonds = data && (data.couple || (data.friends && data.friends.length > 0));
-        if (hasBonds) _featuredBondShowAddBtn(prefix);
+        const hasBonds  = data && (data.couple || (data.friends && data.friends.length > 0));
+        if (hasBonds) {
+          const playerAv    = playerData.avatar_url || '';
+          const skinCache   = _tavGetSkinCache(playerId);
+          const playerFrame = skinCache?.frame_url || '';
+          _featuredBondShowAddState(prefix, playerAv, playerFrame);
+        }
       } catch(_) {}
     }
     return;
   }
 
-  // Fetch bond details
   const sb = getSB();
   if (!sb) return;
   try {
@@ -5166,26 +5315,22 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
     if (!bond) { _featuredBondClearUI(prefix); return; }
 
     const partnerId = bond.player_a_id === playerId ? bond.player_b_id : bond.player_a_id;
+    const sorted    = [playerId, partnerId].sort();
 
-    // Get partner + intimacy in parallel
     const [partnerRes, intimacyRes] = await Promise.all([
       sb.from('players').select('id,name,avatar_url').eq('id', partnerId).maybeSingle(),
-      sb.from('player_intimacy')
-        .select('points')
-        .eq('player_a_id', [playerId, partnerId].sort()[0])
-        .eq('player_b_id', [playerId, partnerId].sort()[1])
-        .maybeSingle()
+      sb.from('player_intimacy').select('points').eq('player_a_id', sorted[0]).eq('player_b_id', sorted[1]).maybeSingle()
     ]);
 
-    const partner       = partnerRes.data;
-    const intimacyPts   = intimacyRes.data?.points || 0;
+    const partner      = partnerRes.data;
+    const intimacyPts  = intimacyRes.data?.points || 0;
 
     const bondRow = {
       bond_id:         bond.id,
       id:              bond.id,
       bond_type:       bond.bond_type,
       partner_id:      partnerId,
-      partner_name:    partner?.name    || '?',
+      partner_name:    partner?.name       || '?',
       partner_avatar:  partner?.avatar_url || '',
       intimacy_points: intimacyPts
     };
@@ -5194,9 +5339,11 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
     const skinCache   = _tavGetSkinCache(playerId);
     const playerFrame = skinCache?.frame_url || '';
 
-    _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf);
+    _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, featuredBondStyle);
   } catch(e) { console.warn('[featured bond load]', e); _featuredBondClearUI(prefix); }
 }
+
+
 
 function getBondLevel(points) {
   let lv = 1;

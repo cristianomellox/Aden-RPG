@@ -5146,8 +5146,8 @@ async function _openBondStylePicker(bondType, bondLevel, currentTier, bondId, pr
           selectedTier = td.tier;
           const sb = getSB();
           if (sb && PLAYER.id) {
-            sb.from('players').update({ featured_bond_style: td.tier }).eq('id', PLAYER.id)
-              .then(({ error }) => { if (error) console.warn('[bond style save]', error); })
+            sb.rpc('set_featured_bond', { p_bond_id: bondId, p_style: td.tier })
+              .then(({ data, error }) => { if (error) console.warn('[bond style save]', error); })
               .catch(() => {});
           }
           // Update icon immediately
@@ -5234,33 +5234,25 @@ async function _featuredBondOpenPicker(prefix) {
 async function _featuredBondSave(bondId, bondRow, prefix) {
   const sb = getSB();
   if (!sb || !PLAYER.id) return;
+
+  const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
+  const autoTier = getBondTier(prog.level);
+
   try {
-    // Save featured_bond_id first — critical field, must succeed.
-    const { error: e1 } = await sb.from('players')
-      .update({ featured_bond_id: bondId })
-      .eq('id', PLAYER.id);
-    if (e1) console.warn('[featured bond save - id]', e1);
-
-    // Save featured_bond_style separately — optional (requires migration).
-    // Fails silently if the column doesn't exist yet.
-    const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
-    const autoTier = getBondTier(prog.level);
-    sb.from('players')
-      .update({ featured_bond_style: autoTier })
-      .eq('id', PLAYER.id)
-      .then(({ error: e2 }) => { if (e2) console.warn('[featured bond save - style]', e2); })
-      .catch(() => {});
-
+    const { data, error } = await sb.rpc('set_featured_bond', {
+      p_bond_id: bondId,
+      p_style:   autoTier
+    });
+    if (error)          { console.warn('[featured bond save] RPC error:', error); showToast('Erro ao salvar destaque.'); return; }
+    if (!data?.success) { console.warn('[featured bond save] RPC failed:', data); showToast('Erro ao salvar destaque.'); return; }
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
-  } catch(e) { console.warn('[featured bond save]', e); }
+  } catch(e) { console.warn('[featured bond save]', e); showToast('Erro ao salvar destaque.'); return; }
 
   const playerAv    = PLAYER.avatar_url || '';
   const frameImgEl  = document.getElementById(prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame');
   const playerFrame = (frameImgEl?.style.display === 'block' && frameImgEl.src)
     ? frameImgEl.src : _tavGetSkinCache(PLAYER.id)?.frame_url || '';
   _featuredBondClearUI(prefix);
-  const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
-  const autoTier = getBondTier(prog.level);
   _featuredBondRender(prefix, playerAv, playerFrame, bondRow, true, autoTier);
   showToast('Laço em destaque atualizado!');
 }
@@ -5270,8 +5262,8 @@ async function _featuredBondRemove(prefix) {
   const sb = getSB();
   if (!sb || !PLAYER.id) return;
   try {
-    await sb.from('players').update({ featured_bond_id: null }).eq('id', PLAYER.id);
-    sb.from('players').update({ featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
+    const { data, error } = await sb.rpc('set_featured_bond', { p_bond_id: null, p_style: null });
+    if (error) console.warn('[featured bond remove]', error);
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond remove]', e); }
   _featuredBondClearUI(prefix);
@@ -5323,7 +5315,7 @@ async function _featuredBondHandleBroken(bondId) {
   }
   const sb = getSB();
   if (sb && PLAYER.id) {
-    sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
+    sb.rpc('set_featured_bond', { p_bond_id: null, p_style: null }).catch(() => {});
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   }
 }
@@ -5337,7 +5329,7 @@ async function _featuredBondHandleBrokenByPartner(partnerId) {
   }
   const sb = getSB();
   if (sb && PLAYER.id) {
-    sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
+    sb.rpc('set_featured_bond', { p_bond_id: null, p_style: null }).catch(() => {});
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   }
 }

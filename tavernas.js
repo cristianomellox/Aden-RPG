@@ -1924,7 +1924,7 @@ async function _pppLoadPlayerData(playerId) {
 
   try {
     // Check local cache (24h)
-    const cacheKey = `tav_player_modal_v2_${playerId}`;
+    const cacheKey = `tav_player_modal_v3_${playerId}`;
     const cached = (() => {
       try {
         const it = JSON.parse(localStorage.getItem(cacheKey));
@@ -2411,7 +2411,7 @@ async function tavFetchPlayerData(playerId, sendmpBtn) {
     } catch(e) {}
 
     // Cache local (24h)
-    const cacheKey = `tav_player_modal_v2_${playerId}`;
+    const cacheKey = `tav_player_modal_v3_${playerId}`;
     const cached   = (() => {
       try {
         const it = JSON.parse(localStorage.getItem(cacheKey));
@@ -4916,17 +4916,25 @@ function getBondImage(bondType, level) {
   return getBondImageByTier(bondType, getBondTier(level));
 }
 
-// Apply glow to a .fbond-icon-wrap or .bsp-card-img-wrap element
-function _applyBondGlow(el, tier) {
-  if (!el) return;
+// Apply glow to a .fbond-icon-wrap: sets CSS var for ::before + drop-shadow on the img
+function _applyBondGlow(wrapEl, tier, imgEl) {
+  if (!wrapEl) return;
   const g = BOND_TIER_GLOWS[tier] || BOND_TIER_GLOWS[1];
-  el.style.background  = `radial-gradient(circle at 50% 50%, ${g.bg} 0%, transparent 72%)`;
+  // Clear any old inline background/boxShadow on wrap
+  wrapEl.style.background = 'transparent';
+  wrapEl.style.boxShadow  = 'none';
+  // Set CSS variable for the ::before pseudo-element glow
+  wrapEl.style.setProperty('--fbond-glow', g.color + 'cc');
   if (tier === 7) {
-    el.classList.add('tier-7');
-    el.style.boxShadow = '';
+    wrapEl.classList.add('tier-7');
   } else {
-    el.classList.remove('tier-7');
-    el.style.boxShadow = `0 0 18px 6px ${g.shadow}, 0 0 36px 12px ${g.shadow.replace('0.7','0.18').replace('0.75','0.18')}`;
+    wrapEl.classList.remove('tier-7');
+  }
+  // Drop-shadow on the image itself (follows transparent areas)
+  if (imgEl) {
+    imgEl.style.filter = tier === 7
+      ? 'drop-shadow(0 0 10px rgba(255,255,255,0.9)) drop-shadow(0 0 20px rgba(255,200,255,0.6))'
+      : `drop-shadow(0 0 10px ${g.color}dd) drop-shadow(0 0 20px ${g.color}88)`;
   }
 }
 
@@ -4965,7 +4973,7 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, cur
   if (iconEl)     iconEl.src = bondImg;
   if (iconWrapEl) {
     iconWrapEl.style.display = 'flex';
-    _applyBondGlow(iconWrapEl, useTier);
+    _applyBondGlow(iconWrapEl, useTier, iconEl);
     // Click → open style picker
     iconWrapEl.onclick = (e) => {
       e.stopPropagation();
@@ -5077,22 +5085,26 @@ async function _openBondStylePicker(bondType, bondLevel, currentTier, bondId, pr
       const isSelected = td.tier === selectedTier;
       const imgUrl     = getBondImageByTier(bondType, td.tier);
       const glow       = BOND_TIER_GLOWS[td.tier];
-      const glowBg     = isUnlocked ? `radial-gradient(circle at 50% 50%, ${glow.bg} 0%, transparent 72%)` : '';
-      const glowShadow = isUnlocked && td.tier < 7 ? `box-shadow:0 0 14px 4px ${glow.shadow};` : '';
+      const cardGlowStyle = isUnlocked
+        ? `style="--fbond-glow:${glow.color}cc;"` : '';
+      const imgFilter = isUnlocked && td.tier < 7
+        ? `style="filter:drop-shadow(0 0 8px ${glow.color}cc) drop-shadow(0 0 16px ${glow.color}77)"`
+        : isUnlocked && td.tier === 7
+        ? `style="filter:drop-shadow(0 0 8px rgba(255,255,255,0.9)) drop-shadow(0 0 16px rgba(255,200,255,0.7))"`
+        : '';
 
       const card = document.createElement('div');
       card.className = `bsp-card${isSelected ? ' selected' : ''}${!isUnlocked ? ' locked' : ''}`;
       card.innerHTML = `
-        <div class="bsp-card-img-wrap${td.tier === 7 && isUnlocked ? ' tier-7' : ''}"
-             style="background:${glowBg};${glowShadow}border-radius:50%;">
-          <img class="bsp-card-img" src="${esc(imgUrl)}" alt="">
+        <div class="bsp-card-img-wrap${td.tier === 7 && isUnlocked ? ' tier-7' : ''}" ${cardGlowStyle}>
+          <img class="bsp-card-img" src="${esc(imgUrl)}" alt="" ${imgFilter}>
           ${!isUnlocked ? `<div class="bsp-card-lock">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
               <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg></div>` : ''}
           ${isSelected ? '<div class="bsp-card-check">✓</div>' : ''}
         </div>
-        <div class="bsp-card-label">${isUnlocked ? td.label : td.label}</div>`;
+        <div class="bsp-card-label">${td.label}</div>`;
 
       if (isUnlocked) {
         card.onclick = async () => {
@@ -5107,7 +5119,7 @@ async function _openBondStylePicker(bondType, bondLevel, currentTier, bondId, pr
           const iconWrapEl = document.getElementById(prefix + '-fbond-icon-wrap');
           const iconEl     = document.getElementById(prefix + '-fbond-icon');
           if (iconEl)     iconEl.src = getBondImageByTier(bondType, td.tier);
-          if (iconWrapEl) _applyBondGlow(iconWrapEl, td.tier);
+          if (iconWrapEl) _applyBondGlow(iconWrapEl, td.tier, iconEl);
           // Update onclick with new tier
           if (iconWrapEl) {
             iconWrapEl.onclick = (e) => {
@@ -5191,7 +5203,7 @@ async function _featuredBondSave(bondId, bondRow, prefix) {
     const prog     = getBondLevelProgress(bondRow.intimacy_points || 0);
     const autoTier = getBondTier(prog.level);
     await sb.from('players').update({ featured_bond_id: bondId, featured_bond_style: autoTier }).eq('id', PLAYER.id);
-    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
+    try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond save]', e); }
 
   const playerAv    = PLAYER.avatar_url || '';
@@ -5210,7 +5222,7 @@ async function _featuredBondRemove(prefix) {
   if (!sb || !PLAYER.id) return;
   try {
     await sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id);
-    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
+    try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond remove]', e); }
   _featuredBondClearUI(prefix);
   showToast('Destaque removido.');
@@ -5262,7 +5274,7 @@ async function _featuredBondHandleBroken(bondId) {
   const sb = getSB();
   if (sb && PLAYER.id) {
     sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
-    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
+    try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   }
 }
 
@@ -5276,7 +5288,7 @@ async function _featuredBondHandleBrokenByPartner(partnerId) {
   const sb = getSB();
   if (sb && PLAYER.id) {
     sb.from('players').update({ featured_bond_id: null, featured_bond_style: null }).eq('id', PLAYER.id).catch(() => {});
-    try { localStorage.removeItem('tav_player_modal_v2_' + PLAYER.id); } catch(_) {}
+    try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   }
 }
 

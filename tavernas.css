@@ -2599,7 +2599,7 @@ html,body {
   /* ↓ More negative than the normal -70px to compensate for the
        label (~28px) + avatars (88px) + gap (6px) above the info.
        Adjust this value if the info appears too high or too low. */
-  margin-top: -132px;
+  margin-top: -152px!important;
   gap: 6px;
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,

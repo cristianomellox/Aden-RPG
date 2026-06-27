@@ -2490,7 +2490,7 @@ html,body {
 .fbond-avatars-row {
   display: flex;
   align-items: center;  /* centers 88px partner on the 140px player wrap */
-  gap: 14px;
+  gap: 4px; /* reduzido de 14px — o frame overlay já cria espaço visual */
 }
 
 /* Partner / add-circle size (default for all wraps) */
@@ -2612,6 +2612,7 @@ html,body {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+  padding-left: 4px; /* sobrescreve o padding padrão de 16px — desloca toda a row do laço para a esquerda */
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,
 #mpm-hero.fbond-active #mpm-avatar-wrap { display: none; }

@@ -5369,36 +5369,23 @@ async function _featuredBondHandleBrokenByPartner(partnerId) {
 // ── Load and render featured bond for a given player profile ───────────────
 async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
   // ── Frame: resolve the displayed player's active frame URL ───────────────
-  // Priority for isSelf=true: skin_system.js localStorage (always up-to-date for own player)
-  // Priority for isSelf=false: tav skin cache (fetched via RPC), then DOM fallback
+  // isSelf=true  → skin_system.js localStorage (always up-to-date, no network needed)
+  // isSelf=false → always RPC-fetch (cross-device cache is unreliable for frame changes)
   let playerFrame = '';
   if (isSelf) {
-    // Own player: use skin_system.js cache as source of truth
     try {
-      const sysRaw = localStorage.getItem('aden_skin_cache_v3');
+      const sysRaw  = localStorage.getItem('aden_skin_cache_v3');
       const sysCache = sysRaw ? JSON.parse(sysRaw) : null;
-      playerFrame = sysCache?.active_frame?.frame_url || '';
+      playerFrame   = sysCache?.active_frame?.frame_url || '';
     } catch(_) {}
-    // Also sync tavSkinCache so other lookups are consistent
-    if (playerFrame) {
-      _tavSetSkinCache(playerId, { frame_url: playerFrame });
-    }
   } else {
-    // Another player: tav skin cache (will RPC-fetch if missing)
-    const tavCached = _tavGetSkinCache(playerId);
-    if (tavCached !== undefined) {
-      playerFrame = tavCached?.frame_url || '';
-    } else {
-      // Cache miss — fetch now so playerFrame is correct before rendering
-      try {
-        const sb0 = getSB();
-        if (sb0) {
-          const { data: skinData } = await sb0.rpc('get_player_skin_urls', { p_player_id: playerId });
-          _tavSetSkinCache(playerId, skinData || {});
-          playerFrame = skinData?.frame_url || '';
-        }
-      } catch(_) {}
-    }
+    try {
+      const sb0 = getSB();
+      if (sb0) {
+        const { data: skinData } = await sb0.rpc('get_player_skin_urls', { p_player_id: playerId });
+        playerFrame = skinData?.frame_url || '';
+      }
+    } catch(_) {}
   }
 
   // ── featured_bond_id may be missing if player data came from a shared cache ─
@@ -5460,28 +5447,21 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
     const partner     = partnerRes.data;
     const intimacyPts = intimacyRes.data?.points || 0;
 
-    // Fetch partner's frame — use tav skin cache; if miss, RPC-fetch now
-    // Special case: if the partner is the logged-in user, read from skin_system.js localStorage
+    // Fetch partner's frame — always RPC to avoid cross-device stale cache
+    // Exception: if the partner IS the logged-in user, use skin_system.js localStorage
     let partnerFrame = '';
     const isPartnerSelf = (window.globalUser?.id === partnerId);
     if (isPartnerSelf) {
       try {
-        const sysRaw = localStorage.getItem('aden_skin_cache_v3');
+        const sysRaw   = localStorage.getItem('aden_skin_cache_v3');
         const sysCache = sysRaw ? JSON.parse(sysRaw) : null;
-        partnerFrame = sysCache?.active_frame?.frame_url || '';
-        if (partnerFrame) _tavSetSkinCache(partnerId, { frame_url: partnerFrame });
+        partnerFrame   = sysCache?.active_frame?.frame_url || '';
       } catch(_) {}
     } else {
-      const partnerCached = _tavGetSkinCache(partnerId);
-      if (partnerCached !== undefined) {
-        partnerFrame = partnerCached?.frame_url || '';
-      } else {
-        try {
-          const { data: skinData } = await sb.rpc('get_player_skin_urls', { p_player_id: partnerId });
-          _tavSetSkinCache(partnerId, skinData || {});
-          partnerFrame = skinData?.frame_url || '';
-        } catch(_) {}
-      }
+      try {
+        const { data: skinData } = await sb.rpc('get_player_skin_urls', { p_player_id: partnerId });
+        partnerFrame = skinData?.frame_url || '';
+      } catch(_) {}
     }
 
     const bondRow = {

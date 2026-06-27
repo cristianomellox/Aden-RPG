@@ -4913,7 +4913,7 @@ const BONDS_CACHE_TTL = 5 * 60 * 1000; // 5 min (laços mudam raramente)
 // altere o valor abaixo. Mais negativo = sobe. Menos negativo = desce.
 // Calculado para que o texto fique na mesma altura do layout normal.
 // ─────────────────────────────────────────────────────────────────────────────
-const FBOND_ACTIVE_MARGIN_TOP = '-190px';
+const FBOND_ACTIVE_MARGIN_TOP = '-100px';
 const BOND_TIER_DATA = [
   { tier: 1, unlockLevel: 1,  imgNum: '01', label: 'Nv. 1'  },
   { tier: 2, unlockLevel: 4,  imgNum: '02', label: 'Nv. 4'  },

@@ -5084,12 +5084,12 @@ function _featuredBondShowAddState(prefix, playerAv, playerFrame) {
   }
   if (playerWrapEl) playerWrapEl.classList.toggle('has-frame', !!playerFrame);
 
-  // Hide icon and partner (clear partner frame too)
-  const iconWrapEl    = document.getElementById(prefix + '-fbond-icon-wrap');
-  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
+  // Hide icon and partner (clearing partner frame too)
+  const iconWrapEl     = document.getElementById(prefix + '-fbond-icon-wrap');
+  const partnerWrapEl  = document.getElementById(prefix + '-fbond-partner-wrap');
   const partnerFrameEl = document.getElementById(prefix + '-fbond-partner-frame');
-  if (iconWrapEl)    iconWrapEl.style.display    = 'none';
-  if (partnerWrapEl) { partnerWrapEl.style.display = 'none'; partnerWrapEl.classList.remove('has-frame'); }
+  if (iconWrapEl)     iconWrapEl.style.display = 'none';
+  if (partnerWrapEl)  { partnerWrapEl.style.display = 'none'; partnerWrapEl.classList.remove('has-frame'); }
   if (partnerFrameEl) { partnerFrameEl.src = ''; partnerFrameEl.style.display = 'none'; }
 
   // Show add circle
@@ -5112,11 +5112,12 @@ function _featuredBondClearUI(prefix) {
     heroEl.classList.remove('fbond-active');
     heroEl.style.marginTop = ''; // restore original CSS value
   }
-  // Clean up has-frame classes so sizing resets for next open
-  const playerWrapEl  = document.getElementById(prefix + '-fbond-player-wrap');
-  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
-  if (playerWrapEl)  playerWrapEl.classList.remove('has-frame');
-  if (partnerWrapEl) partnerWrapEl.classList.remove('has-frame');
+  // Reset has-frame so wrap sizes return to 88px default on next open
+  document.getElementById(prefix + '-fbond-player-wrap')?.classList.remove('has-frame');
+  const partnerWrapEl  = document.getElementById(prefix + '-fbond-partner-wrap');
+  const partnerFrameEl = document.getElementById(prefix + '-fbond-partner-frame');
+  if (partnerWrapEl)  partnerWrapEl.classList.remove('has-frame');
+  if (partnerFrameEl) { partnerFrameEl.src = ''; partnerFrameEl.style.display = 'none'; }
 }
 
 // ── Bond Style Picker — choose which unlocked tier image to display ──────────
@@ -5367,14 +5368,38 @@ async function _featuredBondHandleBrokenByPartner(partnerId) {
 
 // ── Load and render featured bond for a given player profile ───────────────
 async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
-  // ── Frame: read from the actual DOM element set by skin-loading code ──────
-  // This is more reliable than skin cache which may not be populated yet.
-  const frameImgId = prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame';
-  const frameDomEl = document.getElementById(frameImgId);
-  // The frame img has display:'block' when a frame is active (even if parent is hidden)
-  const playerFrame = (frameDomEl?.style.display === 'block' && frameDomEl.src)
-    ? frameDomEl.src
-    : _tavGetSkinCache(playerId)?.frame_url || '';
+  // ── Frame: resolve the displayed player's active frame URL ───────────────
+  // Priority for isSelf=true: skin_system.js localStorage (always up-to-date for own player)
+  // Priority for isSelf=false: tav skin cache (fetched via RPC), then DOM fallback
+  let playerFrame = '';
+  if (isSelf) {
+    // Own player: use skin_system.js cache as source of truth
+    try {
+      const sysRaw = localStorage.getItem('aden_skin_cache_v3');
+      const sysCache = sysRaw ? JSON.parse(sysRaw) : null;
+      playerFrame = sysCache?.active_frame?.frame_url || '';
+    } catch(_) {}
+    // Also sync tavSkinCache so other lookups are consistent
+    if (playerFrame) {
+      _tavSetSkinCache(playerId, { frame_url: playerFrame });
+    }
+  } else {
+    // Another player: tav skin cache (will RPC-fetch if missing)
+    const tavCached = _tavGetSkinCache(playerId);
+    if (tavCached !== undefined) {
+      playerFrame = tavCached?.frame_url || '';
+    } else {
+      // Cache miss — fetch now so playerFrame is correct before rendering
+      try {
+        const sb0 = getSB();
+        if (sb0) {
+          const { data: skinData } = await sb0.rpc('get_player_skin_urls', { p_player_id: playerId });
+          _tavSetSkinCache(playerId, skinData || {});
+          playerFrame = skinData?.frame_url || '';
+        }
+      } catch(_) {}
+    }
+  }
 
   // ── featured_bond_id may be missing if player data came from a shared cache ─
   // (tavFetchPlayerData saves to the same key but without featured_bond_id)
@@ -5435,17 +5460,28 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
     const partner     = partnerRes.data;
     const intimacyPts = intimacyRes.data?.points || 0;
 
-    // Fetch partner's frame — try skin cache first, fallback to RPC
+    // Fetch partner's frame — use tav skin cache; if miss, RPC-fetch now
+    // Special case: if the partner is the logged-in user, read from skin_system.js localStorage
     let partnerFrame = '';
-    const partnerSkinCached = _tavGetSkinCache(partnerId);
-    if (partnerSkinCached !== undefined) {
-      partnerFrame = partnerSkinCached?.frame_url || '';
-    } else {
+    const isPartnerSelf = (window.globalUser?.id === partnerId);
+    if (isPartnerSelf) {
       try {
-        const { data: skinData } = await sb.rpc('get_player_skin_urls', { p_player_id: partnerId });
-        _tavSetSkinCache(partnerId, skinData || {});
-        partnerFrame = skinData?.frame_url || '';
+        const sysRaw = localStorage.getItem('aden_skin_cache_v3');
+        const sysCache = sysRaw ? JSON.parse(sysRaw) : null;
+        partnerFrame = sysCache?.active_frame?.frame_url || '';
+        if (partnerFrame) _tavSetSkinCache(partnerId, { frame_url: partnerFrame });
       } catch(_) {}
+    } else {
+      const partnerCached = _tavGetSkinCache(partnerId);
+      if (partnerCached !== undefined) {
+        partnerFrame = partnerCached?.frame_url || '';
+      } else {
+        try {
+          const { data: skinData } = await sb.rpc('get_player_skin_urls', { p_player_id: partnerId });
+          _tavSetSkinCache(partnerId, skinData || {});
+          partnerFrame = skinData?.frame_url || '';
+        } catch(_) {}
+      }
     }
 
     const bondRow = {

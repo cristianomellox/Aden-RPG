@@ -2489,11 +2489,11 @@ html,body {
 /* Row: player av | bond icon | partner av (or + circle) */
 .fbond-avatars-row {
   display: flex;
-  align-items: center;  /* centers avatars vertically */
+  align-items: center;
   gap: 8px;
 }
 
-/* Partner / add-circle size (default for all wraps — no frame) */
+/* Default size for all wraps — no frame */
 .fbond-av-wrap {
   position: relative;
   width: 88px;
@@ -2512,7 +2512,7 @@ html,body {
   box-shadow: 0 0 18px rgba(201,169,74,0.4), 0 4px 14px rgba(0,0,0,0.7);
 }
 
-/* When a frame is present (JS adds this class to the wrap) */
+/* Expanded size — only when JS adds has-frame (player or partner has a frame skin) */
 .fbond-av-wrap.has-frame {
   width: 140px;
   height: 140px;
@@ -2612,7 +2612,7 @@ html,body {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  padding-left: 4px; /* sobrescreve o padding padrão de 16px — desloca toda a row do laço para a esquerda */
+  padding-left: 4px; /* sobrescreve o padding padrão de 16px — desloca toda a row para a esquerda */
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,
 #mpm-hero.fbond-active #mpm-avatar-wrap { display: none; }

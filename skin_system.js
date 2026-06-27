@@ -43,6 +43,13 @@ function loadSkinCache() {
 
 function clearSkinCache() { localStorage.removeItem(SKIN_CACHE_KEY); }
 
+// Invalida o cache de moldura do tavernas.js (skin_modal_v1_<uuid>)
+// para que o modal/taverna rebusque via RPC na próxima vez que abrir.
+function _invalidateTavSkinCache(userId) {
+    if (!userId) return;
+    try { localStorage.removeItem('skin_modal_v1_' + userId); } catch(_) {}
+}
+
 // ─── Helpers de Tempo ────────────────────────────────────────────────
 
 function formatExpiryTime(expiresAt) {
@@ -239,6 +246,19 @@ async function handleActivateSkin(item) {
     if (error) { window.showCustomAlert?.('Erro ao ativar: ' + error.message); return; }
     if (data?.error) { window.showCustomAlert?.(data.error); return; }
 
+    // Skin permanente duplicada: token consumido no servidor, remove da bolsa local
+    if (data?.duplicate_permanent) {
+        const items = window.allInventoryItems || [];
+        const consumedIdx = items.findIndex(i => i.id === item.id);
+        if (consumedIdx > -1) items.splice(consumedIdx, 1);
+        window.allInventoryItems = items;
+        await window.saveCache?.(items, window.playerBaseStats || {}, new Date().toISOString());
+        window.renderUI?.();
+        document.getElementById('itemDetailsModal').style.display = 'none';
+        window.showCustomAlert?.(data.message || '✨ Skin já estava ativa. Token duplicado consumido.');
+        return;
+    }
+
     // ── Atualiza IDB ──────────────────────────────────────────────
     const items = window.allInventoryItems || [];
     if (data.stacked) {
@@ -276,6 +296,7 @@ async function handleActivateSkin(item) {
         _swapVideo(document.getElementById('background-video'), data.video_url, DEFAULT_VIDEO_TYPE, false);
     }
     saveSkinCache(patch);
+    _invalidateTavSkinCache(user.id); // força rebusca no modal/taverna
 
     window.renderUI?.();
     document.getElementById('itemDetailsModal').style.display = 'none';
@@ -304,6 +325,7 @@ async function handleDeactivateSkin(component) {
         _swapVideo(document.getElementById('background-video'), DEFAULT_VIDEO, DEFAULT_VIDEO_TYPE, false);
     }
     saveSkinCache(patch);
+    _invalidateTavSkinCache(user.id); // força rebusca no modal/taverna
     openSkinManagerModal();
 }
 
@@ -332,6 +354,7 @@ async function handleSelectSkin(inventoryItemId, component) {
         _swapVideo(document.getElementById('background-video'), data.video_url, DEFAULT_VIDEO_TYPE, false);
     }
     saveSkinCache(patch);
+    _invalidateTavSkinCache(user.id); // força rebusca no modal/taverna
     openSkinManagerModal();
 }
 
@@ -379,10 +402,24 @@ function showSkinDetails(item) {
     const actionsDiv = document.getElementById('itemActions');
     if (actionsDiv) actionsDiv.style.display = 'flex';
 
-    // Verifica se esta skin (ou seus componentes) já está ativa
+    // Verifica se esta skin (ou seus componentes) já está ativa.
+    // IMPORTANTE: showSkinDetails só é chamado para itens na BOLSA (equipped_slot=null).
+    // Itens na bolsa jamais estão ativos — a ativação move o item para o gerenciador
+    // (equipped_slot='skin'). Se o cache aponta para este item mas ele está na bolsa,
+    // o cache está obsoleto (ex: sessão anterior, skin desativada mas cache não limpo).
     const cache = loadSkinCache();
-    const frameActive = cache?.active_frame?.inventory_item_id === item.id;
-    const videoActive = cache?.active_video?.inventory_item_id === item.id;
+    const isInBag = (item.equipped_slot === null || item.equipped_slot === undefined);
+
+    // Limpa cache obsoleto para evitar o botão "Já está Ativa" incorreto
+    if (isInBag) {
+        let staleCachePatch = {};
+        if (cache?.active_frame?.inventory_item_id === item.id) staleCachePatch.active_frame = null;
+        if (cache?.active_video?.inventory_item_id === item.id) staleCachePatch.active_video = null;
+        if (Object.keys(staleCachePatch).length > 0) saveSkinCache(staleCachePatch);
+    }
+
+    const frameActive = !isInBag && (cache?.active_frame?.inventory_item_id === item.id);
+    const videoActive = !isInBag && (cache?.active_video?.inventory_item_id === item.id);
     const fullyActive = (!hasFrame || frameActive) && (!hasVideo || videoActive);
 
     const activateBtn = document.getElementById('activateSkinBtn');

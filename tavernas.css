@@ -2527,10 +2527,10 @@ html,body {
 /* Frame overlay — exact same positioning as #ppp-frame on the 140px wrap */
 .fbond-frame-overlay {
   position: absolute;
-  top: -30px;
-  left: -21px;
-  width: 185px;
-  height: 185px;
+  top: -29px;
+  left: -20px;
+  width: 184px;
+  height: 184px;
   pointer-events: none;
   object-fit: contain;
   z-index: 3;

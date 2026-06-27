@@ -2490,7 +2490,7 @@ html,body {
 .fbond-avatars-row {
   display: flex;
   align-items: center;  /* centers 88px partner on the 140px player wrap */
-  gap: 10px;
+  gap: 7px;
 }
 
 /* Partner / add-circle size (default for all wraps) */
@@ -2527,8 +2527,8 @@ html,body {
 /* Frame overlay — exact same positioning as #ppp-frame on the 140px wrap */
 .fbond-frame-overlay {
   position: absolute;
-  top: -30px;
-  left: -20px;
+  top: -32px;
+  left: -23px;
   width: 192px;
   height: 192px;
   pointer-events: none;

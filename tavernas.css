@@ -2490,7 +2490,7 @@ html,body {
 .fbond-avatars-row {
   display: flex;
   align-items: center;  /* centers 88px partner on the 140px player wrap */
-  gap: 7px;
+  gap: 14px;
 }
 
 /* Partner / add-circle size (default for all wraps) */

@@ -2489,11 +2489,11 @@ html,body {
 /* Row: player av | bond icon | partner av (or + circle) */
 .fbond-avatars-row {
   display: flex;
-  align-items: center;  /* centers 88px partner on the 140px player wrap */
-  gap: 4px; /* reduzido de 14px — o frame overlay já cria espaço visual */
+  align-items: center;  /* centers avatars vertically */
+  gap: 8px;
 }
 
-/* Partner / add-circle size (default for all wraps) */
+/* Partner / add-circle size (default for all wraps — no frame) */
 .fbond-av-wrap {
   position: relative;
   width: 88px;
@@ -2512,12 +2512,12 @@ html,body {
   box-shadow: 0 0 18px rgba(201,169,74,0.4), 0 4px 14px rgba(0,0,0,0.7);
 }
 
-/* Player's own avatar (first child) — IDENTICAL to normal #ppp-avatar-wrap */
-.fbond-avatars-row > .fbond-av-wrap:first-child {
+/* When a frame is present (JS adds this class to the wrap) */
+.fbond-av-wrap.has-frame {
   width: 140px;
   height: 140px;
 }
-.fbond-avatars-row > .fbond-av-wrap:first-child .fbond-av {
+.fbond-av-wrap.has-frame .fbond-av {
   width: 90px;
   height: 90px;
   border: 3px solid var(--gold);

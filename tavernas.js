@@ -5003,11 +5003,14 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, cur
   // Player avatar
   const playerAvEl    = document.getElementById(prefix + '-fbond-player-av');
   const playerFrameEl = document.getElementById(prefix + '-fbond-player-frame');
+  const playerWrapEl  = document.getElementById(prefix + '-fbond-player-wrap');
   if (playerAvEl) playerAvEl.src = playerAv || '';
   if (playerFrameEl) {
     if (playerFrame) { playerFrameEl.src = playerFrame; playerFrameEl.style.display = 'block'; }
     else               playerFrameEl.style.display = 'none';
   }
+  // Expand wrap to 140px only when a frame is present
+  if (playerWrapEl) playerWrapEl.classList.toggle('has-frame', !!playerFrame);
 
   // Bond icon
   const iconWrapEl = document.getElementById(prefix + '-fbond-icon-wrap');
@@ -5024,11 +5027,17 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, cur
     iconWrapEl.style.cursor = isSelf ? 'pointer' : 'default';
   }
 
-  // Partner avatar
-  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
-  const partnerAvEl   = document.getElementById(prefix + '-fbond-partner-av');
+  // Partner avatar + frame
+  const partnerWrapEl  = document.getElementById(prefix + '-fbond-partner-wrap');
+  const partnerAvEl    = document.getElementById(prefix + '-fbond-partner-av');
+  const partnerFrameEl = document.getElementById(prefix + '-fbond-partner-frame');
   if (partnerAvEl) partnerAvEl.src = bondRow.partner_avatar || makeAvatar(bondRow.partner_name || '?', 80);
+  if (partnerFrameEl) {
+    if (bondRow.partner_frame) { partnerFrameEl.src = bondRow.partner_frame; partnerFrameEl.style.display = 'block'; }
+    else                         partnerFrameEl.style.display = 'none';
+  }
   if (partnerWrapEl) {
+    partnerWrapEl.classList.toggle('has-frame', !!bondRow.partner_frame);
     partnerWrapEl.style.display = 'flex';
     partnerWrapEl.onclick = (e) => {
       e.stopPropagation();
@@ -5067,17 +5076,21 @@ function _featuredBondShowAddState(prefix, playerAv, playerFrame) {
   // Player avatar
   const playerAvEl    = document.getElementById(prefix + '-fbond-player-av');
   const playerFrameEl = document.getElementById(prefix + '-fbond-player-frame');
+  const playerWrapEl  = document.getElementById(prefix + '-fbond-player-wrap');
   if (playerAvEl) playerAvEl.src = playerAv || '';
   if (playerFrameEl) {
     if (playerFrame) { playerFrameEl.src = playerFrame; playerFrameEl.style.display = 'block'; }
     else               playerFrameEl.style.display = 'none';
   }
+  if (playerWrapEl) playerWrapEl.classList.toggle('has-frame', !!playerFrame);
 
-  // Hide icon and partner
+  // Hide icon and partner (clear partner frame too)
   const iconWrapEl    = document.getElementById(prefix + '-fbond-icon-wrap');
   const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
+  const partnerFrameEl = document.getElementById(prefix + '-fbond-partner-frame');
   if (iconWrapEl)    iconWrapEl.style.display    = 'none';
-  if (partnerWrapEl) partnerWrapEl.style.display = 'none';
+  if (partnerWrapEl) { partnerWrapEl.style.display = 'none'; partnerWrapEl.classList.remove('has-frame'); }
+  if (partnerFrameEl) { partnerFrameEl.src = ''; partnerFrameEl.style.display = 'none'; }
 
   // Show add circle
   const addCircle = document.getElementById(prefix + '-fbond-add-circle');
@@ -5099,6 +5112,11 @@ function _featuredBondClearUI(prefix) {
     heroEl.classList.remove('fbond-active');
     heroEl.style.marginTop = ''; // restore original CSS value
   }
+  // Clean up has-frame classes so sizing resets for next open
+  const playerWrapEl  = document.getElementById(prefix + '-fbond-player-wrap');
+  const partnerWrapEl = document.getElementById(prefix + '-fbond-partner-wrap');
+  if (playerWrapEl)  playerWrapEl.classList.remove('has-frame');
+  if (partnerWrapEl) partnerWrapEl.classList.remove('has-frame');
 }
 
 // ── Bond Style Picker — choose which unlocked tier image to display ──────────
@@ -5417,6 +5435,19 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
     const partner     = partnerRes.data;
     const intimacyPts = intimacyRes.data?.points || 0;
 
+    // Fetch partner's frame — try skin cache first, fallback to RPC
+    let partnerFrame = '';
+    const partnerSkinCached = _tavGetSkinCache(partnerId);
+    if (partnerSkinCached !== undefined) {
+      partnerFrame = partnerSkinCached?.frame_url || '';
+    } else {
+      try {
+        const { data: skinData } = await sb.rpc('get_player_skin_urls', { p_player_id: partnerId });
+        _tavSetSkinCache(partnerId, skinData || {});
+        partnerFrame = skinData?.frame_url || '';
+      } catch(_) {}
+    }
+
     const bondRow = {
       bond_id:         bond.id,
       id:              bond.id,
@@ -5424,6 +5455,7 @@ async function _featuredBondLoad(playerId, playerData, prefix, isSelf) {
       partner_id:      partnerId,
       partner_name:    partner?.name       || '?',
       partner_avatar:  partner?.avatar_url || '',
+      partner_frame:   partnerFrame,
       intimacy_points: intimacyPts
     };
 

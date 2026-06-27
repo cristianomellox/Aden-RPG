@@ -2514,14 +2514,24 @@ html,body {
 
 /* Expanded size — only when JS adds has-frame (player or partner has a frame skin) */
 .fbond-av-wrap.has-frame {
-  width: 140px;
-  height: 140px;
+  width: 110px;
+  height: 110px;
 }
 .fbond-av-wrap.has-frame .fbond-av {
-  width: 90px;
-  height: 90px;
+  width: 72px;
+  height: 72px;
   border: 3px solid var(--gold);
   box-shadow: 0 0 20px rgba(201,169,74,0.45), 0 4px 14px rgba(0,0,0,0.7);
+}
+
+/* Frame overlay reescalonado para o wrap de 110px
+   Proporção original: 184px sobre wrap de 140px = 1.314×
+   Em 110px: 145px overlay, offsets ajustados (−16px / −18px) */
+.fbond-av-wrap.has-frame .fbond-frame-overlay {
+  top:    -18px;
+  left:   -16px;
+  width:  145px;
+  height: 145px;
 }
 
 /* Frame overlay — exact same positioning as #ppp-frame on the 140px wrap */

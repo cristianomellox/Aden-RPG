@@ -4906,6 +4906,14 @@ const BOND_LEVEL_THRESHOLDS = [
 const BONDS_CACHE_TTL = 5 * 60 * 1000; // 5 min (laços mudam raramente)
 
 // ── Tier data & glow colors ───────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AJUSTE DE POSICIONAMENTO DO DESTAQUE DE LAÇO
+// Se o bloco (moldura + avatares + texto) ficar alto/baixo demais,
+// altere o valor abaixo. Mais negativo = sobe. Menos negativo = desce.
+// Calculado para que o texto fique na mesma altura do layout normal.
+// ─────────────────────────────────────────────────────────────────────────────
+const FBOND_ACTIVE_MARGIN_TOP = '-190px';
 const BOND_TIER_DATA = [
   { tier: 1, unlockLevel: 1,  imgNum: '01', label: 'Nv. 1'  },
   { tier: 2, unlockLevel: 4,  imgNum: '02', label: 'Nv. 4'  },
@@ -5043,6 +5051,7 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, cur
   // Activate header + hero
   headerEl.style.display = 'flex';
   heroEl.classList.add('fbond-active');
+  heroEl.style.marginTop = FBOND_ACTIVE_MARGIN_TOP; // inline — immune to CSS overrides
 }
 
 // Render the "add" state: player avatar + dashed "+" circle (own profile only)
@@ -5079,13 +5088,17 @@ function _featuredBondShowAddState(prefix, playerAv, playerFrame) {
 
   headerEl.style.display = 'flex';
   heroEl.classList.add('fbond-active');
+  heroEl.style.marginTop = FBOND_ACTIVE_MARGIN_TOP;
 }
 
 function _featuredBondClearUI(prefix) {
   const headerEl = document.getElementById(prefix + '-bond-header');
   const heroEl   = document.getElementById(prefix === 'ppp' ? 'ppp-hero' : 'mpm-hero');
   if (headerEl) headerEl.style.display = 'none';
-  if (heroEl)   heroEl.classList.remove('fbond-active');
+  if (heroEl) {
+    heroEl.classList.remove('fbond-active');
+    heroEl.style.marginTop = ''; // restore original CSS value
+  }
 }
 
 // ── Bond Style Picker — choose which unlocked tier image to display ──────────

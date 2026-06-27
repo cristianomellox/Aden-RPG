@@ -2489,11 +2489,11 @@ html,body {
 /* Row: player av | bond icon | partner av (or + circle) */
 .fbond-avatars-row {
   display: flex;
-  align-items: center;
-  gap: 18px;
+  align-items: center;  /* centers 88px partner on the 140px player wrap */
+  gap: 14px;
 }
 
-/* Individual avatar circle */
+/* Partner / add-circle size (default for all wraps) */
 .fbond-av-wrap {
   position: relative;
   width: 88px;
@@ -2512,16 +2512,29 @@ html,body {
   box-shadow: 0 0 18px rgba(201,169,74,0.4), 0 4px 14px rgba(0,0,0,0.7);
 }
 
-/* Frame overlay inside bond header avatar */
+/* Player's own avatar (first child) — IDENTICAL to normal #ppp-avatar-wrap */
+.fbond-avatars-row > .fbond-av-wrap:first-child {
+  width: 140px;
+  height: 140px;
+}
+.fbond-avatars-row > .fbond-av-wrap:first-child .fbond-av {
+  width: 90px;
+  height: 90px;
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 20px rgba(201,169,74,0.45), 0 4px 14px rgba(0,0,0,0.7);
+}
+
+/* Frame overlay — exact same positioning as #ppp-frame on the 140px wrap */
 .fbond-frame-overlay {
   position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 180px;
-  height: 180px;
+  top: -36px;
+  left: -26px;
+  width: 192px;
+  height: 192px;
   pointer-events: none;
   object-fit: contain;
   z-index: 3;
+  transform: none;
 }
 
 /* Bond icon wrapper — receives glow via JS */
@@ -2591,15 +2604,13 @@ html,body {
 .fbond-add-circle:active { transform: scale(0.94); }
 .fbond-add-circle svg { width: 30px; height: 30px; color: rgba(201,169,74,0.65); }
 
-/* When bond active: hero becomes column — bond-header is first child, info below */
+/* When bond active: hero becomes column — bond-header is first child, info below.
+   margin-top is set via JS (FBOND_ACTIVE_MARGIN_TOP constant) so it
+   cannot be overridden by CSS specificity. Only layout props here. */
 #ppp-hero.fbond-active,
 #mpm-hero.fbond-active {
   flex-direction: column;
   align-items: flex-start;
-  /* ↓ More negative than the normal -70px to compensate for the
-       label (~28px) + avatars (88px) + gap (6px) above the info.
-       Adjust this value if the info appears too high or too low. */
-  margin-top: -152px!important;
   gap: 6px;
 }
 #ppp-hero.fbond-active #ppp-avatar-wrap,

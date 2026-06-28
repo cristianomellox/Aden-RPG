@@ -882,7 +882,8 @@ function joinChannel(roomId) {
       updateOnlineCount();
       refreshPeopleModal();
       // Calcula pares adjacentes após sync inicial de presença
-      setTimeout(updateProximityPairs, 300);
+      // Delay de 800ms para dar tempo ao _tavEnsureBondsMap de carregar via RPC
+      setTimeout(updateProximityPairs, 800);
 
       // Espectadores: pede aos membros SENTADOS que iniciem uma conexão WebRTC conosco
       // (localStream é null aqui pois não estamos sentados, então não podemos iniciar)
@@ -4541,9 +4542,15 @@ function updateProximityPairs() {
     } else {
       // Par já existe — verifica se o dia virou (pode reativar o par)
       const p = _proxPairs[key];
+
+      // Resolve bondData uma vez para usar em todos os branches abaixo
+      const bondData = imInPair ? _tavGetBondWith(
+        oA.playerId === PLAYER.id ? oB.playerId : oA.playerId
+      ) : null;
+
       const wasReset = _checkDayResetForPair(key, p, now);
       if (wasReset) {
-        renderAura(String(a), String(b), true, key);
+        renderAura(String(a), String(b), true, key, bondData);
         broadcastAuras();
       }
 
@@ -4555,9 +4562,16 @@ function updateProximityPairs() {
         p.nameB = oB.name;
         // Reposiciona a ponte localmente — sem broadcast Ably (cada cliente recalcula)
         if (!p.done) {
-          const bondData = imInPair ? _tavGetBondWith(
-            oA.playerId === PLAYER.id ? oB.playerId : oA.playerId
-          ) : null;
+          renderAura(String(a), String(b), true, key, bondData);
+        }
+      }
+
+      // Injeta ícone de laço se ainda não foi renderizado
+      // (ocorre quando _tavBondsMap carregou depois de o par ser criado)
+      if (!p.done && !wasReset && bondData) {
+        const existingBridge = _proxBridges[key];
+        const hasBondIcon = existingBridge?.el?.querySelector('.seat-bond-icon-wrap');
+        if (!hasBondIcon) {
           renderAura(String(a), String(b), true, key, bondData);
         }
       }

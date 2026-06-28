@@ -799,7 +799,8 @@ html,body {
 
 .seat-bond-icon-wrap {
   position: absolute;
-  /* top e left definidos inteiramente pelo JS (centro real dos assentos) */
+  top: 50%; /* fallback; JS sobrescreve com o centro real dos assentos */
+  /* left definido pelo JS (width/2 da bridge) */
   transform: translate(-50%, -50%);
   width:  52px;
   height: 52px;
@@ -811,9 +812,8 @@ html,body {
   pointer-events: none;
 }
 
-/* Brilho suave via radial-gradient + blur — igual ao perfil */
-.seat-bond-icon-wrap::before {
-  content: '';
+/* Camada de brilho — div filho explícito (evita quirks de ::before em flex+filter mobile) */
+.seat-bond-glow {
   position: absolute;
   inset: -12px;
   border-radius: 50%;
@@ -826,7 +826,7 @@ html,body {
 }
 
 /* Tier-7: efeito prismático igual ao do perfil */
-.seat-bond-icon-wrap.tier-7::before {
+.seat-bond-icon-wrap.tier-7 .seat-bond-glow {
   animation: fbond-prismatic-smoke 2.8s ease-in-out infinite;
   background: radial-gradient(circle at 50% 50%, rgba(255,120,120,0.9) 0%, transparent 65%);
 }

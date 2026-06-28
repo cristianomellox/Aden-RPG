@@ -815,11 +815,11 @@ html,body {
 /* Camada de brilho — div filho explícito (evita quirks de ::before em flex+filter mobile) */
 .seat-bond-glow {
   position: absolute;
-  inset: -6px;
+  inset: -3px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, var(--sb-glow, #c9a94a) 0%, transparent 60%);
+  background: radial-gradient(circle at 50% 50%, var(--sb-glow, lightblue) 0%, transparent 50%);
   filter: blur(8px);
-  opacity: 0.22;
+  opacity: 0.12;
   z-index: 1;
   pointer-events: none;
   animation: fbondSmoke 4s ease-in-out infinite;

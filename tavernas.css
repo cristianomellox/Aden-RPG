@@ -799,74 +799,36 @@ html,body {
 
 .seat-bond-icon-wrap {
   position: absolute;
-  top:  50%;
-  /* left definido pelo JS (width/2 da bridge) */
+  /* top e left definidos inteiramente pelo JS (centro real dos assentos) */
   transform: translate(-50%, -50%);
   width:  52px;
   height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
-}
-
-/* Camada de fumaça luminosa pulsante */
-@keyframes seatBondSmoke {
-  0%   {
-    opacity: 0.55;
-    transform: translate(-50%, -50%) scale(0.88);
-    box-shadow:
-      0 0 10px 4px  var(--sb-glow, #c9a94a),
-      0 0 28px 10px var(--sb-glow-dim, rgba(201,169,74,0.55)),
-      0 0 55px 22px var(--sb-glow-dim, rgba(201,169,74,0.25));
-  }
-  30%  {
-    opacity: 0.9;
-    transform: translate(-50%, -50%) scale(1.08);
-    box-shadow:
-      0 0 16px 7px  var(--sb-glow, #c9a94a),
-      0 0 40px 16px var(--sb-glow-dim, rgba(201,169,74,0.6)),
-      0 0 75px 32px var(--sb-glow-dim, rgba(201,169,74,0.28));
-  }
-  55%  {
-    opacity: 0.75;
-    transform: translate(-50%, -50%) scale(0.95);
-    box-shadow:
-      0 0 12px 5px  var(--sb-glow, #c9a94a),
-      0 0 32px 12px var(--sb-glow-dim, rgba(201,169,74,0.5)),
-      0 0 62px 26px var(--sb-glow-dim, rgba(201,169,74,0.22));
-  }
-  80%  {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.12);
-    box-shadow:
-      0 0 20px 9px  var(--sb-glow, #c9a94a),
-      0 0 48px 20px var(--sb-glow-dim, rgba(201,169,74,0.65)),
-      0 0 85px 38px var(--sb-glow-dim, rgba(201,169,74,0.3));
-  }
-  100% {
-    opacity: 0.55;
-    transform: translate(-50%, -50%) scale(0.88);
-    box-shadow:
-      0 0 10px 4px  var(--sb-glow, #c9a94a),
-      0 0 28px 10px var(--sb-glow-dim, rgba(201,169,74,0.55)),
-      0 0 55px 22px var(--sb-glow-dim, rgba(201,169,74,0.25));
-  }
-}
-
-.seat-bond-smoke {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width:  52px;
-  height: 52px;
-  border-radius: 50%;
+  /* acima das molduras dos assentos */
+  z-index: 35;
   pointer-events: none;
-  animation: seatBondSmoke 2.8s ease-in-out infinite;
-  /* valores base — sobrescritos pelo CSS var do wrap */
-  box-shadow:
-    0 0 10px 4px  var(--sb-glow, #c9a94a),
-    0 0 28px 10px var(--sb-glow-dim, rgba(201,169,74,0.55));
+}
+
+/* Brilho suave via radial-gradient + blur — igual ao perfil */
+.seat-bond-icon-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--sb-glow, #c9a94a) 0%, transparent 65%);
+  filter: blur(10px);
+  opacity: 0.75;
+  z-index: 1;
+  pointer-events: none;
+  animation: fbondSmoke 2.8s ease-in-out infinite;
+}
+
+/* Tier-7: efeito prismático igual ao do perfil */
+.seat-bond-icon-wrap.tier-7::before {
+  animation: fbond-prismatic-smoke 2.8s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(255,120,120,0.9) 0%, transparent 65%);
 }
 
 /* Leve rotação oscilante no ícone em si */

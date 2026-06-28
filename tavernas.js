@@ -3397,13 +3397,10 @@ async function _tavEnsureBondsMap() {
     if (data.couple) allBonds.push({ ...data.couple, bond_type: 'couple' });
     (data.friends || []).forEach(f => allBonds.push({ ...f, bond_type: 'friend' }));
     allBonds.forEach(b => {
-      // get_player_bonds retorna `partner_id` diretamente (não player_a_id/player_b_id,
-      // que são campos brutos do banco e não estão no shape do RPC).
-      const partnerId = b.partner_id;
-      if (!partnerId) return; // ignora entradas sem parceiro identificado
+      const partnerId = b.player_a_id === PLAYER.id ? b.player_b_id : b.player_a_id;
       window._tavBondsMap.set(partnerId, {
         bond_type:       b.bond_type,
-        bond_id:         b.bond_id || b.id,
+        bond_id:         b.id,
         intimacy_points: b.intimacy_points || 0,
       });
     });
@@ -4768,19 +4765,15 @@ function createProxBridge(seatA, seatB, pairKey, bondData) {
     const imgUrl = getBondImageByTier(bondData.bond_type, tier);
 
     const iconWrap = document.createElement('div');
-    iconWrap.className = 'seat-bond-icon-wrap';
-    iconWrap.style.setProperty('--sb-glow',     glow.color);
-    iconWrap.style.setProperty('--sb-glow-dim', glow.shadow);
-
-    const smokeEl = document.createElement('div');
-    smokeEl.className = 'seat-bond-smoke';
+    iconWrap.className = 'seat-bond-icon-wrap' + (tier === 7 ? ' tier-7' : '');
+    // --sb-glow alimenta o radial-gradient do ::before (igual ao perfil)
+    iconWrap.style.setProperty('--sb-glow', glow.color);
 
     const img = document.createElement('img');
     img.className = 'seat-bond-icon';
     img.src       = imgUrl;
     img.alt       = '';
 
-    iconWrap.appendChild(smokeEl);
     iconWrap.appendChild(img);
     bridge.appendChild(iconWrap);
   }
@@ -4835,10 +4828,16 @@ function positionProxBridge(pairKey) {
   b.el.style.top   = topY  + 'px';
   b.el.style.width = width + 'px';
 
-  // Centraliza o ícone do laço (se existir) no meio da ponte
+  // Centraliza o ícone do laço no centro real dos dois assentos
   const iconWrap = b.el.querySelector('.seat-bond-icon-wrap');
   if (iconWrap) {
+    // Centro horizontal: meio da distância entre os centros dos dois assentos
     iconWrap.style.left = (width / 2) + 'px';
+    // Centro vertical: média entre os centros verticais dos assentos,
+    // convertida para coordenada relativa à bridge (que fica em topY, viewport).
+    // Faz o ícone flutuar NO MEIO dos avatares, não abaixo deles.
+    const avgSeatCenterY = ((rA.top + rA.bottom) / 2 + (rB.top + rB.bottom) / 2) / 2;
+    iconWrap.style.top = (avgSeatCenterY - topY) + 'px';
   }
 
   // Dist que cada coração percorre (largura da ponte menos largura do símbolo)

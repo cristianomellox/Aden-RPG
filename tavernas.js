@@ -3397,10 +3397,13 @@ async function _tavEnsureBondsMap() {
     if (data.couple) allBonds.push({ ...data.couple, bond_type: 'couple' });
     (data.friends || []).forEach(f => allBonds.push({ ...f, bond_type: 'friend' }));
     allBonds.forEach(b => {
-      const partnerId = b.player_a_id === PLAYER.id ? b.player_b_id : b.player_a_id;
+      // get_player_bonds retorna `partner_id` diretamente (não player_a_id/player_b_id,
+      // que são campos brutos da tabela e não fazem parte do shape do RPC).
+      const partnerId = b.partner_id;
+      if (!partnerId) return;
       window._tavBondsMap.set(partnerId, {
         bond_type:       b.bond_type,
-        bond_id:         b.id,
+        bond_id:         b.bond_id || b.id,
         intimacy_points: b.intimacy_points || 0,
       });
     });

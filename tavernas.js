@@ -4766,14 +4766,18 @@ function createProxBridge(seatA, seatB, pairKey, bondData) {
 
     const iconWrap = document.createElement('div');
     iconWrap.className = 'seat-bond-icon-wrap' + (tier === 7 ? ' tier-7' : '');
-    // --sb-glow alimenta o radial-gradient do ::before (igual ao perfil)
     iconWrap.style.setProperty('--sb-glow', glow.color);
+
+    // Div de glow explícito (evita quirk de ::before em flex+filter em browsers mobile)
+    const glowEl = document.createElement('div');
+    glowEl.className = 'seat-bond-glow';
 
     const img = document.createElement('img');
     img.className = 'seat-bond-icon';
     img.src       = imgUrl;
     img.alt       = '';
 
+    iconWrap.appendChild(glowEl);
     iconWrap.appendChild(img);
     bridge.appendChild(iconWrap);
   }

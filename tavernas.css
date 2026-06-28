@@ -815,38 +815,37 @@ html,body {
 /* Camada de brilho — div filho explícito (evita quirks de ::before em flex+filter mobile) */
 .seat-bond-glow {
   position: absolute;
-  inset: -12px;
+  inset: -6px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, var(--sb-glow, #c9a94a) 0%, transparent 65%);
-  filter: blur(10px);
-  opacity: 0.75;
+  background: radial-gradient(circle at 50% 50%, var(--sb-glow, #c9a94a) 0%, transparent 60%);
+  filter: blur(8px);
+  opacity: 0.22;
   z-index: 1;
   pointer-events: none;
-  animation: fbondSmoke 2.8s ease-in-out infinite;
+  animation: fbondSmoke 4s ease-in-out infinite;
 }
 
 /* Tier-7: efeito prismático igual ao do perfil */
 .seat-bond-icon-wrap.tier-7 .seat-bond-glow {
-  animation: fbond-prismatic-smoke 2.8s ease-in-out infinite;
-  background: radial-gradient(circle at 50% 50%, rgba(255,120,120,0.9) 0%, transparent 65%);
+  animation: fbond-prismatic-smoke 4s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(255,120,120,0.9) 0%, transparent 60%);
 }
 
-/* Leve rotação oscilante no ícone em si */
+/* Movimento suave e quase imperceptível */
 @keyframes seatBondIconFloat {
-  0%   { transform: scale(0.92) rotate(-3deg); }
-  40%  { transform: scale(1.05) rotate(2deg);  }
-  70%  { transform: scale(0.97) rotate(-1deg); }
-  100% { transform: scale(0.92) rotate(-3deg); }
+  0%   { transform: scale(0.99) rotate(-0.5deg); }
+  50%  { transform: scale(1.01) rotate(0.5deg);  }
+  100% { transform: scale(0.99) rotate(-0.5deg); }
 }
 
 .seat-bond-icon {
   position: relative;
   z-index: 2;
-  width:  40px;
-  height: 40px;
+  width:  36px;
+  height: 36px;
   object-fit: contain;
-  filter: drop-shadow(0 0 6px var(--sb-glow, #c9a94a));
-  animation: seatBondIconFloat 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 3px var(--sb-glow, #c9a94a));
+  animation: seatBondIconFloat 4s ease-in-out infinite;
 }
 
 /* ══════════════════════════════════════════

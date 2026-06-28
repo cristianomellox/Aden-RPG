@@ -365,6 +365,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Pré-carrega sets de seguindo / seguidores (necessário para verificação de amizade mútua)
   _tavEnsureFollowingSet().catch(() => {});
   _tavEnsureFollowersSet().catch(() => {});
+  // Pré-carrega mapa de laços (necessário para ícone de laço nos assentos adjacentes)
+  _tavEnsureBondsMap().catch(() => {});
   // Limpeza lazy semanal: mensagens antigas das tavernas (>7 dias)
   _tavLazyCleanupOldMessages().catch(() => {});
   // Limpeza lazy semanal: notificações antigas (>30 dias)
@@ -3377,6 +3379,37 @@ window._tavFollowingSet = null; // null = ainda não carregado
 // ── Cache em memória dos IDs que me seguem (para detectar seguimento mútuo) ──
 window._tavFollowersSet = null;
 
+// ── Mapa de laços do PLAYER: partnerId → { bond_type, bond_id, intimacy_points } ──
+// Usado para detectar laço entre dois ocupantes de assentos adjacentes sem RPC extra.
+window._tavBondsMap = null; // null = ainda não carregado
+
+async function _tavEnsureBondsMap() {
+  if (window._tavBondsMap !== null) return;
+  window._tavBondsMap = new Map();
+  try {
+    const sb = getSB();
+    if (!sb || !PLAYER.id) return;
+    const { data } = await sb.rpc('get_player_bonds', { p_player_id: PLAYER.id });
+    if (!data) return;
+    const allBonds = [];
+    if (data.couple) allBonds.push({ ...data.couple, bond_type: 'couple' });
+    (data.friends || []).forEach(f => allBonds.push({ ...f, bond_type: 'friend' }));
+    allBonds.forEach(b => {
+      const partnerId = b.player_a_id === PLAYER.id ? b.player_b_id : b.player_a_id;
+      window._tavBondsMap.set(partnerId, {
+        bond_type:       b.bond_type,
+        bond_id:         b.id,
+        intimacy_points: b.intimacy_points || 0,
+      });
+    });
+  } catch(e) { console.warn('_tavEnsureBondsMap:', e); }
+}
+
+// Retorna dados do laço com o parceiro, ou null se não houver
+function _tavGetBondWith(partnerId) {
+  return window._tavBondsMap?.get(partnerId) ?? null;
+}
+
 async function _tavEnsureFollowingSet() {
   if (window._tavFollowingSet !== null) return;
   window._tavFollowingSet = new Set();
@@ -4493,7 +4526,11 @@ function updateProximityPairs() {
       };
 
       if (!_proxPairs[key].done) {
-        renderAura(String(a), String(b), true, key);
+        // Verifica laço entre os dois (apenas quando PLAYER.id está no par)
+        const bondData = imInPair ? _tavGetBondWith(
+          oA.playerId === PLAYER.id ? oB.playerId : oA.playerId
+        ) : null;
+        renderAura(String(a), String(b), true, key, bondData);
         broadcastAuras();
       }
 
@@ -4513,7 +4550,12 @@ function updateProximityPairs() {
         p.nameA = oA.name;
         p.nameB = oB.name;
         // Reposiciona a ponte localmente — sem broadcast Ably (cada cliente recalcula)
-        if (!p.done) renderAura(String(a), String(b), true, key);
+        if (!p.done) {
+          const bondData = imInPair ? _tavGetBondWith(
+            oA.playerId === PLAYER.id ? oB.playerId : oA.playerId
+          ) : null;
+          renderAura(String(a), String(b), true, key, bondData);
+        }
       }
     }
   });
@@ -4663,7 +4705,11 @@ function onIntimacyAura(msg) {
         nameA: p.nameA, nameB: p.nameB,
         startTs, intervals: p.intervals, done: false
       };
-      renderAura(p.seatA, p.seatB, true, p.key);
+      // Verifica laço com qualquer um dos dois (se PLAYER.id é um deles)
+      const bondDataAura = (p.pidA === PLAYER.id)
+        ? _tavGetBondWith(p.pidB)
+        : (p.pidB === PLAYER.id ? _tavGetBondWith(p.pidA) : null);
+      renderAura(p.seatA, p.seatB, true, p.key, bondDataAura);
 
       // Inicia tickers se necessário
       updateProximityPairs();
@@ -4682,8 +4728,9 @@ function proxColorForSeatA(seatA) {
   return PROX_COLORS[idx];
 }
 
-// Cria a ponte de corações viajantes entre dois assentos
-function createProxBridge(seatA, seatB, pairKey) {
+// Cria a ponte de corações viajantes entre dois assentos.
+// Quando bondData é passado, exibe o ícone do laço no centro com glow animado.
+function createProxBridge(seatA, seatB, pairKey, bondData) {
   removeProxBridge(pairKey);
   const color  = proxColorForSeatA(seatA);
   const bridge = document.createElement('div');
@@ -4691,6 +4738,31 @@ function createProxBridge(seatA, seatB, pairKey) {
   bridge.id        = 'prox-bridge-' + pairKey;
   document.body.appendChild(bridge);
   _proxBridges[pairKey] = { el: bridge, seatA, seatB, color };
+
+  if (bondData) {
+    // ── Ícone do laço no centro com fumaça luminosa animada ──
+    const prog   = getBondLevelProgress(bondData.intimacy_points || 0);
+    const tier   = getBondTier(prog.level);
+    const glow   = BOND_TIER_GLOWS[tier] || BOND_TIER_GLOWS[1];
+    const imgUrl = getBondImageByTier(bondData.bond_type, tier);
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'seat-bond-icon-wrap';
+    iconWrap.style.setProperty('--sb-glow',     glow.color);
+    iconWrap.style.setProperty('--sb-glow-dim', glow.shadow);
+
+    const smokeEl = document.createElement('div');
+    smokeEl.className = 'seat-bond-smoke';
+
+    const img = document.createElement('img');
+    img.className = 'seat-bond-icon';
+    img.src       = imgUrl;
+    img.alt       = '';
+
+    iconWrap.appendChild(smokeEl);
+    iconWrap.appendChild(img);
+    bridge.appendChild(iconWrap);
+  }
 
   // 4 corações: 2 indo para a direita, 2 para a esquerda, defasados
   const defs = [
@@ -4742,6 +4814,12 @@ function positionProxBridge(pairKey) {
   b.el.style.top   = topY  + 'px';
   b.el.style.width = width + 'px';
 
+  // Centraliza o ícone do laço (se existir) no meio da ponte
+  const iconWrap = b.el.querySelector('.seat-bond-icon-wrap');
+  if (iconWrap) {
+    iconWrap.style.left = (width / 2) + 'px';
+  }
+
   // Dist que cada coração percorre (largura da ponte menos largura do símbolo)
   const dist = Math.max(0, width - 12);
   b.el.querySelectorAll('.prox-bh').forEach(h => {
@@ -4754,9 +4832,9 @@ function positionAllProxBridges() {
 }
 
 // Aplica ou remove o efeito visual de aura/ponte num par de assentos
-function renderAura(seatA, seatB, active, pairKey) {
+function renderAura(seatA, seatB, active, pairKey, bondData) {
   if (active && pairKey) {
-    createProxBridge(seatA, seatB, pairKey);
+    createProxBridge(seatA, seatB, pairKey, bondData);
   } else if (pairKey) {
     removeProxBridge(pairKey);
   }
@@ -5359,6 +5437,9 @@ async function _featuredBondHandleBrokenByPartner(partnerId) {
     const h = document.getElementById(prefix + '-bond-header');
     if (h && h.style.display !== 'none') { _featuredBondClearUI(prefix); }
   }
+  // Recarrega mapa de laços para remover o laço quebrado dos assentos
+  window._tavBondsMap = null;
+  _tavEnsureBondsMap().catch(() => {});
   const sb = getSB();
   if (sb && PLAYER.id) {
     sb.rpc('set_featured_bond', { p_bond_id: null, p_style: null }).catch(() => {});
@@ -6118,6 +6199,9 @@ async function _bondsRespondInvite(inviteId, accept, fromName, notif) {
       // Invalida cache de ambos os jogadores
       await _bondsClearCache(PLAYER.id);
       if (notif.fromId) await _bondsClearCache(notif.fromId);
+      // Recarrega mapa de laços para refletir o novo laço nos assentos da taverna
+      window._tavBondsMap = null;
+      _tavEnsureBondsMap().catch(() => {});
       showToast(`Laço formado com ${fromName}! ❤`);
       _tavRemoveBondNotif(inviteId);
       _tavUpdateNotifDot();

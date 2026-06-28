@@ -782,6 +782,15 @@ html,body {
   animation-name: proxBhRev;
 }
 
+/* Fumaça do ícone de laço no PERFIL (::before usa filter:blur + opacity/scale, não box-shadow) */
+@keyframes fbondSmoke {
+  0%   { opacity: 0.55; transform: scale(0.88); }
+  30%  { opacity: 0.9;  transform: scale(1.10); }
+  55%  { opacity: 0.7;  transform: scale(0.95); }
+  80%  { opacity: 1;    transform: scale(1.14); }
+  100% { opacity: 0.55; transform: scale(0.88); }
+}
+
 /* ══════════════════════════════════════════
    ÍCONE DE LAÇO NOS ASSENTOS ADJACENTES
    Aparece no centro da prox-bridge quando
@@ -2664,27 +2673,33 @@ html,body {
   border-radius: 50%;
   background: radial-gradient(circle at 50% 50%, var(--fbond-glow, transparent) 0%, transparent 65%);
   filter: blur(10px);
-  opacity: 0.85;
   z-index: 1;
   pointer-events: none;
   transition: background 0.4s;
+  animation: fbondSmoke 2.8s ease-in-out infinite;
 }
 .fbond-icon-wrap:active { transform: scale(0.92); }
+.fbond-icon-wrap:active .fbond-icon { animation-play-state: paused; }
 .fbond-icon {
   width: 72px;
   height: 72px;
   object-fit: contain;
   position: relative;
   z-index: 2;
+  animation: seatBondIconFloat 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px var(--fbond-glow, transparent));
 }
 
-/* Prismatic tier-7 glow animation — cycles hue on the ::before glow */
-@keyframes fbond-prismatic-filter {
-  0%   { filter: blur(10px) hue-rotate(0deg);   }
-  100% { filter: blur(10px) hue-rotate(360deg); }
+/* Prismatic tier-7: combina rotação de matiz com a fumaça */
+@keyframes fbond-prismatic-smoke {
+  0%   { filter: blur(10px) hue-rotate(0deg);   opacity: 0.55; transform: scale(0.88); }
+  30%  { filter: blur(10px) hue-rotate(108deg);  opacity: 0.9;  transform: scale(1.08); }
+  55%  { filter: blur(10px) hue-rotate(198deg);  opacity: 0.75; transform: scale(0.95); }
+  80%  { filter: blur(10px) hue-rotate(288deg);  opacity: 1;    transform: scale(1.12); }
+  100% { filter: blur(10px) hue-rotate(360deg);  opacity: 0.55; transform: scale(0.88); }
 }
 .fbond-icon-wrap.tier-7::before {
-  animation: fbond-prismatic-filter 2.5s linear infinite;
+  animation: fbond-prismatic-smoke 2.8s ease-in-out infinite;
   background: radial-gradient(circle at 50% 50%, rgba(255,120,120,0.9) 0%, transparent 65%);
 }
 

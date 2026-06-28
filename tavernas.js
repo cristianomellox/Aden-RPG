@@ -1210,11 +1210,12 @@ function _tavClearFrameFromSeat(seatId) {
 // Busca e aplica moldura para o jogador num assento
 // Usa cache local (24h); se ausente, busca via RPC get_player_skin_urls
 async function _tavFetchAndApplyFrame(seatId, playerId) {
+  // Aplica cache imediatamente para evitar flicker (se disponível)
   const cached = _tavGetSkinCache(playerId);
   if (cached !== undefined) {
     _tavApplyFrameToSeat(seatId, cached?.frame_url || null);
-    return;
   }
+  // Sempre confirma via RPC — moldura pode ter mudado desde o cache
   try {
     const sb = getSB();
     if (!sb) return;
@@ -3402,6 +3403,9 @@ async function _tavEnsureBondsMap() {
         intimacy_points: b.intimacy_points || 0,
       });
     });
+    // Re-avalia pares adjacentes já ativos para injetar ícone de laço
+    // (pode ter carregado depois de updateProximityPairs pela primeira vez)
+    if (Object.keys(_proxPairs).length > 0) updateProximityPairs();
   } catch(e) { console.warn('_tavEnsureBondsMap:', e); }
 }
 

@@ -2931,3 +2931,86 @@ button, .btn {
     animation: blink 1s infinite;
     color: gold !important;
 }
+
+:root {
+    --epic-texture: url('https://www.transparenttextures.com/patterns/black-paper.png');
+    --gold-light: #e6c27a;
+    --gold-base: #a88235;
+    --gold-dark: #4a3510;
+    --iron-dark: #12100e;
+}
+
+#playerTopBar {
+    background-color: var(--iron-dark) !important;
+    background-image: 
+        var(--epic-texture),
+        linear-gradient(to bottom, #3a3225 0%, #1a1610 40%, #0a0805 100%) !important;
+    border-bottom: 3px solid var(--gold-base) !important;
+    box-shadow: 
+        0 10px 20px rgba(0,0,0,0.9), 
+        inset 0 2px 1px rgba(255,255,255,0.1), 
+        inset 0 -5px 15px rgba(168, 130, 53, 0.4) !important;
+    position: relative;
+    z-index: 1000;
+}
+
+#footerMenu {
+    background-color: var(--iron-dark) !important;
+    background-image: 
+        var(--epic-texture),
+        linear-gradient(to top, #000000 0%, #1a1610 80%, #2b251c 100%) !important;
+    border-top: 3px solid var(--gold-base) !important;
+    box-shadow: 
+        0 -10px 25px rgba(0,0,0,0.95), 
+        inset 0 2px 1px rgba(255,255,255,0.1),
+        inset 0 5px 15px rgba(168, 130, 53, 0.3) !important;
+}
+
+#footerMenu button {
+    transition: all 0.2s ease !important;
+    border-right: 1px solid rgba(0,0,0,0.6) !important;
+    border-left: 1px solid rgba(255,255,255,0.05) !important;
+}
+
+#footerMenu button:hover {
+    background-color: rgba(168, 130, 53, 0.15) !important;
+    box-shadow: inset 0 0 20px rgba(168, 130, 53, 0.4) !important;
+}
+
+#leftSideMenu, #sideMenu {
+    background-color: var(--iron-dark) !important;
+    background-image: 
+        var(--epic-texture),
+        linear-gradient(to right, #0a0805 0%, #1f1b14 100%) !important;
+    border-left: 2px solid var(--gold-base) !important;
+    border-right: 2px solid var(--gold-base) !important;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.9), inset 5px 0 15px rgba(0,0,0,0.8) !important;
+}
+
+#xpBarContainer {
+    border: 2px solid var(--gold-dark) !important;
+    background: #0a0a0a !important;
+    box-shadow: inset 0 3px 5px rgba(0,0,0,0.9), 0 1px 1px rgba(255,255,255,0.1) !important;
+    border-radius: 4px !important;
+}
+
+#xpBar {
+    background: linear-gradient(to bottom, #ff9900 0%, #cc3300 50%, #801a00 100%) !important;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 0 10px rgba(204,51,0,0.6) !important;
+    border-radius: 2px !important;
+}
+
+#playerTopBar::before,
+#playerTopBar::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: radial-gradient(circle at 30% 30%, #888 0%, #333 50%, #000 100%);
+    border-radius: 50%;
+    box-shadow: 0 1px 1px rgba(255,255,255,0.2), inset 0 -1px 2px rgba(0,0,0,0.8);
+    bottom: 5px;
+}
+
+#playerTopBar::before { left: 10px; }
+#playerTopBar::after { right: 10px; }

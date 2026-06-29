@@ -4613,11 +4613,15 @@ async function checkProximityIntervals() {
     if (pair.done) {
       const wasReset = _checkDayResetForPair(key, pair, now);
       if (wasReset) {
-        renderAura(pair.seatA, pair.seatB, true, key);
+        // Bug 2 fix: resolve bondData para que o ícone do laço reapareça no novo dia
+        const imInPairReset = pair.pidA === PLAYER.id || pair.pidB === PLAYER.id;
+        const bondDataReset = imInPairReset ? _tavGetBondWith(
+          pair.pidA === PLAYER.id ? pair.pidB : pair.pidA
+        ) : null;
+        renderAura(pair.seatA, pair.seatB, true, key, bondDataReset);
         broadcastAuras();
-        // Mensagem sutil no chat
         const otherName = pair.pidA === PLAYER.id ? pair.nameB : pair.nameA;
-        if (pair.pidA === PLAYER.id || pair.pidB === PLAYER.id) {
+        if (imInPairReset) {
           sysMsg(`💕 Novo dia! Sua intimidade com ${otherName} pode crescer novamente.`);
         }
       } else {
@@ -4654,12 +4658,22 @@ async function checkProximityIntervals() {
 
       if (pair.intervals >= PROX_MAX_INTERVALS) {
         pair.done = true;
-        renderAura(pair.seatA, pair.seatB, false, key);
         clearProxStart(currentRoom?.id, key);
         broadcastAuras();
-        // Mensagem sutil no chat
+
+        // Mantém o ícone do laço visível (sem corações) se o par tiver laço
+        const imInPairCap = pair.pidA === PLAYER.id || pair.pidB === PLAYER.id;
+        const bondDataCap = imInPairCap ? _tavGetBondWith(
+          pair.pidA === PLAYER.id ? pair.pidB : pair.pidA
+        ) : null;
+        if (bondDataCap) {
+          renderAura(pair.seatA, pair.seatB, true, key, bondDataCap, true); // skipHearts
+        } else {
+          renderAura(pair.seatA, pair.seatB, false, key);
+        }
+
         const otherName = pair.pidA === PLAYER.id ? pair.nameB : pair.nameA;
-        if (pair.pidA === PLAYER.id || pair.pidB === PLAYER.id) {
+        if (imInPairCap) {
           sysMsg(`✨ Sua intimidade com ${otherName} cresceu ao máximo hoje!`);
         }
       }
@@ -4739,6 +4753,21 @@ function onIntimacyAura(msg) {
       // Sincroniza: usa o startTs mais antigo e o maior número de intervalos
       if (p.startTs < existing.startTs) existing.startTs = p.startTs;
       if (p.intervals > existing.intervals) existing.intervals = p.intervals;
+
+      // Bug 3 fix: se o par local estava como done mas o parceiro está ativo novamente
+      // (ex.: dia virou no lado do parceiro e ele re-transmitiu), reativa localmente.
+      if (existing.done) {
+        const currentDailyPts = getDailyProxPoints(p.key);
+        if (currentDailyPts < PROX_DAILY_LIMIT) {
+          existing.done = false;
+          const bondDataReactivate = (p.pidA === PLAYER.id)
+            ? _tavGetBondWith(p.pidB)
+            : (p.pidB === PLAYER.id ? _tavGetBondWith(p.pidA) : null);
+          renderAura(p.seatA, p.seatB, true, p.key, bondDataReactivate);
+          // Reinicia o ticker se estava parado
+          updateProximityPairs();
+        }
+      }
     }
   });
 }
@@ -4751,7 +4780,7 @@ function proxColorForSeatA(seatA) {
 
 // Cria a ponte de corações viajantes entre dois assentos.
 // Quando bondData é passado, exibe o ícone do laço no centro com glow animado.
-function createProxBridge(seatA, seatB, pairKey, bondData) {
+function createProxBridge(seatA, seatB, pairKey, bondData, skipHearts = false) {
   removeProxBridge(pairKey);
   const color  = proxColorForSeatA(seatA);
   const bridge = document.createElement('div');
@@ -4785,23 +4814,25 @@ function createProxBridge(seatA, seatB, pairKey, bondData) {
     bridge.appendChild(iconWrap);
   }
 
-  // 4 corações: 2 indo para a direita, 2 para a esquerda, defasados
-  const defs = [
-    { rev: false, delay: '0s',    dur: '2.4s' },
-    { rev: true,  delay: '0.6s',  dur: '2.4s' },
-    { rev: false, delay: '1.2s',  dur: '2.4s' },
-    { rev: true,  delay: '1.8s',  dur: '2.4s' },
-  ];
-  defs.forEach(d => {
-    const h = document.createElement('span');
-    h.className = 'prox-bh' + (d.rev ? ' prox-bh-rev' : '');
-    h.textContent = '♥';
-    h.style.setProperty('--heart-color', color.fill);
-    h.style.setProperty('--heart-glow',  color.glow);
-    h.style.setProperty('--delay',    d.delay);
-    h.style.setProperty('--duration', d.dur);
-    bridge.appendChild(h);
-  });
+  // 4 corações: omitidos quando skipHearts=true (ex.: limite diário atingido, só mostra laço)
+  if (!skipHearts) {
+    const defs = [
+      { rev: false, delay: '0s',    dur: '2.4s' },
+      { rev: true,  delay: '0.6s',  dur: '2.4s' },
+      { rev: false, delay: '1.2s',  dur: '2.4s' },
+      { rev: true,  delay: '1.8s',  dur: '2.4s' },
+    ];
+    defs.forEach(d => {
+      const h = document.createElement('span');
+      h.className = 'prox-bh' + (d.rev ? ' prox-bh-rev' : '');
+      h.textContent = '♥';
+      h.style.setProperty('--heart-color', color.fill);
+      h.style.setProperty('--heart-glow',  color.glow);
+      h.style.setProperty('--delay',    d.delay);
+      h.style.setProperty('--duration', d.dur);
+      bridge.appendChild(h);
+    });
+  }
 
   // Posiciona após um frame para garantir layout calculado
   requestAnimationFrame(() => positionProxBridge(pairKey));
@@ -4859,9 +4890,9 @@ function positionAllProxBridges() {
 }
 
 // Aplica ou remove o efeito visual de aura/ponte num par de assentos
-function renderAura(seatA, seatB, active, pairKey, bondData) {
+function renderAura(seatA, seatB, active, pairKey, bondData, skipHearts = false) {
   if (active && pairKey) {
-    createProxBridge(seatA, seatB, pairKey, bondData);
+    createProxBridge(seatA, seatB, pairKey, bondData, skipHearts);
   } else if (pairKey) {
     removeProxBridge(pairKey);
   }

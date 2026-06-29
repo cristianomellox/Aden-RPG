@@ -3421,9 +3421,10 @@ async function _tavEnsureBondsMap() {
         intimacy_points: b.intimacy_points || 0,
       });
     });
-    // Re-avalia pares adjacentes já ativos para injetar ícone de laço
-    // (pode ter carregado depois de updateProximityPairs pela primeira vez)
-    if (Object.keys(_proxPairs).length > 0) updateProximityPairs();
+    // Re-avalia pares adjacentes — mesmo que _proxPairs esteja vazio,
+    // porque os sets de following/followers podem ainda estar carregando
+    // e o par pode ainda não ter sido criado.
+    if (currentRoom) setTimeout(updateProximityPairs, 50);
   } catch(e) { console.warn('_tavEnsureBondsMap:', e); }
 }
 
@@ -3434,28 +3435,44 @@ function _tavGetBondWith(partnerId) {
 
 async function _tavEnsureFollowingSet() {
   if (window._tavFollowingSet !== null) return;
-  window._tavFollowingSet = new Set();
+  window._tavFollowingSet = new Set(); // placeholder anti-reentrada
   try {
     const sb = getSB();
-    if (!sb || !PLAYER.id) return;
+    if (!sb || !PLAYER.id) {
+      window._tavFollowingSet = null; // permite retentativa
+      return;
+    }
     const { data } = await sb.rpc('get_following_ids', { p_player_id: PLAYER.id });
     (data || []).forEach(r => window._tavFollowingSet.add(r.id));
-  } catch(e) { console.warn('_tavEnsureFollowingSet:', e); }
+    // Set agora populado — reavalia pares se estivermos em uma sala
+    if (currentRoom) setTimeout(updateProximityPairs, 50);
+  } catch(e) {
+    console.warn('_tavEnsureFollowingSet:', e);
+    window._tavFollowingSet = null; // permite retentativa
+  }
 }
 
 async function _tavEnsureFollowersSet() {
   if (window._tavFollowersSet !== null) return;
-  window._tavFollowersSet = new Set();
+  window._tavFollowersSet = new Set(); // placeholder anti-reentrada
   try {
     const sb = getSB();
-    if (!sb || !PLAYER.id) return;
+    if (!sb || !PLAYER.id) {
+      window._tavFollowersSet = null; // permite retentativa
+      return;
+    }
     // Quem ME segue: busca follower_id onde following_id = eu
     const { data } = await sb
       .from('player_follows')
       .select('follower_id')
       .eq('following_id', PLAYER.id);
     (data || []).forEach(r => window._tavFollowersSet.add(r.follower_id));
-  } catch(e) { console.warn('_tavEnsureFollowersSet:', e); }
+    // Set agora populado — reavalia pares se estivermos em uma sala
+    if (currentRoom) setTimeout(updateProximityPairs, 50);
+  } catch(e) {
+    console.warn('_tavEnsureFollowersSet:', e);
+    window._tavFollowersSet = null; // permite retentativa
+  }
 }
 
 function _tavIsFollowing(targetId) {

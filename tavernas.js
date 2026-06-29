@@ -469,14 +469,27 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 
-  // 2. Re-estabelece conexões WebRTC mortas após ~800ms (tempo para Ably reconectar)
   if (!currentRoom) return;
+
+  // 2. Re-avalia pares de proximidade ao voltar para a aba.
+  //    Enquanto em background: requestAnimationFrame fica suspenso (posição não calculada),
+  //    e onIntimacyAura pode ter rejeitado o par no valid-check por race com presence update.
+  //    Dois delays: 200ms para messages já na fila processarem, 900ms como fallback final.
+  setTimeout(() => {
+    updateProximityPairs();
+    positionAllProxBridges();
+  }, 200);
+  setTimeout(() => {
+    updateProximityPairs();
+    positionAllProxBridges();
+  }, 900);
+
+  // 3. Re-estabelece conexões WebRTC mortas após ~800ms (tempo para Ably reconectar)
   setTimeout(() => {
     if (!micOn || !processedStream) return;
     Object.keys(roomMembers).forEach(peerId => {
       const pc = peerConns[peerId];
       if (!pc) {
-        // Sem conexão — inicia nova
         initiateCall(peerId);
         return;
       }
@@ -490,6 +503,7 @@ document.addEventListener('visibilitychange', () => {
     });
   }, 800);
 });
+
 
 function setConnDot(state) {
   const d = document.getElementById('conn-dot');

@@ -2156,7 +2156,7 @@ margin-right: 15px;
 
 #mapImage {
     background-image: url('https://aden-rpg.pages.dev/assets/mapa_aden.png');
-    background-size: contain;
+    background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: top left;
     width: 1500px;

@@ -3476,9 +3476,21 @@ function enableMapInteraction() {
     }
 
     recalcLimits();
-    // Inicia no zoom mínimo que preenche a tela (evita fundo preto desde o início)
-    currentScale = MIN_SCALE;
-    map.style.transform = `translate(0px, 0px) scale(${MIN_SCALE})`;
+    // Inicia com um leve zoom (igual à Floresta Mística), em vez do mínimo absoluto
+    currentScale = Math.min(MIN_SCALE * 1.3, MAX_SCALE);
+    // Centraliza o mapa horizontalmente na escala inicial
+    (function() {
+        const container = document.getElementById('mapContainer');
+        if (container) {
+            const cr = container.getBoundingClientRect();
+            const scaledW = (map.offsetWidth  || 1500) * currentScale;
+            const scaledH = (map.offsetHeight || 1600) * currentScale;
+            currentX = Math.min(0, (cr.width  - scaledW) / 2);
+            currentY = Math.min(0, (cr.height - scaledH) / 2);
+        }
+    })();
+    map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+    recalcLimits();
     window.addEventListener('resize', recalcLimits);
 
     map.style.touchAction = 'none';

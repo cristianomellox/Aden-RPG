@@ -26,18 +26,18 @@
 
 #mainContainer {
     min-width: 90vw;
-    min-height: calc(100vh - 140px); /* garante altura mesmo antes das minas carregarem */
+    
     margin: 20px auto;
     padding: 20px 20px 100px;
     background-color: none;
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
     text-align: center;
     justify-content: center;
     align-items: center;
     
     background-image: url('https://aden-rpg.pages.dev/assets/fundo_mina.webp');
-    background-size: cover; /* preenche o espaço sem esticar/achatar a imagem */
+    background-size: cover; 
     background-repeat: no-repeat;
     background-position: top center;
 }
@@ -1044,7 +1044,8 @@ p {
 }
 body {
   background-image: url('https://aden-rpg.pages.dev/assets/fundo_mina.webp');
-    background-size: 100% 100%;
+    background-size: cover;
     background-repeat: no-repeat;
     background-position: top left;
+    min-height: 90vh;
 }

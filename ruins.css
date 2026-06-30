@@ -921,9 +921,6 @@ body {
     100% { opacity: 1; transform: scale(1); }
 }
 
-.menu-item a {
-  font-size: 1em!important;
-}
 
 
 /* --- BOTÃO LATERAL (TOGGLE) --- */

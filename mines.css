@@ -25,16 +25,20 @@
 }
 
 #mainContainer {
-    max-width: 600px;
     min-width: 90vw;
     margin: 20px auto;
     padding: 20px 20px 100px;
-    background-color: #2e2e2e;
+    background-color: none;
     border-radius: 8px;
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
     text-align: center;
     justify-content: center;
     align-items: center;
+    
+    background-image: url('https://aden-rpg.pages.dev/assets/fundo_mina.webp');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: top left;
 }
 
 /* Estilos específicos das Minas */
@@ -1036,4 +1040,10 @@ p {
 }
 #pvpCombatModal .player-hp-bar {
     margin-top: 44px;
+}
+body {
+  background-image: url('https://aden-rpg.pages.dev/assets/fundo_mina.webp');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: top left;
 }

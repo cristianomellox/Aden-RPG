@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
   <meta name="robots" content="index,follow" />
   <title>Rankings - Aden RPG</title>
+  <link href="style.css" rel="stylesheet"/>
   <style>
     /* ===================================================================
        BASE
@@ -369,7 +370,10 @@
     .menu-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;flex:1 1 auto;overflow-y:auto;}
     .menu-item{width:100%;}
     .menu-link{display:flex;align-items:center;justify-content:flex-start;padding:15px;color:#e0e0e0;text-decoration:none;
-      font-size:1.4rem;position:relative;transition:background .4s,color .4s;border-bottom:1px solid #252525;width:100%;box-sizing:border-box;}
+      font-size:1.2rem;position:relative;transition:background .4s,color .4s;border-bottom:1px solid #252525;width:100%;box-sizing:border-box;
+      font-family: 'Cinzel', serif;
+      font-weight: bold;
+    }
     .menu-link:hover{background:#333;color:#fff;}
     .menu-icon{width:35px;height:35px;object-fit:contain;margin-right:15px;}
     .menu-item.active .menu-link{background:#555;color:#ffd700;font-weight:bold;border-left:4px solid #ffd700;padding-left:11px;}
@@ -1576,7 +1580,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   const aR = t.getBoundingClientRect().height;
   document.body.removeChild(t);
   const s = document.createElement("style");
-  s.textContent=`html{font-size:${16*(16/aR)}px!important}body{font-size:1rem!important}`;
+  s.textContent=`html{font-size:${13*(16/aR)}px!important}body{font-size:1rem!important}`;
   document.head.appendChild(s);
 });
 </script>

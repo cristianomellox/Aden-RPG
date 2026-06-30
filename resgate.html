@@ -6,6 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="googlebot" content="index, follow">
   <title>Resgate de Código - Aden RPG</title>
+  <link href="style.css" rel="stylesheet"/>
   <style>
     body, html {
       margin: 0;
@@ -85,7 +86,7 @@
       border: none;
       border-radius: 8px;
       background-color: #c9a94a;
-      color: #111;
+      color: lightblue;
       font-weight: bold;
       cursor: pointer;
       font-size: 1em;
@@ -172,7 +173,7 @@
 .menu-header h3 {
     margin: 0;
     color: #ffd700;
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     flex-grow: 1;
     text-align: center; /* Título centralizado */
 }
@@ -211,7 +212,9 @@
     padding: 15px 15px; /* Padding reduzido na esquerda */
     color: #e0e0e0;
     text-decoration: none;
-    font-size: 1.4rem;
+    font-size: 1.2rem!important;
+    font-weight: bold;
+    font-family: 'Cinzel', serif;
     position: relative; /* Necessário para a bolinha de notificação se alinhar ao link */
     transition: background 0.4s, color 0.4s;
     border-bottom: 1px solid #252525;
@@ -508,7 +511,7 @@
       console.log("[scale-lock] 1rem real:", actualRem, "px");
 
       // queremos sempre 16px como base (modo padrão)
-      const targetRem = 16;
+      const targetRem = 13;
       const correction = targetRem / actualRem;
 
       const style = document.createElement("style");

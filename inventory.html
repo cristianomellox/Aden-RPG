@@ -254,7 +254,10 @@
 #leftSideMenu .menu-header{padding:15px!important;background:#111!important;display:flex!important;justify-content:space-between!important;align-items:center!important;border-bottom:1px solid #333!important;height:60px!important;box-sizing:border-box!important;}
 #leftSideMenu .menu-header h3{margin:0!important;color:#ffd700!important;font-size:1.5rem!important;flex-grow:1!important;text-align:center!important;}
 #leftSideMenu .close-menu-btn{background:none!important;border:none!important;color:#fff!important;cursor:pointer!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important;}
-#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;}
+#leftSideMenu .menu-list{list-style:none!important;padding:0!important;margin:0!important;display:flex!important;flex-direction:column!important;flex:1 1 auto!important;overflow-y:auto!important;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+}
 #leftSideMenu .menu-item{width:100%!important;}
 #leftSideMenu .menu-link{display:flex!important;align-items:center!important;justify-content:flex-start!important;padding:15px!important;color:#e0e0e0!important;text-decoration:none!important;font-size:1.4rem!important;position:relative!important;transition:background .4s,color .4s!important;border-bottom:1px solid #252525!important;width:100%!important;box-sizing:border-box!important;}
 #leftSideMenu .menu-link:hover{background:#333!important;color:#fff!important;}
@@ -754,7 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const style = document.createElement("style");
   style.textContent = `
-    html { font-size: ${16 * correction}px !important; }
+    html { font-size: ${13 * correction}px !important; }
     body { font-size: 1rem !important; }
   `;
   document.head.appendChild(style);

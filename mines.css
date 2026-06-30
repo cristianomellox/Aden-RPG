@@ -26,6 +26,7 @@
 
 #mainContainer {
     min-width: 90vw;
+    min-height: calc(100vh - 140px); /* garante altura mesmo antes das minas carregarem */
     margin: 20px auto;
     padding: 20px 20px 100px;
     background-color: none;
@@ -36,9 +37,9 @@
     align-items: center;
     
     background-image: url('https://aden-rpg.pages.dev/assets/fundo_mina.webp');
-    background-size: 100% 100%;
+    background-size: cover; /* preenche o espaço sem esticar/achatar a imagem */
     background-repeat: no-repeat;
-    background-position: top left;
+    background-position: top center;
 }
 
 /* Estilos específicos das Minas */

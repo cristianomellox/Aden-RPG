@@ -1,6 +1,7 @@
 /**
- * Side Menu Toggle — recolhe/expande o #sideMenu para a direita.
- * Inclua nas páginas com o menu lateral: <script src="sidemenu-toggle.js"></script>
+ * Side Menu Toggle — recolhe/expande o #sideMenu para a direita
+ * e o #footerMenu para baixo.
+ * Inclua nas páginas com esses menus: <script src="sidemenu-toggle.js"></script>
  */
 (function () {
   'use strict';
@@ -17,9 +18,21 @@
     <polyline points="15 6 9 12 15 18"/>
   </svg>`;
 
+  const SVG_DOWN = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"
+    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>`;
+
+  const SVG_UP = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"
+    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>`;
+
   const TRANSITION = '0.35s cubic-bezier(.4,0,.2,1)';
 
-  function init() {
+  function initSideMenu() {
     const menu = document.getElementById('sideMenu');
     if (!menu) return;
 
@@ -113,6 +126,133 @@
     window.addEventListener('resize', () => {
       if (!collapsed) snapBtnToMenu();
     });
+  }
+
+  function initFooterMenu() {
+    const menu = document.getElementById('footerMenu');
+    if (!menu) return;
+
+    function adjustMapHeight(isCollapsed) {
+      const mapContainer = document.getElementById('mapContainer');
+      if (!mapContainer) return;
+      const topBar = document.getElementById('playerTopBar');
+      if (isCollapsed) {
+        const topH = topBar ? topBar.getBoundingClientRect().height : 0;
+        mapContainer.style.setProperty('height', `calc(100vh - ${topH}px)`, 'important');
+      } else {
+        mapContainer.style.removeProperty('height'); // volta ao valor definido no CSS
+      }
+    }
+
+    const btn = document.createElement('button');
+    btn.id = 'footerMenuToggleBtn';
+    btn.innerHTML = SVG_DOWN;
+    btn.title = 'Recolher menu';
+
+    Object.assign(btn.style, {
+      display        : 'none',
+      position       : 'fixed',
+      left           : '50%',
+      transform      : 'translateX(-50%)',
+      zIndex         : '1100',
+      alignItems     : 'center',
+      justifyContent : 'center',
+      width          : '52px',
+      height         : '26px',
+      border         : '4px solid #3a6c3a',
+      borderBottom   : 'none',
+      borderRadius   : '12px 12px 0 0',
+      color          : '#8ec88e',
+      cursor         : 'pointer',
+      padding        : '0',
+      transition     : `bottom ${TRANSITION}, background .2s`,
+      pointerEvents  : 'auto',
+    });
+
+    btn.style.setProperty('background', '#000', 'important');
+
+    document.body.appendChild(btn);
+
+    menu.style.transition = `transform ${TRANSITION}, opacity ${TRANSITION}`;
+    menu.style.transformOrigin = 'bottom center';
+
+    let collapsed = false;
+
+    function snapBtnToMenu() {
+      const rect = menu.getBoundingClientRect();
+      btn.style.bottom = (window.innerHeight - rect.top) + 'px';
+    }
+
+    btn.addEventListener('mouseenter', () => { btn.style.setProperty('background', '#1a2e1a', 'important'); });
+    btn.addEventListener('mouseleave', () => { btn.style.setProperty('background', '#000',    'important'); });
+
+    btn.addEventListener('click', () => {
+      collapsed = !collapsed;
+
+      if (collapsed) {
+        menu.style.transform     = 'translateY(120%)';
+        menu.style.opacity       = '0';
+        menu.style.pointerEvents = 'none';
+        btn.style.bottom         = '0px';
+        btn.innerHTML = SVG_UP;
+        btn.title = 'Expandir menu';
+        adjustMapHeight(true);
+      } else {
+        menu.style.transform     = '';
+        menu.style.opacity       = '1';
+        menu.style.pointerEvents = '';
+        btn.innerHTML = SVG_DOWN;
+        btn.title = 'Recolher menu';
+        setTimeout(snapBtnToMenu, 360);
+        adjustMapHeight(false);
+      }
+    });
+
+    function onMenuStyleChange() {
+      const visible = menu.style.display && menu.style.display !== 'none';
+      btn.style.display = visible ? 'flex' : 'none';
+
+      if (visible && !collapsed) {
+        requestAnimationFrame(snapBtnToMenu);
+      }
+
+      if (!visible && collapsed) {
+        collapsed = false;
+        menu.style.transform     = '';
+        menu.style.opacity       = '1';
+        menu.style.pointerEvents = '';
+        btn.innerHTML = SVG_DOWN;
+        btn.title = 'Recolher menu';
+        adjustMapHeight(false);
+      }
+    }
+
+    const observer = new MutationObserver(onMenuStyleChange);
+    observer.observe(menu, { attributes: true, attributeFilter: ['style'] });
+
+    // O #mapContainer é recriado dinamicamente (script.js reconstrói o
+    // welcomeContainer a cada refresh dos dados do jogador). Reaplica o
+    // ajuste de altura sempre que ele reaparecer, se o footer estiver recolhido.
+    const welcomeContainer = document.getElementById('welcomeContainer');
+    if (welcomeContainer) {
+      const mapObserver = new MutationObserver(() => {
+        if (collapsed) adjustMapHeight(true);
+      });
+      mapObserver.observe(welcomeContainer, { childList: true });
+    }
+
+    window.addEventListener('resize', () => {
+      if (!collapsed) {
+        snapBtnToMenu();
+      } else {
+        adjustMapHeight(true);
+      }
+    });
+  }
+
+  function init() {
+    initSideMenu();
+    initFooterMenu();
   }
 
   if (document.readyState === 'loading') {

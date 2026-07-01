@@ -2914,7 +2914,7 @@ body::before {
 #tutorialModalgvgt {
   align-items: center !important;
   justify-content: center !important;
-  display: flex !important; /* garante flex mesmo após JS setar display */
+  /* SEM display !important — deixa o JS controlar show/hide */
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;

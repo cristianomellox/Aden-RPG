@@ -3270,3 +3270,62 @@ body::before {
   margin: 12px 0 !important;
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v9 — REVERTE overrides perigosos do patch v8
+   Remove display/transform !important que conflitam com JS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Reverte #raidMonsterArea — JS controla display durante countdown */
+#raidMonsterArea,
+#raidMonsterWrap {
+  display: unset !important;
+  flex: unset !important;
+  min-height: unset !important;
+  max-height: unset !important;
+  overflow: unset !important;
+}
+
+/* Reverte #raidMonsterImage — JS controla transform/animation */
+#raidMonsterImage {
+  transform: unset !important;
+  left: unset !important;
+  position: absolute !important;
+  top: -2px !important;
+  /* Apenas reduz o tamanho para caber em mobile */
+  width: 220px !important;
+  height: 270px !important;
+}
+
+/* Reverte player avatar — JS define tamanho via inline style */
+#raidPlayerAvatar img,
+#raidPlayerAvatarWrap img {
+  width: unset !important;
+  height: unset !important;
+}
+
+/* Reverte countdown timer — JS define fontSize inline no zero */
+#raidCountdownTimer {
+  font-size: 3em !important;
+  margin: 8px 0 !important;
+}
+
+/* Mantém apenas: background-image do combat modal (seguro) */
+#raidCombatModal .modal-content {
+  background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.1)),
+                    url('https://aden-rpg.pages.dev/assets/tdd_andar.webp') !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+  background-size: cover !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  /* NÃO override display — JS já define flex quando abre */
+}
+
+/* HP bars — só compacta margin, não toca display */
+#raidMonsterHpBar {
+  margin-top: 6px !important;
+  margin-bottom: 4px !important;
+}
+

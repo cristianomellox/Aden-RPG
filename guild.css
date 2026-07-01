@@ -3042,3 +3042,52 @@ body::before {
   margin: 0 !important;
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v4 — gear fixed, tavern fixed, raid modal centered
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1. ENGRENAGEM — position:fixed no viewport, abaixo do header */
+.icon-container {
+  position: fixed !important;
+  top: 108px !important;
+  right: 8px !important;
+  z-index: 50 !important;
+  line-height: 0 !important;
+  pointer-events: auto !important;
+}
+/* remove position relative do guildInfoContainer que não é mais necessário */
+#guildInfoContainer {
+  position: static !important;
+}
+
+/* 2. TAVERNA — position:fixed para cobrir viewport a partir do tab menu */
+#tavernContainer {
+  position: fixed !important;
+  top: 108px !important;   /* abaixo do header+tabmenu */
+  left: 0 !important;
+  width: 100vw !important;
+  height: calc(100vh - 108px) !important;
+  padding: 0 !important;
+  overflow-y: auto !important;
+  z-index: 5 !important;
+  background-position: center top !important;
+}
+
+/* 3. LAST RAID RESULT MODAL — força centralização via padding top */
+#lastRaidResultModal {
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+#lastRaidResultModal .modal-content {
+  margin: auto !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: 88% !important;
+  max-width: 420px !important;
+  text-align: center !important;
+}
+

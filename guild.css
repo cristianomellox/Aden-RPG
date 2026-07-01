@@ -3329,3 +3329,58 @@ body::before {
   margin-bottom: 4px !important;
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v10 — RAID: LIMPA tudo, só touches seguros
+   Regra de ouro: NUNCA setar display em elementos que o JS
+   controla com style.display. Não tocar transform/left no
+   monsterImage (JS usa animation/floatY nele).
+   ═══════════════════════════════════════════════════════════ */
+
+/* Limpa todos os patches anteriores no #raidMonsterArea */
+#raidMonsterArea {
+  /* SEM display — JS controla */
+  flex: unset;
+  min-height: unset;
+  max-height: unset;
+  overflow: unset;
+  position: unset;
+  align-items: unset;
+  justify-content: unset;
+}
+
+/* Limpa avatar — JS define width/height via inline style */
+#raidPlayerAvatar {
+  width: unset !important;
+  height: unset !important;
+}
+#raidPlayerAvatarWrap {
+  width: unset !important;
+  height: unset !important;
+}
+
+/* Monster image: só reduz tamanho, não toca position/transform/top/left/display */
+#raidMonsterImage {
+  width: 260px !important;
+  height: 320px !important;
+  transform: unset;
+  left: unset;
+}
+
+/* Background do combat modal */
+#raidCombatModal .modal-content {
+  background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.1)),
+                    url('https://aden-rpg.pages.dev/assets/tdd_andar.webp') !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+  background-size: cover !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Countdown timer tamanho original */
+#raidCountdownTimer {
+  font-size: 3em !important;
+}
+

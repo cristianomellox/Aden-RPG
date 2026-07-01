@@ -1074,9 +1074,9 @@ body {
 #raidTimerInfo {
   font-weight: bold;
   font-size: 1.6em!important;
-  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%)!important;
+  -webkit-background-clip: text!important;
+  -webkit-text-fill-color: transparent!important;
   margin-top: -32px;
   background-color: black;
 }

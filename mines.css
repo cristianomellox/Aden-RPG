@@ -1042,3 +1042,10 @@ p {
 #pvpCombatModal .player-hp-bar {
     margin-top: 44px;
 }
+body {
+  background-image: url('https://aden-rpg.pages.dev/assets/fundo_mina.webp');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: top left;
+    min-height: 90vh;
+}

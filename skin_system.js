@@ -234,16 +234,39 @@ function reconcileWithServer(serverFrameId, serverVideoId) {
 
 // ─── Handlers ─────────────────────────────────────────────────────────
 
+// Flag global para evitar duplo-clique / race condition na ativação
+let _activatingSkin = false;
+
 async function handleActivateSkin(item) {
+    if (_activatingSkin) return; // já em progresso, ignora
     const user = window.globalUser;
     if (!user) return;
 
-    const { data, error } = await supabase.rpc('activate_skin', {
-        p_inventory_item_id: item.id,
-        p_player_id        : user.id
-    });
+    _activatingSkin = true;
 
-    if (error) { window.showCustomAlert?.('Erro ao ativar: ' + error.message); return; }
+    // Feedback visual imediato no botão
+    const btn = document.getElementById('activateSkinBtn');
+    const originalText = btn?.textContent || 'Ativar';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Ativando...'; }
+
+    let data, error;
+    try {
+        ({ data, error } = await supabase.rpc('activate_skin', {
+            p_inventory_item_id: item.id,
+            p_player_id        : user.id
+        }));
+    } catch(e) {
+        error = e;
+    } finally {
+        _activatingSkin = false;
+        // Restaura botão apenas se o modal ainda estiver visível e a skin não foi ativada
+        if (btn && document.getElementById('itemDetailsModal')?.style.display !== 'none') {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    if (error) { window.showCustomAlert?.('Erro ao ativar: ' + (error.message || error)); return; }
     if (data?.error) { window.showCustomAlert?.(data.error); return; }
 
     // Skin permanente duplicada: token consumido no servidor, remove da bolsa local
@@ -299,7 +322,10 @@ async function handleActivateSkin(item) {
     _invalidateTavSkinCache(user.id); // força rebusca no modal/taverna
 
     window.renderUI?.();
-    document.getElementById('itemDetailsModal').style.display = 'none';
+
+    // Fecha o modal ANTES do alert para o botão de fechar não "travar"
+    const detailModal = document.getElementById('itemDetailsModal');
+    if (detailModal) detailModal.style.display = 'none';
 
     const msg = data.stacked
         ? `✨ Duração acumulada! Novo prazo: ${formatExpiryFull(data.expires_at)}`

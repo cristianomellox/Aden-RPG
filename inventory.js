@@ -273,21 +273,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Nota: o fade-in do vídeo de fundo é gerenciado pelo skin_system.init()
     // que conhece imediatamente qual src usar (padrão ou skin ativa).
 
-    // Auth Otimista
+    // Auth Otimista: tenta recuperar ID do cache local para exibição imediata
     const localId = getLocalUserId();
     if (localId) {
         console.log("⚡ Auth Otimista: ID recuperado localmente.");
         globalUser = { id: localId };
-    } else {
-        console.warn("Auth Cache Miss: Buscando sessão no servidor...");
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-            console.warn("Nenhuma sessão ativa encontrada. Redirecionando para login.");
+    }
+
+    // Sempre valida/renova a sessão com o Supabase em background.
+    // Isso resolve o "adormecimento": após inatividade a sessão expira no cliente
+    // e os RPCs falham silenciosamente. getSession() renova o token se necessário.
+    try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+
+        if (session && session.user) {
+            // Atualiza o usuário global com a sessão fresca (token renovado)
+            globalUser = session.user;
+            console.log("✅ Sessão Supabase validada/renovada.");
+        } else if (!globalUser) {
+            // Sem sessão e sem cache local: redireciona para login
+            console.warn("Nenhuma sessão ativa. Redirecionando para login.");
             window.location.href = "index.html?refresh=true";
             return;
         }
-        globalUser = session.user;
+        // Se globalUser veio do cache mas a sessão retornou vazia,
+        // tenta refreshSession antes de desistir
+        if (!session && globalUser) {
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (refreshData?.session?.user) {
+                globalUser = refreshData.session.user;
+                console.log("♻️ Sessão renovada via refreshSession.");
+            } else {
+                console.warn("Sessão inválida após refresh. Redirecionando.");
+                window.location.href = "index.html?refresh=true";
+                return;
+            }
+        }
+    } catch (e) {
+        // Se falhar a validação mas temos o ID local, continuamos (modo offline parcial)
+        if (!globalUser) {
+            console.error("Erro ao validar sessão:", e);
+            window.location.href = "index.html?refresh=true";
+            return;
+        }
+        console.warn("⚠️ Falha ao validar sessão, usando ID em cache:", e);
     }
     
     // >>> PASSO CRUCIAL: Garante que temos as definições <<<
@@ -533,6 +563,13 @@ async function loadPlayerAndItems(forceRefresh = false) {
         }
 
         renderUI();
+
+        // === SKIN: Reconcilia estado local com o que o servidor retornou ===
+        // (Delta sync agora também retorna active_frame/video_inventory_id)
+        window.skinSystem?.reconcileWithServer(
+            deltaData.active_frame_inventory_id ?? null,
+            deltaData.active_video_inventory_id ?? null
+        );
 
         // Salva o novo estado no cache
         await saveCache(allInventoryItems, playerBaseStats, deltaData.last_inventory_update);

@@ -2986,7 +2986,7 @@ body::before {
 }
 .icon-container {
   position: absolute !important;
-  top: 7px !important;
+  top: 4px !important;
   right: 4px !important;
   z-index: 20 !important;
   line-height: 0 !important;
@@ -3109,7 +3109,7 @@ body::before {
 /* Gear icon — agora position:fixed funciona corretamente */
 .icon-container {
   position: fixed !important;
-  top: 105px !important;
+  top: 108px !important;
   right: 8px !important;
   z-index: 50 !important;
   width: auto !important;
@@ -3174,4 +3174,10 @@ body::before {
   z-index: 5 !important;
   background-size: cover !important;
   background-position: center center !important;
+}
+
+/* ═══ PATCH v7 — tabMenu sempre acima da taverna ═══ */
+#tabMenu {
+  position: relative !important;
+  z-index: 20 !important;
 }

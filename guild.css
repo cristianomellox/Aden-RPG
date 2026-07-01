@@ -1177,15 +1177,15 @@ body {
 }
 #raidCombatModal .modal-content {
 background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('https://aden-rpg.pages.dev/assets/tdd_andar.webp')!important;
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-size: cover;
-    background-color: none;
+    background-repeat: no-repeat!important;
+    background-position: center center!important;
+    background-size: cover!important;
+    background-color: transparent!important;
     border: none;
     width: 95%;
     max-width: none;
     height: 100%;
-    max-height: none;
+    max-height: 95vh!important;
     position: relative;
     z-index: 10000;
     top: 0!important;

@@ -2843,3 +2843,135 @@ hr {
 }
 .shake-animation { animation: shake-monster 1s ease-in-out !important; }
 
+
+/* ═══════════════════════════════════════════════════════════
+   PATCH v2 — Correções pós-review
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1. BACKGROUND — guildhall com blur + brightness ─────────── */
+body {
+  background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp') !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  background-color: #0d0b08 !important;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: inherit;
+  filter: blur(1px) brightness(0.6);
+  z-index: -1;
+}
+
+/* 2. NOME DA GUILDA — gradiente com !important ─────────────── */
+#guildName {
+  font-family: 'Cinzel', serif !important;
+  font-size: 1.6em !important;
+  font-weight: 900 !important;
+  letter-spacing: 2px !important;
+  margin-bottom: 4px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #c9a94a 55%, #7a5c1c 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: transparent !important;
+  filter: drop-shadow(0 0 8px rgba(201,169,74,0.4)) !important;
+  text-shadow: none !important;
+}
+
+/* 3. PODER DA GUILDA — gradiente com !important ────────────── */
+#guildPower {
+  font-size: 1.6em !important;
+  font-weight: 900 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ffaa22 50%, #c9a94a 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  color: transparent !important;
+  text-shadow: none !important;
+  filter: drop-shadow(0 0 6px rgba(255,170,30,0.35)) !important;
+}
+
+/* 4. BARRA DE XP — sobrescreve verde do original ───────────── */
+.xp-bar-fill {
+  background: linear-gradient(90deg, #5c3e08 0%, #c9a94a 50%, #ffd700 80%, #fff6c8 100%) !important;
+  background-color: unset !important;
+}
+.xp-bar-container {
+  border: 1px solid rgba(201,169,74,0.4) !important;
+  background: linear-gradient(180deg, #0a0805 0%, #12100a 100%) !important;
+  background-color: unset !important;
+  border-radius: 9px !important;
+  box-shadow: 0 0 8px rgba(0,0,0,0.6), inset 0 1px 3px rgba(0,0,0,0.8) !important;
+}
+
+/* 5. TUTORIAL MODAL — fix alinhamento central (era flex-start) */
+#tutorialModalRaid,
+#tddModalStory,
+#tutorialModalgvgt {
+  align-items: center !important;
+  justify-content: center !important;
+  display: flex !important; /* garante flex mesmo após JS setar display */
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0,0,0,0.85) !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 13000 !important;
+  overflow-y: auto !important;
+}
+/* O conteúdo em si centralizado */
+#tutorialModalRaid .tut-content,
+#tutorialModalgvgt .tut-content {
+  margin: auto !important;
+  position: relative !important;
+  top: auto !important;
+}
+
+/* 6. EDIT GUILD MODAL — max-height p/ não sumir atrás do footer */
+#editGuildModal .modal-content {
+  max-height: 82vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+#editTabContent {
+  overflow-y: auto !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+}
+
+/* 7. TAB MENU — garante fundo escuro não transparente ──────── */
+#tabMenu {
+  background: linear-gradient(180deg, #1c1508 0%, #110e07 100%) !important;
+  border: 1px solid rgba(201,169,74,0.38) !important;
+  border-radius: 6px !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+/* 8. TAB-PANE — fundo semi-transparente p/ cobrir imagem de fundo */
+.tab-pane {
+  background: rgba(10,8,5,0.55) !important;
+  backdrop-filter: blur(2px) !important;
+  border-radius: 0 0 8px 8px !important;
+  padding: 10px 6px !important;
+}
+
+/* 9. MAIN CONTAINER — garante que não tape o bg ─────────────── */
+#mainContainer {
+  background: transparent !important;
+}
+
+/* 10. DESCRIPTION — cor visível sobre bg ───────────────────── */
+#guildDescription {
+  color: #b8b098 !important;
+}
+

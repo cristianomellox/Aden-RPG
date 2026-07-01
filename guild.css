@@ -980,7 +980,7 @@ body {
   border-radius: 12px;
   overflow: visible;
   margin: 10px auto;
-  height: 28px;
+  height: 20px;
   position: relative;
   border: 1px solid rgba(255,80,0,0.55) !important;
   box-shadow: 0 0 12px rgba(200,0,0,0.35), inset 0 1px 3px rgba(0,0,0,0.8);

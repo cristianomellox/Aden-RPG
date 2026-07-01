@@ -1233,8 +1233,8 @@ hr {
   position: absolute !important;
   top: -2px;
   z-index: 0 !important;
-  width: 370px !important;
-  height: 440px !important;
+  width: 350px !important;
+  height: 420px !important;
   filter: drop-shadow(0 0 8px rgba(200,50,50,0.22));
   transition: filter 0.45s ease;
 }
@@ -3180,4 +3180,13 @@ body::before {
 #tabMenu {
   position: relative !important;
   z-index: 20 !important;
+}
+#raidTimerInfo {
+  font-weight: bold;
+  font-size: 1.6em!important;
+  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%)!important;
+  -webkit-background-clip: text!important;
+  -webkit-text-fill-color: transparent!important;
+  margin-top: -32px;
+  background-color: black;
 }

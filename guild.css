@@ -2980,18 +2980,16 @@ body::before {
    PATCH v3 — Posicionamento: engrenagem, confirmModal, lastRaid
    ═══════════════════════════════════════════════════════════ */
 
-/* 1. BOTÃO ENGRENAGEM — canto superior direito da aba guilda */
+/* 1. BOTÃO ENGRENAGEM — canto superior direito dentro do guildInfoContainer */
+#guildInfoContainer {
+  position: relative !important;
+}
 .icon-container {
   position: absolute !important;
-  top: 100px !important;   /* abaixo do tab menu */
-  right: 10px !important;
+  top: 4px !important;
+  right: 4px !important;
   z-index: 20 !important;
-  text-align: right !important;
-}
-
-/* garante que o pai tenha position relative para o absolute funcionar */
-#tabContent {
-  position: relative !important;
+  line-height: 0 !important;
 }
 
 /* 2. CONFIRM MODAL — centralizado corretamente */
@@ -3001,7 +2999,7 @@ body::before {
   left: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  display: flex !important;
+  /* SEM display !important — JS controla visibilidade */
   justify-content: center !important;
   align-items: center !important;
   transform: none !important;
@@ -3028,7 +3026,7 @@ body::before {
   left: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  display: flex !important;
+  /* SEM display !important — JS controla visibilidade */
   justify-content: center !important;
   align-items: center !important;
   z-index: 12000 !important;

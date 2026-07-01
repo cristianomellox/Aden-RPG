@@ -2056,3 +2056,790 @@ background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
   width: 100% !important;
   margin: 0 auto 8px !important;
 }
+/* ═══════════════════════════════════════════════════════════════════════
+   GUILD.CSS — VISUAL UE5 / AAA DARK FANTASY OVERRIDE
+   Aplica sobre o guild.css existente sem quebrar nenhuma lógica.
+   Padrão: pedra escura, acentos dourados, glow atmosférico, Cinzel serif.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── VARIÁVEIS DE TEMA ─────────────────────────────────────────────── */
+:root {
+  --gold:          #c9a94a;
+  --gold-bright:   #ffd700;
+  --gold-dim:      rgba(201,169,74,0.18);
+  --gold-border:   rgba(201,169,74,0.40);
+  --gold-glow:     rgba(201,169,74,0.25);
+  --stone-dark:    #0d0b08;
+  --stone-mid:     #181410;
+  --stone-light:   #252018;
+  --text-primary:  #e0dccc;
+  --text-secondary:#b0a890;
+  --danger:        rgba(200,40,20,0.55);
+  --ts-black: 1px 1px 2px black,-1px -1px 2px black,
+              1px -1px 2px black,-1px 1px 2px black,
+              0 0 4px black;
+}
+
+/* ── CONTAINER PRINCIPAL ───────────────────────────────────────────── */
+#mainContainer {
+  width: 95%;
+  background: transparent !important;
+  padding-top: 4px;
+}
+
+/* ── TAB MENU ──────────────────────────────────────────────────────── */
+#tabMenu {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin: 0 0 8px 0;
+  margin-left: 0 !important;
+  padding: 0;
+  background: linear-gradient(180deg, #1c1508 0%, #110e07 100%) !important;
+  border: 1px solid var(--gold-border);
+  border-radius: 6px;
+  overflow: hidden;
+  width: 100% !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,215,0,0.06);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 9px 4px;
+  background: transparent !important;
+  border: none;
+  border-right: 1px solid rgba(201,169,74,0.15) !important;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6em;
+  font-weight: 700;
+  color: var(--text-secondary) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-shadow: var(--ts-black);
+  transition: color 0.25s, background 0.25s, box-shadow 0.25s;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  top: 0;
+  max-width: none;
+}
+.tab-btn:last-child { border-right: none !important; }
+
+.tab-btn:hover:not(.active) {
+  background: rgba(201,169,74,0.07) !important;
+  color: var(--gold) !important;
+}
+
+.tab-btn.active {
+  background: linear-gradient(180deg, rgba(201,169,74,0.22) 0%, rgba(201,169,74,0.06) 100%) !important;
+  color: var(--gold-bright) !important;
+  font-weight: 900;
+  border-bottom: 2px solid var(--gold-bright) !important;
+  text-shadow: 0 0 10px rgba(255,215,0,0.6), var(--ts-black);
+  z-index: 2;
+}
+
+/* Bolinha de notificação na aba (mantida funcional) */
+.tab-notification-dot {
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #0d0b08;
+}
+
+/* ── TAB PANES ─────────────────────────────────────────────────────── */
+.tab-pane {
+  display: none;
+  background: transparent !important;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1em;
+  text-align: left;
+  text-shadow: var(--ts-black);
+}
+.tab-pane.active { display: block; }
+
+/* ── GUILD INFO CONTAINER ──────────────────────────────────────────── */
+#guildInfoContainer {
+  text-align: center;
+  padding: 0 4px;
+}
+
+#guildName {
+  font-family: 'Cinzel', serif;
+  font-size: 1.6em;
+  font-weight: 900;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+  background: linear-gradient(180deg, #fff 0%, var(--gold) 55%, #7a5c1c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 8px rgba(201,169,74,0.4));
+}
+
+#guildDescription {
+  margin: 6px 0;
+  color: var(--text-secondary) !important;
+  font-size: 0.78em;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ── XP BAR ────────────────────────────────────────────────────────── */
+#guildLevel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.xp-bar-container {
+  width: 80%;
+  height: 18px;
+  background: linear-gradient(180deg, #0a0805 0%, #12100a 100%);
+  border: 1px solid var(--gold-border) !important;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(0,0,0,0.6), inset 0 1px 3px rgba(0,0,0,0.8);
+  position: relative;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5c3e08 0%, #c9a94a 50%, #ffd700 80%, #fff6c8 100%);
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  border-radius: 9px;
+  box-shadow: 0 0 12px rgba(255,215,0,0.45);
+  position: relative;
+}
+.xp-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(180deg,rgba(255,255,255,0.25) 0%,transparent 100%);
+  border-radius: 9px 9px 0 0;
+}
+
+#guildXpFill {
+  color: var(--text-primary);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: var(--ts-black);
+}
+
+/* ── MEMBER LIST ───────────────────────────────────────────────────── */
+.member-list-container {
+  margin-top: 16px;
+}
+
+.member-list-container h4 {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gold-border);
+  text-shadow: 0 0 10px var(--gold-glow);
+}
+
+#guildMemberList {
+  list-style: none;
+  padding: 0;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+
+#guildMemberList li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(201,169,74,0.1) !important;
+  background: transparent;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+#guildMemberList li:hover {
+  background: rgba(201,169,74,0.05);
+}
+
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-border) !important;
+  box-shadow: 0 0 6px rgba(201,169,74,0.25);
+}
+
+.member-name { color: var(--text-primary); font-weight: 700; flex-grow: 1; }
+.member-role { font-size: 0.78em; color: var(--gold); }
+.member-level { font-size: 0.78em; color: #7ab8ff; margin-top: 2px; }
+
+/* ── ÁREA DE RISCO ─────────────────────────────────────────────────── */
+#risco {
+  margin-top: 18px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(160,20,10,0.35) 0%, rgba(80,8,5,0.2) 100%) !important;
+  border: 1px solid rgba(200,50,30,0.45);
+  box-shadow: 0 0 14px rgba(180,0,0,0.2), inset 0 1px 0 rgba(255,80,50,0.1);
+  height: auto;
+  min-height: 90px;
+  padding: 10px;
+  gap: 8px;
+}
+
+#risco h3 {
+  font-size: 0.78em;
+  letter-spacing: 2px;
+  color: #ff6b5b;
+  text-shadow: 0 0 10px rgba(255,80,50,0.5);
+  text-transform: uppercase;
+}
+
+#deleteguild, #leaveguild {
+  border: 1px solid rgba(200,50,30,0.5) !important;
+  border-radius: 8px;
+  width: 100px;
+  background: rgba(160,20,10,0.2);
+  padding: 8px 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  color: #ffb0a0;
+  font-size: 0.78em;
+  text-shadow: var(--ts-black);
+}
+#deleteguild:hover, #leaveguild:hover {
+  background: rgba(200,40,20,0.35);
+}
+
+/* ── SEM GUILDA ────────────────────────────────────────────────────── */
+#noGuildContainer {
+  background-image: url('https://aden-rpg.pages.dev/assets/guildhall.webp');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  height: 100vh;
+  width: 100vw;
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 0;
+}
+#noGuildContainer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.65) 100%);
+  z-index: 1;
+}
+
+#criar {
+  position: absolute;
+  left: 5%;
+  top: 15%;
+  width: 90%;
+  text-align: center;
+  z-index: 2;
+}
+
+#criar p {
+  font-family: 'Cinzel', serif;
+  color: var(--text-primary);
+  font-size: 0.95em;
+  letter-spacing: 1px;
+  text-shadow: var(--ts-black);
+  margin-bottom: 16px;
+}
+
+/* ── RANKING DAS GUILDAS ───────────────────────────────────────────── */
+#ranking h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px var(--gold-glow);
+  text-align: center;
+}
+#ranking h4 { color: #ffaa44; text-align: center; }
+
+#guildRankingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#guildRankingList li {
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 6px 4px !important;
+  border-bottom: 1px solid rgba(201,169,74,0.1) !important;
+  width: 100% !important;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+#guildRankingList li:hover { background: rgba(201,169,74,0.04); }
+
+.ranking-item-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.ranking-position {
+  width: 28px;
+  text-align: right;
+  font-size: 0.9em;
+  font-weight: 900;
+  color: var(--text-secondary);
+}
+
+/* Top 3 destaque */
+#guildRankingList li:nth-child(1) .ranking-position { color: #FFD700; text-shadow: 0 0 10px rgba(255,215,0,0.7); }
+#guildRankingList li:nth-child(2) .ranking-position { color: #C0C0C0; text-shadow: 0 0 8px rgba(192,192,192,0.6); }
+#guildRankingList li:nth-child(3) .ranking-position { color: #CD7F32; text-shadow: 0 0 8px rgba(205,127,50,0.6); }
+#guildRankingList li:nth-child(1) { background: linear-gradient(90deg, rgba(183,156,9,0.18) 0%, transparent 100%); border-left: 3px solid #FFD700; }
+#guildRankingList li:nth-child(2) { background: linear-gradient(90deg, rgba(168,140,140,0.12) 0%, transparent 100%); border-left: 3px solid silver; }
+#guildRankingList li:nth-child(3) { background: linear-gradient(90deg, rgba(173,99,26,0.12) 0%, transparent 100%); border-left: 3px solid #CD7F32; }
+
+.ranking-flag {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--gold-border);
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+}
+
+.ranking-name { color: var(--text-primary); font-weight: 700; font-size: 1em; }
+.power-value  { color: #ffaa44; font-weight: 700; font-size: 0.95em; }
+.cp-icon      { width: 18px; height: 24px; vertical-align: -3px; }
+
+/* ── MODALS GERAIS ─────────────────────────────────────────────────── */
+.modal {
+  display: flex;
+  position: fixed;
+  z-index: 100;
+  left: 0 !important;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0,0,0,0.75);
+  justify-content: center;
+  align-items: center;
+  margin-top: 0;
+  backdrop-filter: blur(3px);
+}
+
+.modal-content {
+  background: linear-gradient(160deg, #1e1808 0%, #120f07 55%, #1a1508 100%) !important;
+  border: 1px solid var(--gold-border) !important;
+  border-radius: 10px;
+  padding: 20px;
+  width: 88%;
+  max-width: 420px;
+  position: relative;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.8), 0 0 30px rgba(201,169,74,0.1), inset 0 1px 0 rgba(255,215,0,0.05);
+  color: var(--text-primary);
+}
+
+.modal-content h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--gold);
+  text-align: center;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px var(--gold-glow);
+  margin-top: 0;
+}
+
+.close-btn {
+  color: var(--text-secondary);
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 26px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.2s;
+  z-index: 10;
+}
+.close-btn:hover { color: var(--gold); }
+
+/* Modal inputs */
+#newGuildNameInput,
+#searchGuildInput,
+#promptModalInput {
+  width: calc(100% - 20px);
+  padding: 10px;
+  margin: 10px 0;
+  background: rgba(0,0,0,0.5) !important;
+  border: 1px solid var(--gold-border) !important;
+  color: var(--text-primary) !important;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85em;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#newGuildNameInput:focus,
+#searchGuildInput:focus,
+#promptModalInput:focus {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+/* Action buttons */
+.action-btn {
+  padding: 10px 20px;
+  margin-top: 10px;
+  color: var(--text-primary);
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.8em;
+  font-family: 'Cinzel', serif;
+  text-shadow: var(--ts-black);
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+.action-btn:hover { opacity: 0.9; box-shadow: 0 0 14px var(--gold-glow); }
+
+/* ── SECTION: SEM GUILDA — Buscar/Criar botões ─────────────────────── */
+#criar .action-btn {
+  display: inline-block;
+  margin: 6px 8px;
+}
+
+/* ── GUILD INFO HEADER (bandeira + ícones) ─────────────────────────── */
+.icon-container { text-align: right; }
+
+/* ── POWER DISPLAY ─────────────────────────────────────────────────── */
+#guildPower {
+  text-shadow: none !important;
+  background: linear-gradient(180deg, #fff 0%, #ffaa22 50%, #c9a94a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── TAVERNA — área ativa ──────────────────────────────────────────── */
+#tavernContainer {
+  background-image: url('https://aden-rpg.pages.dev/assets/taverna.webp');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  width: 100vw;
+  height: 100vh;
+  top: 0; left: 0;
+  padding: 0;
+  position: absolute;
+  text-align: center;
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+#tavernTitle, #tavernTitle2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1em;
+  color: var(--gold) !important;
+  letter-spacing: 2px;
+  text-shadow: 0 0 14px var(--gold-glow), var(--ts-black);
+  margin-bottom: 8px;
+}
+
+/* Chat da taverna */
+.tavern-chat {
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 100%);
+  border: 1px solid rgba(201,169,74,0.2);
+  border-radius: 10px;
+  padding: 8px;
+  height: 62vh;
+  overflow-y: auto;
+  font-size: 0.85em;
+  margin-bottom: 6px;
+}
+.tavern-chat::-webkit-scrollbar { width: 4px; }
+.tavern-chat::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+.tavern-chat::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 2px; }
+
+.tavern-message .bubble {
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(201,169,74,0.1);
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+}
+
+/* Chat input da taverna */
+#tavernMessageInput {
+  flex: 1;
+  border-radius: 8px;
+  border: 1px solid var(--gold-border);
+  padding: 8px;
+  background: rgba(10,8,5,0.75);
+  color: var(--text-primary);
+  font-family: 'Cinzel', serif;
+  font-size: 0.82em;
+}
+#tavernMessageInput:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 8px var(--gold-glow); }
+
+#tavernSendBtn, .tavernSendBtn {
+  background: linear-gradient(180deg, #c97820 0%, #7a3c08 50%, #c97820 100%) !important;
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(201,120,30,0.5) !important;
+  font-weight: 700;
+  min-width: 72px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.82em;
+  box-shadow: 0 0 8px rgba(200,120,0,0.25);
+  text-shadow: var(--ts-black);
+}
+
+/* Assentos da taverna */
+.tavern-seat {
+  border: 1.5px solid var(--gold-border) !important;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.9);
+  box-shadow: 0 0 8px rgba(0,0,0,0.6);
+}
+
+/* ── RAID — card principal ─────────────────────────────────────────── */
+#tdd {
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255,215,0,0.55), 0 0 30px rgba(200,120,0,0.2), inset 0 0 10px rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,200,50,0.5) !important;
+}
+
+/* ── BATALHA GvG card ──────────────────────────────────────────────── */
+#gvgt {
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(100,180,255,0.5), 0 0 28px rgba(50,100,200,0.2), inset 0 0 10px rgba(100,200,255,0.04) !important;
+  border: 1px solid rgba(100,180,255,0.45) !important;
+}
+
+/* ── HP BARS (mantidas, apenas leve ajuste glow) ───────────────────── */
+#raidMonsterHpBar {
+  box-shadow: 0 0 14px rgba(200,0,0,0.4), inset 0 1px 3px rgba(0,0,0,0.8) !important;
+}
+#raidPlayerHpBar {
+  box-shadow: 0 0 12px rgba(0,180,100,0.3), inset 0 1px 2px rgba(0,0,0,0.8) !important;
+}
+
+/* ── HR DIVIDERS ───────────────────────────────────────────────────── */
+hr {
+  background: linear-gradient(90deg, transparent 0%, var(--gold-border) 30%, var(--gold) 50%, var(--gold-border) 70%, transparent 100%);
+  border: none;
+  height: 1px !important;
+  margin: 12px 0;
+}
+
+/* ── MENSAGENS DE FEEDBACK ─────────────────────────────────────────── */
+.message { margin-top: 10px; font-size: 0.85em; }
+.message.error   { color: #ff6b5b; }
+.message.success { color: #6ce6a0; }
+
+/* ── EDIT GUILD MODAL TABS ─────────────────────────────────────────── */
+#editTabMenu {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--gold-border);
+  margin-bottom: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px 6px 0 0;
+}
+#editTabMenu::-webkit-scrollbar { height: 0; }
+
+.edit-tab-btn {
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+  position: relative;
+}
+.edit-tab-btn.active {
+  border-bottom: 2px solid var(--gold) !important;
+  color: var(--gold) !important;
+  font-weight: 700;
+}
+.edit-tab-btn:hover:not(.active) { color: var(--text-primary); }
+
+/* ── VIEW GUILD MODAL ──────────────────────────────────────────────── */
+#guildViewName {
+  font-family: 'Cinzel', serif;
+  font-size: 1.3em;
+  font-weight: 900;
+  background: linear-gradient(180deg, #fff 0%, var(--gold) 60%, #7a5c1c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+}
+#guildViewDescription { color: var(--text-secondary) !important; font-size: 0.8em; text-align: center; }
+#guildViewMemberList li {
+  border-bottom: 1px solid rgba(201,169,74,0.12) !important;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── SEARCH GUILD RESULTS ──────────────────────────────────────────── */
+#searchGuildResults li {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(201,169,74,0.1) !important;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+#searchGuildResults li:hover { background: rgba(201,169,74,0.07); }
+
+/* ── PLAYER MODAL (já tem estilos próprios, apenas refinamento) ─────── */
+#playerModal > .modal-content {
+  border: 1px solid var(--gold-border) !important;
+  background: linear-gradient(160deg, #1a1208 0%, #0e0c07 60%, #18150a 100%) !important;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.9), 0 0 30px rgba(201,169,74,0.12) !important;
+}
+
+/* ── RANKING_CP - TOP BAR MEDAL COLORS (mantidos) ─────────────────── */
+.pmx-gifter-row.top-1 { background: linear-gradient(90deg, rgba(183,156,9,.42) 0%, rgba(90,68,0,.18) 100%); border-left: 4px solid #FFD700; }
+.pmx-gifter-row.top-2 { background: linear-gradient(90deg, rgba(168,140,140,.36) 0%, rgba(80,60,60,.16) 100%); border-left: 4px solid silver; }
+.pmx-gifter-row.top-3 { background: linear-gradient(90deg, rgba(173,99,26,.32) 0%, rgba(80,40,8,.16) 100%); border-left: 4px solid #CD7F32; }
+
+/* ── SHIMMER (loading) ─────────────────────────────────────────────── */
+.shimmer {
+  animation: shimmer 1.5s infinite linear;
+  background: linear-gradient(to right, #1a1507 0%, #2a2010 50%, #1a1507 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  border-radius: 4px;
+}
+@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+
+/* ── UPLOAD CONTAINER ──────────────────────────────────────────────── */
+.upload-container {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--gold-border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+.custom-file-upload {
+  background: linear-gradient(145deg, #7a5c1c, #c9a94a) !important;
+  border: 1px solid var(--gold) !important;
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.78em;
+  padding: 7px 14px;
+  transition: opacity 0.2s;
+}
+.custom-file-upload:hover { opacity: 0.9; }
+
+/* ── NOTIF DOT PRINCIPAL ───────────────────────────────────────────── */
+.notif-dot-main {
+  position: fixed;
+  width: 12px; height: 12px;
+  background: #ff2222;
+  border-radius: 50%;
+  border: 2px solid #1a1409;
+  right: 13px; top: 92px;
+  z-index: 10;
+  box-shadow: 0 0 8px rgba(255,0,0,0.7);
+}
+
+/* ── CONFIRM / PROMPT MODALS ───────────────────────────────────────── */
+#confirmModal { position: absolute !important; left: 50% !important; top: 50%; }
+#confirmModal .modal-content { max-width: 95%; min-width: 95%; max-height: 580px; text-align: center; }
+#promptModal .modal-content   { max-width: 400px; text-align: center; }
+#infoModalMessage, #confirmModalMessage, #promptModalMessage {
+  margin: 14px 0 20px;
+  font-size: 0.92em;
+  color: var(--text-primary);
+}
+
+/* ── DISABLED BUTTON ───────────────────────────────────────────────── */
+.disabled-btn {
+  filter: grayscale(100%) brightness(60%);
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* ── DAMAGE NUMBERS ────────────────────────────────────────────────── */
+.crit-damage-number, .damage-number {
+  font-family: 'Cinzel', Georgia, serif !important;
+  font-size: 2em !important;
+  font-weight: 900 !important;
+  text-shadow: 2px 2px 4px #000, 0 0 18px rgba(255,130,20,0.7) !important;
+}
+
+/* ── RAID COUNTDOWN ────────────────────────────────────────────────── */
+#raidCountdownTimer {
+  font-weight: 900;
+  font-size: 2em;
+  background: linear-gradient(180deg, #add8ff 0%, #fff 50%, #4488ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none !important;
+}
+
+/* ── SEPARADOR ANTES DA ÁREA DE RISCO ─────────────────────────────── */
+#guildInfoContainer > div[style*="border-bottom"] {
+  border-bottom: 1px solid var(--gold-border) !important;
+  border-radius: 0 !important;
+  margin: 14px 0;
+}
+
+/* ── RANKING: Cabeçalho de seção ───────────────────────────────────── */
+#ranking > center > p {
+  color: var(--text-secondary) !important;
+  font-size: 0.68em;
+}
+
+/* ── SCROLLBARS GLOBAIS (dark/gold) ───────────────────────────────── */
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track { background: rgba(10,8,4,0.6); }
+*::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 2px; }
+
+/* ── KEYFRAME: Pulso das abas ──────────────────────────────────────── */
+@keyframes pulseTabDot {
+  0%  { transform: scale(1);   box-shadow: 0 0 0 0 rgba(255,0,0,0.7); }
+  70% { transform: scale(1.2); box-shadow: 0 0 0 3px rgba(255,0,0,0);  }
+  100%{ transform: scale(1);   box-shadow: 0 0 0 0 rgba(255,0,0,0);   }
+}
+
+/* ── BLINK (uploading) ─────────────────────────────────────────────── */
+@keyframes blink { 50% { opacity: 0.5; } }
+.uploading-text { animation: blink 1s infinite; color: var(--gold-bright) !important; }
+
+/* ── SHAKE ANIMATION ───────────────────────────────────────────────── */
+@keyframes shake-monster {
+  0%,100% { transform: translate(0,0) rotate(0); }
+  10%  { transform: translate(-9px,5px) rotate(-2deg); }
+  20%  { transform: translate(9px,-5px) rotate(2deg); }
+  30%  { transform: translate(-7px,7px) rotate(-1.5deg); }
+  40%  { transform: translate(7px,-7px) rotate(1.5deg); }
+  55%  { transform: translate(-5px,3px) rotate(-1deg); }
+  70%  { transform: translate(5px,-3px) rotate(1deg); }
+  85%  { transform: translate(-3px,2px); }
+}
+.shake-animation { animation: shake-monster 1s ease-in-out !important; }
+

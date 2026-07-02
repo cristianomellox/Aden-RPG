@@ -1231,7 +1231,7 @@ hr {
 }
 #raidMonsterImage {
   position: absolute !important;
-  top: -2px;
+  top: -12px;
   z-index: 0 !important;
   width: 350px !important;
   height: 420px !important;

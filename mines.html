@@ -255,6 +255,13 @@
         </div>
     </div>
 
+    <!-- Overlay de transição de sessão: bloqueia a tela ~1min antes/depois
+         da virada de sessão, para cobrir o atraso do cron do Cloudflare -->
+    <div id="sessionTransitionOverlay">
+        <div class="sto-title">Uma nova sessão irá começar em:</div>
+        <div class="sto-timer" id="sessionTransitionTimer">2:00</div>
+    </div>
+
 
    <script type="module" src="mines.js"></script>
 

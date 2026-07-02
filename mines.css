@@ -75,7 +75,7 @@ body {
     left: 0;
     cursor: grab;
     transform-origin: top left;
-    transition: transform 0.05s linear;
+    transition: transform 0.05s linear, filter 0.6s ease;
     display: block;
     gap: unset;
     background-color: unset;
@@ -83,6 +83,12 @@ body {
     border-radius: 0;
     padding: 0;
     margin: 0;
+}
+
+/* Quando todas as minas da zona estão "esgotadas" (aguardando a próxima
+   sessão), o mapa inteiro perde a cor até a nova sessão começar. */
+#minesContainer.map-desaturated {
+    filter: grayscale(100%) brightness(0.75);
 }
 
 .mine-card {
@@ -247,20 +253,15 @@ body {
     gap: 2px;
     text-decoration: none;
     cursor: pointer;
-    border-radius: 10px;
-    border: 3px solid rgba(255,255,255,0.6);
+    border: none;
+    outline: none;
     background: transparent;
-    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
     padding: 4px 2px;
-
-    /* ─── ÁREA DE DEBUG (para posicionar os hotspots no mapa) ───────
-       Comente a linha abaixo quando terminar de ajustar as posições. */
-    outline: 2px dashed rgba(255,255,255,0.9);
 }
 
-.mine-hotspot:hover {
-    background: rgba(255,255,255,0.10);
-    transform: scale(1.03);
+.mine-hotspot:hover .mine-hotspot-glow {
+    filter: blur(7px);
+    transform: translate(-50%, -50%) scale(1.12);
 }
 
 .mine-hotspot:active {
@@ -269,15 +270,28 @@ body {
 
 .mine-hotspot.disabled-card {
     cursor: default;
-    filter: grayscale(35%);
+    filter: grayscale(45%);
     opacity: 0.85;
 }
 
-/* Cores de borda por status — mesmo código de cores dos cards antigos */
-.mine-hotspot.aberta     { border-color: #ffffff; box-shadow: 0 0 12px rgba(255,255,255,0.35); }
-.mine-hotspot.disputando { border-color: #3399ff; box-shadow: 0 0 14px rgba(51,153,255,0.5); }
-.mine-hotspot.ocupada    { border-color: #9f7f00; box-shadow: 0 0 12px rgba(255,204,0,0.35); }
-.mine-hotspot.esgotada   { border-color: #ff3333; box-shadow: 0 0 12px rgba(255,51,51,0.35); opacity: 0.75; }
+/* ─── DEBUG: mira fina no centro de cada hotspot, para reposicionar
+   sem depender de uma borda quadrada. Desligue MINE_HOTSPOT_DEBUG em
+   mines.js quando tudo estiver no lugar certo. ─────────────────────── */
+#minesContainer.debug-hotspots .mine-hotspot {
+    outline: 1px dashed rgba(255,255,255,0.35);
+}
+#minesContainer.debug-hotspots .mine-hotspot::before,
+#minesContainer.debug-hotspots .mine-hotspot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    background: rgba(255, 0, 0, 0.85);
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    pointer-events: none;
+}
+#minesContainer.debug-hotspots .mine-hotspot::before { width: 16px; height: 2px; }
+#minesContainer.debug-hotspots .mine-hotspot::after  { width: 2px; height: 16px; }
 
 .mine-hotspot-number {
     font-family: 'Cinzel', serif;
@@ -288,10 +302,14 @@ body {
     line-height: 1;
     margin-top: 2px;
     white-space: nowrap;
+    position: relative;
+    z-index: 2;
 }
 
 /* Nome do dono (quando a mina tem dono) OU texto de status (Aberta/Disputando/Esgotada) */
 .mine-hotspot-subtitle {
+    position: relative;
+    z-index: 2;
     font-family: 'Cinzel', serif;
     font-weight: bold;
     font-size: 0.68em;
@@ -309,6 +327,7 @@ body {
 .mine-hotspot-subtitle.status-esgotada   { color: #ff8c8c; }
 
 .mine-hotspot-avatar-slot {
+    position: relative;
     flex: 1;
     display: flex;
     align-items: center;
@@ -317,8 +336,58 @@ body {
     min-height: 0;
 }
 
+/* ── Luz orgânica pulsante — substitui a borda quadrada ──────────────
+   Fica atrás do avatar/ícone (z-index 1); para "Aberta" é a única
+   coisa visível no slot (não há avatar nem ícone). O blend "screen" +
+   blur faz a luz se misturar com o fundo escuro da caverna, como se
+   viesse de dentro da mina, em vez de parecer um círculo colado. */
+.mine-hotspot-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 85%;
+    height: 85%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+    filter: blur(6px);
+    mix-blend-mode: screen;
+    transition: filter 0.25s ease, transform 0.25s ease;
+    animation: mine-glow-flicker 4.2s ease-in-out infinite;
+}
+
+@keyframes mine-glow-flicker {
+    0%   { opacity: 0.5;  transform: translate(-50%, -50%) scale(0.90); }
+    18%  { opacity: 0.78; transform: translate(-50%, -50%) scale(1.03); }
+    34%  { opacity: 0.6;  transform: translate(-50%, -50%) scale(0.95); }
+    52%  { opacity: 0.85; transform: translate(-50%, -50%) scale(1.08); }
+    68%  { opacity: 0.58; transform: translate(-50%, -50%) scale(0.93); }
+    85%  { opacity: 0.72; transform: translate(-50%, -50%) scale(1.02); }
+    100% { opacity: 0.5;  transform: translate(-50%, -50%) scale(0.90); }
+}
+
+.mine-hotspot-glow.glow-aberta {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.5) 32%, rgba(255,255,255,0) 70%);
+}
+.mine-hotspot-glow.glow-ocupada {
+    background: radial-gradient(circle, rgba(255,204,0,0.95) 0%, rgba(255,204,0,0.45) 32%, rgba(255,204,0,0) 70%);
+}
+.mine-hotspot-glow.glow-disputando {
+    background: radial-gradient(circle, rgba(51,153,255,0.95) 0%, rgba(51,153,255,0.45) 32%, rgba(51,153,255,0) 70%);
+}
+.mine-hotspot-glow.glow-esgotada {
+    background: radial-gradient(circle, rgba(255,60,60,0.6) 0%, rgba(255,60,60,0.3) 32%, rgba(255,60,60,0) 70%);
+    animation-duration: 6s; /* mina apagada: luz mais lenta e fraca, tipo brasa */
+    opacity: 0.5;
+}
+
 /* Ícone pulsante exibido no centro enquanto a mina está "disputando" */
 .mine-hotspot-dispute-icon {
+    position: relative;
+    z-index: 2;
     width: 46%;
     max-width: 56px;
     filter: drop-shadow(0 2px 6px rgba(0,0,0,0.85));
@@ -332,6 +401,8 @@ body {
 }
 
 .mine-hotspot-crystal {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 3px;
@@ -349,9 +420,67 @@ body {
     vertical-align: -3px;
 }
 
+/* X vermelho exibido no centro do hotspot quando a mina está "Esgotada" */
+.mine-hotspot-exhausted-x {
+    position: relative;
+    z-index: 2;
+    width: 34%;
+    max-width: 40px;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85));
+}
+
+/* ==================================================================
+   OVERLAY DE TRANSIÇÃO DE SESSÃO
+   Bloqueia toda a tela nos ~2 minutos ao redor da virada de sessão
+   (1 min antes + 1 min de folga para o cron do Cloudflare rodar as
+   RPCs no Supabase), evitando cliques em estado desatualizado.
+   ================================================================== */
+#sessionTransitionOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+#sessionTransitionOverlay.active {
+    display: flex;
+}
+
+#sessionTransitionOverlay .sto-title {
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 1.25em;
+    color: #ffd700;
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.55), 2px 2px 4px black;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+    max-width: 90vw;
+}
+
+#sessionTransitionOverlay .sto-timer {
+    font-weight: bold;
+    font-size: 2em;
+    text-shadow: none !important;
+    background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
 /* Wrapper de avatar dentro do hotspot — reaproveita moldura de skin,
    apenas reduzido para caber no pino do mapa */
 .mine-hotspot .mine-owner-avatar-wrapper {
+    position: relative;
+    z-index: 2;
     width: 74px;
     height: 74px;
 }

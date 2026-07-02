@@ -257,11 +257,9 @@ body {
     outline: none;
     background: transparent;
     padding: 4px 2px;
-}
-
-.mine-hotspot:hover .mine-hotspot-glow {
-    filter: blur(7px);
-    transform: translate(-50%, -50%) scale(1.12);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .mine-hotspot:active {
@@ -328,7 +326,8 @@ body {
 
 .mine-hotspot-avatar-slot {
     position: relative;
-    flex: 1;
+    flex: 0 0 auto;   /* <- era "flex: 1" e esticava até o fim do hotspot, criando o gap grande */
+    height: 78px;     /* <- controla o tamanho da área do avatar/ícone/luz (ajuste aqui se precisar) */
     display: flex;
     align-items: center;
     justify-content: center;

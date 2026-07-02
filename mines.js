@@ -1712,7 +1712,7 @@ function formatTimeCombat(totalSeconds) {
 
       if (mine.status === "disputando") {
           // Em disputa: ícone pulsando no centro + "Disputando" embaixo dele
-          middleHtml = `<img class="mine-hotspot-dispute-icon" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="">`;
+          middleHtml = `<img class="mine-hotspot-dispute-icon" src="https://aden-rpg.pages.dev/assets/homeic.webp" alt="">`;
           bottomHtml = `<div class="mine-hotspot-subtitle status-disputando">Disputando</div>`;
       } else if (mine.owner_player_id) {
           // Ocupada: nome do dono abaixo do nome da mina, avatar no centro, cristais embaixo

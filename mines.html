@@ -292,19 +292,19 @@
             <!-- 1. Status das Minas -->
             <div class="tut-section">
                 <h4 class="tut-section-title" style="color:#00bfff; border-color:#00bfff;">1. Status das Minas</h4>
-                <p>Cada mina exibe um estado que indica se ela pode ser disputada:</p>
+                <p>Cada mina exibe um estado que indica se ela pode ser disputada. No mapa, o contorno do hotspot muda de cor conforme o estado:</p>
                 <div class="tut-status-grid">
                     <div class="tut-status-row">
-                        <div class="tut-dot" style="background:#0d1a0d; border-color:#4CAF50;"></div>
-                        <span><strong style="color:#4CAF50">Aberta</strong> — sem dono, disponível para capturar</span>
+                        <div class="tut-dot" style="background:#1a1a1a; border-color:#ffffff;"></div>
+                        <span><strong style="color:#ffffff">Aberta</strong> — sem dono, sem avatar no mapa; disponível para capturar</span>
                     </div>
                     <div class="tut-status-row">
                         <div class="tut-dot" style="background:#1a1200; border-color:#FFC107;"></div>
-                        <span><strong style="color:#FFC107">Ocupada</strong> — já possui um dono, desafie via PvP</span>
+                        <span><strong style="color:#FFC107">Ocupada</strong> — mostra o avatar e o nome do dono; desafie via PvP</span>
                     </div>
                     <div class="tut-status-row">
                         <div class="tut-dot" style="background:#001a1a; border-color:#2196F3;"></div>
-                        <span><strong style="color:#2196F3">Disputando</strong> — combate em andamento contra o monstro</span>
+                        <span><strong style="color:#2196F3">Disputando</strong> — ícone pulsando no lugar do avatar; combate em andamento contra o monstro</span>
                     </div>
                     <div class="tut-status-row">
                         <div class="tut-dot" style="background:#1a0808; border-color:#f44336;"></div>
@@ -355,9 +355,23 @@
                 </div>
             </div>
 
-            <!-- 5. Guilda Dominante -->
+            <!-- 5. Mapa e Zonas -->
             <div class="tut-section">
-                <h4 class="tut-section-title" style="color:#8ecf8e; border-color:#8ecf8e;">5. Guilda Dominante</h4>
+                <h4 class="tut-section-title" style="color:#66d9ef; border-color:#66d9ef;">5. Mapa e Zonas</h4>
+                <p>As minas ficam espalhadas em um <strong style="color:#ffd700">mapa arrastável</strong> — arraste com o dedo (ou mouse) e use pinça para dar zoom.</p>
+                <div class="tut-info-box">
+                    <ul>
+                        <li>🗺️ Cada zona tem <strong style="color:#ffd700">10 minas</strong> fixas no mapa</li>
+                        <li>🔓 A <strong style="color:#ffd700">próxima zona</strong> é liberada automaticamente assim que todas as minas da zona atual estiverem ocupadas</li>
+                        <li>🧭 Troque de zona pelo seletor abaixo do cronômetro de sessão; zonas ainda bloqueadas aparecem apagadas</li>
+                        <li>⬆️ Use a seta no topo do painel para recolher/expandir as informações de guilda, sessão e zonas e ver o mapa por inteiro</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 6. Guilda Dominante -->
+            <div class="tut-section">
+                <h4 class="tut-section-title" style="color:#8ecf8e; border-color:#8ecf8e;">6. Guilda Dominante</h4>
                 <p>A guilda com <strong style="color:#ffd700">mais membros donos de mina</strong> ao mesmo tempo é exibida no topo da página como <strong style="color:#ffd700">Guilda Dominante</strong>. Coordene com sua guilda para dominar o mapa!</p>
             </div>
 

@@ -1078,7 +1078,6 @@ body {
   -webkit-background-clip: text!important;
   -webkit-text-fill-color: transparent!important;
   margin-top: -32px;
-  background-color: black;
 }
 #tddimg {
   position: absolute !important;
@@ -2862,7 +2861,7 @@ body::before {
   position: fixed;
   inset: 0;
   background: inherit;
-  filter: blur(1px) brightness(0.6);
+  filter: blur(1px) brightness(0.85);
   z-index: -1;
 }
 
@@ -2959,8 +2958,8 @@ body::before {
 
 /* 8. TAB-PANE — fundo semi-transparente p/ cobrir imagem de fundo */
 .tab-pane {
-  background: rgba(10,8,5,0.55) !important;
-  backdrop-filter: blur(2px) !important;
+  background: rgba(10,8,5,0.20) !important;
+  backdrop-filter: none !important;
   border-radius: 0 0 8px 8px !important;
   padding: 10px 6px !important;
 }
@@ -3180,13 +3179,4 @@ body::before {
 #tabMenu {
   position: relative !important;
   z-index: 20 !important;
-}
-#raidTimerInfo {
-  font-weight: bold;
-  font-size: 1.6em!important;
-  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%)!important;
-  -webkit-background-clip: text!important;
-  -webkit-text-fill-color: transparent!important;
-  margin-top: -32px;
-  background-color: black;
 }

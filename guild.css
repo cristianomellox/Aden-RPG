@@ -2861,7 +2861,7 @@ body::before {
   position: fixed;
   inset: 0;
   background: inherit;
-  filter: blur(1px) brightness(0.85);
+  filter: blur(0px) brightness(0.95);
   z-index: -1;
 }
 
@@ -2958,7 +2958,7 @@ body::before {
 
 /* 8. TAB-PANE — fundo semi-transparente p/ cobrir imagem de fundo */
 .tab-pane {
-  background: rgba(10,8,5,0.20) !important;
+  background: rgba(10,8,5,0.10) !important;
   backdrop-filter: none !important;
   border-radius: 0 0 8px 8px !important;
   padding: 10px 6px !important;
@@ -3102,7 +3102,7 @@ body::before {
 .tab-pane {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  background: rgba(8, 6, 3, 0.20) !important;
+  background: rgba(8, 6, 3, 0.10) !important;
 }
 
 /* Gear icon — agora position:fixed funciona corretamente */

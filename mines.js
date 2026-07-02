@@ -327,6 +327,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =================================================================
   
   let userId = null;
+
+  // Offset (ms) entre o relógio do servidor (Supabase) e o relógio local do
+  // dispositivo, calculado a partir de `get_mine_boot_state`. Usar serverNow()
+  // em vez de `new Date()` evita bugs de fuso horário/relógio errado do jogador
+  // nos cálculos de sessão, que dependem do horário UTC real dos cron workers.
+  let serverTimeOffsetMs = 0;
+  function serverNow() {
+      return new Date(Date.now() + serverTimeOffsetMs);
+  }
   let currentMineId = null;
   let myOwnedMineId = null; 
   let maxMonsterHealth = 1;
@@ -543,29 +552,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!minesContainer) { console.error("[mines] ERRO: Container de minas não encontrado."); return; }
 
-  // =================================================================
-  // 3B. MAPA DA MINA — POSIÇÕES DOS HOTSPOTS (10 minas por zona)
-  // =================================================================
-  // Ajuste top/left/width/height olhando o retângulo tracejado (debug)
-  // renderizado em cima do mapa. Quando estiver posicionado corretamente,
-  // comente a linha "outline: 2px dashed ..." dentro de .mine-hotspot em
-  // mines.css para esconder as guias de debug.
-  //
-  // As posições abaixo são relativas ao tamanho NATURAL da imagem
-  // https://aden-rpg.pages.dev/assets/mapa_mina.webp (em pixels reais da imagem,
-  // não da tela) — o mesmo sistema usado em map_hotspots.js no Index.
-  const MINE_HOTSPOT_SLOTS = [
-      { top: 120,  left: 150,  width: 130, height: 150 },
-      { top: 120,  left: 700,  width: 130, height: 150 },
-      { top: 120,  left: 1250, width: 130, height: 150 },
-      { top: 480,  left: 380,  width: 130, height: 150 },
-      { top: 480,  left: 950,  width: 130, height: 150 },
-      { top: 840,  left: 150,  width: 130, height: 150 },
-      { top: 840,  left: 700,  width: 130, height: 150 },
-      { top: 840,  left: 1250, width: 130, height: 150 },
-      { top: 1200, left: 380,  width: 130, height: 150 },
-      { top: 1200, left: 950,  width: 130, height: 150 },
+
+  const MINE_HOTSPOT_DEBUG = false;
+  
+const MINE_HOTSPOT_SLOTS = [
+      { top: 113,  left: 96,  width: 130, height: 150 },
+      { top: 31,  left: 523,  width: 130, height: 150 },
+      { top: 62,  left: 1023, width: 130, height: 150 },
+      { top: 452,  left: 51,  width: 130, height: 150 },
+      { top: 430,  left: 570,  width: 130, height: 150 },
+      { top: 388,  left: 1083,  width: 130, height: 150 },
+      
+      { top: 880,  left: 80,  width: 130, height: 150 },
+      { top: 1010,  left: 564, width: 130, height: 150 },
+      { top: 708, left: 1048,  width: 130, height: 150 },
+      { top: 1002, left: 1031,  width: 130, height: 150 },
   ];
+  
 
   const MINE_MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/mapa_mina.webp';
 
@@ -809,6 +812,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // drag/zoom, para que os limites de arrasto batam exatamente com a arte.
   function initMineMap() {
       syncMineMapOffsets();
+      minesContainer.classList.toggle('debug-hotspots', MINE_HOTSPOT_DEBUG);
       minesContainer.style.backgroundImage = `url('${MINE_MAP_IMAGE_URL}')`;
       const probe = new Image();
       probe.onload = () => {
@@ -986,7 +990,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // =================================================================
   
   function getWeekendMultiplier() {
-      const day = new Date().getUTCDay();
+      const day = serverNow().getUTCDay();
       return (day === 6 || day === 0) ? 2 : 1;
   }
 
@@ -1710,12 +1714,15 @@ function formatTimeCombat(totalSeconds) {
           cardClass = "disabled-card";
       }
 
+      let glowClass = "glow-aberta";
       if (mine.status === "disputando") {
           // Em disputa: ícone pulsando no centro + "Disputando" embaixo dele
-          middleHtml = `<img class="mine-hotspot-dispute-icon" src="https://aden-rpg.pages.dev/assets/homeic.webp" alt="">`;
+          glowClass = "glow-disputando";
+          middleHtml = `<img class="mine-hotspot-dispute-icon" src="https://aden-rpg.pages.dev/assets/iniciar.webp" alt="">`;
           bottomHtml = `<div class="mine-hotspot-subtitle status-disputando">Disputando</div>`;
       } else if (mine.owner_player_id) {
           // Ocupada: nome do dono abaixo do nome da mina, avatar no centro, cristais embaixo
+          glowClass = "glow-ocupada";
           subtitleHtml = `<span class="mine-hotspot-subtitle owner-name">${esc(ownerName)}</span>`;
           middleHtml = _mOwnerAvatarHtml(owner);
           const start = new Date(mine.open_time || new Date());
@@ -1725,9 +1732,15 @@ function formatTimeCombat(totalSeconds) {
           const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
           bottomHtml = `<div class="mine-hotspot-crystal"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="">${crystals}</div>`;
       } else if (mine.status === "esgotada") {
+          glowClass = "glow-esgotada";
           subtitleHtml = `<span class="mine-hotspot-subtitle status-esgotada">Esgotada</span>`;
+          middleHtml = `<svg class="mine-hotspot-exhausted-x" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#ff3333" stroke-width="3.4" stroke-linecap="round">
+              <line x1="5" y1="5" x2="19" y2="19"/>
+              <line x1="19" y1="5" x2="5" y2="19"/>
+          </svg>`;
       } else {
-          // Aberta / sem dono: sem imagem, só o texto de status abaixo do nome da mina
+          // Aberta / sem dono: sem imagem — só a luz pulsante + o texto de status
+          glowClass = "glow-aberta";
           subtitleHtml = `<span class="mine-hotspot-subtitle status-aberta">Aberta</span>`;
       }
 
@@ -1736,10 +1749,23 @@ function formatTimeCombat(totalSeconds) {
       const innerHTML = `
         <span class="mine-hotspot-number">Mina ${esc(numberLabel)}</span>
         ${subtitleHtml}
-        <div class="mine-hotspot-avatar-slot">${middleHtml}</div>
+        <div class="mine-hotspot-avatar-slot">
+          <div class="mine-hotspot-glow ${glowClass}"></div>
+          ${middleHtml}
+        </div>
         ${bottomHtml}`;
 
       return { className, innerHTML, actionType };
+  }
+
+  // Deixa o mapa sem cor quando TODAS as minas visíveis da zona estiverem
+  // "esgotadas" (sessão encerrada, aguardando a próxima). Volta ao normal
+  // assim que qualquer mina reabrir/for ocupada/entrar em disputa.
+  function _refreshMapDesaturation() {
+      const hotspots = minesContainer.querySelectorAll(".mine-hotspot");
+      const allExhausted = hotspots.length > 0 &&
+          Array.from(hotspots).every(el => el.classList.contains("esgotada"));
+      minesContainer.classList.toggle("map-desaturated", allExhausted);
   }
 
   function renderMines(mines, ownersMap) {
@@ -1779,6 +1805,7 @@ function formatTimeCombat(totalSeconds) {
     });
     // Aplica molduras após render — diferido para não competir com updateDominantGuild
     setTimeout(() => _mApplyFramesToCards(), 0);
+    _refreshMapDesaturation();
   }
 
   function renderAndAppendSingleCard(mine) {
@@ -1913,6 +1940,7 @@ function formatTimeCombat(totalSeconds) {
           if (mappedMine.owner_player_id === userId) myOwnedMineId = mappedMine.id;
           else if (myOwnedMineId === mappedMine.id) myOwnedMineId = null;
           syncMiningActivity(); // Sincroniza o lock de caça com a posse real de mina
+          _refreshMapDesaturation();
 
           // Atualiza a guilda dominante refletindo a nova posse desta mina
           const updatedMinesList = lastRenderedMines.map(m =>
@@ -2616,6 +2644,13 @@ function formatTimeCombat(totalSeconds) {
 
       if (error) throw error;
 
+      // T) Sincroniza relógio do servidor — todas as contagens de sessão passam
+      // a usar este horário (corrigido pelo offset) em vez do relógio local do
+      // dispositivo, para não quebrar com fuso horário/relógio errado do jogador.
+      if (data.t) {
+          serverTimeOffsetMs = new Date(data.t).getTime() - Date.now();
+      }
+
       // Z) Zona máxima liberada (10 minas/zona; próxima libera quando a atual lota)
       if (typeof data.z === 'number' && data.z > 0) {
           maxUnlockedZone = data.z;
@@ -2730,20 +2765,93 @@ function formatTimeCombat(totalSeconds) {
     }
   });
 
+  // =================================================================
+  // JANELAS DE SESSÃO (baseadas no horário REAL do servidor, em UTC)
+  // -----------------------------------------------------------------
+  // Cron workers no Cloudflare (sempre em UTC):
+  //   • Esgotar + pagar cristais:  49 0,2,4,6,8,10,12,14,16,18,20,22 * * *
+  //     -> roda no minuto 49 de toda hora PAR (0:49, 2:49, ... 22:49 UTC)
+  //   • Iniciar nova sessão:       0 3,5,7,9,11,13,15,17,19,21,23,1 * * *
+  //     -> roda no minuto 0 de toda hora ÍMPAR (1:00, 3:00, ... 23:00 UTC)
+  // Ou seja: sessão abre numa hora ÍMPAR (UTC) e esgota 1h49 depois, na
+  // hora PAR seguinte, minuto 49. O "Próxima sessão em" sempre mostra o
+  // tempo até a PRÓXIMA abertura (próxima hora ímpar UTC).
+  //
+  // Tudo aqui usa serverNow() (relógio do servidor + offset), nunca o
+  // relógio local do dispositivo — assim o fuso horário/relógio errado
+  // do jogador nunca desalinha o timer com os cron jobs reais.
+  // =================================================================
+  function _nextSessionOpenBoundaryUTC(now) {
+      const d = now;
+      let h = d.getUTCHours();
+      let targetHour = (h % 2 === 0) ? h + 1 : h; // próxima hora ímpar >= h
+      let boundary = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), targetHour, 0, 0, 0));
+      if (boundary.getTime() <= now.getTime()) {
+          targetHour += 2;
+          boundary = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), targetHour, 0, 0, 0));
+      }
+      // Date.UTC lida sozinho com overflow de hora (>23 vira o dia seguinte)
+      return boundary;
+  }
+
+  // =================================================================
+  // OVERLAY DE TRANSIÇÃO DE SESSÃO
+  // -----------------------------------------------------------------
+  // Os cron workers do Cloudflare que rodam as RPCs no Supabase têm
+  // cerca de 1 minuto de atraso. Para evitar cliques num estado
+  // desatualizado, bloqueamos a tela por uma janela fixa de 2 minutos
+  // ao redor de cada abertura de sessão: de 1 min ANTES até 1 min
+  // DEPOIS da hora ímpar UTC.
+  //
+  // A janela é calculada a partir de um horário absoluto (a própria
+  // hora ímpar UTC), não a partir de "quando este cliente entrou na
+  // página" — por isso, mesmo quem abrir a página no meio da janela vê
+  // o overlay com a contagem já correta (justo para quem não estava
+  // esperando).
+  // =================================================================
+  const SESSION_BOUNDARY_BUFFER_MS = 60 * 1000; // 1 min antes + 1 min depois = 2 min de overlay
+  let sessionOverlayReloadTriggered = false;
+
+  function checkSessionTransitionOverlay(now) {
+      const overlay = document.getElementById('sessionTransitionOverlay');
+      const timerEl = document.getElementById('sessionTransitionTimer');
+      if (!overlay) return;
+
+      const ms2h = 2 * 60 * 60 * 1000;
+      const nextBoundary = _nextSessionOpenBoundaryUTC(now).getTime();
+      const prevBoundary = nextBoundary - ms2h;
+      const msUntilNext = nextBoundary - now.getTime();
+      const msSincePrev = now.getTime() - prevBoundary;
+
+      let activeBoundary = null;
+      if (msUntilNext <= SESSION_BOUNDARY_BUFFER_MS) activeBoundary = nextBoundary;       // faltando <= 1 min
+      else if (msSincePrev <= SESSION_BOUNDARY_BUFFER_MS) activeBoundary = prevBoundary;  // passou há <= 1 min
+
+      if (activeBoundary === null) {
+          overlay.classList.remove('active');
+          sessionOverlayReloadTriggered = false;
+          return;
+      }
+
+      const target = activeBoundary + SESSION_BOUNDARY_BUFFER_MS; // fim da janela = hora ímpar + 1 min
+      const remainingMs = target - now.getTime();
+
+      overlay.classList.add('active');
+      if (timerEl) timerEl.textContent = formatTimeCombat(Math.max(0, remainingMs) / 1000);
+
+      if (remainingMs <= 0 && !sessionOverlayReloadTriggered) {
+          sessionOverlayReloadTriggered = true;
+          window.location.reload();
+      }
+  }
+
   function updateCountdown() {
-    const now = new Date();
-    const currentHour = now.getHours();
-    let nextSessionDate = new Date();
-    let nextSessionHour = currentHour + (currentHour % 2 === 0 ? 2 : 1);
-    if (nextSessionHour > 23) {
-      nextSessionHour = 0;
-      nextSessionDate.setDate(nextSessionDate.getDate() + 1);
-    }
-    nextSessionDate.setHours(nextSessionHour, 0, 0, 0);
-    const diffInMs = nextSessionDate.getTime() - now.getTime();
-    const diffInSeconds = Math.floor(diffInMs / 1000);
+    const now = serverNow();
+    const nextSessionDate = _nextSessionOpenBoundaryUTC(now);
+    const diffInSeconds = Math.floor((nextSessionDate.getTime() - now.getTime()) / 1000);
     if (cycleInfoElement) cycleInfoElement.innerHTML = ` <strong>${formatTimeHHMMSS(diffInSeconds)}</strong>`;
     checkEventStatus();
+    checkSessionTransitionOverlay(now);
   }
   setInterval(updateCountdown, 1000);
   updateCountdown();

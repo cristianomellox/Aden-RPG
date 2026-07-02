@@ -117,14 +117,19 @@
     </div>
 
     <div id="mainContainer">
+
+        <!-- Viewport arrastável/zoom do mapa da mina (padrão UE5 igual ao Index) -->
+        <div id="mineMapViewport">
+            <div id="minesContainer"></div>
+        </div>
+
+        <!-- HUD sobreposto ao mapa: guilda dominante + timer + seletor de zona -->
         <div id="mineHeader">
            <p><strong>Guilda Dominante:</strong><br>
            <span id="guilddom">Nenhuma.</span></p>
             <p>Próxima sessão em: <span style="color: white;" id="cycleInfo"></span></p>
+            <div id="zoneSelector"></div>
         </div>
-
-        <div id="minesContainer">
-            </div>
     </div>
 
     <div id="combatModal" class="modal-overlay" style="display: none;">

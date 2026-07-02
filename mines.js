@@ -544,6 +544,335 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!minesContainer) { console.error("[mines] ERRO: Container de minas não encontrado."); return; }
 
   // =================================================================
+  // 3B. MAPA DA MINA — POSIÇÕES DOS HOTSPOTS (10 minas por zona)
+  // =================================================================
+  // Ajuste top/left/width/height olhando o retângulo tracejado (debug)
+  // renderizado em cima do mapa. Quando estiver posicionado corretamente,
+  // comente a linha "outline: 2px dashed ..." dentro de .mine-hotspot em
+  // mines.css para esconder as guias de debug.
+  //
+  // As posições abaixo são relativas ao tamanho NATURAL da imagem
+  // https://aden-rpg.pages.dev/assets/mapa_mina.webp (em pixels reais da imagem,
+  // não da tela) — o mesmo sistema usado em map_hotspots.js no Index.
+  const MINE_HOTSPOT_SLOTS = [
+      { top: 120,  left: 150,  width: 130, height: 150 },
+      { top: 120,  left: 700,  width: 130, height: 150 },
+      { top: 120,  left: 1250, width: 130, height: 150 },
+      { top: 480,  left: 380,  width: 130, height: 150 },
+      { top: 480,  left: 950,  width: 130, height: 150 },
+      { top: 840,  left: 150,  width: 130, height: 150 },
+      { top: 840,  left: 700,  width: 130, height: 150 },
+      { top: 840,  left: 1250, width: 130, height: 150 },
+      { top: 1200, left: 380,  width: 130, height: 150 },
+      { top: 1200, left: 950,  width: 130, height: 150 },
+  ];
+
+  const MINE_MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/mapa_mina.webp';
+
+  // =================================================================
+  // 3C. AJUSTE DE HUD FIXO (topbar/footer) — igual conceito do Index
+  // =================================================================
+  function syncMineMapOffsets() {
+      const viewport = document.getElementById('mineMapViewport');
+      const header = document.getElementById('mineHeader');
+      const topBar = document.getElementById('playerTopBar');
+      const footerBar = document.getElementById('playerFooterBar');
+      const topH = topBar ? topBar.getBoundingClientRect().height : 0;
+      const footH = footerBar ? footerBar.getBoundingClientRect().height : 0;
+      if (viewport) {
+          viewport.style.marginTop = topH + 'px';
+          viewport.style.height = `calc(100vh - ${topH + footH}px)`;
+      }
+      if (header && !header._collapsed) {
+          header.style.top = (topH + 8) + 'px';
+      }
+      const toggleBtn = document.getElementById('mineHeaderToggleBtn');
+      if (toggleBtn && header) {
+          requestAnimationFrame(() => {
+              const rect = header.getBoundingClientRect();
+              toggleBtn.style.top = (header._collapsed ? topH : rect.bottom) + 'px';
+          });
+      }
+  }
+
+  // =================================================================
+  // 3C-2. RETRAIR/EXPANDIR O HUD (mesmo padrão visual do sidemenu-toggle.js)
+  // =================================================================
+  const MHDR_SVG_UP = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`;
+  const MHDR_SVG_DOWN = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+
+  function initMineHeaderToggle() {
+      const header = document.getElementById('mineHeader');
+      if (!header || header._toggleInit) return;
+      header._toggleInit = true;
+      header._collapsed = false;
+
+      const btn = document.createElement('button');
+      btn.id = 'mineHeaderToggleBtn';
+      btn.innerHTML = MHDR_SVG_UP;
+      btn.title = 'Recolher painel';
+      document.body.appendChild(btn);
+
+      btn.addEventListener('click', () => {
+          header._collapsed = !header._collapsed;
+          if (header._collapsed) {
+              header.style.transform = 'translateX(-50%) translateY(-115%)';
+              header.style.opacity = '0';
+              header.style.pointerEvents = 'none';
+              btn.innerHTML = MHDR_SVG_DOWN;
+              btn.title = 'Expandir painel';
+          } else {
+              header.style.transform = 'translateX(-50%)';
+              header.style.opacity = '1';
+              header.style.pointerEvents = '';
+              btn.innerHTML = MHDR_SVG_UP;
+              btn.title = 'Recolher painel';
+          }
+          syncMineMapOffsets();
+      });
+
+      syncMineMapOffsets();
+  }
+
+  // =================================================================
+  // 3D. INTERAÇÃO DO MAPA: ARRASTAR + INÉRCIA + PINCH-TO-ZOOM
+  // (mesma lógica usada no mapa do Index — script.js:enableMapInteraction)
+  // =================================================================
+  let mineMapReady = false;
+  function enableMineMapInteraction() {
+      const map = minesContainer; // #minesContainer é a camada do mapa (equivalente ao #mapImage)
+      if (!map || map._interactionEnabled) return;
+      map._interactionEnabled = true;
+
+      let currentX = 0, currentY = 0, currentScale = 1;
+      let MIN_SCALE = 0.45;
+      const MAX_SCALE = 2.0;
+
+      let velocityX = 0, velocityY = 0;
+      let lastDragTime = 0, lastDragX = 0, lastDragY = 0;
+      let animationFrameId = null;
+      const FRICTION = 0.98;
+
+      let isDragging = false, startX = 0, startY = 0;
+      let isPinching = false, pinchStartDist = 0, pinchStartScale = 1;
+      let pinchFocalX = 0, pinchFocalY = 0, pinchStartTx = 0, pinchStartTy = 0;
+      let minX = 0, maxX = 0, minY = 0, maxY = 0;
+
+      function getViewport() { return document.getElementById('mineMapViewport'); }
+
+      function recalcLimits() {
+          const container = getViewport();
+          if (!container) return;
+          const cr = container.getBoundingClientRect();
+          MIN_SCALE = Math.max(cr.width / (map.offsetWidth || 1500), cr.height / (map.offsetHeight || 1600));
+          const scaledW = (map.offsetWidth  || 1500) * currentScale;
+          const scaledH = (map.offsetHeight || 1600) * currentScale;
+          minX = Math.min(0, cr.width  - scaledW);
+          minY = Math.min(0, cr.height - scaledH);
+          maxX = 0; maxY = 0;
+      }
+
+      recalcLimits();
+      currentScale = Math.min(MIN_SCALE * 1.3, MAX_SCALE);
+      (function () {
+          const container = getViewport();
+          if (container) {
+              const cr = container.getBoundingClientRect();
+              const scaledW = (map.offsetWidth  || 1500) * currentScale;
+              const scaledH = (map.offsetHeight || 1600) * currentScale;
+              currentX = Math.min(0, (cr.width  - scaledW) / 2);
+              currentY = Math.min(0, (cr.height - scaledH) / 2);
+          }
+      })();
+      map.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+      recalcLimits();
+      window.addEventListener('resize', () => { syncMineMapOffsets(); recalcLimits(); });
+
+      map.style.touchAction = 'none';
+      map.style.userSelect  = 'none';
+
+      function applyTransform(x, y, s) {
+          s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+          const container = getViewport();
+          if (container) {
+              const cr = container.getBoundingClientRect();
+              const sw = (map.offsetWidth  || 1500) * s;
+              const sh = (map.offsetHeight || 1600) * s;
+              x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
+              y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
+          }
+          currentX = x; currentY = y; currentScale = s;
+          map.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+          recalcLimits();
+      }
+
+      function setTransform(x, y) {
+          x = Math.max(minX, Math.min(maxX, x));
+          y = Math.max(minY, Math.min(maxY, y));
+          currentX = x; currentY = y;
+          map.style.transform = `translate(${x}px, ${y}px) scale(${currentScale})`;
+      }
+
+      function inertiaAnimation() {
+          velocityX *= FRICTION; velocityY *= FRICTION;
+          setTransform(currentX + velocityX, currentY + velocityY);
+          if (Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
+              animationFrameId = requestAnimationFrame(inertiaAnimation);
+          } else { velocityX = 0; velocityY = 0; animationFrameId = null; }
+      }
+
+      function getPoint(e) {
+          return e.touches && e.touches.length
+              ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+              : { x: e.clientX, y: e.clientY };
+      }
+      function touchDist(e) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+      }
+      function touchMid(e) {
+          return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+      }
+
+      function startDrag(e) {
+          if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+          const p = getPoint(e);
+          isDragging = true;
+          startX = p.x - currentX; startY = p.y - currentY;
+          map.style.cursor = 'grabbing';
+          lastDragX = p.x; lastDragY = p.y; lastDragTime = performance.now();
+      }
+      function continueDrag(e) {
+          if (!isDragging) return;
+          e.preventDefault();
+          const p = getPoint(e);
+          setTransform(p.x - startX, p.y - startY);
+          const now = performance.now();
+          const dt = now - lastDragTime;
+          if (dt > 0) { velocityX = (p.x - lastDragX) / dt; velocityY = (p.y - lastDragY) / dt; }
+          lastDragX = p.x; lastDragY = p.y; lastDragTime = now;
+      }
+      function endDrag() {
+          if (!isDragging) return;
+          isDragging = false;
+          map.style.cursor = 'grab';
+          if (Math.abs(velocityX * 10) > 2 || Math.abs(velocityY * 10) > 2) {
+              velocityX *= 10; velocityY *= 10; inertiaAnimation();
+          } else { velocityX = 0; velocityY = 0; }
+      }
+
+      function onTouchStart(e) {
+          if (e.touches.length >= 2) {
+              isPinching = true; isDragging = false;
+              if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+              pinchStartDist = touchDist(e); pinchStartScale = currentScale;
+              const mid = touchMid(e);
+              const container = getViewport();
+              const cr = container ? container.getBoundingClientRect() : { left: 0, top: 0 };
+              pinchFocalX = mid.x - cr.left; pinchFocalY = mid.y - cr.top;
+              pinchStartTx = currentX; pinchStartTy = currentY;
+          } else if (e.touches.length === 1 && !isPinching) {
+              startDrag(e);
+          }
+      }
+      function onTouchMove(e) {
+          if (e.touches.length >= 2 && isPinching) {
+              e.preventDefault();
+              const newDist = touchDist(e);
+              const newScale = pinchStartScale * (newDist / pinchStartDist);
+              const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
+              const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
+              applyTransform(pinchFocalX - mapPointX * newScale, pinchFocalY - mapPointY * newScale, newScale);
+          } else if (e.touches.length === 1 && !isPinching) {
+              continueDrag(e);
+          }
+      }
+      function onTouchEnd(e) {
+          if (isPinching && e.touches.length < 2) { isPinching = false; velocityX = 0; velocityY = 0; recalcLimits(); }
+          if (e.touches.length === 0) endDrag();
+      }
+
+      map.addEventListener('mousedown', startDrag, { passive: true });
+      window.addEventListener('mousemove', continueDrag, { passive: false });
+      window.addEventListener('mouseup', endDrag, { passive: true });
+
+      map.addEventListener('touchstart', onTouchStart, { passive: true });
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
+      window.addEventListener('touchend', onTouchEnd, { passive: true });
+
+      map.style.cursor = 'grab';
+      setTimeout(recalcLimits, 100);
+  }
+
+  // Carrega a imagem do mapa real (dimensões naturais) antes de habilitar o
+  // drag/zoom, para que os limites de arrasto batam exatamente com a arte.
+  function initMineMap() {
+      syncMineMapOffsets();
+      minesContainer.style.backgroundImage = `url('${MINE_MAP_IMAGE_URL}')`;
+      const probe = new Image();
+      probe.onload = () => {
+          minesContainer.style.width  = probe.naturalWidth + 'px';
+          minesContainer.style.height = probe.naturalHeight + 'px';
+          enableMineMapInteraction();
+          mineMapReady = true;
+      };
+      probe.onerror = () => {
+          // Mantém o fallback 1500x1600 definido no CSS caso a imagem falhe
+          enableMineMapInteraction();
+          mineMapReady = true;
+      };
+      probe.src = MINE_MAP_IMAGE_URL;
+  }
+
+  // =================================================================
+  // 3E. SELETOR DE ZONAS
+  // -----------------------------------------------------------------
+  // 10 minas por zona, até 5 zonas (50 minas). A zona N+1 só aparece
+  // liberada quando a RPC `get_max_unlocked_zone` (chamada dentro do
+  // get_mine_boot_state, campo `z`) indica que a zona N está 100% ocupada.
+  // =================================================================
+  let currentZone = 1;
+  let maxUnlockedZone = 1;
+  const TOTAL_ZONES_PLANNED = 5; // 50 minas / 10 por zona
+  const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912"];
+
+  function renderZoneSelector() {
+      const container = document.getElementById('zoneSelector');
+      if (!container) return;
+      container.innerHTML = '';
+
+      for (let z = 1; z <= TOTAL_ZONES_PLANNED; z++) {
+          const unlocked = z <= maxUnlockedZone;
+          const tab = document.createElement('button');
+          tab.type = 'button';
+          tab.className = 'zone-tab' + (z === currentZone ? ' active' : '') + (!unlocked ? ' locked' : '');
+          tab.textContent = `Zona ${z}`;
+          if (unlocked) {
+              tab.addEventListener('click', () => switchZone(z));
+          } else {
+              tab.title = 'Disponível quando a zona anterior estiver 100% ocupada';
+              tab.addEventListener('click', () => {
+                  showModalAlert('Esta zona será liberada assim que todas as minas da zona anterior estiverem ocupadas.');
+              });
+          }
+          container.appendChild(tab);
+      }
+  }
+
+  async function switchZone(zoneNumber) {
+      if (zoneNumber === currentZone || zoneNumber > maxUnlockedZone) return;
+      currentZone = zoneNumber;
+      renderZoneSelector();
+
+      // Zerando as atribuições de slot do mapa para a nova zona
+      for (const key in mineSlotAssignments) delete mineSlotAssignments[key];
+
+      try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS, p_zone: currentZone }); } catch (e) {}
+      await loadMines();
+  }
+
+  // =================================================================
   // 4. CACHE HELPER & AUTH (OTIMIZADO)
   // =================================================================
   
@@ -1284,7 +1613,7 @@ function formatTimeCombat(totalSeconds) {
     showLoading();
     try {
       // [OTIMIZADO] Usa 'get_visible_mines' (chaves minificadas)
-      const { data: minesJson } = await supabase.rpc("get_visible_mines");
+      const { data: minesJson } = await supabase.rpc("get_visible_mines", { p_zone: currentZone });
       const mines = minesJson || [];
 
       // Mapeia chaves curtas para longas
@@ -1319,66 +1648,135 @@ function formatTimeCombat(totalSeconds) {
 
     } catch (e) {
       console.error(e);
-      minesContainer.innerHTML = `<p>Erro ao carregar minas.</p>`;
+      minesContainer.querySelectorAll(".mine-hotspot").forEach(el => el.remove());
+      showModalAlert("Erro ao carregar minas. Tente novamente.");
     } finally {
       hideLoading();
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Extrai o número de exibição da mina (ex.: "Mina 001" -> "001").
+  // Se o nome não tiver dígitos, usa o índice do slot como fallback.
+  // ─────────────────────────────────────────────────────────────────
+  function _mineNumberLabel(mine, slotIndex) {
+      if (mine && mine.name) {
+          const match = String(mine.name).match(/(\d+)/);
+          if (match) return match[1];
+      }
+      return String(slotIndex + 1).padStart(3, "0");
+  }
+
+  // Controla quais slots do mapa já estão ocupados por um hotspot
+  // (chave: mine.id → índice do slot). Mantido fora das funções de
+  // render para sobreviver a atualizações pontuais (single card).
+  const mineSlotAssignments = {};
+  function _assignMineSlot(mineId, preferredIndex) {
+      if (mineSlotAssignments[mineId] !== undefined) return mineSlotAssignments[mineId];
+      const used = new Set(Object.values(mineSlotAssignments));
+      let idx = (typeof preferredIndex === "number" && !used.has(preferredIndex))
+          ? preferredIndex
+          : null;
+      if (idx === null) {
+          for (let i = 0; i < MINE_HOTSPOT_SLOTS.length; i++) {
+              if (!used.has(i)) { idx = i; break; }
+          }
+      }
+      if (idx === null) idx = Object.keys(mineSlotAssignments).length % MINE_HOTSPOT_SLOTS.length; // overflow: reaproveita
+      mineSlotAssignments[mineId] = idx;
+      return idx;
+  }
+
+  // Monta className + innerHTML + actionType de um hotspot, dado o estado da mina.
+  // Reutilizado por renderMines, renderAndAppendSingleCard e updateSingleMineCard
+  // para garantir que a MESMA lógica de negócio (quem pode clicar, o quê acontece)
+  // permaneça idêntica à versão anterior em cards.
+  function _buildHotspotParts(mine, owner, slotIndex) {
+      const ownerName = owner ? (owner.name || "Desconhecido") : null;
+
+      let subtitleHtml = "";
+      let middleHtml = "";
+      let bottomHtml = "";
+
+      let actionType = null;
+      let cardClass = "";
+      if (mine.status === "aberta" && !mine.owner_player_id) {
+          actionType = "startCombat";
+      } else if (mine.status === "disputando") {
+          actionType = "startCombat";
+      } else if (mine.owner_player_id && mine.owner_player_id !== userId) {
+          actionType = "challengeMine";
+      } else if (mine.owner_player_id === userId) {
+          cardClass = "disabled-card";
+      }
+
+      if (mine.status === "disputando") {
+          // Em disputa: ícone pulsando no centro + "Disputando" embaixo dele
+          middleHtml = `<img class="mine-hotspot-dispute-icon" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="">`;
+          bottomHtml = `<div class="mine-hotspot-subtitle status-disputando">Disputando</div>`;
+      } else if (mine.owner_player_id) {
+          // Ocupada: nome do dono abaixo do nome da mina, avatar no centro, cristais embaixo
+          subtitleHtml = `<span class="mine-hotspot-subtitle owner-name">${esc(ownerName)}</span>`;
+          middleHtml = _mOwnerAvatarHtml(owner);
+          const start = new Date(mine.open_time || new Date());
+          const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
+          const mult = getWeekendMultiplier();
+          const maxCrystals = 1500 * mult;
+          const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
+          bottomHtml = `<div class="mine-hotspot-crystal"><img src="https://aden-rpg.pages.dev/assets/cristais.webp" alt="">${crystals}</div>`;
+      } else if (mine.status === "esgotada") {
+          subtitleHtml = `<span class="mine-hotspot-subtitle status-esgotada">Esgotada</span>`;
+      } else {
+          // Aberta / sem dono: sem imagem, só o texto de status abaixo do nome da mina
+          subtitleHtml = `<span class="mine-hotspot-subtitle status-aberta">Aberta</span>`;
+      }
+
+      const numberLabel = _mineNumberLabel(mine, slotIndex);
+      const className = `mine-hotspot ${mine.status || ""} ${actionType ? "clickable" : ""} ${cardClass}`;
+      const innerHTML = `
+        <span class="mine-hotspot-number">Mina ${esc(numberLabel)}</span>
+        ${subtitleHtml}
+        <div class="mine-hotspot-avatar-slot">${middleHtml}</div>
+        ${bottomHtml}`;
+
+      return { className, innerHTML, actionType };
   }
 
   function renderMines(mines, ownersMap) {
     globalOwnersMap = { ...globalOwnersMap, ...ownersMap };
     lastRenderedMines = [...mines]; // Salva snapshot para atualizações pontuais posteriores
 
-    minesContainer.innerHTML = "";
-    for (const mine of mines) {
+    minesContainer.querySelectorAll(".mine-hotspot").forEach(el => el.remove());
+    for (const key in mineSlotAssignments) delete mineSlotAssignments[key];
+
+    // Ordena por nome para manter os hotspots sempre nas mesmas posições do mapa
+    const sortedMines = [...mines].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true }));
+
+    sortedMines.forEach((mine, index) => {
       const owner = ownersMap[mine.owner_player_id];
-      const ownerName = owner ? (owner.name || "Desconhecido") : null;
-      const ownerAvatarHtml = _mOwnerAvatarHtml(owner);
+      const slotIndex = _assignMineSlot(mine.id, index);
+      const slot = MINE_HOTSPOT_SLOTS[slotIndex] || MINE_HOTSPOT_SLOTS[slotIndex % MINE_HOTSPOT_SLOTS.length];
+      const { className, innerHTML, actionType } = _buildHotspotParts(mine, owner, slotIndex);
 
-      let collectingHtml = "";
-      if (mine.owner_player_id) {
-        const start = new Date(mine.open_time || new Date());
-        const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-        const mult = getWeekendMultiplier();
-        const maxCrystals = 1500 * mult;
-        const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
-        collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
-      }
-
-      let actionType = null;
-      let cardClass = "";
-
-      if (mine.status === "aberta" && !mine.owner_player_id) {
-        actionType = "startCombat";
-      } else if (mine.status === "disputando") {
-        actionType = "startCombat";
-      } else if (mine.owner_player_id && mine.owner_player_id !== userId) {
-        actionType = "challengeMine";
-      } else if (mine.owner_player_id === userId) {
-        cardClass = "disabled-card";
-      }
-
-      const card = document.createElement("div");
-      card.id = `mine-card-${mine.id}`;
-      card.className = `mine-card ${mine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
-      card.innerHTML = `
-        <h3 style="color: yellow;">${esc(mine.name)}</h3>
-        <p>${esc(mine.status || "Fechada")}</p>
-        ${ownerName ? `
-          <div class="mine-owner-container">
-            ${ownerAvatarHtml}
-            <span>${esc(ownerName)}</span>
-          </div>` : "<p><strong>Sem Dono</strong></p>"}
-        ${collectingHtml}`;
+      const hotspot = document.createElement("div");
+      hotspot.id = `mine-card-${mine.id}`; // id mantido para compatibilidade com o restante da lógica
+      hotspot.className = className;
+      Object.assign(hotspot.style, {
+          top: `${slot.top}px`,
+          left: `${slot.left}px`,
+          width: `${slot.width}px`,
+          height: `${slot.height}px`,
+      });
+      hotspot.innerHTML = innerHTML;
 
       if (actionType) {
-        card.addEventListener("click", () => {
+        hotspot.addEventListener("click", () => {
           if (actionType === "startCombat") startCombat(mine.id);
           else if (actionType === "challengeMine") challengeMine(mine, owner, mines);
         });
       }
-      minesContainer.appendChild(card);
-    }
+      minesContainer.appendChild(hotspot);
+    });
     // Aplica molduras após render — diferido para não competir com updateDominantGuild
     setTimeout(() => _mApplyFramesToCards(), 0);
   }
@@ -1388,55 +1786,31 @@ function formatTimeCombat(totalSeconds) {
       if (document.getElementById(`mine-card-${mine.id}`)) return;
 
       const owner = globalOwnersMap[mine.owner_player_id];
-      const ownerName = owner ? (owner.name || "Desconhecido") : null;
-      const ownerAvatarHtml = _mOwnerAvatarHtml(owner);
+      const slotIndex = _assignMineSlot(mine.id);
+      const slot = MINE_HOTSPOT_SLOTS[slotIndex] || MINE_HOTSPOT_SLOTS[slotIndex % MINE_HOTSPOT_SLOTS.length];
+      const { className, innerHTML, actionType } = _buildHotspotParts(mine, owner, slotIndex);
 
-      let collectingHtml = "";
-      if (mine.owner_player_id) {
-        const start = new Date(mine.open_time || new Date());
-        const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-        const mult = getWeekendMultiplier();
-        const maxCrystals = 1500 * mult;
-        const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
-        collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
-      }
-
-      let actionType = null;
-      let cardClass = "";
-
-      if (mine.status === "aberta" && !mine.owner_player_id) {
-        actionType = "startCombat";
-      } else if (mine.status === "disputando") {
-        actionType = "startCombat";
-      } else if (mine.owner_player_id && mine.owner_player_id !== userId) {
-        actionType = "challengeMine";
-      } else if (mine.owner_player_id === userId) {
-        cardClass = "disabled-card";
-      }
-
-      const card = document.createElement("div");
-      card.id = `mine-card-${mine.id}`;
-      card.className = `mine-card ${mine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
-      card.innerHTML = `
-        <h3 style="color: yellow;">${esc(mine.name)}</h3>
-        <p>${esc(mine.status || "Fechada")}</p>
-        ${ownerName ? `
-          <div class="mine-owner-container">
-            ${ownerAvatarHtml}
-            <span>${esc(ownerName)}</span>
-          </div>` : "<p><strong>Sem Dono</strong></p>"}
-        ${collectingHtml}`;
+      const hotspot = document.createElement("div");
+      hotspot.id = `mine-card-${mine.id}`;
+      hotspot.className = className;
+      Object.assign(hotspot.style, {
+          top: `${slot.top}px`,
+          left: `${slot.left}px`,
+          width: `${slot.width}px`,
+          height: `${slot.height}px`,
+      });
+      hotspot.innerHTML = innerHTML;
 
       if (actionType) {
-        card.addEventListener("click", () => {
+        hotspot.addEventListener("click", () => {
           if (actionType === "startCombat") startCombat(mine.id);
           else if (actionType === "challengeMine") challengeMine(mine, owner, []);
         });
       }
-      minesContainer.appendChild(card);
+      minesContainer.appendChild(hotspot);
       // Aplica moldura do dono recém-adicionado
       if (owner && owner.id) {
-          const wrapper = card.querySelector('.mine-owner-avatar-wrapper');
+          const wrapper = hotspot.querySelector('.mine-owner-avatar-wrapper');
           if (wrapper) {
               const ownId = owner.id;
               _mFetchAndApplyFrame(ownId, (frameUrl) => _mApplyFrameToOwnerWrapper(wrapper, frameUrl));
@@ -1509,41 +1883,13 @@ function formatTimeCombat(totalSeconds) {
               }
           }
 
-          const ownerName = owner ? (owner.name || "Desconhecido") : null;
-          const ownerAvatarHtml = _mOwnerAvatarHtml(owner);
+          const slotIndex = _assignMineSlot(mappedMine.id);
+          const { className, innerHTML, actionType } = _buildHotspotParts(mappedMine, owner, slotIndex);
 
-          let collectingHtml = "";
-          if (mappedMine.owner_player_id) {
-              const start = new Date(mappedMine.open_time || new Date());
-              const seconds = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
-              const mult = getWeekendMultiplier();
-              const maxCrystals = 1500 * mult;
-              const crystals = Math.min(maxCrystals, Math.floor(seconds * (maxCrystals / 6600.0)));
-              collectingHtml = `<p><img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 27px; height: 27px; vertical-align: -6px;"><strong> ${crystals}</strong></p>`;
-          }
-
-          let actionType = null;
-          let cardClass = "";
-          if (mappedMine.status === "aberta" && !mappedMine.owner_player_id) {
-              actionType = "startCombat";
-          } else if (mappedMine.status === "disputando") {
-              actionType = "startCombat";
-          } else if (mappedMine.owner_player_id && mappedMine.owner_player_id !== userId) {
-              actionType = "challengeMine";
-          } else if (mappedMine.owner_player_id === userId) {
-              cardClass = "disabled-card";
-          }
-          
-          cardElement.className = `mine-card ${mappedMine.status || ""} ${actionType ? 'clickable' : ''} ${cardClass}`;
-          cardElement.innerHTML = `
-            <h3 style="color: yellow;">${esc(mappedMine.name)}</h3>
-            <p>${esc(mappedMine.status || "Fechada")}</p>
-            ${ownerName ? `
-              <div class="mine-owner-container">
-                ${ownerAvatarHtml}
-                <span>${esc(ownerName)}</span>
-              </div>` : "<p><strong>Sem Dono</strong></p>"}
-            ${collectingHtml}`;
+          // Mantém a posição/tamanho já atribuídos ao hotspot no mapa (top/left/width/height
+          // ficam no style inline do elemento e são preservados pelo cloneNode abaixo).
+          cardElement.className = className;
+          cardElement.innerHTML = innerHTML;
 
           const newCard = cardElement.cloneNode(true);
           cardElement.parentNode.replaceChild(newCard, cardElement);
@@ -1994,25 +2340,10 @@ function formatTimeCombat(totalSeconds) {
     ambientMusic.currentTime = 0;
 
     if (mineToUpdate) {
-        const updatedMine = await updateSingleMineCard(mineToUpdate);
-        
-        // Verifica se precisa renderizar nova mina
-        if (updatedMine && updatedMine.status === 'disputando') {
-            try {
-                const renderedIds = Array.from(document.querySelectorAll('.mine-card'))
-                                         .map(el => el.id.replace('mine-card-', ''));
-                
-                const { data: newMine, error } = await supabase.rpc('get_next_open_mine', { 
-                    p_visible_ids: renderedIds 
-                });
-
-                if (!error && newMine && newMine.length > 0) {
-                    renderAndAppendSingleCard(newMine[0]);
-                }
-            } catch (err) {
-                console.warn("[Mines] Erro ao buscar próxima mina:", err);
-            }
-        }
+        // Com o mapa de 10 minas fixas por zona, não é mais preciso "liberar"
+        // uma mina nova quando a atual entra em disputa — ela já está visível
+        // no mapa em seu próprio hotspot. Apenas atualiza o hotspot local.
+        await updateSingleMineCard(mineToUpdate);
     } else {
         loadMines();
     }
@@ -2255,15 +2586,17 @@ function formatTimeCombat(totalSeconds) {
   // =================================================================
   async function boot() {
     try {
+      initMineMap();       // ativa o mapa arrastável/zoom (padrão UE5 do Index)
+      initMineHeaderToggle(); // botão de retrair/expandir o HUD (guilda/timer/zonas)
+      renderZoneSelector(); // ativa o seletor de zonas
+
       userId = await getLocalUserId();
       if (window.currentPlayerId) userId = window.currentPlayerId;
       if (!userId && typeof session !== 'undefined' && session) userId = session.user.id;
       
       if (!userId) { window.location.href = "index.html"; return; }
 
-      const BOT_IDS = ["bc6b795d-da47-4f14-9f57-3781bfb21e53", "856545ef-e33e-4b86-b2af-71957a9772f9", "9d0af1a4-7f36-4f19-9ce6-5e507b17e912"];
-
-      try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS }); } catch (e) {}
+      try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS, p_zone: currentZone }); } catch (e) {}
       try { await supabase.rpc('resolve_all_expired_mines'); } catch (e) {}
       try { await supabase.rpc('reset_player_pvp_attempts'); } catch (e) {}
 
@@ -2277,10 +2610,17 @@ function formatTimeCombat(totalSeconds) {
       
       const { data, error } = await supabase.rpc('get_mine_boot_state', { 
           p_player_id: userId,
-          p_last_sync_time: lastSync
+          p_last_sync_time: lastSync,
+          p_zone: currentZone
       });
 
       if (error) throw error;
+
+      // Z) Zona máxima liberada (10 minas/zona; próxima libera quando a atual lota)
+      if (typeof data.z === 'number' && data.z > 0) {
+          maxUnlockedZone = data.z;
+          renderZoneSelector();
+      }
 
       // A) Stats
       if (data.s && data.s.success) {

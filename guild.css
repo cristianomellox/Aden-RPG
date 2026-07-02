@@ -299,7 +299,7 @@ p {
 
 #mainContainer {
   width: 90%;
-  background: linear-gradient(to bottom, #444 0%, #222 50%, #444 100%); 
+  background: linear-gradient(to bottom, #444 0%, #222 20%, #444 60%); 
 }
 body {
   width: 100vw;

@@ -349,7 +349,7 @@ function createMediaPlayers() {
     
     if (!normalMusicPlayer) {
         normalMusicPlayer = new Audio(NORMAL_FLOOR_MUSIC_URL);
-        normalMusicPlayer.volume = 0.2;
+        normalMusicPlayer.volume = 0.06;
         normalMusicPlayer.loop = true;
     }
 }
@@ -741,14 +741,14 @@ function ensurePlayerHpUi() {
   if ($id("raidPlayerArea")) return;
   const hr = document.createElement("hr");
   hr.style.width = "90%";
-  hr.style.margin = "12px auto";
+  hr.style.margin = "6px auto";
   container.appendChild(hr);
   const pArea = document.createElement("div");
   pArea.id = "raidPlayerArea";
   pArea.style.display = "flex";
   pArea.style.flexDirection = "column";
   pArea.style.alignItems = "center";
-  pArea.style.gap = "8px";
+  pArea.style.gap = "4px";
   pArea.style.position = "relative";
   const reviveText = document.createElement("div");
   reviveText.id = "raidPlayerReviveText";
@@ -764,8 +764,8 @@ function ensurePlayerHpUi() {
   pArea.appendChild(reviveText);
   const avatarWrap = document.createElement("div");
   avatarWrap.style.position = "relative";
-  avatarWrap.style.width = "80px";
-  avatarWrap.style.height = "80px";
+  avatarWrap.style.width = "48px";
+  avatarWrap.style.height = "48px";
   avatarWrap.style.borderRadius = "50%";
   avatarWrap.style.overflow = "hidden";
   avatarWrap.style.display = "flex";
@@ -777,8 +777,8 @@ function ensurePlayerHpUi() {
   avatar.id = "raidPlayerAvatar";
   // Alteração: Usa userAvatarUrl garantindo que não mostre placeholder se o dado já estiver disponível
   avatar.src = userAvatarUrl || "https://aden-rpg.pages.dev/assets/avatar01.webp";
-  avatar.style.width = "80px";
-  avatar.style.height = "80px";
+  avatar.style.width = "48px";
+  avatar.style.height = "48px";
   avatar.style.borderRadius = "50%";
   avatar.style.objectFit = "cover";
   avatarWrap.appendChild(avatar);
@@ -794,13 +794,13 @@ function ensurePlayerHpUi() {
   avatarWrap.appendChild(reviveOverlay);
   const pHpContainer = document.createElement("div");
   pHpContainer.id = "raidPlayerHpBar";
-  pHpContainer.style.width = "86%";
-  pHpContainer.style.maxWidth = "360px";
+  pHpContainer.style.width = "70%";
+  pHpContainer.style.maxWidth = "220px";
   pHpContainer.style.background = "#333";
-  pHpContainer.style.borderRadius = "12px";
+  pHpContainer.style.borderRadius = "10px";
   pHpContainer.style.overflow = "hidden";
   pHpContainer.style.position = "relative";
-  pHpContainer.style.height = "22px";
+  pHpContainer.style.height = "14px";
   const pFill = document.createElement("div");
   pFill.id = "raidPlayerHpFill";
   pFill.style.height = "100%";
@@ -814,7 +814,7 @@ function ensurePlayerHpUi() {
   pFill.style.background = "linear-gradient(90deg,#ff6b6b,#ffb86b)";
   const pText = document.createElement("span");
   pText.id = "raidPlayerHpText";
-  pText.style.fontSize = "0.9em";
+  pText.style.fontSize = "0.62em";
   pText.style.color = "#000";
   pFill.appendChild(pText);
   pHpContainer.appendChild(pFill);
@@ -1943,6 +1943,7 @@ function clearRaidTimer() { if (raidTimerInterval) clearInterval(raidTimerInterv
 function closeCombatModal(){ 
   const m = $id("raidCombatModal"); 
   if (m) m.style.display = "none"; 
+  _exitRaidFullscreen();
 
   const banner = $id('raidDeathNotification');
   if (banner) {
@@ -1970,13 +1971,41 @@ function closeCombatModal(){
 
 function openRaidModal() { const m = $id("raidModal"); if (m) m.style.display = "flex"; }
 function closeRaidModal(){ const m = $id("raidModal"); if (m) m.style.display = "none"; }
-function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; }
+// ── Fullscreen (esconde a barra de endereço do navegador durante a Raid) ──
+function _requestRaidFullscreen() {
+  try {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) {
+      const p = req.call(el);
+      if (p && p.catch) p.catch(() => {});
+    }
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(() => {});
+    }
+  } catch (e) { /* fullscreen indisponível — ignora silenciosamente */ }
+}
+
+function _exitRaidFullscreen() {
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if (exit) {
+        const p = exit.call(document);
+        if (p && p.catch) p.catch(() => {});
+      }
+    }
+  } catch (e) { /* ignora */ }
+}
+
+function openCombatModal(){ const m = $id("raidCombatModal"); if (m) m.style.display = "flex"; _requestRaidFullscreen(); }
 
 function bindEvents() {
   const tdd = $id("tdd");
   if (tdd) {
     tdd.addEventListener("click", async () => {
       try { primeMedia(); } catch(e) {}
+      _requestRaidFullscreen();
 
       if (!userGuildId) return;
 
@@ -2020,6 +2049,7 @@ function bindEvents() {
 
   $id("startRaidBtn")?.addEventListener("click", async () => {
     try { primeMedia(); } catch(e) {}
+    _requestRaidFullscreen();
 
     if (userRank !== "leader" && userRank !== "co-leader") { showRaidAlert("Apenas líder/co-líder"); return; }
     const startBtn = $id("startRaidBtn");

@@ -2841,7 +2841,19 @@ function formatTimeCombat(totalSeconds) {
 
       if (remainingMs <= 0 && !sessionOverlayReloadTriggered) {
           sessionOverlayReloadTriggered = true;
-          window.location.reload();
+          if (timerEl) timerEl.textContent = 'Atualizando...';
+
+          // Tenta o reload "completo" da página primeiro — se funcionar, a
+          // página já navega e o resto abaixo nem chega a importar.
+          try { window.location.reload(); } catch (e) {}
+
+          // Não depende do reload acima: alguns wrappers de app (ex.:
+          // appcreator24) não disparam/suportam location.reload(). Por
+          // garantia, refaz o boot das minas direto (busca zona, minas e
+          // stats de novo do zero) e só então esconde o overlay.
+          boot().finally(() => {
+              overlay.classList.remove('active');
+          });
       }
   }
 

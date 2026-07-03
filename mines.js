@@ -2794,82 +2794,93 @@ function formatTimeCombat(totalSeconds) {
       return boundary;
   }
 
-  // =================================================================
-  // OVERLAY DE TRANSIÇÃO DE SESSÃO
-  // -----------------------------------------------------------------
-  // Os cron workers do Cloudflare que rodam as RPCs no Supabase têm
-  // cerca de 1 minuto de atraso. Para evitar cliques num estado
-  // desatualizado, bloqueamos a tela por uma janela fixa de 2 minutos
-  // ao redor de cada abertura de sessão: de 1 min ANTES até 1 min
-  // DEPOIS da hora ímpar UTC.
-  //
-  // A janela é calculada a partir de um horário absoluto (a própria
-  // hora ímpar UTC), não a partir de "quando este cliente entrou na
-  // página" — por isso, mesmo quem abrir a página no meio da janela vê
-  // o overlay com a contagem já correta (justo para quem não estava
-  // esperando).
-  // =================================================================
-  const SESSION_BOUNDARY_BUFFER_MS = 60 * 1000; // 1 min antes + 1 min depois = 2 min de overlay
-  let sessionOverlayReloadTriggered = false;
+  const SESSION_PRE_BUFFER_MS  = 60 * 1000;       // 1 min antes da virada
+  const SESSION_POST_BUFFER_MS = 2 * 60 * 1000;   // 2 min depois — folga extra
+
+  let lastSeenNextBoundary = null;
+  let sessionRefreshInFlight = false;
+
+  function _refreshAfterSessionFlip(reason) {
+      if (sessionRefreshInFlight) return;
+      sessionRefreshInFlight = true;
+      console.log('[mines] Recarregando dados após virada de sessão (motivo: ' + reason + ').');
+
+      const overlay = document.getElementById('sessionTransitionOverlay');
+      const timerEl = document.getElementById('sessionTransitionTimer');
+      if (overlay) overlay.classList.add('active');
+      if (timerEl) timerEl.textContent = 'Atualizando...';
+
+      Promise.resolve()
+          .then(() => boot())
+          .catch((err) => console.error('[mines] Falha ao recarregar via boot() após virada de sessão:', err))
+          .finally(() => {
+              sessionRefreshInFlight = false;
+              if (overlay) overlay.classList.remove('active');
+          });
+
+      // Rede de segurança: se o boot() travar por qualquer motivo (ex.: RPC
+      // sem resposta bem nessa janela), libera a tela depois de 12s em vez
+      // de deixar o jogador preso no overlay pra sempre.
+      setTimeout(() => {
+          if (sessionRefreshInFlight) {
+              console.warn('[mines] boot() demorou demais após a virada de sessão — liberando a tela.');
+              sessionRefreshInFlight = false;
+              if (overlay) overlay.classList.remove('active');
+          }
+      }, 12000);
+  }
 
   function checkSessionTransitionOverlay(now) {
       const overlay = document.getElementById('sessionTransitionOverlay');
       const timerEl = document.getElementById('sessionTransitionTimer');
-      if (!overlay) return;
 
       const ms2h = 2 * 60 * 60 * 1000;
       const nextBoundary = _nextSessionOpenBoundaryUTC(now).getTime();
       const prevBoundary = nextBoundary - ms2h;
+
+      // Detecta virada "pulada" (app em segundo plano / tela bloqueada) e
+      // força atualização mesmo fora da janela normal do overlay.
+      if (lastSeenNextBoundary !== null && nextBoundary !== lastSeenNextBoundary) {
+          _refreshAfterSessionFlip('pulou-a-janela');
+      }
+      lastSeenNextBoundary = nextBoundary;
+
+      if (!overlay) return;
+
       const msUntilNext = nextBoundary - now.getTime();
       const msSincePrev = now.getTime() - prevBoundary;
 
       let activeBoundary = null;
-      if (msUntilNext <= SESSION_BOUNDARY_BUFFER_MS) activeBoundary = nextBoundary;       // faltando <= 1 min
-      else if (msSincePrev <= SESSION_BOUNDARY_BUFFER_MS) activeBoundary = prevBoundary;  // passou há <= 1 min
+      let bufferMs = 0;
+      if (msUntilNext <= SESSION_PRE_BUFFER_MS) { activeBoundary = nextBoundary; bufferMs = SESSION_PRE_BUFFER_MS; }
+      else if (msSincePrev <= SESSION_POST_BUFFER_MS) { activeBoundary = prevBoundary; bufferMs = SESSION_POST_BUFFER_MS; }
 
       if (activeBoundary === null) {
           overlay.classList.remove('active');
-          sessionOverlayReloadTriggered = false;
           return;
       }
 
-      const target = activeBoundary + SESSION_BOUNDARY_BUFFER_MS; // fim da janela = hora ímpar + 1 min
+      const target = activeBoundary + SESSION_POST_BUFFER_MS; // fim da janela = hora ímpar + margem pós-virada
       const remainingMs = target - now.getTime();
 
       overlay.classList.add('active');
-      if (timerEl) timerEl.textContent = formatTimeCombat(Math.max(0, remainingMs) / 1000);
+      if (timerEl && !sessionRefreshInFlight) {
+          timerEl.textContent = formatTimeCombat(Math.max(0, remainingMs) / 1000);
+      }
 
-      if (remainingMs <= 0 && !sessionOverlayReloadTriggered) {
-          sessionOverlayReloadTriggered = true;
-          if (timerEl) timerEl.textContent = 'Atualizando...';
-          console.log('[mines] Janela de virada de sessão fechou — recarregando via boot().');
-
-          // Removido o location.reload(): em alguns wrappers de app (ex.:
-          // appcreator24) ele pode não navegar e ainda assim interromper a
-          // execução do script sem lançar nenhum erro capturável, o que
-          // impedia o boot() de rodar depois dele. Agora dependemos só do
-          // boot() (a mesma função usada no carregamento normal da página)
-          // pra buscar zona/minas/stats de novo do zero.
-          Promise.resolve()
-              .then(() => boot())
-              .catch((err) => {
-                  console.error('[mines] Falha ao recarregar via boot() após virada de sessão:', err);
-              })
-              .finally(() => {
-                  overlay.classList.remove('active');
-              });
-
-          // Rede de segurança: se o boot() travar por qualquer motivo (ex.:
-          // RPC sem resposta bem nessa janela), libera a tela depois de 12s
-          // em vez de deixar o jogador preso no overlay pra sempre.
-          setTimeout(() => {
-              if (overlay.classList.contains('active')) {
-                  console.warn('[mines] boot() demorou demais após a virada de sessão — liberando a tela.');
-                  overlay.classList.remove('active');
-              }
-          }, 12000);
+      if (remainingMs <= 0) {
+          _refreshAfterSessionFlip('fim-do-contador');
       }
   }
+
+  // Assim que o app volta a ficar visível (usuário desbloqueou o celular,
+  // trocou de aba, etc.), reavalia na hora — não espera o próximo tick do
+  // setInterval, que em segundo plano pode ter ficado pausado por minutos.
+  document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+          checkSessionTransitionOverlay(serverNow());
+      }
+  });
 
   function updateCountdown() {
     const now = serverNow();

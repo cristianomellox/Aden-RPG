@@ -1209,11 +1209,6 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('
   align-items: center;
   width: 100%;
 }
-/* O espaço vertical sobrando vai inteiro para cima do botão de ataque,
-   empurrando o bloco de ataque/cooldown para o fundo da tela. */
-#raidCombatModal .modal-content > center {
-  margin-top: auto;
-}
 #raidCombatModal {
   position: fixed;
   top: 0;

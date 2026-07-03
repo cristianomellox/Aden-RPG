@@ -974,13 +974,13 @@ body {
 }
 
 #raidMonsterHpBar {
-  width: 90%;
-  max-width: 400px;
+  width: 80%;
+  max-width: 280px;
   background: linear-gradient(180deg,#1a0000,#2d0000);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: visible;
-  margin: 10px auto;
-  height: 20px;
+  margin: 4px auto;
+  height: 14px;
   position: relative;
   border: 1px solid rgba(255,80,0,0.55) !important;
   box-shadow: 0 0 12px rgba(200,0,0,0.35), inset 0 1px 3px rgba(0,0,0,0.8);
@@ -1066,7 +1066,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.7em;
+  font-size: 0.6em;
 }
 #raidCombatTitle {
   margin-top: -2rem;
@@ -1202,9 +1202,19 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('
   left: 0;
   padding: 0 !important;
   height: 100vh;
+  height: 100dvh;
   z-index:  12000;
   width: 100vw;
   align-items: center;
+}
+#raidCombatModal .modal-content {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* Quando o navegador está em modo fullscreen, ocupa toda a tela real do aparelho */
+html:fullscreen #raidCombatModal,
+html:-webkit-full-screen #raidCombatModal {
+  height: 100vh;
+  height: 100dvh;
 }
 
 

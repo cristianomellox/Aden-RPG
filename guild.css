@@ -1074,12 +1074,25 @@ body {
 #raidTimerInfo {
   font-weight: bold;
   font-size: 1.6em!important;
-  color: #aee0ff!important;
-  background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%)!important;
-  -webkit-background-clip: text!important;
-  background-clip: text!important;
-  -webkit-text-fill-color: transparent!important;
+  /* Fallback sólido: sempre visível, mesmo se o navegador não suportar
+     a técnica de gradiente em texto (background-clip: text). */
+  color: #cfe9ff !important;
+  text-shadow:
+    1px 1px 2px black,
+    -1px -1px 2px black,
+    1px -1px 2px black,
+    -1px 1px 2px black,
+    0 0 4px black !important;
   margin-top: -32px;
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  #raidTimerInfo {
+    background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    text-shadow: 0 0 4px rgba(0,0,0,0.7) !important;
+  }
 }
 #tddimg {
   position: absolute !important;

@@ -3206,3 +3206,7 @@ body::before {
   position: relative !important;
   z-index: 20 !important;
 }
+#raidMonsterName {
+  position: relative;
+  z-index: 2;
+}

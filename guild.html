@@ -327,8 +327,7 @@ if ('serviceWorker' in navigator) {
   font-size: 20px;
   font-weight: bold;
   padding: 0;
-  margin-left: 6px;
-}">+</button><br>
+  margin-left: 6px;">+</button><br>
       <span id="raidAttackCooldown"></span>
     </p>
     
@@ -680,9 +679,29 @@ if ('serviceWorker' in navigator) {
     <p>Quantidade de ataques:</p>
     <div style="display: flex; justify-content: center; align-items: center; gap: 35px;">
       <div style="background: #333; border-radius: 8px; border: white; width: 140px; display:flex; justify-content: center; align-items: center;">
-        <button id="buyDecreaseQtyBtn" class="action-btn">-</button>
+        <button id="buyDecreaseQtyBtn" class="action-btn" style="width: 24px;
+  height: 24px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -5px;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;">-</button>
         <span id="buyAttackQty" style="font-size: 2em; color: yellow; margin: 0 12px;">1</span>
-        <button id="buyIncreaseQtyBtn" class="action-btn">+</button>
+        <button id="buyIncreaseQtyBtn" class="action-btn" style="width: 24px;
+  height: 24px;
+  border-radius: 60%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: -5px;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 6px;">+</button>
       </div>
     </div>
     <p id="buyAttackCostInfo">Custo total: 0 Ouro</p>

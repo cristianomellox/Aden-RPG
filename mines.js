@@ -2842,18 +2842,32 @@ function formatTimeCombat(totalSeconds) {
       if (remainingMs <= 0 && !sessionOverlayReloadTriggered) {
           sessionOverlayReloadTriggered = true;
           if (timerEl) timerEl.textContent = 'Atualizando...';
+          console.log('[mines] Janela de virada de sessão fechou — recarregando via boot().');
 
-          // Tenta o reload "completo" da página primeiro — se funcionar, a
-          // página já navega e o resto abaixo nem chega a importar.
-          try { window.location.reload(); } catch (e) {}
+          // Removido o location.reload(): em alguns wrappers de app (ex.:
+          // appcreator24) ele pode não navegar e ainda assim interromper a
+          // execução do script sem lançar nenhum erro capturável, o que
+          // impedia o boot() de rodar depois dele. Agora dependemos só do
+          // boot() (a mesma função usada no carregamento normal da página)
+          // pra buscar zona/minas/stats de novo do zero.
+          Promise.resolve()
+              .then(() => boot())
+              .catch((err) => {
+                  console.error('[mines] Falha ao recarregar via boot() após virada de sessão:', err);
+              })
+              .finally(() => {
+                  overlay.classList.remove('active');
+              });
 
-          // Não depende do reload acima: alguns wrappers de app (ex.:
-          // appcreator24) não disparam/suportam location.reload(). Por
-          // garantia, refaz o boot das minas direto (busca zona, minas e
-          // stats de novo do zero) e só então esconde o overlay.
-          boot().finally(() => {
-              overlay.classList.remove('active');
-          });
+          // Rede de segurança: se o boot() travar por qualquer motivo (ex.:
+          // RPC sem resposta bem nessa janela), libera a tela depois de 12s
+          // em vez de deixar o jogador preso no overlay pra sempre.
+          setTimeout(() => {
+              if (overlay.classList.contains('active')) {
+                  console.warn('[mines] boot() demorou demais após a virada de sessão — liberando a tela.');
+                  overlay.classList.remove('active');
+              }
+          }, 12000);
       }
   }
 

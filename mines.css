@@ -355,17 +355,16 @@ body {
    visível no slot (sem avatar/ícone). */
 .mine-hotspot-glow {
     --glow-rgb: 255,255,255;
-    /* Ajuste estes 3 valores para mover a origem do feixe (perto do nome)
-       e até onde ele desce em direção ao chão/entrada da mina: */
-    --beam-top: 8px;     /* quão acima do slot do avatar o feixe nasce (perto do nome/status) */
-    --beam-height: 60px;  /* altura total do feixe — controla até onde desce em direção ao chão */
-    --beam-width: 116px;    /* largura do feixe */
+    /* Ajuste estes valores para controlar o feixe: */
+    --beam-top: 4px;          /* quão acima do slot do avatar o feixe nasce (perto do nome/status) */
+    --beam-height: 80px;       /* altura total do feixe — até onde desce em direção ao chão */
+    --beam-column-width: 66px;  /* LARGURA REAL E FINAL da coluna de luz — mexa só aqui pra alargar */
 
     position: absolute;
     left: 50%;
     top: var(--beam-top);
     bottom: auto;
-    width: var(--beam-width);
+    width: var(--beam-column-width);
     height: var(--beam-height);
     transform: translateX(-50%);
     pointer-events: none;
@@ -391,7 +390,7 @@ body {
 /* Fonte da luz — pequeno brilho estourado perto do nome/avatar, de onde o feixe "nasce" */
 .mine-hotspot-glow::before {
     top: -10%;
-    width: 42%;
+    width: 55%;
     height: 20%;
     transform: translateX(-50%);
     border-radius: 50%;
@@ -403,15 +402,18 @@ body {
     animation: mgl-source-flicker 3.4s ease-in-out infinite;
 }
 
-/* O feixe — estreito no topo (fonte), abre levemente até o chão. Cai reto
-   pra baixo (nunca pros lados), então não invade a entrada da mina vizinha
-   mesmo nas posições da direita do mapa isométrico. */
+/* O feixe — usa 100% de --beam-column-width (sem indireção extra: aumentar a
+   variável acima já aumenta a coluna inteira, de verdade). O clip-path só
+   arredonda as pontas (abre de 15%→85% no topo até 4%→96% na base), então
+   quase toda a largura da variável já é a coluna visível. Cai reto pra baixo
+   (nunca pros lados), então não invade a entrada da mina vizinha mesmo nas
+   posições da direita do mapa isométrico. */
 .mine-hotspot-glow::after {
     top: 4%;
-    width: 86%;
+    width: 100%;
     height: 92%;
     transform: translateX(-50%);
-    clip-path: polygon(43% 0%, 57% 0%, 76% 100%, 24% 100%);
+    clip-path: polygon(15% 0%, 85% 0%, 96% 100%, 4% 100%);
     background: linear-gradient(to bottom,
         rgba(var(--glow-rgb), 0.75) 0%,
         rgba(var(--glow-rgb), 0.28) 55%,
@@ -421,18 +423,18 @@ body {
 }
 
 @keyframes mgl-ground-flicker {
-    0%   { opacity: 0.65; transform: translateX(-50%) scale(0.92, 0.88); }
-    30%  { opacity: 0.9;  transform: translateX(-50%) scale(1.05, 1.08); }
-    55%  { opacity: 0.6;  transform: translateX(-50%) scale(0.95, 0.9); }
-    78%  { opacity: 0.82; transform: translateX(-50%) scale(1.02, 1.03); }
-    100% { opacity: 0.65; transform: translateX(-50%) scale(0.92, 0.88); }
+    0%   { opacity: 0.65; }
+    30%  { opacity: 0.9;  }
+    55%  { opacity: 0.6;  }
+    78%  { opacity: 0.82; }
+    100% { opacity: 0.65; }
 }
 
 @keyframes mgl-source-flicker {
-    0%   { opacity: 0.7;  transform: translateX(-50%) scale(0.85); }
-    38%  { opacity: 1;    transform: translateX(-50%) scale(1.12); }
-    64%  { opacity: 0.8;  transform: translateX(-50%) scale(0.94); }
-    100% { opacity: 0.7;  transform: translateX(-50%) scale(0.85); }
+    0%   { opacity: 0.7;  }
+    38%  { opacity: 1;    }
+    64%  { opacity: 0.8;  }
+    100% { opacity: 0.7;  }
 }
 
 @keyframes mgl-beam-flicker {
@@ -447,7 +449,6 @@ body {
 .mine-hotspot-glow.glow-aberta {
     --glow-rgb: 255,255,255;
 }
-.mine-hotspot-glow.glow-aberta::after { width: 52%; }
 .mine-hotspot-glow.glow-ocupada    { --glow-rgb: 255,204,0; }
 .mine-hotspot-glow.glow-disputando { --glow-rgb: 51,153,255; }
 .mine-hotspot-glow.glow-esgotada {

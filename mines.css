@@ -327,7 +327,7 @@ body {
 .mine-hotspot-avatar-slot {
     position: relative;
     flex: 0 0 auto;   /* <- era "flex: 1" e esticava até o fim do hotspot, criando o gap grande */
-    height: 78px;     /* <- controla o tamanho da área do avatar/ícone/luz (ajuste aqui se precisar) */
+    height: 64px;     /* <- controla o tamanho da área do avatar/ícone/luz (ajuste aqui se precisar) */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -335,53 +335,130 @@ body {
     min-height: 0;
 }
 
-/* ── Luz orgânica pulsante — substitui a borda quadrada ──────────────
-   Fica atrás do avatar/ícone (z-index 1); para "Aberta" é a única
-   coisa visível no slot (não há avatar nem ícone). O blend "screen" +
-   blur faz a luz se misturar com o fundo escuro da caverna, como se
-   viesse de dentro da mina, em vez de parecer um círculo colado. */
+/* ── Raio de luz descendo — mesmo espírito do "sol" do mapa do Index ──────
+   Em vez de um halo/blob ao redor do avatar (cobria a entrada da mina em
+   minas do lado direito do mapa isométrico), a luz agora é um FEIXE
+   ESTREITO que nasce perto do nome/avatar (fonte) e desce em direção ao
+   chão/entrada da mina, exatamente como os raios de sol de map_effects.js:
+     1) .mine-hotspot-glow::before -> fonte (o "sol"): brilho pequeno e
+                                        estourado, perto do nome/avatar.
+     2) .mine-hotspot-glow::after  -> o feixe em si: estreito no topo,
+                                        levemente mais largo embaixo,
+                                        recortado com clip-path (cone),
+                                        caindo reto pro chão — nunca se
+                                        espalha pros lados, então não
+                                        cobre a arte da entrada vizinha.
+     3) .mine-hotspot-glow         -> poça de luz no chão, onde o feixe
+                                        "bate" — achatada, sutil.
+   "mix-blend-mode: screen" mistura tudo com o fundo escuro do mapa em vez
+   de parecer um adesivo colado por cima. Para "Aberta" é a única coisa
+   visível no slot (sem avatar/ícone). */
 .mine-hotspot-glow {
+    --glow-rgb: 255,255,255;
+    /* Ajuste estes 3 valores para mover a origem do feixe (perto do nome)
+       e até onde ele desce em direção ao chão/entrada da mina: */
+    --beam-top: 8px;     /* quão acima do slot do avatar o feixe nasce (perto do nome/status) */
+    --beam-height: 60px;  /* altura total do feixe — controla até onde desce em direção ao chão */
+    --beam-width: 116px;    /* largura do feixe */
+
     position: absolute;
-    top: 50%;
     left: 50%;
-    width: 85%;
-    height: 85%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
+    top: var(--beam-top);
+    bottom: auto;
+    width: var(--beam-width);
+    height: var(--beam-height);
+    transform: translateX(-50%);
     pointer-events: none;
     z-index: 1;
-    filter: blur(6px);
     mix-blend-mode: screen;
-    transition: filter 0.25s ease, transform 0.25s ease;
-    animation: mine-glow-flicker 4.2s ease-in-out infinite;
+    /* poça de luz no chão, onde o feixe termina */
+    background: radial-gradient(ellipse 90% 40% at 50% 94%,
+        rgba(var(--glow-rgb), 0.55) 0%,
+        rgba(var(--glow-rgb), 0.2) 50%,
+        rgba(var(--glow-rgb), 0) 80%);
+    filter: blur(6px);
+    animation: mgl-ground-flicker 5.6s ease-in-out infinite;
 }
 
-@keyframes mine-glow-flicker {
-    0%   { opacity: 0.5;  transform: translate(-50%, -50%) scale(0.90); }
-    18%  { opacity: 0.78; transform: translate(-50%, -50%) scale(1.03); }
-    34%  { opacity: 0.6;  transform: translate(-50%, -50%) scale(0.95); }
-    52%  { opacity: 0.85; transform: translate(-50%, -50%) scale(1.08); }
-    68%  { opacity: 0.58; transform: translate(-50%, -50%) scale(0.93); }
-    85%  { opacity: 0.72; transform: translate(-50%, -50%) scale(1.02); }
-    100% { opacity: 0.5;  transform: translate(-50%, -50%) scale(0.90); }
+.mine-hotspot-glow::before,
+.mine-hotspot-glow::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    pointer-events: none;
+}
+
+/* Fonte da luz — pequeno brilho estourado perto do nome/avatar, de onde o feixe "nasce" */
+.mine-hotspot-glow::before {
+    top: -10%;
+    width: 42%;
+    height: 20%;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.95) 0%,
+        rgba(var(--glow-rgb), 0.75) 45%,
+        rgba(var(--glow-rgb), 0) 78%);
+    filter: blur(2.5px);
+    animation: mgl-source-flicker 3.4s ease-in-out infinite;
+}
+
+/* O feixe — estreito no topo (fonte), abre levemente até o chão. Cai reto
+   pra baixo (nunca pros lados), então não invade a entrada da mina vizinha
+   mesmo nas posições da direita do mapa isométrico. */
+.mine-hotspot-glow::after {
+    top: 4%;
+    width: 86%;
+    height: 92%;
+    transform: translateX(-50%);
+    clip-path: polygon(43% 0%, 57% 0%, 76% 100%, 24% 100%);
+    background: linear-gradient(to bottom,
+        rgba(var(--glow-rgb), 0.75) 0%,
+        rgba(var(--glow-rgb), 0.28) 55%,
+        rgba(var(--glow-rgb), 0) 94%);
+    filter: blur(3px);
+    animation: mgl-beam-flicker 4.8s ease-in-out infinite;
+}
+
+@keyframes mgl-ground-flicker {
+    0%   { opacity: 0.65; transform: translateX(-50%) scale(0.92, 0.88); }
+    30%  { opacity: 0.9;  transform: translateX(-50%) scale(1.05, 1.08); }
+    55%  { opacity: 0.6;  transform: translateX(-50%) scale(0.95, 0.9); }
+    78%  { opacity: 0.82; transform: translateX(-50%) scale(1.02, 1.03); }
+    100% { opacity: 0.65; transform: translateX(-50%) scale(0.92, 0.88); }
+}
+
+@keyframes mgl-source-flicker {
+    0%   { opacity: 0.7;  transform: translateX(-50%) scale(0.85); }
+    38%  { opacity: 1;    transform: translateX(-50%) scale(1.12); }
+    64%  { opacity: 0.8;  transform: translateX(-50%) scale(0.94); }
+    100% { opacity: 0.7;  transform: translateX(-50%) scale(0.85); }
+}
+
+@keyframes mgl-beam-flicker {
+    0%   { opacity: 0.55; }
+    25%  { opacity: 0.85; }
+    48%  { opacity: 0.4; }
+    70%  { opacity: 0.78; }
+    88%  { opacity: 0.5; }
+    100% { opacity: 0.55; }
 }
 
 .mine-hotspot-glow.glow-aberta {
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.5) 32%, rgba(255,255,255,0) 70%);
+    --glow-rgb: 255,255,255;
 }
-.mine-hotspot-glow.glow-ocupada {
-    background: radial-gradient(circle, rgba(255,204,0,0.95) 0%, rgba(255,204,0,0.45) 32%, rgba(255,204,0,0) 70%);
-}
-.mine-hotspot-glow.glow-disputando {
-    background: radial-gradient(circle, rgba(51,153,255,0.95) 0%, rgba(51,153,255,0.45) 32%, rgba(51,153,255,0) 70%);
-}
+.mine-hotspot-glow.glow-aberta::after { width: 52%; }
+.mine-hotspot-glow.glow-ocupada    { --glow-rgb: 255,204,0; }
+.mine-hotspot-glow.glow-disputando { --glow-rgb: 51,153,255; }
 .mine-hotspot-glow.glow-esgotada {
-    background: radial-gradient(circle, rgba(255,60,60,0.6) 0%, rgba(255,60,60,0.3) 32%, rgba(255,60,60,0) 70%);
-    animation-duration: 6s; /* mina apagada: luz mais lenta e fraca, tipo brasa */
-    opacity: 0.5;
+    --glow-rgb: 255,55,55;
+    opacity: 0.45;
+    filter: blur(6px) saturate(0.7);
+    animation-duration: 8s; /* mina apagada: luz mais lenta/fraca, tipo brasa */
 }
+.mine-hotspot-glow.glow-esgotada::before { animation-duration: 5.2s; opacity: 0.7; }
+.mine-hotspot-glow.glow-esgotada::after  { animation-duration: 9.4s; opacity: 0.5; }
+
 
 /* Ícone pulsante exibido no centro enquanto a mina está "disputando" */
 .mine-hotspot-dispute-icon {

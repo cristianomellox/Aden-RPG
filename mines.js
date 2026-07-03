@@ -556,17 +556,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const MINE_HOTSPOT_DEBUG = false;
   
 const MINE_HOTSPOT_SLOTS = [
-      { top: 113,  left: 96,  width: 130, height: 150 },
-      { top: 31,  left: 523,  width: 130, height: 150 },
-      { top: 62,  left: 1023, width: 130, height: 150 },
-      { top: 452,  left: 51,  width: 130, height: 150 },
-      { top: 430,  left: 570,  width: 130, height: 150 },
-      { top: 388,  left: 1083,  width: 130, height: 150 },
+      { top: 133,  left: 95,  width: 130, height: 150 },
+      { top: 40,  left: 520,  width: 130, height: 150 },
+      { top: 78,  left: 1023, width: 130, height: 150 },
+      { top: 462,  left: 46,  width: 130, height: 150 },
+      { top: 446,  left: 571,  width: 130, height: 150 },
+      { top: 399,  left: 1083,  width: 130, height: 150 },
       
-      { top: 880,  left: 80,  width: 130, height: 150 },
-      { top: 1010,  left: 564, width: 130, height: 150 },
-      { top: 708, left: 1048,  width: 130, height: 150 },
-      { top: 1002, left: 1031,  width: 130, height: 150 },
+      { top: 893,  left: 83,  width: 130, height: 150 },
+      { top: 1032,  left: 565, width: 130, height: 150 },
+      { top: 726, left: 1047,  width: 130, height: 150 },
+      { top: 1024, left: 1029,  width: 130, height: 150 },
   ];
   
 

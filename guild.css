@@ -1202,13 +1202,13 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('
    barras de hp) — não cresce mais, para não deixar um vão vazio entre a
    barra de HP do jogador e o botão de ataque. */
 #raidMonsterArea {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
   width: 100%;
-  margin-top: auto;
 }
 #raidCombatModal {
   position: fixed;
@@ -1254,7 +1254,8 @@ hr {
 }
 #raidMonsterImage {
   position: absolute !important;
-  top: -12px;
+  top: 50%;
+  margin-top: -210px !important; /* metade da altura (420px), centraliza verticalmente sem colidir com a animação (que usa transform) */
   z-index: 0 !important;
   width: 350px !important;
   height: 420px !important;

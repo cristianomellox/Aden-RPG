@@ -750,6 +750,7 @@ function ensurePlayerHpUi() {
   pArea.style.alignItems = "center";
   pArea.style.gap = "4px";
   pArea.style.position = "relative";
+  pArea.style.width = "100%";
   const reviveText = document.createElement("div");
   reviveText.id = "raidPlayerReviveText";
   reviveText.style.position = "absolute";

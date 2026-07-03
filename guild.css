@@ -1072,27 +1072,14 @@ body {
   margin-top: -2rem;
 }
 #raidTimerInfo {
-  font-weight: bold;
+  font-weight: 900;
   font-size: 1.6em!important;
-  /* Fallback sólido: sempre visível, mesmo se o navegador não suportar
-     a técnica de gradiente em texto (background-clip: text). */
-  color: #cfe9ff !important;
-  text-shadow:
-    1px 1px 2px black,
-    -1px -1px 2px black,
-    1px -1px 2px black,
-    -1px 1px 2px black,
-    0 0 4px black !important;
+  background: linear-gradient(180deg, #add8ff 0%, #fff 50%, #4488ff 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
   margin-top: -32px;
-}
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  #raidTimerInfo {
-    background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%) !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    text-shadow: 0 0 4px rgba(0,0,0,0.7) !important;
-  }
 }
 #tddimg {
   position: absolute !important;
@@ -1211,18 +1198,21 @@ background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.1)), url('
   justify-content: flex-start;
     
 }
-/* raidMonsterArea absorve o espaço vertical sobrando e centraliza seu
-   conteúdo (nome, imagem, barras de hp), evitando gaps gigantes entre
-   o header, o botão de ataque e o texto de ataques quando os elementos
-   internos são menores que a tela. */
+/* raidMonsterArea ocupa só o espaço do seu próprio conteúdo (nome, imagem,
+   barras de hp) — não cresce mais, para não deixar um vão vazio entre a
+   barra de HP do jogador e o botão de ataque. */
 #raidMonsterArea {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
   width: 100%;
+}
+/* O espaço vertical sobrando vai inteiro para cima do botão de ataque,
+   empurrando o bloco de ataque/cooldown para o fundo da tela. */
+#raidCombatModal .modal-content > center {
+  margin-top: auto;
 }
 #raidCombatModal {
   position: fixed;

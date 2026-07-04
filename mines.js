@@ -2794,13 +2794,51 @@ function formatTimeCombat(totalSeconds) {
       return boundary;
   }
 
-  const SESSION_PRE_BUFFER_MS  = 60 * 1000;       // 1 min antes da virada
-  const SESSION_POST_BUFFER_MS = 2 * 60 * 1000;   // 2 min depois — folga extra
+  // =================================================================
+  // OVERLAY DE TRANSIÇÃO DE SESSÃO
+  // -----------------------------------------------------------------
+  // Os cron workers do Cloudflare que rodam as RPCs no Supabase às vezes
+  // demoram mais de 1 minuto. Para evitar cliques num estado desatualizado,
+  // bloqueamos a tela numa janela ao redor de cada abertura de sessão: um
+  // pouco ANTES (aviso) e uma margem maior DEPOIS (folga de verdade pro
+  // cron rodar) da hora ímpar UTC — ver SESSION_PRE_BUFFER_MS/
+  // SESSION_POST_BUFFER_MS logo abaixo.
+  //
+  // A janela é calculada a partir de um horário absoluto (a própria hora
+  // ímpar UTC), não a partir de "quando este cliente entrou na página" —
+  // por isso, mesmo quem abrir a página no meio da janela vê o overlay com
+  // a contagem já correta (justo para quem não estava esperando).
+  // =================================================================
+  // Sobre "por que não começar no minuto 0 da hora par": a hora PAR é quando
+  // as minas ESGOTAM (cron das 49min), não quando a sessão abre — a abertura
+  // é sempre na hora ÍMPAR (cron das 0min), 11 minutos depois. Começar a
+  // bloquear a tela no minuto 0 da hora par significaria travar o jogador
+  // por até 59 minutos ANTES da virada, boa parte disso com a sessão ainda
+  // 100% ativa e jogável. Pra resolver o atraso do Cloudflare sem esse efeito
+  // colateral, aumentei bastante a margem DEPOIS da virada (é a que importa
+  // pro cron ter tempo de rodar) e mantive a margem ANTES pequena.
+  const SESSION_PRE_BUFFER_MS  = 3 * 60 * 1000;       // 1 min antes da virada
+  const SESSION_POST_BUFFER_MS = 1 * 1000;   // 3 min depois — folga extra pro cron do Cloudflare
 
+  // Guarda o timestamp da "próxima abertura" visto na última checagem. Se ele
+  // mudar de um tick pro outro sem termos passado pelo fim normal da janela
+  // (ex.: celular travou/segundo plano pausou o setInterval e "pulamos" a
+  // janela inteira), isso detecta que uma virada aconteceu enquanto
+  // estávamos fora do ar e força a atualização mesmo assim — não depende de
+  // pegar o tick exato em que o contador chega a zero.
   let lastSeenNextBoundary = null;
   let sessionRefreshInFlight = false;
 
-  function _refreshAfterSessionFlip(reason) {
+  // Garante que uma tentativa nunca trave pra sempre (ex.: requisição sem
+  // resposta) — depois de 20s desiste dessa tentativa e parte pra próxima.
+  function _withTimeout(promise, ms) {
+      return Promise.race([
+          promise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout de ' + ms + 'ms')), ms))
+      ]);
+  }
+
+  async function _refreshAfterSessionFlip(reason) {
       if (sessionRefreshInFlight) return;
       sessionRefreshInFlight = true;
       console.log('[mines] Recarregando dados após virada de sessão (motivo: ' + reason + ').');
@@ -2808,26 +2846,53 @@ function formatTimeCombat(totalSeconds) {
       const overlay = document.getElementById('sessionTransitionOverlay');
       const timerEl = document.getElementById('sessionTransitionTimer');
       if (overlay) overlay.classList.add('active');
-      if (timerEl) timerEl.textContent = 'Atualizando...';
 
-      Promise.resolve()
-          .then(() => boot())
-          .catch((err) => console.error('[mines] Falha ao recarregar via boot() após virada de sessão:', err))
-          .finally(() => {
-              sessionRefreshInFlight = false;
-              if (overlay) overlay.classList.remove('active');
-          });
+      // Insiste várias vezes em vez de tentar só uma: cobre o caso de o cron
+      // do Cloudflare ainda não ter terminado mesmo depois da janela do
+      // overlay. Cada tentativa re-executa o boot() (mesma função do
+      // carregamento normal da página) e verifica se as minas continuam
+      // "esgotadas" olhando a classe que o próprio renderMines() já aplica
+      // no mapa (map-desaturated = todas as minas ainda esgotadas).
+      const MAX_ATTEMPTS = 6;
+      const RETRY_DELAY_MS = 10000; // 10s entre tentativas (total ~1min de insistência extra)
+      let lastError = null;
+      let stillExhausted = true;
 
-      // Rede de segurança: se o boot() travar por qualquer motivo (ex.: RPC
-      // sem resposta bem nessa janela), libera a tela depois de 12s em vez
-      // de deixar o jogador preso no overlay pra sempre.
-      setTimeout(() => {
-          if (sessionRefreshInFlight) {
-              console.warn('[mines] boot() demorou demais após a virada de sessão — liberando a tela.');
-              sessionRefreshInFlight = false;
-              if (overlay) overlay.classList.remove('active');
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          if (timerEl) {
+              timerEl.textContent = attempt === 1 ? 'Atualizando...' : `Atualizando... (tentativa ${attempt}/${MAX_ATTEMPTS})`;
           }
-      }, 12000);
+          lastError = null;
+          try {
+              await _withTimeout(boot(), 20000);
+          } catch (err) {
+              lastError = err;
+              console.error('[mines] boot() falhou na tentativa ' + attempt + ':', err);
+          }
+
+          stillExhausted = !!(minesContainer && minesContainer.classList.contains('map-desaturated'));
+          if (!stillExhausted) break; // já abriu — sucesso, não precisa mais tentar
+
+          if (attempt < MAX_ATTEMPTS) {
+              await new Promise((res) => setTimeout(res, RETRY_DELAY_MS));
+          }
+      }
+
+      sessionRefreshInFlight = false;
+      if (overlay) overlay.classList.remove('active');
+
+      // Diagnóstico visível na tela — sem precisar de console no celular.
+      // Isso vai aparecer só se, depois de ~1 min extra insistindo, as minas
+      // continuarem esgotadas: ou o boot() está mesmo dando erro (o texto do
+      // erro aparece), ou ele funciona mas o servidor ainda devolve esgotada
+      // (ou seja, o problema está no cron/RPC do lado do Supabase, não aqui).
+      if (stillExhausted) {
+          const ts = serverNow().toISOString().slice(11, 19);
+          const detail = lastError
+              ? `Último erro no boot(): ${lastError.message || lastError}`
+              : 'Nenhum erro no boot() — o servidor respondeu normalmente, mas ainda mandou as minas como esgotada.';
+          showModalAlert(`[Diagnóstico ${ts} UTC] Depois de ${MAX_ATTEMPTS} tentativas as minas ainda aparecem esgotadas. ${detail}`);
+      }
   }
 
   function checkSessionTransitionOverlay(now) {

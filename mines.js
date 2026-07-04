@@ -2765,6 +2765,22 @@ function formatTimeCombat(totalSeconds) {
     }
   });
 
+  // =================================================================
+  // JANELAS DE SESSÃO (baseadas no horário REAL do servidor, em UTC)
+  // -----------------------------------------------------------------
+  // Cron workers no Cloudflare (sempre em UTC):
+  //   • Esgotar + pagar cristais:  49 0,2,4,6,8,10,12,14,16,18,20,22 * * *
+  //     -> roda no minuto 49 de toda hora PAR (0:49, 2:49, ... 22:49 UTC)
+  //   • Iniciar nova sessão:       0 3,5,7,9,11,13,15,17,19,21,23,1 * * *
+  //     -> roda no minuto 0 de toda hora ÍMPAR (1:00, 3:00, ... 23:00 UTC)
+  // Ou seja: sessão abre numa hora ÍMPAR (UTC) e esgota 1h49 depois, na
+  // hora PAR seguinte, minuto 49. O "Próxima sessão em" sempre mostra o
+  // tempo até a PRÓXIMA abertura (próxima hora ímpar UTC).
+  //
+  // Tudo aqui usa serverNow() (relógio do servidor + offset), nunca o
+  // relógio local do dispositivo — assim o fuso horário/relógio errado
+  // do jogador nunca desalinha o timer com os cron jobs reais.
+  // =================================================================
   function _nextSessionOpenBoundaryUTC(now) {
       const d = now;
       let h = d.getUTCHours();
@@ -2779,7 +2795,8 @@ function formatTimeCombat(totalSeconds) {
   }
 
   const SESSION_PRE_BUFFER_MS  = 30 * 1000;       // antes da virada
-  const SESSION_POST_BUFFER_MS = 60 * 1000;   // 1 min depois — folga extra pro cron
+  const SESSION_POST_BUFFER_MS = 60 * 1000;   // 1 min depois — folga extra pro cron do Cloudflare
+
 
   let lastSeenNextBoundary = null;
   let sessionRefreshInFlight = false;
@@ -2846,8 +2863,40 @@ function formatTimeCombat(totalSeconds) {
           const detail = lastError
               ? `Último erro no boot(): ${lastError.message || lastError}`
               : 'Nenhum erro no boot() — o servidor respondeu normalmente, mas ainda mandou as minas como esgotada.';
-          showModalAlert(`[Diagnóstico ${ts} UTC] Depois de ${MAX_ATTEMPTS} tentativas as minas ainda aparecem esgotadas. ${detail}`);
+          _showPersistentDiagBanner(`[Diagnóstico ${ts} UTC] Depois de ${MAX_ATTEMPTS} tentativas as minas ainda aparecem esgotadas. ${detail}`);
       }
+  }
+
+  // Banner fixo no topo da tela que NÃO some sozinho — só ao tocar nele.
+  // Usado só pro diagnóstico da virada de sessão, pra garantir que a
+  // mensagem seja vista mesmo que o jogador não esteja olhando no instante
+  // exato em que ela aparece (diferente de um modal, que dá pra tocar fora
+  // e fechar sem querer, ou passar despercebido).
+  function _showPersistentDiagBanner(message) {
+      const old = document.getElementById('mineDiagBanner');
+      if (old) old.remove();
+
+      const banner = document.createElement('div');
+      banner.id = 'mineDiagBanner';
+      banner.textContent = message + '  (toque para fechar)';
+      Object.assign(banner.style, {
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          right: '0',
+          zIndex: '999999', // acima de tudo, inclusive do #confirmModal (1000) e do overlay de sessão (99999)
+          background: '#3a0000',
+          color: '#fff',
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          lineHeight: '1.4',
+          padding: '10px 12px',
+          borderBottom: '3px solid #ff3333',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.7)',
+          cursor: 'pointer',
+      });
+      banner.addEventListener('click', () => banner.remove());
+      document.body.appendChild(banner);
   }
 
   function checkSessionTransitionOverlay(now) {

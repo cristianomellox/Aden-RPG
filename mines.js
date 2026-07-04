@@ -2765,22 +2765,6 @@ function formatTimeCombat(totalSeconds) {
     }
   });
 
-  // =================================================================
-  // JANELAS DE SESSÃO (baseadas no horário REAL do servidor, em UTC)
-  // -----------------------------------------------------------------
-  // Cron workers no Cloudflare (sempre em UTC):
-  //   • Esgotar + pagar cristais:  49 0,2,4,6,8,10,12,14,16,18,20,22 * * *
-  //     -> roda no minuto 49 de toda hora PAR (0:49, 2:49, ... 22:49 UTC)
-  //   • Iniciar nova sessão:       0 3,5,7,9,11,13,15,17,19,21,23,1 * * *
-  //     -> roda no minuto 0 de toda hora ÍMPAR (1:00, 3:00, ... 23:00 UTC)
-  // Ou seja: sessão abre numa hora ÍMPAR (UTC) e esgota 1h49 depois, na
-  // hora PAR seguinte, minuto 49. O "Próxima sessão em" sempre mostra o
-  // tempo até a PRÓXIMA abertura (próxima hora ímpar UTC).
-  //
-  // Tudo aqui usa serverNow() (relógio do servidor + offset), nunca o
-  // relógio local do dispositivo — assim o fuso horário/relógio errado
-  // do jogador nunca desalinha o timer com os cron jobs reais.
-  // =================================================================
   function _nextSessionOpenBoundaryUTC(now) {
       const d = now;
       let h = d.getUTCHours();
@@ -2794,38 +2778,9 @@ function formatTimeCombat(totalSeconds) {
       return boundary;
   }
 
-  // =================================================================
-  // OVERLAY DE TRANSIÇÃO DE SESSÃO
-  // -----------------------------------------------------------------
-  // Os cron workers do Cloudflare que rodam as RPCs no Supabase às vezes
-  // demoram mais de 1 minuto. Para evitar cliques num estado desatualizado,
-  // bloqueamos a tela numa janela ao redor de cada abertura de sessão: um
-  // pouco ANTES (aviso) e uma margem maior DEPOIS (folga de verdade pro
-  // cron rodar) da hora ímpar UTC — ver SESSION_PRE_BUFFER_MS/
-  // SESSION_POST_BUFFER_MS logo abaixo.
-  //
-  // A janela é calculada a partir de um horário absoluto (a própria hora
-  // ímpar UTC), não a partir de "quando este cliente entrou na página" —
-  // por isso, mesmo quem abrir a página no meio da janela vê o overlay com
-  // a contagem já correta (justo para quem não estava esperando).
-  // =================================================================
-  // Sobre "por que não começar no minuto 0 da hora par": a hora PAR é quando
-  // as minas ESGOTAM (cron das 49min), não quando a sessão abre — a abertura
-  // é sempre na hora ÍMPAR (cron das 0min), 11 minutos depois. Começar a
-  // bloquear a tela no minuto 0 da hora par significaria travar o jogador
-  // por até 59 minutos ANTES da virada, boa parte disso com a sessão ainda
-  // 100% ativa e jogável. Pra resolver o atraso do Cloudflare sem esse efeito
-  // colateral, aumentei bastante a margem DEPOIS da virada (é a que importa
-  // pro cron ter tempo de rodar) e mantive a margem ANTES pequena.
-  const SESSION_PRE_BUFFER_MS  = 3 * 60 * 1000;       // 1 min antes da virada
-  const SESSION_POST_BUFFER_MS = 1 * 1000;   // 3 min depois — folga extra pro cron do Cloudflare
+  const SESSION_PRE_BUFFER_MS  = 30 * 1000;       // antes da virada
+  const SESSION_POST_BUFFER_MS = 60 * 1000;   // 1 min depois — folga extra pro cron
 
-  // Guarda o timestamp da "próxima abertura" visto na última checagem. Se ele
-  // mudar de um tick pro outro sem termos passado pelo fim normal da janela
-  // (ex.: celular travou/segundo plano pausou o setInterval e "pulamos" a
-  // janela inteira), isso detecta que uma virada aconteceu enquanto
-  // estávamos fora do ar e força a atualização mesmo assim — não depende de
-  // pegar o tick exato em que o contador chega a zero.
   let lastSeenNextBoundary = null;
   let sessionRefreshInFlight = false;
 
@@ -2903,9 +2858,16 @@ function formatTimeCombat(totalSeconds) {
       const nextBoundary = _nextSessionOpenBoundaryUTC(now).getTime();
       const prevBoundary = nextBoundary - ms2h;
 
-      // Detecta virada "pulada" (app em segundo plano / tela bloqueada) e
-      // força atualização mesmo fora da janela normal do overlay.
-      if (lastSeenNextBoundary !== null && nextBoundary !== lastSeenNextBoundary) {
+      // Detecta virada REALMENTE pulada (app ficou em segundo plano/tela
+      // travada por tempo suficiente pra perder um ciclo inteiro sem
+      // perceber) e força atualização mesmo fora da janela normal do
+      // overlay. IMPORTANTE: nextBoundary troca de valor (B -> B+2h) toda
+      // vez que "now" cruza uma virada normal — isso é esperado e acontece
+      // a cada ciclo, então só conta como "pulo" se o salto for MAIOR que
+      // um único passo de 2h (ou seja, perdemos um ciclo inteiro sem ver).
+      // Sem esse cuidado, isso disparava a cada virada normal, logo depois
+      // do SESSION_PRE_BUFFER_MS terminar, sem nem esperar o POST_BUFFER.
+      if (lastSeenNextBoundary !== null && (nextBoundary - lastSeenNextBoundary) > ms2h) {
           _refreshAfterSessionFlip('pulou-a-janela');
       }
       lastSeenNextBoundary = nextBoundary;

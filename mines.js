@@ -2794,7 +2794,7 @@ function formatTimeCombat(totalSeconds) {
       return boundary;
   }
 
-  const SESSION_PRE_BUFFER_MS  = 30 * 1000;       // antes da virada
+  const SESSION_PRE_BUFFER_MS  = 2 * 1000;       // antes da virada
   const SESSION_POST_BUFFER_MS = 60 * 1000;   // 1 min depois — folga extra pro cron do Cloudflare
 
   let lastRefreshedBoundary = null;

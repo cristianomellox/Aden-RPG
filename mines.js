@@ -2797,8 +2797,7 @@ function formatTimeCombat(totalSeconds) {
   const SESSION_PRE_BUFFER_MS  = 30 * 1000;       // antes da virada
   const SESSION_POST_BUFFER_MS = 60 * 1000;   // 1 min depois — folga extra pro cron do Cloudflare
 
-
-  let lastSeenNextBoundary = null;
+  let lastRefreshedBoundary = null;
   let sessionRefreshInFlight = false;
 
   // Garante que uma tentativa nunca trave pra sempre (ex.: requisição sem
@@ -2906,47 +2905,46 @@ function formatTimeCombat(totalSeconds) {
       const ms2h = 2 * 60 * 60 * 1000;
       const nextBoundary = _nextSessionOpenBoundaryUTC(now).getTime();
       const prevBoundary = nextBoundary - ms2h;
-
-      // Detecta virada REALMENTE pulada (app ficou em segundo plano/tela
-      // travada por tempo suficiente pra perder um ciclo inteiro sem
-      // perceber) e força atualização mesmo fora da janela normal do
-      // overlay. IMPORTANTE: nextBoundary troca de valor (B -> B+2h) toda
-      // vez que "now" cruza uma virada normal — isso é esperado e acontece
-      // a cada ciclo, então só conta como "pulo" se o salto for MAIOR que
-      // um único passo de 2h (ou seja, perdemos um ciclo inteiro sem ver).
-      // Sem esse cuidado, isso disparava a cada virada normal, logo depois
-      // do SESSION_PRE_BUFFER_MS terminar, sem nem esperar o POST_BUFFER.
-      if (lastSeenNextBoundary !== null && (nextBoundary - lastSeenNextBoundary) > ms2h) {
-          _refreshAfterSessionFlip('pulou-a-janela');
-      }
-      lastSeenNextBoundary = nextBoundary;
-
-      if (!overlay) return;
-
       const msUntilNext = nextBoundary - now.getTime();
-      const msSincePrev = now.getTime() - prevBoundary;
+      const msSincePrev = now.getTime() - prevBoundary; // sempre >= 0
 
-      let activeBoundary = null;
-      let bufferMs = 0;
-      if (msUntilNext <= SESSION_PRE_BUFFER_MS) { activeBoundary = nextBoundary; bufferMs = SESSION_PRE_BUFFER_MS; }
-      else if (msSincePrev <= SESSION_POST_BUFFER_MS) { activeBoundary = prevBoundary; bufferMs = SESSION_POST_BUFFER_MS; }
+      // Primeira checagem da sessão: assume que os dados já estão em dia
+      // (o boot() normal do carregamento da página já rodou), pra não
+      // disparar um refresh à toa só por já estarmos no meio do ciclo.
+      if (lastRefreshedBoundary === null) lastRefreshedBoundary = prevBoundary;
 
-      if (activeBoundary === null) {
+      // ─── DISPARO DO REFRESH ────────────────────────────────────────
+      // Importante: isto NÃO depende de pegar um tick exato onde a janela
+      // do overlay ainda esteja "aberta" — a versão anterior comparava
+      // "ainda dentro do buffer" E "tempo esgotado" ao mesmo tempo, e como
+      // as duas condições só se sobrepõem por um instante, o setInterval
+      // de 1s (que sempre atrasa um pouco) quase sempre pulava esse
+      // instante e a janela fechava sem nunca disparar o refresh.
+      // Agora a regra é simples e sem essa corrida: "já passou tempo
+      // suficiente desde a última virada E ainda não recarreguei para
+      // essa virada específica" — dispara em QUALQUER tick que satisfaça
+      // isso, mesmo que seja bem depois (ex.: app acordando de segundo
+      // plano horas depois). Isso também cobre sozinho o caso de "pulei
+      // um ciclo inteiro" que antes precisava de uma checagem separada.
+      if (msSincePrev >= SESSION_POST_BUFFER_MS && lastRefreshedBoundary !== prevBoundary) {
+          lastRefreshedBoundary = prevBoundary;
+          _refreshAfterSessionFlip('fim-do-contador');
+      }
+
+      // ─── EXIBIÇÃO VISUAL DO OVERLAY (só estética/aviso) ─────────────
+      if (!overlay) return;
+      if (sessionRefreshInFlight) return; // _refreshAfterSessionFlip já controla a classe 'active' sozinho enquanto roda
+
+      const showOverlay = (msUntilNext <= SESSION_PRE_BUFFER_MS) || (msSincePrev <= SESSION_POST_BUFFER_MS);
+      if (!showOverlay) {
           overlay.classList.remove('active');
           return;
       }
 
-      const target = activeBoundary + SESSION_POST_BUFFER_MS; // fim da janela = hora ímpar + margem pós-virada
+      const target = prevBoundary + SESSION_POST_BUFFER_MS;
       const remainingMs = target - now.getTime();
-
       overlay.classList.add('active');
-      if (timerEl && !sessionRefreshInFlight) {
-          timerEl.textContent = formatTimeCombat(Math.max(0, remainingMs) / 1000);
-      }
-
-      if (remainingMs <= 0) {
-          _refreshAfterSessionFlip('fim-do-contador');
-      }
+      if (timerEl) timerEl.textContent = formatTimeCombat(Math.max(0, remainingMs) / 1000);
   }
 
   // Assim que o app volta a ficar visível (usuário desbloqueou o celular,

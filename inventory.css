@@ -430,7 +430,7 @@
     font-weight: bold;
     color: #0d0d0d;
     background: linear-gradient(180deg, #f0d68a, #a88235);
-    padding: 1px 7px;
+    padding: 1px 4px;
     border-radius: 999px;
     white-space: nowrap;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
@@ -660,7 +660,7 @@
     align-items: center;
     background: rgba(0, 0, 0, 0.32);
     border: 1px solid rgba(168, 130, 53, 0.2);
-    padding: 10px 5px;
+    padding: 10px 4px;
     border-radius: 8px;
     margin-bottom: 10px;
     gap: 10px;

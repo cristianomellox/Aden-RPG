@@ -79,6 +79,10 @@
 #equipmentAndAvatarContainer {
     display: flex;
     position: relative;
+    z-index: 0; /* cria stacking context próprio: o #background-video (z-index:-1)
+                   fica preso aqui dentro, atrás do conteúdo mas na FRENTE do
+                   fundo de fallback abaixo — sem isso ele "vazava" para o
+                   contexto de empilhamento da página e ficava coberto. */
     justify-content: space-around;
     align-items: center;
     padding: 26px 16px 30px;

@@ -1,11 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════
-   ADEN RPG — INVENTÁRIO / BOLSA
-   Reskin AAA (padrão Unreal Engine 5) — ferro escuro + ouro forjado,
-   texturas, biséis, glow por raridade. Usa as variáveis globais
-   definidas em style.css (--gold-light, --gold-base, --gold-dark,
-   --iron-dark, --epic-texture) para manter consistência com o resto
-   do jogo (topbar, footer, sidemenu).
-   ════════════════════════════════════════════════════════════════════ */
 
 :root {
     /* Cores de raridade (usadas em .rarity-R / .rarity-SR / .rarity-SSR) */
@@ -79,49 +71,21 @@
 #equipmentAndAvatarContainer {
     display: flex;
     position: relative;
-    z-index: 0; /* cria stacking context próprio: o #background-video (z-index:-1)
-                   fica preso aqui dentro, atrás do conteúdo mas na FRENTE do
-                   fundo de fallback abaixo — sem isso ele "vazava" para o
-                   contexto de empilhamento da página e ficava coberto. */
+    z-index: 0;
     justify-content: space-around;
     align-items: center;
-    padding: 26px 16px 30px;
-    margin-top: 16px;
+    padding: 0;
+    margin-top: 3px;
     overflow: hidden;
 
-    background-color: var(--iron-dark, #12100e);
-    background-image:
-        var(--epic-texture, none),
-        linear-gradient(160deg, #3a3225 0%, #1a1610 45%, #0a0805 100%);
-    border: 1px solid rgba(168, 130, 53, 0.35);
+    /* SEM background-color / background-image aqui de propósito:
+       este container só exibe o #background-video (o elemento <video>).
+       Qualquer preenchimento opaco nesta caixa fica na frente do vídeo
+       e o esconde. */
+    background: transparent;
+    border: none;
     border-radius: 14px;
-    box-shadow:
-        0 14px 28px rgba(0, 0, 0, 0.65),
-        inset 0 2px 1px rgba(255, 255, 255, 0.08),
-        inset 0 -6px 18px rgba(168, 130, 53, 0.22),
-        0 0 0 1px rgba(0, 0, 0, 0.6);
-}
-
-/* cantoneiras douradas decorativas (estilo "moldura forjada") */
-#equipmentAndAvatarContainer::before,
-#equipmentAndAvatarContainer::after {
-    content: '';
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--gold-base, #a88235);
-    opacity: 0.75;
-    pointer-events: none;
-}
-#equipmentAndAvatarContainer::before {
-    top: 8px; left: 8px;
-    border-right: none; border-bottom: none;
-    border-radius: 6px 0 0 0;
-}
-#equipmentAndAvatarContainer::after {
-    bottom: 8px; right: 8px;
-    border-left: none; border-top: none;
-    border-radius: 0 0 6px 0;
+    box-shadow: none;
 }
 
 /* rebites metálicos, mesma técnica usada em #playerTopBar */
@@ -162,25 +126,13 @@
 }
 
 .equipment-slot img {
-    max-width: 82%;
-    max-height: 82%;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7));
 }
-
-/* pontas douradas nos 4 cantos de cada slot — sensação de "engaste" */
-.equipment-slot::before,
-.equipment-slot::after {
-    content: '';
-    position: absolute;
-    width: 6px;
-    height: 6px;
-    border: 1px solid var(--gold-base, #a88235);
-    opacity: 0.55;
-    pointer-events: none;
-}
-.equipment-slot::before { top: 3px; left: 3px; border-right: none; border-bottom: none; }
-.equipment-slot::after  { bottom: 3px; right: 3px; border-left: none; border-top: none; }
 
 #playerAvatarEquipContainer {
     display: flex;
@@ -207,10 +159,10 @@
 #skinConfigBtn {
     position: absolute;
     top: -1px;
-    right: 25%;
+    right: calc(25% - 12px);
     background: rgba(0, 0, 0, 0.55);
     background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: none;
     border-radius: 6px;
     padding: 3px 4px;
     cursor: pointer;
@@ -237,7 +189,7 @@
         var(--epic-texture, none),
         linear-gradient(180deg, #221d16 0%, #14100b 55%, #0a0805 100%);
     padding: 18px 16px 14px;
-    margin: 16px 0;
+    margin: 2px 0 16px 0;
     border-radius: 12px;
     border: 1px solid rgba(168, 130, 53, 0.3);
     box-shadow:
@@ -253,8 +205,9 @@
     font-family: 'Cinzel', serif;
     font-size: 0.72em;
     letter-spacing: 3px;
-    color: var(--gold-base, #a88235);
-    opacity: 0.85;
+    color: var(--gold-light, #e6c27a);
+    text-shadow: 0 0 8px rgba(168, 130, 53, 0.4);
+    opacity: 1;
     margin-bottom: 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid rgba(168, 130, 53, 0.25);
@@ -272,7 +225,7 @@
     flex: 1;
     font-size: 0.72em;
     text-align: center;
-    padding: 8px 4px;
+    padding: 2px 4px;
     background: rgba(0, 0, 0, 0.28);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 7px;
@@ -290,7 +243,7 @@
 
 .attribute-value {
     font-family: 'Cinzel', serif;
-    font-size: 1.25em;
+    font-size: 1em;
     font-weight: bold;
     color: var(--gold-light, #e6c27a);
     text-shadow: 0 0 8px rgba(168, 130, 53, 0.4);
@@ -403,8 +356,10 @@
 }
 
 .inventory-item img {
-    max-width: 82%;
-    max-height: 82%;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7));
 }
@@ -529,20 +484,6 @@
         inset 0 -6px 18px rgba(168, 130, 53, 0.2);
 }
 
-/* cantoneiras douradas — mesma linguagem do resto do jogo */
-.modal-content::before,
-.modal-content::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--gold-base, #a88235);
-    opacity: 0.7;
-    pointer-events: none;
-}
-.modal-content::before { top: 8px; left: 8px; border-right: none; border-bottom: none; border-radius: 6px 0 0 0; }
-.modal-content::after  { bottom: 8px; right: 8px; border-left: none; border-top: none; border-radius: 0 0 6px 0; }
-
 .modal-content p { font-weight: bold; }
 .modal-content span { color: var(--rar-ssr-color, #ffcf40); }
 
@@ -607,8 +548,8 @@
 }
 
 #detailItemImage {
-    width: 78px;
-    height: 78px;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
 }

@@ -1253,7 +1253,7 @@ async function showItemDetails(item) {
                 let formattedValue = item.reforge_slot1.value;
                 if (['TAXA CRIT','DANO CRIT','EVASÃO'].includes(formattedName)) formattedValue += '%';
                 const textStyle1 = `font-size:1.1em; margin:0; color:silver; font-weight:bold; text-shadow: none;
-  background: linear-gradient(to bottom, lightblue 10%, gray 50%, white 100%);
+  background: linear-gradient(to bottom, black 100%, white 50%, black 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;`;
                 refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="${textStyle1}">${formattedName} +${formattedValue}</p>`;

@@ -1256,7 +1256,7 @@ async function showItemDetails(item) {
   background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 0.6px gold;`;
+  -webkit-text-stroke: 0.3px red;`;
                 refineRow1.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="${textStyle1}">${formattedName} +${formattedValue}</p>`;
                 refineRow1.style.setProperty('background', rarityGradient(item.reforge_slot1.color));
                 refineRow1.style.height = "15px";
@@ -1278,7 +1278,7 @@ async function showItemDetails(item) {
   background: linear-gradient(to bottom, lightblue 0%, white 50%, blue 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 0.6px gold;`;
+  -webkit-text-stroke: 0.3px red;`;
                 refineRow2.innerHTML = `<img src="https://aden-rpg.pages.dev/assets/refund.webp" class="refine-icon" style="width:38px;height:38px;"><p style="${textStyle2}">${formattedName} +${formattedValue}</p>`;
                 refineRow2.style.setProperty('background', rarityGradient(item.reforge_slot2.color));
                 refineRow2.style.height = "15px";

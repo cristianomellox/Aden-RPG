@@ -726,6 +726,11 @@ async function loadItems(tab = 'all', itemsList = null) {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'inventory-item';
 
+        // AAA: borda/brilho colorido por raridade (R / SR / SSR)
+        if (item.items.rarity) {
+            itemDiv.classList.add('rarity-' + item.items.rarity);
+        }
+
         if (item.items.item_type === 'fragmento' && item.items.crafts_item_id && item.quantity >= 30) {
             itemDiv.classList.add('zoom-border');
         }
@@ -1155,6 +1160,13 @@ async function showItemDetails(item) {
 
     document.getElementById('detailItemName').textContent = item.items.display_name;
     document.getElementById('detailItemRarity').textContent = item.items.rarity;
+
+    // AAA: aplica borda/brilho de raridade no card do modal de detalhes
+    const detailsContentEl = document.getElementById('itemDetailsContent');
+    if (detailsContentEl) {
+        detailsContentEl.classList.remove('rarity-R', 'rarity-SR', 'rarity-SSR');
+        if (item.items.rarity) detailsContentEl.classList.add('rarity-' + item.items.rarity);
+    }
 
     // Garante que o skinExpiryInfo e activateSkinBtn ficam ocultos para itens normais
     const skinExpiryEl = document.getElementById('skinExpiryInfo');

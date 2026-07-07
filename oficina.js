@@ -1281,6 +1281,11 @@ function injectOficinaStyles() {
 .oficina-chain-name  { color: #e0dccc; font-size: .78em; line-height: 1.3; }
 .oficina-chain-chance { color: #ffd700; font-size: .72em; }
 .oficina-chain-arrow { color: #c9a94a; font-size: 1.6em; align-self: center; margin-top: 20px; }
+@media (max-width: 480px) {
+    .oficina-chain { flex-direction: column; align-items: center; }
+    .oficina-chain-arrow { margin: 2px 0; transform: rotate(90deg); }
+    .oficina-chain-step { max-width: 220px; }
+}
 .oficina-chain-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 2px; }
 .oficina-stat-badge { background: rgba(201,169,74,.15); border: 1px solid #c9a94a55; color: #e0dccc; font-size: .68em; padding: 2px 6px; border-radius: 4px; }
 .oficina-mat-preview { width: 100%; }

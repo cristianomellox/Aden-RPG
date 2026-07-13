@@ -1263,11 +1263,10 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
         currentBattleState.player_state[packCol] = Math.min(oldCount + 1, MAX_PACK_PURCHASES);
     }
 
-    isPurchasingBattleAction = false;
-    refreshShopButtonsState();
-
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
+        isPurchasingBattleAction = false;
+        refreshShopButtonsState();
     }, 1500);
 }
 

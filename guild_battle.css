@@ -872,6 +872,13 @@ textarea:focus, textarea:active {
 }
 
 #obj-nexus .obj-visual {
-    width: 150px!important;
-    height: 150px!important;
+    width: 80px!important;
+    height: 80px!important;
+}
+
+#img-nexus {
+    width: 80px!important;
+    height: 80px!important;
+    border-radius: 50%;
+    object-fit: cover;
 }

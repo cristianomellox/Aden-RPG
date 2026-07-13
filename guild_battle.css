@@ -389,6 +389,14 @@
             font-weight: bold;
             cursor: pointer;
         }
+
+        #resultsModal .modal-content {
+            height: 94vh;
+            max-height: 94vh;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
         
         #objectiveModalActions, #cityRegisterModalActions, #garrisonLeaveModalActions {
             display: flex;

@@ -1,10 +1,72 @@
 import { supabase } from './supabaseClient.js'
+import {
+    ensureNexusDOM, openNexusConfirmModal, enterNexus, leaveNexus,
+    startNexusScreen, stopNexusLoop, pauseNexusPolling, resumeNexusPolling,
+    isNexusScreenActive
+} from './nexus_module.js'
 
 // --- Configurações & Constantes ---
 const NORMAL_REGEN_MS = 3600 * 1000; // 1 Hora (Fase Normal)
 const FAST_REGEN_MS = 60 * 1000;     // 1 Minuto (Fase Final - 20 min)
 const FINAL_PHASE_SECONDS = 1200;    // 20 Minutos para o fim
 const MAX_ACTIONS = 5;
+
+// ── INATIVIDADE / VISIBILIDADE (mesmo padrão de floresta_mistica.js) ──
+const _INACTIVITY_MS = 3 * 60 * 1000;
+const _INACTIVITY_CHECK_MS = 20_000;
+let _lastActivityMs = Date.now();
+let _inactivityCheckId = null;
+let _inactivityPaused = false;
+function _resetActivity() { _lastActivityMs = Date.now(); }
+['touchstart', 'click', 'mousemove', 'keydown', 'scroll', 'pointerdown'].forEach(ev => {
+    document.addEventListener(ev, _resetActivity, { passive: true, capture: true });
+});
+function _startInactivityGuard() {
+    clearInterval(_inactivityCheckId);
+    _inactivityCheckId = setInterval(() => {
+        if (_inactivityPaused) return;
+        if (Date.now() - _lastActivityMs >= _INACTIVITY_MS) _showInactivityModal();
+    }, _INACTIVITY_CHECK_MS);
+}
+function _showInactivityModal() {
+    _inactivityPaused = true;
+    stopHeartbeatPolling();
+    stopDamagePolling();
+    pauseNexusPolling();
+    let m = $('battleInactivityModal');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'battleInactivityModal';
+        m.className = 'modal';
+        m.innerHTML = `<div class="modal-content"><h3>Você ficou inativo</h3><p>Toque para continuar acompanhando a batalha.</p>
+            <button id="battleInactivityResumeBtn" class="action-btn">Continuar</button></div>`;
+        document.body.appendChild(m);
+        document.getElementById('battleInactivityResumeBtn').onclick = () => {
+            m.style.display = 'none';
+            _inactivityPaused = false;
+            _resetActivity();
+            _resumeAfterPause();
+        };
+    }
+    m.style.display = 'flex';
+}
+function _resumeAfterPause() {
+    if (isNexusScreenActive()) { resumeNexusPolling(); return; }
+    if (!currentBattleState || currentBattleState.status !== 'active') return;
+    // Não força heartbeat fora da janela dos 20 minutos finais — o uiTimerInterval
+    // já cuida disso (polling "lazy" original). Só garante um refresh pontual.
+    pollBattleState();
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        stopHeartbeatPolling();
+        stopDamagePolling();
+        pauseNexusPolling();
+    } else if (!_inactivityPaused) {
+        _resetActivity();
+        _resumeAfterPause();
+    }
+});
 
 // --- Variáveis de Estado Global ---
 let userId = null;
@@ -30,6 +92,7 @@ let captureNotificationQueue = [];
 let isDisplayingCaptureNotification = false;
 let processedCaptureTimestamps = new Set();
 let lastCaptureTimestamp = '1970-01-01T00:00:00+00:00'; 
+let lastNexusEventTimestamp = '1970-01-01T00:00:00+00:00';
 
 const CITIES = [
     { id: 1, name: 'Capital' }
@@ -329,7 +392,9 @@ function createCaptureNotificationUI() {
 function displayCaptureNotification(data) {
     const banner = $('battleCaptureNotification');
     if (!banner) return;
-    banner.innerHTML = `<span style="color: yellow;">${data.playerName}</span> da guilda <span style="color: #00bcd4;">${data.guildName}</span> destruiu o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
+    banner.innerHTML = data.rawHtml
+        ? data.rawHtml
+        : `<span style="color: yellow;">${data.playerName}</span> da guilda <span style="color: #00bcd4;">${data.guildName}</span> destruiu o <span style="color: lightgreen;">${data.objectiveName}</span>!`;
     banner.classList.add('show');
     const onAnimationEnd = () => {
         banner.classList.remove('show');
@@ -347,6 +412,11 @@ function processCaptureNotificationQueue() {
     isDisplayingCaptureNotification = true;
     const data = captureNotificationQueue.shift();
     displayCaptureNotification(data);
+}
+
+function pushRawBannerNotification(html) {
+    captureNotificationQueue.push({ rawHtml: html });
+    if (!isDisplayingCaptureNotification) processCaptureNotificationQueue();
 }
 
 function playCaptureSound(type, index, isAlly) {
@@ -460,7 +530,8 @@ function renderWaitingScreen(instance) {
 
 function renderBattleScreen(state) {
     currentBattleState = state;
-    userPlayerStats = state.player_stats; 
+    userPlayerStats = state.player_stats;
+    currentBattleState.is_nexus_open = state.is_nexus_open !== false;
 
     const city = CITIES.find(c => c.id === state.instance.city_id);
     if (city) {
@@ -503,23 +574,49 @@ function renderRankingModal(registeredGuilds, playerDamageRanking) {
     });
 
     modals.playerDamageList.innerHTML = '';
+    let myRankIndex = -1;
     playerDamageRanking.forEach((p, index) => {
         const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
         if (p.name && !playerDamageCache.has(p.player_id)) {
             playerDamageCache.set(p.player_id, p.name);
         }
+        if (p.player_id === userId) myRankIndex = index;
         const color = guildColorMap.get(p.guild_id) || 'var(--guild-color-neutral)';
         const li = document.createElement('li');
+        const kills = p.total_eliminations || 0;
         li.innerHTML = `
             <span>${index + 1}. <strong style="color: ${color};">${playerName}</strong></span>
-            <span>${kFormatter(p.total_damage_dealt)}</span>
+            <span>${kFormatter(p.total_damage_dealt)} dmg · ${kills} 💀</span>
         `;
         modals.playerDamageList.appendChild(li);
     });
+
+    // Linha "Meu Ranking" — meu dano/eliminações mesmo se eu não estiver no Top 30
+    let myRankEl = $('myRankingLine');
+    if (!myRankEl) {
+        myRankEl = document.createElement('li');
+        myRankEl.id = 'myRankingLine';
+        myRankEl.style.cssText = 'border-top:1px dashed #666; margin-top:6px; padding-top:6px; color:#8cf; font-weight:bold;';
+        modals.playerDamageList.after(myRankEl);
+    }
+    if (myRankIndex >= 0) {
+        const me = playerDamageRanking[myRankIndex];
+        myRankEl.innerHTML = `<span>Você: #${myRankIndex + 1}</span><span>${kFormatter(me.total_damage_dealt)} dmg · ${me.total_eliminations || 0} 💀</span>`;
+    } else if (currentBattleState && currentBattleState.player_state) {
+        const me = currentBattleState.player_state;
+        myRankEl.innerHTML = `<span>Você: fora do Top 30</span><span>${kFormatter(me.total_damage_dealt || 0)} dmg · ${me.total_eliminations || 0} 💀</span>`;
+    } else {
+        myRankEl.innerHTML = '';
+    }
 }
 
 function renderAllObjectives(objectives) {
     if (!objectives || !currentBattleState || !currentBattleState.instance) return;
+
+    const nexusEl = $('obj-nexus');
+    if (nexusEl) {
+        nexusEl.classList.toggle('nexus-closed', currentBattleState.is_nexus_open === false);
+    }
 
     if (!currentBattleState.guildColorMap) {
         const guildColorMap = new Map();
@@ -643,7 +740,7 @@ function createRewardItemHTML(item, quantity) {
     `;
 }
 
-function renderResultsScreen(instance, playerDamageRanking) {
+function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
     const titleEl = $('resultCityName');
     titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
     
@@ -688,12 +785,27 @@ function renderResultsScreen(instance, playerDamageRanking) {
             const li = document.createElement('li');
             const guildName = guildNameMap.get(p.guild_id) ? `(${guildNameMap.get(p.guild_id)})` : '';
             const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
+            const kills = p.total_eliminations || 0;
             li.innerHTML = `
                 <span>#${index + 1} ${playerName} ${guildName}</span>
-                <span>${kFormatter(p.total_damage_dealt)}</span>
+                <span>${kFormatter(p.total_damage_dealt)} dmg · ${kills} 💀</span>
             `;
             modals.resultsRankingDamage.appendChild(li);
         });
+    }
+
+    // Ranking pessoal (onde EU cheguei), mesmo fora do Top 5
+    let personalEl = $('resultsPersonalRanking');
+    if (!personalEl) {
+        personalEl = document.createElement('p');
+        personalEl.id = 'resultsPersonalRanking';
+        personalEl.style.cssText = 'text-align:center; color:#8cf; font-weight:bold; margin-top:8px;';
+        modals.resultsRankingDamage.after(personalEl);
+    }
+    if (personalRanking && personalRanking.rank) {
+        personalEl.textContent = `Você: #${personalRanking.rank} — ${kFormatter(personalRanking.total_damage_dealt || 0)} dmg · ${personalRanking.total_eliminations || 0} 💀`;
+    } else {
+        personalEl.textContent = '';
     }
 
     let guildRewardsEl = $('resultsGuildRewards');
@@ -917,13 +1029,23 @@ async function handleCityRegistrationConfirm(cityId, cityName) {
 }
 
 function handleObjectiveClick(objective) {
-    unlockBattleAudio(); 
+    unlockBattleAudio();
     if (isProcessingBattleAction) return;
 
     const fullObjective = currentBattleState.objectives.find(o => o.id === objective.id);
-    if (!fullObjective) return; 
-    
-    selectedObjective = fullObjective; 
+    if (!fullObjective) return;
+
+    if (fullObjective.objective_type === 'nexus') {
+        openNexusConfirmModal(async () => {
+            const result = await enterNexus(currentBattleState.instance.id);
+            if (!result || !result.success) return false;
+            enterNexusScreenFlow(result);
+            return true;
+        });
+        return;
+    }
+
+    selectedObjective = fullObjective;
     modals.objectiveTitle.textContent = fullObjective.objective_type === 'nexus' ? 'Nexus Central' : `Ponto de Controle ${fullObjective.objective_index}`;
     const isOwned = fullObjective.owner_guild_id === userGuildId;
     
@@ -985,6 +1107,47 @@ function handleObjectiveClick(objective) {
     modals.objective.style.display = 'flex';
 }
 
+// ── FLUXO DO NEXUS ──────────────────────────────────────────────────
+function enterNexusScreenFlow(entryData) {
+    stopHeartbeatPolling();
+    stopDamagePolling();
+    showScreen('nexus');
+    startNexusScreen({
+        instanceId: currentBattleState.instance.id,
+        playerId: userId,
+        guildId: userGuildId,
+        avatarUrl: userPlayerStats ? userPlayerStats.avatar_url : null,
+        entryPosX: entryData.pos_x,
+        entryPosY: entryData.pos_y,
+        syncSeed: entryData.sync_seed,
+        nextSeq: entryData.next_seq || 0,
+        onBack: handleNexusBackClick,
+        onForceExit: handleNexusForceExit,
+        onBannerEvent: (html) => pushRawBannerNotification(html)
+    });
+}
+
+async function handleNexusBackClick() {
+    if (!currentBattleState || !currentBattleState.instance) return;
+    const result = await leaveNexus(currentBattleState.instance.id);
+    if (!result || !result.success) {
+        showAlert(result?.message || 'Você ainda não pode sair do Nexus.');
+        return;
+    }
+    stopNexusLoop();
+    showScreen('battle');
+    pollBattleState();
+}
+
+function handleNexusForceExit(reason) {
+    stopNexusLoop();
+    showScreen('battle');
+    if (reason === 'phase2') {
+        showAlert('O Nexus fechou — faltam 20 minutos para o fim da batalha. Você foi trazido de volta.');
+    }
+    pollBattleState();
+}
+
 function checkGarrisonLeaveAndExecute(actionCallback) {
     if (!currentBattleState || !currentBattleState.player_garrison || !userPlayerStats) {
         actionCallback();
@@ -1012,11 +1175,7 @@ function checkGarrisonLeaveAndExecute(actionCallback) {
     modals.garrisonLeave.style.display = 'flex';
 }
 
-function openBattleShop() {
-    if (modals.battleShopMessage) {
-        modals.battleShopMessage.textContent = "";
-    }
-
+function refreshShopButtonsState() {
     const MAX_PACK_PURCHASES = 5;
     const playerState = currentBattleState && currentBattleState.player_state;
     const pack1Count = playerState ? (parseInt(playerState.bought_action_pack_1) || 0) : 0;
@@ -1025,30 +1184,42 @@ function openBattleShop() {
     const pack2Remaining = Math.max(0, MAX_PACK_PURCHASES - pack2Count);
 
     if (modals.shopBtnPack1) {
-        const exhausted1 = pack1Remaining <= 0;
-        modals.shopBtnPack1.disabled = exhausted1;
-        modals.shopBtnPack1.textContent = "Comprar";
+        modals.shopBtnPack1.disabled = pack1Remaining <= 0;
         const rem1El = document.getElementById('pack1Remaining');
         if (rem1El) {
-            rem1El.textContent = exhausted1 ? "Esgotado" : `${pack1Remaining} compra(s) restante(s)`;
-            rem1El.style.color = exhausted1 ? '#dc3545' : '#aaa';
+            rem1El.textContent = pack1Remaining <= 0 ? "Esgotado" : `${pack1Remaining} compra(s) restante(s)`;
+            rem1El.style.color = pack1Remaining <= 0 ? '#dc3545' : '#aaa';
         }
     }
     if (modals.shopBtnPack2) {
-        const exhausted2 = pack2Remaining <= 0;
-        modals.shopBtnPack2.disabled = exhausted2;
-        modals.shopBtnPack2.textContent = "Comprar";
+        modals.shopBtnPack2.disabled = pack2Remaining <= 0;
         const rem2El = document.getElementById('pack2Remaining');
         if (rem2El) {
-            rem2El.textContent = exhausted2 ? "Esgotado" : `${pack2Remaining} compra(s) restante(s)`;
-            rem2El.style.color = exhausted2 ? '#dc3545' : '#aaa';
+            rem2El.textContent = pack2Remaining <= 0 ? "Esgotado" : `${pack2Remaining} compra(s) restante(s)`;
+            rem2El.style.color = pack2Remaining <= 0 ? '#dc3545' : '#aaa';
         }
     }
+}
+
+function openBattleShop() {
+    if (modals.battleShopMessage) {
+        modals.battleShopMessage.textContent = "";
+    }
+    if (modals.shopBtnPack1) modals.shopBtnPack1.textContent = "Comprar";
+    if (modals.shopBtnPack2) modals.shopBtnPack2.textContent = "Comprar";
+    refreshShopButtonsState();
     modals.battleShop.style.display = 'flex';
 }
 
+// Trava as DUAS opções assim que qualquer compra começa, e só libera
+// depois que a resposta do servidor chega — evita corrida de clique duplo/cruzado.
+let isPurchasingBattleAction = false;
+
 async function handleBuyBattleActions(packId, cost, actions, btnEl) {
-    btnEl.disabled = true;
+    if (isPurchasingBattleAction) return;
+    isPurchasingBattleAction = true;
+    if (modals.shopBtnPack1) modals.shopBtnPack1.disabled = true;
+    if (modals.shopBtnPack2) modals.shopBtnPack2.disabled = true;
     modals.battleShopMessage.textContent = "Processando...";
 
     const { data, error } = await supabase.rpc('buy_battle_actions', { p_pack_id: packId });
@@ -1056,10 +1227,8 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
     if (error || !data.success) {
         modals.battleShopMessage.textContent = `Erro: ${error ? error.message : data.message}`;
         modals.battleShopMessage.style.color = '#dc3545';
-        // Reabilita o botão apenas se não for erro de limite atingido
-        if (!data?.message?.includes("Limite")) {
-            btnEl.disabled = false;
-        }
+        isPurchasingBattleAction = false;
+        refreshShopButtonsState();
         return;
     }
 
@@ -1083,26 +1252,10 @@ async function handleBuyBattleActions(packId, cost, actions, btnEl) {
         const packCol = packId === 1 ? 'bought_action_pack_1' : 'bought_action_pack_2';
         const oldCount = parseInt(currentBattleState.player_state[packCol]) || 0;
         currentBattleState.player_state[packCol] = Math.min(oldCount + 1, MAX_PACK_PURCHASES);
-
-        // Atualiza visualmente os contadores da loja
-        const pack1Count = parseInt(currentBattleState.player_state.bought_action_pack_1) || 0;
-        const pack2Count = parseInt(currentBattleState.player_state.bought_action_pack_2) || 0;
-
-        const rem1El = document.getElementById('pack1Remaining');
-        if (rem1El) {
-            const rem = Math.max(0, MAX_PACK_PURCHASES - pack1Count);
-            rem1El.textContent = rem <= 0 ? "Esgotado" : `${rem} compra(s) restante(s)`;
-            rem1El.style.color = rem <= 0 ? '#dc3545' : '#aaa';
-            if (modals.shopBtnPack1) modals.shopBtnPack1.disabled = rem <= 0;
-        }
-        const rem2El = document.getElementById('pack2Remaining');
-        if (rem2El) {
-            const rem = Math.max(0, MAX_PACK_PURCHASES - pack2Count);
-            rem2El.textContent = rem <= 0 ? "Esgotado" : `${rem} compra(s) restante(s)`;
-            rem2El.style.color = rem <= 0 ? '#dc3545' : '#aaa';
-            if (modals.shopBtnPack2) modals.shopBtnPack2.disabled = rem <= 0;
-        }
     }
+
+    isPurchasingBattleAction = false;
+    refreshShopButtonsState();
 
     setTimeout(() => {
         modals.battleShop.style.display = 'none';
@@ -1163,13 +1316,26 @@ async function pollBattleState() {
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
 
+            const nexusEvents = (data.instance && data.instance.recent_nexus_events) ? data.instance.recent_nexus_events : [];
+            lastNexusEventTimestamp = nexusEvents.length > 0
+                ? nexusEvents[nexusEvents.length - 1].timestamp
+                : '1970-01-01T00:00:00+00:00';
+
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
-                setTimeout(() => {
+                setTimeout(async () => {
                     renderBattleScreen(data);
-                    // Não iniciamos polling agressivo aqui, apenas o render inicial
+                    if (data.in_nexus) {
+                        const entry = await enterNexus(currentBattleState.instance.id);
+                        if (entry && entry.success) enterNexusScreenFlow(entry);
+                    }
                 }, 500);
-            } else {
+            } else if (data.in_nexus && !isNexusScreenActive()) {
+                renderBattleScreen(data);
+                enterNexus(currentBattleState.instance.id).then(entry => {
+                    if (entry && entry.success) enterNexusScreenFlow(entry);
+                });
+            } else if (!isNexusScreenActive()) {
                 renderBattleScreen(data);
             }
             break;
@@ -1181,7 +1347,7 @@ async function pollBattleState() {
         case 'finished':
             if (resultsPollTimeout) clearTimeout(resultsPollTimeout);
             playerDamageCache.clear();
-            renderResultsScreen(data.instance, data.player_damage_ranking);
+            renderResultsScreen(data.instance, data.player_damage_ranking, data.personal_ranking);
             resultsPollTimeout = setTimeout(pollBattleState, 7000);
             break;
             
@@ -1246,7 +1412,8 @@ async function handleNewCaptures(newCaptures, skipSounds = false) {
 
 async function pollHeartbeatState() {
     const { data, error } = await supabase.rpc('get_battle_heartbeat', { 
-        p_last_capture_timestamp: lastCaptureTimestamp 
+        p_last_capture_timestamp: lastCaptureTimestamp,
+        p_last_nexus_event_timestamp: lastNexusEventTimestamp
     });
     
     if (error) {
@@ -1310,6 +1477,22 @@ function processHeartbeat(data) {
                     }
                 });
             }
+
+            if (typeof data.is_nexus_open === 'boolean') {
+                currentBattleState.is_nexus_open = data.is_nexus_open;
+            }
+
+            if (data.recent_nexus_events && data.recent_nexus_events.length > 0) {
+                data.recent_nexus_events.forEach(ev => {
+                    lastNexusEventTimestamp = ev.timestamp > lastNexusEventTimestamp ? ev.timestamp : lastNexusEventTimestamp;
+                    if (ev.type === 'nexus_pvp') {
+                        const html = ev.attacker_won
+                            ? `<span style="color:#ff8">${ev.attacker_name}</span> eliminou <span style="color:#f88">${ev.defender_name}</span> no Nexus!`
+                            : `<span style="color:#f88">${ev.attacker_name}</span> tentou eliminar <span style="color:#ff8">${ev.defender_name}</span> no Nexus e perdeu.`;
+                        pushRawBannerNotification(html);
+                    }
+                });
+            }
             
             renderAllObjectives(currentBattleState.objectives);
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
@@ -1340,6 +1523,7 @@ async function pollDamageRanking() {
     const newRanking = data.map(p => ({
         player_id: p.player_id,
         total_damage_dealt: p.total_damage_dealt,
+        total_eliminations: p.total_eliminations,
         guild_id: p.guild_id,
         name: playerDamageCache.get(p.player_id) // Puxa do cache
     }));
@@ -1534,12 +1718,14 @@ function injectGarrisonHpBarStyles() {
 }
 
 function setupDOMElements() {
+    ensureNexusDOM();
     screens = {
         loading: $('loadingScreen'),
         citySelection: $('citySelectionScreen'),
         waiting: $('waitingScreen'),
         battle: $('battleActiveScreen'),
-        results: $('resultsModal')
+        results: $('resultsModal'),
+        nexus: $('nexusScreen')
     };
 
     battle = {
@@ -1630,6 +1816,7 @@ async function init() {
     createCaptureNotificationUI();
     injectGarrisonHpBarStyles();
     document.body.addEventListener('click', unlockBattleAudio, { once: true });
+    _startInactivityGuard();
 
 
     // =================================================================

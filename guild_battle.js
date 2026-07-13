@@ -640,6 +640,9 @@ function renderAllObjectives(objectives) {
 
         const fullObj = currentBattleState.objectives.find(o => o.id === obj.id);
         if (!fullObj) return; 
+
+        // Nexus não tem mais HP/dono — só o ícone permanece
+        if (obj.objective_type === 'nexus') return;
         
         const totalHp = (fullObj.base_hp || 0) + (obj.garrison_hp || 0);
         const currentTotalHp = (obj.current_hp || 0) + (obj.garrison_hp || 0);
@@ -1044,9 +1047,9 @@ function handleObjectiveClick(objective) {
     if (fullObjective.objective_type === 'nexus') {
         openNexusConfirmModal(async () => {
             const result = await enterNexus(currentBattleState.instance.id);
-            if (!result || !result.success) return false;
+            if (!result || !result.success) return result;
             enterNexusScreenFlow(result);
-            return true;
+            return result;
         });
         return;
     }
@@ -1222,7 +1225,7 @@ function openBattleShop() {
 let isPurchasingBattleAction = false;
 
 async function handleBuyBattleActions(packId, cost, actions, btnEl) {
-    if (isPurchasingBattleAction) return;
+    if (isPurchasingBattleAction || (btnEl && btnEl.disabled)) return;
     isPurchasingBattleAction = true;
     if (modals.shopBtnPack1) modals.shopBtnPack1.disabled = true;
     if (modals.shopBtnPack2) modals.shopBtnPack2.disabled = true;

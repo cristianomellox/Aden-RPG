@@ -208,10 +208,13 @@ export function openNexusConfirmModal(onConfirm) {
     modal.style.display = 'flex';
     document.getElementById('nexusConfirmYesBtn').onclick = async () => {
         document.getElementById('nexusConfirmYesBtn').disabled = true;
-        const ok = await onConfirm();
+        const result = await onConfirm();
         document.getElementById('nexusConfirmYesBtn').disabled = false;
-        if (ok) modal.style.display = 'none';
-        else msg.textContent = 'Não foi possível entrar no Nexus agora.';
+        if (result === true || (result && result.success)) {
+            modal.style.display = 'none';
+        } else {
+            msg.textContent = (result && result.message) ? result.message : 'Não foi possível entrar no Nexus agora.';
+        }
     };
 }
 

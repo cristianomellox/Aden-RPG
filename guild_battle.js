@@ -11,6 +11,12 @@ const FAST_REGEN_MS = 60 * 1000;     // 1 Minuto (Fase Final - 20 min)
 const FINAL_PHASE_SECONDS = 1200;    // 20 Minutos para o fim
 const MAX_ACTIONS = 5;
 
+// 🧪 MODO DE TESTE — precisa ficar em sincronia com "v_test_mode" em
+// register_for_guild_battle.sql. Com true: libera o registro na tela
+// (botões das cidades + contador) a qualquer dia/hora. Mude para false
+// junto com o backend para voltar ao normal (só Sábado 00:00–23:30 UTC).
+const TEST_MODE_REGISTRATION = true;
+
 // ── INATIVIDADE / VISIBILIDADE (mesmo padrão de floresta_mistica.js) ──
 const _INACTIVITY_MS = 3 * 60 * 1000;
 const _INACTIVITY_CHECK_MS = 20_000;
@@ -457,7 +463,7 @@ function renderCitySelectionScreen(playerRank) {
     const dayUTC = now.getUTCDay(); // 6 = Sábado
     const hoursUTC = now.getUTCHours();
     const isLeader = playerRank === 'leader' || playerRank === 'co-leader';
-    let registrationOpen = (dayUTC === 6 && hoursUTC < 23); // Sábado, antes das 23:30 (margem visual)
+    let registrationOpen = TEST_MODE_REGISTRATION || (dayUTC === 6 && hoursUTC < 23); // Sábado, antes das 23:30 (margem visual)
 
     CITIES.forEach(city => {
         const btn = document.createElement('button');
@@ -486,7 +492,7 @@ function updateCityRegistrationButtons() {
     const now = new Date();
     const dayUTC = now.getUTCDay(); // 6 = Sábado
     const hoursUTC = now.getUTCHours();
-    let registrationOpen = (dayUTC === 6 && hoursUTC < 23); 
+    let registrationOpen = TEST_MODE_REGISTRATION || (dayUTC === 6 && hoursUTC < 23); 
 
     const cityButtons = document.querySelectorAll('#cityGrid .city-btn');
 
@@ -1595,7 +1601,15 @@ function startGlobalUITimer() {
             const dayUTC = now.getUTCDay(); // 6 = Sábado
             const hoursUTC = now.getUTCHours();
             
-            if (dayUTC === 6 && hoursUTC < 23) {
+            if (TEST_MODE_REGISTRATION) {
+                // Espelha o bloco de 5 minutos usado por v_test_mode no backend,
+                // só para o contador mostrar um valor coerente durante o teste.
+                const bucketMs = 5 * 60 * 1000;
+                const bucketStart = Math.floor(now.getTime() / bucketMs) * bucketMs;
+                const bucketEnd = bucketStart + bucketMs;
+                const timeLeft = Math.max(0, Math.floor((bucketEnd - now.getTime()) / 1000));
+                registrationTimer.textContent = `[TESTE] Registro fecha em: ${formatTime(timeLeft)}`;
+            } else if (dayUTC === 6 && hoursUTC < 23) {
                 // REGISTRO ABERTO Sábado
                 const registrationEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 30, 0));
                 const timeLeft = Math.max(0, Math.floor((registrationEnd - now) / 1000));

@@ -46,7 +46,7 @@
       position       : 'fixed',
       top            : '50%',
       transform      : 'translateY(-50%)',
-      zIndex         : '1100',
+      zIndex         : '1001',
       alignItems     : 'center',
       justifyContent : 'center',
       width          : '26px',

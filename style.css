@@ -540,7 +540,7 @@ p#authMessage, p#profileEditMessage, p#afkMessage {
     background-color: transparent; 
     margin: 0;
     position: fixed;
-    z-index: 1000; 
+    z-index: 1002; 
     top: 0;
     left: 0;
     overflow-y: auto;

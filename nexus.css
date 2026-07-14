@@ -18,12 +18,15 @@
 }
 
 /* ── Tela do Nexus (fullscreen, sem topbar) ─────────────────────── */
+/* z-index BAIXO (abaixo de .modal, que é 1500) para que qualquer modal
+   genérico (alerta, confirmação, etc) sempre apareça por cima quando
+   aberto durante a tela do Nexus. */
 #nexusScreen {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: #000;
-    z-index: 9000;
+    z-index: 500;
     display: none;
     flex-direction: column;
 }
@@ -32,11 +35,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
     padding: 10px 14px;
     background: rgba(0,0,0,0.75);
     color: #fff;
     z-index: 10;
     position: relative;
+    min-height: 40px;
+}
+#nexusHeader > * {
+    display: flex;
+    align-items: center;
 }
 #nexusBackBtn {
     background: none;
@@ -44,18 +53,48 @@
     color: #fff;
     cursor: pointer;
     padding: 4px;
+    flex-shrink: 0;
+    line-height: 0;
 }
 #nexusTimer {
     font-weight: bold;
     font-size: 1.1em;
     color: #ffc107;
     text-shadow: 1px 1px 3px #000;
+    line-height: 1;
 }
 #nexusActions {
     font-weight: bold;
     color: #8cf;
     font-size: 0.95em;
+    line-height: 1;
+    white-space: nowrap;
 }
+
+/* Botão de câmera (item 6) */
+#nexusCameraBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 2px 6px;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: opacity .2s;
+}
+#nexusCameraBtn.active { opacity: 1; }
+#nexusCameraBtn span {
+    color: #fff;
+    font-size: 0.6em;
+    line-height: 1;
+    white-space: nowrap;
+}
+#nexusCameraBtn svg { display: block; }
+#nexusCameraBtn.active svg circle:first-child,
+#nexusCameraBtn.active svg line { stroke: #6f6; }
 
 #nexusMapContainer {
     position: relative;
@@ -75,18 +114,19 @@
     user-select: none;
 }
 
-/* Mobs do Nexus */
+/* Mobs do Nexus — item 1: dobro do tamanho + drop-shadow leve */
 .nexus-mob-wrapper {
     position: absolute;
-    width: 70px; height: 90px;
+    width: 140px; height: 180px;
     display: flex; flex-direction: column; align-items: center;
     z-index: 6;
     pointer-events: none;
     transition: opacity .4s ease;
 }
 .nexus-mob-avatar {
-    width: 60px; height: 60px;
+    width: 120px; height: 120px;
     object-fit: contain;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.55));
     animation: nexus-mob-breathe 4.2s ease-in-out infinite;
 }
 .nexus-mob-wrapper.dead {
@@ -98,20 +138,39 @@
     50% { transform: scale(1.05); }
 }
 
-/* Jogadores no Nexus (próprio e inimigos) */
+/* Jogadores no Nexus (próprio e inimigos) — item 10: nome acima, guilda
+   abaixo do nome, barra de HP abaixo do avatar, tudo acima da moldura */
 .nexus-player-wrapper {
     position: absolute;
-    width: 70px; height: 90px;
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    width: 90px; height: 148px;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
     z-index: 9;
 }
 .nexus-player-wrapper.enemy { cursor: default; }
 .nexus-player-name {
+    position: relative;
+    z-index: 25;
     font-size: 0.72em;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+    white-space: nowrap;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.nexus-player-guild {
+    position: relative;
+    z-index: 25;
+    font-size: 0.62em;
     font-weight: bold;
     color: #8cf;
     text-shadow: 1px 1px 2px #000;
     white-space: nowrap;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: -2px;
 }
 .avatar-frame-wrap { position: relative; width: 60px; height: 60px; }
 .nexus-player-avatar {
@@ -125,21 +184,59 @@
 }
 .nexus-player-wrapper.own .nexus-player-avatar { border-color: #fc0; }
 .nexus-player-avatar.eliminated { filter: grayscale(100%) brightness(.6); }
+
+/* Barra de HP — sempre acima da moldura (z-index 25 > moldura 20/21) */
+.nexus-hp-bar {
+    position: relative;
+    z-index: 25;
+    width: 64px;
+    height: 7px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+.nexus-hp-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(to right, #4caf50, #8bc34a);
+    transition: width .35s ease-out, background-color .35s ease-out;
+}
+.nexus-hp-bar-fill.low { background: linear-gradient(to right, #d32f2f, #f44336); }
+
 .nexus-dead-label {
     display: none;
+    position: relative;
+    z-index: 25;
     font-size: .6em;
     color: #ffc3c3;
     font-weight: bold;
     text-shadow: 1px 1px 2px #000;
 }
 .nexus-player-wrapper.is-dead .nexus-dead-label { display: block; }
+.nexus-player-wrapper.is-dead .nexus-hp-bar { visibility: hidden; }
+
+/* Item 7: shake + flash ao receber dano (mob ou jogador) */
+@keyframes nx-shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+.nx-hit-shake { animation: nx-shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+.nx-hit-flash { animation: nx-flash 0.35s ease-out; }
+@keyframes nx-flash {
+    0% { filter: brightness(2.4) saturate(0.3); }
+    100% { filter: brightness(1) saturate(1); }
+}
 
 /* Overlay de morte (mesmo padrão da caça) */
 #nexusDeadOverlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.85);
-    z-index: 9500;
+    z-index: 600;
     display: none;
     flex-direction: column;
     align-items: center;

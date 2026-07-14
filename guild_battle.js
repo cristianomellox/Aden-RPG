@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient.js'
 import {
     ensureNexusDOM, openNexusConfirmModal, enterNexus, leaveNexus,
     startNexusScreen, stopNexusLoop, pauseNexusPolling, resumeNexusPolling,
-    isNexusScreenActive
+    isNexusScreenActive, showCantLeaveModal, showReviveChoiceModal
 } from './nexus_module.js'
 
 // --- Configurações & Constantes ---
@@ -1121,18 +1121,25 @@ function enterNexusScreenFlow(entryData) {
     stopHeartbeatPolling();
     stopDamagePolling();
     showScreen('nexus');
+
+    const myGuildEntry = currentBattleState?.instance?.registered_guilds?.find(g => g.guild_id === userGuildId);
+
     startNexusScreen({
         instanceId: currentBattleState.instance.id,
         playerId: userId,
         guildId: userGuildId,
         avatarUrl: userPlayerStats ? userPlayerStats.avatar_url : null,
+        playerName: userPlayerStats ? userPlayerStats.name : null,
+        guildName: myGuildEntry ? myGuildEntry.guild_name : null,
         entryPosX: entryData.pos_x,
         entryPosY: entryData.pos_y,
+        enteredAt: entryData.entered_at,
         syncSeed: entryData.sync_seed,
         nextSeq: entryData.next_seq || 0,
         onBack: handleNexusBackClick,
         onForceExit: handleNexusForceExit,
-        onBannerEvent: (html) => pushRawBannerNotification(html)
+        onBannerEvent: (html) => pushRawBannerNotification(html),
+        onDeadTimerEnd: handleNexusDeadTimerEnd
     });
 }
 
@@ -1140,12 +1147,35 @@ async function handleNexusBackClick() {
     if (!currentBattleState || !currentBattleState.instance) return;
     const result = await leaveNexus(currentBattleState.instance.id);
     if (!result || !result.success) {
-        showAlert(result?.message || 'Você ainda não pode sair do Nexus.');
+        if (result && result.can_leave_at) {
+            showCantLeaveModal(result.can_leave_at);
+        } else {
+            showAlert(result?.message || 'Você ainda não pode sair do Nexus.');
+        }
         return;
     }
     stopNexusLoop();
     showScreen('battle');
     pollBattleState();
+}
+
+// Item 8: ao terminar o tempo de morte, pergunta se o jogador quer continuar
+// no Nexus ou voltar aos objetivos (mesmo dentro da janela de 1h).
+function handleNexusDeadTimerEnd() {
+    showReviveChoiceModal(
+        () => { /* Continuar no Nexus: nada a fazer, o próprio módulo já revive */ },
+        async () => {
+            if (!currentBattleState || !currentBattleState.instance) return;
+            const result = await leaveNexus(currentBattleState.instance.id);
+            if (!result || !result.success) {
+                showAlert(result?.message || 'Não foi possível sair do Nexus.');
+                return;
+            }
+            stopNexusLoop();
+            showScreen('battle');
+            pollBattleState();
+        }
+    );
 }
 
 function handleNexusForceExit(reason) {

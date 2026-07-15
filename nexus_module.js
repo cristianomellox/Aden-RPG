@@ -1,34 +1,34 @@
 import { supabase } from './supabaseClient.js';
 
 // ══════════════════════════════════════════════════════════════════════
-// NEXUS — área PvP/PvE dentro da Batalha de Guildas (v3)
+// NEXUS — área PvP/PvE dentro da Batalha de Guildas (v4)
 //
-// MOVIMENTO: cada entidade (jogador ou mob) anda em um padrão "andar e
-// descansar" 100% determinístico, calculado a partir de (seed derivado do
-// id) + (entered_at). Como é uma fórmula pura, QUALQUER cliente calcula a
-// mesma posição para QUALQUER entidade a qualquer momento — por isso todos
-// continuam se movendo mesmo se o dono daquele avatar não estiver com a
-// aba aberta (não depende de ping de posição de ninguém). O servidor só
-// recebe um "pos_x/pos_y aproximado" ocasional (no sync adaptativo) para
-// validar alcance de PvP — não precisa bater pixel-a-pixel com o visual.
+// O combate NÃO depende mais de posição/distância no cliente. O servidor
+// (nexus_sync) avança um "relógio de combate" por jogador baseado em
+// tempo real decorrido — por isso todo mundo continua lutando mobs e
+// duelando mesmo com a aba fechada, e não existe mais "errou o alcance".
+// O cliente só: (1) anima o andar (decorativo), (2) mostra os resultados
+// que o servidor devolve a cada sync, (3) toca a animação REAL do duelo
+// (battle_log) quando o próprio jogador participa de um PvP.
 // ══════════════════════════════════════════════════════════════════════
 
 const NEXUS_MAP_SIZE = 2121;
 const NEXUS_IMG_URL  = 'https://aden-rpg.pages.dev/assets/b_nexus.webp';
 const AVATAR_W = 70, AVATAR_H = 90;
-const ATTACK_MIN_MS = 2500, ATTACK_MAX_MS = 3800;
-const COMBAT_RANGE = 150;
 
 const CYCLE_SEC = 11;
 const MOVE_SEC  = 3.2;
 const MOB_WOBBLE_RADIUS = 45;
 
-const SYNC_BASE_ACTIVE = 9_000;
-const SYNC_BASE_IDLE   = 45_000;
-const SYNC_STEP        = 15_000;
-const SYNC_MAX         = 120_000;
+const SYNC_BASE_ACTIVE = 6_000;   // teve combate recente: consulta mais rápido
+const SYNC_BASE_IDLE   = 30_000;
+const SYNC_STEP        = 10_000;
+const SYNC_MAX         = 90_000;
 
-const DEFAULT_AVATAR = 'https://aden-rpg.pages.dev/assets/default_avatar.webp';
+// Fallback que NUNCA falha (SVG embutido, sem depender de rede)
+const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60"><rect width="60" height="60" fill="#333"/><circle cx="30" cy="22" r="12" fill="#888"/><path d="M10 54c0-12 9-18 20-18s20 6 20 18" fill="#888"/></svg>`
+);
 
 const MOB_TYPES = [
     { key: 'unicornio',      img: 'https://aden-rpg.pages.dev/assets/unicornio.webp',      sound: 'https://aden-rpg.pages.dev/assets/unicornio.mp3' },
@@ -45,6 +45,7 @@ const MOB_TYPES = [
     { key: 'pixie',          img: 'https://aden-rpg.pages.dev/assets/pixie.webp',           sound: 'https://aden-rpg.pages.dev/assets/pixie.mp3' },
 ];
 
+// ── ÁUDIO ──────────────────────────────────────────────────────────
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const audioBufs = {};
 const SRC = {
@@ -96,19 +97,12 @@ function proximityVolume(targetX, targetY) {
     const dist = Math.hypot(vc.x - targetX, vc.y - targetY);
     return Math.max(0.08, Math.exp(-dist / 300));
 }
-function playProximitySound(name, x, y) {
-    playSoundAt(name, baseVolume(name) * proximityVolume(x, y));
-}
+function playProximitySound(name, x, y) { playSoundAt(name, baseVolume(name) * proximityVolume(x, y)); }
 
 function rand(min, max) { return min + Math.random() * (max - min); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-async function sha256Hex(text) {
-    const data = new TextEncoder().encode(text);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
-// ── MOTOR DE MOVIMENTO DETERMINÍSTICO ────────────────────────────────
+// ── MOTOR DE MOVIMENTO DETERMINÍSTICO (só cosmético) ─────────────────
 function seedFromId(id) {
     let h = 2166136261 >>> 0;
     const str = String(id);
@@ -130,7 +124,6 @@ function computeWaypoint(seed, cycleIndex, w, h, marginW, marginH) {
         y: marginH + (h2 / 4294967295) * Math.max(1, h - marginH * 2)
     };
 }
-
 const wanderState = new Map();
 function getCurrentComputedPos(el) {
     const cs = getComputedStyle(el);
@@ -174,6 +167,7 @@ function pauseWander(key, ms) {
     const pos = getCurrentComputedPos(state.el);
     state.el.style.transition = 'none';
     state.el.style.left = pos.x + 'px'; state.el.style.top = pos.y + 'px';
+    state.lastX = pos.x; state.lastY = pos.y;
     state.pausedUntil = Date.now() + ms;
 }
 function stopWander(key) {
@@ -315,6 +309,101 @@ function showReviveChoiceModal(onStay, onLeave) {
     document.getElementById('nexusReviveLeaveBtn').onclick = () => { modal.style.display = 'none'; onLeave(); };
 }
 
+// ── DUELO ANIMADO (dados REAIS do simulate_pvp_battle, mesmo do que a caça usa) ──
+function ensureDuelModal() {
+    if (document.getElementById('nexusDuelModal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'nexusDuelModal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:520px;">
+            <h3 id="nexusDuelTitle">Duelo!</h3>
+            <div style="display:flex; justify-content:space-between; gap:14px; margin-top:10px;">
+                <div style="flex:1; text-align:center;">
+                    <img id="nexusDuelAtkAvatar" src="${DEFAULT_AVATAR}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid #48f;">
+                    <div id="nexusDuelAtkName" style="font-weight:bold; font-size:.85em; margin-top:4px;"></div>
+                    <div class="nexus-hp-bar" style="width:100%; margin:4px auto;"><div id="nexusDuelAtkHp" class="nexus-hp-bar-fill"></div></div>
+                    <div id="nexusDuelAtkHpText" style="font-size:.7em; color:#ccc;"></div>
+                </div>
+                <div style="align-self:center; font-weight:bold; color:#f88;">VS</div>
+                <div style="flex:1; text-align:center;">
+                    <img id="nexusDuelDefAvatar" src="${DEFAULT_AVATAR}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid #f44;">
+                    <div id="nexusDuelDefName" style="font-weight:bold; font-size:.85em; margin-top:4px;"></div>
+                    <div class="nexus-hp-bar" style="width:100%; margin:4px auto;"><div id="nexusDuelDefHp" class="nexus-hp-bar-fill"></div></div>
+                    <div id="nexusDuelDefHpText" style="font-size:.7em; color:#ccc;"></div>
+                </div>
+            </div>
+            <p id="nexusDuelResult" style="text-align:center; font-weight:bold; margin-top:14px; min-height:1.4em;"></p>
+        </div>`;
+    document.body.appendChild(modal);
+}
+async function playRealDuelAnimation(entry) {
+    ensureDuelModal();
+    const combat = entry.combat || {};
+    const log = combat.battle_log || [];
+    const atkId = combat.attacker_id;
+    const modal = document.getElementById('nexusDuelModal');
+
+    document.getElementById('nexusDuelTitle').textContent = 'Duelo no Nexus!';
+    document.getElementById('nexusDuelAtkName').textContent = entry.attacker_name || 'Atacante';
+    document.getElementById('nexusDuelDefName').textContent = entry.defender_name || 'Defensor';
+    document.getElementById('nexusDuelResult').textContent = '';
+
+    const atkAv = document.getElementById('nexusDuelAtkAvatar');
+    const defAv = document.getElementById('nexusDuelDefAvatar');
+    atkAv.src = ownAvatarUrl || DEFAULT_AVATAR;
+    const oppEntry = otherPlayersCache.get(entry.attacker_id === ctx.playerId ? entry.defender_id : entry.attacker_id);
+    defAv.src = (oppEntry && oppEntry.av && oppEntry.av.src) || DEFAULT_AVATAR;
+    if (entry.attacker_id !== ctx.playerId) { atkAv.src = (oppEntry && oppEntry.av && oppEntry.av.src) || DEFAULT_AVATAR; defAv.src = ownAvatarUrl || DEFAULT_AVATAR; }
+
+    const atkFill = document.getElementById('nexusDuelAtkHp');
+    const defFill = document.getElementById('nexusDuelDefHp');
+    const atkTxt = document.getElementById('nexusDuelAtkHpText');
+    const defTxt = document.getElementById('nexusDuelDefHpText');
+
+    const dmgToDef = log.filter(t => t.attacker_id === atkId).reduce((s, t) => s + (t.damage || 0), 0);
+    const dmgToAtk = log.filter(t => t.attacker_id !== atkId).reduce((s, t) => s + (t.damage || 0), 0);
+    const defMaxHp = Math.max(1, (combat.defender_health_left || 0) + dmgToDef);
+    const atkMaxHp = Math.max(1, (combat.attacker_health_left || 0) + dmgToAtk);
+    let curAtk = atkMaxHp, curDef = defMaxHp;
+
+    function upd() {
+        setHpBar(atkFill, Math.max(0, (curAtk / atkMaxHp) * 100));
+        setHpBar(defFill, Math.max(0, (curDef / defMaxHp) * 100));
+        atkTxt.textContent = Math.max(0, curAtk) + ' / ' + atkMaxHp;
+        defTxt.textContent = Math.max(0, curDef) + ' / ' + defMaxHp;
+    }
+    upd();
+    modal.style.display = 'flex';
+
+    for (const turn of log) {
+        await new Promise(r => setTimeout(r, 500));
+        const isAtk = turn.attacker_id === atkId;
+        if (isAtk) curDef = Math.max(0, curDef - (turn.damage || 0));
+        else curAtk = Math.max(0, curAtk - (turn.damage || 0));
+
+        const targetAv = isAtk ? defAv : atkAv;
+        if (turn.evaded) {
+            playSoundAt('evade', baseVolume('evade'));
+        } else {
+            targetAv.classList.remove('nx-hit-shake', 'nx-hit-flash');
+            void targetAv.offsetWidth;
+            targetAv.classList.add('nx-hit-shake', 'nx-hit-flash');
+            setTimeout(() => targetAv.classList.remove('nx-hit-shake', 'nx-hit-flash'), 450);
+            playSoundAt(turn.critical ? 'critical' : 'normal', baseVolume(turn.critical ? 'critical' : 'normal'));
+        }
+        upd();
+    }
+
+    await new Promise(r => setTimeout(r, 300));
+    document.getElementById('nexusDuelResult').textContent = entry.attacker_won
+        ? `${entry.attacker_name} venceu o duelo!`
+        : `${entry.defender_name} venceu o duelo!`;
+
+    await new Promise(r => setTimeout(r, 1600));
+    modal.style.display = 'none';
+}
+
 // ── ENTRAR / SAIR ─────────────────────────────────────────────────────
 export async function enterNexus(instanceId) {
     const { data, error } = await supabase.rpc('enter_nexus', { p_battle_instance_id: instanceId });
@@ -331,7 +420,7 @@ export async function leaveNexus(instanceId) {
 let ctx = null;
 let ownEnteredAtMs = 0;
 let ownSeed = 0;
-let localAttackTimeout = null;
+let ownAvatarUrl = null;
 let syncTimeout = null;
 let running = false;
 let isDeadLocal = false;
@@ -342,25 +431,17 @@ let onDeadTimerEndCb = null;
 let otherPlayersCache = new Map();
 let mobsCache = new Map();
 let lastEventTs = '1970-01-01T00:00:00+00:00';
-
-let syncSeed = null;
-let localSeq = 0;
-let pendingActions = [];
 let syncInFlight = false;
 let hadRecentActivity = false;
-
 let cameraFollow = true;
 let ownHpFill = null;
 let mapControls = null;
-let lastKnownMobs = [];
 let currentSyncMs = SYNC_BASE_IDLE;
 let timerBaseSeconds = 0;
 let timerBaseAtMs = 0;
 let timerInterval = null;
 
 const panState = { x: 0, y: 0, scale: 1, minScale: 0.5 };
-
-function rangeSq(a, b) { return Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2); }
 
 // ── DOM ───────────────────────────────────────────────────────────────
 function ensureNexusDOM() {
@@ -376,20 +457,15 @@ function ensureNexusDOM() {
             <div id="nexusTimer">--:--</div>
             <button id="nexusCameraBtn" class="active" title="Câmera segue o jogador">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="9"/>
-                    <circle cx="12" cy="12" r="3"/>
-                    <line x1="12" y1="1" x2="12" y2="5"/>
-                    <line x1="12" y1="19" x2="12" y2="23"/>
-                    <line x1="1" y1="12" x2="5" y2="12"/>
-                    <line x1="19" y1="12" x2="23" y2="12"/>
+                    <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>
+                    <line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/>
                 </svg>
                 <span>Câmera</span>
             </button>
             <div id="nexusActions">Ações: -- / 5</div>
         </div>
-        <div id="nexusMapContainer">
-            <div id="nexusMap"></div>
-        </div>
+        <div id="nexusMapContainer"><div id="nexusMap"></div></div>
         <div id="nexusDeadOverlay">
             <img id="nexusDeadAvatar" src="${DEFAULT_AVATAR}">
             <p>Você foi derrotado!</p>
@@ -437,18 +513,16 @@ function rebuildMobsDOM(mobs) {
         const el = document.createElement('div');
         el.className = 'nexus-mob-wrapper';
         el.dataset.mobIndex = m.mob_index;
-        el.style.left = m.pos_x + 'px';
-        el.style.top = m.pos_y + 'px';
+        el.style.left = m.pos_x + 'px'; el.style.top = m.pos_y + 'px';
         const av = document.createElement('img');
         av.className = 'nexus-mob-avatar';
         av.src = type.img;
-        av.onerror = () => { av.src = DEFAULT_AVATAR; };
+        av.onerror = () => { av.onerror = null; av.src = DEFAULT_AVATAR; };
         el.appendChild(av);
         if (!m.is_alive) el.classList.add('dead');
         map.appendChild(el);
         mobsCache.set(m.mob_index, { el, type, basePos: { x: m.pos_x, y: m.pos_y } });
-        const mobSeed = seedFromId('mob-' + m.mob_index + '-' + (ctx ? ctx.instanceId : ''));
-        wanderState.set('mob:' + m.mob_index, { seed: mobSeed, el });
+        wanderState.set('mob:' + m.mob_index, { seed: seedFromId('mob-' + m.mob_index + '-' + (ctx ? ctx.instanceId : '')), el });
     });
     repositionMobWobble();
 }
@@ -466,20 +540,14 @@ function repositionMobWobble() {
             const wp = computeWaypoint(state.seed, cycleIndex, MOB_WOBBLE_RADIUS * 2, MOB_WOBBLE_RADIUS * 2, 0, 0);
             const targetX = entry.basePos.x - MOB_WOBBLE_RADIUS + wp.x;
             const targetY = entry.basePos.y - MOB_WOBBLE_RADIUS + wp.y;
-            if (state.pausedUntil && state.pausedUntil > Date.now()) {
-                state.timer = setTimeout(tick, state.pausedUntil - Date.now() + 20);
-                return;
-            }
             if (cyclePos < MOVE_SEC) {
                 const remainingMs = (MOVE_SEC - cyclePos) * 1000;
                 entry.el.style.transition = `left ${remainingMs}ms ease-in-out, top ${remainingMs}ms ease-in-out`;
                 entry.el.style.left = targetX + 'px'; entry.el.style.top = targetY + 'px';
-                state.lastX = targetX; state.lastY = targetY;
                 state.timer = setTimeout(tick, remainingMs + 30);
             } else {
                 entry.el.style.transition = 'none';
                 entry.el.style.left = targetX + 'px'; entry.el.style.top = targetY + 'px';
-                state.lastX = targetX; state.lastY = targetY;
                 state.timer = setTimeout(tick, (CYCLE_SEC - cyclePos) * 1000 + 30);
             }
         };
@@ -501,6 +569,7 @@ function updateMobsDOM(mobs) {
 }
 
 function buildOwnPlayerDOM(playerId, avatarUrl, name, guildName) {
+    ownAvatarUrl = avatarUrl || DEFAULT_AVATAR;
     const map = document.getElementById('nexusMap');
     const wrap = document.createElement('div');
     wrap.id = 'nexusOwnPlayer';
@@ -520,8 +589,8 @@ function buildOwnPlayerDOM(playerId, avatarUrl, name, guildName) {
     avWrap.className = 'avatar-frame-wrap';
     const av = document.createElement('img');
     av.className = 'nexus-player-avatar';
-    av.src = avatarUrl || DEFAULT_AVATAR;
-    av.onerror = () => { av.src = DEFAULT_AVATAR; };
+    av.src = ownAvatarUrl;
+    av.onerror = () => { av.onerror = null; av.src = DEFAULT_AVATAR; };
     avWrap.appendChild(av);
     wrap.appendChild(avWrap);
 
@@ -559,7 +628,7 @@ function upsertOtherPlayerDOM(p) {
         const av = document.createElement('img');
         av.className = 'nexus-player-avatar';
         av.src = p.avatar_url || DEFAULT_AVATAR;
-        av.onerror = () => { av.src = DEFAULT_AVATAR; };
+        av.onerror = () => { av.onerror = null; av.src = DEFAULT_AVATAR; };
         avWrap.appendChild(av);
         wrap.appendChild(avWrap);
 
@@ -585,15 +654,18 @@ function upsertOtherPlayerDOM(p) {
     }
     entry.guildId = p.guild_id;
     entry.name = p.name;
+
+    const maxHp = p.max_hp || 1;
+    const curHp = p.current_hp ?? maxHp;
+    setHpBar(entry.hpFill, (curHp / maxHp) * 100);
+
     const wasDead = entry.isDead;
     entry.isDead = !!p.is_dead;
     entry.wrap.classList.toggle('is-dead', entry.isDead);
     entry.av.classList.toggle('eliminated', entry.isDead);
     if (!wasDead && entry.isDead) {
-        setHpBar(entry.hpFill, 0);
         stopWander('player:' + p.id);
     } else if (wasDead && !entry.isDead) {
-        setHpBar(entry.hpFill, 100);
         const seed = seedFromId(p.id);
         const enteredAtMs = p.entered_at ? new Date(p.entered_at).getTime() : Date.now();
         scheduleWander('player:' + p.id, entry.wrap, seed, enteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
@@ -666,15 +738,12 @@ function enableNexusMapInteraction() {
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         return Math.sqrt(dx * dx + dy * dy);
     }
-    function touchMid(e) {
-        return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
-    }
+    function touchMid(e) { return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }; }
     function disableFollow() { setCameraFollow(false); }
     function startDrag(e) {
         drag = true; disableFollow();
         map.style.cursor = 'grabbing';
-        sx = e.clientX ?? e.touches[0].clientX;
-        sy = e.clientY ?? e.touches[0].clientY;
+        sx = e.clientX ?? e.touches[0].clientX; sy = e.clientY ?? e.touches[0].clientY;
         vx = vy = 0; lt = performance.now();
         cancelAnimationFrame(aId);
     }
@@ -689,8 +758,7 @@ function enableNexusMapInteraction() {
         sx = nx; sy = ny; lt = performance.now();
     }
     function endDrag() {
-        drag = false;
-        map.style.cursor = 'grab';
+        drag = false; map.style.cursor = 'grab';
         if (Math.abs(vx) > 0.2 || Math.abs(vy) > 0.2) { vx *= 10; vy *= 10; inertia(); }
     }
     function onTouchStart(e) {
@@ -736,7 +804,6 @@ function enableNexusMapInteraction() {
 
     mapControls = { recalcLimits, applyTransform, setPos };
 }
-
 function centerCameraOn(x, y, animate) {
     const cont = document.getElementById('nexusMapContainer');
     const map = document.getElementById('nexusMap');
@@ -768,7 +835,6 @@ function pushNexusBannerEvent(ev) {
 function showDeadOverlay(deadUntilIso, avatarUrl) {
     isDeadLocal = true;
     stopWander('own');
-    clearTimeout(localAttackTimeout);
     setCameraFollow(false);
     const overlay = document.getElementById('nexusDeadOverlay');
     const avImg = document.getElementById('nexusDeadAvatar');
@@ -794,161 +860,42 @@ function reviveOwnLocally() {
     isDeadLocal = false;
     if (ownHpFill) setHpBar(ownHpFill, 100);
     scheduleOwnWander();
-    scheduleLocalAttackLoop();
     setCameraFollow(true);
 }
-
-// ── WANDER PRÓPRIO + LOOP LOCAL DE COMBATE ───────────────────────────
 function scheduleOwnWander() {
     const el = document.getElementById('nexusOwnPlayer');
     if (!el) return;
     scheduleWander('own', el, ownSeed, ownEnteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
 }
-function scheduleLocalAttackLoop() {
-    clearTimeout(localAttackTimeout);
-    if (!running || isDeadLocal) return;
-    localAttackTimeout = setTimeout(doLocalAttackTick, rand(ATTACK_MIN_MS, ATTACK_MAX_MS));
-}
-async function doLocalAttackTick() {
-    if (!running || isDeadLocal) return;
 
-    const ownPos = getEntityPos('own');
-    if (!ownPos) { scheduleLocalAttackLoop(); return; }
-
-    let nearestMob = null, nearestMobDist = Infinity, nearestMobKey = null;
-    mobsCache.forEach((entry, idx) => {
-        if (entry.el.classList.contains('dead')) return;
-        const pos = getEntityPos('mob:' + idx) || entry.basePos;
-        const d = rangeSq(ownPos, pos);
-        if (d < nearestMobDist) { nearestMobDist = d; nearestMob = { mob_index: idx, pos_x: pos.x, pos_y: pos.y }; nearestMobKey = 'mob:' + idx; }
-    });
-
-    let nearestPlayer = null, nearestPlayerDist = Infinity, nearestPlayerId = null;
-    otherPlayersCache.forEach((entry, id) => {
-        if (entry.isDead) return;
-        if (ctx && entry.guildId === ctx.guildId) return;
-        const pos = getEntityPos('player:' + id);
-        if (!pos) return;
-        const d = rangeSq(ownPos, pos);
-        if (d < nearestPlayerDist) { nearestPlayerDist = d; nearestPlayer = entry; nearestPlayerId = id; }
-    });
-
-    const range2 = COMBAT_RANGE * COMBAT_RANGE;
-    const mobInRange = nearestMob && nearestMobDist <= range2;
-    const playerInRange = nearestPlayer && nearestPlayerDist <= range2;
-
-    if (playerInRange && (!mobInRange || nearestPlayerDist <= nearestMobDist)) {
-        hadRecentActivity = true;
-        pauseWander('own', ATTACK_MAX_MS + 300);
-        pauseWander('player:' + nearestPlayerId, ATTACK_MAX_MS + 300);
-
-        const { data, error } = await supabase.rpc('nexus_pvp_attack', {
-            p_battle_instance_id: ctx.instanceId,
-            p_defender_id: nearestPlayerId,
-            p_pos_x: ownPos.x,
-            p_pos_y: ownPos.y
-        });
-        if (!error && data) {
-            if (data.status === 'force_exit') { handleForceExit(data.reason); return; }
-            if (data.success) await playDuelAnimation(data, nearestPlayer);
-        }
-        maybeSyncSoon();
-    } else if (mobInRange) {
-        hadRecentActivity = true;
-        pauseWander('own', ATTACK_MAX_MS + 300);
-        pauseWander(nearestMobKey, ATTACK_MAX_MS + 300);
-
-        const seq = localSeq++;
-        pendingActions.push({ seq, ts: Date.now(), mob_index: nearestMob.mob_index });
-
-        const mobEntry = mobsCache.get(nearestMob.mob_index);
-        const isCrit = Math.random() < 0.15;
-        playProximitySound(isCrit ? 'critical' : 'normal', nearestMob.pos_x, nearestMob.pos_y);
-        if (mobEntry) { playProximitySound('mob_' + mobEntry.type.key, nearestMob.pos_x, nearestMob.pos_y); flashHit(mobEntry.el); }
-        const ownEl = document.getElementById('nexusOwnPlayer');
-        if (ownEl) flashHit(ownEl);
-
-        maybeSyncSoon();
-    } else {
-        hadRecentActivity = false;
-    }
-    scheduleLocalAttackLoop();
-}
-
-async function playDuelAnimation(data, defenderEntry) {
-    const ownEl = document.getElementById('nexusOwnPlayer');
-    const rounds = 3;
-    for (let i = 0; i < rounds; i++) {
-        await new Promise(r => setTimeout(r, 260));
-        const lastRound = i === rounds - 1;
-        const winnerIsAttacker = data.attacker_won;
-        if (ownEl) flashHit(ownEl);
-        if (defenderEntry?.wrap) flashHit(defenderEntry.wrap);
-        playProximitySound(Math.random() < 0.2 ? 'critical' : 'normal', 0, 0);
-        if (winnerIsAttacker) {
-            if (defenderEntry) setHpBar(defenderEntry.hpFill, lastRound ? 0 : Math.round(100 - ((i + 1) / rounds) * 100));
-            if (ownHpFill) setHpBar(ownHpFill, lastRound ? Math.max(60, 100 - rounds * 5) : 100 - i * 5);
-        } else {
-            if (ownHpFill) setHpBar(ownHpFill, lastRound ? 0 : Math.round(100 - ((i + 1) / rounds) * 100));
-            if (defenderEntry) setHpBar(defenderEntry.hpFill, lastRound ? Math.max(60, 100 - rounds * 5) : 100 - i * 5);
-        }
-    }
-    pushNexusBannerEvent({ attacker_name: data.attacker_name, defender_name: data.defender_name, attacker_won: data.attacker_won });
-    if (data.attacker_won && ownHpFill) setTimeout(() => setHpBar(ownHpFill, 100), 500);
-}
-
-// ── SINCRONIZAÇÃO ADAPTATIVA (lote + hash) ───────────────────────────
+// ── SINCRONIZAÇÃO ADAPTATIVA (o servidor decide TUDO do combate) ────
 function scheduleSync(delay) {
     clearTimeout(syncTimeout);
     if (!running) return;
     if (document.visibilityState === 'hidden') return;
     syncTimeout = setTimeout(doSync, delay);
 }
-function maybeSyncSoon() {
-    if (pendingActions.length >= 5) { doSync(); return; }
-    if (!syncInFlight) { clearTimeout(syncTimeout); syncTimeout = setTimeout(doSync, 2500); }
-}
 async function doSync() {
     if (!running || !ctx || syncInFlight) return;
     syncInFlight = true;
     try {
-        const batch = pendingActions.slice();
         const ownPos = getEntityPos('own') || { x: NEXUS_MAP_SIZE / 2, y: NEXUS_MAP_SIZE / 2 };
-        let payload = {
+        const { data, error } = await supabase.rpc('nexus_sync', {
             p_battle_instance_id: ctx.instanceId,
-            p_pos_x: ownPos.x, p_pos_y: ownPos.y,
+            p_pos_x: ownPos.x,
+            p_pos_y: ownPos.y,
             p_last_event_timestamp: lastEventTs
-        };
-        if (batch.length > 0) {
-            const seqStart = batch[0].seq;
-            const seqEnd = batch[batch.length - 1].seq;
-            const actionsJson = JSON.stringify(batch);
-            const hash = await sha256Hex(`${syncSeed}:${seqStart}:${seqEnd}:${actionsJson}`);
-            payload.p_seq_start = seqStart;
-            payload.p_seq_end = seqEnd;
-            payload.p_actions_json = actionsJson;
-            payload.p_batch_hash = hash;
-        }
-
-        const { data, error } = await supabase.rpc('nexus_sync', payload);
+        });
 
         if (error || !data) { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
         if (data.status === 'force_exit') { syncInFlight = false; handleForceExit(data.reason); return; }
         if (data.status !== 'active') { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
 
-        if (batch.length > 0) {
-            if (data.batch_accepted) {
-                pendingActions = pendingActions.filter(a => a.seq > (data.next_seq - 1));
-            } else if (typeof data.next_seq === 'number') {
-                localSeq = data.next_seq; pendingActions = [];
-                console.warn('[nexus] lote rejeitado:', data.batch_reject_reason);
-            }
-        }
+        await applyState(data);
 
-        applyState(data);
-
+        hadRecentActivity = (data.my_pve_ticks > 0) || (data.my_combats && data.my_combats.length > 0);
         currentSyncMs = hadRecentActivity ? SYNC_BASE_ACTIVE : Math.min(currentSyncMs + SYNC_STEP, SYNC_MAX);
-        scheduleSync(pendingActions.length > 0 ? 4000 : currentSyncMs);
+        scheduleSync(currentSyncMs);
     } catch (e) {
         console.warn('[nexus] sync error', e);
         scheduleSync(SYNC_BASE_IDLE);
@@ -971,35 +918,68 @@ function startLocalTimerTick() {
         el.textContent = `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     }, 1000);
 }
-function applyState(data) {
+
+async function applyState(data) {
     const st = data.own_state;
     if (st) {
         const actionsEl = document.getElementById('nexusActions');
         if (actionsEl) actionsEl.textContent = `Ações: ${st.attacks_left} / 5`;
         timerBaseSeconds = Math.max(0, st.time_left_seconds | 0);
         timerBaseAtMs = Date.now();
+
+        if (ownHpFill && st.max_hp) setHpBar(ownHpFill, ((st.current_hp ?? st.max_hp) / st.max_hp) * 100);
+
         if (st.is_dead && !isDeadLocal) {
-            showDeadOverlay(st.dead_until, document.querySelector('#nexusOwnPlayer .nexus-player-avatar')?.src);
+            showDeadOverlay(st.dead_until, ownAvatarUrl);
         } else if (!st.is_dead && isDeadLocal) {
             reviveOwnLocally();
         }
     }
-    if (data.mobs) { lastKnownMobs = data.mobs; updateMobsDOM(data.mobs); }
+
+    if (data.mobs) updateMobsDOM(data.mobs);
+
     if (data.other_players) {
         const ids = new Set();
         data.other_players.forEach(p => { ids.add(p.id); upsertOtherPlayerDOM(p); });
         pruneMissingPlayers(ids);
     }
+
+    // Recap de PvE (você lutou mobs desde o último sync) — feedback rápido
+    if (data.my_pve_ticks > 0 && !isDeadLocal) {
+        const ownEl = document.getElementById('nexusOwnPlayer');
+        const n = Math.min(data.my_pve_ticks, 3); // não spamma se veio um catch-up grande
+        for (let i = 0; i < n; i++) {
+            if (ownEl) flashHit(ownEl);
+            playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', getEntityPos('own')?.x || 0, getEntityPos('own')?.y || 0);
+            await new Promise(r => setTimeout(r, 220));
+        }
+    }
+
+    // Duelo(s) reais em que participei desde o último sync
+    if (data.my_combats && data.my_combats.length) {
+        for (const entry of data.my_combats) {
+            await playRealDuelAnimation(entry);
+            pushNexusBannerEvent(entry);
+        }
+    }
+
     if (data.new_events && data.new_events.length) {
         data.new_events.forEach(ev => {
             lastEventTs = ev.timestamp > lastEventTs ? ev.timestamp : lastEventTs;
             pushNexusBannerEvent(ev);
         });
     }
+
     if (cameraFollow) {
         const ownPos = getEntityPos('own');
         if (ownPos) centerCameraOn(ownPos.x + AVATAR_W / 2, ownPos.y + AVATAR_H / 2, false);
     }
+}
+
+// ── TOPBAR DO JOGO (esconder na tela do Nexus) ───────────────────────
+function setGlobalTopBarVisible(visible) {
+    const tb = document.getElementById('playerTopBar');
+    if (tb) tb.style.display = visible ? '' : 'none';
 }
 
 // ── API PÚBLICA ───────────────────────────────────────────────────────
@@ -1011,9 +991,6 @@ export function startNexusScreen(options) {
     onDeadTimerEndCb = options.onDeadTimerEnd || null;
     lastEventTs = '1970-01-01T00:00:00+00:00';
     isDeadLocal = false;
-    syncSeed = options.syncSeed;
-    localSeq = options.nextSeq || 0;
-    pendingActions = [];
     currentSyncMs = SYNC_BASE_IDLE;
     cameraFollow = true;
 
@@ -1021,6 +998,7 @@ export function startNexusScreen(options) {
     ownSeed = seedFromId(options.playerId);
 
     ensureNexusDOM();
+    setGlobalTopBarVisible(false);
     document.querySelectorAll('#nexusOwnPlayer').forEach(e => e.remove());
     stopWander('own');
     otherPlayersCache.forEach((entry, id) => { entry.wrap.remove(); stopWander('player:' + id); });
@@ -1038,6 +1016,7 @@ export function startNexusScreen(options) {
     const entryX = options.entryPosX ?? NEXUS_MAP_SIZE / 2;
     const entryY = options.entryPosY ?? NEXUS_MAP_SIZE / 2;
     if (ownEl) { ownEl.style.left = entryX + 'px'; ownEl.style.top = entryY + 'px'; }
+    if (ownHpFill && options.maxHp) setHpBar(ownHpFill, ((options.currentHp ?? options.maxHp) / options.maxHp) * 100);
 
     enableNexusMapInteraction();
 
@@ -1059,7 +1038,6 @@ export function startNexusScreen(options) {
 
     running = true;
     scheduleOwnWander();
-    scheduleLocalAttackLoop();
     startLocalTimerTick();
     doSync();
 }
@@ -1067,23 +1045,15 @@ export function startNexusScreen(options) {
 export function stopNexusLoop() {
     running = false;
     clearTimeout(syncTimeout); syncTimeout = null;
-    clearTimeout(localAttackTimeout); localAttackTimeout = null;
     clearInterval(deadOverlayInterval); deadOverlayInterval = null;
     clearInterval(timerInterval); timerInterval = null;
+    setGlobalTopBarVisible(true);
     stopWander('own');
     otherPlayersCache.forEach((entry, id) => stopWander('player:' + id));
     mobsCache.forEach((entry, idx) => stopWander('mob:' + idx));
 }
-export function pauseNexusPolling() {
-    clearTimeout(syncTimeout);
-    clearTimeout(localAttackTimeout);
-    if (running && ctx && pendingActions.length > 0 && !syncInFlight) doSync();
-}
-export function resumeNexusPolling() {
-    if (!running || !ctx) return;
-    scheduleLocalAttackLoop();
-    doSync();
-}
+export function pauseNexusPolling() { clearTimeout(syncTimeout); }
+export function resumeNexusPolling() { if (!running || !ctx) return; doSync(); }
 
 export function isNexusScreenActive() { return running; }
 export function getNexusMapSize() { return NEXUS_MAP_SIZE; }

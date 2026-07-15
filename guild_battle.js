@@ -182,6 +182,13 @@ function closeResultsAndShowCities() {
     renderCitySelectionScreen(userRank || 'member'); 
 }
 
+function formatNexusLockCountdown() {
+    if (!currentBattleState || !currentBattleState.nexus_opens_at) return '';
+    const opensAt = new Date(currentBattleState.nexus_opens_at);
+    const secs = Math.max(0, Math.floor((opensAt.getTime() - Date.now()) / 1000));
+    return formatTime(secs);
+}
+
 function formatTime(totalSeconds) {
     if (totalSeconds < 0) totalSeconds = 0;
     
@@ -538,6 +545,8 @@ function renderBattleScreen(state) {
     currentBattleState = state;
     userPlayerStats = state.player_stats;
     currentBattleState.is_nexus_open = state.is_nexus_open !== false;
+    currentBattleState.nexus_opens_at = state.nexus_opens_at || null;
+    currentBattleState.nexus_closes_at = state.nexus_closes_at || null;
 
     const city = CITIES.find(c => c.id === state.instance.city_id);
     if (city) {
@@ -621,7 +630,21 @@ function renderAllObjectives(objectives) {
 
     const nexusEl = $('obj-nexus');
     if (nexusEl) {
-        nexusEl.classList.toggle('nexus-closed', currentBattleState.is_nexus_open === false);
+        const locked = currentBattleState.is_nexus_open === false;
+        nexusEl.classList.toggle('nexus-locked', locked);
+        let overlay = document.getElementById('nexusLockOverlay');
+        if (locked) {
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'nexusLockOverlay';
+                overlay.className = 'nexus-lock-overlay';
+                const visual = nexusEl.querySelector('.obj-visual');
+                if (visual) visual.appendChild(overlay);
+            }
+            overlay.textContent = formatNexusLockCountdown();
+        } else if (overlay) {
+            overlay.remove();
+        }
     }
 
     if (!currentBattleState.guildColorMap) {
@@ -1045,6 +1068,10 @@ function handleObjectiveClick(objective) {
     if (!fullObjective) return;
 
     if (fullObjective.objective_type === 'nexus') {
+        if (currentBattleState.is_nexus_open === false) {
+            showAlert(`O Nexus está fechado agora. Reabre em ${formatNexusLockCountdown()}.`);
+            return;
+        }
         openNexusConfirmModal(async () => {
             const result = await enterNexus(currentBattleState.instance.id);
             if (!result || !result.success) return result;
@@ -1135,6 +1162,7 @@ function enterNexusScreenFlow(entryData) {
         entryPosY: entryData.pos_y,
         currentHp: entryData.current_hp,
         maxHp: entryData.max_hp,
+        nexusClosesAt: entryData.nexus_closes_at,
         enteredAt: entryData.entered_at,
         onBack: handleNexusBackClick,
         onForceExit: handleNexusForceExit,
@@ -1181,7 +1209,9 @@ function handleNexusDeadTimerEnd() {
 function handleNexusForceExit(reason) {
     stopNexusLoop();
     showScreen('battle');
-    if (reason === 'phase2') {
+    if (reason === 'window_closed') {
+        showAlert('A janela do Nexus fechou. Você foi trazido de volta aos objetivos — ela reabre em breve.');
+    } else if (reason === 'phase2') {
         showAlert('O Nexus fechou — faltam 20 minutos para o fim da batalha. Você foi trazido de volta.');
     }
     pollBattleState();
@@ -1518,6 +1548,8 @@ function processHeartbeat(data) {
 
             if (typeof data.is_nexus_open === 'boolean') {
                 currentBattleState.is_nexus_open = data.is_nexus_open;
+                currentBattleState.nexus_opens_at = data.nexus_opens_at || null;
+                currentBattleState.nexus_closes_at = data.nexus_closes_at || null;
             }
 
             if (data.recent_nexus_events && data.recent_nexus_events.length > 0) {
@@ -1681,7 +1713,10 @@ function startGlobalUITimer() {
             // Contagem para o fim da batalha (Domingo 23:59 UTC)
             const battleEnd = new Date(currentBattleState.instance.end_time);
             const timeLeft = Math.max(0, Math.floor((battleEnd - now) / 1000));
-            
+
+            const overlay = document.getElementById('nexusLockOverlay');
+            if (overlay) overlay.textContent = formatNexusLockCountdown();
+
             const timerEl = battle.timer;
             timerEl.textContent = formatTime(timeLeft);
 

@@ -129,7 +129,7 @@ function getCurrentComputedPos(el) {
     const cs = getComputedStyle(el);
     return { x: parseFloat(cs.left) || 0, y: parseFloat(cs.top) || 0 };
 }
-function scheduleWander(key, el, seed, enteredAtMs, mapSize, marginW, marginH) {
+function scheduleWander(key, el, seed, enteredAtMs, mapSize, marginW, marginH, onMove) {
     let state = wanderState.get(key);
     if (!state) { state = {}; wanderState.set(key, state); }
     clearTimeout(state.timer);
@@ -151,11 +151,13 @@ function scheduleWander(key, el, seed, enteredAtMs, mapSize, marginW, marginH) {
             el.style.transition = `left ${remainingMs}ms linear, top ${remainingMs}ms linear`;
             el.style.left = wp.x + 'px'; el.style.top = wp.y + 'px';
             state.lastX = wp.x; state.lastY = wp.y;
+            if (typeof onMove === 'function') onMove(wp.x, wp.y, remainingMs);
             state.timer = setTimeout(tick, remainingMs + 30);
         } else {
             el.style.transition = 'none';
             el.style.left = wp.x + 'px'; el.style.top = wp.y + 'px';
             state.lastX = wp.x; state.lastY = wp.y;
+            if (typeof onMove === 'function') onMove(wp.x, wp.y, 0);
             state.timer = setTimeout(tick, (CYCLE_SEC - cyclePos) * 1000 + 30);
         }
     };
@@ -804,16 +806,17 @@ function enableNexusMapInteraction() {
 
     mapControls = { recalcLimits, applyTransform, setPos };
 }
-function centerCameraOn(x, y, animate) {
+function centerCameraOn(x, y, animate, durationMs) {
     const cont = document.getElementById('nexusMapContainer');
     const map = document.getElementById('nexusMap');
     if (!cont || !map || !mapControls) return;
     const cr = cont.getBoundingClientRect();
     const targetX = cr.width / 2 - x * panState.scale;
     const targetY = cr.height / 2 - y * panState.scale;
-    map.style.transition = animate ? 'transform 0.6s ease-out' : 'none';
+    const ms = durationMs || 600;
+    map.style.transition = animate ? `transform ${ms}ms linear` : 'none';
     mapControls.setPos(targetX, targetY);
-    if (animate) setTimeout(() => { map.style.transition = 'none'; }, 650);
+    if (animate) setTimeout(() => { map.style.transition = 'none'; }, ms + 50);
 }
 function setCameraFollow(on) {
     cameraFollow = on;
@@ -865,7 +868,10 @@ function reviveOwnLocally() {
 function scheduleOwnWander() {
     const el = document.getElementById('nexusOwnPlayer');
     if (!el) return;
-    scheduleWander('own', el, ownSeed, ownEnteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
+    scheduleWander('own', el, ownSeed, ownEnteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H,
+        (x, y, durationMs) => {
+            if (cameraFollow) centerCameraOn(x + AVATAR_W / 2, y + AVATAR_H / 2, durationMs > 0, durationMs);
+        });
 }
 
 // ── SINCRONIZAÇÃO ADAPTATIVA (o servidor decide TUDO do combate) ────
@@ -887,8 +893,24 @@ async function doSync() {
             p_last_event_timestamp: lastEventTs
         });
 
-        if (error || !data) { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
+        if (error) {
+            console.error('[nexus] erro de rede/RPC no nexus_sync:', error);
+            scheduleSync(SYNC_BASE_IDLE);
+            syncInFlight = false;
+            return;
+        }
+        if (!data) { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
         if (data.status === 'force_exit') { syncInFlight = false; handleForceExit(data.reason); return; }
+        if (data.status === 'error') {
+            console.error('[nexus] nexus_sync retornou erro do banco:', data.message);
+            if (typeof onBannerEventCb === 'function' && !window.__nexusErrorShown) {
+                window.__nexusErrorShown = true;
+                onBannerEventCb(`<span style="color:#f88">Erro no Nexus:</span> ${esc(data.message || 'desconhecido')} (veja o console)`);
+            }
+            scheduleSync(SYNC_BASE_IDLE);
+            syncInFlight = false;
+            return;
+        }
         if (data.status !== 'active') { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
 
         await applyState(data);
@@ -996,6 +1018,11 @@ export function startNexusScreen(options) {
 
     ownEnteredAtMs = options.enteredAt ? new Date(options.enteredAt).getTime() : Date.now();
     ownSeed = seedFromId(options.playerId);
+
+    if (options.nexusClosesAt) {
+        timerBaseSeconds = Math.max(0, Math.round((new Date(options.nexusClosesAt).getTime() - Date.now()) / 1000));
+        timerBaseAtMs = Date.now();
+    }
 
     ensureNexusDOM();
     setGlobalTopBarVisible(false);

@@ -186,7 +186,8 @@ function formatNexusLockCountdown() {
     if (!currentBattleState || !currentBattleState.nexus_opens_at) return '';
     const opensAt = new Date(currentBattleState.nexus_opens_at);
     const secs = Math.max(0, Math.floor((opensAt.getTime() - Date.now()) / 1000));
-    return formatTime(secs);
+    const m = Math.floor(secs / 60), s = secs % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function formatTime(totalSeconds) {
@@ -1175,11 +1176,7 @@ async function handleNexusBackClick() {
     if (!currentBattleState || !currentBattleState.instance) return;
     const result = await leaveNexus(currentBattleState.instance.id);
     if (!result || !result.success) {
-        if (result && result.can_leave_at) {
-            showCantLeaveModal(result.can_leave_at);
-        } else {
-            showAlert(result?.message || 'Você ainda não pode sair do Nexus.');
-        }
+        showAlert(result?.message || 'Não foi possível sair do Nexus agora. Tente novamente.');
         return;
     }
     stopNexusLoop();

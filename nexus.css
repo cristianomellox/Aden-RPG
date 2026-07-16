@@ -4,8 +4,8 @@
 
 /* Item 2: Nexus nos objetivos agora usa a nova imagem, 80x80, redondo */
 #obj-nexus .obj-visual {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
 }
 #img-nexus {
     border-radius: 50%;

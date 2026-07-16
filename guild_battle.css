@@ -247,9 +247,6 @@
     box-sizing: border-box;
     transition: all 0.3s ease;
     width: 200px;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-user-select: none;
-    user-select: none;
 }
 
 
@@ -875,13 +872,13 @@ textarea:focus, textarea:active {
 }
 
 #obj-nexus .obj-visual {
-    width: 80px!important;
-    height: 80px!important;
+    width: 100px!important;
+    height: 100px!important;
 }
 
 #img-nexus {
-    width: 80px!important;
-    height: 80px!important;
+    width: 100px!important;
+    height: 100px!important;
     border-radius: 50%;
     object-fit: cover;
 }

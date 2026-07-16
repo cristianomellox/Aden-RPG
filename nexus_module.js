@@ -263,23 +263,23 @@ function ensureCantLeaveModal() {
     modal.innerHTML = `
         <div class="modal-content">
             <span class="modal-close" id="nexusCantLeaveClose">&times;</span>
-            <h3>Você ainda não pode sair</h3>
-            <p>Só é possível deixar a zona do Nexus 1 hora após ter entrado.</p>
-            <p style="color:#ffc107; font-weight:bold; text-align:center; font-size:1.3em;" id="nexusCantLeaveTimer">--:--</p>
+            <h3>Você não pode sair agora</h3>
+            <p id="nexusCantLeaveText" style="color:#ffc107; font-weight:bold; text-align:center; font-size:1.15em;"></p>
         </div>`;
     document.body.appendChild(modal);
     document.getElementById('nexusCantLeaveClose').onclick = () => { modal.style.display = 'none'; clearInterval(modal._interval); };
 }
-function showCantLeaveModal(canLeaveAtIso) {
+function showCantLeaveModal(closesAtIso) {
     ensureCantLeaveModal();
     const modal = document.getElementById('nexusCantLeaveModal');
-    const timerEl = document.getElementById('nexusCantLeaveTimer');
-    const until = new Date(canLeaveAtIso).getTime();
+    const textEl = document.getElementById('nexusCantLeaveText');
+    const until = new Date(closesAtIso).getTime();
     clearInterval(modal._interval);
     const tick = () => {
         const s = Math.max(0, Math.ceil((until - Date.now()) / 1000));
-        const m = Math.floor(s / 60), sec = s % 60;
-        timerEl.textContent = `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        textEl.textContent = `Você só pode sair do Nexus em ${t}`;
         if (s <= 0) clearInterval(modal._interval);
     };
     tick();

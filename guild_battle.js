@@ -186,8 +186,16 @@ function formatNexusLockCountdown() {
     if (!currentBattleState || !currentBattleState.nexus_opens_at) return '';
     const opensAt = new Date(currentBattleState.nexus_opens_at);
     const secs = Math.max(0, Math.floor((opensAt.getTime() - Date.now()) / 1000));
-    const m = Math.floor(secs / 60), s = secs % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// Falta menos de 1h de batalha: não haverá mais nenhuma janela do Nexus —
+// o ícone deve sumir de vez (não só ficar travado/grayscale)
+function isNexusPermanentlyClosed() {
+    if (!currentBattleState || !currentBattleState.instance || !currentBattleState.instance.end_time) return false;
+    const msLeft = new Date(currentBattleState.instance.end_time).getTime() - Date.now();
+    return msLeft < 60 * 60 * 1000;
 }
 
 function formatTime(totalSeconds) {
@@ -631,20 +639,29 @@ function renderAllObjectives(objectives) {
 
     const nexusEl = $('obj-nexus');
     if (nexusEl) {
+        const permanentlyClosed = isNexusPermanentlyClosed();
         const locked = currentBattleState.is_nexus_open === false;
-        nexusEl.classList.toggle('nexus-locked', locked);
         let overlay = document.getElementById('nexusLockOverlay');
-        if (locked) {
-            if (!overlay) {
-                overlay = document.createElement('div');
-                overlay.id = 'nexusLockOverlay';
-                overlay.className = 'nexus-lock-overlay';
-                const visual = nexusEl.querySelector('.obj-visual');
-                if (visual) visual.appendChild(overlay);
+
+        if (permanentlyClosed) {
+            nexusEl.style.display = 'none';
+            nexusEl.classList.remove('nexus-locked');
+            if (overlay) overlay.remove();
+        } else {
+            nexusEl.style.display = '';
+            nexusEl.classList.toggle('nexus-locked', locked);
+            if (locked) {
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'nexusLockOverlay';
+                    overlay.className = 'nexus-lock-overlay';
+                    const visual = nexusEl.querySelector('.obj-visual');
+                    if (visual) visual.appendChild(overlay);
+                }
+                overlay.textContent = formatNexusLockCountdown();
+            } else if (overlay) {
+                overlay.remove();
             }
-            overlay.textContent = formatNexusLockCountdown();
-        } else if (overlay) {
-            overlay.remove();
         }
     }
 

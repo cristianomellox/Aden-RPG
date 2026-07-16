@@ -875,6 +875,22 @@ function scheduleOwnWander() {
 }
 
 // ── SINCRONIZAÇÃO ADAPTATIVA (o servidor decide TUDO do combate) ────
+function showSyncDebugLine(text) {
+    let el = document.getElementById('nexusSyncDebug');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'nexusSyncDebug';
+        el.style.cssText = 'position:fixed; left:0; right:0; bottom:0; z-index:9999; background:rgba(180,0,0,0.9); color:#fff; font-size:11px; padding:6px 10px; word-break:break-word; font-family:monospace;';
+        document.body.appendChild(el);
+    }
+    el.textContent = '[Nexus] ' + text;
+    el.style.display = 'block';
+}
+function clearSyncDebugLine() {
+    const el = document.getElementById('nexusSyncDebug');
+    if (el) el.style.display = 'none';
+}
+
 function scheduleSync(delay) {
     clearTimeout(syncTimeout);
     if (!running) return;
@@ -894,32 +910,35 @@ async function doSync() {
         });
 
         if (error) {
-            console.error('[nexus] erro de rede/RPC no nexus_sync:', error);
+            showSyncDebugLine('Erro de rede: ' + (error.message || JSON.stringify(error)));
             scheduleSync(SYNC_BASE_IDLE);
             syncInFlight = false;
             return;
         }
-        if (!data) { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
-        if (data.status === 'force_exit') { syncInFlight = false; handleForceExit(data.reason); return; }
+        if (!data) {
+            showSyncDebugLine('nexus_sync não retornou dados.');
+            scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return;
+        }
+        if (data.status === 'force_exit') { clearSyncDebugLine(); syncInFlight = false; handleForceExit(data.reason); return; }
         if (data.status === 'error') {
-            console.error('[nexus] nexus_sync retornou erro do banco:', data.message);
-            if (typeof onBannerEventCb === 'function' && !window.__nexusErrorShown) {
-                window.__nexusErrorShown = true;
-                onBannerEventCb(`<span style="color:#f88">Erro no Nexus:</span> ${esc(data.message || 'desconhecido')} (veja o console)`);
-            }
+            showSyncDebugLine('Erro no banco: ' + (data.message || 'desconhecido'));
             scheduleSync(SYNC_BASE_IDLE);
             syncInFlight = false;
             return;
         }
-        if (data.status !== 'active') { scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return; }
+        if (data.status !== 'active') {
+            showSyncDebugLine('Status inesperado: ' + JSON.stringify(data.status));
+            scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return;
+        }
 
+        clearSyncDebugLine();
         await applyState(data);
 
         hadRecentActivity = (data.my_pve_ticks > 0) || (data.my_combats && data.my_combats.length > 0);
         currentSyncMs = hadRecentActivity ? SYNC_BASE_ACTIVE : Math.min(currentSyncMs + SYNC_STEP, SYNC_MAX);
         scheduleSync(currentSyncMs);
     } catch (e) {
-        console.warn('[nexus] sync error', e);
+        showSyncDebugLine('Exceção no cliente: ' + (e?.message || String(e)));
         scheduleSync(SYNC_BASE_IDLE);
     } finally {
         syncInFlight = false;
@@ -1075,6 +1094,7 @@ export function stopNexusLoop() {
     clearInterval(deadOverlayInterval); deadOverlayInterval = null;
     clearInterval(timerInterval); timerInterval = null;
     setGlobalTopBarVisible(true);
+    clearSyncDebugLine();
     stopWander('own');
     otherPlayersCache.forEach((entry, id) => stopWander('player:' + id));
     mobsCache.forEach((entry, idx) => stopWander('mob:' + idx));

@@ -576,6 +576,46 @@ function renderBattleScreen(state) {
     showScreen('battle');
 }
 
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function svgPositionBadge(rank) {
+    const colors = { 1: '#ffd700', 2: '#c8c8d4', 3: '#cd7f32' };
+    const fill = colors[rank] || '#556';
+    const textColor = (rank === 1 || rank === 2 || rank === 3) ? '#1a1a1a' : '#fff';
+    const label = String(rank);
+    const fontSize = label.length > 2 ? 8 : 11;
+    return `<svg width="22" height="22" viewBox="0 0 24 24" style="display:block;margin:auto;"><circle cx="12" cy="12" r="11" fill="${fill}" stroke="#000" stroke-opacity="0.35"/><text x="12" y="16" font-size="${fontSize}" font-weight="bold" text-anchor="middle" fill="${textColor}">${label}</text></svg>`;
+}
+function svgSkullIcon() {
+    return `<svg width="15" height="15" viewBox="0 0 24 24" fill="#eee" style="display:inline-block;vertical-align:middle;"><path d="M12 2C7.6 2 4 5.4 4 9.8c0 2.9 1.5 5 3 6.4V18a1 1 0 0 0 1 1h1v-2.2h1.5V19h1v-2.2h1v2.2h1V19h1a1 1 0 0 0 1-1v-1.8c1.5-1.4 3-3.5 3-6.4C20 5.4 16.4 2 12 2z"/><circle cx="9" cy="9.5" r="1.5" fill="#111"/><circle cx="15" cy="9.5" r="1.5" fill="#111"/></svg>`;
+}
+function buildRankingTableHtml(list, guildColorMap, guildNameMap, myPlayerId) {
+    if (!list || list.length === 0) {
+        return `<tr class="ranking-row-empty"><td colspan="5">Nenhum jogador registrado ainda.</td></tr>`;
+    }
+    const head = `<thead><tr>
+        <th class="rk-center">#</th><th>Jogador</th><th>Guilda</th><th style="text-align:right;">Dano</th><th class="rk-center">💀</th>
+    </tr></thead>`;
+    const rows = list.map((p, i) => {
+        const rank = i + 1;
+        const posLabel = p._customRank ? p._customRank : (p._outsideTop ? '30+' : rank);
+        const name = playerDamageCache.get(p.player_id) || p.name || '???';
+        if (p.name && !playerDamageCache.has(p.player_id)) playerDamageCache.set(p.player_id, p.name);
+        const guildName = (guildNameMap && guildNameMap.get(p.guild_id)) || '';
+        const color = (guildColorMap && guildColorMap.get(p.guild_id)) || 'var(--guild-color-neutral)';
+        const isMe = p.player_id === myPlayerId;
+        return `<tr class="${isMe ? 'ranking-row-me' : ''}">
+            <td class="rk-pos">${svgPositionBadge(posLabel)}</td>
+            <td class="rk-name" style="color:${color};">${escHtml(name)}${isMe ? ' <span style="color:#8cf;">(você)</span>' : ''}</td>
+            <td class="rk-guild">${escHtml(guildName)}</td>
+            <td class="rk-dmg">${kFormatter(p.total_damage_dealt)}</td>
+            <td class="rk-kills">${svgSkullIcon()}<span>${p.total_eliminations || 0}</span></td>
+        </tr>`;
+    }).join('');
+    return head + '<tbody>' + rows + '</tbody>';
+}
+
 function renderRankingModal(registeredGuilds, playerDamageRanking) {
     if (!registeredGuilds) registeredGuilds = [];
     if (!playerDamageRanking) playerDamageRanking = [];
@@ -597,41 +637,23 @@ function renderRankingModal(registeredGuilds, playerDamageRanking) {
         modals.guildRankingList.appendChild(li);
     });
 
-    modals.playerDamageList.innerHTML = '';
-    let myRankIndex = -1;
-    playerDamageRanking.forEach((p, index) => {
-        const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
-        if (p.name && !playerDamageCache.has(p.player_id)) {
-            playerDamageCache.set(p.player_id, p.name);
-        }
-        if (p.player_id === userId) myRankIndex = index;
-        const color = guildColorMap.get(p.guild_id) || 'var(--guild-color-neutral)';
-        const li = document.createElement('li');
-        const kills = p.total_eliminations || 0;
-        li.innerHTML = `
-            <span>${index + 1}. <strong style="color: ${color};">${playerName}</strong></span>
-            <span>${kFormatter(p.total_damage_dealt)} dmg · ${kills} 💀</span>
-        `;
-        modals.playerDamageList.appendChild(li);
-    });
-
-    // Linha "Meu Ranking" — meu dano/eliminações mesmo se eu não estiver no Top 30
-    let myRankEl = $('myRankingLine');
-    if (!myRankEl) {
-        myRankEl = document.createElement('li');
-        myRankEl.id = 'myRankingLine';
-        myRankEl.style.cssText = 'border-top:1px dashed #666; margin-top:6px; padding-top:6px; color:#8cf; font-weight:bold;';
-        modals.playerDamageList.after(myRankEl);
-    }
-    if (myRankIndex >= 0) {
-        const me = playerDamageRanking[myRankIndex];
-        myRankEl.innerHTML = `<span>Você: #${myRankIndex + 1}</span><span>${kFormatter(me.total_damage_dealt)} dmg · ${me.total_eliminations || 0} 💀</span>`;
-    } else if (currentBattleState && currentBattleState.player_state) {
+    // Garante que "eu" apareça na tabela mesmo se estiver fora do Top 30
+    let listForTable = playerDamageRanking;
+    const iAmIn = playerDamageRanking.some(p => p.player_id === userId);
+    if (!iAmIn && currentBattleState && currentBattleState.player_state) {
         const me = currentBattleState.player_state;
-        myRankEl.innerHTML = `<span>Você: fora do Top 30</span><span>${kFormatter(me.total_damage_dealt || 0)} dmg · ${me.total_eliminations || 0} 💀</span>`;
-    } else {
-        myRankEl.innerHTML = '';
+        if ((me.total_damage_dealt || 0) > 0) {
+            listForTable = [...playerDamageRanking, {
+                player_id: userId,
+                total_damage_dealt: me.total_damage_dealt || 0,
+                total_eliminations: me.total_eliminations || 0,
+                guild_id: userGuildId,
+                name: userPlayerStats ? userPlayerStats.name : 'Você',
+                _outsideTop: true
+            }];
+        }
     }
+    modals.playerDamageList.innerHTML = buildRankingTableHtml(listForTable, guildColorMap, null, userId);
 }
 
 function renderAllObjectives(objectives) {
@@ -824,39 +846,26 @@ function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
         });
     }
 
-    modals.resultsRankingDamage.innerHTML = '';
-    if (!playerDamageRanking || playerDamageRanking.length === 0) {
-        modals.resultsRankingDamage.innerHTML = '<li>Nenhum jogador causou dano.</li>';
-    } else {
-        const guildNameMap = new Map();
-        (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
-        
-        playerDamageRanking.forEach((p, index) => {
-            const li = document.createElement('li');
-            const guildName = guildNameMap.get(p.guild_id) ? `(${guildNameMap.get(p.guild_id)})` : '';
-            const playerName = playerDamageCache.get(p.player_id) || p.name || '???';
-            const kills = p.total_eliminations || 0;
-            li.innerHTML = `
-                <span>#${index + 1} ${playerName} ${guildName}</span>
-                <span>${kFormatter(p.total_damage_dealt)} dmg · ${kills} 💀</span>
-            `;
-            modals.resultsRankingDamage.appendChild(li);
-        });
-    }
+    const guildColorMapResults = new Map();
+    (instance.registered_guilds || []).forEach((g, index) => {
+        guildColorMapResults.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
+    });
+    const guildNameMap = new Map();
+    (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
 
-    // Ranking pessoal (onde EU cheguei), mesmo fora do Top 5
-    let personalEl = $('resultsPersonalRanking');
-    if (!personalEl) {
-        personalEl = document.createElement('p');
-        personalEl.id = 'resultsPersonalRanking';
-        personalEl.style.cssText = 'text-align:center; color:#8cf; font-weight:bold; margin-top:8px;';
-        modals.resultsRankingDamage.after(personalEl);
+    let listForResultsTable = playerDamageRanking || [];
+    const iAmInTop5 = listForResultsTable.some(p => p.player_id === userId);
+    if (!iAmInTop5 && personalRanking && personalRanking.rank) {
+        listForResultsTable = [...listForResultsTable, {
+            player_id: userId,
+            total_damage_dealt: personalRanking.total_damage_dealt || 0,
+            total_eliminations: personalRanking.total_eliminations || 0,
+            guild_id: userGuildId,
+            name: userPlayerStats ? userPlayerStats.name : 'Você',
+            _customRank: personalRanking.rank
+        }];
     }
-    if (personalRanking && personalRanking.rank) {
-        personalEl.textContent = `Você: #${personalRanking.rank} — ${kFormatter(personalRanking.total_damage_dealt || 0)} dmg · ${personalRanking.total_eliminations || 0} 💀`;
-    } else {
-        personalEl.textContent = '';
-    }
+    modals.resultsRankingDamage.innerHTML = buildRankingTableHtml(listForResultsTable, guildColorMapResults, guildNameMap, userId);
 
     let guildRewardsEl = $('resultsGuildRewards');
     if (!guildRewardsEl) {

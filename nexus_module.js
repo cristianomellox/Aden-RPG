@@ -437,6 +437,7 @@ let syncInFlight = false;
 let hadRecentActivity = false;
 let cameraFollow = true;
 let ownHpFill = null;
+let lastKnownOwnHp = null;
 let mapControls = null;
 let currentSyncMs = SYNC_BASE_IDLE;
 let timerBaseSeconds = 0;
@@ -565,7 +566,13 @@ function updateMobsDOM(mobs) {
         if (!entry) return;
         const wasDead = entry.el.classList.contains('dead');
         entry.el.classList.toggle('dead', !m.is_alive);
-        if (!wasDead && !m.is_alive) flashHit(entry.el);
+        if (!wasDead && !m.is_alive) {
+            flashHit(entry.el);
+            // Som de impacto do mob (mesma lógica de volume por proximidade
+            // da caça), mesmo que quem tenha atacado seja outro jogador
+            playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', m.pos_x, m.pos_y);
+            playProximitySound('mob_' + entry.type.key, m.pos_x, m.pos_y);
+        }
         entry.basePos = { x: m.pos_x, y: m.pos_y };
     });
 }
@@ -647,7 +654,7 @@ function upsertOtherPlayerDOM(p) {
         requestAnimationFrame(() => _nxPositionFrameOffset(fr, sh, av, 117, 60));
         _nxFetchFrame(p.id, fr, sh, av, '3px solid #48f');
 
-        entry = { wrap, av, lbl, hpFill: fill, guildId: p.guild_id, name: p.name, isDead: false };
+        entry = { wrap, av, lbl, hpFill: fill, guildId: p.guild_id, name: p.name, isDead: false, lastKnownHp: null };
         otherPlayersCache.set(p.id, entry);
 
         const seed = seedFromId(p.id);
@@ -659,6 +666,16 @@ function upsertOtherPlayerDOM(p) {
 
     const maxHp = p.max_hp || 1;
     const curHp = p.current_hp ?? maxHp;
+
+    // Se o HP baixou desde a última vez que vi esse jogador, ele levou um
+    // golpe de ALGUÉM (não necessariamente eu) — toca o som/flash mesmo
+    // assim, igual acontece na página de caça com outros jogadores.
+    if (entry.lastKnownHp !== null && curHp < entry.lastKnownHp && !entry.isDead) {
+        flashHit(entry.wrap);
+        playProximitySound(Math.random() < 0.2 ? 'critical' : 'normal', p.pos_x, p.pos_y);
+    }
+    entry.lastKnownHp = curHp;
+
     setHpBar(entry.hpFill, (curHp / maxHp) * 100);
 
     const wasDead = entry.isDead;
@@ -968,7 +985,17 @@ async function applyState(data) {
         timerBaseSeconds = Math.max(0, st.time_left_seconds | 0);
         timerBaseAtMs = Date.now();
 
-        if (ownHpFill && st.max_hp) setHpBar(ownHpFill, ((st.current_hp ?? st.max_hp) / st.max_hp) * 100);
+        if (ownHpFill && st.max_hp) {
+            const curOwnHp = st.current_hp ?? st.max_hp;
+            if (lastKnownOwnHp !== null && curOwnHp < lastKnownOwnHp && !isDeadLocal) {
+                const ownEl = document.getElementById('nexusOwnPlayer');
+                if (ownEl) flashHit(ownEl);
+                const ownPos = getEntityPos('own');
+                playProximitySound(Math.random() < 0.2 ? 'critical' : 'normal', ownPos?.x || 0, ownPos?.y || 0);
+            }
+            lastKnownOwnHp = curOwnHp;
+            setHpBar(ownHpFill, (curOwnHp / st.max_hp) * 100);
+        }
 
         if (st.is_dead && !isDeadLocal) {
             showDeadOverlay(st.dead_until, ownAvatarUrl);
@@ -1034,6 +1061,7 @@ export function startNexusScreen(options) {
     isDeadLocal = false;
     currentSyncMs = SYNC_BASE_IDLE;
     cameraFollow = true;
+    lastKnownOwnHp = options.currentHp ?? options.maxHp ?? null;
 
     ownEnteredAtMs = options.enteredAt ? new Date(options.enteredAt).getTime() : Date.now();
     ownSeed = seedFromId(options.playerId);

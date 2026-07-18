@@ -289,25 +289,79 @@ async function doLocalCombatTick() {
 
 // Aproximação do ATACANTE quando EU sou o alvo (fui desafiado) — puramente
 // visual, encena o "encontro" antes do duelo de verdade tocar.
-async function playApproachAnimation(opponentId, opponentName) {
+function ensureChallengeOverlay() {
+    if (document.getElementById('nexusChallengeOverlay')) return;
+    const el = document.createElement('div');
+    el.id = 'nexusChallengeOverlay';
+    el.innerHTML = `
+        <div id="nexusChallengeGlow"></div>
+        <p id="nexusChallengeText">Alguém está prestes a te desafiar</p>
+        <h2 id="nexusChallengeTimer">5</h2>
+    `;
+    document.body.appendChild(el);
+}
+function showChallengeOverlay(seconds) {
+    return new Promise(resolve => {
+        ensureChallengeOverlay();
+        const el = document.getElementById('nexusChallengeOverlay');
+        const timerEl = document.getElementById('nexusChallengeTimer');
+        let remaining = seconds;
+        timerEl.textContent = String(remaining);
+        el.classList.add('active');
+        playSoundAt('critical', 0.5);
+        const interval = setInterval(() => {
+            remaining -= 1;
+            if (remaining <= 0) {
+                clearInterval(interval);
+                el.classList.remove('active');
+                resolve();
+                return;
+            }
+            timerEl.textContent = String(remaining);
+        }, 1000);
+    });
+}
     const ownPos = getEntityPos('own');
     if (!ownPos) { await new Promise(r => setTimeout(r, 300)); return; }
 
-    pauseWander('own', 3000);
     const oppEntry = otherPlayersCache.get(opponentId);
-    if (oppEntry && oppEntry.wrap) {
-        pauseWander('player:' + opponentId, 3000);
-        const angle = Math.random() * Math.PI * 2;
-        const nearX = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_W, ownPos.x + Math.cos(angle) * APPROACH_OFFSET));
-        const nearY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, ownPos.y + Math.sin(angle) * APPROACH_OFFSET));
-        oppEntry.wrap.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
-        oppEntry.wrap.style.left = nearX + 'px';
-        oppEntry.wrap.style.top = nearY + 'px';
-        const oState = wanderState.get('player:' + opponentId);
-        if (oState) { oState.lastX = nearX; oState.lastY = nearY; }
-        await new Promise(r => setTimeout(r, APPROACH_MS + 100));
+    const angle = Math.random() * Math.PI * 2;
+
+    if (iAmDefender) {
+        // O outro jogador vem até mim
+        pauseWander('own', 3000);
+        if (oppEntry && oppEntry.wrap) {
+            pauseWander('player:' + opponentId, 3000);
+            const nearX = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_W, ownPos.x + Math.cos(angle) * APPROACH_OFFSET));
+            const nearY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, ownPos.y + Math.sin(angle) * APPROACH_OFFSET));
+            oppEntry.wrap.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
+            oppEntry.wrap.style.left = nearX + 'px';
+            oppEntry.wrap.style.top = nearY + 'px';
+            const oState = wanderState.get('player:' + opponentId);
+            if (oState) { oState.lastX = nearX; oState.lastY = nearY; }
+            await new Promise(r => setTimeout(r, APPROACH_MS + 100));
+        } else {
+            await new Promise(r => setTimeout(r, 400));
+        }
     } else {
-        await new Promise(r => setTimeout(r, 400));
+        // Eu vou até o outro jogador
+        pauseLocalCombatLoop();
+        const ownEl = document.getElementById('nexusOwnPlayer');
+        if (oppEntry && oppEntry.wrap && ownEl) {
+            pauseWander('player:' + opponentId, 3000);
+            const oppPos = getEntityPos('player:' + opponentId) || ownPos;
+            const nearX = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_W, oppPos.x + Math.cos(angle) * APPROACH_OFFSET));
+            const nearY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, oppPos.y + Math.sin(angle) * APPROACH_OFFSET));
+            stopWander('own');
+            wanderState.set('own', { el: ownEl, lastX: nearX, lastY: nearY });
+            ownEl.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
+            ownEl.style.left = nearX + 'px';
+            ownEl.style.top = nearY + 'px';
+            updateFogPosition();
+            await new Promise(r => setTimeout(r, APPROACH_MS + 100));
+        } else {
+            await new Promise(r => setTimeout(r, 400));
+        }
     }
 }
 
@@ -408,7 +462,7 @@ function showCantLeaveModal(closesAtIso) {
         const s = Math.max(0, Math.ceil((until - Date.now()) / 1000));
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
         const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-        textEl.textContent = `Você só pode sair do Nexus em ${t}`;
+        textEl.textContent = `Você só poderá sair do Nexus em ${t} ou caso seja eliminado.`;
         if (s <= 0) clearInterval(modal._interval);
     };
     tick();
@@ -1197,9 +1251,11 @@ async function applyState(data) {
         pauseLocalCombatLoop();
         for (const entry of data.my_combats) {
             const iAmDefender = entry.defender_id === ctx.playerId;
-            if (iAmDefender) {
-                await playApproachAnimation(entry.attacker_id, entry.attacker_name);
-            }
+            const opponentId = iAmDefender ? entry.attacker_id : entry.defender_id;
+            const opponentName = iAmDefender ? entry.attacker_name : entry.defender_name;
+
+            await playApproachAnimation(opponentId, opponentName, iAmDefender);
+            await showChallengeOverlay(5);
             await playRealDuelAnimation(entry);
             pushNexusBannerEvent(entry);
         }

@@ -13,8 +13,11 @@ import { supabase } from './supabaseClient.js';
 // ══════════════════════════════════════════════════════════════════════
 
 const NEXUS_MAP_SIZE = 2121;
-const NEXUS_IMG_URL  = 'https://aden-rpg.pages.dev/assets/b_nexus.webp';
+const NEXUS_IMG_URL  = 'https://aden-rpg.pages.dev/assets/b_nexus.png';
 const AVATAR_W = 70, AVATAR_H = 90;
+const ATTACK_MIN_MS = 2500, ATTACK_MAX_MS = 3800; // mesmo ritmo da página de caça
+const APPROACH_MS = 750; // duração da "caminhada" até o alvo antes do golpe
+const APPROACH_OFFSET = 45; // distância visual entre os dois avatares durante o golpe
 
 const CYCLE_SEC = 11;
 const MOVE_SEC  = 3.2;
@@ -180,6 +183,132 @@ function getEntityPos(key) {
     const state = wanderState.get(key);
     if (!state || state.lastX === undefined) return null;
     return { x: state.lastX, y: state.lastY };
+}
+
+function rangeSq(a, b) { return Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2); }
+
+// ══════════════════════════════════════════════════════════════════════
+// LOOP VISUAL LOCAL DE COMBATE — 100% cosmético (o resultado mecânico real
+// sempre vem do servidor via my_pve_ticks/my_combats). Dá a sensação de
+// "aproximar, golpear uma vez, voltar a andar" igual à página de caça,
+// mesmo que o alvo/servidor não tenham nenhuma noção de posição.
+// ══════════════════════════════════════════════════════════════════════
+let localCombatTimeout = null;
+let localCombatPaused = false;
+
+function scheduleLocalCombatLoop() {
+    clearTimeout(localCombatTimeout);
+    if (!running || isDeadLocal || localCombatPaused) return;
+    localCombatTimeout = setTimeout(doLocalCombatTick, rand(ATTACK_MIN_MS, ATTACK_MAX_MS));
+}
+function pauseLocalCombatLoop() {
+    localCombatPaused = true;
+    clearTimeout(localCombatTimeout);
+}
+function resumeLocalCombatLoop() {
+    localCombatPaused = false;
+    scheduleLocalCombatLoop();
+}
+
+async function doLocalCombatTick() {
+    if (!running || isDeadLocal || localCombatPaused) return;
+
+    const ownPos = getEntityPos('own');
+    const ownEl = document.getElementById('nexusOwnPlayer');
+    if (!ownPos || !ownEl) { scheduleLocalCombatLoop(); return; }
+
+    // Mob VIVO mais próximo (revalida no instante do golpe também — item 3:
+    // nunca ataca mob morto/inexistente, mesmo em cooldown de respawn)
+    let nearestMobPos = null, nearestMobDist = Infinity, nearestMobIdx = null;
+    mobsCache.forEach((entry, idx) => {
+        if (entry.el.classList.contains('dead')) return;
+        const pos = getEntityPos('mob:' + idx) || entry.basePos;
+        const d = rangeSq(ownPos, pos);
+        if (d < nearestMobDist) { nearestMobDist = d; nearestMobPos = pos; nearestMobIdx = idx; }
+    });
+
+    // Jogador inimigo vivo mais próximo — NUNCA da própria guilda (item 3)
+    let nearestPlayerPos = null, nearestPlayerDist = Infinity, nearestPlayerId = null;
+    otherPlayersCache.forEach((entry, id) => {
+        if (entry.isDead) return;
+        if (ctx && entry.guildId != null && entry.guildId === ctx.guildId) return;
+        const pos = getEntityPos('player:' + id);
+        if (!pos) return;
+        const d = rangeSq(ownPos, pos);
+        if (d < nearestPlayerDist) { nearestPlayerDist = d; nearestPlayerId = id; nearestPlayerPos = pos; }
+    });
+
+    const targetIsMob = nearestMobPos && (!nearestPlayerPos || nearestMobDist <= nearestPlayerDist);
+    const targetPos = targetIsMob ? nearestMobPos : nearestPlayerPos;
+
+    if (!targetPos) { scheduleLocalCombatLoop(); return; } // nada por perto: só continua andando
+
+    // ── Aproximação: caminha até ficar ao lado do alvo antes de golpear ──
+    stopWander('own');
+    const angle = Math.random() * Math.PI * 2;
+    const approachX = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_W, targetPos.x + Math.cos(angle) * APPROACH_OFFSET));
+    const approachY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, targetPos.y + Math.sin(angle) * APPROACH_OFFSET));
+    wanderState.set('own', { el: ownEl, lastX: approachX, lastY: approachY });
+    ownEl.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
+    ownEl.style.left = approachX + 'px';
+    ownEl.style.top = approachY + 'px';
+    updateFogPosition();
+
+    await new Promise(r => setTimeout(r, APPROACH_MS + 60));
+    if (!running || isDeadLocal || localCombatPaused) return;
+
+    // ── Golpe único (item 2: nunca mais de um por alvo) ──
+    if (targetIsMob) {
+        const entry = mobsCache.get(nearestMobIdx);
+        if (entry && !entry.el.classList.contains('dead')) {
+            const isCrit = Math.random() < 0.15;
+            flashHit(ownEl);
+            flashHit(entry.el);
+            playProximitySound(isCrit ? 'critical' : 'normal', targetPos.x, targetPos.y);
+            playProximitySound('mob_' + entry.type.key, targetPos.x, targetPos.y);
+        }
+    } else if (nearestPlayerId) {
+        const entry = otherPlayersCache.get(nearestPlayerId);
+        if (entry && !entry.isDead) {
+            // Encontro casual — sem resultado aqui. Se o servidor confirmar um
+            // duelo de verdade depois, o duelo animado real toca via my_combats.
+            flashHit(ownEl);
+            flashHit(entry.wrap);
+            playProximitySound('normal', targetPos.x, targetPos.y);
+        }
+    }
+
+    await new Promise(r => setTimeout(r, 350));
+
+    // ── Volta a andar até o próximo alvo ──
+    if (running && !isDeadLocal && !localCombatPaused) {
+        scheduleOwnWander();
+    }
+    scheduleLocalCombatLoop();
+}
+
+// Aproximação do ATACANTE quando EU sou o alvo (fui desafiado) — puramente
+// visual, encena o "encontro" antes do duelo de verdade tocar.
+async function playApproachAnimation(opponentId, opponentName) {
+    const ownPos = getEntityPos('own');
+    if (!ownPos) { await new Promise(r => setTimeout(r, 300)); return; }
+
+    pauseWander('own', 3000);
+    const oppEntry = otherPlayersCache.get(opponentId);
+    if (oppEntry && oppEntry.wrap) {
+        pauseWander('player:' + opponentId, 3000);
+        const angle = Math.random() * Math.PI * 2;
+        const nearX = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_W, ownPos.x + Math.cos(angle) * APPROACH_OFFSET));
+        const nearY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, ownPos.y + Math.sin(angle) * APPROACH_OFFSET));
+        oppEntry.wrap.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
+        oppEntry.wrap.style.left = nearX + 'px';
+        oppEntry.wrap.style.top = nearY + 'px';
+        const oState = wanderState.get('player:' + opponentId);
+        if (oState) { oState.lastX = nearX; oState.lastY = nearY; }
+        await new Promise(r => setTimeout(r, APPROACH_MS + 100));
+    } else {
+        await new Promise(r => setTimeout(r, 400));
+    }
 }
 
 // ── MOLDURAS DE AVATAR ───────────────────────────────────────────────
@@ -739,11 +868,13 @@ function enableNexusMapInteraction() {
         panState.x = x; panState.y = y; panState.scale = s;
         map.style.transform = `translate(${x}px,${y}px) scale(${s})`;
         recalcLimits(true);
+        updateFogPosition();
     }
     function setPos(x, y) {
         panState.x = Math.max(minX, Math.min(maxX, x));
         panState.y = Math.max(minY, Math.min(maxY, y));
         map.style.transform = `translate(${panState.x}px,${panState.y}px) scale(${panState.scale})`;
+        updateFogPosition();
     }
     function inertia() {
         cancelAnimationFrame(aId);
@@ -834,6 +965,7 @@ function centerCameraOn(x, y, animate, durationMs) {
     map.style.transition = animate ? `transform ${ms}ms linear` : 'none';
     mapControls.setPos(targetX, targetY);
     if (animate) setTimeout(() => { map.style.transition = 'none'; }, ms + 50);
+    updateFogPosition();
 }
 function setCameraFollow(on) {
     cameraFollow = on;
@@ -855,6 +987,7 @@ function pushNexusBannerEvent(ev) {
 function showDeadOverlay(deadUntilIso, avatarUrl) {
     isDeadLocal = true;
     stopWander('own');
+    pauseLocalCombatLoop();
     setCameraFollow(false);
     const overlay = document.getElementById('nexusDeadOverlay');
     const avImg = document.getElementById('nexusDeadAvatar');
@@ -880,6 +1013,7 @@ function reviveOwnLocally() {
     isDeadLocal = false;
     if (ownHpFill) setHpBar(ownHpFill, 100);
     scheduleOwnWander();
+    resumeLocalCombatLoop();
     setCameraFollow(true);
 }
 function scheduleOwnWander() {
@@ -888,7 +1022,51 @@ function scheduleOwnWander() {
     scheduleWander('own', el, ownSeed, ownEnteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H,
         (x, y, durationMs) => {
             if (cameraFollow) centerCameraOn(x + AVATAR_W / 2, y + AVATAR_H / 2, durationMs > 0, durationMs);
+            updateFogPosition();
         });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// NEVOEIRO DE GUERRA — degradê suave centrado no próprio avatar (raio
+// ~150 em espaço do mapa). Mobs e jogadores inimigos fora do raio somem.
+// ══════════════════════════════════════════════════════════════════════
+const FOG_VISIBLE_RADIUS = 150; // totalmente visível
+const FOG_FADE_RADIUS = 260;    // opaco a partir daqui
+
+function ensureFogOverlay() {
+    const cont = document.getElementById('nexusMapContainer');
+    if (!cont || document.getElementById('nexusFogOverlay')) return;
+    const fog = document.createElement('div');
+    fog.id = 'nexusFogOverlay';
+    cont.appendChild(fog);
+}
+
+function updateFogPosition() {
+    const fog = document.getElementById('nexusFogOverlay');
+    const cont = document.getElementById('nexusMapContainer');
+    if (!fog || !cont) return;
+    const ownPos = getEntityPos('own');
+    if (!ownPos) return;
+
+    const screenX = ownPos.x * panState.scale + panState.x + (AVATAR_W / 2) * panState.scale;
+    const screenY = ownPos.y * panState.scale + panState.y + (AVATAR_H / 2) * panState.scale;
+    fog.style.setProperty('--fog-cx', screenX + 'px');
+    fog.style.setProperty('--fog-cy', screenY + 'px');
+    fog.style.setProperty('--fog-r1', (FOG_VISIBLE_RADIUS * panState.scale) + 'px');
+    fog.style.setProperty('--fog-r2', (FOG_FADE_RADIUS * panState.scale) + 'px');
+
+    // Esconde mobs/jogadores inimigos fora do raio visível (espaço do mapa,
+    // consistente em qualquer zoom)
+    mobsCache.forEach((entry, idx) => {
+        const pos = getEntityPos('mob:' + idx) || entry.basePos;
+        const visible = rangeSq(ownPos, pos) <= FOG_VISIBLE_RADIUS * FOG_VISIBLE_RADIUS;
+        entry.el.style.visibility = visible ? 'visible' : 'hidden';
+    });
+    otherPlayersCache.forEach((entry, id) => {
+        const pos = getEntityPos('player:' + id);
+        const visible = pos && rangeSq(ownPos, pos) <= FOG_VISIBLE_RADIUS * FOG_VISIBLE_RADIUS;
+        entry.wrap.style.visibility = visible ? 'visible' : 'hidden';
+    });
 }
 
 // ── SINCRONIZAÇÃO ADAPTATIVA (o servidor decide TUDO do combate) ────
@@ -1012,23 +1190,20 @@ async function applyState(data) {
         pruneMissingPlayers(ids);
     }
 
-    // Recap de PvE (você lutou mobs desde o último sync) — feedback rápido
-    if (data.my_pve_ticks > 0 && !isDeadLocal) {
-        const ownEl = document.getElementById('nexusOwnPlayer');
-        const n = Math.min(data.my_pve_ticks, 3); // não spamma se veio um catch-up grande
-        for (let i = 0; i < n; i++) {
-            if (ownEl) flashHit(ownEl);
-            playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', getEntityPos('own')?.x || 0, getEntityPos('own')?.y || 0);
-            await new Promise(r => setTimeout(r, 220));
-        }
-    }
-
-    // Duelo(s) reais em que participei desde o último sync
+    // Duelo(s) reais em que participei desde o último sync — se eu fui o
+    // ALVO (não quem iniciou), mostra o oponente se aproximando antes,
+    // pra dar a sensação de "encontro", igual pedido.
     if (data.my_combats && data.my_combats.length) {
+        pauseLocalCombatLoop();
         for (const entry of data.my_combats) {
+            const iAmDefender = entry.defender_id === ctx.playerId;
+            if (iAmDefender) {
+                await playApproachAnimation(entry.attacker_id, entry.attacker_name);
+            }
             await playRealDuelAnimation(entry);
             pushNexusBannerEvent(entry);
         }
+        resumeLocalCombatLoop();
     }
 
     if (data.new_events && data.new_events.length) {
@@ -1041,6 +1216,8 @@ async function applyState(data) {
     if (cameraFollow) {
         const ownPos = getEntityPos('own');
         if (ownPos) centerCameraOn(ownPos.x + AVATAR_W / 2, ownPos.y + AVATAR_H / 2, false);
+    } else {
+        updateFogPosition();
     }
 }
 
@@ -1093,6 +1270,7 @@ export function startNexusScreen(options) {
     if (ownHpFill && options.maxHp) setHpBar(ownHpFill, ((options.currentHp ?? options.maxHp) / options.maxHp) * 100);
 
     enableNexusMapInteraction();
+    ensureFogOverlay();
 
     requestAnimationFrame(() => {
         centerCameraOn(entryX + AVATAR_W / 2, entryY + AVATAR_H / 2, false);
@@ -1111,7 +1289,9 @@ export function startNexusScreen(options) {
     };
 
     running = true;
+    localCombatPaused = false;
     scheduleOwnWander();
+    scheduleLocalCombatLoop();
     startLocalTimerTick();
     doSync();
 }
@@ -1119,6 +1299,7 @@ export function startNexusScreen(options) {
 export function stopNexusLoop() {
     running = false;
     clearTimeout(syncTimeout); syncTimeout = null;
+    clearTimeout(localCombatTimeout); localCombatTimeout = null;
     clearInterval(deadOverlayInterval); deadOverlayInterval = null;
     clearInterval(timerInterval); timerInterval = null;
     setGlobalTopBarVisible(true);

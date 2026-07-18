@@ -120,6 +120,20 @@
     overflow: hidden;
     background: #111;
 }
+
+/* Nevoeiro de guerra — degradê suave, ~150px visíveis ao redor do jogador */
+#nexusFogOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+    background: radial-gradient(
+        circle at var(--fog-cx, 50%) var(--fog-cy, 50%),
+        transparent 0,
+        transparent var(--fog-r1, 150px),
+        rgba(4, 6, 12, 0.94) var(--fog-r2, 260px)
+    );
+}
 #nexusMap {
     position: absolute;
     top: 0; left: 0;

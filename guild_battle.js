@@ -610,7 +610,7 @@ function buildRankingTableHtml(list, guildColorMap, guildNameMap, myPlayerId) {
             <td class="rk-name" style="color:${color};">${escHtml(name)}${isMe ? ' <span style="color:#8cf;">(você)</span>' : ''}</td>
             <td class="rk-guild">${escHtml(guildName)}</td>
             <td class="rk-dmg">${kFormatter(p.total_damage_dealt)}</td>
-            <td class="rk-kills">${svgSkullIcon()}<span>${p.total_eliminations || 0}</span></td>
+            <td class="rk-kills">${p.total_eliminations || 0}</td>
         </tr>`;
     }).join('');
     return head + '<tbody>' + rows + '</tbody>';

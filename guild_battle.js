@@ -812,7 +812,28 @@ function createRewardItemHTML(item, quantity) {
     `;
 }
 
+let _resultsViewportListenerAdded = false;
+function adjustResultsModalViewport() {
+    const modal = $('resultsModal');
+    const content = modal ? modal.querySelector('.modal-content') : null;
+    if (!modal || !content) return;
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    modal.style.height = vh + 'px';
+    modal.style.maxHeight = vh + 'px';
+    content.style.height = (vh * 0.94) + 'px';
+    content.style.maxHeight = (vh * 0.94) + 'px';
+
+    if (!_resultsViewportListenerAdded) {
+        _resultsViewportListenerAdded = true;
+        const relayout = () => adjustResultsModalViewport();
+        window.addEventListener('resize', relayout);
+        window.addEventListener('orientationchange', relayout);
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
+    }
+}
+
 function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
+    adjustResultsModalViewport();
     const titleEl = $('resultCityName');
     titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
     

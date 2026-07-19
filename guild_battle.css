@@ -927,3 +927,7 @@ textarea:focus, textarea:active {
     border-radius: 50%;
     object-fit: cover;
 }
+
+.shop-content {
+  height: 94vh!important;
+}

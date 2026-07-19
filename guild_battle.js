@@ -812,25 +812,30 @@ function createRewardItemHTML(item, quantity) {
     `;
 }
 
-let _resultsViewportListenerAdded = false;
-function adjustResultsModalViewport() {
-    const modal = $('resultsModal');
+let _modalViewportListenerAdded = false;
+const _viewportFittedModalIds = new Set();
+
+function fitModalToViewport(modalId) {
+    const modal = $(modalId);
     const content = modal ? modal.querySelector('.modal-content') : null;
     if (!modal || !content) return;
+    _viewportFittedModalIds.add(modalId);
+
     const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
     modal.style.height = vh + 'px';
     modal.style.maxHeight = vh + 'px';
     content.style.height = (vh * 0.94) + 'px';
     content.style.maxHeight = (vh * 0.94) + 'px';
 
-    if (!_resultsViewportListenerAdded) {
-        _resultsViewportListenerAdded = true;
-        const relayout = () => adjustResultsModalViewport();
+    if (!_modalViewportListenerAdded) {
+        _modalViewportListenerAdded = true;
+        const relayout = () => _viewportFittedModalIds.forEach(id => fitModalToViewport(id));
         window.addEventListener('resize', relayout);
         window.addEventListener('orientationchange', relayout);
         if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
     }
 }
+function adjustResultsModalViewport() { fitModalToViewport('resultsModal'); }
 
 function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
     adjustResultsModalViewport();
@@ -1322,6 +1327,9 @@ function openBattleShop() {
     if (modals.shopBtnPack2) modals.shopBtnPack2.textContent = "Comprar";
     refreshShopButtonsState();
     modals.battleShop.style.display = 'flex';
+    modals.battleShop.style.alignItems = 'center';
+    modals.battleShop.style.justifyContent = 'center';
+    fitModalToViewport('battleShopModal');
 }
 
 // Trava as DUAS opções assim que qualquer compra começa, e só libera

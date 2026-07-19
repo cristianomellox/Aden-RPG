@@ -131,7 +131,7 @@
         circle at var(--fog-cx, 50%) var(--fog-cy, 50%),
         transparent 0,
         transparent var(--fog-r1, 150px),
-        rgba(4, 6, 12, 0.45) var(--fog-r2, 260px)
+        rgba(4, 6, 12, 0.65) var(--fog-r2, 260px)
     );
 }
 #nexusMap {

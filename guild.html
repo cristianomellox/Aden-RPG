@@ -813,37 +813,62 @@ if ('serviceWorker' in navigator) {
         </div>
         <div class="tut-sec">
             <h4 class="tut-sec-title" style="color:#ff9800; border-color:#ff9800;">2. Campo de Batalha</h4>
-            <p>Cada cidade tem <strong style="color:#ffd700">5 Objetivos</strong> a dominar para acumular Pontos de Honra:</p>
+            <p>Cada cidade tem <strong style="color:#ffd700">4 Pontos de Controle</strong> para dominar e um <strong style="color:#ffd700">Nexus</strong>, que agora é uma área especial (veja a seção 3):</p>
             <div class="tut-box"><ul>
-                <li>🔴 <strong style="color:#ffd700">Nexus</strong> — objetivo central, <strong style="color:#ffd700">300.000 HP</strong></li>
-                <li>🔵 <strong style="color:#ffd700">4 Pontos de Controle</strong> — objetivos secundários, <strong style="color:#ffd700">100.000 HP</strong> cada</li>
+                <li>🔵 <strong style="color:#ffd700">4 Pontos de Controle</strong> — objetivos atacáveis, <strong style="color:#ffd700">100.000 HP</strong> cada</li>
+                <li>🔴 <strong style="color:#ffd700">Nexus</strong> — não tem mais HP e não pode ser atacado diretamente; é uma zona de PvP/PvE (seção 3)</li>
                 <li>🏆 A guilda com mais <strong style="color:#ffd700">Pontos de Honra</strong> ao fim vence e conquista a cidade</li>
             </ul></div>
         </div>
         <div class="tut-sec">
-            <h4 class="tut-sec-title" style="color:#c084fc; border-color:#c084fc;">3. Ações de Batalha</h4>
+            <h4 class="tut-sec-title" style="color:#ff4da6; border-color:#ff4da6;">3. O Nexus — Área de PvP/PvE</h4>
+            <p>Uma zona à parte dos Pontos de Controle, com mobs e jogadores inimigos, onde o combate acontece automaticamente.</p>
             <div class="tut-box"><ul>
-                <li>🎯 Máximo de <strong style="color:#ffd700">5 Ações</strong> acumuladas</li>
+                <li>🕒 <strong style="color:#ffd700">Abre por 60 minutos</strong> a cada ciclo, começando junto com a batalha, depois fica <strong style="color:#ffd700">fechado por 120 minutos</strong> antes de reabrir — se repete até faltar 1h para o fim da batalha (aí não abre mais)</li>
+                <li>🔒 Enquanto fechado, o ícone do Nexus fica acinzentado com uma contagem regressiva; na última hora de batalha, ele some da tela</li>
+                <li>🚪 Toque no ícone do Nexus e confirme para entrar — dentro dele a barra superior do jogo some e vira um mapa arrastável, com zoom</li>
+                <li>🔒 Uma vez dentro, <strong style="color:#ffd700">só é possível sair quando a janela fechar</strong> — a exceção é se você for eliminado (aí pode escolher sair ao reviver)</li>
+            </ul></div>
+            <p style="margin-top:8px;">Dentro do Nexus:</p>
+            <div class="tut-box"><ul>
+                <li>🚶 Seu avatar anda sozinho pelo mapa, ataca o mob ou jogador inimigo mais próximo automaticamente e volta a andar — não precisa clicar em nada</li>
+                <li>🌫️ Um <strong style="color:#ffd700">nevoeiro de guerra</strong> só mostra o que está bem perto de você; mobs e inimigos aparecem só quando você se aproxima</li>
+                <li>🎥 Botão de <strong style="color:#ffd700">Câmera</strong> na barra superior: liga/desliga o acompanhamento automático do seu avatar (desliga sozinho se você arrastar o mapa)</li>
+                <li>⚔️ Ao cruzar com um jogador inimigo, aparece uma animação de aproximação, um aviso de desafio com contagem regressiva, e então o duelo — igual acontece quando você é desafiado por outro jogador</li>
+                <li>❤️ O HP do duelo <strong style="color:#ff6b6b">não regenera</strong> entre combates: se você saiu de um duelo com pouco HP, começa o próximo já ferido, até ser eliminado</li>
+                <li>💀 Ao ser eliminado, fica <strong style="color:#ffd700">10 minutos</strong> caído até reviver; ao reviver, pode escolher continuar no Nexus ou voltar para os objetivos</li>
+            </ul></div>
+            <p style="margin-top:8px;">Recompensas dentro do Nexus:</p>
+            <div class="tut-box"><ul>
+                <li>👹 Eliminar um mob → <strong style="color:#ffd700">+3 Honra</strong> e <strong style="color:#ffd700">5% de chance</strong> de ganhar uma Ação extra</li>
+                <li>⚔️ Eliminar um jogador inimigo → <strong style="color:#ffd700">+3 Honra</strong> e <strong style="color:#ffd700">5% de chance</strong> de ganhar uma Ação extra</li>
+                <li>📊 O dano causado em duelos do Nexus também conta no seu ranking de dano da batalha, e eliminações aparecem no ranking pessoal</li>
+            </ul></div>
+        </div>
+        <div class="tut-sec">
+            <h4 class="tut-sec-title" style="color:#c084fc; border-color:#c084fc;">4. Ações de Batalha</h4>
+            <div class="tut-box"><ul>
+                <li>🎯 Máximo de <strong style="color:#ffd700">5 Ações</strong> acumuladas (ações extras do Nexus também respeitam esse limite de 5)</li>
                 <li>⏱️ Recupera <strong style="color:#ffd700">1 Ação</strong> a cada <strong style="color:#ffd700">60 minutos</strong></li>
                 <li>🔥 <span class="tut-frenzy-badge">MODO FRENÉTICO</span> ativa nos últimos 20 min — recupera <strong style="color:#ffd700">1 Ação/minuto</strong></li>
-                <li>💰 Compre reforços com Ouro: <strong style="color:#ffd700">Pacote 1</strong> (3 Ações) ou <strong style="color:#ffd700">Pacote 2</strong> (5 Ações)</li>
+                <li>💰 Compre reforços com Ouro: <strong style="color:#ffd700">Pacote 1</strong> (3 Ações) ou <strong style="color:#ffd700">Pacote 2</strong> (5 Ações) — essas compras podem passar de 5/5</li>
             </ul></div>
-            <p style="margin-top:8px;">Use suas ações de duas formas:</p>
+            <p style="margin-top:8px;">Use suas ações de duas formas nos Pontos de Controle:</p>
             <div class="tut-box"><ul>
-                <li>⚔️ <strong style="color:#ffd700">ATACAR</strong> (1 Ação) — causa dano; primeiro atinge a Guarnição inimiga, depois o HP do objetivo</li>
+                <li>⚔️ <strong style="color:#ffd700">ATACAR</strong> (1 Ação) — causa dano; primeiro atinge a Guarnição inimiga, depois o HP do objetivo; cada ataque já rende <strong style="color:#ffd700">+3 Honra</strong> na hora</li>
                 <li>🛡️ <strong style="color:#ffd700">GUARNECER</strong> (1 Ação) — reforça a defesa de um objetivo aliado, aumentando seu HP</li>
             </ul></div>
         </div>
         <div class="tut-sec">
-            <h4 class="tut-sec-title" style="color:#ff6b6b; border-color:#ff6b6b;">4. Captura e Pontuação</h4>
+            <h4 class="tut-sec-title" style="color:#ff6b6b; border-color:#ff6b6b;">5. Captura e Pontuação</h4>
             <div class="tut-box"><ul>
-                <li>🔴 Captura do <strong style="color:#ffd700">Nexus</strong> → <strong style="color:#ffd700">+300 Honra</strong> distribuídos proporcionalmente ao dano</li>
-                <li>🔵 Captura de <strong style="color:#ffd700">Ponto de Controle</strong> → <strong style="color:#ffd700">+100 Honra</strong> distribuídos proporcionalmente</li>
+                <li>🔵 Captura de <strong style="color:#ffd700">Ponto de Controle</strong> → <strong style="color:#ffd700">+100 Honra</strong> distribuídos proporcionalmente ao dano</li>
                 <li>📉 Perder um objetivo <strong style="color:#ff6b6b">penaliza</strong> na mesma quantidade de Honra</li>
+                <li>⚔️🐺 Honra do Nexus (mobs e eliminações) é somada continuamente, sem precisar dominar nada</li>
             </ul></div>
         </div>
         <div class="tut-sec">
-            <h4 class="tut-sec-title" style="color:#8ecf8e; border-color:#8ecf8e;">5. Recompensas</h4>
+            <h4 class="tut-sec-title" style="color:#8ecf8e; border-color:#8ecf8e;">6. Recompensas</h4>
             <p>Distribuídas para as <strong style="color:#ffd700">3 primeiras guildas</strong>, apenas para quem causou dano:</p>
             <table class="tut-reward-table">
                 <thead><tr><th>Classificação</th><th>Recompensas</th></tr></thead>
@@ -856,6 +881,7 @@ if ('serviceWorker' in navigator) {
             <div class="tut-box" style="margin-top:8px;"><ul>
                 <li>🏅 <strong style="color:#ffd700">Top 1 de dano</strong> → recompensas <strong style="color:#ffd700">triplicadas</strong></li>
                 <li>🏅 <strong style="color:#ffd700">Top 2 de dano</strong> → recompensas <strong style="color:#ffd700">duplicadas</strong></li>
+                <li>📊 No resultado final você vê o Top 5 de dano numa tabela (posição, nome, guilda, dano, eliminações) e sua própria posição, mesmo se não estiver no Top 5</li>
             </ul></div>
         </div>
         <div style="text-align:center; margin-top:4px; padding-top:12px; border-top:1px solid #333;">

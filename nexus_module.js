@@ -252,7 +252,8 @@ async function doLocalCombatTick() {
     ownEl.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
     ownEl.style.left = approachX + 'px';
     ownEl.style.top = approachY + 'px';
-    updateFogPosition();
+    if (cameraFollow) centerCameraOn(approachX + AVATAR_W / 2, approachY + AVATAR_H / 2, true, APPROACH_MS);
+    else updateFogPosition();
 
     await new Promise(r => setTimeout(r, APPROACH_MS + 60));
     if (!running || isDeadLocal || localCombatPaused) return;
@@ -321,6 +322,7 @@ function showChallengeOverlay(seconds) {
         }, 1000);
     });
 }
+async function playApproachAnimation(opponentId, opponentName, iAmDefender) {
     const ownPos = getEntityPos('own');
     if (!ownPos) { await new Promise(r => setTimeout(r, 300)); return; }
 
@@ -357,7 +359,8 @@ function showChallengeOverlay(seconds) {
             ownEl.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
             ownEl.style.left = nearX + 'px';
             ownEl.style.top = nearY + 'px';
-            updateFogPosition();
+            if (cameraFollow) centerCameraOn(nearX + AVATAR_W / 2, nearY + AVATAR_H / 2, true, APPROACH_MS);
+            else updateFogPosition();
             await new Promise(r => setTimeout(r, APPROACH_MS + 100));
         } else {
             await new Promise(r => setTimeout(r, 400));

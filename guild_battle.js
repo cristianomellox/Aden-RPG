@@ -824,8 +824,8 @@ function fitModalToViewport(modalId) {
     const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
     modal.style.height = vh + 'px';
     modal.style.maxHeight = vh + 'px';
-    content.style.height = (vh * 0.94) + 'px';
-    content.style.maxHeight = (vh * 0.94) + 'px';
+    content.style.height = (vh * 0.90) + 'px';
+    content.style.maxHeight = (vh * 0.90) + 'px';
 
     if (!_modalViewportListenerAdded) {
         _modalViewportListenerAdded = true;
@@ -1228,7 +1228,11 @@ async function handleNexusBackClick() {
     if (!currentBattleState || !currentBattleState.instance) return;
     const result = await leaveNexus(currentBattleState.instance.id);
     if (!result || !result.success) {
-        showAlert(result?.message || 'Não foi possível sair do Nexus agora. Tente novamente.');
+        if (result && result.nexus_closes_at) {
+            showCantLeaveModal(result.nexus_closes_at);
+        } else {
+            showAlert(result?.message || 'Não foi possível sair do Nexus agora.');
+        }
         return;
     }
     stopNexusLoop();

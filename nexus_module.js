@@ -15,7 +15,7 @@ import { supabase } from './supabaseClient.js';
 const NEXUS_MAP_SIZE = 2121;
 const NEXUS_IMG_URL  = 'https://aden-rpg.pages.dev/assets/b_nexus.png';
 const AVATAR_W = 70, AVATAR_H = 90;
-const ATTACK_MIN_MS = 2500, ATTACK_MAX_MS = 3800; // mesmo ritmo da página de caça
+const ATTACK_MIN_MS = 8000, ATTACK_MAX_MS = 8000; // ataca, espera 8s, ataca de novo
 const APPROACH_MS = 750; // duração da "caminhada" até o alvo antes do golpe
 const APPROACH_OFFSET = 45; // distância visual entre os dois avatares durante o golpe
 
@@ -249,7 +249,7 @@ async function doLocalCombatTick() {
     const approachX = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_W, targetPos.x + Math.cos(angle) * APPROACH_OFFSET));
     const approachY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, targetPos.y + Math.sin(angle) * APPROACH_OFFSET));
     wanderState.set('own', { el: ownEl, lastX: approachX, lastY: approachY });
-    ownEl.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
+    ownEl.style.transition = `left ${APPROACH_MS}ms linear, top ${APPROACH_MS}ms linear`;
     ownEl.style.left = approachX + 'px';
     ownEl.style.top = approachY + 'px';
     if (cameraFollow) centerCameraOn(approachX + AVATAR_W / 2, approachY + AVATAR_H / 2, true, APPROACH_MS);
@@ -282,7 +282,11 @@ async function doLocalCombatTick() {
     await new Promise(r => setTimeout(r, 350));
 
     // ── Volta a andar até o próximo alvo ──
+    // Reancora o relógio do wander a partir de AGORA (com um deslocamento
+    // aleatório dentro de um ciclo), senão a fórmula determinística ignora
+    // o desvio do combate e "puxa" o avatar de volta pro waypoint antigo.
     if (running && !isDeadLocal && !localCombatPaused) {
+        ownEnteredAtMs = Date.now() - Math.floor(Math.random() * CYCLE_SEC * 1000);
         scheduleOwnWander();
     }
     scheduleLocalCombatLoop();
@@ -356,7 +360,7 @@ async function playApproachAnimation(opponentId, opponentName, iAmDefender) {
             const nearY = Math.max(0, Math.min(NEXUS_MAP_SIZE - AVATAR_H, oppPos.y + Math.sin(angle) * APPROACH_OFFSET));
             stopWander('own');
             wanderState.set('own', { el: ownEl, lastX: nearX, lastY: nearY });
-            ownEl.style.transition = `left ${APPROACH_MS}ms ease-in-out, top ${APPROACH_MS}ms ease-in-out`;
+            ownEl.style.transition = `left ${APPROACH_MS}ms linear, top ${APPROACH_MS}ms linear`;
             ownEl.style.left = nearX + 'px';
             ownEl.style.top = nearY + 'px';
             if (cameraFollow) centerCameraOn(nearX + AVATAR_W / 2, nearY + AVATAR_H / 2, true, APPROACH_MS);

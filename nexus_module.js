@@ -23,10 +23,10 @@ const CYCLE_SEC = 11;
 const MOVE_SEC  = 3.2;
 const MOB_WOBBLE_RADIUS = 45;
 
-const SYNC_BASE_ACTIVE = 6_000;   // teve combate recente: consulta mais rápido
-const SYNC_BASE_IDLE   = 30_000;
+const SYNC_BASE_ACTIVE = 60_000;   // teve combate recente: consulta mais rápido
+const SYNC_BASE_IDLE   = 70_000;
 const SYNC_STEP        = 10_000;
-const SYNC_MAX         = 90_000;
+const SYNC_MAX         = 180_000;
 
 // Fallback que NUNCA falha (SVG embutido, sem depender de rede)
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -282,12 +282,8 @@ async function doLocalCombatTick() {
     await new Promise(r => setTimeout(r, 350));
 
     // ── Volta a andar até o próximo alvo ──
-    // Reancora o relógio do wander a partir de AGORA (com um deslocamento
-    // aleatório dentro de um ciclo), senão a fórmula determinística ignora
-    // o desvio do combate e "puxa" o avatar de volta pro waypoint antigo.
     if (running && !isDeadLocal && !localCombatPaused) {
-        ownEnteredAtMs = Date.now() - Math.floor(Math.random() * CYCLE_SEC * 1000);
-        scheduleOwnWander();
+        resumeWanderSmoothlyAfterCombat();
     }
     scheduleLocalCombatLoop();
 }
@@ -1077,6 +1073,30 @@ function reviveOwnLocally() {
     resumeLocalCombatLoop();
     setCameraFollow(true);
 }
+// Depois de atacar, retoma o wander SEM resetar o relógio (ownEnteredAtMs
+// nunca muda) — calcula onde a fórmula diz que o avatar "deveria" estar
+// agora e caminha suavemente até lá (sempre com transição, nunca instantâneo,
+// mesmo que a fórmula original mandasse "descansar" nesse instante).
+function resumeWanderSmoothlyAfterCombat() {
+    const el = document.getElementById('nexusOwnPlayer');
+    if (!el) return;
+    const elapsedSec = (Date.now() - ownEnteredAtMs) / 1000;
+    const cycleIndex = Math.floor(elapsedSec / CYCLE_SEC);
+    const wp = computeWaypoint(ownSeed, cycleIndex, NEXUS_MAP_SIZE, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
+    const walkMs = 900;
+
+    wanderState.set('own', { el, lastX: wp.x, lastY: wp.y });
+    el.style.transition = `left ${walkMs}ms linear, top ${walkMs}ms linear`;
+    el.style.left = wp.x + 'px';
+    el.style.top = wp.y + 'px';
+    if (cameraFollow) centerCameraOn(wp.x + AVATAR_W / 2, wp.y + AVATAR_H / 2, true, walkMs);
+    else updateFogPosition();
+
+    setTimeout(() => {
+        if (running && !isDeadLocal && !localCombatPaused) scheduleOwnWander();
+    }, walkMs + 60);
+}
+
 function scheduleOwnWander() {
     const el = document.getElementById('nexusOwnPlayer');
     if (!el) return;
@@ -1217,6 +1237,7 @@ function startLocalTimerTick() {
 }
 
 async function applyState(data) {
+    const shownDuelTimestamps = new Set();
     const st = data.own_state;
     if (st) {
         const actionsEl = document.getElementById('nexusActions');
@@ -1265,6 +1286,7 @@ async function applyState(data) {
             await showChallengeOverlay(5);
             await playRealDuelAnimation(entry);
             pushNexusBannerEvent(entry);
+            if (entry.timestamp) shownDuelTimestamps.add(entry.timestamp);
         }
         resumeLocalCombatLoop();
     }
@@ -1272,6 +1294,8 @@ async function applyState(data) {
     if (data.new_events && data.new_events.length) {
         data.new_events.forEach(ev => {
             lastEventTs = ev.timestamp > lastEventTs ? ev.timestamp : lastEventTs;
+            // Já mostrado pela animação real do duelo (acima) — evita banner duplicado
+            if (ev.timestamp && shownDuelTimestamps.has(ev.timestamp)) return;
             pushNexusBannerEvent(ev);
         });
     }

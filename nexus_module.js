@@ -296,7 +296,7 @@ function ensureChallengeOverlay() {
     el.id = 'nexusChallengeOverlay';
     el.innerHTML = `
         <div id="nexusChallengeGlow"></div>
-        <p id="nexusChallengeText">Alguém está prestes a te desafiar</p>
+        <p id="nexusChallengeText">Um duelo está prestes a começar</p>
         <h2 id="nexusChallengeTimer">5</h2>
     `;
     document.body.appendChild(el);

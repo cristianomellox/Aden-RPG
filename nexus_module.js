@@ -51,6 +51,16 @@ const MOB_TYPES = [
     { key: 'duende',         img: 'https://aden-rpg.pages.dev/assets/duende.webp',          sound: 'https://aden-rpg.pages.dev/assets/duende.mp3' },
     { key: 'limut',          img: 'https://aden-rpg.pages.dev/assets/limut.webp',           sound: 'https://aden-rpg.pages.dev/assets/limut.mp3' },
     { key: 'pixie',          img: 'https://aden-rpg.pages.dev/assets/pixie.webp',           sound: 'https://aden-rpg.pages.dev/assets/pixie.mp3' },
+    // Item 3: extraídos da caça do Pântano de Molinar
+    { key: 'homem_lagarto',  img: 'https://aden-rpg.pages.dev/assets/homem_lagarto.webp',    sound: 'https://aden-rpg.pages.dev/assets/caveira.mp3' },
+    { key: 'gorgomo',        img: 'https://aden-rpg.pages.dev/assets/gorgomo.webp',          sound: 'https://aden-rpg.pages.dev/assets/duende.mp3' },
+    { key: 'javali',         img: 'https://aden-rpg.pages.dev/assets/javali.webp',           sound: 'https://aden-rpg.pages.dev/assets/fenix.mp3' },
+    { key: 'monticulo',      img: 'https://aden-rpg.pages.dev/assets/monticulo_errante.webp', sound: 'https://aden-rpg.pages.dev/assets/quar.mp3' },
+    // Item 3: extraídos da caça de Razar
+    { key: 'golem_de_gelo',    img: 'https://aden-rpg.pages.dev/assets/golem_de_gelo.webp',     sound: 'https://aden-rpg.pages.dev/assets/quar.mp3' },
+    { key: 'aranha_artica',    img: 'https://aden-rpg.pages.dev/assets/aranha_artica.webp',     sound: 'https://aden-rpg.pages.dev/assets/morcego.mp3' },
+    { key: 'yeti',             img: 'https://aden-rpg.pages.dev/assets/yeti.webp',              sound: 'https://aden-rpg.pages.dev/assets/limut.mp3' },
+    { key: 'fenrir_montanhes', img: 'https://aden-rpg.pages.dev/assets/fenrir_montanhes.webp',  sound: 'https://aden-rpg.pages.dev/assets/tigre.mp3' },
 ];
 
 // ── ÁUDIO ──────────────────────────────────────────────────────────
@@ -276,8 +286,10 @@ async function doLocalCombatTick() {
             const isCrit = Math.random() < 0.15;
             flashHit(ownEl);
             flashHit(entry.el);
+            // Item 1: som do golpe toca no MESMO instante do flash; o som do
+            // próprio mob (rugido/grito) só 300ms depois, igual à caça.
             playProximitySound(isCrit ? 'critical' : 'normal', targetPos.x, targetPos.y);
-            playProximitySound('mob_' + entry.type.key, targetPos.x, targetPos.y);
+            setTimeout(() => playProximitySound('mob_' + entry.type.key, targetPos.x, targetPos.y), 300);
         }
     } else if (nearestPlayerId) {
         const entry = otherPlayersCache.get(nearestPlayerId);
@@ -1208,10 +1220,16 @@ function scheduleOwnWander() {
 
 // ══════════════════════════════════════════════════════════════════════
 // NEVOEIRO DE GUERRA — degradê suave centrado no próprio avatar (raio
-// ~150 em espaço do mapa). Mobs e jogadores inimigos fora do raio somem.
+// ~260 em espaço do mapa). Mobs e jogadores inimigos fora do raio somem.
+// Item 2: recalculado em loop contínuo (não só nos "saltos" de waypoint
+// do wander, que podiam levar até 11s) e usando a posição REAL interpolada
+// do avatar (não o próximo destino) — sem isso, um mob só ficava visível
+// no instante exato do ataque, quando o jogador já estava colado nele.
 // ══════════════════════════════════════════════════════════════════════
-const FOG_VISIBLE_RADIUS = 150; // totalmente visível
-const FOG_FADE_RADIUS = 260;    // opaco a partir daqui
+const FOG_VISIBLE_RADIUS = 260; // totalmente visível
+const FOG_FADE_RADIUS = 420;    // opaco a partir daqui
+const FOG_LOOP_MS = 250;
+let fogVisibilityInterval = null;
 
 function ensureFogOverlay() {
     const cont = document.getElementById('nexusMapContainer');
@@ -1221,11 +1239,30 @@ function ensureFogOverlay() {
     cont.appendChild(fog);
 }
 
+// Posição real (interpolada) do próprio avatar, lida direto do DOM — ao
+// contrário de getEntityPos('own'), que só sabe o próximo destino do
+// wander, isso reflete onde o avatar VISUALMENTE está no meio da transição.
+function getOwnLivePos() {
+    const el = document.getElementById('nexusOwnPlayer');
+    if (el) return getCurrentComputedPos(el);
+    return getEntityPos('own');
+}
+
+function startFogVisibilityLoop() {
+    clearInterval(fogVisibilityInterval);
+    updateFogPosition();
+    fogVisibilityInterval = setInterval(updateFogPosition, FOG_LOOP_MS);
+}
+function stopFogVisibilityLoop() {
+    clearInterval(fogVisibilityInterval);
+    fogVisibilityInterval = null;
+}
+
 function updateFogPosition() {
     const fog = document.getElementById('nexusFogOverlay');
     const cont = document.getElementById('nexusMapContainer');
     if (!fog || !cont) return;
-    const ownPos = getEntityPos('own');
+    const ownPos = getOwnLivePos();
     if (!ownPos) return;
 
     const screenX = ownPos.x * panState.scale + panState.x + (AVATAR_W / 2) * panState.scale;
@@ -1493,6 +1530,7 @@ export function startNexusScreen(options) {
     scheduleOwnWander();
     scheduleLocalCombatLoop();
     startLocalTimerTick();
+    startFogVisibilityLoop();
     showProtectionBadgeIfNeeded();
     doSync();
 }
@@ -1503,6 +1541,7 @@ export function stopNexusLoop() {
     clearTimeout(localCombatTimeout); localCombatTimeout = null;
     clearInterval(deadOverlayInterval); deadOverlayInterval = null;
     clearInterval(protectionInterval); protectionInterval = null;
+    stopFogVisibilityLoop();
     const badge = document.getElementById('nexusProtectionBadge');
     if (badge) badge.style.display = 'none';
     clearInterval(timerInterval); timerInterval = null;

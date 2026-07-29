@@ -19,6 +19,11 @@ const ATTACK_MIN_MS = 8000, ATTACK_MAX_MS = 8000; // ataca, espera 8s, ataca de 
 const APPROACH_MS = 750; // duração da "caminhada" até o alvo antes do golpe
 const APPROACH_OFFSET = 45; // distância visual entre os dois avatares durante o golpe
 
+// Item 1: proteção de 30s ao entrar (espelha a mesma janela aplicada no
+// servidor em _nexus_tick_player) — puramente informativo aqui, o combate
+// real já não acontece no servidor durante essa janela.
+const ENTRY_PROTECTION_MS = 30000;
+
 const CYCLE_SEC = 11;
 const MOVE_SEC  = 3.2;
 const MOB_WOBBLE_RADIUS = 45;
@@ -199,6 +204,12 @@ let localCombatPaused = false;
 function scheduleLocalCombatLoop() {
     clearTimeout(localCombatTimeout);
     if (!running || isDeadLocal || localCombatPaused) return;
+    if (isEntryProtected()) {
+        // Item 1: nada de combate (nem cosmético) enquanto protegido —
+        // só reagenda para o instante em que a proteção acaba.
+        localCombatTimeout = setTimeout(scheduleLocalCombatLoop, (ownEnteredAtMs + ENTRY_PROTECTION_MS - Date.now()) + 50);
+        return;
+    }
     localCombatTimeout = setTimeout(doLocalCombatTick, rand(ATTACK_MIN_MS, ATTACK_MAX_MS));
 }
 function pauseLocalCombatLoop() {
@@ -221,7 +232,7 @@ async function doLocalCombatTick() {
     // nunca ataca mob morto/inexistente, mesmo em cooldown de respawn)
     let nearestMobPos = null, nearestMobDist = Infinity, nearestMobIdx = null;
     mobsCache.forEach((entry, idx) => {
-        if (entry.el.classList.contains('dead')) return;
+        if (entry.el.classList.contains('dead') || entry.el.classList.contains('nx-mob-dying')) return;
         const pos = getEntityPos('mob:' + idx) || entry.basePos;
         const d = rangeSq(ownPos, pos);
         if (d < nearestMobDist) { nearestMobDist = d; nearestMobPos = pos; nearestMobIdx = idx; }
@@ -261,7 +272,7 @@ async function doLocalCombatTick() {
     // ── Golpe único (item 2: nunca mais de um por alvo) ──
     if (targetIsMob) {
         const entry = mobsCache.get(nearestMobIdx);
-        if (entry && !entry.el.classList.contains('dead')) {
+        if (entry && !entry.el.classList.contains('dead') && !entry.el.classList.contains('nx-mob-dying')) {
             const isCrit = Math.random() < 0.15;
             flashHit(ownEl);
             flashHit(entry.el);
@@ -613,6 +624,7 @@ let syncTimeout = null;
 let running = false;
 let isDeadLocal = false;
 let deadOverlayInterval = null;
+let protectionInterval = null;
 let onForceExitCb = null;
 let onBannerEventCb = null;
 let onDeadTimerEndCb = null;
@@ -665,6 +677,39 @@ function ensureNexusDOM() {
 }
 export { ensureNexusDOM };
 
+// ── PROTEÇÃO DE ENTRADA (item 1) ──────────────────────────────────────
+function isEntryProtected() {
+    return (Date.now() - ownEnteredAtMs) < ENTRY_PROTECTION_MS;
+}
+function ensureProtectionBadge() {
+    if (document.getElementById('nexusProtectionBadge')) return;
+    const el = document.createElement('div');
+    el.id = 'nexusProtectionBadge';
+    el.style.cssText = 'position:absolute; top:58px; left:50%; transform:translateX(-50%); z-index:40; background:rgba(20,140,80,0.92); color:#fff; font-size:12px; font-weight:bold; padding:5px 12px; border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.4); pointer-events:none; display:flex; align-items:center; gap:6px; white-space:nowrap;';
+    el.innerHTML = `🛡️ <span id="nexusProtectionText">Protegido</span>`;
+    const screen = document.getElementById('nexusScreen');
+    if (screen) screen.appendChild(el);
+}
+function showProtectionBadgeIfNeeded() {
+    if (!isEntryProtected()) return;
+    ensureProtectionBadge();
+    const el = document.getElementById('nexusProtectionBadge');
+    const txt = document.getElementById('nexusProtectionText');
+    if (!el || !txt) return;
+    el.style.display = 'flex';
+    clearInterval(protectionInterval);
+    const tick = () => {
+        const remaining = Math.max(0, Math.ceil((ownEnteredAtMs + ENTRY_PROTECTION_MS - Date.now()) / 1000));
+        txt.textContent = `Protegido: ${remaining}s`;
+        if (remaining <= 0) {
+            clearInterval(protectionInterval); protectionInterval = null;
+            el.style.display = 'none';
+        }
+    };
+    tick();
+    protectionInterval = setInterval(tick, 1000);
+}
+
 function pickMobType(mobIndex) {
     let seed = 0;
     const str = 'nexus-mob-' + mobIndex;
@@ -691,6 +736,56 @@ function flashHit(wrapEl) {
     void av.offsetWidth;
     av.classList.add('nx-hit-shake', 'nx-hit-flash');
     setTimeout(() => av.classList.remove('nx-hit-shake', 'nx-hit-flash'), 450);
+}
+
+// ── ANIMAÇÃO DE MORTE/RESPAWN DOS MOBS (item 4) ───────────────────────
+// Mesma técnica usada na página de caça (mob-dying/mob-respawning): o mob
+// encolhe, esmaece e "afunda" em vez de simplesmente sumir. Injetada via
+// <style> própria do módulo (não depende do conteúdo de nexus.css).
+const MOB_DEATH_ANIM_MS = 850;
+const MOB_RESPAWN_ANIM_MS = 700;
+let _mobDeathStylesInjected = false;
+function ensureMobDeathStyles() {
+    if (_mobDeathStylesInjected) return;
+    _mobDeathStylesInjected = true;
+    const style = document.createElement('style');
+    style.id = 'nexusMobDeathStyles';
+    style.textContent = `
+@keyframes nxMobDeathFade{0%{opacity:1;transform:scale(1) translateY(0);}60%{opacity:.3;transform:scale(0.7) translateY(8px);}100%{opacity:0;transform:scale(0.4) translateY(18px);}}
+@keyframes nxMobRespawn{0%{opacity:0;transform:scale(0.3) translateY(-14px);}60%{opacity:.9;transform:scale(1.12) translateY(-3px);}100%{opacity:1;transform:scale(1) translateY(0);}}
+.nexus-mob-wrapper.nx-mob-dying .nexus-mob-avatar{animation:nxMobDeathFade ${MOB_DEATH_ANIM_MS}ms ease-out forwards!important;}
+.nexus-mob-wrapper.nx-mob-respawning .nexus-mob-avatar{animation:nxMobRespawn ${MOB_RESPAWN_ANIM_MS}ms cubic-bezier(.22,1,.36,1) forwards!important;}
+.nexus-mob-wrapper.dead{pointer-events:none;}
+`;
+    document.head.appendChild(style);
+}
+// Toca a animação de morte de um mob: flash de impacto imediato, seguido
+// (com um pequeno atraso, igual à caça) do som do próprio mob, e só depois
+// de a animação de "afundar" terminar é que ele fica realmente marcado
+// como morto (evita ser escolhido como alvo nesse meio-tempo).
+function triggerMobDeathAnim(entry, m) {
+    ensureMobDeathStyles();
+    flashHit(entry.el);
+    // Som de impacto do mob (mesma lógica de volume por proximidade da
+    // caça), mesmo que quem tenha atacado seja outro jogador
+    playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', m.pos_x, m.pos_y);
+    // Som do próprio mob toca alguns ms DEPOIS do golpe, igual à página de caça
+    setTimeout(() => playProximitySound('mob_' + entry.type.key, m.pos_x, m.pos_y), 300);
+
+    entry.el.classList.remove('nx-mob-respawning');
+    entry.el.classList.add('nx-mob-dying');
+    entry.deathTimer = setTimeout(() => {
+        entry.el.classList.remove('nx-mob-dying');
+        entry.el.classList.add('dead');
+        entry.deathTimer = null;
+    }, MOB_DEATH_ANIM_MS);
+}
+function triggerMobRespawnAnim(entry) {
+    ensureMobDeathStyles();
+    if (entry.deathTimer) { clearTimeout(entry.deathTimer); entry.deathTimer = null; }
+    entry.el.classList.remove('dead', 'nx-mob-dying');
+    entry.el.classList.add('nx-mob-respawning');
+    setTimeout(() => entry.el.classList.remove('nx-mob-respawning'), MOB_RESPAWN_ANIM_MS);
 }
 
 function rebuildMobsDOM(mobs) {
@@ -750,14 +845,11 @@ function updateMobsDOM(mobs) {
     (mobs || []).forEach(m => {
         const entry = mobsCache.get(m.mob_index);
         if (!entry) return;
-        const wasDead = entry.el.classList.contains('dead');
-        entry.el.classList.toggle('dead', !m.is_alive);
-        if (!wasDead && !m.is_alive) {
-            flashHit(entry.el);
-            // Som de impacto do mob (mesma lógica de volume por proximidade
-            // da caça), mesmo que quem tenha atacado seja outro jogador
-            playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', m.pos_x, m.pos_y);
-            playProximitySound('mob_' + entry.type.key, m.pos_x, m.pos_y);
+        const wasAlive = !entry.el.classList.contains('dead') && !entry.el.classList.contains('nx-mob-dying');
+        if (wasAlive && !m.is_alive) {
+            triggerMobDeathAnim(entry, m);
+        } else if (!wasAlive && m.is_alive && (entry.el.classList.contains('dead') || entry.el.classList.contains('nx-mob-dying'))) {
+            triggerMobRespawnAnim(entry);
         }
         entry.basePos = { x: m.pos_x, y: m.pos_y };
     });
@@ -1060,6 +1152,13 @@ function showDeadOverlay(deadUntilIso, avatarUrl) {
         if (remaining <= 0) {
             clearInterval(deadOverlayInterval); deadOverlayInterval = null;
             overlay.classList.remove('active');
+            // Item 3: revive otimisticamente no cliente assim que o timer local
+            // zera (HP volta, volta a andar), sem esperar o próximo sync
+            // periódico (que pode demorar até alguns minutos) — e força uma
+            // sincronização imediata pra confirmar/corrigir com o servidor
+            // o quanto antes, em vez de deixar a barra de HP vazia parada.
+            reviveOwnLocally();
+            scheduleSync(0);
             if (typeof onDeadTimerEndCb === 'function') onDeadTimerEndCb();
         }
     };
@@ -1239,15 +1338,56 @@ function startLocalTimerTick() {
 async function applyState(data) {
     const shownDuelTimestamps = new Set();
     const st = data.own_state;
+    const hadShownCombat = !!(data.my_combats && data.my_combats.length);
+
+    // Ações/timer podem ser atualizados de imediato, são só texto.
     if (st) {
         const actionsEl = document.getElementById('nexusActions');
         if (actionsEl) actionsEl.textContent = `Ações: ${st.attacks_left} / 5`;
         timerBaseSeconds = Math.max(0, st.time_left_seconds | 0);
         timerBaseAtMs = Date.now();
+    }
 
+    if (data.mobs) updateMobsDOM(data.mobs);
+
+    if (data.other_players) {
+        const ids = new Set();
+        data.other_players.forEach(p => { ids.add(p.id); upsertOtherPlayerDOM(p); });
+        pruneMissingPlayers(ids);
+    }
+
+    // Duelo(s) reais em que participei desde o último sync — se eu fui o
+    // ALVO (não quem iniciou), mostra o oponente se aproximando antes,
+    // pra dar a sensação de "encontro", igual pedido. Isso é tocado ANTES
+    // de aplicar o HP/estado final abaixo — o backend já devolve o
+    // resultado desse combate resolvido no MESMO `own_state`, então sem
+    // essa ordem o overlay de derrota apareceria antes do duelo animado.
+    if (hadShownCombat) {
+        pauseLocalCombatLoop();
+        for (const entry of data.my_combats) {
+            const iAmDefender = entry.defender_id === ctx.playerId;
+            const opponentId = iAmDefender ? entry.attacker_id : entry.defender_id;
+            const opponentName = iAmDefender ? entry.attacker_name : entry.defender_name;
+
+            await playApproachAnimation(opponentId, opponentName, iAmDefender);
+            await showChallengeOverlay(5);
+            await playRealDuelAnimation(entry);
+            pushNexusBannerEvent(entry);
+            if (entry.timestamp) shownDuelTimestamps.add(entry.timestamp);
+        }
+        resumeLocalCombatLoop();
+    }
+
+    // Item 2: aplica o HP/estado (já correto e atual, resolvido pelo backend
+    // na mesma chamada) só agora — depois do duelo animado, se houve algum.
+    // Isso garante que a morte/dano aparece de imediato, sem esperar o
+    // próximo tick/sync, e sem "pular" o overlay de derrota antes do duelo.
+    if (st) {
         if (ownHpFill && st.max_hp) {
             const curOwnHp = st.current_hp ?? st.max_hp;
-            if (lastKnownOwnHp !== null && curOwnHp < lastKnownOwnHp && !isDeadLocal) {
+            // Só flasheia/toca som "genérico" de dano se NENHUM duelo animado
+            // já tiver sido mostrado agora — senão duplicaria o feedback.
+            if (!hadShownCombat && lastKnownOwnHp !== null && curOwnHp < lastKnownOwnHp && !isDeadLocal) {
                 const ownEl = document.getElementById('nexusOwnPlayer');
                 if (ownEl) flashHit(ownEl);
                 const ownPos = getEntityPos('own');
@@ -1262,33 +1402,6 @@ async function applyState(data) {
         } else if (!st.is_dead && isDeadLocal) {
             reviveOwnLocally();
         }
-    }
-
-    if (data.mobs) updateMobsDOM(data.mobs);
-
-    if (data.other_players) {
-        const ids = new Set();
-        data.other_players.forEach(p => { ids.add(p.id); upsertOtherPlayerDOM(p); });
-        pruneMissingPlayers(ids);
-    }
-
-    // Duelo(s) reais em que participei desde o último sync — se eu fui o
-    // ALVO (não quem iniciou), mostra o oponente se aproximando antes,
-    // pra dar a sensação de "encontro", igual pedido.
-    if (data.my_combats && data.my_combats.length) {
-        pauseLocalCombatLoop();
-        for (const entry of data.my_combats) {
-            const iAmDefender = entry.defender_id === ctx.playerId;
-            const opponentId = iAmDefender ? entry.attacker_id : entry.defender_id;
-            const opponentName = iAmDefender ? entry.attacker_name : entry.defender_name;
-
-            await playApproachAnimation(opponentId, opponentName, iAmDefender);
-            await showChallengeOverlay(5);
-            await playRealDuelAnimation(entry);
-            pushNexusBannerEvent(entry);
-            if (entry.timestamp) shownDuelTimestamps.add(entry.timestamp);
-        }
-        resumeLocalCombatLoop();
     }
 
     if (data.new_events && data.new_events.length) {
@@ -1380,6 +1493,7 @@ export function startNexusScreen(options) {
     scheduleOwnWander();
     scheduleLocalCombatLoop();
     startLocalTimerTick();
+    showProtectionBadgeIfNeeded();
     doSync();
 }
 
@@ -1388,6 +1502,9 @@ export function stopNexusLoop() {
     clearTimeout(syncTimeout); syncTimeout = null;
     clearTimeout(localCombatTimeout); localCombatTimeout = null;
     clearInterval(deadOverlayInterval); deadOverlayInterval = null;
+    clearInterval(protectionInterval); protectionInterval = null;
+    const badge = document.getElementById('nexusProtectionBadge');
+    if (badge) badge.style.display = 'none';
     clearInterval(timerInterval); timerInterval = null;
     setGlobalTopBarVisible(true);
     clearSyncDebugLine();

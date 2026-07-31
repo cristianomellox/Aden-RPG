@@ -63,14 +63,28 @@ function _resumeAfterPause() {
     // já cuida disso (polling "lazy" original). Só garante um refresh pontual.
     pollBattleState();
 }
+let _hiddenAtMs = null;
+// Acima disso, ao voltar não confiamos mais no estado local (a sessão pode
+// já ter perdido janelas do Nexus inteiras, token de auth pode ter
+// expirado etc.) — melhor um refresh completo e autoritativo do servidor.
+const _HIDDEN_HARD_REFRESH_MS = 2 * 60 * 1000;
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
+        _hiddenAtMs = Date.now();
         stopHeartbeatPolling();
         stopDamagePolling();
         pauseNexusPolling();
     } else if (!_inactivityPaused) {
         _resetActivity();
-        _resumeAfterPause();
+        const wasHiddenMs = _hiddenAtMs ? (Date.now() - _hiddenAtMs) : 0;
+        _hiddenAtMs = null;
+        if (wasHiddenMs >= _HIDDEN_HARD_REFRESH_MS) {
+            console.log(`[Visibility] Oculto por ${Math.round(wasHiddenMs / 1000)}s — refresh completo em vez de retomar sessão local.`);
+            if (isNexusScreenActive()) stopNexusLoop();
+            pollBattleState();
+        } else {
+            _resumeAfterPause();
+        }
     }
 });
 

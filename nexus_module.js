@@ -650,6 +650,15 @@ let ownHpFill = null;
 let lastKnownOwnHp = null;
 let mapControls = null;
 let currentSyncMs = SYNC_BASE_IDLE;
+// Item 3: contador de falhas consecutivas de sync. Sem isso, se o
+// dispositivo dorme por horas (token de auth expira, rede cai, etc.), ao
+// acordar o doSync() ficava tentando de novo pra sempre em loop de retry
+// SILENCIOSO (só um debug-line discreto), com o jogador "preso" olhando a
+// última tela conhecida do Nexus mesmo depois da janela já ter fechado
+// várias vezes — sem nunca desistir e voltar pra tela principal.
+let consecutiveSyncFailures = 0;
+const MAX_CONSECUTIVE_SYNC_FAILURES = 4;
+let lastVisibleAtMs = Date.now();
 let timerBaseSeconds = 0;
 let timerBaseAtMs = 0;
 let timerInterval = null;
@@ -800,70 +809,92 @@ function triggerMobRespawnAnim(entry) {
     setTimeout(() => entry.el.classList.remove('nx-mob-respawning'), MOB_RESPAWN_ANIM_MS);
 }
 
-function rebuildMobsDOM(mobs) {
+function createMobDOM(m) {
     const map = document.getElementById('nexusMap');
+    const type = pickMobType(m.mob_index);
+    const el = document.createElement('div');
+    el.className = 'nexus-mob-wrapper';
+    el.dataset.mobIndex = m.mob_index;
+    el.style.left = m.pos_x + 'px'; el.style.top = m.pos_y + 'px';
+    const av = document.createElement('img');
+    av.className = 'nexus-mob-avatar';
+    av.src = type.img;
+    av.onerror = () => { av.onerror = null; av.src = DEFAULT_AVATAR; };
+    el.appendChild(av);
+    if (!m.is_alive) el.classList.add('dead');
+    map.appendChild(el);
+    const entry = { el, type, basePos: { x: m.pos_x, y: m.pos_y } };
+    mobsCache.set(m.mob_index, entry);
+    wanderState.set('mob:' + m.mob_index, { seed: seedFromId('mob-' + m.mob_index + '-' + (ctx ? ctx.instanceId : '')), el });
+    return entry;
+}
+function rebuildMobsDOM(mobs) {
     mobsCache.forEach((entry, idx) => { entry.el.remove(); stopWander('mob:' + idx); });
     mobsCache.clear();
-    (mobs || []).forEach(m => {
-        const type = pickMobType(m.mob_index);
-        const el = document.createElement('div');
-        el.className = 'nexus-mob-wrapper';
-        el.dataset.mobIndex = m.mob_index;
-        el.style.left = m.pos_x + 'px'; el.style.top = m.pos_y + 'px';
-        const av = document.createElement('img');
-        av.className = 'nexus-mob-avatar';
-        av.src = type.img;
-        av.onerror = () => { av.onerror = null; av.src = DEFAULT_AVATAR; };
-        el.appendChild(av);
-        if (!m.is_alive) el.classList.add('dead');
-        map.appendChild(el);
-        mobsCache.set(m.mob_index, { el, type, basePos: { x: m.pos_x, y: m.pos_y } });
-        wanderState.set('mob:' + m.mob_index, { seed: seedFromId('mob-' + m.mob_index + '-' + (ctx ? ctx.instanceId : '')), el });
-    });
+    (mobs || []).forEach(m => createMobDOM(m));
     repositionMobWobble();
 }
-function repositionMobWobble() {
-    mobsCache.forEach((entry, idx) => {
-        const key = 'mob:' + idx;
-        let state = wanderState.get(key);
-        if (!state) return;
-        clearTimeout(state.timer);
-        const tick = () => {
-            if (!entry.el.isConnected) return;
-            const elapsedSec = (Date.now() - ownEnteredAtMs) / 1000;
-            const cycleIndex = Math.floor(elapsedSec / CYCLE_SEC);
-            const cyclePos = elapsedSec - cycleIndex * CYCLE_SEC;
-            const wp = computeWaypoint(state.seed, cycleIndex, MOB_WOBBLE_RADIUS * 2, MOB_WOBBLE_RADIUS * 2, 0, 0);
-            const targetX = entry.basePos.x - MOB_WOBBLE_RADIUS + wp.x;
-            const targetY = entry.basePos.y - MOB_WOBBLE_RADIUS + wp.y;
-            if (cyclePos < MOVE_SEC) {
-                const remainingMs = (MOVE_SEC - cyclePos) * 1000;
-                entry.el.style.transition = `left ${remainingMs}ms ease-in-out, top ${remainingMs}ms ease-in-out`;
-                entry.el.style.left = targetX + 'px'; entry.el.style.top = targetY + 'px';
-                state.timer = setTimeout(tick, remainingMs + 30);
-            } else {
-                entry.el.style.transition = 'none';
-                entry.el.style.left = targetX + 'px'; entry.el.style.top = targetY + 'px';
-                state.timer = setTimeout(tick, (CYCLE_SEC - cyclePos) * 1000 + 30);
-            }
-        };
-        tick();
-    });
+function scheduleMobWander(idx, entry) {
+    const key = 'mob:' + idx;
+    let state = wanderState.get(key);
+    if (!state) return;
+    clearTimeout(state.timer);
+    const tick = () => {
+        if (!entry.el.isConnected) return;
+        const elapsedSec = (Date.now() - ownEnteredAtMs) / 1000;
+        const cycleIndex = Math.floor(elapsedSec / CYCLE_SEC);
+        const cyclePos = elapsedSec - cycleIndex * CYCLE_SEC;
+        const wp = computeWaypoint(state.seed, cycleIndex, MOB_WOBBLE_RADIUS * 2, MOB_WOBBLE_RADIUS * 2, 0, 0);
+        const targetX = entry.basePos.x - MOB_WOBBLE_RADIUS + wp.x;
+        const targetY = entry.basePos.y - MOB_WOBBLE_RADIUS + wp.y;
+        if (cyclePos < MOVE_SEC) {
+            const remainingMs = (MOVE_SEC - cyclePos) * 1000;
+            entry.el.style.transition = `left ${remainingMs}ms ease-in-out, top ${remainingMs}ms ease-in-out`;
+            entry.el.style.left = targetX + 'px'; entry.el.style.top = targetY + 'px';
+            state.timer = setTimeout(tick, remainingMs + 30);
+        } else {
+            entry.el.style.transition = 'none';
+            entry.el.style.left = targetX + 'px'; entry.el.style.top = targetY + 'px';
+            state.timer = setTimeout(tick, (CYCLE_SEC - cyclePos) * 1000 + 30);
+        }
+    };
+    tick();
 }
+function repositionMobWobble() {
+    mobsCache.forEach((entry, idx) => scheduleMobWander(idx, entry));
+}
+// Item 1 (egress): o servidor agora só manda mobs dentro do raio de
+// visibilidade — então a lista recebida aqui é sempre um SUBCONJUNTO dos
+// 30 mobs da instância, que muda a cada sync conforme o jogador anda.
+// Por isso a atualização é 100% incremental (adiciona o que é novo,
+// atualiza o que já existe, remove o que saiu do raio) — nunca recria
+// tudo do zero, senão mobs já visíveis "piscariam"/reiniciariam o wander
+// toda vez que um mob novo entrasse no raio.
 function updateMobsDOM(mobs) {
-    let needsRebuild = mobsCache.size === 0;
-    (mobs || []).forEach(m => { if (!mobsCache.has(m.mob_index)) needsRebuild = true; });
-    if (needsRebuild) { rebuildMobsDOM(mobs); return; }
+    if (mobsCache.size === 0) { rebuildMobsDOM(mobs); return; }
+    const incomingIds = new Set();
     (mobs || []).forEach(m => {
-        const entry = mobsCache.get(m.mob_index);
-        if (!entry) return;
-        const wasAlive = !entry.el.classList.contains('dead') && !entry.el.classList.contains('nx-mob-dying');
-        if (wasAlive && !m.is_alive) {
-            triggerMobDeathAnim(entry, m);
-        } else if (!wasAlive && m.is_alive && (entry.el.classList.contains('dead') || entry.el.classList.contains('nx-mob-dying'))) {
-            triggerMobRespawnAnim(entry);
+        incomingIds.add(m.mob_index);
+        let entry = mobsCache.get(m.mob_index);
+        if (!entry) {
+            entry = createMobDOM(m);
+            scheduleMobWander(m.mob_index, entry); // só o mob novo entra no ciclo agora
+        } else {
+            const wasAlive = !entry.el.classList.contains('dead') && !entry.el.classList.contains('nx-mob-dying');
+            if (wasAlive && !m.is_alive) {
+                triggerMobDeathAnim(entry, m);
+            } else if (!wasAlive && m.is_alive && (entry.el.classList.contains('dead') || entry.el.classList.contains('nx-mob-dying'))) {
+                triggerMobRespawnAnim(entry);
+            }
         }
         entry.basePos = { x: m.pos_x, y: m.pos_y };
+    });
+    // Mobs que saíram do raio de visibilidade nesta resposta: removidos do
+    // DOM/cache — reaparecem "frescos" (posição/estado atuais) quando o
+    // jogador andar de volta pra perto, sem custo nenhum de manter algo
+    // invisível vivo em memória.
+    mobsCache.forEach((entry, idx) => {
+        if (!incomingIds.has(idx)) { entry.el.remove(); stopWander('mob:' + idx); mobsCache.delete(idx); }
     });
 }
 
@@ -1265,8 +1296,22 @@ function updateFogPosition() {
     const ownPos = getOwnLivePos();
     if (!ownPos) return;
 
-    const screenX = ownPos.x * panState.scale + panState.x + (AVATAR_W / 2) * panState.scale;
-    const screenY = ownPos.y * panState.scale + panState.y + (AVATAR_H / 2) * panState.scale;
+    let screenX, screenY;
+    if (cameraFollow) {
+        // Item 2: com a câmera travada no jogador, o avatar está SEMPRE
+        // exatamente no centro da viewport por definição — usar isso
+        // direto em vez de recalcular a partir de panState. panState.x/y
+        // já salta pro valor FINAL assim que a transição do pan começa
+        // (só a CSS anima visualmente até lá), enquanto ownPos é a posição
+        // REAL interpolada do avatar — misturar os dois fazia o círculo
+        // "correr atrás" do avatar até a transição terminar.
+        const cr = cont.getBoundingClientRect();
+        screenX = cr.width / 2;
+        screenY = cr.height / 2;
+    } else {
+        screenX = ownPos.x * panState.scale + panState.x + (AVATAR_W / 2) * panState.scale;
+        screenY = ownPos.y * panState.scale + panState.y + (AVATAR_H / 2) * panState.scale;
+    }
     fog.style.setProperty('--fog-cx', screenX + 'px');
     fog.style.setProperty('--fog-cy', screenY + 'px');
     fog.style.setProperty('--fog-r1', (FOG_VISIBLE_RADIUS * panState.scale) + 'px');
@@ -1323,27 +1368,28 @@ async function doSync() {
 
         if (error) {
             showSyncDebugLine('Erro de rede: ' + (error.message || JSON.stringify(error)));
-            scheduleSync(SYNC_BASE_IDLE);
             syncInFlight = false;
+            handleSyncFailure();
             return;
         }
         if (!data) {
             showSyncDebugLine('nexus_sync não retornou dados.');
-            scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return;
+            syncInFlight = false; handleSyncFailure(); return;
         }
-        if (data.status === 'force_exit') { clearSyncDebugLine(); syncInFlight = false; handleForceExit(data.reason); return; }
+        if (data.status === 'force_exit') { clearSyncDebugLine(); syncInFlight = false; consecutiveSyncFailures = 0; handleForceExit(data.reason); return; }
         if (data.status === 'error') {
             showSyncDebugLine('Erro no banco: ' + (data.message || 'desconhecido'));
-            scheduleSync(SYNC_BASE_IDLE);
             syncInFlight = false;
+            handleSyncFailure();
             return;
         }
         if (data.status !== 'active') {
             showSyncDebugLine('Status inesperado: ' + JSON.stringify(data.status));
-            scheduleSync(SYNC_BASE_IDLE); syncInFlight = false; return;
+            syncInFlight = false; handleSyncFailure(); return;
         }
 
         clearSyncDebugLine();
+        consecutiveSyncFailures = 0;
         await applyState(data);
 
         hadRecentActivity = (data.my_pve_ticks > 0) || (data.my_combats && data.my_combats.length > 0);
@@ -1351,7 +1397,7 @@ async function doSync() {
         scheduleSync(currentSyncMs);
     } catch (e) {
         showSyncDebugLine('Exceção no cliente: ' + (e?.message || String(e)));
-        scheduleSync(SYNC_BASE_IDLE);
+        handleSyncFailure();
     } finally {
         syncInFlight = false;
     }
@@ -1359,6 +1405,22 @@ async function doSync() {
 function handleForceExit(reason) {
     stopNexusLoop();
     if (typeof onForceExitCb === 'function') onForceExitCb(reason);
+}
+// Item 3: chamado em qualquer falha de sync (rede, erro de banco, resposta
+// inesperada). Continua tentando com o backoff normal até um limite — mas
+// depois de várias falhas seguidas (ex: token de auth expirado após o
+// dispositivo dormir por horas), desiste de tentar silenciosamente pra
+// sempre e força a saída do Nexus localmente, deixando a tela principal
+// (que já faz um refresh completo) resolver o estado real com o servidor.
+function handleSyncFailure() {
+    consecutiveSyncFailures++;
+    if (consecutiveSyncFailures >= MAX_CONSECUTIVE_SYNC_FAILURES) {
+        clearSyncDebugLine();
+        consecutiveSyncFailures = 0;
+        handleForceExit('sync_lost');
+        return;
+    }
+    scheduleSync(SYNC_BASE_IDLE);
 }
 function startLocalTimerTick() {
     clearInterval(timerInterval);
@@ -1474,6 +1536,7 @@ export function startNexusScreen(options) {
     lastEventTs = '1970-01-01T00:00:00+00:00';
     isDeadLocal = false;
     currentSyncMs = SYNC_BASE_IDLE;
+    consecutiveSyncFailures = 0;
     cameraFollow = true;
     lastKnownOwnHp = options.currentHp ?? options.maxHp ?? null;
 

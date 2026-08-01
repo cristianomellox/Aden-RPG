@@ -784,14 +784,16 @@ function ensureMobDeathStyles() {
 // (com um pequeno atraso, igual à caça) do som do próprio mob, e só depois
 // de a animação de "afundar" terminar é que ele fica realmente marcado
 // como morto (evita ser escolhido como alvo nesse meio-tempo).
-function triggerMobDeathAnim(entry, m) {
+function triggerMobDeathAnim(entry) {
     ensureMobDeathStyles();
     flashHit(entry.el);
-    // Som de impacto do mob (mesma lógica de volume por proximidade da
-    // caça), mesmo que quem tenha atacado seja outro jogador
-    playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', m.pos_x, m.pos_y);
+    // Item 2 (egress): posição não vem mais no payload de sync — usa a
+    // âncora em cache (basePos), que já foi recebida uma vez em
+    // enter_nexus e nunca muda. Suficiente pro cálculo de volume por
+    // proximidade, já que o mob só balança um pouco em torno dela.
+    playProximitySound(Math.random() < 0.15 ? 'critical' : 'normal', entry.basePos.x, entry.basePos.y);
     // Som do próprio mob toca alguns ms DEPOIS do golpe, igual à página de caça
-    setTimeout(() => playProximitySound('mob_' + entry.type.key, m.pos_x, m.pos_y), 300);
+    setTimeout(() => playProximitySound('mob_' + entry.type.key, entry.basePos.x, entry.basePos.y), 300);
 
     entry.el.classList.remove('nx-mob-respawning');
     entry.el.classList.add('nx-mob-dying');
@@ -809,6 +811,8 @@ function triggerMobRespawnAnim(entry) {
     setTimeout(() => entry.el.classList.remove('nx-mob-respawning'), MOB_RESPAWN_ANIM_MS);
 }
 
+// m aqui SEMPRE tem pos_x/pos_y — só é chamada com os dados de âncora
+// vindos de enter_nexus (uma vez, no início da sessão no Nexus).
 function createMobDOM(m) {
     const map = document.getElementById('nexusMap');
     const type = pickMobType(m.mob_index);
@@ -828,6 +832,8 @@ function createMobDOM(m) {
     wanderState.set('mob:' + m.mob_index, { seed: seedFromId('mob-' + m.mob_index + '-' + (ctx ? ctx.instanceId : '')), el });
     return entry;
 }
+// Item 2 (egress): chamada UMA VEZ, com os dados completos (âncora +
+// estado inicial) que vêm de enter_nexus — não mais a cada sync.
 function rebuildMobsDOM(mobs) {
     mobsCache.forEach((entry, idx) => { entry.el.remove(); stopWander('mob:' + idx); });
     mobsCache.clear();
@@ -863,38 +869,21 @@ function scheduleMobWander(idx, entry) {
 function repositionMobWobble() {
     mobsCache.forEach((entry, idx) => scheduleMobWander(idx, entry));
 }
-// Item 1 (egress): o servidor agora só manda mobs dentro do raio de
-// visibilidade — então a lista recebida aqui é sempre um SUBCONJUNTO dos
-// 30 mobs da instância, que muda a cada sync conforme o jogador anda.
-// Por isso a atualização é 100% incremental (adiciona o que é novo,
-// atualiza o que já existe, remove o que saiu do raio) — nunca recria
-// tudo do zero, senão mobs já visíveis "piscariam"/reiniciariam o wander
-// toda vez que um mob novo entrasse no raio.
+// Item 2 (egress): a cada sync o servidor manda o estado vivo/morto de
+// TODOS os 30 mobs, sem posição nenhuma (a âncora já está em cache desde
+// o rebuildMobsDOM inicial) — então aqui é só um "diff" de estado, nunca
+// cria/remove elemento nenhum.
 function updateMobsDOM(mobs) {
-    if (mobsCache.size === 0) { rebuildMobsDOM(mobs); return; }
-    const incomingIds = new Set();
+    if (mobsCache.size === 0) return; // ainda não seedado (não deveria acontecer)
     (mobs || []).forEach(m => {
-        incomingIds.add(m.mob_index);
-        let entry = mobsCache.get(m.mob_index);
-        if (!entry) {
-            entry = createMobDOM(m);
-            scheduleMobWander(m.mob_index, entry); // só o mob novo entra no ciclo agora
-        } else {
-            const wasAlive = !entry.el.classList.contains('dead') && !entry.el.classList.contains('nx-mob-dying');
-            if (wasAlive && !m.is_alive) {
-                triggerMobDeathAnim(entry, m);
-            } else if (!wasAlive && m.is_alive && (entry.el.classList.contains('dead') || entry.el.classList.contains('nx-mob-dying'))) {
-                triggerMobRespawnAnim(entry);
-            }
+        const entry = mobsCache.get(m.mob_index);
+        if (!entry) return; // mob desconhecido — não deveria acontecer, os 30 já vêm de enter_nexus
+        const wasAlive = !entry.el.classList.contains('dead') && !entry.el.classList.contains('nx-mob-dying');
+        if (wasAlive && !m.is_alive) {
+            triggerMobDeathAnim(entry);
+        } else if (!wasAlive && m.is_alive && (entry.el.classList.contains('dead') || entry.el.classList.contains('nx-mob-dying'))) {
+            triggerMobRespawnAnim(entry);
         }
-        entry.basePos = { x: m.pos_x, y: m.pos_y };
-    });
-    // Mobs que saíram do raio de visibilidade nesta resposta: removidos do
-    // DOM/cache — reaparecem "frescos" (posição/estado atuais) quando o
-    // jogador andar de volta pra perto, sem custo nenhum de manter algo
-    // invisível vivo em memória.
-    mobsCache.forEach((entry, idx) => {
-        if (!incomingIds.has(idx)) { entry.el.remove(); stopWander('mob:' + idx); mobsCache.delete(idx); }
     });
 }
 
@@ -935,29 +924,31 @@ function buildOwnPlayerDOM(playerId, avatarUrl, name, guildName) {
     ownHpFill = fill;
 }
 
-function upsertOtherPlayerDOM(p) {
+// Item 2 (egress): só é chamada quando o servidor manda dados completos
+// de um jogador em new_players_info — ou seja, uma vez por jogador
+// "descoberto" (não muda de novo enquanto ele continuar no Nexus).
+function createOtherPlayerDOM(info) {
+    if (otherPlayersCache.has(info.id)) return otherPlayersCache.get(info.id);
     const map = document.getElementById('nexusMap');
-    let entry = otherPlayersCache.get(p.id);
-    if (!entry) {
-        const wrap = document.createElement('div');
-        wrap.className = 'nexus-player-wrapper enemy';
-        wrap.dataset.playerId = p.id;
+    const wrap = document.createElement('div');
+    wrap.className = 'nexus-player-wrapper enemy';
+    wrap.dataset.playerId = info.id;
 
         const nm = document.createElement('div');
         nm.className = 'nexus-player-name';
-        nm.textContent = esc(p.name);
+        nm.textContent = esc(info.name);
         wrap.appendChild(nm);
 
         const gd = document.createElement('div');
         gd.className = 'nexus-player-guild';
-        gd.textContent = esc(p.guild_name || '');
+        gd.textContent = esc(info.guild_name || '');
         wrap.appendChild(gd);
 
         const avWrap = document.createElement('div');
         avWrap.className = 'avatar-frame-wrap';
         const av = document.createElement('img');
         av.className = 'nexus-player-avatar';
-        av.src = p.avatar_url || DEFAULT_AVATAR;
+        av.src = info.avatar_url || DEFAULT_AVATAR;
         av.onerror = () => { av.onerror = null; av.src = DEFAULT_AVATAR; };
         avWrap.appendChild(av);
         wrap.appendChild(avWrap);
@@ -973,17 +964,31 @@ function upsertOtherPlayerDOM(p) {
         map.appendChild(wrap);
         const { fr, sh } = _nxAddFrame(avWrap, 117);
         requestAnimationFrame(() => _nxPositionFrameOffset(fr, sh, av, 117, 60));
-        _nxFetchFrame(p.id, fr, sh, av, '3px solid #48f');
+        _nxFetchFrame(info.id, fr, sh, av, '3px solid #48f');
 
-        entry = { wrap, av, lbl, hpFill: fill, guildId: p.guild_id, name: p.name, isDead: false, lastKnownHp: null };
-        otherPlayersCache.set(p.id, entry);
+        // Item 2 (egress): entered_at só é mandado UMA VEZ, aqui na
+        // descoberta do jogador — guardado no entry pra reusar depois (ex:
+        // reagendar o wander num revive) sem precisar receber de novo.
+        const enteredAtMs = info.entered_at ? new Date(info.entered_at).getTime() : Date.now();
+        const entry = {
+            wrap, av, lbl, hpFill: fill, guildId: info.guild_id, name: info.name,
+            isDead: false, lastKnownHp: null, enteredAtMs
+        };
+        otherPlayersCache.set(info.id, entry);
 
-        const seed = seedFromId(p.id);
-        const enteredAtMs = p.entered_at ? new Date(p.entered_at).getTime() : Date.now();
-        scheduleWander('player:' + p.id, wrap, seed, enteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
-    }
-    entry.guildId = p.guild_id;
-    entry.name = p.name;
+        const seed = seedFromId(info.id);
+        scheduleWander('player:' + info.id, wrap, seed, enteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
+        return entry;
+}
+// Item 2 (egress): chamada a cada sync pra TODOS os jogadores da
+// instância (não só os próximos) — mas só com {id, hp, is_dead}, nunca
+// nome/avatar/posição, que já foram tratados uma vez em
+// createOtherPlayerDOM. Se o jogador ainda não está em cache aqui, é
+// porque o servidor não o considerou "conhecido" (não deveria acontecer,
+// já que new_players_info roda antes no mesmo applyState).
+function updateOtherPlayerState(p) {
+    const entry = otherPlayersCache.get(p.id);
+    if (!entry) return;
 
     const maxHp = p.max_hp || 1;
     const curHp = p.current_hp ?? maxHp;
@@ -993,7 +998,8 @@ function upsertOtherPlayerDOM(p) {
     // assim, igual acontece na página de caça com outros jogadores.
     if (entry.lastKnownHp !== null && curHp < entry.lastKnownHp && !entry.isDead) {
         flashHit(entry.wrap);
-        playProximitySound(Math.random() < 0.2 ? 'critical' : 'normal', p.pos_x, p.pos_y);
+        const pos = getEntityPos('player:' + p.id);
+        playProximitySound(Math.random() < 0.2 ? 'critical' : 'normal', pos?.x || 0, pos?.y || 0);
     }
     entry.lastKnownHp = curHp;
 
@@ -1007,8 +1013,7 @@ function upsertOtherPlayerDOM(p) {
         stopWander('player:' + p.id);
     } else if (wasDead && !entry.isDead) {
         const seed = seedFromId(p.id);
-        const enteredAtMs = p.entered_at ? new Date(p.entered_at).getTime() : Date.now();
-        scheduleWander('player:' + p.id, entry.wrap, seed, enteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
+        scheduleWander('player:' + p.id, entry.wrap, seed, entry.enteredAtMs, NEXUS_MAP_SIZE, AVATAR_W, AVATAR_H);
     }
 }
 function pruneMissingPlayers(currentIds) {
@@ -1257,8 +1262,8 @@ function scheduleOwnWander() {
 // do avatar (não o próximo destino) — sem isso, um mob só ficava visível
 // no instante exato do ataque, quando o jogador já estava colado nele.
 // ══════════════════════════════════════════════════════════════════════
-const FOG_VISIBLE_RADIUS = 260; // totalmente visível
-const FOG_FADE_RADIUS = 420;    // opaco a partir daqui
+const FOG_VISIBLE_RADIUS = 360; // totalmente visível
+const FOG_FADE_RADIUS = 520;    // opaco a partir daqui
 const FOG_LOOP_MS = 250;
 let fogVisibilityInterval = null;
 
@@ -1358,11 +1363,9 @@ async function doSync() {
     if (!running || !ctx || syncInFlight) return;
     syncInFlight = true;
     try {
-        const ownPos = getEntityPos('own') || { x: NEXUS_MAP_SIZE / 2, y: NEXUS_MAP_SIZE / 2 };
         const { data, error } = await supabase.rpc('nexus_sync', {
             p_battle_instance_id: ctx.instanceId,
-            p_pos_x: ownPos.x,
-            p_pos_y: ownPos.y,
+            p_known_player_ids: Array.from(otherPlayersCache.keys()),
             p_last_event_timestamp: lastEventTs
         });
 
@@ -1449,9 +1452,16 @@ async function applyState(data) {
 
     if (data.mobs) updateMobsDOM(data.mobs);
 
+    // Item 2 (egress): primeiro cria o DOM de quem é novo pra mim (dados
+    // completos, mandados só uma vez), DEPOIS aplica HP/vivo-morto em
+    // TODOS (novos e já conhecidos) — nessa ordem, um jogador que acabou
+    // de aparecer já entra com a barra de HP certa no mesmo ciclo.
+    if (data.new_players_info) {
+        data.new_players_info.forEach(info => createOtherPlayerDOM(info));
+    }
     if (data.other_players) {
         const ids = new Set();
-        data.other_players.forEach(p => { ids.add(p.id); upsertOtherPlayerDOM(p); });
+        data.other_players.forEach(p => { ids.add(p.id); updateOtherPlayerState(p); });
         pruneMissingPlayers(ids);
     }
 
@@ -1561,11 +1571,18 @@ export function startNexusScreen(options) {
     document.getElementById('nexusMap').style.width = NEXUS_MAP_SIZE + 'px';
     document.getElementById('nexusMap').style.height = NEXUS_MAP_SIZE + 'px';
 
+    // Item 2 (egress): as âncoras dos 30 mobs vêm UMA VEZ aqui, na entrada
+    // — nunca mais são retransmitidas pelo nexus_sync.
+    rebuildMobsDOM(options.mobs || []);
+
     buildOwnPlayerDOM(options.playerId, options.avatarUrl, options.playerName, options.guildName);
 
     const ownEl = document.getElementById('nexusOwnPlayer');
-    const entryX = options.entryPosX ?? NEXUS_MAP_SIZE / 2;
-    const entryY = options.entryPosY ?? NEXUS_MAP_SIZE / 2;
+    // Posição inicial é só um placeholder — scheduleOwnWander() (mais
+    // abaixo) já calcula e sobrescreve com a posição real antes de
+    // qualquer paint, então não depende mais de nada vindo do servidor.
+    const entryX = NEXUS_MAP_SIZE / 2;
+    const entryY = NEXUS_MAP_SIZE / 2;
     if (ownEl) { ownEl.style.left = entryX + 'px'; ownEl.style.top = entryY + 'px'; }
     if (ownHpFill && options.maxHp) setHpBar(ownHpFill, ((options.currentHp ?? options.maxHp) / options.maxHp) * 100);
 
@@ -1573,8 +1590,9 @@ export function startNexusScreen(options) {
     ensureFogOverlay();
 
     requestAnimationFrame(() => {
-        centerCameraOn(entryX + AVATAR_W / 2, entryY + AVATAR_H / 2, false);
         setCameraFollow(true);
+        const ownPos = getEntityPos('own') || { x: entryX, y: entryY };
+        centerCameraOn(ownPos.x + AVATAR_W / 2, ownPos.y + AVATAR_H / 2, false);
     });
 
     document.getElementById('nexusBackBtn').onclick = () => {

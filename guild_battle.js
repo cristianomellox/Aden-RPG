@@ -15,7 +15,7 @@ const MAX_ACTIONS = 5;
 // register_for_guild_battle.sql. Com true: libera o registro na tela
 // (botões das cidades + contador) a qualquer dia/hora. Mude para false
 // junto com o backend para voltar ao normal (só Sábado 00:00–23:30 UTC).
-const TEST_MODE_REGISTRATION = false;
+const TEST_MODE_REGISTRATION = true;
 
 // ── INATIVIDADE / VISIBILIDADE (mesmo padrão de floresta_mistica.js) ──
 const _INACTIVITY_MS = 3 * 60 * 1000;
@@ -1225,12 +1225,11 @@ function enterNexusScreenFlow(entryData) {
         avatarUrl: userPlayerStats ? userPlayerStats.avatar_url : null,
         playerName: userPlayerStats ? userPlayerStats.name : null,
         guildName: myGuildEntry ? myGuildEntry.guild_name : null,
-        entryPosX: entryData.pos_x,
-        entryPosY: entryData.pos_y,
         currentHp: entryData.current_hp,
         maxHp: entryData.max_hp,
         nexusClosesAt: entryData.nexus_closes_at,
         enteredAt: entryData.entered_at,
+        mobs: entryData.mobs,
         onBack: handleNexusBackClick,
         onForceExit: handleNexusForceExit,
         onBannerEvent: (html) => pushRawBannerNotification(html),

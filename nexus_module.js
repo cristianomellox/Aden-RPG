@@ -635,6 +635,12 @@ let ownAvatarUrl = null;
 let syncTimeout = null;
 let running = false;
 let isDeadLocal = false;
+// Item 3: true só na primeira sincronização depois de (re)entrar na tela —
+// combates que chegam aí são "atrasados" (aconteceram enquanto a tela
+// estava fechada/em background), então não fazem sentido como animação
+// ao vivo. Vira false depois do primeiro sync e fica assim até a próxima
+// (re)entrada na tela.
+let isFirstSyncAfterResume = true;
 let deadOverlayInterval = null;
 let protectionInterval = null;
 let onForceExitCb = null;
@@ -995,8 +1001,11 @@ function updateOtherPlayerState(p) {
 
     // Se o HP baixou desde a última vez que vi esse jogador, ele levou um
     // golpe de ALGUÉM (não necessariamente eu) — toca o som/flash mesmo
-    // assim, igual acontece na página de caça com outros jogadores.
-    if (entry.lastKnownHp !== null && curHp < entry.lastKnownHp && !entry.isDead) {
+    // assim, igual acontece na página de caça com outros jogadores. Exceto
+    // no primeiro sync após retomar a tela (item 3): aí seria só "spam" de
+    // flashes/sons de coisas que já aconteceram enquanto a tela estava
+    // fechada — a barra de HP já atualiza certa, só sem o efeito.
+    if (!isFirstSyncAfterResume && entry.lastKnownHp !== null && curHp < entry.lastKnownHp && !entry.isDead) {
         flashHit(entry.wrap);
         const pos = getEntityPos('player:' + p.id);
         playProximitySound(Math.random() < 0.2 ? 'critical' : 'normal', pos?.x || 0, pos?.y || 0);
@@ -1262,8 +1271,8 @@ function scheduleOwnWander() {
 // do avatar (não o próximo destino) — sem isso, um mob só ficava visível
 // no instante exato do ataque, quando o jogador já estava colado nele.
 // ══════════════════════════════════════════════════════════════════════
-const FOG_VISIBLE_RADIUS = 360; // totalmente visível
-const FOG_FADE_RADIUS = 520;    // opaco a partir daqui
+const FOG_VISIBLE_RADIUS = 260; // totalmente visível
+const FOG_FADE_RADIUS = 420;    // opaco a partir daqui
 const FOG_LOOP_MS = 250;
 let fogVisibilityInterval = null;
 
@@ -1471,20 +1480,32 @@ async function applyState(data) {
     // de aplicar o HP/estado final abaixo — o backend já devolve o
     // resultado desse combate resolvido no MESMO `own_state`, então sem
     // essa ordem o overlay de derrota apareceria antes do duelo animado.
+    //
+    // Item 3: EXCETO se este for o primeiro sync depois de (re)entrar na
+    // tela — nesse caso os combates em `my_combats` são "atrasados"
+    // (aconteceram enquanto a tela estava fechada), então a animação ao
+    // vivo não faz sentido pra ninguém: só empurra pro banner de eventos.
     if (hadShownCombat) {
-        pauseLocalCombatLoop();
-        for (const entry of data.my_combats) {
-            const iAmDefender = entry.defender_id === ctx.playerId;
-            const opponentId = iAmDefender ? entry.attacker_id : entry.defender_id;
-            const opponentName = iAmDefender ? entry.attacker_name : entry.defender_name;
+        if (isFirstSyncAfterResume) {
+            data.my_combats.forEach(entry => {
+                pushNexusBannerEvent(entry);
+                if (entry.timestamp) shownDuelTimestamps.add(entry.timestamp);
+            });
+        } else {
+            pauseLocalCombatLoop();
+            for (const entry of data.my_combats) {
+                const iAmDefender = entry.defender_id === ctx.playerId;
+                const opponentId = iAmDefender ? entry.attacker_id : entry.defender_id;
+                const opponentName = iAmDefender ? entry.attacker_name : entry.defender_name;
 
-            await playApproachAnimation(opponentId, opponentName, iAmDefender);
-            await showChallengeOverlay(5);
-            await playRealDuelAnimation(entry);
-            pushNexusBannerEvent(entry);
-            if (entry.timestamp) shownDuelTimestamps.add(entry.timestamp);
+                await playApproachAnimation(opponentId, opponentName, iAmDefender);
+                await showChallengeOverlay(5);
+                await playRealDuelAnimation(entry);
+                pushNexusBannerEvent(entry);
+                if (entry.timestamp) shownDuelTimestamps.add(entry.timestamp);
+            }
+            resumeLocalCombatLoop();
         }
-        resumeLocalCombatLoop();
     }
 
     // Item 2: aplica o HP/estado (já correto e atual, resolvido pelo backend
@@ -1528,6 +1549,8 @@ async function applyState(data) {
     } else {
         updateFogPosition();
     }
+
+    isFirstSyncAfterResume = false;
 }
 
 // ── TOPBAR DO JOGO (esconder na tela do Nexus) ───────────────────────
@@ -1545,6 +1568,7 @@ export function startNexusScreen(options) {
     onDeadTimerEndCb = options.onDeadTimerEnd || null;
     lastEventTs = '1970-01-01T00:00:00+00:00';
     isDeadLocal = false;
+    isFirstSyncAfterResume = true;
     currentSyncMs = SYNC_BASE_IDLE;
     consecutiveSyncFailures = 0;
     cameraFollow = true;

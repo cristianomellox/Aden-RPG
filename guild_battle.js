@@ -492,8 +492,12 @@ function renderCitySelectionScreen(playerRank) {
     const now = new Date();
     const dayUTC = now.getUTCDay(); // 6 = Sábado
     const hoursUTC = now.getUTCHours();
+    const minutesUTC = now.getUTCMinutes();
     const isLeader = playerRank === 'leader' || playerRank === 'co-leader';
-    let registrationOpen = TEST_MODE_REGISTRATION || (dayUTC === 6 && hoursUTC < 23); // Sábado, antes das 23:30 (margem visual)
+    // Corte real é 23:30 UTC (bate com register_for_guild_battle.sql) — antes
+    // checava só "hoursUTC < 23" (ou seja, 23:00), fechando o botão 30min
+    // cedo demais em relação ao que o backend realmente aceita.
+    let registrationOpen = TEST_MODE_REGISTRATION || (dayUTC === 6 && (hoursUTC * 60 + minutesUTC) < (23 * 60 + 30));
 
     CITIES.forEach(city => {
         const btn = document.createElement('button');
@@ -522,7 +526,8 @@ function updateCityRegistrationButtons() {
     const now = new Date();
     const dayUTC = now.getUTCDay(); // 6 = Sábado
     const hoursUTC = now.getUTCHours();
-    let registrationOpen = TEST_MODE_REGISTRATION || (dayUTC === 6 && hoursUTC < 23); 
+    const minutesUTC = now.getUTCMinutes();
+    let registrationOpen = TEST_MODE_REGISTRATION || (dayUTC === 6 && (hoursUTC * 60 + minutesUTC) < (23 * 60 + 30));
 
     const cityButtons = document.querySelectorAll('#cityGrid .city-btn');
 
@@ -1255,6 +1260,38 @@ async function handleNexusBackClick() {
 
 // Item 8: ao terminar o tempo de morte, pergunta se o jogador quer continuar
 // no Nexus ou voltar aos objetivos (mesmo dentro da janela de 1h).
+// Item 2: o timer de morte no Nexus já esgotou enquanto o jogador estava
+// FORA da página (fechou a aba, trocou de app etc.) — ao voltar, não
+// reentra sozinho no Nexus: fica nos objetivos e pergunta o que ele quer,
+// igual já acontece quando o timer zera com a tela aberta.
+let _nexusChoiceModalShowing = false;
+function handleNexusDeadAwaitingChoiceOnLoad() {
+    if (_nexusChoiceModalShowing) return;
+    _nexusChoiceModalShowing = true;
+    showReviveChoiceModal(
+        async () => {
+            _nexusChoiceModalShowing = false;
+            if (!currentBattleState || !currentBattleState.instance) return;
+            const entry = await enterNexus(currentBattleState.instance.id);
+            if (entry && entry.success) {
+                enterNexusScreenFlow(entry);
+            } else {
+                showAlert(entry?.message || 'Não foi possível entrar no Nexus.');
+                pollBattleState();
+            }
+        },
+        async () => {
+            _nexusChoiceModalShowing = false;
+            if (!currentBattleState || !currentBattleState.instance) { pollBattleState(); return; }
+            const result = await leaveNexus(currentBattleState.instance.id);
+            if (!result || !result.success) {
+                showAlert(result?.message || 'Não foi possível sair do Nexus.');
+            }
+            pollBattleState();
+        }
+    );
+}
+
 function handleNexusDeadTimerEnd() {
     showReviveChoiceModal(
         () => { /* Continuar no Nexus: nada a fazer, o próprio módulo já revive */ },
@@ -1465,6 +1502,8 @@ async function pollBattleState() {
                     if (data.in_nexus) {
                         const entry = await enterNexus(currentBattleState.instance.id);
                         if (entry && entry.success) enterNexusScreenFlow(entry);
+                    } else if (data.nexus_dead_awaiting_choice) {
+                        handleNexusDeadAwaitingChoiceOnLoad();
                     }
                 }, 500);
             } else if (data.in_nexus && !isNexusScreenActive()) {
@@ -1472,6 +1511,9 @@ async function pollBattleState() {
                 enterNexus(currentBattleState.instance.id).then(entry => {
                     if (entry && entry.success) enterNexusScreenFlow(entry);
                 });
+            } else if (data.nexus_dead_awaiting_choice && !isNexusScreenActive()) {
+                renderBattleScreen(data);
+                handleNexusDeadAwaitingChoiceOnLoad();
             } else if (!isNexusScreenActive()) {
                 renderBattleScreen(data);
             }
@@ -1733,6 +1775,8 @@ function startGlobalUITimer() {
             const registrationTimer = $('registrationTimer');
             const dayUTC = now.getUTCDay(); // 6 = Sábado
             const hoursUTC = now.getUTCHours();
+            const minutesUTC = now.getUTCMinutes();
+            const totalMinUTC = hoursUTC * 60 + minutesUTC;
             
             if (TEST_MODE_REGISTRATION) {
                 // Espelha o bloco de 5 minutos usado por v_test_mode no backend,
@@ -1742,8 +1786,10 @@ function startGlobalUITimer() {
                 const bucketEnd = bucketStart + bucketMs;
                 const timeLeft = Math.max(0, Math.floor((bucketEnd - now.getTime()) / 1000));
                 registrationTimer.textContent = `[TESTE] Registro fecha em: ${formatTime(timeLeft)}`;
-            } else if (dayUTC === 6 && hoursUTC < 23) {
-                // REGISTRO ABERTO Sábado
+            } else if (dayUTC === 6 && totalMinUTC < (23 * 60 + 30)) {
+                // REGISTRO ABERTO Sábado — corte real é 23:30 UTC, batendo com
+                // register_for_guild_battle.sql (antes o gate daqui usava
+                // "hoursUTC < 23", ou seja 23:00, 30min cedo demais).
                 const registrationEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 30, 0));
                 const timeLeft = Math.max(0, Math.floor((registrationEnd - now) / 1000));
                 registrationTimer.textContent = `Registro fecha em: ${formatTime(timeLeft)}`;
@@ -1754,7 +1800,7 @@ function startGlobalUITimer() {
                 nextSaturday.setUTCDate(now.getUTCDate() + daysToSaturday);
                 nextSaturday.setUTCHours(0, 0, 0, 0);
 
-                if (dayUTC === 6 && hoursUTC >= 23) { 
+                if (dayUTC === 6 && totalMinUTC >= (23 * 60 + 30)) { 
                     nextSaturday.setUTCDate(now.getUTCDate() + 7);
                 }
                 

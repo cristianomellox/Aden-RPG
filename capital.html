@@ -560,7 +560,7 @@ font > font {
 .city-hotspot-name {
     font-family: 'Cinzel', serif;
     font-weight: bold;
-    font-size: 0.85em;
+    font-size: 1.6em;
     color: #ffd700;
     text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
     line-height: 1;
@@ -725,24 +725,24 @@ font > font {
                  tracejadas + a mira vermelha de cada hotspot. Quando terminar,
                  mude para false. ==================================================================== -->
 
-            <div id="btnPotionMaster" class="city-hotspot" style="top:520px; left:380px; width:130px; height:150px;">
+            <div id="btnPotionMaster" class="city-hotspot" style="top:1130px; left:720px; width:130px; height:220px;">
                 <span class="city-hotspot-name">Mestre de Poções</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:80px; --beam-column-width:60px; --glow-rgb:160,80,255;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:190px; --beam-column-width:120px; --glow-rgb:255,255,255;"></div>
                 </div>
             </div>
 
-            <div id="btnOficina" class="city-hotspot" style="top:700px; left:900px; width:130px; height:150px;">
+            <div id="btnOficina" class="city-hotspot" style="top:880px; left:1315px; width:230px; height:280px;">
                 <span class="city-hotspot-name">Ferreiro</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:90px; --beam-column-width:70px; --glow-rgb:255,140,40;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:230px; --beam-column-width:200px; --glow-rgb:255,255,255;"></div>
                 </div>
             </div>
 
-            <div id="btnMercador" class="city-hotspot" style="top:900px; left:560px; width:130px; height:150px;">
+            <div id="btnMercador" class="city-hotspot" style="top:790px; left:235px; width:230px; height:300px;">
                 <span class="city-hotspot-name">Mercador</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:70px; --beam-column-width:55px; --glow-rgb:80,220,255;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:260px; --beam-column-width:170px; --glow-rgb:255,255,255;"></div>
                 </div>
             </div>
 
@@ -750,7 +750,7 @@ font > font {
                  fetchAndDisplayCityOwner() (mais abaixo) mostra/esconde ESTE
                  bloco inteiro — quando não há guilda regente, nem a imagem
                  nem o nome aparecem. -->
-            <div id="cityGuildHotspot" class="city-hotspot non-interactive" style="top:120px; left:680px; width:140px; height:150px;">
+            <div id="cityGuildHotspot" class="city-hotspot non-interactive" style="top:140px; left:886px; width:140px; height:150px;">
                 <img id="guild_flag_capital" class="guild-flag-img" src="" alt="Bandeira da Guilda">
                 <span id="guild_name_capital" class="guild-name-label"></span>
             </div>
@@ -1994,6 +1994,6 @@ document.addEventListener("DOMContentLoaded", () => {
 <script>window.MERCHANT_CITY = "Capital";</script>
 <script type="module" src="mercador.js"></script>
 <script type="module" src="oficina.js"></script>
-<script src="browser-guard.js"></script>
+<script src="browser-guard2.js"></script>
 </body>
 </html>

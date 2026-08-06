@@ -572,21 +572,12 @@ font > font {
 .city-hotspot-glow-slot {
     position: relative;
     flex: 0 0 auto;
-    height: 64px;   /* controla o tamanho da área do ícone/luz — ajuste aqui se precisar */
+    height: 64px;   /* controla o tamanho da área da luz — ajuste aqui se precisar */
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     min-height: 0;
-}
-
-.city-hotspot-icon {
-    position: relative;
-    z-index: 2;
-    width: 46%;
-    max-width: 56px;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.85));
-    pointer-events: none;
 }
 
 /* Feixe de luz — mesma técnica das minas, mas AJUSTÁVEL POR HOTSPOT:
@@ -595,7 +586,7 @@ font > font {
    já que cada área da cidade tem um tamanho e nome diferente. */
 .city-hotspot-glow {
     --glow-rgb: 255,215,0;
-    --beam-top: 4px;           /* quão acima do ícone o feixe nasce (perto do nome) */
+    --beam-top: 4px;           /* quão acima da luz o feixe nasce (perto do nome) */
     --beam-height: 80px;       /* altura total do feixe — até onde desce em direção ao chão */
     --beam-column-width: 60px; /* largura real e final da coluna de luz */
 
@@ -689,10 +680,10 @@ font > font {
     font-family: 'Cinzel', serif;
     font-weight: bold;
     color: orange;
-    font-size: 0.9em;
+    font-size: 1.5em;
     text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
     text-align: center;
-    max-width: 150px;
+    max-width: 180px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -738,7 +729,6 @@ font > font {
                 <span class="city-hotspot-name">Mestre de Poções</span>
                 <div class="city-hotspot-glow-slot">
                     <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:80px; --beam-column-width:60px; --glow-rgb:160,80,255;"></div>
-                    <img class="city-hotspot-icon" src="https://aden-rpg.pages.dev/assets/mdp.webp" alt="Mestre de Poções">
                 </div>
             </div>
 
@@ -746,7 +736,6 @@ font > font {
                 <span class="city-hotspot-name">Ferreiro</span>
                 <div class="city-hotspot-glow-slot">
                     <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:90px; --beam-column-width:70px; --glow-rgb:255,140,40;"></div>
-                    <img class="city-hotspot-icon" src="https://aden-rpg.pages.dev/assets/ferreiro.webp" alt="Ferreiro">
                 </div>
             </div>
 
@@ -754,7 +743,6 @@ font > font {
                 <span class="city-hotspot-name">Mercador</span>
                 <div class="city-hotspot-glow-slot">
                     <div class="city-hotspot-glow" style="--beam-top:4px; --beam-height:70px; --beam-column-width:55px; --glow-rgb:80,220,255;"></div>
-                    <img class="city-hotspot-icon" src="https://aden-rpg.pages.dev/assets/escambo.webp" alt="Mercador">
                 </div>
             </div>
 

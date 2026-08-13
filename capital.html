@@ -560,7 +560,7 @@ font > font {
 .city-hotspot-name {
     font-family: 'Cinzel', serif;
     font-weight: bold;
-    font-size: 1.6em;
+    font-size: 1.8em;
     color: #ffd700;
     text-shadow: 1px 1px 3px black, -1px -1px 3px black, 0 0 6px black;
     line-height: 1;
@@ -578,6 +578,7 @@ font > font {
     justify-content: center;
     width: 100%;
     min-height: 0;
+    opacity: 0.8;
 }
 
 /* Feixe de luz — mesma técnica das minas, mas AJUSTÁVEL POR HOTSPOT:
@@ -668,6 +669,23 @@ font > font {
 #cityGuildHotspot {
     display: none;
 }
+/* Luz atrás da bandeira: mesma técnica/animação do feixe das lojas
+   (".city-hotspot-glow"), mas ancorada atrás da bandeira redonda em vez de
+   descer até o chão. Ajuste --beam-height / --beam-column-width abaixo para
+   mudar o tamanho do "spot" e da luz. */
+#cityGuildHotspot .guild-flag-glow-slot {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;   /* mesmo tamanho da bandeira — ajuste aqui o "spot" */
+    height: 100px;
+    z-index: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 #cityGuildHotspot .guild-flag-img {
     width: 100px;
     height: 100px;
@@ -675,8 +693,12 @@ font > font {
     border: 2px solid gold;
     object-fit: cover;
     box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    position: relative;
+    z-index: 2; /* fica acima da luz */
 }
 #cityGuildHotspot .guild-name-label {
+    position: relative;
+    z-index: 2;
     font-family: 'Cinzel', serif;
     font-weight: bold;
     color: orange;
@@ -728,21 +750,21 @@ font > font {
             <div id="btnPotionMaster" class="city-hotspot" style="top:1130px; left:720px; width:130px; height:220px;">
                 <span class="city-hotspot-name">Mestre de Poções</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:190px; --beam-column-width:120px; --glow-rgb:255,255,255;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:190px; --beam-column-width:120px; --glow-rgb:255,140,40;"></div>
                 </div>
             </div>
 
-            <div id="btnOficina" class="city-hotspot" style="top:880px; left:1315px; width:230px; height:280px;">
+            <div id="btnOficina" class="city-hotspot" style="top:910px; left:1290px; width:230px; height:280px;">
                 <span class="city-hotspot-name">Ferreiro</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:230px; --beam-column-width:200px; --glow-rgb:255,255,255;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:230px; --beam-column-width:200px; --glow-rgb:255,140,40;"></div>
                 </div>
             </div>
 
             <div id="btnMercador" class="city-hotspot" style="top:790px; left:235px; width:230px; height:300px;">
                 <span class="city-hotspot-name">Mercador</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:260px; --beam-column-width:170px; --glow-rgb:255,255,255;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:260px; --beam-column-width:170px; --glow-rgb:255,140,40;"></div>
                 </div>
             </div>
 
@@ -751,8 +773,21 @@ font > font {
                  bloco inteiro — quando não há guilda regente, nem a imagem
                  nem o nome aparecem. -->
             <div id="cityGuildHotspot" class="city-hotspot non-interactive" style="top:140px; left:886px; width:140px; height:150px;">
+                <div class="guild-flag-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:-16px; --beam-height:132px; --beam-column-width:120px; --glow-rgb:255,215,0;"></div>
+                </div>
                 <img id="guild_flag_capital" class="guild-flag-img" src="" alt="Bandeira da Guilda">
                 <span id="guild_name_capital" class="guild-name-label"></span>
+            </div>
+
+            <!-- Chancelaria: abre modal com mapa arrastável próprio (capital_chanc.png)
+                 mostrando os títulos da cidade. Ajuste top/left/width/height abaixo
+                 para posicionar no mapa (CITY_HOTSPOT_DEBUG está true mais abaixo). -->
+            <div id="btnChancelaria" class="city-hotspot" style="top:720px; left:880px; width:450px; height:350px;">
+                <span class="city-hotspot-name">Chancelaria</span>
+                <div class="city-hotspot-glow-slot">
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:330px; --beam-column-width:440px; --glow-rgb:255,140,40;"></div>
+                </div>
             </div>
             </div>
     </div>
@@ -784,6 +819,26 @@ font > font {
             <h3 class="pm-title" style="margin-top:40px;">Mercador Ambulante</h3>
             <div id="mercadorContent" style="width:100%;max-width:680px;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;animation:fadeCardIn 4s ease-out forwards;">
                 Carregando...
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Chancelaria: shell (topbar + mapa arrastável). Todo o conteúdo
+         dinâmico (títulos/avatares) e a lógica de arrastar/zoom são
+         controlados por chancelaria.js. -->
+    <div id="chancelariaModal" class="modal-container chanc-modal" style="display:none; z-index: 3005;">
+        <div id="chancTopBar" class="chanc-topbar">
+            <button id="chancBackBtn" class="top-bar-link chanc-back-btn" aria-label="Voltar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <div><span class="chanc-page-title">Chancelaria</span></div>
+            <div class="chanc-topbar-spacer"></div>
+        </div>
+        <div id="chancMapContainer" class="chanc-map-container">
+            <div id="chancMap" class="chanc-map">
+                <div id="chancTitlesHotspot" class="chanc-titles-hotspot"></div>
             </div>
         </div>
     </div>
@@ -1994,6 +2049,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <script>window.MERCHANT_CITY = "Capital";</script>
 <script type="module" src="mercador.js"></script>
 <script type="module" src="oficina.js"></script>
+<script type="module" src="chancelaria.js"></script>
 <script src="browser-guard2.js"></script>
 </body>
 </html>

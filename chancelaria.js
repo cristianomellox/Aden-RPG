@@ -1,26 +1,112 @@
 import { supabase } from './supabaseClient.js';
 
 // =======================================================================
-// CHANCELARIA — mostra os títulos da cidade (Rei/Rainha, Consorte,
-// Príncipes/Princesas e Bobo(a) da Corte) sobre um mapa arrastável/com
+// CHANCELARIA — mostra os títulos da cidade sobre um mapa arrastável/com
 // zoom próprio, dentro de um modal com topbar dedicada.
 //
-// Por enquanto só a Capital tem Chancelaria (cidade id 1 / nobless 101-103).
-// Para estender às demais cidades no futuro, ajuste CHANC_CITY_ID e o
-// range de nobless em fetchChancData().
+// Um único arquivo cuida de TODAS as cidades: a config abaixo (CITY_CONFIGS)
+// é escolhida automaticamente pela variável global `window.MERCHANT_CITY`
+// que cada página de cidade já define (ex.: window.MERCHANT_CITY = "Zion").
+//
+// A Capital tem um conjunto de títulos próprio (Rei/Rainha, Consorte,
+// Príncipes/Princesas e Bobo(a) da Corte — nobless 101/102/103). As demais
+// cidades usam Lord/Lady, Lord/Lady Consorte e Nobre (nobless <id>01/<id>02).
 // =======================================================================
 
-// Enquanto estiver posicionando o bloco de títulos no mapa, deixe true
-// para ver o contorno tracejado + a mira vermelha. Depois mude para false.
-const CHANC_DEBUG = true;
+// Enquanto estiver posicionando o bloco de títulos no mapa de CADA cidade,
+// deixe true para ver o contorno tracejado + a mira vermelha. Depois mude
+// para false (afeta todas as cidades de uma vez, já que é um arquivo só).
+const CHANC_DEBUG = false;
 
-const CHANC_CITY_ID = 1; // Capital
-const CHANC_IMG_URL = 'https://aden-rpg.pages.dev/assets/capital_chanc.png';
+const ASSET_BASE = 'https://aden-rpg.pages.dev/assets/';
 
-// Posição (em px, no espaço natural da imagem do mapa da Chancelaria) do
-// bloco de títulos. É centralizado horizontalmente sozinho — só ajuste o
-// "top" aqui enquanto CHANC_DEBUG estiver true.
-const TITLES_HOTSPOT_TOP = 170;
+// --- Configuração por cidade -------------------------------------------
+// id: mesmo id de guild_battle_cities / base do campo `nobless` (id*100)
+// imgUrl: imagem do mapa da Chancelaria dessa cidade
+// titlesHotspotTop: posição vertical (px) do bloco de títulos no mapa da
+//   Chancelaria — ajuste aqui enquanto CHANC_DEBUG estiver true
+// rulerTitles: título do líder regente (m/f)
+// consortTitles: título do consorte (m/f)
+// extraSlots: linhas adicionais de títulos, cada uma com o nobless, quantas
+//   pessoas cabem nela (count) e os títulos m/f + rótulo padrão quando vago
+const CITY_CONFIGS = {
+    'Capital': {
+        id: 1,
+        imgUrl: ASSET_BASE + 'capital_chanc.png',
+        titlesHotspotTop: 174,
+        rulerTitles: { m: 'Rei', f: 'Rainha' },
+        consortTitles: { m: 'Rei Consorte', f: 'Rainha' },
+        extraSlots: [
+            { nobless: 102, count: 2, titles: { m: 'Príncipe', f: 'Princesa' }, defaultLabel: 'Herdeiro(a)' },
+            { nobless: 103, count: 1, titles: { m: 'Bobo da Corte', f: 'Boba da Corte' }, defaultLabel: 'Bobo(a) da Corte' }
+        ]
+    },
+    'Zion': {
+        id: 2,
+        imgUrl: ASSET_BASE + 'zion_chanc.png',
+        titlesHotspotTop: 600,
+        rulerTitles: { m: 'Lord', f: 'Lady' },
+        consortTitles: { m: 'Lord Consorte', f: 'Lady' },
+        extraSlots: [
+            { nobless: 202, count: 1, titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre' }
+        ]
+    },
+    'Elendor': {
+        id: 3,
+        imgUrl: ASSET_BASE + 'elendor_chanc.png',
+        titlesHotspotTop: 600,
+        rulerTitles: { m: 'Lord', f: 'Lady' },
+        consortTitles: { m: 'Lord Consorte', f: 'Lady' },
+        extraSlots: [
+            { nobless: 302, count: 1, titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre' }
+        ]
+    },
+    'Mitrar': {
+        id: 4,
+        imgUrl: ASSET_BASE + 'mitrar_chanc.png',
+        titlesHotspotTop: 600,
+        rulerTitles: { m: 'Lord', f: 'Lady' },
+        consortTitles: { m: 'Lord Consorte', f: 'Lady' },
+        extraSlots: [
+            { nobless: 402, count: 1, titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre' }
+        ]
+    },
+    'Tandra': {
+        id: 5,
+        imgUrl: ASSET_BASE + 'tandra_chanc.png',
+        titlesHotspotTop: 600,
+        rulerTitles: { m: 'Lord', f: 'Lady' },
+        consortTitles: { m: 'Lord Consorte', f: 'Lady' },
+        extraSlots: [
+            { nobless: 502, count: 1, titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre' }
+        ]
+    },
+    'Astrax': {
+        id: 6,
+        imgUrl: ASSET_BASE + 'astrax_chanc.png',
+        titlesHotspotTop: 600,
+        rulerTitles: { m: 'Lord', f: 'Lady' },
+        consortTitles: { m: 'Lord Consorte', f: 'Lady' },
+        extraSlots: [
+            { nobless: 602, count: 1, titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre' }
+        ]
+    },
+    'Duratar': {
+        id: 7,
+        imgUrl: ASSET_BASE + 'duratar_chanc.png',
+        titlesHotspotTop: 600,
+        rulerTitles: { m: 'Lord', f: 'Lady' },
+        consortTitles: { m: 'Lord Consorte', f: 'Lady' },
+        extraSlots: [
+            { nobless: 702, count: 1, titles: { m: 'Nobre', f: 'Nobre' }, defaultLabel: 'Nobre' }
+        ]
+    }
+};
+
+// Detecta a cidade atual pela variável global que cada página já define
+// para o mercador (window.MERCHANT_CITY = "Zion", "Capital", etc).
+const CITY = CITY_CONFIGS[window.MERCHANT_CITY] || null;
+const CONSORT_NOBLESS = CITY ? CITY.id * 100 + 1 : null;
 
 let chancMapInitialized = false;
 
@@ -89,7 +175,7 @@ function injectStyles() {
             background-color: #121212;
         }
         #chancMap {
-            background-image: url('${CHANC_IMG_URL}');
+            background-image: url('${CITY ? CITY.imgUrl : ''}');
             background-repeat: no-repeat;
             background-position: center center;
             background-size: cover;
@@ -211,7 +297,7 @@ function injectStyles() {
 //         mas medindo a imagem em tempo real para não depender de um
 //         tamanho fixo e garantir o ajuste automático sem áreas pretas) ---
 function initChancMap() {
-    if (chancMapInitialized) return;
+    if (chancMapInitialized || !CITY) return;
     chancMapInitialized = true;
 
     const mapContainer = document.getElementById('chancMapContainer');
@@ -226,7 +312,7 @@ function initChancMap() {
         // Fallback caso a imagem não carregue (mesmas proporções do mapa principal)
         setupDragZoom(mapContainer, map, 1500, 1700);
     };
-    probe.src = CHANC_IMG_URL;
+    probe.src = CITY.imgUrl;
 }
 
 function setupDragZoom(mapContainer, map, naturalWidth, naturalHeight) {
@@ -402,12 +488,14 @@ function setupDragZoom(mapContainer, map, naturalWidth, naturalHeight) {
     map.style.cursor = 'grab';
 }
 
-// --- 3. Dados dos títulos (Rei/Rainha, Consorte, Príncipes, Bobo da Corte) ---
+// --- 3. Dados dos títulos da cidade atual ---
 async function fetchChancData() {
+    if (!CITY) return { leader: null, nobles: [] };
+
     const { data: cityRow, error: cityErr } = await supabase
         .from('guild_battle_cities')
         .select('owner')
-        .eq('id', CHANC_CITY_ID)
+        .eq('id', CITY.id)
         .single();
 
     if (cityErr) throw cityErr;
@@ -422,10 +510,14 @@ async function fetchChancData() {
         leader = guildData?.players || null;
     }
 
+    // Consorte + todos os slots extras (Príncipes/Bobo da Corte na Capital,
+    // Nobre nas demais cidades)
+    const noblessIds = [CONSORT_NOBLESS, ...CITY.extraSlots.map(s => s.nobless)];
+
     const { data: nobles } = await supabase
         .from('players')
         .select('id, name, gender, avatar_url, nobless')
-        .in('nobless', [101, 102, 103]);
+        .in('nobless', noblessIds);
 
     return { leader, nobles: nobles || [] };
 }
@@ -468,44 +560,48 @@ function buildCardHtml(title, player) {
 
 function renderTitles(data) {
     const wrap = document.getElementById('chancTitlesHotspot');
-    if (!wrap) return;
+    if (!wrap || !CITY) return;
 
     const leader = data.leader;
-    // Sem líder definido: assume "Rei" como rótulo padrão (não há gênero para consultar)
+    // Sem líder definido: assume o título masculino como rótulo padrão
+    // (não há gênero para consultar ainda)
     const leaderGender = leader?.gender || 'Masculino';
-    const isKing = leaderGender === 'Masculino';
-    const kingTitle = isKing ? 'Rei' : 'Rainha';
+    const isRulerMale = leaderGender === 'Masculino';
+    const rulerTitle = isRulerMale ? CITY.rulerTitles.m : CITY.rulerTitles.f;
 
-    const consort = data.nobles.find(n => n.nobless === 101) || null;
+    const consort = data.nobles.find(n => n.nobless === CONSORT_NOBLESS) || null;
     const consortTitle = consort
-        ? (consort.gender === 'Masculino' ? 'Rei Consorte' : 'Rainha')
-        : (isKing ? 'Rainha' : 'Rei Consorte'); // oposto do gênero do regente atual
+        ? (consort.gender === 'Masculino' ? CITY.consortTitles.m : CITY.consortTitles.f)
+        : (isRulerMale ? CITY.consortTitles.f : CITY.consortTitles.m); // oposto do gênero do regente atual
 
-    const princes = data.nobles
-        .filter(n => n.nobless === 102)
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-    const prince1 = princes[0] || null;
-    const prince2 = princes[1] || null;
-    const princeTitle = (p) => p ? (p.gender === 'Masculino' ? 'Príncipe' : 'Princesa') : 'Herdeiro(a)';
-
-    const jester = data.nobles.find(n => n.nobless === 103) || null;
-    const jesterTitle = jester
-        ? (jester.gender === 'Masculino' ? 'Bobo da Corte' : 'Boba da Corte')
-        : 'Bobo(a) da Corte';
-
-    wrap.innerHTML = `
+    // Linha 1: regente + consorte
+    let rowsHtml = `
         <div class="chanc-title-row">
-            ${buildCardHtml(kingTitle, leader)}
+            ${buildCardHtml(rulerTitle, leader)}
             ${buildCardHtml(consortTitle, consort)}
         </div>
-        <div class="chanc-title-row">
-            ${buildCardHtml(princeTitle(prince1), prince1)}
-            ${buildCardHtml(princeTitle(prince2), prince2)}
-        </div>
-        <div class="chanc-title-row">
-            ${buildCardHtml(jesterTitle, jester)}
-        </div>
     `;
+
+    // Linhas seguintes: uma por slot extra da config da cidade (Príncipes +
+    // Bobo da Corte na Capital / Nobre nas demais)
+    CITY.extraSlots.forEach(slot => {
+        const holders = data.nobles
+            .filter(n => n.nobless === slot.nobless)
+            .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+        const cards = [];
+        for (let i = 0; i < slot.count; i++) {
+            const p = holders[i] || null;
+            const title = p
+                ? (p.gender === 'Masculino' ? slot.titles.m : slot.titles.f)
+                : slot.defaultLabel;
+            cards.push(buildCardHtml(title, p));
+        }
+
+        rowsHtml += `<div class="chanc-title-row">${cards.join('')}</div>`;
+    });
+
+    wrap.innerHTML = rowsHtml;
 
     // Fallback de avatar quebrado -> círculo com a inicial do nome
     wrap.querySelectorAll('img.chanc-card-avatar').forEach((img) => {
@@ -520,6 +616,7 @@ function renderTitles(data) {
 
 // --- 4. Abertura / fechamento do modal ---
 function openChancModal() {
+    if (!CITY) return;
     const modal = document.getElementById('chancelariaModal');
     if (!modal) return;
 
@@ -552,10 +649,16 @@ function closeChancModal() {
 
 // --- 5. Inicialização ---
 document.addEventListener('DOMContentLoaded', () => {
+    if (!CITY) {
+        // Página sem MERCHANT_CITY reconhecido (ou sem Chancelaria configurada
+        // ainda para essa cidade) — não faz nada.
+        return;
+    }
+
     injectStyles();
 
     const wrap = document.getElementById('chancTitlesHotspot');
-    if (wrap) wrap.style.top = TITLES_HOTSPOT_TOP + 'px';
+    if (wrap) wrap.style.top = CITY.titlesHotspotTop + 'px';
 
     const chancMap = document.getElementById('chancMap');
     if (chancMap) chancMap.classList.toggle('debug-hotspots', CHANC_DEBUG);

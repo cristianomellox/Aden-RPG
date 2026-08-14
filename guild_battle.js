@@ -878,23 +878,33 @@ function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
         minute: '2-digit' 
     });
 
-    modals.resultsRankingHonor.innerHTML = '';
-    const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => b.honor_points - a.honor_points);
-    
-    if (sortedGuilds.length === 0) {
-        modals.resultsRankingHonor.innerHTML = '<li>Nenhum dado de ranking.</li>';
-    } else {
-        sortedGuilds.forEach((g, index) => {
-            const li = document.createElement('li');
-            li.textContent = `#${index + 1} ${g.guild_name} - ${g.honor_points} Pontos`;
-            modals.resultsRankingHonor.appendChild(li);
-        });
-    }
-
+    // Mapeia as cores baseadas no array original ANTES de ordenar
     const guildColorMapResults = new Map();
     (instance.registered_guilds || []).forEach((g, index) => {
         guildColorMapResults.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
     });
+
+    modals.resultsRankingHonor.innerHTML = '';
+
+    // Ordenação segura garantindo que os valores sejam tratados como números (evita NaN)
+    const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) =>
+        (Number(b.honor_points) || 0) - (Number(a.honor_points) || 0)
+    );
+
+    if (sortedGuilds.length === 0) {
+        modals.resultsRankingHonor.innerHTML = '<li style="justify-content: center; color: #aaa;">Nenhum dado de ranking.</li>';
+    } else {
+        sortedGuilds.forEach((g, index) => {
+            const color = guildColorMapResults.get(g.guild_id) || 'var(--guild-color-neutral)';
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span>${index + 1}. <strong style="color: ${color};">${escHtml(g.guild_name)}</strong></span>
+                <span>${g.honor_points || 0} pts</span>
+            `;
+            modals.resultsRankingHonor.appendChild(li);
+        });
+    }
+
     const guildNameMap = new Map();
     (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
 

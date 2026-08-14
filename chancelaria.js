@@ -20,7 +20,7 @@ const CHANC_IMG_URL = 'https://aden-rpg.pages.dev/assets/capital_chanc.png';
 // Posição (em px, no espaço natural da imagem do mapa da Chancelaria) do
 // bloco de títulos. É centralizado horizontalmente sozinho — só ajuste o
 // "top" aqui enquanto CHANC_DEBUG estiver true.
-const TITLES_HOTSPOT_TOP = 300;
+const TITLES_HOTSPOT_TOP = 200;
 
 let chancMapInitialized = false;
 

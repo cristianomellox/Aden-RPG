@@ -44,7 +44,7 @@ const CITY_CONFIGS = {
     'Zion': {
         id: 2,
         imgUrl: ASSET_BASE + 'zion_chanc.png',
-        titlesHotspotTop: 185,
+        titlesHotspotTop: 215,
         rulerTitles: { m: 'Lord', f: 'Lady' },
         consortTitles: { m: 'Lord Consorte', f: 'Lady' },
         extraSlots: [
@@ -54,7 +54,7 @@ const CITY_CONFIGS = {
     'Elendor': {
         id: 3,
         imgUrl: ASSET_BASE + 'elendor_chanc.png',
-        titlesHotspotTop: 185,
+        titlesHotspotTop: 215,
         rulerTitles: { m: 'Lord', f: 'Lady' },
         consortTitles: { m: 'Lord Consorte', f: 'Lady' },
         extraSlots: [
@@ -64,7 +64,7 @@ const CITY_CONFIGS = {
     'Mitrar': {
         id: 4,
         imgUrl: ASSET_BASE + 'mitrar_chanc.png',
-        titlesHotspotTop: 185,
+        titlesHotspotTop: 215,
         rulerTitles: { m: 'Lord', f: 'Lady' },
         consortTitles: { m: 'Lord Consorte', f: 'Lady' },
         extraSlots: [
@@ -74,7 +74,7 @@ const CITY_CONFIGS = {
     'Tandra': {
         id: 5,
         imgUrl: ASSET_BASE + 'tandra_chanc.png',
-        titlesHotspotTop: 185,
+        titlesHotspotTop: 215,
         rulerTitles: { m: 'Lord', f: 'Lady' },
         consortTitles: { m: 'Lord Consorte', f: 'Lady' },
         extraSlots: [
@@ -84,7 +84,7 @@ const CITY_CONFIGS = {
     'Astrax': {
         id: 6,
         imgUrl: ASSET_BASE + 'astrax_chanc.png',
-        titlesHotspotTop: 185,
+        titlesHotspotTop: 215,
         rulerTitles: { m: 'Lord', f: 'Lady' },
         consortTitles: { m: 'Lord Consorte', f: 'Lady' },
         extraSlots: [
@@ -94,7 +94,7 @@ const CITY_CONFIGS = {
     'Duratar': {
         id: 7,
         imgUrl: ASSET_BASE + 'duratar_chanc.png',
-        titlesHotspotTop: 185,
+        titlesHotspotTop: 215,
         rulerTitles: { m: 'Lord', f: 'Lady' },
         consortTitles: { m: 'Lord Consorte', f: 'Lady' },
         extraSlots: [

@@ -2284,15 +2284,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function checkAndResetArenaSeason() {
         try {
             const now = new Date();
-            if (now.getUTCDate() !== 1) return;
+            const currentYear = now.getUTCFullYear();
+            const currentMonth = now.getUTCMonth() + 1;
             const lastResetRaw = localStorage.getItem('arena_last_season_reset');
             const keyData = lastResetRaw ? JSON.parse(lastResetRaw) : null;
-            if (keyData && keyData.month === (now.getUTCMonth() + 1)) return;
+            // Antes isso só rodava no dia 1 UTC — se ninguém abrisse o jogo
+            // exatamente naquele dia, o reset da temporada nunca acontecia
+            // e ficava impossível resgatar a recompensa do mês anterior.
+            // Agora tenta em qualquer dia; a função no banco é idempotente
+            // (só reseta de fato uma vez por transição de mês), então é
+            // seguro chamar sempre até confirmar sucesso.
+            // Também comparamos o ANO, não só o mês, pra não pular o reset
+            // por engano no mesmo mês do ano seguinte.
+            if (keyData && keyData.month === currentMonth && keyData.year === currentYear) return;
             localStorage.removeItem('arena_top_100_cache');
             localStorage.removeItem('arena_last_season_cache');
             const { data } = await supabase.rpc('reset_arena_season');
             const r = normalizeRpcResult(data);
-            if (r?.success) localStorage.setItem('arena_last_season_reset', JSON.stringify({ year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 }));
+            if (r?.success) localStorage.setItem('arena_last_season_reset', JSON.stringify({ year: currentYear, month: currentMonth }));
         } catch {}
     }
 

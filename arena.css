@@ -1267,6 +1267,14 @@ textarea:focus, textarea:active {
     background: rgba(0, 0, 0, 0.9) !important;
 }
 
+/* O modal de alerta/erro (#confirmModal) precisa SEMPRE aparecer por cima
+   de qualquer outro modal (incluindo o de recompensa de temporada, z-index
+   1500). Sem isso, um erro no resgate ficava escondido atrás do modal de
+   recompensa e parecia que "nada acontecia" ao clicar em Resgatar. */
+#confirmModal {
+    z-index: 2200;
+}
+
 .arena-reward-modal-content {
     background: linear-gradient(160deg, #1c0f00, #2a1a00, #1a0a00) !important;
     border: 3px solid #ffd700 !important;

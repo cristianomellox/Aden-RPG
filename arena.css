@@ -106,7 +106,7 @@ body, html {
     font-weight: bold;
     padding: 15px 40px; 
     font-size: 1.1em;
-    text-shadow: 1px 1px 2px #000;
+    text-shadow: none!important;
     transition: filter 0.3s;
 }
 .action-btn:hover {
@@ -1376,7 +1376,7 @@ textarea:focus, textarea:active {
     background: linear-gradient(135deg, #b8922a, #f0d070, #c9a94a, #f0d070, #b8922a) !important;
     background-size: 200% 100% !important;
     background-image: none !important;
-    color: #1a0800 !important;
+    color: white !important;
     font-weight: bold !important;
     padding: 14px 36px !important;
     font-size: 1.15em !important;

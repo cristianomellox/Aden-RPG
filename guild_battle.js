@@ -857,187 +857,215 @@ function fitModalToViewport(modalId) {
 function adjustResultsModalViewport() { fitModalToViewport('resultsModal'); }
 
 function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
-    adjustResultsModalViewport();
-    const titleEl = $('resultCityName');
-    titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
-    
-    let dateEl = $('resultBattleDate');
-    if (!dateEl) {
-        dateEl = document.createElement('p');
-        dateEl.id = 'resultBattleDate';
-        dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: 0px; margin-bottom: 0px; text-align: center;';
-        titleEl.after(dateEl);
-    }
-    
-    const endDate = new Date(instance.end_time);
-    dateEl.textContent = endDate.toLocaleString('pt-BR', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
+    try {
+        adjustResultsModalViewport();
+        
+        const titleEl = $('resultCityName');
+        if (titleEl) titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
+        
+        let dateEl = $('resultBattleDate');
+        if (!dateEl && titleEl) {
+            dateEl = document.createElement('p');
+            dateEl.id = 'resultBattleDate';
+            dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: 0px; margin-bottom: 10px; text-align: center;';
+            titleEl.after(dateEl);
+        }
+        
+        if (dateEl && instance.end_time) {
+            const endDate = new Date(instance.end_time);
+            dateEl.textContent = endDate.toLocaleString('pt-BR', { 
+                day: '2-digit', month: '2-digit', year: 'numeric', 
+                hour: '2-digit', minute: '2-digit' 
+            });
+        }
 
-    // Mapeia as cores baseadas no array original ANTES de ordenar
-    const guildColorMapResults = new Map();
-    (instance.registered_guilds || []).forEach((g, index) => {
-        guildColorMapResults.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
-    });
+        // 1. Parse blindado do array de guildas
+        let rawGuilds = instance.registered_guilds;
+        if (typeof rawGuilds === 'string') {
+            try { rawGuilds = JSON.parse(rawGuilds); } catch(e) { rawGuilds = []; }
+        }
+        if (!Array.isArray(rawGuilds)) rawGuilds = [];
 
-    modals.resultsRankingHonor.innerHTML = '';
-
-    // Ordenação segura garantindo que os valores sejam tratados como números (evita NaN)
-    const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) =>
-        (Number(b.honor_points) || 0) - (Number(a.honor_points) || 0)
-    );
-
-    if (sortedGuilds.length === 0) {
-        modals.resultsRankingHonor.innerHTML = '<li style="justify-content: center; color: #aaa;">Nenhum dado de ranking.</li>';
-    } else {
-        sortedGuilds.forEach((g, index) => {
-            const color = guildColorMapResults.get(g.guild_id) || 'var(--guild-color-neutral)';
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <span>${index + 1}. <strong style="color: ${color};">${escHtml(g.guild_name)}</strong></span>
-                <span>${g.honor_points || 0} pts</span>
-            `;
-            modals.resultsRankingHonor.appendChild(li);
+        const guildColorMapResults = new Map();
+        rawGuilds.forEach((g, index) => {
+            if (g && g.guild_id) {
+                guildColorMapResults.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
+            }
         });
-    }
 
-    const guildNameMap = new Map();
-    (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
-
-    let listForResultsTable = playerDamageRanking || [];
-    const iAmInTop5 = listForResultsTable.some(p => p.player_id === userId);
-    if (!iAmInTop5 && personalRanking && personalRanking.rank) {
-        listForResultsTable = [...listForResultsTable, {
-            player_id: userId,
-            total_damage_dealt: personalRanking.total_damage_dealt || 0,
-            total_eliminations: personalRanking.total_eliminations || 0,
-            guild_id: userGuildId,
-            name: userPlayerStats ? userPlayerStats.name : 'Você',
-            _customRank: personalRanking.rank
-        }];
-    }
-    modals.resultsRankingDamage.innerHTML = buildRankingTableHtml(listForResultsTable, guildColorMapResults, guildNameMap, userId);
-
-    let guildRewardsEl = $('resultsGuildRewards');
-    if (!guildRewardsEl) {
-        guildRewardsEl = document.createElement('div');
-        guildRewardsEl.id = 'resultsGuildRewards';
-        guildRewardsEl.className = 'results-rewards-section';
-        modals.resultsRewardMessage.after(guildRewardsEl);
-    }
-    guildRewardsEl.innerHTML = '';
-    guildRewardsEl.style.display = 'block';
-
-    let playerRewardsEl = $('resultsPlayerRewards');
-    if (!playerRewardsEl) {
-        playerRewardsEl = document.createElement('div');
-        playerRewardsEl.id = 'resultsPlayerRewards';
-        playerRewardsEl.className = 'results-rewards-section';
-        guildRewardsEl.after(playerRewardsEl);
-    }
-    playerRewardsEl.innerHTML = '';
-    playerRewardsEl.style.display = 'block';
-
-    let myGuildRank = -1;
-    let myGuildResult = null;
-    if (sortedGuilds.length > 0) {
-        myGuildResult = sortedGuilds.find(g => g.guild_id === userGuildId);
-        if (myGuildResult) {
-            myGuildRank = sortedGuilds.indexOf(myGuildResult) + 1;
+        // 2. Renderização blindada do Ranking de Guildas
+        if (modals.resultsRankingHonor) {
+            modals.resultsRankingHonor.innerHTML = '';
+            
+            const sortedGuilds = [...rawGuilds].sort((a, b) => 
+                (Number(b.honor_points) || 0) - (Number(a.honor_points) || 0)
+            );
+            
+            if (sortedGuilds.length === 0) {
+                modals.resultsRankingHonor.innerHTML = '<li style="text-align: center; color: #aaa; display: block; padding: 10px;">Nenhum dado de ranking.</li>';
+            } else {
+                sortedGuilds.forEach((g, index) => {
+                    const color = guildColorMapResults.get(g.guild_id) || 'var(--guild-color-neutral)';
+                    const li = document.createElement('li');
+                    
+                    // Força estilos inline para impedir que o CSS externo colapse a linha no mobile
+                    li.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #444; width: 100%; box-sizing: border-box; min-height: 35px;';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.innerHTML = `${index + 1}. <strong style="color: ${color};">${escHtml(g.guild_name || 'Desconhecida')}</strong>`;
+                    
+                    const ptsSpan = document.createElement('span');
+                    ptsSpan.textContent = `${g.honor_points || 0} pts`;
+                    ptsSpan.style.fontWeight = 'bold';
+                    
+                    li.appendChild(nameSpan);
+                    li.appendChild(ptsSpan);
+                    modals.resultsRankingHonor.appendChild(li);
+                });
+            }
         }
-    }
-    
-    // Rank do jogador no ranking GLOBAL de dano (top 1 e top 2 entre todos os participantes)
-    let myPlayerDamageRank = -1;
-    if (playerDamageRanking && playerDamageRanking.length > 0) {
-        const globalDamageRanking = [...playerDamageRanking]
-            .sort((a, b) => b.total_damage_dealt - a.total_damage_dealt);
-        const myIndex = globalDamageRanking.findIndex(p => p.player_id === userId);
-        if (myIndex !== -1) {
-            myPlayerDamageRank = myIndex + 1;
+
+        const guildNameMap = new Map();
+        rawGuilds.forEach(g => {
+            if (g && g.guild_id) guildNameMap.set(g.guild_id, g.guild_name);
+        });
+
+        // 3. Renderização do Ranking de Dano
+        let listForResultsTable = playerDamageRanking || [];
+        const iAmInTop5 = listForResultsTable.some(p => p.player_id === userId);
+        if (!iAmInTop5 && personalRanking && personalRanking.rank) {
+            listForResultsTable = [...listForResultsTable, {
+                player_id: userId,
+                total_damage_dealt: personalRanking.total_damage_dealt || 0,
+                total_eliminations: personalRanking.total_eliminations || 0,
+                guild_id: userGuildId,
+                name: userPlayerStats ? userPlayerStats.name : 'Você',
+                _customRank: personalRanking.rank
+            }];
         }
+        
+        if (modals.resultsRankingDamage) {
+            modals.resultsRankingDamage.innerHTML = buildRankingTableHtml(listForResultsTable, guildColorMapResults, guildNameMap, userId);
+        }
+
+        // 4. Lógica de Recompensas
+        let guildRewardsEl = $('resultsGuildRewards');
+        if (!guildRewardsEl) {
+            guildRewardsEl = document.createElement('div');
+            guildRewardsEl.id = 'resultsGuildRewards';
+            guildRewardsEl.className = 'results-rewards-section';
+            modals.resultsRewardMessage.after(guildRewardsEl);
+        }
+        guildRewardsEl.innerHTML = '';
+        guildRewardsEl.style.display = 'block';
+
+        let playerRewardsEl = $('resultsPlayerRewards');
+        if (!playerRewardsEl) {
+            playerRewardsEl = document.createElement('div');
+            playerRewardsEl.id = 'resultsPlayerRewards';
+            playerRewardsEl.className = 'results-rewards-section';
+            guildRewardsEl.after(playerRewardsEl);
+        }
+        playerRewardsEl.innerHTML = '';
+        playerRewardsEl.style.display = 'block';
+
+        let myGuildRank = -1;
+        let myGuildResult = null;
+        
+        // Re-ordena as guildas para garantir que a lógica de recompensas funcione
+        const sortedForRewards = [...rawGuilds].sort((a, b) => (Number(b.honor_points) || 0) - (Number(a.honor_points) || 0));
+        
+        if (sortedForRewards.length > 0) {
+            myGuildResult = sortedForRewards.find(g => g.guild_id === userGuildId);
+            if (myGuildResult) {
+                myGuildRank = sortedForRewards.indexOf(myGuildResult) + 1;
+            }
+        }
+        
+        let myPlayerDamageRank = -1;
+        if (playerDamageRanking && playerDamageRanking.length > 0) {
+            const globalDamageRanking = [...playerDamageRanking]
+                .sort((a, b) => b.total_damage_dealt - a.total_damage_dealt);
+            const myIndex = globalDamageRanking.findIndex(p => p.player_id === userId);
+            if (myIndex !== -1) {
+                myPlayerDamageRank = myIndex + 1;
+            }
+        }
+
+        let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
+        let hasGuildRewards = false;
+
+        if (myGuildRank === 1 && myGuildResult && myGuildResult.honor_points > 0) {
+            modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
+            modals.resultsRewardMessage.style.color = 'gold';
+            guildRewardsHTML += '<div class="results-reward-list">';
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); 
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); 
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100);
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.BATTLE_FRAME, 1);
+            guildRewardsHTML += '</div>';
+            hasGuildRewards = true;
+        } else if (myGuildRank === 2 && myGuildResult && myGuildResult.honor_points > 0) {
+            modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
+            modals.resultsRewardMessage.style.color = '#00bcd4';
+            guildRewardsHTML += '<div class="results-reward-list">';
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); 
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); 
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); 
+            guildRewardsHTML += '</div>';
+            hasGuildRewards = true;
+        } else if (myGuildRank === 3 && myGuildResult && myGuildResult.honor_points > 0) {
+            modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
+            modals.resultsRewardMessage.style.color = '#cd7f32';
+            guildRewardsHTML += '<div class="results-reward-list">';
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); 
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); 
+            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); 
+            guildRewardsHTML += '</div>';
+            hasGuildRewards = true;
+        } else {
+            modals.resultsRewardMessage.textContent = "Sem recompensas ou já recebidas!";
+            modals.resultsRewardMessage.style.color = '#aaa';
+            guildRewardsHTML += '<p>Nenhuma recompensa de guilda nesta batalha.</p>';
+        }
+        
+        guildRewardsEl.innerHTML = guildRewardsHTML;
+        if (!hasGuildRewards && myGuildRank > 0) guildRewardsEl.style.display = 'none';
+
+        let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
+        let hasPlayerRewards = false;
+
+        const guildBaseRewards = {
+            1: { crystals: 6000, cards: 8,  stones: 100, cardItem: REWARD_ITEMS.CARD_ADVANCED },
+            2: { crystals: 2000, cards: 12, stones: 40,  cardItem: REWARD_ITEMS.CARD_COMMON },
+            3: { crystals: 1000, cards: 8,  stones: 20,  cardItem: REWARD_ITEMS.CARD_COMMON },
+        };
+
+        if (myGuildRank >= 1 && myGuildRank <= 3 && (myPlayerDamageRank === 1 || myPlayerDamageRank === 2)) {
+            const base = guildBaseRewards[myGuildRank];
+            const multiplier = myPlayerDamageRank === 1 ? 3 : 2;
+            const bonusMultiplier = multiplier - 1;
+            const rankLabel = myPlayerDamageRank === 1 ? 'Rank 1' : 'Rank 2';
+
+            playerRewardsHTML += `<p>Bônus por <strong>${rankLabel}</strong> em Dano global (Multiplicador ${multiplier}x):</p>`;
+            playerRewardsHTML += '<div class="results-reward-list">';
+            playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, `${base.crystals} (Base) + ${base.crystals * bonusMultiplier} (Bônus)`);
+            playerRewardsHTML += createRewardItemHTML(base.cardItem, `${base.cards} (Base) + ${base.cards * bonusMultiplier} (Bônus)`);
+            playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, `${base.stones} (Base) + ${base.stones * bonusMultiplier} (Bônus)`);
+            playerRewardsHTML += '</div>';
+            hasPlayerRewards = true;
+        }
+
+        if (hasPlayerRewards) {
+            playerRewardsEl.innerHTML = playerRewardsHTML;
+        } else {
+            playerRewardsEl.style.display = 'none';
+        }
+        
+        showScreen('results');
+    } catch (err) {
+        console.error("Erro crítico ao renderizar a tela de resultados:", err);
     }
-
-    let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
-    let hasGuildRewards = false;
-
-    // --- RECOMPENSAS VISUAIS ATUALIZADAS (DOBRADAS) ---
-    if (myGuildRank === 1 && myGuildResult.honor_points > 0) {
-        modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
-        modals.resultsRewardMessage.style.color = 'gold';
-        guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100);
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.BATTLE_FRAME, 1);
-        guildRewardsHTML += '</div>';
-        hasGuildRewards = true;
-    } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
-        modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
-        modals.resultsRewardMessage.style.color = '#00bcd4';
-        guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); 
-        guildRewardsHTML += '</div>';
-        hasGuildRewards = true;
-    } else if (myGuildRank === 3 && myGuildResult.honor_points > 0) {
-        modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
-        modals.resultsRewardMessage.style.color = '#cd7f32';
-        guildRewardsHTML += '<div class="results-reward-list">';
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); 
-        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); 
-        guildRewardsHTML += '</div>';
-        hasGuildRewards = true;
-    } else {
-        modals.resultsRewardMessage.textContent = "Sem recompensas ou já recebidas!";
-        modals.resultsRewardMessage.style.color = '#aaa';
-        guildRewardsHTML += '<p>Nenhuma recompensa de guilda nesta batalha.</p>';
-    }
-    
-    guildRewardsEl.innerHTML = guildRewardsHTML;
-    if (!hasGuildRewards && myGuildRank > 0) guildRewardsEl.style.display = 'none';
-
-    let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
-    let hasPlayerRewards = false;
-
-    // Bônus individuais baseados no rank GLOBAL de dano (top 1 e top 2 entre todos os participantes)
-    // Os valores base dependem do rank da guilda; o multiplicador depende do rank global de dano.
-    const guildBaseRewards = {
-        1: { crystals: 6000, cards: 8,  stones: 100, cardItem: REWARD_ITEMS.CARD_ADVANCED },
-        2: { crystals: 2000, cards: 12, stones: 40,  cardItem: REWARD_ITEMS.CARD_COMMON },
-        3: { crystals: 1000, cards: 8,  stones: 20,  cardItem: REWARD_ITEMS.CARD_COMMON },
-    };
-
-    if (myGuildRank >= 1 && myGuildRank <= 3 && (myPlayerDamageRank === 1 || myPlayerDamageRank === 2)) {
-        const base = guildBaseRewards[myGuildRank];
-        const multiplier = myPlayerDamageRank === 1 ? 3 : 2;
-        const bonusMultiplier = multiplier - 1;
-        const rankLabel = myPlayerDamageRank === 1 ? 'Rank 1' : 'Rank 2';
-
-        playerRewardsHTML += `<p>Bônus por <strong>${rankLabel}</strong> em Dano global (Multiplicador ${multiplier}x):</p>`;
-        playerRewardsHTML += '<div class="results-reward-list">';
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, `${base.crystals} (Base) + ${base.crystals * bonusMultiplier} (Bônus)`);
-        playerRewardsHTML += createRewardItemHTML(base.cardItem, `${base.cards} (Base) + ${base.cards * bonusMultiplier} (Bônus)`);
-        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, `${base.stones} (Base) + ${base.stones * bonusMultiplier} (Bônus)`);
-        playerRewardsHTML += '</div>';
-        hasPlayerRewards = true;
-    }
-
-
-    
-    if (hasPlayerRewards) {
-        playerRewardsEl.innerHTML = playerRewardsHTML;
-    } else {
-        playerRewardsEl.style.display = 'none';
-    }
-    
-    showScreen('results');
 }
 
 // --- Lógica de Interação ---

@@ -2340,6 +2340,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Listener do botão de resgatar recompensas de temporada
     const arenaRewardClaimBtn = document.getElementById('arenaRewardClaimBtn');
     if (arenaRewardClaimBtn) arenaRewardClaimBtn.addEventListener('click', claimArenaSeasonRewards);
+
+    // Botão de fechar do modal de recompensa — garante que o jogador NUNCA
+    // fique preso na tela caso o resgate falhe (ex: erro de rede/servidor).
+    // Fechar aqui NÃO marca como concluído: o glow/modal voltarão a aparecer
+    // depois, permitindo tentar resgatar novamente mais tarde.
+    const closeArenaRewardBtn = document.getElementById('closeArenaRewardBtn');
+    if (closeArenaRewardBtn) closeArenaRewardBtn.addEventListener('click', () => {
+        const modal = document.getElementById('arenaRewardModal');
+        const claimBtn = document.getElementById('arenaRewardClaimBtn');
+        if (modal) modal.style.display = 'none';
+        if (claimBtn) { claimBtn.disabled = false; claimBtn.textContent = '⚔ Resgatar ⚔'; }
+    });
     
     if (closeRankingBtn) closeRankingBtn.addEventListener("click", () => { 
         if (rankingModal) rankingModal.style.display = 'none';

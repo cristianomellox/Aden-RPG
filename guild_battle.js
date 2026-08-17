@@ -897,14 +897,23 @@ function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
     });
 
     modals.resultsRankingHonor.innerHTML = '';
+    // Estilo inline direto no <ol>, não só via classe — se o wrapper do
+    // app (appcreator24) injetar algum reset de CSS que sobrescreva ou
+    // remova as classes .ranking-list/.results-list, o conteúdo ainda
+    // fica visível de qualquer forma.
+    modals.resultsRankingHonor.style.cssText = 'list-style:none;padding:0;margin:0 0 15px 0;text-align:left;border:1px solid #555;border-radius:5px;background:rgba(0,0,0,0.2);min-height:24px;display:block;visibility:visible;opacity:1;';
     const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => (b.honor_points || 0) - (a.honor_points || 0));
     
     if (sortedGuilds.length === 0) {
-        modals.resultsRankingHonor.innerHTML = '<li>Nenhum dado de ranking.</li>';
+        const li = document.createElement('li');
+        li.textContent = 'Nenhum dado de ranking.';
+        li.style.cssText = 'display:block;padding:8px;color:#fff;font-size:1em;';
+        modals.resultsRankingHonor.appendChild(li);
     } else {
         sortedGuilds.forEach((g, index) => {
             const li = document.createElement('li');
             li.textContent = `#${index + 1} ${g.guild_name} - ${g.honor_points || 0} Pontos`;
+            li.style.cssText = `display:block;padding:8px;border-bottom:1px solid #555;font-size:1em;visibility:visible;opacity:1;color:${index === 0 ? 'gold' : '#fff'};${index === 0 ? 'font-weight:bold;' : ''}`;
             modals.resultsRankingHonor.appendChild(li);
         });
     }

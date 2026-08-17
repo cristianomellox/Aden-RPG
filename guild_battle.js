@@ -96,6 +96,7 @@ let userPlayerStats = null;
 
 let currentBattleState = null; 
 let heartbeatTimer = null; // Timer para polling adaptativo
+let heartbeatContinuousMode = false; // true só na fase final (polling encadeado); calls avulsas de ação não reagendam
 let uiTimerInterval = null;
 let selectedObjective = null;
 
@@ -857,215 +858,194 @@ function fitModalToViewport(modalId) {
 function adjustResultsModalViewport() { fitModalToViewport('resultsModal'); }
 
 function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
-    try {
-        adjustResultsModalViewport();
-        
-        const titleEl = $('resultCityName');
-        if (titleEl) titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
-        
-        let dateEl = $('resultBattleDate');
-        if (!dateEl && titleEl) {
-            dateEl = document.createElement('p');
-            dateEl.id = 'resultBattleDate';
-            dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: 0px; margin-bottom: 10px; text-align: center;';
-            titleEl.after(dateEl);
-        }
-        
-        if (dateEl && instance.end_time) {
-            const endDate = new Date(instance.end_time);
-            dateEl.textContent = endDate.toLocaleString('pt-BR', { 
-                day: '2-digit', month: '2-digit', year: 'numeric', 
-                hour: '2-digit', minute: '2-digit' 
-            });
-        }
+    adjustResultsModalViewport();
 
-        // 1. Parse blindado do array de guildas
-        let rawGuilds = instance.registered_guilds;
-        if (typeof rawGuilds === 'string') {
-            try { rawGuilds = JSON.parse(rawGuilds); } catch(e) { rawGuilds = []; }
-        }
-        if (!Array.isArray(rawGuilds)) rawGuilds = [];
-
-        const guildColorMapResults = new Map();
-        rawGuilds.forEach((g, index) => {
-            if (g && g.guild_id) {
-                guildColorMapResults.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
-            }
-        });
-
-        // 2. Renderização blindada do Ranking de Guildas
-        if (modals.resultsRankingHonor) {
-            modals.resultsRankingHonor.innerHTML = '';
-            
-            const sortedGuilds = [...rawGuilds].sort((a, b) => 
-                (Number(b.honor_points) || 0) - (Number(a.honor_points) || 0)
-            );
-            
-            if (sortedGuilds.length === 0) {
-                modals.resultsRankingHonor.innerHTML = '<li style="text-align: center; color: #aaa; display: block; padding: 10px;">Nenhum dado de ranking.</li>';
-            } else {
-                sortedGuilds.forEach((g, index) => {
-                    const color = guildColorMapResults.get(g.guild_id) || 'var(--guild-color-neutral)';
-                    const li = document.createElement('li');
-                    
-                    // Força estilos inline para impedir que o CSS externo colapse a linha no mobile
-                    li.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #444; width: 100%; box-sizing: border-box; min-height: 35px;';
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.innerHTML = `${index + 1}. <strong style="color: ${color};">${escHtml(g.guild_name || 'Desconhecida')}</strong>`;
-                    
-                    const ptsSpan = document.createElement('span');
-                    ptsSpan.textContent = `${g.honor_points || 0} pts`;
-                    ptsSpan.style.fontWeight = 'bold';
-                    
-                    li.appendChild(nameSpan);
-                    li.appendChild(ptsSpan);
-                    modals.resultsRankingHonor.appendChild(li);
-                });
-            }
-        }
-
-        const guildNameMap = new Map();
-        rawGuilds.forEach(g => {
-            if (g && g.guild_id) guildNameMap.set(g.guild_id, g.guild_name);
-        });
-
-        // 3. Renderização do Ranking de Dano
-        let listForResultsTable = playerDamageRanking || [];
-        const iAmInTop5 = listForResultsTable.some(p => p.player_id === userId);
-        if (!iAmInTop5 && personalRanking && personalRanking.rank) {
-            listForResultsTable = [...listForResultsTable, {
-                player_id: userId,
-                total_damage_dealt: personalRanking.total_damage_dealt || 0,
-                total_eliminations: personalRanking.total_eliminations || 0,
-                guild_id: userGuildId,
-                name: userPlayerStats ? userPlayerStats.name : 'Você',
-                _customRank: personalRanking.rank
-            }];
-        }
-        
-        if (modals.resultsRankingDamage) {
-            modals.resultsRankingDamage.innerHTML = buildRankingTableHtml(listForResultsTable, guildColorMapResults, guildNameMap, userId);
-        }
-
-        // 4. Lógica de Recompensas
-        let guildRewardsEl = $('resultsGuildRewards');
-        if (!guildRewardsEl) {
-            guildRewardsEl = document.createElement('div');
-            guildRewardsEl.id = 'resultsGuildRewards';
-            guildRewardsEl.className = 'results-rewards-section';
-            modals.resultsRewardMessage.after(guildRewardsEl);
-        }
-        guildRewardsEl.innerHTML = '';
-        guildRewardsEl.style.display = 'block';
-
-        let playerRewardsEl = $('resultsPlayerRewards');
-        if (!playerRewardsEl) {
-            playerRewardsEl = document.createElement('div');
-            playerRewardsEl.id = 'resultsPlayerRewards';
-            playerRewardsEl.className = 'results-rewards-section';
-            guildRewardsEl.after(playerRewardsEl);
-        }
-        playerRewardsEl.innerHTML = '';
-        playerRewardsEl.style.display = 'block';
-
-        let myGuildRank = -1;
-        let myGuildResult = null;
-        
-        // Re-ordena as guildas para garantir que a lógica de recompensas funcione
-        const sortedForRewards = [...rawGuilds].sort((a, b) => (Number(b.honor_points) || 0) - (Number(a.honor_points) || 0));
-        
-        if (sortedForRewards.length > 0) {
-            myGuildResult = sortedForRewards.find(g => g.guild_id === userGuildId);
-            if (myGuildResult) {
-                myGuildRank = sortedForRewards.indexOf(myGuildResult) + 1;
-            }
-        }
-        
-        let myPlayerDamageRank = -1;
-        if (playerDamageRanking && playerDamageRanking.length > 0) {
-            const globalDamageRanking = [...playerDamageRanking]
-                .sort((a, b) => b.total_damage_dealt - a.total_damage_dealt);
-            const myIndex = globalDamageRanking.findIndex(p => p.player_id === userId);
-            if (myIndex !== -1) {
-                myPlayerDamageRank = myIndex + 1;
-            }
-        }
-
-        let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
-        let hasGuildRewards = false;
-
-        if (myGuildRank === 1 && myGuildResult && myGuildResult.honor_points > 0) {
-            modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
-            modals.resultsRewardMessage.style.color = 'gold';
-            guildRewardsHTML += '<div class="results-reward-list">';
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); 
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); 
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100);
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.BATTLE_FRAME, 1);
-            guildRewardsHTML += '</div>';
-            hasGuildRewards = true;
-        } else if (myGuildRank === 2 && myGuildResult && myGuildResult.honor_points > 0) {
-            modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
-            modals.resultsRewardMessage.style.color = '#00bcd4';
-            guildRewardsHTML += '<div class="results-reward-list">';
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); 
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); 
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); 
-            guildRewardsHTML += '</div>';
-            hasGuildRewards = true;
-        } else if (myGuildRank === 3 && myGuildResult && myGuildResult.honor_points > 0) {
-            modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
-            modals.resultsRewardMessage.style.color = '#cd7f32';
-            guildRewardsHTML += '<div class="results-reward-list">';
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); 
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); 
-            guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); 
-            guildRewardsHTML += '</div>';
-            hasGuildRewards = true;
-        } else {
-            modals.resultsRewardMessage.textContent = "Sem recompensas ou já recebidas!";
-            modals.resultsRewardMessage.style.color = '#aaa';
-            guildRewardsHTML += '<p>Nenhuma recompensa de guilda nesta batalha.</p>';
-        }
-        
-        guildRewardsEl.innerHTML = guildRewardsHTML;
-        if (!hasGuildRewards && myGuildRank > 0) guildRewardsEl.style.display = 'none';
-
-        let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
-        let hasPlayerRewards = false;
-
-        const guildBaseRewards = {
-            1: { crystals: 6000, cards: 8,  stones: 100, cardItem: REWARD_ITEMS.CARD_ADVANCED },
-            2: { crystals: 2000, cards: 12, stones: 40,  cardItem: REWARD_ITEMS.CARD_COMMON },
-            3: { crystals: 1000, cards: 8,  stones: 20,  cardItem: REWARD_ITEMS.CARD_COMMON },
-        };
-
-        if (myGuildRank >= 1 && myGuildRank <= 3 && (myPlayerDamageRank === 1 || myPlayerDamageRank === 2)) {
-            const base = guildBaseRewards[myGuildRank];
-            const multiplier = myPlayerDamageRank === 1 ? 3 : 2;
-            const bonusMultiplier = multiplier - 1;
-            const rankLabel = myPlayerDamageRank === 1 ? 'Rank 1' : 'Rank 2';
-
-            playerRewardsHTML += `<p>Bônus por <strong>${rankLabel}</strong> em Dano global (Multiplicador ${multiplier}x):</p>`;
-            playerRewardsHTML += '<div class="results-reward-list">';
-            playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, `${base.crystals} (Base) + ${base.crystals * bonusMultiplier} (Bônus)`);
-            playerRewardsHTML += createRewardItemHTML(base.cardItem, `${base.cards} (Base) + ${base.cards * bonusMultiplier} (Bônus)`);
-            playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, `${base.stones} (Base) + ${base.stones * bonusMultiplier} (Bônus)`);
-            playerRewardsHTML += '</div>';
-            hasPlayerRewards = true;
-        }
-
-        if (hasPlayerRewards) {
-            playerRewardsEl.innerHTML = playerRewardsHTML;
-        } else {
-            playerRewardsEl.style.display = 'none';
-        }
-        
-        showScreen('results');
-    } catch (err) {
-        console.error("Erro crítico ao renderizar a tela de resultados:", err);
+    // O modal de resultado é reaproveitado (mesmo nó do DOM) entre batalhas
+    // e também é re-renderizado a cada 7s enquanto fica na tela (polling
+    // de 'finished'). Sem isso, se o jogador tivesse rolado pra baixo (pra
+    // ver recompensas) numa exibição anterior, o scroll ficava "preso" lá
+    // embaixo na próxima vez que o modal abrisse — fazendo o Ranking de
+    // Honra (primeira seção, lá em cima) parecer que sumiu, mostrando só
+    // Dano/Eliminações e Recompensas, que ficam mais abaixo. Só reseta no
+    // momento em que o modal está sendo ABERTO agora (não a cada poll de
+    // 7s, senão puxaria a rolagem de volta pro topo enquanto o jogador
+    // ainda está lendo as recompensas).
+    const isFirstOpen = !screens.results || screens.results.style.display !== 'flex';
+    if (isFirstOpen) {
+        const resultsContent = modals.results ? modals.results.querySelector('.modal-content') : null;
+        if (resultsContent) resultsContent.scrollTop = 0;
     }
+
+    const titleEl = $('resultCityName');
+    titleEl.textContent = CITIES.find(c => c.id === instance.city_id)?.name || 'Desconhecida';
+    
+    let dateEl = $('resultBattleDate');
+    if (!dateEl) {
+        dateEl = document.createElement('p');
+        dateEl.id = 'resultBattleDate';
+        dateEl.style.cssText = 'font-size: 0.9em; color: #ccc; margin-top: 0px; margin-bottom: 0px; text-align: center;';
+        titleEl.after(dateEl);
+    }
+    
+    const endDate = new Date(instance.end_time);
+    dateEl.textContent = endDate.toLocaleString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+
+    modals.resultsRankingHonor.innerHTML = '';
+    const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => (b.honor_points || 0) - (a.honor_points || 0));
+    
+    if (sortedGuilds.length === 0) {
+        modals.resultsRankingHonor.innerHTML = '<li>Nenhum dado de ranking.</li>';
+    } else {
+        sortedGuilds.forEach((g, index) => {
+            const li = document.createElement('li');
+            li.textContent = `#${index + 1} ${g.guild_name} - ${g.honor_points || 0} Pontos`;
+            modals.resultsRankingHonor.appendChild(li);
+        });
+    }
+
+    const guildColorMapResults = new Map();
+    (instance.registered_guilds || []).forEach((g, index) => {
+        guildColorMapResults.set(g.guild_id, GUILD_COLORS[index] || 'var(--guild-color-neutral)');
+    });
+    const guildNameMap = new Map();
+    (instance.registered_guilds || []).forEach(g => guildNameMap.set(g.guild_id, g.guild_name));
+
+    let listForResultsTable = playerDamageRanking || [];
+    const iAmInTop5 = listForResultsTable.some(p => p.player_id === userId);
+    if (!iAmInTop5 && personalRanking && personalRanking.rank) {
+        listForResultsTable = [...listForResultsTable, {
+            player_id: userId,
+            total_damage_dealt: personalRanking.total_damage_dealt || 0,
+            total_eliminations: personalRanking.total_eliminations || 0,
+            guild_id: userGuildId,
+            name: userPlayerStats ? userPlayerStats.name : 'Você',
+            _customRank: personalRanking.rank
+        }];
+    }
+    modals.resultsRankingDamage.innerHTML = buildRankingTableHtml(listForResultsTable, guildColorMapResults, guildNameMap, userId);
+
+    let guildRewardsEl = $('resultsGuildRewards');
+    if (!guildRewardsEl) {
+        guildRewardsEl = document.createElement('div');
+        guildRewardsEl.id = 'resultsGuildRewards';
+        guildRewardsEl.className = 'results-rewards-section';
+        modals.resultsRewardMessage.after(guildRewardsEl);
+    }
+    guildRewardsEl.innerHTML = '';
+    guildRewardsEl.style.display = 'block';
+
+    let playerRewardsEl = $('resultsPlayerRewards');
+    if (!playerRewardsEl) {
+        playerRewardsEl = document.createElement('div');
+        playerRewardsEl.id = 'resultsPlayerRewards';
+        playerRewardsEl.className = 'results-rewards-section';
+        guildRewardsEl.after(playerRewardsEl);
+    }
+    playerRewardsEl.innerHTML = '';
+    playerRewardsEl.style.display = 'block';
+
+    let myGuildRank = -1;
+    let myGuildResult = null;
+    if (sortedGuilds.length > 0) {
+        myGuildResult = sortedGuilds.find(g => g.guild_id === userGuildId);
+        if (myGuildResult) {
+            myGuildRank = sortedGuilds.indexOf(myGuildResult) + 1;
+        }
+    }
+    
+    // Rank do jogador no ranking GLOBAL de dano (top 1 e top 2 entre todos os participantes)
+    let myPlayerDamageRank = -1;
+    if (playerDamageRanking && playerDamageRanking.length > 0) {
+        const globalDamageRanking = [...playerDamageRanking]
+            .sort((a, b) => b.total_damage_dealt - a.total_damage_dealt);
+        const myIndex = globalDamageRanking.findIndex(p => p.player_id === userId);
+        if (myIndex !== -1) {
+            myPlayerDamageRank = myIndex + 1;
+        }
+    }
+
+    let guildRewardsHTML = '<h4>Recompensas da Guilda</h4>';
+    let hasGuildRewards = false;
+
+    // --- RECOMPENSAS VISUAIS ATUALIZADAS (DOBRADAS) ---
+    if (myGuildRank === 1 && myGuildResult.honor_points > 0) {
+        modals.resultsRewardMessage.textContent = "Sua guilda venceu! Recompensas enviadas.";
+        modals.resultsRewardMessage.style.color = 'gold';
+        guildRewardsHTML += '<div class="results-reward-list">';
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 6000); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_ADVANCED, 8); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 100);
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.BATTLE_FRAME, 1);
+        guildRewardsHTML += '</div>';
+        hasGuildRewards = true;
+    } else if (myGuildRank === 2 && myGuildResult.honor_points > 0) {
+        modals.resultsRewardMessage.textContent = "Sua guilda ficou em 2º lugar! Recompensas enviadas.";
+        modals.resultsRewardMessage.style.color = '#00bcd4';
+        guildRewardsHTML += '<div class="results-reward-list">';
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 2000); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 12); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 40); 
+        guildRewardsHTML += '</div>';
+        hasGuildRewards = true;
+    } else if (myGuildRank === 3 && myGuildResult.honor_points > 0) {
+        modals.resultsRewardMessage.textContent = "Sua guilda ficou em 3º lugar! Recompensas enviadas.";
+        modals.resultsRewardMessage.style.color = '#cd7f32';
+        guildRewardsHTML += '<div class="results-reward-list">';
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, 1000); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CARD_COMMON, 8); 
+        guildRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, 20); 
+        guildRewardsHTML += '</div>';
+        hasGuildRewards = true;
+    } else {
+        modals.resultsRewardMessage.textContent = "Sem recompensas ou já recebidas!";
+        modals.resultsRewardMessage.style.color = '#aaa';
+        guildRewardsHTML += '<p>Nenhuma recompensa de guilda nesta batalha.</p>';
+    }
+    
+    guildRewardsEl.innerHTML = guildRewardsHTML;
+    if (!hasGuildRewards && myGuildRank > 0) guildRewardsEl.style.display = 'none';
+
+    let playerRewardsHTML = '<h4>Bônus Individual (Top Dano)</h4>';
+    let hasPlayerRewards = false;
+
+    // Bônus individuais baseados no rank GLOBAL de dano (top 1 e top 2 entre todos os participantes)
+    // Os valores base dependem do rank da guilda; o multiplicador depende do rank global de dano.
+    const guildBaseRewards = {
+        1: { crystals: 6000, cards: 8,  stones: 100, cardItem: REWARD_ITEMS.CARD_ADVANCED },
+        2: { crystals: 2000, cards: 12, stones: 40,  cardItem: REWARD_ITEMS.CARD_COMMON },
+        3: { crystals: 1000, cards: 8,  stones: 20,  cardItem: REWARD_ITEMS.CARD_COMMON },
+    };
+
+    if (myGuildRank >= 1 && myGuildRank <= 3 && (myPlayerDamageRank === 1 || myPlayerDamageRank === 2)) {
+        const base = guildBaseRewards[myGuildRank];
+        const multiplier = myPlayerDamageRank === 1 ? 3 : 2;
+        const bonusMultiplier = multiplier - 1;
+        const rankLabel = myPlayerDamageRank === 1 ? 'Rank 1' : 'Rank 2';
+
+        playerRewardsHTML += `<p>Bônus por <strong>${rankLabel}</strong> em Dano global (Multiplicador ${multiplier}x):</p>`;
+        playerRewardsHTML += '<div class="results-reward-list">';
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.CRYSTALS, `${base.crystals} (Base) + ${base.crystals * bonusMultiplier} (Bônus)`);
+        playerRewardsHTML += createRewardItemHTML(base.cardItem, `${base.cards} (Base) + ${base.cards * bonusMultiplier} (Bônus)`);
+        playerRewardsHTML += createRewardItemHTML(REWARD_ITEMS.REFORGE_STONE, `${base.stones} (Base) + ${base.stones * bonusMultiplier} (Bônus)`);
+        playerRewardsHTML += '</div>';
+        hasPlayerRewards = true;
+    }
+
+
+    
+    if (hasPlayerRewards) {
+        playerRewardsEl.innerHTML = playerRewardsHTML;
+    } else {
+        playerRewardsEl.style.display = 'none';
+    }
+    
+    showScreen('results');
 }
 
 // --- Lógica de Interação ---
@@ -1528,10 +1508,18 @@ async function pollBattleState() {
                 lastCaptureTimestamp = '1970-01-01T00:00:00+00:00';
             }
 
+            // Histórico de PvP do Nexus: mesmo tratamento das capturas acima
+            // — mostra o banner pro que já aconteceu, sem repetir som.
+            // Antes só atualizava lastNexusEventTimestamp e nunca exibia
+            // nada, então essas notificações só apareciam se o jogador
+            // estivesse dentro do Nexus na hora (o nexus_module tem sua
+            // própria via pra isso).
             const nexusEvents = (data.instance && data.instance.recent_nexus_events) ? data.instance.recent_nexus_events : [];
-            lastNexusEventTimestamp = nexusEvents.length > 0
-                ? nexusEvents[nexusEvents.length - 1].timestamp
-                : '1970-01-01T00:00:00+00:00';
+            if (nexusEvents.length > 0) {
+                handleNewNexusEvents(nexusEvents);
+            } else {
+                lastNexusEventTimestamp = '1970-01-01T00:00:00+00:00';
+            }
 
             if (screens.battle.style.display === 'none' || screens.loading.style.display === 'flex') {
                 showScreen('loading');
@@ -1585,6 +1573,22 @@ async function pollBattleState() {
 }
 
 // skipSounds = true quando chamado no boot/re-poll para não repetir sons históricos
+// skipSounds/histórico segue o mesmo padrão de handleNewCaptures: no
+// boot/re-poll os eventos já aconteceram, só exibe o banner sem tocar som.
+function handleNewNexusEvents(newEvents) {
+    if (!newEvents || newEvents.length === 0) return;
+
+    newEvents.forEach(ev => {
+        lastNexusEventTimestamp = ev.timestamp > lastNexusEventTimestamp ? ev.timestamp : lastNexusEventTimestamp;
+        if (ev.type === 'nexus_pvp') {
+            const html = ev.attacker_won
+                ? `<span style="color:#ff8">${ev.attacker_name}</span> eliminou <span style="color:#f88">${ev.defender_name}</span> no Nexus!`
+                : `<span style="color:#f88">${ev.attacker_name}</span> tentou eliminar <span style="color:#ff8">${ev.defender_name}</span> no Nexus e perdeu.`;
+            pushRawBannerNotification(html);
+        }
+    });
+}
+
 async function handleNewCaptures(newCaptures, skipSounds = false) {
     if (!newCaptures || newCaptures.length === 0) return;
 
@@ -1627,7 +1631,7 @@ async function handleNewCaptures(newCaptures, skipSounds = false) {
     processCaptureNotificationQueue();
 }
 
-async function pollHeartbeatState() {
+async function pollHeartbeatState(reschedule = true) {
     const { data, error } = await supabase.rpc('get_battle_heartbeat', { 
         p_last_capture_timestamp: lastCaptureTimestamp,
         p_last_nexus_event_timestamp: lastNexusEventTimestamp
@@ -1638,10 +1642,10 @@ async function pollHeartbeatState() {
         return;
     }
     
-    processHeartbeat(data);
+    processHeartbeat(data, reschedule);
 }
 
-function processHeartbeat(data) {
+function processHeartbeat(data, reschedule = true) {
     if (!data) return; 
 
     switch(data.status) {
@@ -1701,23 +1705,20 @@ function processHeartbeat(data) {
                 currentBattleState.nexus_closes_at = data.nexus_closes_at || null;
             }
 
-            if (data.recent_nexus_events && data.recent_nexus_events.length > 0) {
-                data.recent_nexus_events.forEach(ev => {
-                    lastNexusEventTimestamp = ev.timestamp > lastNexusEventTimestamp ? ev.timestamp : lastNexusEventTimestamp;
-                    if (ev.type === 'nexus_pvp') {
-                        const html = ev.attacker_won
-                            ? `<span style="color:#ff8">${ev.attacker_name}</span> eliminou <span style="color:#f88">${ev.defender_name}</span> no Nexus!`
-                            : `<span style="color:#f88">${ev.attacker_name}</span> tentou eliminar <span style="color:#ff8">${ev.defender_name}</span> no Nexus e perdeu.`;
-                        pushRawBannerNotification(html);
-                    }
-                });
-            }
+            handleNewNexusEvents(data.recent_nexus_events);
             
             renderAllObjectives(currentBattleState.objectives);
             renderRankingModal(currentBattleState.instance.registered_guilds, currentBattleState.player_damage_ranking);
             
-            // Re-agenda o próximo heartbeat com base no estado atual
-            scheduleNextHeartbeat();
+            // Re-agenda o próximo heartbeat SÓ se já estávamos em modo
+            // contínuo (fase final). Uma chamada avulsa disparada por uma
+            // ação do jogador (atacar/guarnecer) fora da fase final é só
+            // uma busca pontual — reagendar aqui criaria uma corrente de
+            // polling contínuo pelo resto da batalha, o que era exatamente
+            // o comportamento que queríamos evitar fora da fase final.
+            if (reschedule && heartbeatContinuousMode) {
+                scheduleNextHeartbeat();
+            }
             break;
 
         case 'finished':
@@ -1783,6 +1784,7 @@ function scheduleNextHeartbeat() {
 
 function startHeartbeatPolling() {
     stopHeartbeatPolling(); 
+    heartbeatContinuousMode = true;
     // Inicia o ciclo imediatamente
     pollHeartbeatState();
 }
@@ -1790,6 +1792,7 @@ function startHeartbeatPolling() {
 function stopHeartbeatPolling() {
     if (heartbeatTimer) clearTimeout(heartbeatTimer);
     heartbeatTimer = null;
+    heartbeatContinuousMode = false;
 }
 
 function startDamagePolling() {
@@ -2189,7 +2192,16 @@ async function init() {
 
                     // Se o objetivo foi destruído, precisamos sincronizar tudo (vencedor, honra, etc)
                     if (data.objective_destroyed) {
-                        pollHeartbeatState(); // Traz o novo dono e toca sons
+                        pollHeartbeatState(false); // Traz o novo dono e toca sons (busca pontual, não inicia polling contínuo)
+                    } else {
+                        // Mesmo sem destruir o objetivo, toda ação é uma
+                        // boa oportunidade de trazer novidades que
+                        // aconteceram enquanto o jogador não estava no
+                        // Nexus (honra, notificações de PvP) — mesmo
+                        // tratamento que "Guarnecer" já tinha. Busca
+                        // pontual: não inicia polling contínuo fora da
+                        // fase final.
+                        setTimeout(() => pollHeartbeatState(false), 1500);
                     }
                 })
                 .finally(() => {
@@ -2294,7 +2306,7 @@ async function init() {
                             isProcessingBattleAction = false;
                             modals.objectiveGarrisonBtn.disabled = false;
                         }, 800); 
-                        setTimeout(pollHeartbeatState, 1500); 
+                        setTimeout(() => pollHeartbeatState(false), 1500); 
                     });
             });
         };

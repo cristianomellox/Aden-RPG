@@ -901,7 +901,7 @@ function renderResultsScreen(instance, playerDamageRanking, personalRanking) {
     // app (appcreator24) injetar algum reset de CSS que sobrescreva ou
     // remova as classes .ranking-list/.results-list, o conteúdo ainda
     // fica visível de qualquer forma.
-    modals.resultsRankingHonor.style.cssText = 'list-style:none;padding:0;margin:0 0 15px 0;text-align:left;border:1px solid #555;border-radius:5px;background:rgba(0,0,0,0.2);min-height:24px;display:block;visibility:visible;opacity:1;';
+    modals.resultsRankingHonor.style.cssText = 'list-style:none;padding:0;margin:0 0 15px 0;text-align:left;border:1px solid #555;border-radius:5px;background:rgba(0,0,0,0.2);display:block;visibility:visible;opacity:1;max-height:none;overflow:visible;';
     const sortedGuilds = [...(instance.registered_guilds || [])].sort((a, b) => (b.honor_points || 0) - (a.honor_points || 0));
     
     if (sortedGuilds.length === 0) {

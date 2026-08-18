@@ -104,6 +104,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   // --- FIM: NOVAS FUNÇÕES DE CACHE ---
 
+  // ── Exclusão no Cloudinary via Edge Function (delete-cloudinary-image) ──
+  // Best-effort: se falhar, apenas loga no console — não deve travar o fluxo.
+  function isCloudinaryUrl(url) {
+      return typeof url === 'string' && url.includes('res.cloudinary.com');
+  }
+  async function deleteCloudinaryImages(urls) {
+      const list = (urls || []).filter(isCloudinaryUrl);
+      if (!list.length) return;
+      try {
+          const { error } = await supabase.functions.invoke('delete-cloudinary-image', { body: { urls: list } });
+          if (error) console.warn('[Cloudinary] Falha ao excluir imagem(ns):', error);
+      } catch (e) {
+          console.warn('[Cloudinary] Erro ao chamar função de exclusão:', e);
+      }
+  }
+
   // =========================================================
   // >>> CLOUDINARY UPLOAD FUNCTION (NOVA) <<<
   // =========================================================
@@ -1115,8 +1131,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         const newName = editGuildName ? editGuildName.value.trim() : null;
         const newDesc = editGuildDescription ? editGuildDescription.value.trim() : null;
         const newFlag = editGuildFlagUrl ? editGuildFlagUrl.value.trim() : null;
+        const oldFlag = currentGuildData ? currentGuildData.flag_url : null;
         const { error } = await supabase.rpc('update_guild_info', { p_guild_id: userGuildId, p_player_id: userId, p_name: newName, p_description: newDesc, p_flag_url: newFlag });
         if (error) throw error;
+
+        // Se a bandeira mudou e a antiga era um upload no Cloudinary,
+        // apaga o arquivo antigo — best-effort, não bloqueia o salvamento.
+        if (oldFlag && newFlag && oldFlag !== newFlag) {
+            deleteCloudinaryImages([oldFlag]);
+        }
+
         showInfoModal('Guilda atualizada com sucesso!', 'success');
         localStorage.removeItem(`guild_info_${userGuildId}`);
         await loadGuildInfo();

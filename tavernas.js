@@ -1036,7 +1036,7 @@ function onPresence(action, msg) {
     const m = roomMembers[id];
     if (m) {
       if (m.seatId) clearSeat(m.seatId);
-      sysMsg((m.name || '?') + ' saiu da taverna.');
+      // Anúncio de saída removido do chat (não é mais exibido).
     }
     delete roomMembers[id];
     peerConns[id]?.close(); delete peerConns[id];
@@ -6697,6 +6697,25 @@ function stopCoverSlideshow(coverEl) {
   }
 }
 
+// ── Exclusão no Cloudinary via Edge Function (delete-cloudinary-image) ─────
+// Best-effort: se falhar (rede, função ainda não configurada, etc), apenas
+// loga o erro no console — não deve travar o fluxo de exclusão local.
+function isCloudinaryUrl(url) {
+  return typeof url === 'string' && url.includes('res.cloudinary.com');
+}
+async function deleteCloudinaryImages(urls) {
+  const list = (urls || []).filter(isCloudinaryUrl);
+  if (!list.length) return;
+  try {
+    const sb = getSB();
+    if (!sb) return;
+    const { error } = await sb.functions.invoke('delete-cloudinary-image', { body: { urls: list } });
+    if (error) console.warn('[Cloudinary] Falha ao excluir imagem(ns):', error);
+  } catch (e) {
+    console.warn('[Cloudinary] Erro ao chamar função de exclusão:', e);
+  }
+}
+
 // ── Modal de gerenciamento das fotos de perfil ──────────────────────────────
 let _ppmCropper       = null;   // instância ativa do Cropper.js
 let _ppmDeleteTarget  = null;   // índice (em PLAYER.profile_photos) marcado para exclusão
@@ -6881,11 +6900,15 @@ async function _ppmExecuteDelete() {
   _ppmCancelDelete();
   if (idx === null || idx === undefined) return;
 
-  const newPhotos = (PLAYER.profile_photos || []).filter((_, i) => i !== idx);
+  const currentPhotos = PLAYER.profile_photos || [];
+  const removedUrl = currentPhotos[idx];
+  const newPhotos = currentPhotos.filter((_, i) => i !== idx);
   try {
     await _ppmSavePhotos(newPhotos);
     _renderProfilePhotosGrid();
     showToast('Foto excluída.');
+    // Apaga o arquivo do Cloudinary (não bloqueia a UI — best-effort)
+    deleteCloudinaryImages([removedUrl]);
   } catch (err) {
     console.error('Erro ao excluir foto de perfil:', err);
     showToast('Erro ao excluir a foto.');

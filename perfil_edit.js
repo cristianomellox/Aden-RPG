@@ -85,6 +85,22 @@ async function uploadAvatarAoCloudinary(file) {
 
 // =========================================================
 
+// ── Exclusão no Cloudinary via Edge Function (delete-cloudinary-image) ─────
+// Best-effort: se falhar, apenas loga no console — não deve travar o fluxo.
+function isCloudinaryUrl(url) {
+    return typeof url === 'string' && url.includes('res.cloudinary.com');
+}
+async function deleteCloudinaryImages(urls) {
+    const list = (urls || []).filter(isCloudinaryUrl);
+    if (!list.length) return;
+    try {
+        const { error } = await supabaseClient.functions.invoke('delete-cloudinary-image', { body: { urls: list } });
+        if (error) console.warn('[Cloudinary] Falha ao excluir imagem(ns):', error);
+    } catch (e) {
+        console.warn('[Cloudinary] Erro ao chamar função de exclusão:', e);
+    }
+}
+
 let originalProfileData = {};
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -208,6 +224,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- FUNÇÃO DE UPDATE DO MODAL ---
     window.updateProfileEditModal = (playerData) => {
         if (playerData) {
+            // Guarda o avatar atual — usado depois pra saber se precisa apagar
+            // a imagem antiga do Cloudinary quando o jogador trocar de avatar.
+            originalProfileData.avatar_url = playerData.avatar_url || '';
+
             // Detecta novo usuário pelo padrão de nome padrão gerado no cadastro
             const isFirstSetup = /^Nome_[0-9a-fA-F]{6}$/.test(playerData.name);
             isNewUserSetup = isFirstSetup;
@@ -353,6 +373,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
 
                 if (error) throw error;
+
+                // Se o avatar mudou e o antigo era um upload no Cloudinary
+                // (seja pra outro upload, pra um avatar padrão, ou de volta
+                // ao padrão do banco), apaga o arquivo antigo — best-effort,
+                // não bloqueia o fluxo de salvamento.
+                const oldAvatar = originalProfileData.avatar_url;
+                if (oldAvatar && oldAvatar !== newAvatar) {
+                    deleteCloudinaryImages([oldAvatar]);
+                }
+                originalProfileData.avatar_url = newAvatar;
 
                 showFloatingMessage('Perfil atualizado com sucesso!');
 

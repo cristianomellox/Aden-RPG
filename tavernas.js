@@ -900,6 +900,10 @@ function joinChannel(roomId) {
       // Calcula pares adjacentes após sync inicial de presença
       // Delay de 800ms para dar tempo ao _tavEnsureBondsMap de carregar via RPC
       setTimeout(updateProximityPairs, 800);
+      // Anuncia no chat os laços que já estavam na taverna quando eu entrei
+      // (o listener de presença 'enter' de terceiros não cobre esse caso,
+      // pois não dispara para o próprio jogador)
+      setTimeout(_tavAnnounceBondsAlreadyPresent, 850);
 
       // Espectadores: pede aos membros SENTADOS que iniciem uma conexão WebRTC conosco
       // (localStream é null aqui pois não estamos sentados, então não podemos iniciar)
@@ -982,7 +986,6 @@ function onPresence(action, msg) {
     // Popula ownersCache imediatamente — garante avatares em chat/modal sem aguardar Supabase
     if (d.avatar_url) cacheAvatarFromPresence(id, d.name, d.avatar_url);
 
-    if (action === 'enter') sysMsg((d.name || '?') + ' entrou na taverna.');
     if (action === 'enter') _tavAnnounceBondEnter(id, d.name || '?');
     if (action === 'enter' && micOn && localStream) initiateCall(id);
     if (roomMembers[id].seatId) {
@@ -1836,12 +1839,34 @@ function bondEnterMsg(enteringName, bondLabel, partnerName) {
 }
 
 async function _tavAnnounceBondEnter(enteringId, enteringName) {
+  let bond = null;
   try {
     await _tavEnsureBondsMap();
-    const bond = _tavGetBondWith(enteringId);
-    if (!bond) return;
+    bond = _tavGetBondWith(enteringId);
+  } catch(e) { /* silencioso — anúncio é cosmético */ }
+
+  if (bond) {
     const label = bond.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
     bondEnterMsg(enteringName, label, PLAYER.name);
+  } else {
+    // Sem laço: mostra a mensagem padrão de entrada
+    sysMsg((enteringName || '?') + ' entrou na taverna.');
+  }
+}
+
+// Ao entrar na sala, avisa também sobre laços já presentes (do ponto de vista
+// de quem está entrando agora) — cobre o caso em que o outro lado do laço
+// já estava na taverna antes de mim, situação que o listener de presença
+//'enter' de terceiros não cobre pois não é disparado para o próprio jogador.
+async function _tavAnnounceBondsAlreadyPresent() {
+  try {
+    await _tavEnsureBondsMap();
+    Object.keys(roomMembers).forEach(id => {
+      const bond = _tavGetBondWith(id);
+      if (!bond) return;
+      const label = bond.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+      bondEnterMsg(PLAYER.name, label, roomMembers[id].name || '?');
+    });
   } catch(e) { /* silencioso — anúncio é cosmético */ }
 }
 function clearChat() {
@@ -6583,8 +6608,9 @@ function _tavBuildCoverPhotoList(avatarUrl, extraPhotos) {
 
 // Inicia (ou reinicia) o slideshow em um elemento de cover.
 // photos: array de URLs (já processado por _tavBuildCoverPhotoList).
-// Comportamento: cada foto fica 5s, depois desliza (direção aleatória:
-// esquerda/direita/cima/baixo) para a próxima.
+// Comportamento: cada foto fica 8s parada, depois desliza suavemente (4s)
+// numa direção aleatória (esquerda/direita/cima/baixo) para a próxima —
+// sempre aleatório, mesmo havendo só 2 fotos (avatar + 1 extra).
 function startCoverSlideshow(coverEl, photos) {
   if (!coverEl) return;
   stopCoverSlideshow(coverEl);
@@ -6629,7 +6655,15 @@ function startCoverSlideshow(coverEl, photos) {
     const outEl = activeIsA ? layerA : layerB;
     const inEl  = activeIsA ? layerB : layerA;
 
-    idx = (idx + 1) % list.length;
+    // Sempre escolhe o próximo índice de forma aleatória (mesmo com só 2 fotos,
+    // a direção do slide abaixo já varia a cada troca).
+    if (list.length === 2) {
+      idx = idx === 0 ? 1 : 0;
+    } else {
+      let next;
+      do { next = Math.floor(Math.random() * list.length); } while (next === idx);
+      idx = next;
+    }
     const dir = DIRS[Math.floor(Math.random() * DIRS.length)];
     const { from, to } = offsetsFor(dir);
 
@@ -6639,8 +6673,8 @@ function startCoverSlideshow(coverEl, photos) {
     inEl.style.display    = 'block';
     void inEl.offsetWidth; // força reflow antes de animar
 
-    inEl.style.transition  = 'transform 0.9s cubic-bezier(0.22,1,0.36,1)';
-    outEl.style.transition = 'transform 0.9s cubic-bezier(0.22,1,0.36,1)';
+    inEl.style.transition  = 'transform 4s cubic-bezier(0.22,1,0.36,1)';
+    outEl.style.transition = 'transform 4s cubic-bezier(0.22,1,0.36,1)';
     inEl.style.transform   = 'translate3d(0,0,0)';
     outEl.style.transform  = to;
 
@@ -6648,10 +6682,10 @@ function startCoverSlideshow(coverEl, photos) {
       outEl.style.display    = 'none';
       outEl.style.transition = 'none';
       outEl.style.transform  = 'translate3d(0,0,0)';
-    }, 920);
+    }, 4020);
 
     activeIsA = !activeIsA;
-  }, 5000);
+  }, 8000);
 
   coverEl._slideTimer = timer;
 }

@@ -264,6 +264,20 @@ html,body {
 .c-text { font-size:0.86rem; color:var(--text-main); line-height:1.35; word-break:break-word; }
 .c-sys { font-size:0.71rem; font-style:italic; color:var(--blue-light); text-align:center; padding:2px 0; opacity:0.8; }
 .c-mod { font-size:0.71rem; font-style:italic; color:#e8a060; text-align:center; padding:2px 0; }
+.c-bond-announce {
+  font-size: 0.74rem;
+  text-align: center;
+  color: #f5dfa0;
+  margin: 4px auto;
+  padding: 5px 12px;
+  max-width: 92%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(201,169,74,0.05), rgba(201,169,74,0.16), rgba(201,169,74,0.05));
+  border: 1px solid rgba(201,169,74,0.35);
+  box-shadow: 0 0 10px rgba(201,169,74,0.15);
+  line-height: 1.4;
+}
+.c-bond-announce b { color: var(--gold, #c9a94a); }
 
 /* Action bar — flex-shrink:0 so it never gets squashed */
 #room-action-bar {
@@ -815,14 +829,14 @@ html,body {
 /* Camada de brilho — div filho explícito (evita quirks de ::before em flex+filter mobile) */
 .seat-bond-glow {
   position: absolute;
-  inset: -3px;
+  inset: -2px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, var(--sb-glow, lightblue) 0%, transparent 50%);
-  filter: blur(8px);
-  opacity: 0.12;
+  background: radial-gradient(circle at 50% 50%, var(--sb-glow, lightblue) 0%, transparent 40%);
+  filter: blur(4px);
+  opacity: 0.10;
   z-index: 1;
   pointer-events: none;
-  animation: fbondSmoke 4s ease-in-out infinite;
+  animation: fbondSmoke 6s ease-in-out infinite;
 }
 
 /* Tier-7: efeito prismático igual ao do perfil */
@@ -1015,6 +1029,27 @@ html,body {
 #mpm-close:hover { color: var(--gold); border-color: var(--gold-dark); }
 #mpm-close svg { width: 20px; height: 20px; }
 
+/* Botão de editar fotos — espelho do close, canto superior direito */
+#mpm-edit-photos {
+  position: fixed;
+  top: 5px;
+  right: 14px;
+  z-index: 10;
+  background: rgba(10, 6, 2, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.2s, border-color 0.2s;
+}
+#mpm-edit-photos:hover { color: var(--gold); border-color: var(--gold-dark); }
+#mpm-edit-photos svg { width: 18px; height: 18px; }
+
 /* Cover photo — full visible, not blurred */
 #mpm-cover {
   width: 100%;
@@ -1022,6 +1057,8 @@ html,body {
   background-size: cover;
   background-position: center top;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
 }
 #mpm-cover-fade {
   width: 100%;
@@ -1848,6 +1885,8 @@ html,body {
   background-position: center top;
   flex-shrink: 0;
   background-color: rgba(20, 14, 6, 0.8);
+  position: relative;
+  overflow: hidden;
 }
 #ppp-cover-fade {
   width: 100%;
@@ -2931,3 +2970,200 @@ html,body {
   flex-shrink: 0;
 }
 .bond-eligible-arrow svg { width: 16px; height: 16px; }
+/* ══════════════════════════════════════════════════════════
+   COVER SLIDESHOW — camadas de foto (avatar + fotos extras)
+   ══════════════════════════════════════════════════════════ */
+.cover-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+  will-change: transform;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PROFILE PHOTOS MODAL — gerenciar fotos de fundo do perfil
+   ══════════════════════════════════════════════════════════ */
+#profile-photos-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(0, 0, 0, 0.86);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: mpm-fade-in 0.2s ease;
+}
+#profile-photos-modal.open { display: flex; }
+
+#ppm-inner {
+  width: 100%;
+  max-width: 380px;
+  background: linear-gradient(180deg, rgba(28,20,10,0.98), rgba(14,10,5,0.98));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  animation: mpm-slide-up 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#ppm-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+#ppm-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  color: var(--gold-light);
+  letter-spacing: 0.03em;
+}
+#ppm-close {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.2s, border-color 0.2s;
+}
+#ppm-close:hover { color: var(--gold); border-color: var(--gold-dark); }
+#ppm-close svg { width: 15px; height: 15px; }
+
+#ppm-hint {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+#ppm-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ppm-card {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--border-mid);
+  background: rgba(0,0,0,0.35);
+  flex-shrink: 0;
+}
+.ppm-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.ppm-card-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-mid);
+  color: var(--gold-dark);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.ppm-card-add:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,169,74,0.06); }
+.ppm-card-add svg { width: 34px; height: 34px; }
+.ppm-card-add.disabled { opacity: 0.4; cursor: not-allowed; }
+.ppm-card-add.disabled:hover { border-color: var(--border-mid); color: var(--gold-dark); background: transparent; }
+
+.ppm-card-avatar { border-color: var(--gold-dark); }
+.ppm-card-badge {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  text-align: center;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--gold-light);
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  padding: 10px 0 4px;
+  font-family: 'Cinzel', serif;
+}
+
+.ppm-card-photo { cursor: pointer; }
+.ppm-del-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(180,30,30,0.85);
+  border: 1px solid rgba(255,255,255,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.18s, transform 0.18s;
+  pointer-events: none;
+}
+.ppm-del-btn svg { width: 15px; height: 15px; }
+.ppm-card-photo.show-del .ppm-del-btn {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#ppm-status {
+  font-size: 0.75rem;
+  text-align: center;
+  margin: 12px 0 0;
+  min-height: 1em;
+}
+
+/* ══════════════════════════════════════════════════════════
+   CROP MODAL (Cropper.js) — recorte 1:1 da foto de perfil
+   ══════════════════════════════════════════════════════════ */
+#ppm-crop-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(0, 0, 0, 0.94);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#ppm-crop-modal.open { display: flex; }
+
+#ppm-crop-inner {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#ppm-crop-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  color: var(--gold-light);
+  margin-bottom: 12px;
+}
+#ppm-crop-imgwrap {
+  width: 100%;
+  max-width: 320px;
+  height: 320px;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+#ppm-crop-image { display: block; max-width: 100%; }
+
+#ppm-crop-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  justify-content: center;
+  width: 100%;
+}

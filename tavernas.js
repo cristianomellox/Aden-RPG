@@ -147,6 +147,7 @@ let PLAYER = {
   role:       localStorage.getItem('aden_role') || 'member',
   guild:      localStorage.getItem('aden_guild')|| '',
   avatar_url: null,
+  profile_photos: [],
   nobless:    0
 };
 
@@ -203,7 +204,7 @@ async function initPlayer() {
     if (sb) {
       const { data: rows } = await sb
         .from('players')
-        .select('id, name, avatar_url, guild_id, nobless, rank')
+        .select('id, name, avatar_url, guild_id, nobless, rank, profile_photos')
         .eq('id', PLAYER.id)
         .maybeSingle();
       if (!rows) {
@@ -211,10 +212,11 @@ async function initPlayer() {
         window.location.replace('index.html');
         return;
       }
-      PLAYER.avatar_url = rows.avatar_url || PLAYER.avatar_url;
-      PLAYER.name       = rows.name       || PLAYER.name;
-      PLAYER.guild      = rows.guild_id   || '';   // '' quando null (evita valor stale do localStorage)
-      PLAYER.nobless    = rows.nobless    || 0;
+      PLAYER.avatar_url     = rows.avatar_url || PLAYER.avatar_url;
+      PLAYER.name           = rows.name       || PLAYER.name;
+      PLAYER.guild          = rows.guild_id   || '';   // '' quando null (evita valor stale do localStorage)
+      PLAYER.nobless        = rows.nobless    || 0;
+      PLAYER.profile_photos = Array.isArray(rows.profile_photos) ? rows.profile_photos : [];
       if (rows.rank) PLAYER.role = rows.rank;
       await dbSaveOwners([{ id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url, guild_id: PLAYER.guild }]);
       ownersCache[PLAYER.id] = { id: PLAYER.id, name: PLAYER.name, avatar_url: PLAYER.avatar_url };
@@ -981,6 +983,7 @@ function onPresence(action, msg) {
     if (d.avatar_url) cacheAvatarFromPresence(id, d.name, d.avatar_url);
 
     if (action === 'enter') sysMsg((d.name || '?') + ' entrou na taverna.');
+    if (action === 'enter') _tavAnnounceBondEnter(id, d.name || '?');
     if (action === 'enter' && micOn && localStream) initiateCall(id);
     if (roomMembers[id].seatId) {
       renderSeat(id, roomMembers[id].seatId, roomMembers[id].name, roomMembers[id].muted, roomMembers[id].avatar_url);
@@ -1816,6 +1819,31 @@ function modMsg(text) {
   m.className = 'c-mod'; m.textContent = '[ Moderacao ] ' + text;
   c.appendChild(m); c.scrollTop = c.scrollHeight;
 }
+
+// ══════════════════════════════════════════
+//  ANÚNCIO DE LAÇO NO CHAT (entrada de jogador com laço na taverna)
+// ══════════════════════════════════════════
+// Mensagem destacada no chat quando alguém que tem laço com o jogador local
+// entra na taverna. Ex.: "Rukia, Melhor Amigo(a) de iKa entrou na taverna."
+function bondEnterMsg(enteringName, bondLabel, partnerName) {
+  const c = document.getElementById('chat-messages');
+  if (!c) return;
+  const m = document.createElement('div');
+  m.className = 'c-bond-announce';
+  m.innerHTML = `<b>${esc(enteringName)}</b>, ${esc(bondLabel)} de <b>${esc(partnerName)}</b> entrou na taverna.`;
+  c.appendChild(m);
+  c.scrollTop = c.scrollHeight;
+}
+
+async function _tavAnnounceBondEnter(enteringId, enteringName) {
+  try {
+    await _tavEnsureBondsMap();
+    const bond = _tavGetBondWith(enteringId);
+    if (!bond) return;
+    const label = bond.bond_type === 'couple' ? 'Casal' : 'Melhor Amigo(a)';
+    bondEnterMsg(enteringName, label, PLAYER.name);
+  } catch(e) { /* silencioso — anúncio é cosmético */ }
+}
 function clearChat() {
   const c = document.getElementById('chat-messages');
   if (c) c.innerHTML = '';
@@ -1874,7 +1902,7 @@ async function openPlayerProfilePage(playerId, name) {
   if (levelEl)  levelEl.textContent = '';
   if (cpEl)     cpEl.textContent    = '0';
   if (avatarEl) { avatarEl.src = makeAvatar(name || '?', 180); avatarEl.style.border = '3px solid var(--gold)'; }
-  if (coverEl)  coverEl.style.backgroundImage = '';
+  if (coverEl)  { stopCoverSlideshow(coverEl); coverEl.innerHTML = ''; coverEl.style.backgroundImage = ''; }
   if (guildDiv) guildDiv.style.display = 'none';
   if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
   ['ppp-followers','ppp-following','ppp-fame','ppp-gifts'].forEach(id => {
@@ -1916,6 +1944,7 @@ async function openPlayerProfilePage(playerId, name) {
 
 function closePlayerProfilePage() {
   document.getElementById('player-profile-page')?.classList.remove('open');
+  stopCoverSlideshow(document.getElementById('ppp-cover'));
   window._pppPlayerId   = null;
   window._pppPlayerName = null;
   window._pppGuildId    = null;
@@ -1935,7 +1964,7 @@ async function _pppLoadPlayerData(playerId) {
   const cachedOwner = ownersCache[playerId];
   if (cachedOwner?.avatar_url && avatarEl) {
     avatarEl.src = cachedOwner.avatar_url;
-    if (coverEl) coverEl.style.backgroundImage = `url('${cachedOwner.avatar_url}')`;
+    if (coverEl) startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(cachedOwner.avatar_url, null));
   }
 
   try {
@@ -1956,17 +1985,18 @@ async function _pppLoadPlayerData(playerId) {
       guildData = cached.guildData;
 
       // Cache may have been written by a context that didn't include featured_bond_id
-      // (e.g. generic player modal). Always fetch these two fields live to guarantee
-      // the bond section renders correctly for any visitor.
+      // (e.g. generic player modal). Always fetch these fields live to guarantee
+      // the bond section and background photos render correctly for any visitor.
       if (player) {
         try {
           const _sb = getSB();
           if (_sb) {
             const { data: bf } = await _sb.from('players')
-              .select('featured_bond_id,featured_bond_style')
+              .select('featured_bond_id,featured_bond_style,profile_photos')
               .eq('id', playerId).maybeSingle();
             player.featured_bond_id    = bf?.featured_bond_id    ?? null;
             player.featured_bond_style = bf?.featured_bond_style ?? null;
+            player.profile_photos      = bf?.profile_photos      ?? [];
           }
         } catch(_) {}
       }
@@ -1974,7 +2004,7 @@ async function _pppLoadPlayerData(playerId) {
       const sb = getSB();
       if (!sb) return;
       const { data: p } = await sb.from('players')
-        .select('id,name,level,avatar_url,guild_id,combat_power,featured_bond_id,featured_bond_style')
+        .select('id,name,level,avatar_url,guild_id,combat_power,featured_bond_id,featured_bond_style,profile_photos')
         .eq('id', playerId).maybeSingle();
       if (!p) return;
       player = p;
@@ -1998,7 +2028,7 @@ async function _pppLoadPlayerData(playerId) {
     if (cpEl)    cpEl.textContent    = fmt(Number(player.combat_power || 0));
     if (player.avatar_url) {
       if (avatarEl) avatarEl.src = player.avatar_url;
-      if (coverEl)  coverEl.style.backgroundImage = `url('${player.avatar_url}')`;
+      if (coverEl)  startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(player.avatar_url, player.profile_photos));
       ownersCache[playerId] = ownersCache[playerId] || {};
       ownersCache[playerId].avatar_url = player.avatar_url;
     }
@@ -3110,9 +3140,9 @@ async function openMyProfileModal() {
   }
   window._mpmGuildId = guildId || null;
 
-  // 3. Cover photo (the avatar itself, full-visible)
+  // 3. Cover photo (avatar + fotos extras, em slideshow)
   const coverEl = document.getElementById('mpm-cover');
-  if (coverEl && avatarUrl) coverEl.style.backgroundImage = `url('${avatarUrl}')`;
+  if (coverEl) startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(avatarUrl, PLAYER.profile_photos));
 
   // 4. Avatar
   const avEl = document.getElementById('mpm-avatar');
@@ -3252,6 +3282,7 @@ async function openMyProfileModal() {
 
 function closeMyProfileModal() {
   document.getElementById('my-profile-modal')?.classList.remove('open');
+  stopCoverSlideshow(document.getElementById('mpm-cover'));
 }
 
 // ══════════════════════════════════════════
@@ -6510,3 +6541,350 @@ _tavRenderNotifs = function() {
 
 // Nota: openNotifModal() já chama _tavRenderNotifs() internamente,
 // portanto a substituição acima de _tavRenderNotifs é suficiente.
+
+// ══════════════════════════════════════════════════════════════════════════
+//  FOTOS DE FUNDO DO PERFIL (avatar + até 2 fotos extras) — Cloudinary
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Upload genérico para o Cloudinary (mesma conta/preset usado no avatar) ──
+async function uploadImageToCloudinary(file) {
+  const cloudName    = 'dbrghqhqy';
+  const uploadPreset = 'avatars_preset';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', uploadPreset);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    let msg = 'Erro no upload';
+    try { const errorData = await response.json(); msg = errorData.error?.message || msg; } catch(_) {}
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  if (data.eager && data.eager.length > 0) return data.eager[0].secure_url;
+  return data.secure_url;
+}
+
+// ── Slideshow do cover (avatar + fotos extras) ──────────────────────────────
+// Monta a lista de fotos exibidas no fundo: avatar primeiro, depois as extras
+// (sem duplicar, máximo de 3 no total).
+function _tavBuildCoverPhotoList(avatarUrl, extraPhotos) {
+  const list = [];
+  if (avatarUrl) list.push(avatarUrl);
+  (extraPhotos || []).forEach(u => { if (u && !list.includes(u)) list.push(u); });
+  return list.slice(0, 3);
+}
+
+// Inicia (ou reinicia) o slideshow em um elemento de cover.
+// photos: array de URLs (já processado por _tavBuildCoverPhotoList).
+// Comportamento: cada foto fica 5s, depois desliza (direção aleatória:
+// esquerda/direita/cima/baixo) para a próxima.
+function startCoverSlideshow(coverEl, photos) {
+  if (!coverEl) return;
+  stopCoverSlideshow(coverEl);
+
+  const list = (photos || []).filter(Boolean);
+
+  if (list.length === 0) {
+    coverEl.innerHTML = '';
+    coverEl.style.backgroundImage = '';
+    return;
+  }
+
+  if (list.length === 1) {
+    coverEl.innerHTML = '';
+    coverEl.style.backgroundImage = `url('${list[0]}')`;
+    return;
+  }
+
+  // Múltiplas fotos → duas camadas empilhadas para o efeito de slide
+  coverEl.style.backgroundImage = '';
+  coverEl.innerHTML = `
+    <div class="cover-slide cover-slide-a" style="background-image:url('${list[0]}');display:block;"></div>
+    <div class="cover-slide cover-slide-b" style="display:none;"></div>`;
+
+  let idx        = 0;
+  let activeIsA  = true;
+  const DIRS = ['left', 'right', 'up', 'down'];
+  const offsetsFor = (dir) => {
+    switch (dir) {
+      case 'left':  return { from: 'translate3d(100%,0,0)',  to: 'translate3d(-100%,0,0)' };
+      case 'right': return { from: 'translate3d(-100%,0,0)', to: 'translate3d(100%,0,0)'  };
+      case 'up':    return { from: 'translate3d(0,100%,0)',  to: 'translate3d(0,-100%,0)' };
+      default:      return { from: 'translate3d(0,-100%,0)', to: 'translate3d(0,100%,0)'  };
+    }
+  };
+
+  const timer = setInterval(() => {
+    const layerA = coverEl.querySelector('.cover-slide-a');
+    const layerB = coverEl.querySelector('.cover-slide-b');
+    if (!layerA || !layerB) return;
+
+    const outEl = activeIsA ? layerA : layerB;
+    const inEl  = activeIsA ? layerB : layerA;
+
+    idx = (idx + 1) % list.length;
+    const dir = DIRS[Math.floor(Math.random() * DIRS.length)];
+    const { from, to } = offsetsFor(dir);
+
+    inEl.style.backgroundImage = `url('${list[idx]}')`;
+    inEl.style.transition = 'none';
+    inEl.style.transform  = from;
+    inEl.style.display    = 'block';
+    void inEl.offsetWidth; // força reflow antes de animar
+
+    inEl.style.transition  = 'transform 0.9s cubic-bezier(0.22,1,0.36,1)';
+    outEl.style.transition = 'transform 0.9s cubic-bezier(0.22,1,0.36,1)';
+    inEl.style.transform   = 'translate3d(0,0,0)';
+    outEl.style.transform  = to;
+
+    setTimeout(() => {
+      outEl.style.display    = 'none';
+      outEl.style.transition = 'none';
+      outEl.style.transform  = 'translate3d(0,0,0)';
+    }, 920);
+
+    activeIsA = !activeIsA;
+  }, 5000);
+
+  coverEl._slideTimer = timer;
+}
+
+function stopCoverSlideshow(coverEl) {
+  if (coverEl && coverEl._slideTimer) {
+    clearInterval(coverEl._slideTimer);
+    coverEl._slideTimer = null;
+  }
+}
+
+// ── Modal de gerenciamento das fotos de perfil ──────────────────────────────
+let _ppmCropper       = null;   // instância ativa do Cropper.js
+let _ppmDeleteTarget  = null;   // índice (em PLAYER.profile_photos) marcado para exclusão
+
+function openProfilePhotosModal() {
+  if (!Array.isArray(PLAYER.profile_photos)) PLAYER.profile_photos = [];
+  _renderProfilePhotosGrid();
+  const statusEl = document.getElementById('ppm-status');
+  if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
+  document.getElementById('profile-photos-modal')?.classList.add('open');
+}
+
+function closeProfilePhotosModal() {
+  document.getElementById('profile-photos-modal')?.classList.remove('open');
+}
+
+function _renderProfilePhotosGrid() {
+  const grid = document.getElementById('ppm-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const extras   = PLAYER.profile_photos || [];
+  const canAdd   = extras.length < 2;
+
+  // Card 1 — Adicionar foto (+)
+  const addCard = document.createElement('div');
+  addCard.className = 'ppm-card ppm-card-add' + (canAdd ? '' : ' disabled');
+  addCard.title = canAdd ? 'Adicionar foto' : 'Limite de 2 fotos extras atingido';
+  addCard.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>`;
+  addCard.onclick = () => {
+    if (!canAdd) { showToast('Você já tem o máximo de 2 fotos extras.'); return; }
+    document.getElementById('ppmFileInput')?.click();
+  };
+  grid.appendChild(addCard);
+
+  // Card 2 — Avatar (não pode ser excluído)
+  const avCard = document.createElement('div');
+  avCard.className = 'ppm-card ppm-card-avatar';
+  avCard.innerHTML = `
+    <img src="${esc(PLAYER.avatar_url || makeAvatar(PLAYER.name, 150))}" alt="Avatar">
+    <span class="ppm-card-badge">Avatar</span>`;
+  grid.appendChild(avCard);
+
+  // Cards seguintes — fotos extras (deletáveis)
+  extras.forEach((url, i) => {
+    const card = document.createElement('div');
+    card.className = 'ppm-card ppm-card-photo';
+    card.innerHTML = `
+      <img src="${esc(url)}" alt="Foto ${i + 1}">
+      <button class="ppm-del-btn" title="Excluir foto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/>
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>`;
+    // Clique na foto revela/esconde o botão de lixeira no canto superior
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.ppm-del-btn')) return;
+      document.querySelectorAll('.ppm-card-photo.show-del').forEach(c => { if (c !== card) c.classList.remove('show-del'); });
+      card.classList.toggle('show-del');
+    });
+    card.querySelector('.ppm-del-btn').onclick = (e) => {
+      e.stopPropagation();
+      _ppmDeleteTarget = i;
+      const modal = document.getElementById('ppm-delete-confirm');
+      if (modal) modal.style.display = 'flex';
+    };
+    grid.appendChild(card);
+  });
+}
+
+function _ppmCancelDelete() {
+  _ppmDeleteTarget = null;
+  const modal = document.getElementById('ppm-delete-confirm');
+  if (modal) modal.style.display = 'none';
+}
+
+// ── Fluxo de adicionar foto (seleção → crop 1:1 → upload → salvar) ─────────
+document.addEventListener('DOMContentLoaded', () => {
+  const fileInput = document.getElementById('ppmFileInput');
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      fileInput.value = ''; // permite selecionar o mesmo arquivo de novo depois
+      if (!file) return;
+      _ppmOpenCropper(file);
+    });
+  }
+
+  const cropCancelBtn  = document.getElementById('ppm-crop-cancel');
+  const cropConfirmBtn = document.getElementById('ppm-crop-confirm');
+  if (cropCancelBtn)  cropCancelBtn.onclick  = _ppmCloseCropper;
+  if (cropConfirmBtn) cropConfirmBtn.onclick = _ppmConfirmCrop;
+
+  const delYesBtn = document.getElementById('ppm-delete-yes');
+  if (delYesBtn) delYesBtn.onclick = _ppmExecuteDelete;
+});
+
+function _ppmOpenCropper(file) {
+  const modal  = document.getElementById('ppm-crop-modal');
+  const imgEl  = document.getElementById('ppm-crop-image');
+  if (!modal || !imgEl) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    imgEl.src = ev.target.result;
+    modal.classList.add('open');
+
+    // Garante que a imagem anterior (se houver) foi destruída antes de recriar
+    if (_ppmCropper) { try { _ppmCropper.destroy(); } catch(_) {} _ppmCropper = null; }
+
+    // Cropper precisa que a imagem já esteja no DOM/visível
+    requestAnimationFrame(() => {
+      if (typeof Cropper === 'undefined') {
+        showToast('Erro ao carregar ferramenta de recorte.');
+        return;
+      }
+      _ppmCropper = new Cropper(imgEl, {
+        aspectRatio: 1,
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 1,
+        movable: true,
+        zoomable: true,
+        rotatable: false,
+        scalable: false,
+        background: false,
+        guides: true,
+      });
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function _ppmCloseCropper() {
+  const modal = document.getElementById('ppm-crop-modal');
+  if (modal) modal.classList.remove('open');
+  if (_ppmCropper) { try { _ppmCropper.destroy(); } catch(_) {} _ppmCropper = null; }
+  const imgEl = document.getElementById('ppm-crop-image');
+  if (imgEl) imgEl.src = '';
+}
+
+async function _ppmConfirmCrop() {
+  if (!_ppmCropper) return;
+  const confirmBtn = document.getElementById('ppm-crop-confirm');
+  const statusEl   = document.getElementById('ppm-status');
+
+  try {
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Enviando...'; }
+
+    const canvas = _ppmCropper.getCroppedCanvas({ width: 800, height: 800, imageSmoothingQuality: 'high' });
+    if (!canvas) throw new Error('Falha ao gerar recorte');
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) throw new Error('Falha ao gerar imagem');
+
+    const file = new File([blob], 'profile_photo.jpg', { type: 'image/jpeg' });
+    const uploadedUrl = await uploadImageToCloudinary(file);
+
+    const newPhotos = [...(PLAYER.profile_photos || []), uploadedUrl].slice(0, 2);
+    await _ppmSavePhotos(newPhotos);
+
+    _ppmCloseCropper();
+    _renderProfilePhotosGrid();
+    if (statusEl) { statusEl.style.color = '#4CAF50'; statusEl.textContent = 'Foto adicionada com sucesso!'; }
+  } catch (err) {
+    console.error('Erro ao adicionar foto de perfil:', err);
+    if (statusEl) { statusEl.style.color = '#ff5f5f'; statusEl.textContent = 'Erro ao enviar. Tente outra imagem.'; }
+    showToast('Erro ao enviar a foto.');
+  } finally {
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Usar Foto'; }
+  }
+}
+
+async function _ppmExecuteDelete() {
+  const idx = _ppmDeleteTarget;
+  _ppmCancelDelete();
+  if (idx === null || idx === undefined) return;
+
+  const newPhotos = (PLAYER.profile_photos || []).filter((_, i) => i !== idx);
+  try {
+    await _ppmSavePhotos(newPhotos);
+    _renderProfilePhotosGrid();
+    showToast('Foto excluída.');
+  } catch (err) {
+    console.error('Erro ao excluir foto de perfil:', err);
+    showToast('Erro ao excluir a foto.');
+  }
+}
+
+// Persiste a lista de fotos extras via RPC e atualiza estado local (memória + IDB + cover ativo)
+async function _ppmSavePhotos(photosArray) {
+  const sb = getSB();
+  if (!sb) throw new Error('Sem conexão.');
+
+  const { data, error } = await sb.rpc('set_profile_photos', { p_photos: photosArray });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'save_failed');
+
+  PLAYER.profile_photos = photosArray;
+
+  // Atualiza o slideshow do próprio perfil, se estiver aberto
+  const mpmCover = document.getElementById('mpm-cover');
+  if (mpmCover && document.getElementById('my-profile-modal')?.classList.contains('open')) {
+    startCoverSlideshow(mpmCover, _tavBuildCoverPhotoList(PLAYER.avatar_url, PLAYER.profile_photos));
+  }
+
+  // Sincroniza no IDB (mesmo padrão usado pelo perfil_edit.js)
+  try {
+    const db = await openGlobalDB();
+    const tx = db.transaction(PLAYER_STORE, 'readwrite');
+    const store = tx.objectStore(PLAYER_STORE);
+    const current = await new Promise(resolve => {
+      const req = store.get('player_data');
+      req.onsuccess = () => resolve(req.result?.value || null);
+      req.onerror   = () => resolve(null);
+    });
+    if (current) store.put({ key: 'player_data', value: { ...current, profile_photos: photosArray } });
+  } catch(_) {}
+}

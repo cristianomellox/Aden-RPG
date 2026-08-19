@@ -5133,10 +5133,11 @@ const BONDS_CACHE_TTL = 5 * 60 * 1000; // 5 min (laços mudam raramente)
 // ─────────────────────────────────────────────────────────────────────────────
 // AJUSTE DE POSICIONAMENTO DO DESTAQUE DE LAÇO
 // Se o bloco (moldura + avatares + texto) ficar alto/baixo demais,
-// altere o valor abaixo. Mais negativo = sobe. Menos negativo = desce.
-// Calculado para que o texto fique na mesma altura do layout normal.
+// altere o valor abaixo. Mais negativo (segunda parte do calc) = sobe. Menos negativo = desce.
+// A base "42%" tem que acompanhar sempre o margin-top do #mpm-hero/#ppp-hero no CSS
+// (que agora é em % da largura, já que a capa virou um quadrado 1:1 atrás do conteúdo).
 // ─────────────────────────────────────────────────────────────────────────────
-const FBOND_ACTIVE_MARGIN_TOP = '-100px';
+const FBOND_ACTIVE_MARGIN_TOP = 'calc(42% - 30px)';
 const BOND_TIER_DATA = [
   { tier: 1, unlockLevel: 1,  imgNum: '01', label: 'Nv. 1'  },
   { tier: 2, unlockLevel: 4,  imgNum: '02', label: 'Nv. 4'  },

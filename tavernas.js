@@ -1927,7 +1927,7 @@ async function openPlayerProfilePage(playerId, name) {
   if (levelEl)  levelEl.textContent = '';
   if (cpEl)     cpEl.textContent    = '0';
   if (avatarEl) { avatarEl.src = makeAvatar(name || '?', 180); avatarEl.style.border = '3px solid var(--gold)'; }
-  if (coverEl)  { stopCoverSlideshow(coverEl); coverEl.innerHTML = ''; coverEl.style.backgroundImage = ''; }
+  if (coverEl)  { stopCoverSlideshow(coverEl); coverEl.innerHTML = ''; coverEl.style.backgroundImage = ''; coverEl.onclick = null; coverEl.style.cursor = ''; }
   if (guildDiv) guildDiv.style.display = 'none';
   if (frameEl)  { frameEl.src = ''; frameEl.style.display = 'none'; }
   ['ppp-followers','ppp-following','ppp-fame','ppp-gifts'].forEach(id => {
@@ -1989,7 +1989,10 @@ async function _pppLoadPlayerData(playerId) {
   const cachedOwner = ownersCache[playerId];
   if (cachedOwner?.avatar_url && avatarEl) {
     avatarEl.src = cachedOwner.avatar_url;
-    if (coverEl) startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(cachedOwner.avatar_url, null));
+    if (coverEl) {
+      startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(cachedOwner.avatar_url, null));
+      _tavWireCoverClick(coverEl, cachedOwner.avatar_url, null, window._pppPlayerName);
+    }
   }
 
   try {
@@ -2053,7 +2056,10 @@ async function _pppLoadPlayerData(playerId) {
     if (cpEl)    cpEl.textContent    = fmt(Number(player.combat_power || 0));
     if (player.avatar_url) {
       if (avatarEl) avatarEl.src = player.avatar_url;
-      if (coverEl)  startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(player.avatar_url, player.profile_photos));
+      if (coverEl) {
+        startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(player.avatar_url, player.profile_photos));
+        _tavWireCoverClick(coverEl, player.avatar_url, player.profile_photos, player.name || window._pppPlayerName);
+      }
       ownersCache[playerId] = ownersCache[playerId] || {};
       ownersCache[playerId].avatar_url = player.avatar_url;
     }
@@ -3167,7 +3173,10 @@ async function openMyProfileModal() {
 
   // 3. Cover photo (avatar + fotos extras, em slideshow)
   const coverEl = document.getElementById('mpm-cover');
-  if (coverEl) startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(avatarUrl, PLAYER.profile_photos));
+  if (coverEl) {
+    startCoverSlideshow(coverEl, _tavBuildCoverPhotoList(avatarUrl, PLAYER.profile_photos));
+    _tavWireCoverClick(coverEl, avatarUrl, PLAYER.profile_photos, name);
+  }
 
   // 4. Avatar
   const avEl = document.getElementById('mpm-avatar');
@@ -5204,6 +5213,30 @@ function _applyBondGlow(wrapEl, tier, imgEl) {
   }
 }
 
+// ── Badge "Destacar laço" (selo de 50px no canto do avatar) ─────────────────
+// Fica visível apenas quando o próprio jogador tem laços mas nenhum em
+// destaque ainda (estado "adicionar"). Quando há um laço em destaque, o
+// header expandido (avatares + ícone) é mostrado no lugar e o selo some.
+function _pfeatSetBadge(prefix, mode, onClick) {
+  const badge = document.getElementById(prefix + '-fbond-badge');
+  if (!badge) return;
+  if (mode !== 'add') {
+    badge.style.display = 'none';
+    badge.onclick = null;
+    return;
+  }
+  badge.style.display = 'flex';
+  badge.onclick = onClick;
+}
+// Reposiciona o selo para o canto da moldura (se equipada) ou do avatar.
+function _pfeatSyncBadgeFramePos(prefix) {
+  const badge   = document.getElementById(prefix + '-fbond-badge');
+  const frameEl = document.getElementById(prefix + '-frame');
+  if (!badge) return;
+  const hasFrame = !!(frameEl && frameEl.style.display === 'block' && frameEl.src);
+  badge.classList.toggle('on-frame', hasFrame);
+}
+
 // ── Featured Bond ─────────────────────────────────────────────────────────────
 // Renders the full featured bond header (label + both avatars + bond icon).
 // bondRow: { bond_id, bond_type, partner_id, partner_name, partner_avatar, intimacy_points }
@@ -5277,9 +5310,10 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, cur
     };
   }
 
-  // Hide add-circle
+  // Hide add-circle / badge (row with partner is shown instead)
   const addCircle = document.getElementById(prefix + '-fbond-add-circle');
   if (addCircle) addCircle.style.display = 'none';
+  _pfeatSetBadge(prefix, 'hidden');
 
   // Activate header + hero
   headerEl.style.display = 'flex';
@@ -5287,45 +5321,21 @@ function _featuredBondRender(prefix, playerAv, playerFrame, bondRow, isSelf, cur
   heroEl.style.marginTop = FBOND_ACTIVE_MARGIN_TOP; // inline — immune to CSS overrides
 }
 
-// Render the "add" state: player avatar + dashed "+" circle (own profile only)
+// Estado "sem laço em destaque, mas com laços elegíveis": mantém o avatar
+// normal visível e mostra apenas o selo de 50px no canto superior direito
+// (da moldura, se houver) para abrir o seletor de laço em destaque.
 function _featuredBondShowAddState(prefix, playerAv, playerFrame) {
   const headerEl = document.getElementById(prefix + '-bond-header');
   const heroEl   = document.getElementById(prefix === 'ppp' ? 'ppp-hero' : 'mpm-hero');
   if (!headerEl || !heroEl) return;
 
-  // Hide label
-  const labelEl = document.getElementById(prefix + '-fbond-label');
-  if (labelEl) labelEl.style.display = 'none';
+  // Não expande o hero em row — avatar normal continua visível
+  headerEl.style.display = 'none';
+  heroEl.classList.remove('fbond-active');
+  heroEl.style.marginTop = '';
 
-  // Player avatar
-  const playerAvEl    = document.getElementById(prefix + '-fbond-player-av');
-  const playerFrameEl = document.getElementById(prefix + '-fbond-player-frame');
-  const playerWrapEl  = document.getElementById(prefix + '-fbond-player-wrap');
-  if (playerAvEl) playerAvEl.src = playerAv || '';
-  if (playerFrameEl) {
-    if (playerFrame) { playerFrameEl.src = playerFrame; playerFrameEl.style.display = 'block'; }
-    else               playerFrameEl.style.display = 'none';
-  }
-  if (playerWrapEl) playerWrapEl.classList.toggle('has-frame', !!playerFrame);
-
-  // Hide icon and partner (clearing partner frame too)
-  const iconWrapEl     = document.getElementById(prefix + '-fbond-icon-wrap');
-  const partnerWrapEl  = document.getElementById(prefix + '-fbond-partner-wrap');
-  const partnerFrameEl = document.getElementById(prefix + '-fbond-partner-frame');
-  if (iconWrapEl)     iconWrapEl.style.display = 'none';
-  if (partnerWrapEl)  { partnerWrapEl.style.display = 'none'; partnerWrapEl.classList.remove('has-frame'); }
-  if (partnerFrameEl) { partnerFrameEl.src = ''; partnerFrameEl.style.display = 'none'; }
-
-  // Show add circle
-  const addCircle = document.getElementById(prefix + '-fbond-add-circle');
-  if (addCircle) {
-    addCircle.style.display = 'flex';
-    addCircle.onclick = () => _featuredBondOpenPicker(prefix);
-  }
-
-  headerEl.style.display = 'flex';
-  heroEl.classList.add('fbond-active');
-  heroEl.style.marginTop = FBOND_ACTIVE_MARGIN_TOP;
+  _pfeatSyncBadgeFramePos(prefix);
+  _pfeatSetBadge(prefix, 'add', () => _featuredBondOpenPicker(prefix));
 }
 
 function _featuredBondClearUI(prefix) {
@@ -5342,6 +5352,7 @@ function _featuredBondClearUI(prefix) {
   const partnerFrameEl = document.getElementById(prefix + '-fbond-partner-frame');
   if (partnerWrapEl)  partnerWrapEl.classList.remove('has-frame');
   if (partnerFrameEl) { partnerFrameEl.src = ''; partnerFrameEl.style.display = 'none'; }
+  _pfeatSetBadge(prefix, 'hidden');
 }
 
 // ── Bond Style Picker — choose which unlocked tier image to display ──────────
@@ -5523,6 +5534,13 @@ async function _featuredBondRemove(prefix) {
     try { localStorage.removeItem('tav_player_modal_v3_' + PLAYER.id); } catch(_) {}
   } catch(e) { console.warn('[featured bond remove]', e); }
   _featuredBondClearUI(prefix);
+  // O jogador ainda tem laços (só o destaque foi removido) — volta o selo
+  // de "+" no canto do avatar em vez de deixar sem nenhum indicador.
+  const playerAv    = PLAYER.avatar_url || '';
+  const frameImgEl  = document.getElementById(prefix === 'ppp' ? 'ppp-frame' : 'mpm-frame');
+  const playerFrame = (frameImgEl?.style.display === 'block' && frameImgEl.src)
+    ? frameImgEl.src : _tavGetSkinCache(PLAYER.id)?.frame_url || '';
+  _featuredBondShowAddState(prefix, playerAv, playerFrame);
   showToast('Destaque removido.');
 }
 
@@ -5992,7 +6010,7 @@ function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
     const nameEl = div.querySelector('.bond-card-name');
     const circEl = div.querySelector('.bond-card-circle');
     if (isSelf) {
-      const openOptions = () => _bondsOpenOwnOptions(bondData.partner_id, bondData.partner_name, av, bondData.bond_id, slotType);
+      const openOptions = () => _bondsOpenOwnOptions(bondData.partner_id, bondData.partner_name, av, bondData.bond_id, slotType, bondData.intimacy_points || 0);
       if (nameEl) nameEl.onclick = openOptions;
       if (circEl) circEl.onclick = openOptions;
     } else {
@@ -6050,19 +6068,20 @@ function _bondsBuildCard({ slotType, bondData, pending, isSelf, slotIndex }) {
 }
 
 // ══════════════════════════════════════════
-//  OPÇÕES DO PRÓPRIO CARD (ver perfil / desfazer)
+//  OPÇÕES DO PRÓPRIO CARD (ver perfil / desfazer / destacar)
 // ══════════════════════════════════════════
-// Armazena dados do card aberto para uso pelo botão de rompimento
+// Armazena dados do card aberto para uso pelos botões de rompimento/destaque
 let _booCurrentBond = null;
 
-function _bondsOpenOwnOptions(partnerId, partnerName, partnerAv, bondId, bondType) {
+function _bondsOpenOwnOptions(partnerId, partnerName, partnerAv, bondId, bondType, intimacyPoints) {
   const modal  = document.getElementById('tav-bond-own-options');
   const avImg  = document.getElementById('boo-avatar');
   const nameEl = document.getElementById('boo-name');
   const viewBtn= document.getElementById('boo-view-btn');
+  const featBtn= document.getElementById('boo-feature-btn');
   if (!modal) return;
 
-  _booCurrentBond = { partnerId, partnerName, bondId, bondType };
+  _booCurrentBond = { partnerId, partnerName, partnerAv, bondId, bondType, intimacyPoints: intimacyPoints || 0 };
 
   if (avImg)  avImg.src         = partnerAv || makeAvatar(partnerName || '?', 64);
   if (nameEl) nameEl.textContent = partnerName || '';
@@ -6073,11 +6092,98 @@ function _bondsOpenOwnOptions(partnerId, partnerName, partnerAv, bondId, bondTyp
     openPlayerModalFor(partnerId, partnerName);
   };
 
+  // Botão "Destacar Laço" / "Remover Destaque" — consulta o featured_bond_id
+  // atual do jogador para saber em qual dos dois estados começar.
+  if (featBtn) {
+    featBtn.textContent = '...';
+    featBtn.disabled = true;
+    featBtn.onclick = null;
+    (async () => {
+      let currentFeaturedId = null;
+      try {
+        const sb = getSB();
+        if (sb && PLAYER.id) {
+          const { data } = await sb.from('players').select('featured_bond_id').eq('id', PLAYER.id).maybeSingle();
+          currentFeaturedId = data?.featured_bond_id ?? null;
+        }
+      } catch(_) {}
+      // Evita atualizar um botão referente a um card diferente, caso o
+      // modal já tenha sido reaberto para outro laço enquanto isso carregava.
+      if (!_booCurrentBond || _booCurrentBond.bondId !== bondId) return;
+
+      const isFeatured = !!currentFeaturedId && currentFeaturedId === bondId;
+      const willReplace = !isFeatured && !!currentFeaturedId;
+      featBtn.textContent = isFeatured ? 'Remover Destaque' : 'Destacar Laço';
+      featBtn.disabled = false;
+      featBtn.onclick = () => _bondsShowFeatureConfirm(isFeatured, willReplace);
+    })();
+  }
+
   modal.style.display = 'flex';
 }
 function closeBondOwnOptions() {
   const m = document.getElementById('tav-bond-own-options');
   if (m) m.style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+//  DESTACAR / REMOVER DESTAQUE DE LAÇO
+// ══════════════════════════════════════════
+
+function _bondsShowFeatureConfirm(isFeatured, willReplace) {
+  const bond = _booCurrentBond;
+  if (!bond) return;
+
+  const modal  = document.getElementById('tav-bond-feature-confirm');
+  const textEl = document.getElementById('bond-feature-text');
+  const warnEl = document.getElementById('bond-feature-warning');
+  const yesBtn = document.getElementById('bond-feature-yes');
+  if (!modal) return;
+
+  if (isFeatured) {
+    if (textEl) textEl.textContent = `Tem certeza que deseja remover o destaque do laço com ${bond.partnerName}?`;
+    if (warnEl) { warnEl.textContent = ''; warnEl.style.display = 'none'; }
+  } else {
+    if (textEl) textEl.textContent = `Tem certeza que deseja destacar o laço com ${bond.partnerName}?`;
+    if (warnEl) {
+      if (willReplace) {
+        warnEl.textContent = 'Atenção: isso substituirá o laço atualmente em destaque.';
+        warnEl.style.display = 'block';
+      } else {
+        warnEl.textContent = '';
+        warnEl.style.display = 'none';
+      }
+    }
+  }
+  if (yesBtn) yesBtn.onclick = () => _bondExecuteFeatureToggle(isFeatured);
+
+  modal.style.display = 'flex';
+}
+function closeBondFeatureConfirm() {
+  const m = document.getElementById('tav-bond-feature-confirm');
+  if (m) m.style.display = 'none';
+}
+
+async function _bondExecuteFeatureToggle(isFeatured) {
+  closeBondFeatureConfirm();
+  closeBondOwnOptions();
+
+  const bond = _booCurrentBond;
+  if (!bond?.bondId) { showToast('Laço não identificado.'); return; }
+
+  if (isFeatured) {
+    await _featuredBondRemove('mpm');
+  } else {
+    const bondRow = {
+      bond_id: bond.bondId,
+      bond_type: bond.bondType,
+      partner_id: bond.partnerId,
+      partner_name: bond.partnerName,
+      partner_avatar: bond.partnerAv,
+      intimacy_points: bond.intimacyPoints || 0
+    };
+    await _featuredBondSave(bond.bondId, bondRow, 'mpm');
+  }
 }
 
 // ══════════════════════════════════════════
@@ -6698,6 +6804,201 @@ function stopCoverSlideshow(coverEl) {
   }
 }
 
+// ══════════════════════════════════════════════════════════
+//  IMAGENS DE FUNDO CLICÁVEIS (perfil próprio e de visitantes)
+//  Clique no fundo → grade de fotos (mesmo estilo do modal de
+//  edição, porém sem o "+") → clique numa foto → visualizador
+//  fullscreen com zoom (dedos ou mouse) e arrastar p/ trocar.
+// ══════════════════════════════════════════════════════════
+
+// Liga (ou desliga, se não houver fotos) o clique num elemento de cover.
+// Chame sempre logo após startCoverSlideshow(coverEl, ...) com os mesmos
+// avatarUrl/extraPhotos usados para montar a lista, mais um título (nome
+// do jogador exibido) para o cabeçalho do modal.
+function _tavWireCoverClick(coverEl, avatarUrl, extraPhotos, title) {
+  if (!coverEl) return;
+  const list = _tavBuildCoverPhotoList(avatarUrl, extraPhotos);
+  if (list.length) {
+    coverEl.style.cursor = 'pointer';
+    coverEl.onclick = () => openBackgroundPhotosViewer(avatarUrl, extraPhotos, title);
+  } else {
+    coverEl.style.cursor = '';
+    coverEl.onclick = null;
+  }
+}
+
+let _tpvPhotos = [];
+
+// Abre a grade de fotos de fundo (somente leitura — sem card de "+").
+function openBackgroundPhotosViewer(avatarUrl, extraPhotos, title) {
+  _tpvPhotos = _tavBuildCoverPhotoList(avatarUrl, extraPhotos);
+  if (!_tpvPhotos.length) return;
+
+  const modal   = document.getElementById('tav-photos-view-modal');
+  const grid    = document.getElementById('tpv-grid');
+  const titleEl = document.getElementById('tpv-title');
+  if (!modal || !grid) return;
+
+  if (titleEl) titleEl.textContent = title || 'Fotos';
+  grid.innerHTML = '';
+  _tpvPhotos.forEach((url, i) => {
+    const card = document.createElement('div');
+    card.className = 'ppm-card ppm-card-photo';
+    card.innerHTML = `<img src="${esc(url)}" alt="Foto ${i + 1}">` +
+      (i === 0 ? '<span class="ppm-card-badge">Avatar</span>' : '');
+    card.onclick = () => _tpvOpenFullscreen(i);
+    grid.appendChild(card);
+  });
+
+  modal.classList.add('open');
+}
+function closeBackgroundPhotosViewer() {
+  document.getElementById('tav-photos-view-modal')?.classList.remove('open');
+}
+
+// ── Visualizador fullscreen: pinch-zoom + pan + swipe (estilo Play Store) ──
+let _tpfIndex        = 0;
+const _tpfState       = { scale: 1, tx: 0, ty: 0 };
+let _tpfPointers     = new Map();  // pointerId → {x,y}
+let _tpfMode         = null;       // 'pan' | 'pinch' | null
+let _tpfStart        = null;       // snapshot no início do gesto
+let _tpfSwipeStartX  = 0;
+let _tpfWired        = false;
+
+function _tpvOpenFullscreen(index) {
+  _tpfIndex = index;
+  const modal = document.getElementById('tav-photo-fullscreen');
+  if (!modal) return;
+  _tpfWireEvents();
+  _tpfResetTransform();
+  _tpfRenderImage();
+  modal.classList.add('open');
+}
+function _tpvCloseFullscreen() {
+  document.getElementById('tav-photo-fullscreen')?.classList.remove('open');
+}
+function _tpfRenderImage() {
+  const img     = document.getElementById('tpf-img');
+  const counter = document.getElementById('tpf-counter');
+  if (img)     img.src = _tpvPhotos[_tpfIndex] || '';
+  if (counter) counter.textContent = `${_tpfIndex + 1} / ${_tpvPhotos.length}`;
+}
+function _tpfResetTransform() {
+  _tpfState.scale = 1; _tpfState.tx = 0; _tpfState.ty = 0;
+  _tpfApplyTransform();
+}
+function _tpfApplyTransform() {
+  const img = document.getElementById('tpf-img');
+  if (img) img.style.transform = `translate(${_tpfState.tx}px, ${_tpfState.ty}px) scale(${_tpfState.scale})`;
+}
+function _tpfClampScale(s) { return Math.min(4, Math.max(1, s)); }
+function _tpfDist(pts) { const [a, b] = pts; return Math.hypot(a.x - b.x, a.y - b.y); }
+
+function _tpfNav(dir) {
+  const next = _tpfIndex + dir;
+  if (next < 0 || next >= _tpvPhotos.length) { _tpfState.tx = 0; _tpfApplyTransform(); return; }
+  _tpfIndex = next;
+  _tpfResetTransform();
+  _tpfRenderImage();
+}
+
+// Liga os listeners uma única vez (idempotente).
+function _tpfWireEvents() {
+  if (_tpfWired) return;
+  _tpfWired = true;
+
+  const stage = document.getElementById('tpf-stage');
+  const img   = document.getElementById('tpf-img');
+  if (!stage || !img) return;
+
+  stage.addEventListener('pointerdown', (e) => {
+    stage.setPointerCapture(e.pointerId);
+    _tpfPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    img.classList.add('dragging');
+
+    if (_tpfPointers.size === 1) {
+      _tpfMode = 'pan';
+      _tpfSwipeStartX = e.clientX;
+      _tpfStart = { x: e.clientX, y: e.clientY, tx: _tpfState.tx, ty: _tpfState.ty };
+    } else if (_tpfPointers.size === 2) {
+      _tpfMode = 'pinch';
+      const pts = [..._tpfPointers.values()];
+      _tpfStart = { dist: _tpfDist(pts), scale: _tpfState.scale };
+    }
+  });
+
+  stage.addEventListener('pointermove', (e) => {
+    if (!_tpfPointers.has(e.pointerId)) return;
+    _tpfPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (_tpfMode === 'pan' && _tpfPointers.size === 1) {
+      const dx = e.clientX - _tpfStart.x;
+      const dy = e.clientY - _tpfStart.y;
+      if (_tpfState.scale > 1) {
+        // Arrasta a imagem ampliada (pan)
+        _tpfState.tx = _tpfStart.tx + dx;
+        _tpfState.ty = _tpfStart.ty + dy;
+        _tpfApplyTransform();
+      } else {
+        // Arrasto horizontal p/ trocar de foto — leve resistência visual
+        _tpfState.tx = dx * 0.5;
+        _tpfApplyTransform();
+      }
+    } else if (_tpfMode === 'pinch' && _tpfPointers.size === 2) {
+      const pts     = [..._tpfPointers.values()];
+      const newDist = _tpfDist(pts);
+      const ratio   = newDist / (_tpfStart.dist || 1);
+      _tpfState.scale = _tpfClampScale(_tpfStart.scale * ratio);
+      _tpfApplyTransform();
+    }
+  });
+
+  const endPointer = (e) => {
+    if (!_tpfPointers.has(e.pointerId)) return;
+    _tpfPointers.delete(e.pointerId);
+    img.classList.remove('dragging');
+
+    if (_tpfPointers.size === 0) {
+      if (_tpfMode === 'pan' && _tpfState.scale <= 1) {
+        const dx = e.clientX - _tpfSwipeStartX;
+        if (Math.abs(dx) > 70) {
+          _tpfNav(dx < 0 ? 1 : -1);
+        } else {
+          _tpfState.tx = 0; _tpfApplyTransform();
+        }
+      } else if (_tpfState.scale <= 1) {
+        _tpfState.tx = 0; _tpfState.ty = 0; _tpfApplyTransform();
+      }
+      _tpfMode = null;
+    } else if (_tpfPointers.size === 1) {
+      // Saiu do pinch (2→1 dedo) — retoma o pan com o dedo restante
+      const [[, p]] = [..._tpfPointers.entries()];
+      _tpfMode  = 'pan';
+      _tpfStart = { x: p.x, y: p.y, tx: _tpfState.tx, ty: _tpfState.ty };
+      _tpfSwipeStartX = p.x;
+    }
+  };
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+  stage.addEventListener('pointerleave', endPointer);
+
+  // Zoom com a roda do mouse
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.18 : -0.18;
+    _tpfState.scale = _tpfClampScale(_tpfState.scale + delta);
+    if (_tpfState.scale <= 1) { _tpfState.tx = 0; _tpfState.ty = 0; }
+    _tpfApplyTransform();
+  }, { passive: false });
+
+  // Duplo clique / duplo toque: alterna entre 1x e 2.4x
+  stage.addEventListener('dblclick', () => {
+    _tpfState.scale = _tpfState.scale > 1 ? 1 : 2.4;
+    if (_tpfState.scale === 1) { _tpfState.tx = 0; _tpfState.ty = 0; }
+    _tpfApplyTransform();
+  });
+}
+
 // ── Exclusão no Cloudinary via Edge Function (delete-cloudinary-image) ─────
 // Best-effort: se falhar (rede, função ainda não configurada, etc), apenas
 // loga o erro no console — não deve travar o fluxo de exclusão local.
@@ -6931,6 +7232,7 @@ async function _ppmSavePhotos(photosArray) {
   const mpmCover = document.getElementById('mpm-cover');
   if (mpmCover && document.getElementById('my-profile-modal')?.classList.contains('open')) {
     startCoverSlideshow(mpmCover, _tavBuildCoverPhotoList(PLAYER.avatar_url, PLAYER.profile_photos));
+    _tavWireCoverClick(mpmCover, PLAYER.avatar_url, PLAYER.profile_photos, PLAYER.name || 'Aventureiro');
   }
 
   // Sincroniza no IDB (mesmo padrão usado pelo perfil_edit.js)

@@ -1109,11 +1109,20 @@ html,body {
 }
 /* Centralizada via transform (independe do tamanho) — para mudar o
    TAMANHO da moldura do avatar sozinho (sem laço em destaque), edite
-   apenas width/height abaixo. */
+   apenas width/height abaixo.
+   Isso centraliza a IMAGEM (canvas 192×192) sobre o avatar — testado
+   e confirmado matematicamente exato. Se um skin de moldura específico
+   ainda parecer um pouco deslocado, é porque o anel dessa arte não
+   está perfeitamente centralizado dentro do próprio arquivo PNG (ex.
+   molduras ornamentadas com um brasão/castelo no topo e uma faixa
+   "ganha mais peso" embaixo). Nesse caso, ajuste fino com
+   --frame-nudge-x/--frame-nudge-y (em px; padrão 0,0): */
 #mpm-frame {
+  --frame-nudge-x: 0px;
+  --frame-nudge-y: 0px;
   position: absolute;
   top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--frame-nudge-x)), calc(-50% + var(--frame-nudge-y)));
   width: 192px;
   height: 192px;
   pointer-events: none;
@@ -1946,11 +1955,20 @@ html,body {
 }
 /* Centralizada via transform (independe do tamanho) — para mudar o
    TAMANHO da moldura do avatar sozinho (sem laço em destaque), edite
-   apenas width/height abaixo. */
+   apenas width/height abaixo.
+   Isso centraliza a IMAGEM (canvas 192×192) sobre o avatar — testado
+   e confirmado matematicamente exato. Se um skin de moldura específico
+   ainda parecer um pouco deslocado, é porque o anel dessa arte não
+   está perfeitamente centralizado dentro do próprio arquivo PNG (ex.
+   molduras ornamentadas com um brasão/castelo no topo e uma faixa
+   "ganha mais peso" embaixo). Nesse caso, ajuste fino com
+   --frame-nudge-x/--frame-nudge-y (em px; padrão 0,0): */
 #ppp-frame {
+  --frame-nudge-x: 0px;
+  --frame-nudge-y: 0px;
   position: absolute;
   top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--frame-nudge-x)), calc(-50% + var(--frame-nudge-y)));
   width: 192px;
   height: 192px;
   pointer-events: none;
@@ -2663,8 +2681,13 @@ html,body {
 
 /* Frame overlay — avatar COM laço em destaque (wrap de 140px, sem o
    modificador .has-frame). Centralizada via transform (independe do
-   tamanho) — para mudar o TAMANHO, edite apenas width/height. */
+   tamanho) — para mudar o TAMANHO, edite apenas width/height.
+   Mesma observação do #ppp-frame: isto centraliza o CANVAS da imagem;
+   se um skin específico parecer deslocado por causa da arte (anel não
+   centralizado dentro do PNG), ajuste com --frame-nudge-x/-y. */
 .fbond-frame-overlay {
+  --frame-nudge-x: 0px;
+  --frame-nudge-y: 0px;
   position: absolute;
   top: 50%;
   left: 50%;
@@ -2673,7 +2696,7 @@ html,body {
   pointer-events: none;
   object-fit: contain;
   z-index: 3;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--frame-nudge-x)), calc(-50% + var(--frame-nudge-y)));
 }
 
 /* Bond icon wrapper — receives glow via JS */
@@ -2733,17 +2756,27 @@ html,body {
 
 /* ════════════════════════════════════════════════════
    BADGE "DESTACAR LAÇO" — selo de 50px no canto superior
-   direito do avatar do jogador (ppp/mpm). Fica no canto da
+   direito do avatar do jogador (ppp/mpm). Fica na borda da
    MOLDURA quando o jogador tem uma equipada (classe .on-frame).
-   Para mudar o TAMANHO do selo, edite width/height abaixo —
-   as posições (top/right normal e .on-frame) foram calculadas
-   para manter o CENTRO do selo exatamente sobre o canto do
-   círculo do avatar (90px) ou da moldura (192px), então se o
-   tamanho do selo mudar, ajuste também esses offsets.
+
+   IMPORTANTE: o avatar e a moldura são CÍRCULOS — o selo é
+   ancorado no ponto a 45° (canto superior direito) da
+   CIRCUNFERÊNCIA visível, não no canto do quadrado/imagem
+   (que fica vazio/transparente, fora do círculo). Por isso os
+   valores de top/right abaixo NÃO são metade do tamanho da
+   imagem — são calculados como raio × cos(45°)/sen(45°).
+
+   Se mudar o TAMANHO do selo (width/height) ou o TAMANHO do
+   avatar (90px) / moldura (192px) em #ppp-avatar, #ppp-frame,
+   #mpm-avatar, #mpm-frame, recalcule com a fórmula:
+     R = diâmetro do círculo / 2
+     centro_do_selo = centro_do_avatar + R × (0.7071, -0.7071)
+     top   = centro_do_selo.y − metade_do_selo − centro_do_wrap.y
+     right = mesma lógica, a partir da borda direita do wrap
    ════════════════════════════════════════════════════ */
 .pfeat-badge {
   position: absolute;
-  top: 0; right: 0;
+  top: 13px; right: 13px;   /* borda do avatar (90px) a 45° */
   width: 50px; height: 50px;
   border-radius: 50%;
   display: none;
@@ -2759,9 +2792,9 @@ html,body {
 .pfeat-badge:hover { background: rgba(35,24,10,0.95); }
 .pfeat-badge:active { transform: scale(0.92); }
 .pfeat-badge svg { width: 20px; height: 20px; color: var(--gold-light); }
-/* Quando o jogador tem moldura equipada, o selo sobe/some para o
-   canto superior direito da MOLDURA (192px) em vez do avatar (90px) */
-.pfeat-badge.on-frame { top: -51px; right: -51px; }
+/* Quando o jogador tem moldura equipada, o selo se move para a
+   borda da MOLDURA (192px) a 45°, em vez da borda do avatar (90px) */
+.pfeat-badge.on-frame { top: -23px; right: -23px; }
 
 /* When bond active: hero becomes column — bond-header is first child, info below.
    margin-top is set via JS (FBOND_ACTIVE_MARGIN_TOP constant) so it

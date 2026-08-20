@@ -83,6 +83,47 @@ async function uploadAvatarAoCloudinary(file) {
     return data.secure_url;
 }
 
+// Mesma coisa, mas via XMLHttpRequest, para conseguirmos acompanhar o
+// progresso real do envio (usado pela barra de progresso do modal AAA).
+function uploadAvatarAoCloudinaryComProgresso(file, onProgress) {
+    const cloudName = 'dbrghqhqy';
+    const uploadPreset = 'avatars_preset';
+
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', uploadPreset);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/upload`, true);
+
+        if (xhr.upload && typeof onProgress === 'function') {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    onProgress(percent);
+                }
+            };
+        }
+
+        xhr.onload = () => {
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const url = (data.eager && data.eager.length > 0) ? data.eager[0].secure_url : data.secure_url;
+                    resolve(url);
+                } else {
+                    reject(new Error((data.error && data.error.message) || 'Erro no upload'));
+                }
+            } catch (e) {
+                reject(new Error('Resposta inválida do servidor de imagens.'));
+            }
+        };
+        xhr.onerror = () => reject(new Error('Falha de conexão durante o upload.'));
+        xhr.send(formData);
+    });
+}
+
 // =========================================================
 
 // ── Exclusão no Cloudinary via Edge Function (delete-cloudinary-image) ─────
@@ -117,6 +158,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const customAvatarUrlInput = document.getElementById("editPlayerCustomAvatarUrl"); // Hidden p/ Cloudinary
     const avatarFileInput = document.getElementById("avatarFileInput"); // O input de arquivo novo
     const uploadStatusText = document.getElementById("uploadStatusText"); // Texto de status
+    const pemAvatarPreview = document.getElementById("pemAvatarPreview"); // Preview grande no topo do modal
+
+    // Barra de progresso do upload
+    const pemProgressWrap = document.getElementById("pemUploadProgressWrap");
+    const pemProgressFill = document.getElementById("pemUploadProgressFill");
+    const pemProgressText = document.getElementById("pemUploadProgressText");
+
+    // Modal de recorte (Cropper.js)
+    const pemCropModal   = document.getElementById("pem-crop-modal");
+    const pemCropImage   = document.getElementById("pem-crop-image");
+    const pemCropCancel  = document.getElementById("pem-crop-cancel");
+    const pemCropConfirm = document.getElementById("pem-crop-confirm");
+    let pemCropperInstance = null;
 
     const saveProfileBtn = document.getElementById("saveProfileBtn");
     const closeProfileModalBtn = document.getElementById("closeProfileModalBtn");
@@ -137,39 +191,155 @@ document.addEventListener("DOMContentLoaded", () => {
         'https://aden-rpg.pages.dev/assets/avatar13.webp', 'https://aden-rpg.pages.dev/assets/avatar14.webp'
     ];
 
-    // --- LÓGICA DE UPLOAD (Novo) ---
+    function setUploadProgress(percent) {
+        if (!pemProgressWrap) return;
+        pemProgressWrap.style.display = 'flex';
+        if (pemProgressFill) pemProgressFill.style.width = percent + '%';
+        if (pemProgressText) pemProgressText.textContent = percent + '%';
+    }
+    function hideUploadProgress() {
+        if (pemProgressWrap) pemProgressWrap.style.display = 'none';
+        if (pemProgressFill) pemProgressFill.style.width = '0%';
+        if (pemProgressText) pemProgressText.textContent = '0%';
+    }
+
+    // --- LÓGICA DE SELEÇÃO DE ARQUIVO -> ABRE O RECORTE (CROPPER) ---
     if (avatarFileInput) {
-        avatarFileInput.addEventListener('change', async (e) => {
+        avatarFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
+            avatarFileInput.value = ''; // permite selecionar o mesmo arquivo novamente depois
             if (!file) return;
+            _pemOpenCropper(file);
+        });
+    }
 
-            // Limpa seleção da grid de avatares padrão
-            document.querySelectorAll('.avatar-option.selected').forEach(i => i.classList.remove('selected'));
-            selectedAvatarUrlInput.value = '';
+    function _pemOpenCropper(file) {
+        if (!pemCropModal || !pemCropImage) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            pemCropImage.src = ev.target.result;
+            pemCropModal.classList.add('open');
 
-            // UI de Carregando
-            uploadStatusText.textContent = "Enviando imagem...";
-            uploadStatusText.className = "uploading-text";
-            saveProfileBtn.disabled = true; // Impede salvar durante upload
+            if (pemCropperInstance) { try { pemCropperInstance.destroy(); } catch (_) {} pemCropperInstance = null; }
+
+            requestAnimationFrame(() => {
+                if (typeof Cropper === 'undefined') {
+                    if (typeof showToast === 'function') showToast('Erro ao carregar ferramenta de recorte.');
+                    return;
+                }
+                pemCropperInstance = new Cropper(pemCropImage, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 1,
+                    movable: true,
+                    zoomable: true,
+                    rotatable: false,
+                    scalable: false,
+                    background: false,
+                    guides: true,
+                });
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function _pemCloseCropper() {
+        if (pemCropModal) pemCropModal.classList.remove('open');
+        if (pemCropperInstance) { try { pemCropperInstance.destroy(); } catch (_) {} pemCropperInstance = null; }
+        if (pemCropImage) pemCropImage.src = '';
+    }
+
+    if (pemCropCancel) pemCropCancel.onclick = _pemCloseCropper;
+    if (pemCropModal) {
+        pemCropModal.addEventListener('click', (e) => {
+            if (e.target === pemCropModal) _pemCloseCropper();
+        });
+    }
+
+    if (pemCropConfirm) {
+        pemCropConfirm.onclick = async () => {
+            if (!pemCropperInstance) return;
 
             try {
-                const uploadedUrl = await uploadAvatarAoCloudinary(file);
-                
+                pemCropConfirm.disabled = true;
+                pemCropConfirm.textContent = 'Enviando...';
+
+                const canvas = pemCropperInstance.getCroppedCanvas({ width: 500, height: 500, imageSmoothingQuality: 'high' });
+                if (!canvas) throw new Error('Falha ao gerar recorte.');
+
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+                if (!blob) throw new Error('Falha ao gerar imagem.');
+
+                const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+
+                // Limpa seleção da grid de avatares padrão
+                document.querySelectorAll('.avatar-option.selected').forEach(i => i.classList.remove('selected'));
+                if (selectedAvatarUrlInput) selectedAvatarUrlInput.value = '';
+
+                if (uploadStatusText) {
+                    uploadStatusText.textContent = "Enviando imagem...";
+                    uploadStatusText.className = "uploading-text";
+                }
+                if (saveProfileBtn) saveProfileBtn.disabled = true;
+                setUploadProgress(0);
+
+                const uploadedUrl = await uploadAvatarAoCloudinaryComProgresso(file, (percent) => setUploadProgress(percent));
+
                 // Sucesso
-                customAvatarUrlInput.value = uploadedUrl; // Coloca a URL no input hidden
-                uploadStatusText.textContent = "Imagem carregada com sucesso!";
-                uploadStatusText.className = "";
-                uploadStatusText.style.color = "#4CAF50"; // Verde
-                
+                if (customAvatarUrlInput) customAvatarUrlInput.value = uploadedUrl;
+                if (uploadStatusText) {
+                    uploadStatusText.textContent = "Imagem carregada com sucesso!";
+                    uploadStatusText.className = "";
+                    uploadStatusText.style.color = "#4CAF50";
+                }
+                if (pemAvatarPreview) pemAvatarPreview.src = uploadedUrl;
+                renderCustomAvatarThumbnail(uploadedUrl, true);
+
+                _pemCloseCropper();
             } catch (error) {
                 console.error("Erro upload:", error);
-                uploadStatusText.textContent = "Erro ao enviar. Tente outra imagem.";
-                uploadStatusText.style.color = "#ff5f5f"; // Vermelho
-                customAvatarUrlInput.value = '';
+                if (uploadStatusText) {
+                    uploadStatusText.textContent = "Erro ao enviar. Tente outra imagem.";
+                    uploadStatusText.style.color = "#ff5f5f";
+                }
+                if (customAvatarUrlInput) customAvatarUrlInput.value = '';
             } finally {
-                saveProfileBtn.disabled = false;
+                if (saveProfileBtn) saveProfileBtn.disabled = false;
+                pemCropConfirm.disabled = false;
+                pemCropConfirm.textContent = 'Usar Imagem';
+                hideUploadProgress();
             }
-        });
+        };
+    }
+
+    // Cria/atualiza a miniatura da imagem enviada via upload dentro da grid de avatares,
+    // sempre na primeira posição, e a marca como selecionada (toggle).
+    function renderCustomAvatarThumbnail(url, markSelected) {
+        if (!avatarGrid) return;
+        let thumb = avatarGrid.querySelector('.avatar-option.custom-uploaded');
+        if (!thumb) {
+            thumb = document.createElement('img');
+            thumb.classList.add('avatar-option', 'custom-uploaded');
+            thumb.title = "Sua imagem enviada";
+            avatarGrid.insertBefore(thumb, avatarGrid.firstChild);
+        }
+        thumb.src = url;
+        thumb.onclick = () => {
+            document.querySelectorAll('.avatar-option').forEach(i => i.classList.remove('selected'));
+            thumb.classList.add('selected');
+            if (customAvatarUrlInput) customAvatarUrlInput.value = url;
+            if (selectedAvatarUrlInput) selectedAvatarUrlInput.value = '';
+            if (pemAvatarPreview) pemAvatarPreview.src = url;
+            if (uploadStatusText) {
+                uploadStatusText.textContent = "Usando imagem enviada.";
+                uploadStatusText.style.color = "#aaa";
+            }
+        };
+        if (markSelected) {
+            document.querySelectorAll('.avatar-option').forEach(i => i.classList.remove('selected'));
+            thumb.classList.add('selected');
+        }
     }
 
     function renderAvatarOptions(selectedUrl = '') {
@@ -202,6 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     uploadStatusText.style.color = "#aaa";
                 }
                 if(avatarFileInput) avatarFileInput.value = ""; // Reseta o input file
+                if (pemAvatarPreview) pemAvatarPreview.src = url;
             };
             avatarGrid.appendChild(img);
         });
@@ -209,10 +380,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Lógica inicial ao abrir modal
         const isCustom = selectedUrl && !avatarUrls.includes(selectedUrl);
         if (isCustom) {
-            // Se já tem um custom (vindo do banco), preenche o hidden e avisa
+            // Se já tem um custom (vindo do banco), preenche o hidden, avisa e mostra a miniatura na grid
             if(customAvatarUrlInput) customAvatarUrlInput.value = selectedUrl;
             if(selectedAvatarUrlInput) selectedAvatarUrlInput.value = '';
             if(uploadStatusText) uploadStatusText.textContent = "Avatar personalizado atual carregado.";
+            renderCustomAvatarThumbnail(selectedUrl, true);
         } else {
              // Se é padrão
              if(customAvatarUrlInput) customAvatarUrlInput.value = '';
@@ -267,8 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (lockedTitleIcon) {
                 if (iconPrefix) {
                     lockedTitleIcon.textContent = iconPrefix;
-                    lockedTitleIcon.style.display = "block";
-                    lockedTitleIcon.style.marginRight = "5px";
+                    lockedTitleIcon.style.display = "flex";
                 } else {
                     lockedTitleIcon.textContent = "";
                     lockedTitleIcon.style.display = "none";
@@ -281,6 +452,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (editPlayerFactionSelect) editPlayerFactionSelect.value = playerData.faction;
             if (editPlayerGenderSelect) editPlayerGenderSelect.value = playerData.gender || "Masculino";
+
+            if (pemAvatarPreview) {
+                pemAvatarPreview.src = playerData.avatar_url || avatarUrls[0];
+            }
+            hideUploadProgress();
 
             renderAvatarOptions(playerData.avatar_url);
         }

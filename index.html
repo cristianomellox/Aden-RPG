@@ -965,10 +965,13 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 
 <div id="pvModal" class="modal-container" style="display:none;">
   <div class="modal-content pv-modal-content">
+    <button id="closePvModalBtn" aria-label="Fechar"></button>
+    <button id="pvtuto" aria-label="Como funcionam as mensagens?" title="Como funcionam as mensagens?">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </button>
     <div class="pv-tabs">
       <h2 class="pv-tab-btn active" data-tab="pv-messages">Mensagens</h2>
       <h2 class="pv-tab-btn" data-tab="pv-system">Sistema</h2>
-      <img id="pvtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:22px; height:22px; margin-left: 4px; cursor: pointer;" title="Como funcionam as mensagens?">
     </div>
 
     <div id="pv-list-bar">
@@ -1023,8 +1026,6 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
       <div id="pv-system-messages-list">
         </div>
     </div>
-
-    <button id="closePvModalBtn" aria-label="Fechar"></button>
   </div>
 </div>
 
@@ -1039,17 +1040,40 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
   </div>
 </div>
 
-<div id="pvtutomodal" class="modal-overlay2" style="display: none; z-index: 9999;">
-    <div class="modal-content2">
-      <center><h2>Mensagens</h2></center>
-     <p>As mensagens privadas (PV) não são necessariamente um chat <strong>/</strong> bate-papo, é mais uma espécie de mural de recados.</p>
-<p>Recomendo que você use para deixar recados importantes e/ou trocar informações e contato, pois há limitações como:</p>
-<ul>
-<li><strong>Turno de mensagens</strong>: quando você envia uma mensagem para um jogador, você só poderá enviar outra mensagem após ele responder e vice-versa ou após três dias, quando há o arquivamento automático das mensagens.</li>
-<li><strong>Arquivamento</strong>: a cada três dias o histórico de mensagens é arquivado caso não haja mais interação de conversa.</li></ul>   
-        <center><button id="closepvtutoBtn" class="action-btn">Fechar</button></center>       
+<div id="pvtutomodal" class="aaa-modal-backdrop" style="display: none; z-index: 9999;">
+    <div class="aaa-tuto-box">
+        <button id="closepvtutoBtn" class="aaa-modal-close" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="aaa-modal-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <h2>Sobre as Mensagens</h2>
+        <p class="aaa-tuto-lead">As mensagens privadas (PV) não são necessariamente um chat / bate-papo — são mais um mural de recados.</p>
+        <p class="aaa-tuto-lead">Recomendamos usá-las para deixar recados importantes e/ou trocar contatos, pois há algumas limitações:</p>
+        <div class="aaa-tuto-rules">
+            <div class="aaa-tuto-rule">
+                <span class="aaa-tuto-rule-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                </span>
+                <div class="aaa-tuto-rule-text">
+                    <strong>Turno de mensagens</strong>
+                    <p>Ao enviar uma mensagem para outro jogador, só será possível enviar outra depois que ele responder — ou após três dias, quando ocorre o arquivamento automático.</p>
+                </div>
+            </div>
+            <div class="aaa-tuto-rule">
+                <span class="aaa-tuto-rule-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                </span>
+                <div class="aaa-tuto-rule-text">
+                    <strong>Arquivamento</strong>
+                    <p>A cada três dias sem interação, o histórico da conversa é arquivado automaticamente.</p>
+                </div>
+            </div>
+        </div>
+        <button id="closepvtutoBtnFooter" class="aaa-btn-primary">Entendi</button>
     </div>
-</div> 
+</div>
 
 <div id="progressionModal" class="modal-container" style="display:none;">
   <div class="modal-content">
@@ -1075,6 +1099,13 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 
             if (closepvtutoBtn) {
                 closepvtutoBtn.addEventListener("click", () => {
+                    pvtutomodal.style.display = "none";
+                });
+            }
+
+            const closepvtutoBtnFooter = document.getElementById("closepvtutoBtnFooter");
+            if (closepvtutoBtnFooter) {
+                closepvtutoBtnFooter.addEventListener("click", () => {
                     pvtutomodal.style.display = "none";
                 });
             }

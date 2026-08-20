@@ -1483,11 +1483,33 @@ async function signOut() {
 // Apenas exibe Nome, Facção e Botões
 function renderPlayerUI(player, preserveActiveContainer = false) {
     authContainer.style.display = 'none';
+    const avatarSrc = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
     playerInfoDiv.innerHTML = `
-      <p class="hellop">${player.name}!</p>
-      <p>Facção: ${player.faction}</p>
-      <button id="editProfileBtn">Editar Perfil</button>
-      <button id="signOutBtn">Deslogar</button>
+      <div class="acc-modal-header">
+        <div class="acc-modal-avatar-wrap">
+          <img class="acc-modal-avatar" src="${avatarSrc}" alt="Avatar">
+          <span class="acc-modal-level">Nv. ${player.level}</span>
+        </div>
+        <p class="acc-modal-name">${player.name}</p>
+        <p class="acc-modal-faction">${player.faction}</p>
+      </div>
+      <div class="acc-menu">
+        <button class="acc-menu-item" id="editProfileBtn" type="button">
+          <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+          <span class="acc-menu-label">Editar Perfil</span>
+          <span class="acc-menu-arrow">&rsaquo;</span>
+        </button>
+        <button class="acc-menu-item" id="changePasswordBtn" type="button">
+          <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <span class="acc-menu-label">Alterar Senha</span>
+          <span class="acc-menu-arrow">&rsaquo;</span>
+        </button>
+        <button class="acc-menu-item acc-menu-danger" id="signOutBtn" type="button">
+          <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
+          <span class="acc-menu-label">Deslogar</span>
+          <span class="acc-menu-arrow">&rsaquo;</span>
+        </button>
+      </div>
     `;
     const editProfileBtn = playerInfoDiv.querySelector('#editProfileBtn');
     if (editProfileBtn) {
@@ -2182,9 +2204,113 @@ document.addEventListener('DOMContentLoaded', () => {
                     signOut();
                 };
             }
+            const modalChangePasswordBtn = modal.querySelector('#changePasswordBtn');
+            if (modalChangePasswordBtn) {
+                modalChangePasswordBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    openChangePasswordModal();
+                };
+            }
         });
         closeBtn.addEventListener('click', () => {
             modal.style.display = 'none';
+        });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+    }
+});
+
+// --- Modal de Alterar Senha (acessível pelo menu de conta) ---
+function openChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (!modal) return;
+    const curEl = document.getElementById('cpwCurrentPwd');
+    const p1El  = document.getElementById('cpwNewPwd');
+    const p2El  = document.getElementById('cpwConfirmPwd');
+    const msgEl = document.getElementById('cpwMessage');
+    if (curEl) curEl.value = '';
+    if (p1El)  p1El.value  = '';
+    if (p2El)  p2El.value  = '';
+    if (msgEl) { msgEl.textContent = ''; }
+    modal.style.display = 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const cpwModal       = document.getElementById('changePasswordModal');
+    const cpwCloseBtn     = document.getElementById('closeChangePasswordModalBtn');
+    const cpwConfirmBtn   = document.getElementById('cpwConfirmBtn');
+    const cpwCurrentPwd   = document.getElementById('cpwCurrentPwd');
+    const cpwNewPwd       = document.getElementById('cpwNewPwd');
+    const cpwConfirmPwd   = document.getElementById('cpwConfirmPwd');
+    const cpwMessage      = document.getElementById('cpwMessage');
+
+    if (!cpwModal) return;
+
+    const closeCpwModal = () => { cpwModal.style.display = 'none'; };
+
+    if (cpwCloseBtn) cpwCloseBtn.addEventListener('click', closeCpwModal);
+    cpwModal.addEventListener('click', (e) => {
+        if (e.target === cpwModal) closeCpwModal();
+    });
+
+    if (cpwConfirmBtn) {
+        cpwConfirmBtn.addEventListener('click', async () => {
+            const curPwd = cpwCurrentPwd ? cpwCurrentPwd.value : '';
+            const p1 = cpwNewPwd ? cpwNewPwd.value : '';
+            const p2 = cpwConfirmPwd ? cpwConfirmPwd.value : '';
+
+            if (cpwMessage) { cpwMessage.style.color = '#ff9999'; cpwMessage.textContent = ''; }
+
+            if (!curPwd) {
+                if (cpwMessage) cpwMessage.textContent = 'Informe sua senha atual.';
+                return;
+            }
+            if (!p1 || p1.length < 6) {
+                if (cpwMessage) cpwMessage.textContent = 'A nova senha deve ter pelo menos 6 caracteres.';
+                return;
+            }
+            if (p1 !== p2) {
+                if (cpwMessage) cpwMessage.textContent = 'As senhas não coincidem.';
+                return;
+            }
+
+            cpwConfirmBtn.disabled = true;
+            if (cpwMessage) { cpwMessage.style.color = '#aaa'; cpwMessage.textContent = 'Verificando senha atual...'; }
+
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                const email = session && session.user ? session.user.email : null;
+                if (!email) throw new Error('Não foi possível identificar sua conta. Faça login novamente.');
+
+                // Reautentica com a senha atual antes de trocar, por segurança
+                const { error: reauthError } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: curPwd
+                });
+                if (reauthError) {
+                    if (cpwMessage) { cpwMessage.style.color = '#e55'; cpwMessage.textContent = 'Senha atual incorreta.'; }
+                    cpwConfirmBtn.disabled = false;
+                    return;
+                }
+
+                if (cpwMessage) { cpwMessage.style.color = '#aaa'; cpwMessage.textContent = 'Salvando nova senha...'; }
+
+                const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+                if (error) {
+                    if (cpwMessage) { cpwMessage.style.color = '#e55'; cpwMessage.textContent = translateSupabaseError(error.message); }
+                    cpwConfirmBtn.disabled = false;
+                    return;
+                }
+
+                if (cpwMessage) { cpwMessage.style.color = '#7dc97d'; cpwMessage.textContent = '✅ Senha alterada com sucesso!'; }
+                setTimeout(closeCpwModal, 1500);
+            } catch (err) {
+                console.error('Erro ao alterar senha:', err);
+                if (cpwMessage) { cpwMessage.style.color = '#e55'; cpwMessage.textContent = err.message || 'Ocorreu um erro ao alterar a senha.'; }
+            } finally {
+                cpwConfirmBtn.disabled = false;
+            }
         });
     }
 });

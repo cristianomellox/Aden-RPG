@@ -32,6 +32,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- Cropper.js — usado para recorte quadrado (1:1) do avatar do jogador -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 </head>
 <body>
   <div id="floatingMessage" style="display: none;"></div>
@@ -244,49 +247,84 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 <button id="sendChatBtn">Enviar</button>
 </div>
 <div id="profileEditModal">
-<div>
-    <h2>Bem-vindo(a), Aventureiro(a)!</h2>
-    <label for="editPlayerName">Nome do Jogador:</label><br/>
-    <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 10px;">
-        <span id="lockedTitleIcon" style="font-size: 1.5em; display: none; cursor: help;" title="Este é seu título de nobreza e não pode ser removido aqui."></span>
-        <input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text" maxlength="11" style="flex-grow: 1;" />
+<div class="pem-box">
+    <button id="closeProfileModalBtn" class="aaa-modal-close" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <div class="pem-header">
+        <h2>Personalize seu Aventureiro</h2>
+        <p class="pem-subtitle">Configure nome, gênero, facção e avatar</p>
     </div>
 
-    <label for="editPlayerGender">Gênero:</label><br/>
-    <select id="editPlayerGender" style="width: 100%; padding: 10px; margin-bottom: 10px; background: #fff; color: black; border: 1px solid #555; border-radius: 5px;">
-        <option value="Masculino">Masculino</option>
-        <option value="Feminino">Feminino</option>
-    </select><br/>
-    <label for="editPlayerFaction">Escolha sua Facção:</label><br/>
-    <select id="editPlayerFaction">
-        <option value="Aliança da Floresta">Aliança da Floresta</option>
-        <option value="Guerreiros do Gelo">Guerreiros do Gelo</option>
-        <option value="Sentinelas do Fogo">Sentinelas do Fogo</option>
-        <option value="Horda Sombria">Horda Sombria</option>
-    </select><br/>
+    <div class="pem-avatar-preview-wrap">
+        <img id="pemAvatarPreview" class="pem-avatar-preview" src="https://aden-rpg.pages.dev/assets/avatar01.webp" alt="Avatar atual"/>
+        <span id="lockedTitleIcon" class="pem-locked-icon" title="Este é seu título de nobreza e não pode ser removido aqui."></span>
+    </div>
 
-    <label>Escolha seu Avatar:</label><br/>
-    <div class="avatar-grid" id="avatarSelection"></div>
-    <input id="selectedAvatarUrl" type="hidden"/>
+    <div class="pem-field">
+        <label for="editPlayerName">Nome do Jogador</label>
+        <input id="editPlayerName" placeholder="Seu nome de aventureiro" type="text" maxlength="11" />
+    </div>
 
-    <label>Ou envie sua própria imagem:</label><br/>
+    <div class="pem-field-row">
+        <div class="pem-field">
+            <label for="editPlayerGender">Gênero</label>
+            <select id="editPlayerGender">
+                <option value="Masculino">Masculino</option>
+                <option value="Feminino">Feminino</option>
+            </select>
+        </div>
+        <div class="pem-field">
+            <label for="editPlayerFaction">Facção</label>
+            <select id="editPlayerFaction">
+                <option value="Aliança da Floresta">Aliança da Floresta</option>
+                <option value="Guerreiros do Gelo">Guerreiros do Gelo</option>
+                <option value="Sentinelas do Fogo">Sentinelas do Fogo</option>
+                <option value="Horda Sombria">Horda Sombria</option>
+            </select>
+        </div>
+    </div>
 
-<div class="upload-container">
-    <label for="avatarFileInput" class="custom-file-upload">
-        <img src="https://aden-rpg.pages.dev/assets/promover.webp" style="width:20px; vertical-align:middle; margin-right:5px;"> 
-        Escolher Arquivo
-    </label>
-    <input id="avatarFileInput" type="file" accept="image/*" style="display:none;"/>
-    
-    <span id="uploadStatusText" style="font-size: 0.9em; color: #aaa; margin-left: 10px;">Nenhum arquivo.</span>
-</div>
+    <div class="pem-section">
+        <label class="pem-section-label">Escolha seu Avatar</label>
+        <div class="avatar-grid" id="avatarSelection"></div>
+        <input id="selectedAvatarUrl" type="hidden"/>
+    </div>
 
-<input id="editPlayerCustomAvatarUrl" type="hidden" />
-<br />
+    <div class="pem-section">
+        <label class="pem-section-label">Ou envie sua própria imagem</label>
+        <div class="upload-container">
+            <label for="avatarFileInput" class="custom-file-upload">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Escolher Arquivo
+            </label>
+            <input id="avatarFileInput" type="file" accept="image/*" style="display:none;"/>
+        </div>
+        <div id="pemUploadProgressWrap" class="pem-progress-wrap" style="display:none;">
+            <div class="pem-progress-bar"><div id="pemUploadProgressFill" class="pem-progress-fill"></div></div>
+            <span id="pemUploadProgressText" class="pem-progress-text">0%</span>
+        </div>
+        <span id="uploadStatusText" class="pem-upload-status">Nenhum arquivo.</span>
+    </div>
+
+    <input id="editPlayerCustomAvatarUrl" type="hidden" />
     <p id="profileEditMessage"></p>
-    <button id="saveProfileBtn">Salvar Perfil</button>
-    <button id="closeProfileModalBtn">Fechar</button>
+    <button id="saveProfileBtn" class="aaa-btn-primary">Salvar Perfil</button>
 </div>
+</div>
+
+<!-- ══ CROP DE AVATAR DO JOGADOR (1:1) — usa Cropper.js ══ -->
+<div id="pem-crop-modal">
+  <div class="pem-crop-inner">
+    <div class="pem-crop-title">Ajustar Imagem</div>
+    <div class="pem-crop-imgwrap"><img id="pem-crop-image" src="" alt=""></div>
+    <p class="pem-crop-hint">Arraste e use o zoom para enquadrar seu avatar.</p>
+    <div class="pem-crop-actions">
+      <button id="pem-crop-cancel" class="aaa-btn-secondary">Cancelar</button>
+      <button id="pem-crop-confirm" class="aaa-btn-primary">Usar Imagem</button>
+    </div>
+  </div>
 </div>
 <div id="recursosSubmenu" class="footer-submenu" style="display:none;">
   <div id="btnAfk" onclick="window.location.href = 'afk.html'" class="footer-submenu-btn">
@@ -929,8 +967,8 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
   <div class="modal-content pv-modal-content">
     <div class="pv-tabs">
       <h2 class="pv-tab-btn active" data-tab="pv-messages">Mensagens</h2>
-      <img id="pvtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:28px; height:28px; margin-left: -27px; margin-top: 10px;">
       <h2 class="pv-tab-btn" data-tab="pv-system">Sistema</h2>
+      <img id="pvtuto" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" style="width:22px; height:22px; margin-left: 4px; cursor: pointer;" title="Como funcionam as mensagens?">
     </div>
 
     <div id="pv-list-bar">
@@ -986,7 +1024,7 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
         </div>
     </div>
 
-    <button id="closePvModalBtn">Fechar</button>
+    <button id="closePvModalBtn" aria-label="Fechar"></button>
   </div>
 </div>
 
@@ -1059,12 +1097,44 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 <script src="map_hotspots.js"></script>
 <script src="map_effects.js"></script>
 <div class="modal" id="playerInfoModal" style="display: none;">
-<div class="modal-content">
-<h2>Olá,</h2>
+<div class="aaa-account-box">
+<button id="closePlayerInfoBtn" class="aaa-modal-close" aria-label="Fechar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+</button>
 <div id="modalPlayerInfoContent"></div>
-<button id="closePlayerInfoBtn">Fechar</button>
 </div>
 </div>
+
+<!-- ══ MODAL: ALTERAR SENHA DA CONTA ══ -->
+<div id="changePasswordModal" class="modal" style="display:none;">
+  <div class="aaa-cpw-box">
+    <button id="closeChangePasswordModalBtn" class="aaa-modal-close" aria-label="Fechar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="aaa-modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h2>Alterar Senha</h2>
+    <p class="aaa-modal-subtitle">Confirme sua senha atual e defina uma nova senha para sua conta.</p>
+
+    <div class="aaa-input-group">
+      <label for="cpwCurrentPwd">Senha Atual</label>
+      <input type="password" id="cpwCurrentPwd" placeholder="Sua senha atual" autocomplete="current-password">
+    </div>
+    <div class="aaa-input-group">
+      <label for="cpwNewPwd">Nova Senha</label>
+      <input type="password" id="cpwNewPwd" placeholder="Mínimo de 6 caracteres" autocomplete="new-password">
+    </div>
+    <div class="aaa-input-group">
+      <label for="cpwConfirmPwd">Confirmar Nova Senha</label>
+      <input type="password" id="cpwConfirmPwd" placeholder="Repita a nova senha" autocomplete="new-password">
+    </div>
+
+    <p id="cpwMessage" class="aaa-modal-message"></p>
+    <button id="cpwConfirmBtn" class="aaa-btn-primary">Salvar Nova Senha</button>
+  </div>
+</div>
+
 <div id="loading-overlay">
   <div id="loading-container">
     <h2>Carregando...</h2>

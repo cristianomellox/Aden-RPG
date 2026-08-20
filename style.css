@@ -3633,7 +3633,7 @@ button, .btn {
     justify-content: center;
     border-bottom: 1px solid var(--aaa-border-soft);
     margin-bottom: 0;
-    padding: 14px 14px 0;
+    padding: 14px 46px 0;
     background: linear-gradient(180deg, rgba(201,169,74,0.06), transparent);
     flex-shrink: 0;
 }
@@ -3861,7 +3861,7 @@ button, .btn {
 #pvModal #closePvModalBtn {
     position: absolute;
     top: 12px;
-    right: 12px;
+    left: 12px;
     width: 30px;
     height: 30px;
     border-radius: 50%;
@@ -3887,3 +3887,107 @@ button, .btn {
         linear-gradient(-45deg, transparent 45%, var(--aaa-gold-light) 45%, var(--aaa-gold-light) 55%, transparent 55%);
 }
 #pvModal #closePvModalBtn:hover { background: rgba(201,169,74,0.18) !important; border-color: var(--aaa-gold) !important; }
+
+#pvModal #pvtuto {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(201,169,74,0.1) !important;
+    background-image: none !important;
+    border: 1px solid var(--aaa-border) !important;
+    color: var(--aaa-gold-light);
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    margin: 0;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, transform 0.15s;
+}
+#pvModal #pvtuto svg { width: 16px; height: 16px; pointer-events: none; }
+#pvModal #pvtuto:hover {
+    background: rgba(201,169,74,0.22) !important;
+    border-color: var(--aaa-gold) !important;
+    transform: scale(1.06);
+}
+
+/* ══════════════ MODAL DE TUTORIAL DO PV (AAA) ══════════════ */
+.aaa-tuto-box {
+    position: relative;
+    width: 100%;
+    max-width: 380px;
+    max-height: 86vh;
+    overflow-y: auto;
+    background-color: var(--aaa-bg-panel);
+    background-image: var(--aaa-texture), linear-gradient(165deg, #211b10 0%, #120f09 55%, #0a0805 100%);
+    border: 1px solid var(--aaa-border);
+    border-radius: 16px;
+    box-shadow: var(--aaa-shadow-deep);
+    padding: 30px 22px 24px;
+    box-sizing: border-box;
+    text-align: center;
+    animation: aaaPopIn 0.25s cubic-bezier(.2,.9,.3,1.2);
+}
+.aaa-tuto-box::-webkit-scrollbar { width: 5px; }
+.aaa-tuto-box::-webkit-scrollbar-thumb { background: var(--aaa-gold-dark); border-radius: 3px; }
+.aaa-tuto-box::-webkit-scrollbar-track { background: transparent; }
+.aaa-tuto-box h2 {
+    margin: 0 0 14px;
+    font-size: 1.1em;
+    color: var(--aaa-gold-light);
+}
+.aaa-tuto-lead {
+    font-size: 0.84em;
+    color: #cabf9d;
+    line-height: 1.55;
+    text-align: left;
+    margin: 0 0 12px;
+}
+.aaa-tuto-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 18px 0 6px;
+}
+.aaa-tuto-rule {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--aaa-border-soft);
+    border-radius: 10px;
+    padding: 12px 13px;
+    text-align: left;
+}
+.aaa-tuto-rule-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(201,169,74,0.1);
+    border: 1px solid var(--aaa-border-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--aaa-gold-light);
+}
+.aaa-tuto-rule-icon svg { width: 16px; height: 16px; }
+.aaa-tuto-rule-text strong {
+    display: block;
+    font-size: 0.86em;
+    color: var(--aaa-gold-light);
+    margin-bottom: 3px;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.02em;
+}
+.aaa-tuto-rule-text p {
+    margin: 0;
+    font-size: 0.78em;
+    color: #a99f83;
+    line-height: 1.45;
+}
+.aaa-tuto-box .aaa-btn-primary { margin-top: 20px; }

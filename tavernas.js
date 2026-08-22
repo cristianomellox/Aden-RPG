@@ -268,6 +268,150 @@ const CITY_THRONE_DATA = {
   'Taverna de Duratar': { cityId: 7, throneNobless: [null, 701, 702], throneLabels: ['Lord / Lady', 'Consorte', 'Nobre'] },
 };
 
+// Catálogo das tavernas atualmente existentes (mesmos dados da aba Principal).
+// Usado para: (1) montar os cards reais da aba Recentes e (2) validar se uma
+// taverna do histórico local ainda existe antes de tentar abri-la.
+const TAVERN_CATALOG = {
+  'Taverna da Capital': { img: 'https://aden-rpg.pages.dev/assets/capital.png', desc: 'O centro de tudo em Aden',                         tag: 'Capital' },
+  'Taverna de Elendor': { img: 'https://aden-rpg.pages.dev/assets/elendor.png', desc: 'Entre as arvores eternas',                          tag: 'Elendor' },
+  'Taverna de Zion':    { img: 'https://aden-rpg.pages.dev/assets/zion.png',    desc: 'Um grande comércio precisa de uma boa taverna',      tag: 'Zion'    },
+  'Taverna de Mitrar':  { img: 'https://aden-rpg.pages.dev/assets/mitrar.png',  desc: 'Forjada nas montanhas geladas',                      tag: 'Mitrar'  },
+  'Taverna de Tandra':  { img: 'https://aden-rpg.pages.dev/assets/tandra.png',  desc: 'A melhor sopa de cogunelos do continente',            tag: 'Tandra'  },
+  'Taverna de Astrax':  { img: 'https://aden-rpg.pages.dev/assets/astrax.png',  desc: 'Disciplina e organização humana',                    tag: 'Astrax'  },
+  'Taverna de Duratar': { img: 'https://aden-rpg.pages.dev/assets/duratar.png', desc: 'Para aqueles com estômago forte',                    tag: 'Duratar' },
+};
+
+// ══════════════════════════════════════════
+//  RECENTES — histórico local (últimas 5 tavernas visitadas)
+// ══════════════════════════════════════════
+const RECENT_TAVERNS_KEY = 'aden_tav_recent';
+const RECENT_TAVERNS_MAX = 5;
+
+function getRecentTavernas() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_TAVERNS_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) { return []; }
+}
+
+function saveRecentTavernas(list) {
+  try { localStorage.setItem(RECENT_TAVERNS_KEY, JSON.stringify(list)); } catch (_) {}
+}
+
+function addRecentTaverna(name) {
+  let list = getRecentTavernas().filter(n => n !== name);
+  list.unshift(name);
+  if (list.length > RECENT_TAVERNS_MAX) list = list.slice(0, RECENT_TAVERNS_MAX);
+  saveRecentTavernas(list);
+  renderRecentTavernas();
+}
+
+function removeRecentTaverna(name) {
+  const list = getRecentTavernas().filter(n => n !== name);
+  saveRecentTavernas(list);
+  renderRecentTavernas();
+}
+
+function renderRecentTavernas() {
+  const listEl  = document.getElementById('recentes-list');
+  const emptyEl = document.getElementById('recentes-empty');
+  if (!listEl) return;
+
+  const names = getRecentTavernas().filter(n => TAVERN_CATALOG[n]); // já limpa entradas inexistentes na renderização
+  saveRecentTavernas(names);
+
+  if (!names.length) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  listEl.innerHTML = names.map(name => {
+    const info = TAVERN_CATALOG[name];
+    return `
+      <div class="tavern-card" onclick="openRoom('${esc(name)}',0,'${esc(info.tag)}')">
+        <div class="tavern-cover"><img src="${esc(info.img)}" alt="${esc(info.tag)}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"></div>
+        <div class="tavern-info">
+          <div class="tavern-name">${esc(name)}</div>
+          <div class="tavern-desc">${esc(info.desc)}</div>
+          <div class="tavern-avatars"></div>
+        </div>
+        <div class="tavern-right"><div class="t-online"><div class="online-dot"></div>0</div><div class="t-tag city">${esc(info.tag)}</div></div>
+      </div>`;
+  }).join('');
+
+  // Preenche contagem/avatares reais imediatamente (mesma fonte usada pela aba Principal)
+  renderListCards();
+}
+
+// ══════════════════════════════════════════
+//  MENSAGENS PRIVADAS (PV) — abre o modal replicado do Index direto aqui
+// ══════════════════════════════════════════
+function openPvModal() {
+  const pvModal = document.getElementById('pvModal');
+  if (pvModal) pvModal.style.display = 'flex';
+}
+window.openPvModal = openPvModal;
+
+async function openPvChatWithPlayer(playerId, name) {
+  if (!playerId) return;
+  if (playerId === PLAYER.id) { showToast('Você não pode enviar mensagem para si mesmo.'); return; }
+  try {
+    await (window.pvInitializationPromise || Promise.resolve());
+    const sb = window.supabaseClient || getSB();
+    const { data, error } = await sb.rpc('get_or_create_private_conversation', { target_player_id: playerId });
+    if (error) throw error;
+    const conversationId = data.conversation_id;
+
+    const pvModal = document.getElementById('pvModal');
+    if (pvModal) pvModal.style.display = 'flex';
+    // Garante que a aba "Mensagens" (e não "Sistema") esteja ativa
+    document.querySelector('#pvModal .pv-tab-btn[data-tab="pv-messages"]')?.click();
+
+    if (window.openChatView) {
+      await window.openChatView(conversationId, name);
+    } else {
+      showToast('O sistema de mensagens ainda está carregando, tente novamente.');
+    }
+  } catch (err) {
+    console.error('Erro ao abrir PV:', err);
+    showToast('Erro ao abrir a conversa.');
+  }
+}
+window.openPvChatWithPlayer = openPvChatWithPlayer;
+
+// ── Notificação instantânea de PV via Ably (só ativo aqui nas Tavernas) ──
+// Cada jogador escuta seu próprio canal "pv-notify:<id>"; pv.js publica
+// nesse canal do destinatário sempre que envia mensagem/presente/escambo,
+// e aqui isso força o PV a re-sincronizar na hora, sem esperar o polling
+// por tempo do index.html.
+function tavPublishPvNotify(targetPlayerId) {
+  try {
+    if (!ablyClient || !targetPlayerId) return;
+    ablyClient.channels.get('pv-notify:' + targetPlayerId).publish('new_message', { from: PLAYER.id, ts: Date.now() });
+  } catch (_) {}
+}
+window.tavPublishPvNotify = tavPublishPvNotify;
+
+function _tavSubscribePvNotify() {
+  try {
+    if (!ablyClient || !PLAYER?.id) return;
+    const ch = ablyClient.channels.get('pv-notify:' + PLAYER.id);
+    ch.unsubscribe();
+    ch.subscribe('new_message', () => {
+      if (typeof window.pvForceRefresh === 'function') window.pvForceRefresh();
+    });
+  } catch (_) {}
+}
+
+function openTavernMissingModal() {
+  document.getElementById('tavern-missing-modal')?.classList.add('open');
+}
+function closeTavernMissingModal() {
+  document.getElementById('tavern-missing-modal')?.classList.remove('open');
+}
+
 // ── Silêncio Local (Sessão) ──
 // Persiste enquanto a aba estiver aberta; limpa ao fechar/reabrir.
 const localMutes = new Set(
@@ -352,6 +496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindTabs();
   bindInputs();
   resetListCards();   // Zera imediatamente os valores fictícios do HTML
+  renderRecentTavernas();
   await initPlayer();
   await loadOwnersCache();
   initAbly();
@@ -445,7 +590,7 @@ function initAbly() {
     echoMessages: false,
     recover:      (_, cb) => cb(false)  // FIX: nunca reutiliza estado antigo; evita replay de sinalizações WebRTC obsoletas
   });
-  ablyClient.connection.on('connected',    () => { ablyReady = true;  setConnDot('on');  joinGlobalPresence(); });
+  ablyClient.connection.on('connected',    () => { ablyReady = true;  setConnDot('on');  joinGlobalPresence(); _tavSubscribePvNotify(); });
   ablyClient.connection.on('disconnected', () => { ablyReady = false; setConnDot('off'); });
   // Se a conexão falhar, libera o footer mesmo assim — senão um problema
   // de rede/Ably trancaria o jogador na página sem nem conseguir navegar
@@ -704,11 +849,21 @@ function renderListCards() {
 //  ROOM OPEN / CLOSE
 // ══════════════════════════════════════════
 function openRoom(name, _online, tag) {
+  // Valida se a taverna ainda existe (protege o histórico de Recentes contra
+  // tavernas que deixaram de existir).
+  if (!TAVERN_CATALOG[name]) {
+    removeRecentTaverna(name);
+    openTavernMissingModal();
+    return;
+  }
+
   if (!ablyReady) {
     showToast('Aguardando conexao...');
     setTimeout(() => openRoom(name, _online, tag), 1200);
     return;
   }
+
+  addRecentTaverna(name);
 
   const roomId = slugify(name);
   currentRoom  = { id: roomId, name, tag };
@@ -1952,7 +2107,7 @@ async function openPlayerProfilePage(playerId, name) {
     msgBtn.style.display = 'flex';
     msgBtn.onclick = () => {
       closePlayerProfilePage();
-      window.location.href = `index.html?action=open_pv&target_id=${encodeURIComponent(playerId)}&target_name=${encodeURIComponent(name)}`;
+      openPvChatWithPlayer(playerId, name);
     };
   }
 
@@ -4418,6 +4573,9 @@ function showToast(msg) {
   t.textContent = msg; t.classList.add('show');
   clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 3000);
 }
+// pv.js (réplica do sistema de PV do Index) usa window.showFloatingMessage
+// como toast de feedback — reaproveita o toast das Tavernas.
+window.showFloatingMessage = showToast;
 function scaleFont() {
   const d = document.createElement('div');
   d.style.cssText = 'position:absolute;visibility:hidden;font-size:1rem;line-height:1;';

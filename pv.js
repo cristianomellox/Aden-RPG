@@ -743,6 +743,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentPlayer            = null;
     let currentOpenConversationId = null;
     let currentOtherPlayerId      = null; // ID do outro jogador na conversa aberta
+
+    // Publica no canal Ably pessoal do destinatário para forçar refresh
+    // instantâneo do PV enquanto ele estiver nas Tavernas. Sem efeito
+    // (e sem erro) em qualquer outra página, já que a função só existe
+    // quando tavernas.js está carregado.
+    function notifyOtherPlayer(otherId) {
+        try {
+            if (otherId && typeof window.tavPublishPvNotify === 'function') {
+                window.tavPublishPvNotify(otherId);
+            }
+        } catch (_) {}
+    }
     let playerCache              = new Map();
 
     function loadNameCache() {
@@ -948,6 +960,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             closeTradeModal();
             showFloatingMessage(`Oferta criada! Os itens foram reservados por 12 horas.`);
+            notifyOtherPlayer(currentOtherPlayerId);
 
             // Força sincronização e re-render do chat
             await fetchAndSyncMessages(true);
@@ -998,6 +1011,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 // Adiciona ao IDB local
                 await incrementIdbItem(data.item_id, data.items_received);
+                notifyOtherPlayer(currentOtherPlayerId);
 
                 // Re-renderiza a conversa para mostrar status atualizado
                 await fetchAndSyncMessages(true);
@@ -1028,6 +1042,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isSeller) {
                 await incrementIdbItem(data.item_id, data.quantity);
             }
+            notifyOtherPlayer(currentOtherPlayerId);
 
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
@@ -1342,6 +1357,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.openChatView = openChatView;
 
+    // Chamado pelo listener do canal Ably "pv-notify:<meuId>" (só existe nas
+    // Tavernas) sempre que o outro jogador manda mensagem/presente/escambo.
+    // Re-sincroniza a lista e, se um chat estiver aberto, também o re-renderiza —
+    // efetivamente marcando como lida em tempo real, sem esperar o polling.
+    window.pvForceRefresh = async function() {
+        await fetchAndSyncMessages(true);
+        if (currentOpenConversationId) {
+            await openChatView(currentOpenConversationId);
+        }
+    };
+
     function _ensureTradeHeaderBtn(convo) {
         // Remove botão legado se existir de versão anterior
         const old = document.getElementById('pv-trade-btn');
@@ -1593,6 +1619,7 @@ document.addEventListener("DOMContentLoaded", () => {
             await decrementIdbItem(selectedGiftItem.id, qty);
             closeGiftModal();
             showFloatingMessage('Presente enviado! O destinatário tem 24h para aceitar.');
+            notifyOtherPlayer(currentOtherPlayerId);
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
         } catch (err) {
@@ -1622,6 +1649,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Invalida o cache do inventário no IDB para forçar re-sync
             // quando o receptor abrir o inventário
             _invalidateInventoryCache();
+            notifyOtherPlayer(currentOtherPlayerId);
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
             showFloatingMessage('Presente aceito! Abra o inventário para ver a skin recebida.');
@@ -1659,6 +1687,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 btns.forEach(b => b.disabled = false); return;
             }
             if (isSender) await incrementIdbItem(itemId, data.quantity || 1);
+            notifyOtherPlayer(currentOtherPlayerId);
             await fetchAndSyncMessages(true);
             await openChatView(currentOpenConversationId);
             showFloatingMessage(data.message || 'Presente processado.');
@@ -1937,6 +1966,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 chatInput.disabled = false;
             } else {
                 chatInput.value = '';
+                notifyOtherPlayer(currentOtherPlayerId);
                 await fetchAndSyncMessages(true);
                 const currentConvo = localConversations.get(currentOpenConversationId);
                 if (currentConvo) {

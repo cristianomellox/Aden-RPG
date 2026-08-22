@@ -3133,8 +3133,8 @@ html,body {
 
 .ppm-card {
   position: relative;
-  width: 150px;
-  height: 150px;
+  width: 120px;
+  height: 120px;
   border-radius: 12px;
   overflow: hidden;
   border: 1.5px solid var(--border-mid);

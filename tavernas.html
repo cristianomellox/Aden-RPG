@@ -816,6 +816,58 @@
   </div>
 </div>
 
+<!-- ══ CARD DE AÇÕES DA MENSAGEM (copiar / denunciar) ══ -->
+<div class="modal-backdrop" id="msg-action-modal" onclick="if(event.target===this)closeMsgActionCard()">
+  <div class="modal-sheet msg-action-sheet">
+    <div class="modal-handle"></div>
+    <div class="msg-action-body">
+      <div class="msg-action-preview" id="msg-action-preview"></div>
+      <button class="msg-action-btn" id="msg-action-copy-btn" onclick="copyPendingMsgText()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copiar mensagem
+      </button>
+      <button class="msg-action-btn report" id="msg-action-report-btn" onclick="openReportConfirm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        Denunciar mensagem
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRMAÇÃO DE DENÚNCIA ══ -->
+<div class="modal-backdrop" id="msg-report-confirm-modal" onclick="if(event.target===this)closeReportConfirm()">
+  <div class="modal-sheet report-confirm-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Denunciar Mensagem</div>
+      <button class="modal-close" onclick="closeReportConfirm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="report-confirm-body">
+      <p class="report-confirm-question">Tem certeza que deseja denunciar essa mensagem do usuário?</p>
+      <div class="report-confirm-quote" id="report-confirm-quote"></div>
+      <p class="report-confirm-warning">⚠️ Atenção: o uso indevido ou falsas denúncias podem gerar punições.</p>
+      <div class="report-confirm-actions">
+        <button class="report-confirm-btn no" onclick="closeReportConfirm()">Não</button>
+        <button class="report-confirm-btn yes" id="report-confirm-yes-btn" onclick="confirmReportMsg()">Sim</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DENÚNCIA ENVIADA ══ -->
+<div class="modal-backdrop" id="msg-report-success-modal" onclick="if(event.target===this)closeReportSuccess()">
+  <div class="modal-sheet report-success-sheet">
+    <div class="modal-handle"></div>
+    <div class="report-success-body">
+      <div class="report-success-icon">✅</div>
+      <p class="report-success-text">Denúncia enviada com sucesso. Caso seja confirmada, uma mensagem será enviada para seu sistema. Obrigado por colaborar em manter o ambiente do jogo agradável e respeitoso para todos!</p>
+      <button class="report-success-btn" onclick="closeReportSuccess()">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ FAME MODAL ══ -->
 <div id="tav-fame-modal" class="tav-side-modal" onclick="if(event.target===this)closeFameModal()">
   <div class="tav-side-inner" style="max-height:80vh;">

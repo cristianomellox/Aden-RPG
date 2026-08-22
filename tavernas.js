@@ -5,6 +5,13 @@ const ROOM_CAPACITY = 30;
 const MIC_GAIN      = 0.5;   // Amplificação do microfone (1.0 = sem ganho; aumente se ainda estiver baixo)
 const NOISE_GATE    = 15;    // Threshold do noise gate (0–255). Suba se vazar ruído, desça se cortar voz.
 
+// Bot do Telegram — mesmo bot usado pela loja do index.html (browser-guard.js)
+// para comprovantes de compra. Aqui é reaproveitado para receber denúncias
+// de mensagens do chat da taverna. tavernas.html não carrega browser-guard.js,
+// por isso o token/chat id são replicados aqui.
+const REPORT_BOT_TOKEN = '8505706283:AAEUfVyAhZCzSfLwwz8GMSFXuFUOAPRgmKo';
+const REPORT_CHAT_ID   = '7713632832';
+
 // ── Supabase (cliente próprio — tavernas.html não herda o do script.js) ──
 const SB_URL  = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
 const SB_KEY  = 'sb_publishable_le96thktqRYsYPeK4laasQ_xDmMAgPx';
@@ -462,6 +469,12 @@ let audioCtx      = null;
 let speakLastTs   = 0;
 let speakLastState = false;
 let selectedGiftRecipients = new Set();
+
+// ── Denúncia de mensagens do chat ──
+let _chatHistory        = [];   // { id, name, clientId, text } — histórico p/ contexto de denúncia
+let _chatMsgSeq         = 0;
+let _msgActionPendingId = null; // mensagem selecionada no card de ações (copiar/denunciar)
+let _reportPendingId    = null; // mensagem confirmada para denúncia
 
 // ── Intimidade por Proximidade (tempo sentado adjacente) ──
 const PROX_INTERVAL_MS   = 5 * 60 * 1000;  // 5 minutos por intervalo
@@ -1722,6 +1735,22 @@ function forceMuteSelf() {
 // Speaking detection + Noise Gate (AnalyserNode — client-side, sem custo de rede)
 // O noise gate controla o GainNode: abaixo do threshold o áudio é zerado,
 // evitando que ruído ambiente vaze continuamente para os outros jogadores.
+//
+// ── ECONOMIA DE ABLY ──────────────────────────────────────────────────────
+// O anel luminoso do PRÓPRIO assento é 100% local (setSpeaking abaixo) e não
+// custa nada de rede. O que custa Ably é o roomChannel.publish('speak', ...)
+// que avisa aos outros clientes da sala para acenderem o anel no assento
+// deste jogador — esse é o único ponto do indicador realmente ligado ao
+// Ably (o áudio em si viaja por WebRTC, sem custo de mensagens Ably).
+// Antes: publicava a cada mudança de estado com apenas 900ms de intervalo
+// mínimo, o que gera MUITAS mensagens numa conversa normal (a voz humana
+// tem pausas curtas entre palavras/frases que cruzam o threshold o tempo
+// todo). Agora aplicamos um "hold" (SPEAK_HOLD) antes de considerar que a
+// pessoa parou de falar — pausas curtas não geram mais um novo publish — e
+// aumentamos o intervalo mínimo entre publicações (SPEAK_MIN_GAP). Isso
+// reduz bastante o volume de mensagens no plano free do Ably sem prejudicar
+// a UX: o anel ainda acende quase instantaneamente ao começar a falar e
+// apaga pouco depois de parar — só fica mais "estável" (menos flicker).
 function startSpeakDetect() {
   if (!localStream) return;
   try {
@@ -1732,16 +1761,18 @@ function startSpeakDetect() {
     src.connect(anl);
     const buf = new Uint8Array(anl.frequencyBinCount);
 
-    let gateOpen    = false;  // estado atual do gate
-    let lastAbove   = 0;      // timestamp da última vez que o sinal ficou acima do threshold
-    const GATE_HOLD = 300;    // ms — mantém o gate aberto após silêncio para não cortar pausas curtas
+    let gateOpen        = false; // estado atual do gate
+    let lastAbove        = 0;    // timestamp da última vez que o sinal ficou acima do threshold
+    const GATE_HOLD      = 300;  // ms — mantém o ÁUDIO (WebRTC) aberto após silêncio para não cortar pausas curtas
+    const SPEAK_HOLD     = 700;  // ms — mantém o anel/estado "falando" após silêncio (evita flicker → menos publishes no Ably)
+    const SPEAK_MIN_GAP  = 1200; // ms — intervalo mínimo entre publicações de estado no Ably (antes: 900ms)
 
     const tick = () => {
       if (!micOn || !localStream) return;
       anl.getByteFrequencyData(buf);
       const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
 
-      // ── Noise Gate ──────────────────────────────────────────────
+      // ── Noise Gate (controla o áudio via WebRTC — sem custo de Ably) ──
       if (avg >= NOISE_GATE) lastAbove = Date.now();
       const shouldOpen = (Date.now() - lastAbove) < GATE_HOLD;
 
@@ -1756,13 +1787,16 @@ function startSpeakDetect() {
         );
       }
 
-      // ── Speak detection (anel visual) ───────────────────────────
-      const talking = avg > NOISE_GATE && !micMuted;
+      // ── Speak detection (anel visual + publish no Ably) ───────────────
+      // Usa o mesmo "lastAbove" com um hold próprio (SPEAK_HOLD) para não
+      // oscilar a cada micro-pausa da fala — reduz o flicker visual e,
+      // principalmente, o número de mensagens publicadas no Ably.
+      const now     = Date.now();
+      const talking = ((now - lastAbove) < SPEAK_HOLD) && !micMuted;
       const sid     = Object.keys(mySeats)[0];
-      if (sid) setSpeaking(sid, talking);
+      if (sid) setSpeaking(sid, talking); // local, sem custo de Ably
 
-      const now = Date.now();
-      if (talking !== speakLastState && now - speakLastTs > 900) {
+      if (talking !== speakLastState && now - speakLastTs > SPEAK_MIN_GAP) {
         roomChannel?.publish('speak', { speaking: talking });
         speakLastTs    = now;
         speakLastState = talking;
@@ -1941,8 +1975,20 @@ function renderMentions(rawText) {
 function chatMsg(name, text, isMine, clientId) {
   const c = document.getElementById('chat-messages');
   if (!c) return;
+
+  // ── Histórico para o sistema de denúncia ─────────────────────────────
+  // Guarda toda mensagem de chat "real" (com um clientId associado) para
+  // que, ao denunciar uma mensagem, seja possível montar o contexto com as
+  // 10 mensagens anteriores e as 10 posteriores. Mensagens de sistema
+  // (clientId === 'system') entram no histórico como contexto, mas não
+  // são denunciáveis (ver attachMsgActionHandlers).
+  const msgId = 'm' + (++_chatMsgSeq);
+  _chatHistory.push({ id: msgId, name, clientId: clientId || null, text });
+  if (_chatHistory.length > 300) _chatHistory.shift(); // limite de memória, contexto de denúncia não precisa de mais que isso
+
   const m = document.createElement('div');
   m.className = 'chat-msg';
+  m.dataset.msgId = msgId;
   m.style.flexDirection = isMine ? 'row-reverse' : 'row';
   const av = clientId ? resolveAvatar(clientId, name, 50) : makeAvatar(name, 50);
   
@@ -1961,6 +2007,11 @@ function chatMsg(name, text, isMine, clientId) {
     </div>`;
   c.appendChild(m);
   c.scrollTop = c.scrollHeight;
+
+  // Só mensagens de jogadores reais (não 'system') podem abrir o card de ações
+  if (clientId && clientId !== 'system') {
+    attachMsgActionHandlers(m.querySelector('.c-text'), msgId);
+  }
 }
 
 function sysMsg(text) {
@@ -1976,6 +2027,160 @@ function modMsg(text) {
   const m = document.createElement('div');
   m.className = 'c-mod'; m.textContent = '[ Moderacao ] ' + text;
   c.appendChild(m); c.scrollTop = c.scrollHeight;
+}
+
+// ══════════════════════════════════════════
+//  DENÚNCIA DE MENSAGENS DO CHAT
+// ══════════════════════════════════════════
+// Fluxo: clicar (ou clicar e segurar) numa mensagem → card com "Copiar" e
+// "Denunciar" (denunciar não aparece na própria mensagem) → confirmação →
+// envio ao bot do Telegram com as 10 mensagens antes/depois de contexto.
+
+// Liga o clique simples e o "clicar e segurar" (touch) ao card de ações,
+// sem disparar o card duas vezes no mesmo toque.
+function attachMsgActionHandlers(el, msgId) {
+  if (!el) return;
+  el.style.cursor = 'pointer';
+  el.style.webkitTouchCallout = 'none';
+  el.style.userSelect = 'none';
+
+  let pressTimer = null;
+  let longFired  = false;
+
+  el.addEventListener('click', () => {
+    if (longFired) { longFired = false; return; } // já abriu via long-press neste toque
+    openMsgActionCard(msgId);
+  });
+
+  el.addEventListener('touchstart', () => {
+    longFired = false;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      longFired = true;
+      openMsgActionCard(msgId);
+    }, 450);
+  }, { passive: true });
+
+  const cancelPress = () => clearTimeout(pressTimer);
+  el.addEventListener('touchend',   cancelPress);
+  el.addEventListener('touchmove',  cancelPress);
+  el.addEventListener('touchcancel', cancelPress);
+}
+
+function openMsgActionCard(msgId) {
+  const entry = _chatHistory.find(x => x.id === msgId);
+  if (!entry) return;
+  _msgActionPendingId = msgId;
+
+  const preview = document.getElementById('msg-action-preview');
+  if (preview) {
+    const full = `${entry.name}: ${entry.text}`;
+    preview.textContent = full.length > 140 ? full.slice(0, 140) + '…' : full;
+  }
+
+  const isMine = entry.clientId && entry.clientId === PLAYER.id;
+  const reportBtn = document.getElementById('msg-action-report-btn');
+  if (reportBtn) reportBtn.style.display = isMine ? 'none' : '';
+
+  document.getElementById('msg-action-modal')?.classList.add('open');
+}
+
+function closeMsgActionCard() {
+  document.getElementById('msg-action-modal')?.classList.remove('open');
+}
+
+function copyPendingMsgText() {
+  const entry = _chatHistory.find(x => x.id === _msgActionPendingId);
+  closeMsgActionCard();
+  if (!entry) return;
+  const done = () => showToast('Mensagem copiada!');
+  const fail = () => showToast('Não foi possível copiar a mensagem.');
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(entry.text).then(done).catch(fail);
+  } else {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = entry.text;
+      ta.style.position = 'fixed';
+      ta.style.opacity  = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    } catch (e) { fail(); }
+  }
+}
+
+function openReportConfirm() {
+  const entry = _chatHistory.find(x => x.id === _msgActionPendingId);
+  closeMsgActionCard();
+  if (!entry) return;
+  _reportPendingId = entry.id;
+
+  const quoteEl = document.getElementById('report-confirm-quote');
+  if (quoteEl) quoteEl.textContent = `${entry.name}: ${entry.text}`;
+
+  document.getElementById('msg-report-confirm-modal')?.classList.add('open');
+}
+
+function closeReportConfirm() {
+  document.getElementById('msg-report-confirm-modal')?.classList.remove('open');
+  _reportPendingId = null;
+}
+
+async function confirmReportMsg() {
+  const entry = _chatHistory.find(x => x.id === _reportPendingId);
+  if (!entry) { closeReportConfirm(); return; }
+
+  const yesBtn = document.getElementById('report-confirm-yes-btn');
+  if (yesBtn) yesBtn.disabled = true;
+
+  const idx    = _chatHistory.findIndex(x => x.id === entry.id);
+  const before = _chatHistory.slice(Math.max(0, idx - 10), idx);
+  const after  = _chatHistory.slice(idx + 1, idx + 11);
+
+  const trunc   = (t) => (t.length > 220 ? t.slice(0, 220) + '…' : t);
+  const fmtLine = (x) => `${x.name}: ${trunc(x.text || '')}`;
+
+  let text =
+    `Denúncia!\n` +
+    `Denunciante: ${PLAYER.name} (ID: ${PLAYER.id})\n` +
+    `Denunciado: ${entry.name} (ID: ${entry.clientId || 'desconhecido'})\n\n`;
+
+  if (before.length) {
+    text += `Mensagens anteriores:\n` + before.map(fmtLine).join('\n') + '\n\n';
+  }
+  text += `Mensagem denunciada:\n${fmtLine(entry)}\n\n`;
+  if (after.length) {
+    text += `Mensagens posteriores:\n` + after.map(fmtLine).join('\n');
+  }
+
+  // Limite de segurança (Telegram aceita até 4096 caracteres por mensagem de texto)
+  if (text.length > 3900) text = text.slice(0, 3900) + '\n(denúncia truncada)';
+
+  try {
+    const url  = `https://api.telegram.org/bot${REPORT_BOT_TOKEN}/sendMessage`;
+    const resp = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ chat_id: REPORT_CHAT_ID, text })
+    });
+    const result = await resp.json();
+    if (!resp.ok || !result.ok) throw new Error(result.description || 'Resposta inválida do Telegram');
+
+    closeReportConfirm();
+    document.getElementById('msg-report-success-modal')?.classList.add('open');
+  } catch (err) {
+    console.error('[Aden RPG] Report send error:', err);
+    showToast('Erro ao enviar denúncia. Tente novamente.');
+  } finally {
+    if (yesBtn) yesBtn.disabled = false;
+  }
+}
+
+function closeReportSuccess() {
+  document.getElementById('msg-report-success-modal')?.classList.remove('open');
 }
 
 // ══════════════════════════════════════════

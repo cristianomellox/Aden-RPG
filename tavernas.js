@@ -2265,26 +2265,8 @@ async function confirmReportMsg() {
     console.error('[Aden RPG] Report send error:', err);
     if (String(err?.message).includes('message_not_found_in_history')) {
       showToast('Não foi possível localizar essa mensagem. Tente denunciar novamente em alguns segundos.');
-      // Diagnóstico temporário — mostra na tela (sem precisar de DevTools)
-      // qual canal/timestamp foram consultados no Ably, pra comparar com o
-      // que está configurado no dashboard. Pode remover este alert depois
-      // de confirmar que está tudo funcionando.
-      if (err.debug) {
-        alert(
-          'DIAGNÓSTICO (envie print pra análise):\n\n' +
-          'Canal: ' + err.debug.channel + '\n' +
-          'Timestamp: ' + err.debug.reportedTs + '\n' +
-          'Key (14 car.): ' + err.debug.keyPrefixInUse + '\n' +
-          'Tamanho key (esp. 57): ' + err.debug.keyLength + '\n\n' +
-          'URL consultada:\n' + err.debug.rawUrl + '\n\n' +
-          'Status HTTP: ' + err.debug.rawStatus + '\n' +
-          'Erro de rede: ' + (err.debug.rawFetchError || '(nenhum)') + '\n\n' +
-          'Corpo da resposta:\n' + err.debug.rawBody
-        );
-      }
     } else {
       showToast('Erro ao enviar denúncia. Tente novamente.');
-      alert('DIAGNÓSTICO (envie print pra análise):\n\n' + String(err?.message || err));
     }
   } finally {
     if (yesBtn) yesBtn.disabled = false;

@@ -1,7 +1,7 @@
 
 // ── Config ──
 const ABLY_KEY      = '5kVVVQ.Gn1VBA:lN3zK-KKFTZOWm3iBe3FfbPmtwb-oxsMTco_W0A-AZw';
-const ROOM_CAPACITY = 30;
+const ROOM_CAPACITY = 12;
 const MIC_GAIN      = 0.5;   // Amplificação do microfone (1.0 = sem ganho; aumente se ainda estiver baixo)
 const NOISE_GATE    = 15;    // Threshold do noise gate (0–255). Suba se vazar ruído, desça se cortar voz.
 
@@ -2259,7 +2259,11 @@ async function confirmReportMsg() {
     document.getElementById('msg-report-success-modal')?.classList.add('open');
   } catch (err) {
     console.error('[Aden RPG] Report send error:', err);
-    showToast('Erro ao enviar denúncia. Tente novamente.');
+    if (String(err?.message).includes('message_not_found_in_history')) {
+      showToast('Não foi possível localizar essa mensagem. Tente denunciar novamente em alguns segundos.');
+    } else {
+      showToast('Erro ao enviar denúncia. Tente novamente.');
+    }
   } finally {
     if (yesBtn) yesBtn.disabled = false;
   }

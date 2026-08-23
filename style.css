@@ -3071,10 +3071,10 @@ button, .btn {
     background-image: none !important;
     border: 1px solid #8a6e24 !important;
     border-radius: 10px;
-    color: #241a05 !important;
+    color: #fff !important;
     font-weight: 700;
     letter-spacing: 0.04em;
-    text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+  
     font-size: 0.95em !important;
     cursor: pointer;
     box-shadow: 0 6px 16px rgba(201,169,74,0.25), inset 0 1px 0 rgba(255,255,255,0.35);
@@ -3097,7 +3097,7 @@ button, .btn {
     background-image: none !important;
     border: 1px solid var(--aaa-border) !important;
     border-radius: 10px;
-    color: var(--aaa-gold-light) !important;
+    color: #fff!important;
     font-weight: 600;
     font-size: 0.9em !important;
     cursor: pointer;

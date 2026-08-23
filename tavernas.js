@@ -5,12 +5,10 @@ const ROOM_CAPACITY = 30;
 const MIC_GAIN      = 0.5;   // Amplificação do microfone (1.0 = sem ganho; aumente se ainda estiver baixo)
 const NOISE_GATE    = 15;    // Threshold do noise gate (0–255). Suba se vazar ruído, desça se cortar voz.
 
-// Bot do Telegram — mesmo bot usado pela loja do index.html (browser-guard.js)
-// para comprovantes de compra. Aqui é reaproveitado para receber denúncias
-// de mensagens do chat da taverna. tavernas.html não carrega browser-guard.js,
-// por isso o token/chat id são replicados aqui.
-const REPORT_BOT_TOKEN = '8505706283:AAEUfVyAhZCzSfLwwz8GMSFXuFUOAPRgmKo';
-const REPORT_CHAT_ID   = '7713632832';
+// Bot do Telegram — as chamadas diretas foram substituídas por Edge
+// Functions no Supabase (o token nunca fica exposto no cliente). Ver
+// SUPABASE_FN_URL abaixo.
+const SUPABASE_FN_URL = 'https://lqzlblvmkuwedcofmgfb.functions.supabase.co';
 
 // ── Supabase (cliente próprio — tavernas.html não herda o do script.js) ──
 const SB_URL  = 'https://lqzlblvmkuwedcofmgfb.supabase.co';
@@ -449,7 +447,6 @@ let ablyReady     = false;
 let currentRoomCityMeta = null;   // { cityId, ownerGuildId, throneNobless, throneLabels }
 let currentThroneIds    = [];      // ['t1','t2',...] — dinâmico por cidade
 let ablyClient    = null;
-let globalChannel = null; // 'taverna:global' — presença global para lista
 let roomChannel   = null;
 let sigChannel    = null;
 let currentRoom   = null;   // { id, name, tag }
@@ -513,6 +510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initPlayer();
   await loadOwnersCache();
   initAbly();
+  refreshTavernLobbyCounts(); // popula contagem/avatares da lista + Recentes no boot (Supabase RPC)
   scaleFont();
   // Inicializa ponto de notificação
   _tavUpdateNotifDot();
@@ -603,7 +601,7 @@ function initAbly() {
     echoMessages: false,
     recover:      (_, cb) => cb(false)  // FIX: nunca reutiliza estado antigo; evita replay de sinalizações WebRTC obsoletas
   });
-  ablyClient.connection.on('connected',    () => { ablyReady = true;  setConnDot('on');  joinGlobalPresence(); _tavSubscribePvNotify(); });
+  ablyClient.connection.on('connected',    () => { ablyReady = true;  setConnDot('on');  _tavSubscribePvNotify(); });
   ablyClient.connection.on('disconnected', () => { ablyReady = false; setConnDot('off'); });
   // Se a conexão falhar, libera o footer mesmo assim — senão um problema
   // de rede/Ably trancaria o jogador na página sem nem conseguir navegar
@@ -691,98 +689,89 @@ async function refreshGlobalAvatars() {
 }
 
 // ══════════════════════════════════════════
-//  PRESENÇA GLOBAL (para contagem na lista)
+//  PRESENÇA NA LISTA (Supabase, substitui a presença global do Ably)
 // ══════════════════════════════════════════
-function joinGlobalPresence() {
-  if (!ablyClient) return;
-  globalChannel = ablyClient.channels.get('taverna:global');
+// Antes: um canal Ably `taverna:global` sempre aberto, com presence.enter
+// de todo mundo que visita a taverna — custava 1 conexão+canal extra por
+// jogador só para alimentar a contagem/avatares da lista de tavernas.
+// Agora: uma tabela no Supabase (migration 001_taverna_presence.sql) é
+// atualizada via RPC quando o jogador entra/sai de uma sala, e a lista só
+// é RELIDA pontualmente — no boot e quando o jogador volta pra tela
+// inicial (visibilitychange) — em vez de ficar recebendo eventos o tempo
+// todo. Serve tanto a aba Principal quanto a aba Recentes (ambas usam
+// renderListCards(), que lê de globalPresenceMap).
+let _presenceHeartbeatTimer = null;
+const PRESENCE_HEARTBEAT_MS = 60_000; // bem abaixo da janela de "stale" da RPC (150s)
 
-  // Um único subscriber para TODOS os eventos de presença — evita perder eventos
-  globalChannel.presence.subscribe((msg) => {
-    onGlobalPresence(msg.action, msg);
-  });
+async function refreshTavernLobbyCounts() {
+  try {
+    const sb = getSB();
+    if (!sb) return;
+    const { data, error } = await sb.rpc('taverna_lobby_counts');
+    if (error) throw error;
 
-  // Entra sem sala (está na lista)
-  globalChannel.presence.enter({
-    name:       PLAYER.name,
-    avatar_url: PLAYER.avatar_url || null,
-    roomId:     null
-  });
+    const map = {};
+    (data || []).forEach(row => {
+      map[row.room_id] = {
+        count:   row.online_count,
+        members: (row.avatars || []).map(a => ({ id: a.id, name: a.name, avatar_url: a.avatar_url }))
+      };
+    });
+    globalPresenceMap = map;
+    renderListCards();
+    // Busca avatares que ainda estejam faltando (fallback)
+    refreshGlobalAvatars();
+  } catch (err) {
+    console.warn('[Aden RPG] taverna_lobby_counts error:', err);
+  }
+}
 
-  // Após o canal ser attached (SYNC completo), faz refresh completo como segurança
-  const doFullRefresh = async () => {
+// Chamado ao entrar numa sala: grava a presença + inicia o heartbeat
+// (refresca updated_at a cada 60s enquanto estiver dentro da taverna).
+async function _tavPresenceEnterRoom(roomId) {
+  const avatarForPresence = PLAYER.avatar_url || ownersCache[PLAYER.id]?.avatar_url || null;
+  try {
+    const sb = getSB();
+    await sb?.rpc('taverna_presence_upsert', {
+      p_room_id: roomId, p_name: PLAYER.name, p_avatar_url: avatarForPresence
+    });
+  } catch (err) { console.warn('[Aden RPG] taverna_presence_upsert error:', err); }
+
+  clearInterval(_presenceHeartbeatTimer);
+  _presenceHeartbeatTimer = setInterval(async () => {
+    if (!currentRoom) return;
     try {
-      const members = await globalChannel.presence.get();
-      if (!members) return;
-      globalPresenceMap = {};
-      members.forEach(m => {
-        const d = m.data || {};
-        if (d.roomId) {
-          const avatarUrl = d.avatar_url || ownersCache[m.clientId]?.avatar_url || null;
-          addToGlobalMap(d.roomId, m.clientId, d.name, avatarUrl);
-        }
+      const sb = getSB();
+      const av = PLAYER.avatar_url || ownersCache[PLAYER.id]?.avatar_url || null;
+      await sb?.rpc('taverna_presence_upsert', {
+        p_room_id: currentRoom.id, p_name: PLAYER.name, p_avatar_url: av
       });
-      renderListCards();
-      // Busca avatares faltantes após SYNC
-      refreshGlobalAvatars();
-    } catch(err) {
-      console.warn('[Ably] presence.get error:', err);
-    }
-  };
+    } catch (_) {}
+  }, PRESENCE_HEARTBEAT_MS);
+}
 
-  if (globalChannel.state === 'attached') {
-    doFullRefresh();
-  } else {
-    globalChannel.once('attached', doFullRefresh);
+// Chamado ao sair da sala: remove a própria linha + para o heartbeat.
+function _tavPresenceLeaveRoom() {
+  clearInterval(_presenceHeartbeatTimer);
+  _presenceHeartbeatTimer = null;
+  try { getSB()?.rpc('taverna_presence_leave'); } catch (_) {}
+}
+
+// Melhor esforço: tenta limpar a presença ao fechar/recarregar a aba.
+// Se não completar a tempo, a linha expira sozinha pela janela de "stale"
+// da RPC de leitura (150s) — não é crítico.
+window.addEventListener('pagehide', () => {
+  try { getSB()?.rpc('taverna_presence_leave'); } catch (_) {}
+});
+
+// Atualiza a lista quando o jogador volta pra tela inicial vindo de outra
+// aba/app (visibilitychange), mas só se estiver mesmo na tela da lista.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' &&
+      document.getElementById('list-view')?.classList.contains('active')) {
+    refreshTavernLobbyCounts();
   }
-}
-
-function onGlobalPresence(action, msg) {
-  const id = msg.clientId;
-  const d  = msg.data || {};
-
-  if (action === 'leave') {
-    removeFromGlobalMap(id);
-  } else {
-    // enter / update / present — remove posição anterior e re-insere
-    removeFromGlobalMap(id);
-    if (d.roomId) {
-      const avatarUrl = d.avatar_url || ownersCache[id]?.avatar_url || null;
-      addToGlobalMap(d.roomId, id, d.name, avatarUrl);
-      // Se ainda sem avatar, busca do Supabase e atualiza o mapa
-      if (!avatarUrl) {
-        fetchMissingProfiles([id]).then(() => {
-          const fetched = ownersCache[id]?.avatar_url;
-          if (!fetched) return;
-          // Atualiza entrada no mapa
-          const room = globalPresenceMap[d.roomId];
-          if (room) {
-            const entry = room.members.find(m => m.id === id);
-            if (entry) { entry.avatar_url = fetched; renderListCards(); }
-          }
-        });
-      }
-    }
-  }
-  renderListCards();
-}
-
-function addToGlobalMap(roomId, clientId, name, avatar_url) {
-  if (!globalPresenceMap[roomId]) globalPresenceMap[roomId] = { count: 0, members: [] };
-  // Evita duplicatas
-  if (!globalPresenceMap[roomId].members.find(m => m.id === clientId)) {
-    globalPresenceMap[roomId].members.push({ id: clientId, name, avatar_url });
-    globalPresenceMap[roomId].count++;
-  }
-}
-
-function removeFromGlobalMap(clientId) {
-  Object.keys(globalPresenceMap).forEach(roomId => {
-    const m = globalPresenceMap[roomId].members;
-    const idx = m.findIndex(x => x.id === clientId);
-    if (idx !== -1) { m.splice(idx, 1); globalPresenceMap[roomId].count--; }
-  });
-}
+});
 
 
 function renderListCards() {
@@ -886,6 +875,7 @@ function openRoom(name, _online, tag) {
   document.getElementById('topbar-center').textContent     = '';
   document.getElementById('btn-back').style.visibility     = 'visible';
   document.getElementById('btn-create').style.display      = 'none';
+  document.getElementById('btn-mod-review').style.display  = '';
   document.getElementById('conn-dot').style.display        = 'block';
   document.getElementById('room-header-name').textContent  = name;
   document.getElementById('room-people-count').textContent = '–';
@@ -922,13 +912,8 @@ function openRoom(name, _online, tag) {
   sysMsg('Bem-vindo a ' + name + ' · max ' + ROOM_CAPACITY + ' pessoas');
   sysMsg('Clique em um assento para entrar com o microfone ativado.');
 
-  // Atualiza presença global — informa que entrou nessa sala (sempre com avatar mais recente)
-  const avatarForPresence = PLAYER.avatar_url || ownersCache[PLAYER.id]?.avatar_url || null;
-  globalChannel?.presence.update({
-    name:       PLAYER.name,
-    avatar_url: avatarForPresence,
-    roomId
-  });
+  // Atualiza presença na lista (Supabase) — informa que entrou nessa sala
+  _tavPresenceEnterRoom(roomId);
 
   joinChannel(roomId);
 }
@@ -949,17 +934,13 @@ function closeRoom() {
   leaveChannel();
   stopVoice();
 
-  // 2. Atualiza presença global — voltou para a lista (com avatar atualizado)
-  const avatarForPresence = PLAYER.avatar_url || ownersCache[PLAYER.id]?.avatar_url || null;
-  globalChannel?.presence.update({
-    name:       PLAYER.name,
-    avatar_url: avatarForPresence,
-    roomId:     null
-  });
+  // 2. Atualiza presença na lista (Supabase) — voltou pra tela inicial
+  _tavPresenceLeaveRoom();
 
   document.getElementById('topbar-center').textContent = 'Tavernas';
   document.getElementById('btn-back').style.visibility = 'hidden';
   document.getElementById('btn-create').style.display  = '';
+  document.getElementById('btn-mod-review').style.display = 'none';
   document.getElementById('conn-dot').style.display    = 'none';
   document.getElementById('room-view').classList.remove('active', 'fade-in');
   document.getElementById('list-view').classList.add('active', 'fade-in');
@@ -982,8 +963,9 @@ function closeRoom() {
   Object.keys(_proxBridges).forEach(k => removeProxBridge(k));
   if (_proxTicker) { clearInterval(_proxTicker); _proxTicker = null; }
 
-  // Atualiza a lista com contagens reais (mapa já é mantido pelo onGlobalPresence)
-  setTimeout(renderListCards, 400);
+  // Atualiza a lista com contagens reais (via Supabase RPC — só nesse
+  // ponto de retorno, não fica escutando eventos o tempo todo)
+  refreshTavernLobbyCounts();
 }
 
 // ══════════════════════════════════════════
@@ -1005,7 +987,8 @@ function joinChannel(roomId) {
   roomChannel.subscribe('msg',   onMsg);
   roomChannel.subscribe('seat',  onSeat);
   roomChannel.subscribe('mod',   onMod);
-  roomChannel.subscribe('speak', onSpeak);
+  // 'speak' NÃO passa mais pelo Ably — vai direto por RTCDataChannel P2P
+  // (ver makePeer/wireAppDataChannel/broadcastSpeakP2P). Sem subscribe aqui.
   roomChannel.subscribe('gift',  onGiftMsg);
   roomChannel.subscribe('intimacy-aura', onIntimacyAura);
   roomChannel.subscribe('follow_notif', _tavHandleFollowNotif);
@@ -1015,11 +998,28 @@ function joinChannel(roomId) {
     }
   });
 
-  // Canal de sinalização WebRTC (pessoal)
-  sigChannel = ablyClient.channels.get('sig:' + roomId + ':' + PLAYER.id);
-  sigChannel.subscribe('offer',     (m) => handleOffer(m.clientId, m.data));
-  sigChannel.subscribe('answer',    (m) => handleAnswer(m.clientId, m.data));
-  sigChannel.subscribe('candidate', (m) => handleCandidate(m.clientId, m.data));
+  // Canal de sinalização WebRTC — COMPARTILHADO por sala (não mais 1 por
+  // jogador). Antes: 'sig:<sala>:<meuId>' — 1 canal Ably dedicado por
+  // jogador online, o que estourava rápido o limite de 200 canais
+  // concorrentes do plano free. Agora todo mundo na sala usa o mesmo
+  // canal 'sig:<sala>' e cada evento carrega { to, payload }; cada
+  // cliente ignora localmente o que não é endereçado a ele. Troca-se um
+  // pouco de volume de mensagem (esse tráfego passa a ter fan-out pra
+  // sala) por uma quantidade de canais praticamente fixa (não cresce mais
+  // com o número de jogadores online).
+  sigChannel = ablyClient.channels.get('sig:' + roomId);
+  sigChannel.subscribe('offer', (m) => {
+    if (m.data?.to !== PLAYER.id) return;
+    handleOffer(m.clientId, m.data.payload);
+  });
+  sigChannel.subscribe('answer', (m) => {
+    if (m.data?.to !== PLAYER.id) return;
+    handleAnswer(m.clientId, m.data.payload);
+  });
+  sigChannel.subscribe('candidate', (m) => {
+    if (m.data?.to !== PLAYER.id) return;
+    handleCandidate(m.clientId, m.data.payload);
+  });
 
   // Subscriber único para TODOS os eventos de presença da sala
   // (inclui 'present' = membros existentes durante o SYNC inicial)
@@ -1123,6 +1123,7 @@ function leaveChannel() {
   roomChannel = null; sigChannel = null;
   for (const pc of Object.values(peerConns)) { try { pc.close(); } catch(_){} }
   peerConns = {};
+  outboundDataChannels = {};
   document.querySelectorAll('.remote-audio').forEach(el => el.remove());
 }
 
@@ -1224,7 +1225,7 @@ function onMsg(msg) {
     try { d = JSON.parse(d); } catch(e) {}
   }
   d = d || {};
-  chatMsg(d.name || '?', d.text || '', false, msg.clientId);
+  chatMsg(d.name || '?', d.text || '', false, msg.clientId, msg.timestamp);
 }
 
 function onSeat(msg) {
@@ -1240,11 +1241,8 @@ function onSeat(msg) {
   setTimeout(updateProximityPairs, 200);
 }
 
-function onSpeak(msg) {
-  if (msg.clientId === PLAYER.id) return;
-  const m = roomMembers[msg.clientId];
-  if (m?.seatId) setSpeaking(m.seatId, msg.data?.speaking === true);
-}
+// onSpeak (Ably) removido — o indicador de fala agora chega via
+// RTCDataChannel P2P, tratado por applyRemoteSpeak() (ver makePeer).
 
 function onMod(msg) {
   const d = msg.data || {};
@@ -1684,7 +1682,8 @@ async function toggleMic() {
     setSpeaking(sid, false);
     document.getElementById('seat-btn-' + sid)?.classList.toggle('muted', micMuted);
   }
-  roomChannel?.publish('speak', { speaking: false });
+  broadcastSpeakP2P(false);
+  speakLastState = false; // mantém o hold do tick() consistente com o mute explícito
   roomChannel?.presence.update({
     name: PLAYER.name, role: PLAYER.role, guild: PLAYER.guild,
     seatId: sid || null, muted: micMuted, avatar_url: PLAYER.avatar_url || null
@@ -1722,6 +1721,7 @@ function stopVoice() {
   audioCtx = null;
   for (const pc of Object.values(peerConns)) { try { pc.close(); } catch(_){} }
   peerConns = {};
+  outboundDataChannels = {};
   document.querySelectorAll('.remote-audio').forEach(el => el.remove());
 }
 
@@ -1736,21 +1736,13 @@ function forceMuteSelf() {
 // O noise gate controla o GainNode: abaixo do threshold o áudio é zerado,
 // evitando que ruído ambiente vaze continuamente para os outros jogadores.
 //
-// ── ECONOMIA DE ABLY ──────────────────────────────────────────────────────
-// O anel luminoso do PRÓPRIO assento é 100% local (setSpeaking abaixo) e não
-// custa nada de rede. O que custa Ably é o roomChannel.publish('speak', ...)
-// que avisa aos outros clientes da sala para acenderem o anel no assento
-// deste jogador — esse é o único ponto do indicador realmente ligado ao
-// Ably (o áudio em si viaja por WebRTC, sem custo de mensagens Ably).
-// Antes: publicava a cada mudança de estado com apenas 900ms de intervalo
-// mínimo, o que gera MUITAS mensagens numa conversa normal (a voz humana
-// tem pausas curtas entre palavras/frases que cruzam o threshold o tempo
-// todo). Agora aplicamos um "hold" (SPEAK_HOLD) antes de considerar que a
-// pessoa parou de falar — pausas curtas não geram mais um novo publish — e
-// aumentamos o intervalo mínimo entre publicações (SPEAK_MIN_GAP). Isso
-// reduz bastante o volume de mensagens no plano free do Ably sem prejudicar
-// a UX: o anel ainda acende quase instantaneamente ao começar a falar e
-// apaga pouco depois de parar — só fica mais "estável" (menos flicker).
+// ── SEM ABLY ──────────────────────────────────────────────────────────────
+// O anel luminoso do PRÓPRIO assento é 100% local (setSpeaking abaixo).
+// O aviso pros OUTROS jogadores agora viaja pelo RTCDataChannel P2P já
+// aberto junto com o áudio (broadcastSpeakP2P — ver makePeer), e não mais
+// pelo Ably. Como deixou de custar mensagens no plano free, mantemos só um
+// hold pequeno (SPEAK_HOLD) pra suavizar o flicker visual entre pausas
+// curtas da fala, mas com uma resposta bem mais ágil que antes.
 function startSpeakDetect() {
   if (!localStream) return;
   try {
@@ -1764,8 +1756,8 @@ function startSpeakDetect() {
     let gateOpen        = false; // estado atual do gate
     let lastAbove        = 0;    // timestamp da última vez que o sinal ficou acima do threshold
     const GATE_HOLD      = 300;  // ms — mantém o ÁUDIO (WebRTC) aberto após silêncio para não cortar pausas curtas
-    const SPEAK_HOLD     = 700;  // ms — mantém o anel/estado "falando" após silêncio (evita flicker → menos publishes no Ably)
-    const SPEAK_MIN_GAP  = 1200; // ms — intervalo mínimo entre publicações de estado no Ably (antes: 900ms)
+    const SPEAK_HOLD     = 400;  // ms — mantém o anel/estado "falando" após silêncio (só suaviza flicker, sem custo de rede agora)
+    const SPEAK_MIN_GAP  = 150;  // ms — só evita disparos redundantes em rajada, não é mais uma economia de Ably
 
     const tick = () => {
       if (!micOn || !localStream) return;
@@ -1787,17 +1779,14 @@ function startSpeakDetect() {
         );
       }
 
-      // ── Speak detection (anel visual + publish no Ably) ───────────────
-      // Usa o mesmo "lastAbove" com um hold próprio (SPEAK_HOLD) para não
-      // oscilar a cada micro-pausa da fala — reduz o flicker visual e,
-      // principalmente, o número de mensagens publicadas no Ably.
+      // ── Speak detection (anel visual + envio via DataChannel P2P) ─────
       const now     = Date.now();
       const talking = ((now - lastAbove) < SPEAK_HOLD) && !micMuted;
       const sid     = Object.keys(mySeats)[0];
-      if (sid) setSpeaking(sid, talking); // local, sem custo de Ably
+      if (sid) setSpeaking(sid, talking); // local
 
       if (talking !== speakLastState && now - speakLastTs > SPEAK_MIN_GAP) {
-        roomChannel?.publish('speak', { speaking: talking });
+        broadcastSpeakP2P(talking); // P2P direto — sem Ably
         speakLastTs    = now;
         speakLastState = talking;
       }
@@ -1898,6 +1887,18 @@ function makePeer(peerId) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   peerConns[peerId] = pc;
 
+  // ── Canal de dados P2P (substitui o publish('speak') via Ably) ────────
+  // Como já existe uma conexão WebRTC direta (P2P) com áudio entre os
+  // jogadores conectados, aproveitamos a MESMA conexão para abrir um
+  // RTCDataChannel leve e usá-lo para avisar "estou falando" direto pro
+  // outro peer — sem passar pelo Ably, sem custo de mensagens.
+  // Cada lado cria seu próprio canal de saída (outDc) e recebe o do peer
+  // via 'ondatachannel'; ambos ficam com um handler de mensagem idêntico,
+  // então funciona independente de quem foi o "offerer" da vez.
+  const outDc = pc.createDataChannel('app', { ordered: false, maxRetransmits: 0 });
+  wireAppDataChannel(peerId, outDc, true);
+  pc.ondatachannel = (e) => wireAppDataChannel(peerId, e.channel, false);
+
   pc.onicecandidate = e => {
     if (e.candidate) sendSignal(peerId, 'candidate', e.candidate.toJSON());
   };
@@ -1918,15 +1919,55 @@ function makePeer(peerId) {
   pc.onconnectionstatechange = () => {
     if (['disconnected','failed','closed'].includes(pc.connectionState)) {
       pc.close(); delete peerConns[peerId];
+      delete outboundDataChannels[peerId];
       document.getElementById('audio-' + peerId)?.remove();
     }
   };
   return pc;
 }
 
+// peerId -> RTCDataChannel de saída (o que ESTE cliente criou pra aquele par)
+let outboundDataChannels = {};
+
+function wireAppDataChannel(peerId, dc, isOutbound) {
+  if (isOutbound) {
+    dc.onopen  = () => { outboundDataChannels[peerId] = dc; };
+    dc.onclose = () => { if (outboundDataChannels[peerId] === dc) delete outboundDataChannels[peerId]; };
+  }
+  dc.onmessage = (e) => handleAppData(peerId, e.data);
+}
+
+function handleAppData(fromId, raw) {
+  try {
+    const d = JSON.parse(raw);
+    if (typeof d.speak === 'boolean') applyRemoteSpeak(fromId, d.speak);
+  } catch (_) {}
+}
+
+// Envia o estado de fala pra todos os peers conectados via DataChannel
+// (P2P, direto — sem Ably). Chamado pelo tick() em startSpeakDetect().
+function broadcastSpeakP2P(talking) {
+  const payload = JSON.stringify({ speak: talking });
+  Object.values(outboundDataChannels).forEach(dc => {
+    if (dc.readyState === 'open') {
+      try { dc.send(payload); } catch (_) {}
+    }
+  });
+}
+
+// Aplica o estado de fala recebido de um peer remoto no anel do assento dele.
+function applyRemoteSpeak(fromId, speaking) {
+  if (fromId === PLAYER.id) return;
+  const m = roomMembers[fromId];
+  if (m?.seatId) setSpeaking(m.seatId, speaking === true);
+}
+
 function sendSignal(targetId, type, data) {
   if (!currentRoom || !ablyClient) return;
-  ablyClient.channels.get('sig:' + currentRoom.id + ':' + targetId).publish(type, data);
+  // Publica no canal compartilhado da sala (não mais um canal por par de
+  // jogadores) — o destinatário é identificado pelo campo "to", cada
+  // cliente filtra localmente (ver joinChannel/sigChannel.subscribe acima).
+  ablyClient.channels.get('sig:' + currentRoom.id).publish(type, { to: targetId, payload: data });
 }
 
 // ══════════════════════════════════════════
@@ -1938,7 +1979,7 @@ function sendMessage() {
   const text = (inp.value || '').trim().slice(0, 300);
   if (!text) return;
   inp.value = '';
-  chatMsg(PLAYER.name, text, true, PLAYER.id);
+  chatMsg(PLAYER.name, text, true, PLAYER.id, Date.now());
   roomChannel.publish('msg', { name: PLAYER.name, text });
 }
 
@@ -1972,7 +2013,7 @@ function renderMentions(rawText) {
   }).join('');
 }
 
-function chatMsg(name, text, isMine, clientId) {
+function chatMsg(name, text, isMine, clientId, ts) {
   const c = document.getElementById('chat-messages');
   if (!c) return;
 
@@ -1981,9 +2022,11 @@ function chatMsg(name, text, isMine, clientId) {
   // que, ao denunciar uma mensagem, seja possível montar o contexto com as
   // 10 mensagens anteriores e as 10 posteriores. Mensagens de sistema
   // (clientId === 'system') entram no histórico como contexto, mas não
-  // são denunciáveis (ver attachMsgActionHandlers).
+  // são denunciáveis (ver attachMsgActionHandlers). O "ts" (timestamp do
+  // Ably) é usado pela Edge Function para localizar a mensagem no
+  // histórico persistido do Ably na hora de montar a denúncia.
   const msgId = 'm' + (++_chatMsgSeq);
-  _chatHistory.push({ id: msgId, name, clientId: clientId || null, text });
+  _chatHistory.push({ id: msgId, name, clientId: clientId || null, text, ts: ts || Date.now() });
   if (_chatHistory.length > 300) _chatHistory.shift(); // limite de memória, contexto de denúncia não precisa de mais que isso
 
   const m = document.createElement('div');
@@ -2085,8 +2128,57 @@ function openMsgActionCard(msgId) {
   document.getElementById('msg-action-modal')?.classList.add('open');
 }
 
-function closeMsgActionCard() {
-  document.getElementById('msg-action-modal')?.classList.remove('open');
+// ══════════════════════════════════════════
+//  DENÚNCIA — LIMITE DE FREQUÊNCIA (1 por hora, por tipo, por jogador)
+// ══════════════════════════════════════════
+// Guardado localmente (localStorage) — não precisa de ida ao banco.
+// Cobre tanto a denúncia de mensagem quanto o pedido de revisão de mod.
+const REPORT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
+
+function _reportCooldownKey(kind) {
+  return `aden_report_cd_${kind}_${PLAYER.id || 'anon'}`;
+}
+
+function reportOnCooldown(kind) {
+  try {
+    const last = Number(localStorage.getItem(_reportCooldownKey(kind)) || 0);
+    return (Date.now() - last) < REPORT_COOLDOWN_MS;
+  } catch (_) { return false; }
+}
+
+function reportCooldownRemainingMin(kind) {
+  try {
+    const last = Number(localStorage.getItem(_reportCooldownKey(kind)) || 0);
+    const remaining = REPORT_COOLDOWN_MS - (Date.now() - last);
+    return Math.max(1, Math.ceil(remaining / 60000));
+  } catch (_) { return 60; }
+}
+
+function markReportSent(kind) {
+  try { localStorage.setItem(_reportCooldownKey(kind), String(Date.now())); } catch (_) {}
+}
+
+// Pega o token de sessão do Supabase para autenticar a chamada às Edge Functions.
+async function _tavGetAccessToken() {
+  try {
+    const sb = getSB();
+    if (!sb) return null;
+    const { data } = await sb.auth.getSession();
+    return data?.session?.access_token || null;
+  } catch (_) { return null; }
+}
+
+async function _tavCallEdgeFunction(fnName, payload) {
+  const token = await _tavGetAccessToken();
+  if (!token) throw new Error('Sessão não encontrada — faça login novamente.');
+  const resp = await fetch(`${SUPABASE_FN_URL}/${fnName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+  const result = await resp.json().catch(() => ({}));
+  if (!resp.ok || !result.ok) throw new Error(result.error || 'Falha na requisição.');
+  return result;
 }
 
 function copyPendingMsgText() {
@@ -2116,6 +2208,12 @@ function openReportConfirm() {
   const entry = _chatHistory.find(x => x.id === _msgActionPendingId);
   closeMsgActionCard();
   if (!entry) return;
+
+  if (reportOnCooldown('msg')) {
+    showToast(`Você já denunciou recentemente. Tente novamente em ${reportCooldownRemainingMin('msg')} min.`);
+    return;
+  }
+
   _reportPendingId = entry.id;
 
   const quoteEl = document.getElementById('report-confirm-quote');
@@ -2133,42 +2231,26 @@ async function confirmReportMsg() {
   const entry = _chatHistory.find(x => x.id === _reportPendingId);
   if (!entry) { closeReportConfirm(); return; }
 
+  if (reportOnCooldown('msg')) {
+    closeReportConfirm();
+    showToast(`Você já denunciou recentemente. Tente novamente em ${reportCooldownRemainingMin('msg')} min.`);
+    return;
+  }
+
   const yesBtn = document.getElementById('report-confirm-yes-btn');
   if (yesBtn) yesBtn.disabled = true;
 
-  const idx    = _chatHistory.findIndex(x => x.id === entry.id);
-  const before = _chatHistory.slice(Math.max(0, idx - 10), idx);
-  const after  = _chatHistory.slice(idx + 1, idx + 11);
-
-  const trunc   = (t) => (t.length > 220 ? t.slice(0, 220) + '…' : t);
-  const fmtLine = (x) => `${x.name}: ${trunc(x.text || '')}`;
-
-  let text =
-    `Denúncia!\n` +
-    `Denunciante: ${PLAYER.name} (ID: ${PLAYER.id})\n` +
-    `Denunciado: ${entry.name} (ID: ${entry.clientId || 'desconhecido'})\n\n`;
-
-  if (before.length) {
-    text += `Mensagens anteriores:\n` + before.map(fmtLine).join('\n') + '\n\n';
-  }
-  text += `Mensagem denunciada:\n${fmtLine(entry)}\n\n`;
-  if (after.length) {
-    text += `Mensagens posteriores:\n` + after.map(fmtLine).join('\n');
-  }
-
-  // Limite de segurança (Telegram aceita até 4096 caracteres por mensagem de texto)
-  if (text.length > 3900) text = text.slice(0, 3900) + '\n(denúncia truncada)';
-
   try {
-    const url  = `https://api.telegram.org/bot${REPORT_BOT_TOKEN}/sendMessage`;
-    const resp = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ chat_id: REPORT_CHAT_ID, text })
+    // A Edge Function busca o contexto real (10 antes/depois) direto no
+    // histórico persistido do Ably usando o timestamp — não confia no que
+    // o cliente manda, então nem precisamos enviar o texto/histórico local.
+    await _tavCallEdgeFunction('telegram-message-report', {
+      roomId:           currentRoom?.id || '',
+      reportedClientId: entry.clientId || '',
+      reportedTs:       entry.ts || Date.now()
     });
-    const result = await resp.json();
-    if (!resp.ok || !result.ok) throw new Error(result.description || 'Resposta inválida do Telegram');
 
+    markReportSent('msg');
     closeReportConfirm();
     document.getElementById('msg-report-success-modal')?.classList.add('open');
   } catch (err) {
@@ -2181,6 +2263,53 @@ async function confirmReportMsg() {
 
 function closeReportSuccess() {
   document.getElementById('msg-report-success-modal')?.classList.remove('open');
+}
+
+// ══════════════════════════════════════════
+//  PEDIDO DE REVISÃO DE MODERADOR (ícone na topbar da sala)
+// ══════════════════════════════════════════
+function openModReviewConfirm() {
+  if (!currentRoom) return;
+
+  if (reportOnCooldown('modreview')) {
+    showToast(`Você já solicitou revisão recentemente. Tente novamente em ${reportCooldownRemainingMin('modreview')} min.`);
+    return;
+  }
+
+  document.getElementById('mod-review-confirm-modal')?.classList.add('open');
+}
+
+function closeModReviewConfirm() {
+  document.getElementById('mod-review-confirm-modal')?.classList.remove('open');
+}
+
+async function confirmModReview() {
+  if (!currentRoom) { closeModReviewConfirm(); return; }
+
+  if (reportOnCooldown('modreview')) {
+    closeModReviewConfirm();
+    showToast(`Você já solicitou revisão recentemente. Tente novamente em ${reportCooldownRemainingMin('modreview')} min.`);
+    return;
+  }
+
+  const yesBtn = document.getElementById('mod-review-confirm-yes-btn');
+  if (yesBtn) yesBtn.disabled = true;
+
+  try {
+    await _tavCallEdgeFunction('telegram-mod-review', { roomName: currentRoom.name });
+    markReportSent('modreview');
+    closeModReviewConfirm();
+    document.getElementById('mod-review-success-modal')?.classList.add('open');
+  } catch (err) {
+    console.error('[Aden RPG] Mod review send error:', err);
+    showToast('Erro ao enviar solicitação. Tente novamente.');
+  } finally {
+    if (yesBtn) yesBtn.disabled = false;
+  }
+}
+
+function closeModReviewSuccess() {
+  document.getElementById('mod-review-success-modal')?.classList.remove('open');
 }
 
 // ══════════════════════════════════════════

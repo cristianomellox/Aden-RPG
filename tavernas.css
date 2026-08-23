@@ -63,6 +63,8 @@ html,body {
 .topbar-action { background:none; border:1px solid var(--border); border-radius:5px; width:33px; height:29px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--gold); transition:border-color 0.2s,background 0.2s; }
 .topbar-action:hover { border-color:var(--gold); background:rgba(201,169,74,0.1); }
 .topbar-action svg { width:16px; height:16px; }
+#btn-mod-review { color:#ff9a9a; border-color:rgba(220,70,70,0.35); margin-right:6px; }
+#btn-mod-review:hover { border-color:rgba(220,90,90,0.6); background:rgba(140,30,30,0.15); }
 
 /* ── APP SHELL ──
    THE KEY: use a fixed-height flex column.

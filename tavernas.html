@@ -52,6 +52,12 @@
   </div>
   <div id="topbar-center">Tavernas</div>
   <div id="topbar-right">
+    <button class="topbar-action" id="btn-mod-review" title="Solicitar revisão de moderador"
+      style="display:none;" onclick="openModReviewConfirm()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+      </svg>
+    </button>
     <button class="topbar-action" id="btn-create" title="Criar Taverna"
       onclick="showToast('Criação de Tavernas em breve.')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -864,6 +870,40 @@
       <div class="report-success-icon">✅</div>
       <p class="report-success-text">Denúncia enviada com sucesso. Caso seja confirmada, uma mensagem será enviada para seu sistema. Obrigado por colaborar em manter o ambiente do jogo agradável e respeitoso para todos!</p>
       <button class="report-success-btn" onclick="closeReportSuccess()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SOLICITAR REVISÃO DE MODERADOR ══ -->
+<div class="modal-backdrop" id="mod-review-confirm-modal" onclick="if(event.target===this)closeModReviewConfirm()">
+  <div class="modal-sheet report-confirm-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Revisão de Moderador</div>
+      <button class="modal-close" onclick="closeModReviewConfirm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="report-confirm-body">
+      <p class="report-confirm-question">Se houver algum usuário com falta de respeito nos assentos, você pode solicitar a revisão de um moderador.</p>
+      <p class="report-confirm-question" style="font-size:0.78rem;color:var(--text-muted);">Solicitar revisão de um moderador?</p>
+      <p class="report-confirm-warning">⚠️ Atenção: o uso indevido desse recurso pode resultar em punição!</p>
+      <div class="report-confirm-actions">
+        <button class="report-confirm-btn no" onclick="closeModReviewConfirm()">Não</button>
+        <button class="report-confirm-btn yes" id="mod-review-confirm-yes-btn" onclick="confirmModReview()">Sim</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ REVISÃO SOLICITADA (sucesso) ══ -->
+<div class="modal-backdrop" id="mod-review-success-modal" onclick="if(event.target===this)closeModReviewSuccess()">
+  <div class="modal-sheet report-success-sheet">
+    <div class="modal-handle"></div>
+    <div class="report-success-body">
+      <div class="report-success-icon">✅</div>
+      <p class="report-success-text">Solicitação de revisão enviada com sucesso. Um moderador irá dar uma olhada na taverna em breve. Obrigado por ajudar a manter o ambiente do jogo agradável e respeitoso para todos!</p>
+      <button class="report-success-btn" onclick="closeModReviewSuccess()">OK</button>
     </div>
   </div>
 </div>

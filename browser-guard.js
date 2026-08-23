@@ -28,8 +28,8 @@
   // ─────────────────────────────────────────────
   // CONFIGURAÇÃO DE PAGAMENTOS
   // ─────────────────────────────────────────────
-  const TELEGRAM_BOT_TOKEN = '8505706283:AAEUfVyAhZCzSfLwwz8GMSFXuFUOAPRgmKo';
-  const TELEGRAM_CHAT_ID   = '7713632832';
+  // Token do bot do Telegram não fica mais aqui — foi movido para a Edge
+  // Function telegram-purchase-proof (ver enviarComprovanteTelegram abaixo).
 
   const PACKAGES = [
     {
@@ -485,8 +485,16 @@
   }
 
   // ─────────────────────────────────────────────
-  // ENVIO DO COMPROVANTE VIA TELEGRAM
+  // ENVIO DO COMPROVANTE — via Edge Function (Supabase)
   // ─────────────────────────────────────────────
+  // Antes: chamava a API do Telegram direto do navegador, com o token do
+  // bot exposto no código-fonte (qualquer um podia ver e abusar). Agora o
+  // navegador só envia o print + dados pra uma Edge Function autenticada
+  // (telegram-purchase-proof); o token do bot fica só no servidor, e o
+  // comprador é identificado pelo token de sessão (não pelo que o próprio
+  // cliente afirma ser).
+  const SUPABASE_FN_URL = 'https://lqzlblvmkuwedcofmgfb.functions.supabase.co';
+
   async function enviarComprovanteTelegram(fileInput, statusEl, pkg, methodLabel, onSuccess) {
     statusEl.style.color = '#aaa';
     statusEl.textContent = '';
@@ -497,10 +505,6 @@
       statusEl.textContent = '❌ Anexe o print do comprovante!';
       return;
     }
-
-    const playerId = (typeof currentPlayerId !== 'undefined' && currentPlayerId)
-      ? currentPlayerId
-      : 'ID não disponível';
 
     const file = fileInput.files[0];
 
@@ -528,31 +532,33 @@
       : null;
     if (sendBtn) sendBtn.disabled = true;
 
-    const mensagem =
-      `💰 NOVA COMPRA ${methodLabel.toUpperCase()}!\n` +
-      `👤 ID: ${playerId}\n` +
-      `📦 Pacote: ${pkg.telegramLabel}\n` +
-      `💳 Método: ${methodLabel}`;
-
-    const url      = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('caption', mensagem);
-    formData.append('photo', file);
-
     try {
-      const response = await fetch(url, { method: 'POST', body: formData });
-      const result   = await response.json();
+      // supabaseClient/currentPlayerId vêm do script.js (mesma página)
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Sessão não encontrada — faça login novamente.');
+
+      const formData = new FormData();
+      formData.append('photo', file);
+      formData.append('pkg', pkg.telegramLabel);
+      formData.append('method', methodLabel);
+
+      const response = await fetch(`${SUPABASE_FN_URL}/telegram-purchase-proof`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      const result = await response.json().catch(() => ({}));
 
       if (response.ok && result.ok) {
         onSuccess();
       } else {
-        throw new Error(result.description || 'Resposta inválida do Telegram');
+        throw new Error(result.error || 'Resposta inválida do servidor');
       }
     } catch (err) {
       statusEl.style.color = '#e55';
       statusEl.textContent = '❌ Erro ao enviar. Tente novamente.';
-      console.error('[Aden RPG] Telegram send error:', err);
+      console.error('[Aden RPG] Purchase proof send error:', err);
       if (sendBtn) sendBtn.disabled = false;
     }
   }

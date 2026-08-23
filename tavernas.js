@@ -2272,13 +2272,14 @@ async function confirmReportMsg() {
       if (err.debug) {
         alert(
           'DIAGNÓSTICO (envie print pra análise):\n\n' +
-          'Canal consultado: ' + err.debug.channel + '\n' +
-          'Timestamp da mensagem: ' + err.debug.reportedTs + '\n' +
-          'Consultado até: ' + err.debug.queriedEnd + '\n' +
-          'Key em uso (14 primeiros caracteres): ' + err.debug.keyPrefixInUse + '\n' +
-          'Tamanho da key (esperado 57): ' + err.debug.keyLength + '\n' +
-          'Msgs achadas SEM filtro de tempo: ' + err.debug.broadQueryItemCount + '\n' +
-          'Erro na consulta ampla: ' + (err.debug.broadQueryError || '(nenhum)')
+          'Canal: ' + err.debug.channel + '\n' +
+          'Timestamp: ' + err.debug.reportedTs + '\n' +
+          'Key (14 car.): ' + err.debug.keyPrefixInUse + '\n' +
+          'Tamanho key (esp. 57): ' + err.debug.keyLength + '\n\n' +
+          'URL consultada:\n' + err.debug.rawUrl + '\n\n' +
+          'Status HTTP: ' + err.debug.rawStatus + '\n' +
+          'Erro de rede: ' + (err.debug.rawFetchError || '(nenhum)') + '\n\n' +
+          'Corpo da resposta:\n' + err.debug.rawBody
         );
       }
     } else {

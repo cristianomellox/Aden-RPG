@@ -2274,7 +2274,8 @@ async function confirmReportMsg() {
           'DIAGNÓSTICO (envie print pra análise):\n\n' +
           'Canal consultado: ' + err.debug.channel + '\n' +
           'Timestamp da mensagem: ' + err.debug.reportedTs + '\n' +
-          'Consultado até: ' + err.debug.queriedEnd
+          'Consultado até: ' + err.debug.queriedEnd + '\n' +
+          'Key em uso (14 primeiros caracteres): ' + err.debug.keyPrefixInUse
         );
       }
     } else {

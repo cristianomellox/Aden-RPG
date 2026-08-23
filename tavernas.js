@@ -2128,6 +2128,10 @@ function openMsgActionCard(msgId) {
   document.getElementById('msg-action-modal')?.classList.add('open');
 }
 
+function closeMsgActionCard() {
+  document.getElementById('msg-action-modal')?.classList.remove('open');
+}
+
 // ══════════════════════════════════════════
 //  DENÚNCIA — LIMITE DE FREQUÊNCIA (1 por hora, por tipo, por jogador)
 // ══════════════════════════════════════════

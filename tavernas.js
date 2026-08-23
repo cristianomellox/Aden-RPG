@@ -2181,7 +2181,11 @@ async function _tavCallEdgeFunction(fnName, payload) {
     body: JSON.stringify(payload)
   });
   const result = await resp.json().catch(() => ({}));
-  if (!resp.ok || !result.ok) throw new Error(result.error || 'Falha na requisição.');
+  if (!resp.ok || !result.ok) {
+    const err = new Error(result.error || 'Falha na requisição.');
+    err.debug = result.debug || null; // dados de diagnóstico (ex.: canal/timestamp consultados no Ably)
+    throw err;
+  }
   return result;
 }
 
@@ -2261,8 +2265,21 @@ async function confirmReportMsg() {
     console.error('[Aden RPG] Report send error:', err);
     if (String(err?.message).includes('message_not_found_in_history')) {
       showToast('Não foi possível localizar essa mensagem. Tente denunciar novamente em alguns segundos.');
+      // Diagnóstico temporário — mostra na tela (sem precisar de DevTools)
+      // qual canal/timestamp foram consultados no Ably, pra comparar com o
+      // que está configurado no dashboard. Pode remover este alert depois
+      // de confirmar que está tudo funcionando.
+      if (err.debug) {
+        alert(
+          'DIAGNÓSTICO (envie print pra análise):\n\n' +
+          'Canal consultado: ' + err.debug.channel + '\n' +
+          'Timestamp da mensagem: ' + err.debug.reportedTs + '\n' +
+          'Consultado até: ' + err.debug.queriedEnd
+        );
+      }
     } else {
       showToast('Erro ao enviar denúncia. Tente novamente.');
+      alert('DIAGNÓSTICO (envie print pra análise):\n\n' + String(err?.message || err));
     }
   } finally {
     if (yesBtn) yesBtn.disabled = false;

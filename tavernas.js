@@ -2275,7 +2275,10 @@ async function confirmReportMsg() {
           'Canal consultado: ' + err.debug.channel + '\n' +
           'Timestamp da mensagem: ' + err.debug.reportedTs + '\n' +
           'Consultado até: ' + err.debug.queriedEnd + '\n' +
-          'Key em uso (14 primeiros caracteres): ' + err.debug.keyPrefixInUse
+          'Key em uso (14 primeiros caracteres): ' + err.debug.keyPrefixInUse + '\n' +
+          'Tamanho da key (esperado 57): ' + err.debug.keyLength + '\n' +
+          'Msgs achadas SEM filtro de tempo: ' + err.debug.broadQueryItemCount + '\n' +
+          'Erro na consulta ampla: ' + (err.debug.broadQueryError || '(nenhum)')
         );
       }
     } else {

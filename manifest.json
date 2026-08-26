@@ -1,0 +1,29 @@
+{
+  "name": "Aden RPG Online",
+  "short_name": "Aden RPG",
+  "description": "RPG estratégico com guerras de guildas, economia real, chefes mundiais e sem Pay-to-Win.",
+  "start_url": "/index.html?source=pwa",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#000",
+  "theme_color": "#000",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["games", "entertainment", "adventure"],
+  "icons": [
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Jogar agora",
+      "short_name": "Jogar",
+      "url": "/index.html?source=pwa-shortcut",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

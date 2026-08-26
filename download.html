@@ -24,6 +24,19 @@
     <meta name="twitter:image" content="https://aden-rpg.pages.dev/assets/aden_ini.jpg">
     <title>Download Aden RPG Online | Jogo Mobile Estratégico Grátis</title>
     <link rel="canonical" href="https://aden-rpg.pages.dev/download">
+
+    <!-- ══ PWA ══ -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0e0a06">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aden RPG">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <script src="/platform.js"></script>
+    <script src="/pwa-install.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
     <style>
@@ -1156,15 +1169,15 @@
     </div>
 </div>
 
-<!-- MODAL: Versão Web -->
+<!-- MODAL: Instalar PWA (Android/PC instala direto; iPhone recebe tutorial) -->
 <div class="modal-backdrop" id="modal-web" role="dialog" aria-modal="true" aria-labelledby="modal-web-title">
     <div class="modal-box">
         <button class="modal-close-btn" onclick="closeModal('modal-web')" aria-label="Fechar">&times;</button>
-        <h3 id="modal-web-title" data-i18n="mweb_title" data-lang-en="Web Version">Versão Web</h3>
-        <p data-i18n="mweb_body" data-lang-en="You can continue using the web version, however some features and areas are locked in this version.">Você pode continuar usando a versão web, porém alguns recursos e áreas estão bloqueados nessa versão.</p>
+        <h3 id="modal-web-title" data-i18n="mweb_title" data-lang-en="Install the app">Instalar o app</h3>
+        <p data-i18n="mweb_body" data-lang-en="Install Aden RPG Online on your home screen for the full experience — works on Android, iPhone and PC.">Instale Aden RPG Online na sua tela de início para a experiência completa do jogo — funciona no Android, iPhone e PC.</p>
         <div class="modal-btn-row">
             <button class="mbtn muted" onclick="closeModal('modal-web')" data-i18n="btn_close" data-lang-en="Close">Fechar</button>
-            <button class="mbtn primary" onclick="openWebVersion()" data-i18n="mweb_go" data-lang-en="Go to Web Version">Ir para versão web</button>
+            <button class="mbtn primary" onclick="closeModal('modal-web'); startPwaInstall();" data-i18n="mweb_go" data-lang-en="Install now">Instalar agora</button>
         </div>
     </div>
 </div>
@@ -1234,7 +1247,7 @@
         <div class="story-chapter">
             <div class="story-chapter-title" data-i18n="sch1" data-lang-en="I — The World Before the War">I — O Mundo Antes da Guerra</div>
             <p data-i18n="sch1_p1" data-lang-en="Long before the great conflict tore the continent apart, the races of Aden lived in their own corners of the world, each forging unique civilizations. Zion rose as the great neutral market where merchants traded crystals and secrets. Elendor, entwined in the roots of the Mother Trees of the Ether Jungle, was cultivated over millennia by the Forest Elves, guided by the Circle of Guardians of the Seed. In the frozen peaks, the dwarves of the Iron Hand Clan carved Mitrar out of the Glacial Mountains of Razar, forging weapons with Star Iron. And in the southeast, the humans of Astrax raised the Bastion of Strategy — an academy of war, discipline and military doctrine.">Muito antes de o grande conflito rasgar o continente, as raças de Aden viviam em seus próprios cantos do mundo, cada uma forjando civilizações únicas. Zion ergueu-se como o grande mercado neutro onde mercadores trocavam cristais e segredos. Elendor, entrelaçada nas raízes das Árvores-Mãe da Selva de Éter, foi cultivada ao longo de milênios pelos Elfos da Floresta, guiada pelo Círculo dos Guardiões da Semente. Nos picos gelados, os anões do Clã Mão de Gelo esculpiram Mitrar dentro das Montanhas Gélidas de Razar, forjando armas com Ferro Estelar. E no sudeste, os humanos de Astrax ergueram o Bastião da Estratégia — uma academia de guerra, disciplina e doutrina militar.</p>
-            <p data-i18n="sch1_p2" data-lang-en="Duratar, squeezed between the Pântano de Kretus and the wastelands of Madekai, was the home of the orc clans — resilient warriors who patrolled borders and repelled the swamp creatures that crept from the darkness. And Tandra, the Heart of Stone, prospered coldly in its rocky gorge, ruled by merchants of sand who made profit their only morality.">Duratar, espremida entre o Pântano de Kretus e as terras áridas de Madekai, era o lar dos clãs orcs — guerreiros resilientes que patrulhavam fronteiras e repeliam as criaturas do pântano que rastejavam das trevas. E Tandra, o Coração de Pedra, prosperava friamente em seu desfiladeiro rochoso, governada por mercadores de areia que faziam do lucro sua única moralidade.</p>
+            <p data-i18n="sch1_p2" data-lang-en="Duratar, squeezed between the Pântano of Molinar and the wastelands of Madekai, was the home of the orc clans — resilient warriors who patrolled borders and repelled the swamp creatures that crept from the darkness. And Tandra, the Heart of Stone, prospered coldly in its rocky gorge, ruled by merchants of sand who made profit their only morality.">Duratar, espremida entre o Pântano de Molinar e as terras áridas de Madekai, era o lar dos clãs orcs — guerreiros resilientes que patrulhavam fronteiras e repeliam as criaturas do pântano que rastejavam das trevas. E Tandra, o Coração de Pedra, prosperava friamente em seu desfiladeiro rochoso, governada por mercadores de areia que faziam do lucro sua única moralidade.</p>
         </div>
 
         <div class="story-chapter">
@@ -1323,7 +1336,17 @@ function proceedDownload() {
     if (pendingDownloadUrl) window.open(pendingDownloadUrl, '_blank');
 }
 
-// ── Web Version — força abertura no navegador externo quando dentro do wrapper ──
+// ── Instalar PWA — Android/PC dispara o prompt nativo, iPhone recebe o tutorial ──
+function startPwaInstall() {
+    if (window.AdenInstall && typeof window.AdenInstall.trigger === 'function') {
+        window.AdenInstall.trigger();
+    } else {
+        // Fallback de segurança caso pwa-install.js não tenha carregado por algum motivo
+        openWebVersion();
+    }
+}
+
+// ── Web Version (legado) — força abertura no navegador externo quando dentro do wrapper antigo ──
 function openWebVersion() {
     closeModal('modal-web');
     const WEB_URL = 'https://aden-rpg.pages.dev';

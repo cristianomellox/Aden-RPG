@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v18'; // Versão atualizada para forçar atualização
+const CACHE_NAME = 'aden-rpg-assets-v20'; // v20: migração PWA — manifest + ícones no precache
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições
@@ -20,6 +20,9 @@ const ASSETS_TO_PRECACHE = [
     '/assets/aden_intro.webm',
     '/assets/goldcoin.webp',
     '/assets/cristais.webp',
+    '/manifest.json',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
 ];
 
 self.addEventListener('install', event => {
@@ -128,4 +131,48 @@ self.addEventListener('fetch', event => {
             })
         );
     }
+});
+
+// =========================================================
+// >>> PUSH NOTIFICATIONS (infra pronta para os gatilhos futuros) <<<
+// =========================================================
+// Quando o backend enviar um push (ex: "mineração concluída", "você foi
+// atacado", "nova mensagem privada"), este handler exibe a notificação.
+self.addEventListener('push', event => {
+    let payload = { title: 'Aden RPG Online', body: 'Você tem uma novidade no jogo!', url: '/index.html' };
+
+    if (event.data) {
+        try {
+            payload = { ...payload, ...event.data.json() };
+        } catch (e) {
+            payload.body = event.data.text() || payload.body;
+        }
+    }
+
+    const options = {
+        body: payload.body,
+        icon: '/icons/notification-icon-192.png', // ícone maior exibido no corpo da notificação
+        badge: '/icons/badge-icon.png',            // ícone pequeno da status bar (Android tinge de branco/tema)
+        data: { url: payload.url || '/index.html' },
+        vibrate: [100, 50, 100],
+    };
+
+    event.waitUntil(self.registration.showNotification(payload.title, options));
+});
+
+// Ao tocar na notificação, foca uma aba já aberta do jogo ou abre uma nova.
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const targetUrl = (event.notification.data && event.notification.data.url) || '/index.html';
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+            for (const client of clientList) {
+                if (client.url.includes(targetUrl) && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            if (clients.openWindow) return clients.openWindow(targetUrl);
+        })
+    );
 });

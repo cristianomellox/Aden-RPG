@@ -5,31 +5,38 @@
   // ─────────────────────────────────────────────
   // CONFIGURAÇÃO
   // ─────────────────────────────────────────────
-  const APK_UA_TOKEN   = 'aden2712';
   const DOWNLOAD_URL   = '/download.html';
   const SESSION_KEY    = 'aden_browser_warning_shown';
   const INTRO_LS_KEY   = 'aden_intro_seen_v32';   // mesmo do script.js
 
+  // Páginas "pesadas" que exigem o app instalado (PWA ou TWA).
   const BLOCKED_PAGES  = [
-    'capital.html', 'zion.html', 'elendor.html', 'mitrar.html',
-    'tandra.html',  'astrax.html', 'duratar.html'
+    'capital2.html',
   ];
 
-  // ─────────────────────────────────────────────
-  // DETECÇÃO DE PLATAFORMA
-  // ─────────────────────────────────────────────
-  const isAPK = navigator.userAgent.includes(APK_UA_TOKEN);
-  if (isAPK) return; // Dentro do APK → sem restrições
+  // ── Alcance do redirecionamento pra /download.html no navegador comum ──
+  // false (padrão) = só as páginas de BLOCKED_PAGES redirecionam pro download.
+  // true  = QUALQUER página do jogo redireciona pro download se acessada por
+  //         navegador comum (sem PWA/TWA instalado). Ajuste aqui se quiser esse
+  //         comportamento mais restritivo.
+  const REDIRECT_ALL_PAGES_IF_BROWSER = true;
+  const PAGES_EXEMPT_FROM_REDIRECT = ['download.html']; // só usado se a flag acima for true
 
-  const currentPage = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  // ─────────────────────────────────────────────
+  // DETECÇÃO DE PLATAFORMA (definida em platform.js — inclua-o ANTES deste arquivo)
+  // ─────────────────────────────────────────────
+  const platform = window.AdenPlatform || {
+    type: 'browser', isBrowser: true, isPWA: false, isTWA: false,
+    isLegacyApk: false, isApp: false, showsStoreComingSoon: false
+  };
+
+  const currentPage   = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
   const isBlockedPage = BLOCKED_PAGES.includes(currentPage);
   const isIndex       = currentPage === 'index.html' || currentPage === '';
 
   // ─────────────────────────────────────────────
   // CONFIGURAÇÃO DE PAGAMENTOS
   // ─────────────────────────────────────────────
-  // Token do bot do Telegram não fica mais aqui — foi movido para a Edge
-  // Function telegram-purchase-proof (ver enviarComprovanteTelegram abaixo).
 
   const PACKAGES = [
     {
@@ -485,14 +492,7 @@
   }
 
   // ─────────────────────────────────────────────
-  // ENVIO DO COMPROVANTE — via Edge Function (Supabase)
-  // ─────────────────────────────────────────────
-  // Antes: chamava a API do Telegram direto do navegador, com o token do
-  // bot exposto no código-fonte (qualquer um podia ver e abusar). Agora o
-  // navegador só envia o print + dados pra uma Edge Function autenticada
-  // (telegram-purchase-proof); o token do bot fica só no servidor, e o
-  // comprador é identificado pelo token de sessão (não pelo que o próprio
-  // cliente afirma ser).
+  
   const SUPABASE_FN_URL = 'https://lqzlblvmkuwedcofmgfb.functions.supabase.co';
 
   async function enviarComprovanteTelegram(fileInput, statusEl, pkg, methodLabel, onSuccess) {
@@ -564,23 +564,23 @@
   }
 
   // ─────────────────────────────────────────────
-  // 1. PÁGINAS BLOQUEADAS ─ acesso direto via URL
+  // 1. GATE DE ACESSO ─ navegador comum é redirecionado pro download
   // ─────────────────────────────────────────────
-  if (isBlockedPage) {
-    const run = () =>
-      showModal(
-        'O acesso a essa área está bloqueado na versão de navegador. Por favor baixe o app.',
-        'Entendi',
-        () => { window.location.href = '/index.html'; }
-      );
+  // PWA e TWA (e o APK legado) nunca caem aqui — acesso total liberado.
+  if (platform.isBrowser && currentPage !== 'download.html') {
+    const mustRedirect = REDIRECT_ALL_PAGES_IF_BROWSER
+      ? !PAGES_EXEMPT_FROM_REDIRECT.includes(currentPage)
+      : isBlockedPage;
 
-    if (document.body) run();
-    else document.addEventListener('DOMContentLoaded', run);
-    return; // Não executa o restante nas páginas bloqueadas
+    if (mustRedirect) {
+      window.location.replace(DOWNLOAD_URL);
+      return; // Interrompe tudo — a página vai trocar
+    }
   }
 
   // ─────────────────────────────────────────────
-  // A partir daqui, tudo se aplica ao index.html
+  // A partir daqui, o aviso de navegador / interceptação de loja
+  // só fazem sentido no index.html (onde vivem os elementos correspondentes).
   // ─────────────────────────────────────────────
   if (!isIndex) return;
 
@@ -588,13 +588,14 @@
   // 2. AVISO DE NAVEGADOR (modal no index)
   // ─────────────────────────────────────────────
   function showBrowserWarning() {
+    if (!platform.isBrowser) return; // PWA/TWA/app legado nunca veem esse aviso
     if (sessionStorage.getItem(SESSION_KEY)) return;
     sessionStorage.setItem(SESSION_KEY, '1');
 
     showModal(
       `Você está acessando o jogo pelo navegador. O acesso a algumas funções e
-       áreas será limitado nessa versão. Por favor, baixe o app Aden RPG Online
-       para ter uma experiência completa do jogo,
+       áreas será limitado nessa versão. Instale o app Aden RPG Online na sua
+       tela de início para ter a experiência completa do jogo,
        <a href="${DOWNLOAD_URL}">clicando aqui</a>.`,
       'Entendi',
       null
@@ -654,9 +655,9 @@
   // ─────────────────────────────────────────────
   function showBlockedNavModal() {
     showModal(
-      'O acesso a essa área está bloqueado na versão de navegador. Por favor baixe o app.',
-      'Entendi',
-      null
+      'O acesso a essa área está bloqueado na versão de navegador. Instale o app para continuar.',
+      'Instalar / Baixar',
+      () => { window.location.href = DOWNLOAD_URL; }
     );
   }
 
@@ -667,6 +668,9 @@
   }
 
   function setupNavInterceptors() {
+    // PWA/TWA/app legado têm acesso total — nada a interceptar.
+    if (!platform.isBrowser) return;
+
     // ─── Sobrescreve guildBtn (tem onclick inline) ───
     const guildBtn = document.getElementById('guildBtn');
     if (guildBtn) {
@@ -751,26 +755,30 @@
 
       const tab = btn.getAttribute('data-tab');
 
-      // ── Aba de Vídeo: bloqueada ──
+      // ── Aba de Vídeo: bloqueada só no navegador comum (PWA/TWA liberado) ──
       if (tab === 'shop-video') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        showModal(
-          'O recurso "Assistir Vídeo" está bloqueado na versão de navegador. Por favor baixe o app.',
-          'Entendi',
-          null
-        );
+        if (platform.isBrowser) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          showModal(
+            'O recurso "Assistir Vídeo" está bloqueado na versão de navegador. Instale o app para assistir.',
+            'Entendi',
+            null
+          );
+        }
         return;
       }
 
-      // ── Aba de Recarga: injetar conteúdo do navegador ──
-      if (tab === 'shop-recharge') {
+      // ── Aba de Recarga: Pix/PayPal no navegador e no PWA; TWA/app legado mantém "Em breve" ──
+      if (tab === 'shop-recharge' && !platform.showsStoreComingSoon) {
         // Deixa o handler original trocar a aba, depois injetamos
         setTimeout(injectBrowserRechargeContent, 80);
       }
     }, true);
 
     // Também injeta se o shopModal abrir já com a aba Recarga ativa
+    if (platform.showsStoreComingSoon) return; // TWA/app legado: mantém "Em breve" (Play Billing entra aqui no futuro)
+
     const shopModal = document.getElementById('shopModal');
     if (shopModal) {
       new MutationObserver(() => {

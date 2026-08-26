@@ -672,7 +672,7 @@
     if (!platform.isBrowser) return;
 
     // ─── Sobrescreve guildBtn (tem onclick inline) ───
-    const guildBtn = document.getElementById('guildBtn');
+    const guildBtn = document.getElementById('guildBtn2');
     if (guildBtn) {
       guildBtn.onclick = null;
       guildBtn.addEventListener('click', e => {

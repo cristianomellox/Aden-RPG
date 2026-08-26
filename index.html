@@ -25,6 +25,20 @@
     <meta name="twitter:image" content="https://aden-rpg.pages.dev/assets/aden_ini.jpg">
     <title>Aden RPG Online | Jogo Mobile Estratégico Grátis</title>
     <link rel="canonical" href="https://aden-rpg.pages.dev/">
+
+    <!-- ══ PWA ══ -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0e0a06">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <!-- iOS: instalação manual via Safari (Compartilhar → Adicionar à Tela de Início) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Aden RPG">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <!-- Android/Chrome antigo -->
+    <meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="maintenance2.js"></script>
 <link href="style.css" rel="stylesheet"/>
@@ -1481,7 +1495,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 <script src="pvp_boot_notifs.js"></script>
+<script src="platform.js"></script>
+<script src="pwa-install.js"></script>
 <script src="browser-guard.js"></script>
+<script src="notifications.js"></script>
 <script src="security.js"></script>
 <script src="tutorial_onboarding.js"></script>
 <!-- ══ MODAL COMPARTILHAR — cole antes de </body> no index.html ══════════ -->

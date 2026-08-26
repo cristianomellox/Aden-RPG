@@ -18,6 +18,17 @@ html, body {
     margin: 0;
     padding: 0;
     box-sizing: border-box; /* Garante que padding e border não aumentem a largura/altura total */
+    /* ── Comportamento de app nativo (como no AppCreator24) ── */
+    overscroll-behavior-y: contain; /* impede o "puxar pra baixo" de disparar o refresh do navegador */
+    touch-action: pan-x pan-y;      /* permite rolar normalmente, mas bloqueia pinça/zoom por gesto */
+    -webkit-user-select: none;      /* evita seleção de texto acidental ao arrastar (efeito "app") */
+    user-select: none;
+}
+
+/* Permite selecionar texto normalmente onde faz sentido (inputs, textareas, chat) */
+input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 body {
@@ -30,6 +41,7 @@ body {
     position: relative; /* Para posicionar elementos filhos com 'absolute' ou 'fixed' relativos ao body */
     min-height: 100vh; /* Garante que o body tenha pelo menos a altura da viewport */
     overflow-x: hidden; /* Previne rolagem horizontal indesejada no body */
+    overscroll-behavior-y: contain;
 }
 
 /* Um container principal para o conteúdo que não é o rodapé ou chat bubble */

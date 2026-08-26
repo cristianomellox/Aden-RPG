@@ -165,25 +165,58 @@
 
   function showBlockedTutorialModal() {
     const platform = getPlatform();
-    const steps = platform.isIOS
-      ? [
-          'Abra o app <strong>Ajustes</strong> do iPhone.',
-          'Role até encontrar <strong>Notificações</strong> (ou procure "Aden RPG" direto na busca dos Ajustes).',
-          'Toque em <strong>Aden RPG Online</strong> e ative <strong>Permitir Notificações</strong>.',
-        ]
-      : [
-          'Abra <strong>Configurações</strong> do celular.',
-          'Vá em <strong>Apps</strong> (ou "Aplicativos") → <strong>Aden RPG Online</strong>.',
-          'Toque em <strong>Notificações</strong> e ative a permissão.',
-        ];
 
+    if (platform.isIOS) {
+      showModal({
+        title: 'Notificações bloqueadas',
+        bodyHtml: `
+          <p>Parece que as notificações do jogo estão bloqueadas. Pra ativar e receber sua recompensa de 50 de ouro:</p>
+          <ol class="adennotif-steps">
+            <li><span class="num">1</span><span>Abra o app <strong>Ajustes</strong> do iPhone.</span></li>
+            <li><span class="num">2</span><span>Role até <strong>Notificações</strong> (ou procure "Aden RPG" na busca dos Ajustes).</span></li>
+            <li><span class="num">3</span><span>Toque em <strong>Aden RPG Online</strong> e ative <strong>Permitir Notificações</strong>.</span></li>
+          </ol>`,
+        primaryLabel: 'Entendi',
+        onPrimary: null,
+      });
+      return;
+    }
+
+    if (platform.isTWA) {
+      // TWA = app real instalado pela Play Store, com canal de notificação
+      // nativo do Android. Não tem a ambiguidade do PWA (item abaixo).
+      showModal({
+        title: 'Notificações bloqueadas',
+        bodyHtml: `
+          <p>Parece que as notificações do jogo estão bloqueadas. Pra ativar e receber sua recompensa de 50 de ouro:</p>
+          <ol class="adennotif-steps">
+            <li><span class="num">1</span><span>Abra <strong>Configurações</strong> do celular.</span></li>
+            <li><span class="num">2</span><span>Vá em <strong>Apps</strong> → <strong>Aden RPG Online</strong> → <strong>Notificações</strong>.</span></li>
+            <li><span class="num">3</span><span>Ative a permissão.</span></li>
+          </ol>`,
+        primaryLabel: 'Entendi',
+        onPrimary: null,
+      });
+      return;
+    }
+
+    // Android, instalado como PWA (via Chrome/WebAPK): a permissão pode estar
+    // guardada em DOIS lugares diferentes que às vezes não ficam sincronizados
+    // entre si — nas Configurações do Android OU nas configurações de site do
+    // próprio Chrome. Por isso mostramos os dois caminhos.
     showModal({
       title: 'Notificações bloqueadas',
       bodyHtml: `
-        <p>Parece que as notificações do jogo estão bloqueadas. Pra ativar e receber sua recompensa de 50 de ouro:</p>
+        <p>Parece que as notificações do jogo estão bloqueadas. Tente primeiro pelas Configurações do celular:</p>
         <ol class="adennotif-steps">
-          ${steps.map((s, i) => `<li><span class="num">${i + 1}</span><span>${s}</span></li>`).join('')}
-        </ol>`,
+          <li><span class="num">1</span><span>Abra <strong>Configurações</strong> do celular → <strong>Apps</strong> → <strong>Aden RPG Online</strong> → <strong>Notificações</strong> → ative.</span></li>
+        </ol>
+        <p>Se mesmo assim continuar bloqueado, o Chrome guarda essa permissão separado, por site:</p>
+        <ol class="adennotif-steps">
+          <li><span class="num">2</span><span>Abra o <strong>Chrome</strong> → menu (⋮) → <strong>Configurações</strong> → <strong>Configurações de site</strong> → <strong>Notificações</strong>.</span></li>
+          <li><span class="num">3</span><span>Procure <strong>aden-rpg.pages.dev</strong> na lista e mude para <strong>Permitir</strong>.</span></li>
+        </ol>
+        <p>Assim que permitir por qualquer um dos dois caminhos, sua recompensa de 50 de ouro é creditada automaticamente — não precisa nem recarregar a página.</p>`,
       primaryLabel: 'Entendi',
       onPrimary: null,
     });
@@ -298,8 +331,73 @@
   }
 
   // ─────────────────────────────────────────────
-  // Orquestração — decide qual modal (se algum) mostrar
+  // Re-checagem automática (cobre o caso do Android onde a permissão pode
+  // estar guardada nas Configurações do sistema OU nas do Chrome — o jogador
+  // não precisa saber qual; assim que ficar "granted" por qualquer caminho,
+  // a gente credita a recompensa e fecha qualquer tutorial aberto).
   // ─────────────────────────────────────────────
+  function closeAnyOpenModal() {
+    const el = document.getElementById('adennotif-overlay');
+    if (el) el.remove();
+  }
+
+  async function recheckPermission() {
+    if (!supportsNotifications()) return;
+    if (Notification.permission === 'granted') {
+      closeAnyOpenModal();
+      await grantRewardIfFirstTime();
+      subscribeToPush().catch(() => {});
+    }
+  }
+
+  function setupAutoRecheck() {
+    // Cobre o caso mais comum: o jogador sai pro app de Configurações e volta.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') recheckPermission();
+    });
+    window.addEventListener('focus', recheckPermission);
+
+    // Onde suportado (Chrome/Android), reage à mudança em tempo real.
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'notifications' })
+        .then(status => { status.onchange = recheckPermission; })
+        .catch(() => {});
+    }
+  }
+  setupAutoRecheck();
+
+  // ─────────────────────────────────────────────
+  // Notificação local instantânea — NÃO passa pelo Supabase/push, dispara
+  // direto do navegador. Só funciona enquanto o jogo estiver aberto (aba em
+  // primeiro/segundo plano com o processo ainda vivo). Ótimo pra eventos que
+  // acontecem enquanto o jogador está jogando (ex: "mineração concluída!").
+  // Não serve pra acordar o app fechado — isso só com push de verdade (server).
+  // ─────────────────────────────────────────────
+  async function notifyLocal(title, body, url) {
+    if (!supportsNotifications() || Notification.permission !== 'granted') return false;
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.showNotification(title, {
+            body,
+            icon: '/icons/notification-icon-192.png',
+            badge: '/icons/badge-icon.png',
+            data: { url: url || '/index.html' },
+            vibrate: [80, 40, 80],
+          });
+          return true;
+        }
+      }
+      // Fallback sem service worker registrado
+      new Notification(title, { body, icon: '/icons/notification-icon-192.png' });
+      return true;
+    } catch (e) {
+      console.warn('[Notif] notifyLocal falhou:', e);
+      return false;
+    }
+  }
+
   function maybeShowFlow() {
     if (modalShownThisPageLoad) return;
     const platform = getPlatform();
@@ -341,5 +439,5 @@
     setTimeout(maybeShowFlow, 1500); // pequeno delay pra não brigar com outros modais de entrada (banimento, pacote inicial etc.)
   });
 
-  window.AdenNotifications = { maybeShowFlow, requestPermissionFlow };
+  window.AdenNotifications = { maybeShowFlow, requestPermissionFlow, notifyLocal };
 })();

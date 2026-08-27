@@ -25,6 +25,15 @@ html, body {
     user-select: none;
 }
 
+/* touch-action NÃO é herdado pelos filhos por padrão — por isso só o html/body
+   não bastava: qualquer modal, div com scroll próprio, etc. reabre a pinça de
+   zoom por dentro. Aplicamos em tudo, e os poucos elementos que já definem o
+   próprio touch-action (ex: .map-hotspot) continuam valendo, porque seletor
+   de classe tem mais especificidade que o universal abaixo. */
+*, *::before, *::after {
+    touch-action: pan-x pan-y;
+}
+
 /* Permite selecionar texto normalmente onde faz sentido (inputs, textareas, chat) */
 input, textarea, [contenteditable="true"] {
     -webkit-user-select: text;

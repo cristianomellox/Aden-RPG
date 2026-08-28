@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v21'; // v21: corrige caminho dos ícones de notificação (/icons/ -> /assets/)
+const CACHE_NAME = 'aden-rpg-assets-v22'; // v21: corrige caminho dos ícones de notificação (/icons/ -> /assets/)
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições

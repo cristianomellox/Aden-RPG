@@ -22,7 +22,7 @@
   'use strict';
 
   // ⚠️ Troque pela chave pública VAPID real quando for gerá-la (veja o guia).
-  const VAPID_PUBLIC_KEY = 'COLOQUE_SUA_VAPID_PUBLIC_KEY_AQUI';
+  const VAPID_PUBLIC_KEY = 'BKL6CE-TufpzqU8HAhWxlA6pHw21XhgDnGFtwGe_3UFVA4BdvNMQ9uTxsqBN3FvVgCcyaWszhGCH49TDbD8gE1o';
 
   const REWARD_KEY_PREFIX = 'aden_notif_reward_given_';
   let modalShownThisPageLoad = false;

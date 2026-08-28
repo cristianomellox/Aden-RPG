@@ -296,6 +296,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentGuildData = null;
   let userRank = 'member'; // leader | co-leader | member
 
+  // =======================================================================
+  // LIMPEZA PERIÓDICA DE LOGS (substitui os 2 cron workers do Cloudflare)
+  // Chave de cache COMPARTILHADA com a página da mina (mesmo localStorage,
+  // mesmo domínio): quem visitar primeiro após 15 dias dispara para os dois.
+  // =======================================================================
+  const LOGS_CLEANUP_KEY = 'aden_logs_cleanup_last_run';
+  const LOGS_CLEANUP_INTERVAL_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
+
+  async function triggerLogsCleanupIfDue(sb) {
+      try {
+          const last = parseInt(localStorage.getItem(LOGS_CLEANUP_KEY) || '0', 10);
+          if (Date.now() - last < LOGS_CLEANUP_INTERVAL_MS) return; // ainda não venceu
+
+          const [guildRes, pvpRes] = await Promise.allSettled([
+              sb.rpc('cleanup_old_guild_logs'),
+              sb.rpc('cleanup_mine_pvp_logs')
+          ]);
+
+          const ok = [guildRes, pvpRes].every(r => r.status === 'fulfilled' && !r.value?.error);
+          if (ok) {
+              // Só marca como feito se as duas limpezas realmente rodaram;
+              // se alguma falhar, tenta de novo no próximo boot em vez de
+              // esperar mais 15 dias.
+              localStorage.setItem(LOGS_CLEANUP_KEY, String(Date.now()));
+          } else {
+              console.warn('[cleanup] Falha ao rodar limpeza periódica de logs', guildRes, pvpRes);
+          }
+      } catch (e) {
+          console.warn('[cleanup] Erro ao verificar/rodar limpeza periódica de logs', e);
+      }
+  }
+
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1319,6 +1351,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const ok = await getUserSession();
   if (ok) await loadGuildInfo();
+
+  // Dispara (se já passaram 15 dias) a limpeza de guild_logs e mine_pvp_logs.
+  // Não usa "await" de propósito: não deve atrasar o carregamento da página.
+  if (ok) triggerLogsCleanupIfDue(supabase);
 
 });
 

@@ -12,6 +12,38 @@ const OWNERS_STORE = 'owners_store';
 
 const OWNERS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 Horas em milissegundos
 
+// =======================================================================
+// LIMPEZA PERIÓDICA DE LOGS (substitui os 2 cron workers do Cloudflare)
+// Chave de cache COMPARTILHADA com a página da guilda (mesmo localStorage,
+// mesmo domínio): quem visitar primeiro após 15 dias dispara para os dois.
+// =======================================================================
+const LOGS_CLEANUP_KEY = 'aden_logs_cleanup_last_run';
+const LOGS_CLEANUP_INTERVAL_MS = 15 * 24 * 60 * 60 * 1000; // 15 dias
+
+async function triggerLogsCleanupIfDue(sb) {
+    try {
+        const last = parseInt(localStorage.getItem(LOGS_CLEANUP_KEY) || '0', 10);
+        if (Date.now() - last < LOGS_CLEANUP_INTERVAL_MS) return; // ainda não venceu
+
+        const [guildRes, pvpRes] = await Promise.allSettled([
+            sb.rpc('cleanup_old_guild_logs'),
+            sb.rpc('cleanup_mine_pvp_logs')
+        ]);
+
+        const ok = [guildRes, pvpRes].every(r => r.status === 'fulfilled' && !r.value?.error);
+        if (ok) {
+            // Só marca como feito se as duas limpezas realmente rodaram;
+            // se alguma falhar, tenta de novo no próximo boot em vez de
+            // esperar mais 15 dias.
+            localStorage.setItem(LOGS_CLEANUP_KEY, String(Date.now()));
+        } else {
+            console.warn('[cleanup] Falha ao rodar limpeza periódica de logs', guildRes, pvpRes);
+        }
+    } catch (e) {
+        console.warn('[cleanup] Erro ao verificar/rodar limpeza periódica de logs', e);
+    }
+}
+
 const GlobalDB = {
     open: function() {
         return new Promise((resolve, reject) => {
@@ -2627,6 +2659,10 @@ function formatTimeCombat(totalSeconds) {
       try { await supabase.rpc('populate_bot_mines', { p_bot_ids: BOT_IDS, p_zone: currentZone }); } catch (e) {}
       try { await supabase.rpc('resolve_all_expired_mines'); } catch (e) {}
       try { await supabase.rpc('reset_player_pvp_attempts'); } catch (e) {}
+
+      // Dispara (se já passaram 15 dias) a limpeza de guild_logs e mine_pvp_logs.
+      // Não usa "await" de propósito: não deve atrasar o boot da página.
+      triggerLogsCleanupIfDue(supabase);
 
       showLoading();
       

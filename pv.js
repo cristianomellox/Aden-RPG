@@ -1436,8 +1436,23 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             chatMessagesDiv.appendChild(msgDiv);
+
+            // Se a mensagem tiver imagem (ex: card de presente/troca), reajusta o
+            // scroll quando ela terminar de carregar — senão a altura muda depois
+            // do scrollTop já ter sido calculado e a conversa fica "subida".
+            msgDiv.querySelectorAll('img').forEach(img => {
+                img.addEventListener('load', () => {
+                    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+                }, { once: true });
+            });
         }
-        chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+
+        // requestAnimationFrame garante que o navegador já terminou o layout
+        // (importante principalmente quando o chat acabou de ficar visível,
+        // como no deep link vindo de uma notificação).
+        requestAnimationFrame(() => {
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        });
     }
 
     function buildTradeMessageHtml(msg, tradeStatuses) {
@@ -1871,6 +1886,22 @@ document.addEventListener("DOMContentLoaded", () => {
         await fetchAndRenderSystemMessages({ markAsRead: false });
         setupEventListeners();
         checkUnreadStatus();
+
+        // Deep link vindo do clique numa notificação push: ?openPV=<conversation_id>
+        try {
+            const params = new URLSearchParams(location.search);
+            const deepLinkConvoId = params.get('openPV');
+            if (deepLinkConvoId) {
+                params.delete('openPV');
+                const newSearch = params.toString();
+                history.replaceState({}, '', location.pathname + (newSearch ? '?' + newSearch : '') + location.hash);
+
+                pvModal.style.display = 'flex';
+                await openChatView(deepLinkConvoId);
+            }
+        } catch (e) {
+            console.warn('[PV] Falha ao abrir conversa via deep link:', e);
+        }
     }
 
     function setupEventListeners() {

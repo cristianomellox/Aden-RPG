@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v20'; // v20: migração PWA — manifest + ícones no precache
+const CACHE_NAME = 'aden-rpg-assets-v21'; // v21: corrige caminho dos ícones de notificação (/icons/ -> /assets/)
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições
@@ -21,8 +21,10 @@ const ASSETS_TO_PRECACHE = [
     '/assets/goldcoin.webp',
     '/assets/cristais.webp',
     '/manifest.json',
-    '/icons/icon-192.png',
-    '/icons/icon-512.png',
+    '/assets/icon-192.png',
+    '/assets/icon-512.png',
+    '/assets/notification-icon-192.png',
+    '/assets/badge-icon.png',
 ];
 
 self.addEventListener('install', event => {
@@ -151,8 +153,8 @@ self.addEventListener('push', event => {
 
     const options = {
         body: payload.body,
-        icon: '/icons/notification-icon-192.png', // ícone maior exibido no corpo da notificação
-        badge: '/icons/badge-icon.png',            // ícone pequeno da status bar (Android tinge de branco/tema)
+        icon: '/assets/notification-icon-192.png', // ícone maior exibido no corpo da notificação
+        badge: '/assets/badge-icon.png',            // ícone pequeno da status bar (Android tinge de branco/tema)
         data: { url: payload.url || '/index.html' },
         vibrate: [100, 50, 100],
     };

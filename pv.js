@@ -1304,15 +1304,26 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!convo.is_server_deleted) {
             const { data: msgData } = await supabaseClient
                 .from('private_messages')
-                .select('messages')
+                .select('messages, last_sender_id, last_message')
                 .eq('id', currentOpenConversationId)
                 .single();
 
-            if (msgData && msgData.messages) {
-                const existingTimestamps = new Set(convo.messages.map(m => m.timestamp));
-                msgData.messages.forEach(dbMsg => {
-                    if (!existingTimestamps.has(dbMsg.timestamp)) convo.messages.push(dbMsg);
-                });
+            if (msgData) {
+                // CRÍTICO: atualiza last_sender_id com o valor real do servidor.
+                // Sem isso, se a conversa já estava em cache local (o que acontece
+                // sempre que fetchAndSyncMessages usou o cache de 15min em vez de
+                // buscar de novo), o turno era decidido com um dado de até 15
+                // minutos atrás — causando o "aguardando resposta" falso mesmo
+                // quando já era a vez do jogador responder.
+                convo.last_sender_id = msgData.last_sender_id;
+                convo.last_message   = msgData.last_message;
+
+                if (msgData.messages) {
+                    const existingTimestamps = new Set(convo.messages.map(m => m.timestamp));
+                    msgData.messages.forEach(dbMsg => {
+                        if (!existingTimestamps.has(dbMsg.timestamp)) convo.messages.push(dbMsg);
+                    });
+                }
                 localConversations.set(currentOpenConversationId, convo);
                 saveToLocalStorage();
             }
@@ -1439,18 +1450,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Se a mensagem tiver imagem (ex: card de presente/troca), reajusta o
             // scroll quando ela terminar de carregar — senão a altura muda depois
-            // do scrollTop já ter sido calculado e a conversa fica "subida".
+            // do scroll já ter sido calculado e a conversa fica "subida".
             msgDiv.querySelectorAll('img').forEach(img => {
-                img.addEventListener('load', () => {
-                    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
-                }, { once: true });
+                img.addEventListener('load', () => scrollChatToBottom(), { once: true });
             });
         }
 
-        // requestAnimationFrame garante que o navegador já terminou o layout
-        // (importante principalmente quando o chat acabou de ficar visível,
-        // como no deep link vindo de uma notificação).
+        scrollChatToBottom();
+    }
+
+    // #pv-chat-messages fica DENTRO de .pv-content, que também tem overflow-y:auto —
+    // ou seja, o container que de fato rola pode ser qualquer um dos dois dependendo
+    // do layout calculado. scrollIntoView() deixa o navegador resolver isso sozinho,
+    // subindo por todos os ancestrais roláveis até o último elemento ficar visível —
+    // diferente de setar scrollTop manualmente num container específico, que só
+    // funciona se aquele for, de fato, o container com overflow real.
+    function scrollChatToBottom() {
         requestAnimationFrame(() => {
+            const lastMsg = chatMessagesDiv.lastElementChild;
+            if (lastMsg && lastMsg.scrollIntoView) {
+                lastMsg.scrollIntoView({ block: 'end', inline: 'nearest' });
+            } else {
+                chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+            }
+            // Cobre os dois containers de qualquer forma, por garantia.
+            const pvContent = chatMessagesDiv.closest('.pv-content');
+            if (pvContent) pvContent.scrollTop = pvContent.scrollHeight;
             chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
         });
     }

@@ -308,24 +308,65 @@
 
   async function subscribeToPush() {
     if (VAPID_PUBLIC_KEY.startsWith('COLOQUE_')) return; // chave ainda não configurada — sai em silêncio
+    if (!supportsNotifications() || Notification.permission !== 'granted') return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
+
     if (!sub) {
-      sub = await reg.pushManager.subscribe({
+      sub = await createSubscription(reg);
+    } else {
+      // Confere se a subscription existente foi criada com a MESMA chave VAPID
+      // atual. Se não (ex: sobrou de um teste anterior, ou de antes da chave
+      // real ter sido configurada), o navegador nunca vai deixar recriar por
+      // cima — precisa desinscrever a antiga primeiro.
+      const currentKey = bufferToBase64(sub.options && sub.options.applicationServerKey);
+      const expectedKey = bufferToBase64(urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer);
+      if (currentKey && expectedKey && currentKey !== expectedKey) {
+        console.warn('[Notif] Subscription antiga com chave VAPID diferente — recriando.');
+        await sub.unsubscribe().catch(() => {});
+        sub = await createSubscription(reg);
+      }
+    }
+
+    if (!sub) return;
+
+    if (typeof supabaseClient === 'undefined') {
+      console.warn('[Notif] supabaseClient ainda não disponível — inscrição de push não foi salva agora, será re-sincronizada depois.');
+      return;
+    }
+
+    const platform = getPlatform();
+    const { error } = await supabaseClient.rpc('save_push_subscription', {
+      p_endpoint: sub.endpoint,
+      p_p256dh: bufferToBase64(sub.getKey('p256dh')),
+      p_auth: bufferToBase64(sub.getKey('auth')),
+      p_device_type: platform.isIOS ? 'ios' : (platform.isTWA ? 'twa' : 'web'),
+    });
+    if (error) {
+      console.warn('[Notif] Erro ao salvar push subscription (save_push_subscription):', error.message);
+    }
+  }
+
+  async function createSubscription(reg) {
+    try {
+      return await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
-    }
-
-    if (typeof supabaseClient !== 'undefined') {
-      const platform = getPlatform();
-      await supabaseClient.rpc('save_push_subscription', {
-        p_endpoint: sub.endpoint,
-        p_p256dh: bufferToBase64(sub.getKey('p256dh')),
-        p_auth: bufferToBase64(sub.getKey('auth')),
-        p_device_type: platform.isIOS ? 'ios' : (platform.isTWA ? 'twa' : 'web'),
+    } catch (e) {
+      // Última tentativa: se ainda existir alguma subscription conflitante
+      // que getSubscription() não pegou por algum motivo, força limpeza total.
+      console.warn('[Notif] Falha ao criar subscription, tentando limpar e recriar:', e);
+      const existing = await reg.pushManager.getSubscription().catch(() => null);
+      if (existing) await existing.unsubscribe().catch(() => {});
+      return reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      }).catch(e2 => {
+        console.warn('[Notif] Falha definitiva ao criar subscription:', e2);
+        return null;
       });
     }
   }
@@ -357,11 +398,19 @@
     });
     window.addEventListener('focus', recheckPermission);
 
-    // Onde suportado (Chrome/Android), reage à mudança em tempo real.
+    // Onde suportado (Chrome/Android), reage à mudança em tempo real E também
+    // roda uma checagem imediata com o estado ATUAL — sem isso, uma sessão em
+    // que nada dispara visibilitychange/focus nunca sincroniza a inscrição.
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'notifications' })
-        .then(status => { status.onchange = recheckPermission; })
-        .catch(() => {});
+        .then(status => {
+          status.onchange = recheckPermission;
+          recheckPermission();
+        })
+        .catch(() => { recheckPermission(); });
+    } else {
+      // Safari/iOS não suporta permissions.query('notifications') — checa direto.
+      recheckPermission();
     }
   }
   setupAutoRecheck();
@@ -414,7 +463,11 @@
     const state = Notification.permission; // 'default' | 'granted' | 'denied'
 
     if (state === 'granted') {
-      grantRewardIfFirstTime(); // silencioso — só garante que a recompensa foi dada
+      // Silencioso — só garante que a recompensa foi dada e que a inscrição de
+      // push está sincronizada (cobre o jogador que já tinha permitido antes,
+      // reativou depois de ter bloqueado, ou trocou de aparelho/navegador).
+      grantRewardIfFirstTime();
+      subscribeToPush().catch(e => console.warn('[Notif] push subscribe falhou (maybeShowFlow):', e));
       return;
     }
 

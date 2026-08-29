@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Câmara do Arauto · Aden RPG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b0710;
+    --panel:#150c1f;
+    --panel-2:#1c1128;
+    --line:#3a2450;
+    --line-soft:#2a1a3a;
+    --gold:#c9a24b;
+    --gold-bright:#e8c877;
+    --violet:#8b5fd6;
+    --violet-dim:#5a3d8a;
+    --text:#e9dfef;
+    --text-dim:#a893bd;
+    --danger:#e0605a;
+    --danger-dim:#3a1518;
+    --ok:#5fd68b;
+    --ok-dim:#123a24;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, #2a1640 0%, transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 100%, #1a0f2e 0%, transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:'Crimson Text', Georgia, serif;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:32px 16px 64px;
+  }
+  .seal-bg{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background-image:radial-gradient(circle, rgba(201,162,75,.05) 1px, transparent 1px);
+    background-size:26px 26px;
+    opacity:.5;
+  }
+
+  h1,h2,.eyebrow{ font-family:'Cinzel', serif; }
+
+  .wrap{
+    width:100%;
+    max-width:920px;
+    position:relative;
+    z-index:1;
+  }
+
+  /* ---------- topo ---------- */
+  .top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+  .eyebrow{
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin:0 0 6px;
+  }
+  h1{
+    font-size:1.7rem;
+    font-weight:700;
+    margin:0;
+    color:var(--text);
+    letter-spacing:.02em;
+  }
+  .sub{
+    color:var(--text-dim);
+    font-size:.95rem;
+    margin-top:6px;
+    max-width:46ch;
+  }
+  .session-pill{
+    display:none;
+    align-items:center;
+    gap:8px;
+    font-family:'Cinzel',serif;
+    font-size:.68rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ok);
+    background:var(--ok-dim);
+    border:1px solid rgba(95,214,139,.35);
+    padding:7px 12px;
+    border-radius:999px;
+    white-space:nowrap;
+  }
+  .session-pill.show{ display:inline-flex; }
+  .session-pill .dot{ width:6px; height:6px; border-radius:50%; background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  .session-pill button{
+    background:none; border:none; color:inherit; font:inherit; cursor:pointer;
+    text-decoration:underline; opacity:.75; margin-left:4px; padding:0;
+  }
+  .session-pill button:hover{ opacity:1; }
+
+  /* ---------- gate de senha ---------- */
+  #gate{
+    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:40px 32px;
+    text-align:center;
+    max-width:420px;
+    margin:60px auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  #gate .sigil{
+    width:46px; height:46px; margin:0 auto 18px;
+    border:1px solid var(--gold);
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--gold);
+    font-size:1.3rem;
+  }
+  #gate h2{ font-size:1.15rem; margin:0 0 8px; color:var(--text); }
+  #gate p{ color:var(--text-dim); font-size:.9rem; margin:0 0 22px; }
+  #gate input[type="password"]{
+    width:100%;
+    background:var(--ink);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:10px;
+    padding:13px 14px;
+    font-family:'Crimson Text', serif;
+    font-size:1rem;
+    text-align:center;
+    letter-spacing:.1em;
+  }
+  #gate input[type="password"]:focus{ outline:none; border-color:var(--violet); }
+  .remember-row{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    margin-top:14px; font-size:.82rem; color:var(--text-dim);
+  }
+  .remember-row input{ accent-color:var(--violet); }
+  #gate button{
+    width:100%;
+    margin-top:18px;
+    background:linear-gradient(135deg, var(--violet), var(--violet-dim));
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    padding:13px;
+    font-family:'Cinzel',serif;
+    font-size:.85rem;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  #gate button:hover{ filter:brightness(1.1); }
+  #gateError{
+    color:var(--danger);
+    font-size:.82rem;
+    margin-top:12px;
+    min-height:1em;
+  }
+
+  /* ---------- painel principal ---------- */
+  #panel{ display:none; }
+  #panel.show{ display:block; }
+
+  .grid{
+    display:grid;
+    grid-template-columns:1.15fr .85fr;
+    gap:22px;
+    align-items:start;
+  }
+  @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
+
+  .card{
+    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:26px;
+  }
+
+  .card h2{
+    font-size:.78rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin:0 0 20px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .card h2::after{
+    content:'';
+    flex:1;
+    height:1px;
+    background:linear-gradient(90deg, var(--line), transparent);
+  }
+
+  label{
+    display:block;
+    font-family:'Cinzel', serif;
+    font-size:.68rem;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:7px;
+  }
+  .field{ margin-bottom:18px; }
+  .field-foot{
+    display:flex;
+    justify-content:space-between;
+    margin-top:5px;
+    font-size:.72rem;
+    color:#6d5a85;
+  }
+  .field-foot.over{ color:var(--danger); }
+
+  input[type="text"], textarea{
+    width:100%;
+    background:var(--ink);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:9px;
+    padding:11px 13px;
+    font-family:'Crimson Text', serif;
+    font-size:1rem;
+    resize:none;
+  }
+  input[type="text"]:focus, textarea:focus{
+    outline:none;
+    border-color:var(--violet);
+  }
+  input[type="text"]::placeholder, textarea::placeholder{ color:#5a4870; }
+
+  .img-input-wrap{
+    display:flex;
+    align-items:stretch;
+    border:1px solid var(--line);
+    border-radius:9px;
+    overflow:hidden;
+    background:var(--ink);
+  }
+  .img-input-wrap .prefix{
+    display:flex;
+    align-items:center;
+    padding:0 10px;
+    font-size:.78rem;
+    color:#6d5a85;
+    background:#160c20;
+    border-right:1px solid var(--line);
+    white-space:nowrap;
+    font-family:monospace;
+  }
+  .img-input-wrap input{
+    border:none;
+    background:transparent;
+    border-radius:0;
+  }
+  .img-input-wrap input:focus{ outline:none; }
+
+  select{
+    width:100%;
+    background:var(--ink);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:9px;
+    padding:11px 13px;
+    font-family:'Crimson Text', serif;
+    font-size:1rem;
+  }
+  select:focus{ outline:none; border-color:var(--violet); }
+
+  .page-row{ display:flex; gap:8px; }
+  .page-row input{ flex:1; }
+
+  .send-btn{
+    width:100%;
+    margin-top:6px;
+    background:linear-gradient(135deg, #d4af37, #8a6a1f);
+    color:#1a1108;
+    border:none;
+    border-radius:10px;
+    padding:15px;
+    font-family:'Cinzel',serif;
+    font-size:.9rem;
+    font-weight:700;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    cursor:pointer;
+    transition:filter .15s, transform .1s;
+  }
+  .send-btn:hover{ filter:brightness(1.08); }
+  .send-btn:active{ transform:scale(.985); }
+  .send-btn:disabled{ opacity:.5; cursor:not-allowed; filter:none; }
+
+  .confirm-hint{
+    font-size:.78rem;
+    color:var(--text-dim);
+    text-align:center;
+    margin-top:10px;
+  }
+
+  .status{
+    margin-top:16px;
+    padding:12px 14px;
+    border-radius:9px;
+    font-size:.88rem;
+    display:none;
+  }
+  .status.show{ display:block; }
+  .status.ok{ background:var(--ok-dim); color:var(--ok); border:1px solid rgba(95,214,139,.3); }
+  .status.err{ background:var(--danger-dim); color:var(--danger); border:1px solid rgba(224,96,90,.35); }
+
+  /* ---------- preview ---------- */
+  .preview-outer{ position:sticky; top:24px; }
+  .phone-notice{
+    background:#111116;
+    border:1px solid #2a2a34;
+    border-radius:16px;
+    padding:14px;
+    box-shadow:0 20px 50px rgba(0,0,0,.5);
+  }
+  .phone-notice-row{
+    display:flex;
+    gap:11px;
+    align-items:flex-start;
+  }
+  .phone-notice-icon{
+    width:42px; height:42px;
+    border-radius:9px;
+    background:#26263a center/cover no-repeat;
+    background-image:url('https://aden-rpg.pages.dev/assets/notification-icon-192.png');
+    flex-shrink:0;
+    border:1px solid #34344a;
+  }
+  .phone-notice-body{ flex:1; min-width:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .phone-notice-app{
+    font-size:.68rem;
+    color:#9a9ab0;
+    display:flex; align-items:center; gap:5px;
+    margin-bottom:2px;
+  }
+  .phone-notice-app img{ width:12px; height:12px; border-radius:2px; }
+  .phone-notice-title{
+    font-size:.86rem;
+    font-weight:600;
+    color:#f2f2f5;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .phone-notice-text{
+    font-size:.8rem;
+    color:#c4c4d2;
+    margin-top:1px;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .phone-notice-img{
+    margin-top:10px;
+    width:100%;
+    aspect-ratio:2/1;
+    border-radius:8px;
+    background:#20202c center/cover no-repeat;
+    display:none;
+    border:1px solid #2a2a34;
+  }
+  .phone-notice-img.show{ display:block; }
+  .phone-notice-img.err::after{
+    content:'Imagem não encontrada em /assets/';
+    display:flex; align-items:center; justify-content:center;
+    height:100%;
+    color:#8a8a9a;
+    font-size:.72rem;
+    font-family:'Crimson Text',serif;
+  }
+
+  .preview-label{
+    text-align:center;
+    font-size:.68rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#5a4870;
+    margin-top:10px;
+  }
+
+  .destino-tag{
+    margin-top:16px;
+    font-size:.8rem;
+    color:var(--text-dim);
+    text-align:center;
+  }
+  .destino-tag code{
+    color:var(--gold-bright);
+    font-family:monospace;
+    background:#1c1128;
+    padding:2px 6px;
+    border-radius:5px;
+  }
+</style>
+</head>
+<body>
+
+<div class="seal-bg"></div>
+
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <p class="eyebrow">Câmara do Arauto</p>
+      <h1>Notificação para o reino</h1>
+      <p class="sub">Envie um aviso push para todos os jogadores com notificações ativas. Use com moderação — todos recebem de uma vez.</p>
+    </div>
+    <div class="session-pill" id="sessionPill">
+      <span class="dot"></span> Sessão ativa <button id="logoutBtn" type="button">sair</button>
+    </div>
+  </div>
+
+  <!-- ===================== GATE DE SENHA ===================== -->
+  <div id="gate">
+    <div class="sigil">✦</div>
+    <h2>Acesso restrito</h2>
+    <p>Esta câmara só se abre para o Arauto do reino.</p>
+    <input type="password" id="secretInput" placeholder="Senha do painel" autocomplete="off">
+    <div class="remember-row">
+      <input type="checkbox" id="rememberChk">
+      <label for="rememberChk" style="margin:0; text-transform:none; font-family:'Crimson Text',serif; font-size:.85rem; letter-spacing:0;">Lembrar neste dispositivo</label>
+    </div>
+    <button id="unlockBtn" type="button">Entrar</button>
+    <div id="gateError"></div>
+  </div>
+
+  <!-- ===================== PAINEL ===================== -->
+  <div id="panel">
+    <div class="grid">
+
+      <!-- form -->
+      <div class="card">
+        <h2>Conteúdo do aviso</h2>
+
+        <div class="field">
+          <label for="fTitle">Título</label>
+          <input type="text" id="fTitle" maxlength="60" placeholder="Ex: Manutenção às 22h">
+          <div class="field-foot"><span></span><span id="titleCount">0/60</span></div>
+        </div>
+
+        <div class="field">
+          <label for="fBody">Texto</label>
+          <textarea id="fBody" rows="3" maxlength="160" placeholder="Ex: O servidor ficará fora do ar por 15 minutos para atualização."></textarea>
+          <div class="field-foot"><span></span><span id="bodyCount">0/160</span></div>
+        </div>
+
+        <div class="field">
+          <label for="fImage">Imagem <span style="opacity:.6;">(opcional — banner grande)</span></label>
+          <div class="img-input-wrap">
+            <span class="prefix">/assets/</span>
+            <input type="text" id="fImage" placeholder="mina.jpg">
+          </div>
+          <div class="field-foot"><span>Deixe em branco para enviar sem imagem</span><span></span></div>
+        </div>
+
+        <div class="field">
+          <label for="fPage">Página de destino</label>
+          <div class="page-row">
+            <input type="text" id="fPage" placeholder="/index.html" value="/index.html">
+          </div>
+          <div class="field-foot"><span>Para onde o jogador vai ao tocar na notificação</span><span></span></div>
+        </div>
+
+        <button class="send-btn" id="sendBtn">Enviar para todo o reino</button>
+        <p class="confirm-hint">Você confirmará antes do envio ser disparado.</p>
+
+        <div class="status" id="statusBox"></div>
+      </div>
+
+      <!-- preview -->
+      <div class="preview-outer">
+        <div class="phone-notice">
+          <div class="phone-notice-row">
+            <div class="phone-notice-icon" id="prevIcon"></div>
+            <div class="phone-notice-body">
+              <div class="phone-notice-app"><img src="https://aden-rpg.pages.dev/assets/badge-icon.png" onerror="this.style.display='none'"> Aden RPG Online</div>
+              <div class="phone-notice-title" id="prevTitle">Título do aviso</div>
+              <div class="phone-notice-text" id="prevBody">O texto do aviso aparece aqui.</div>
+            </div>
+          </div>
+          <div class="phone-notice-img" id="prevImg"></div>
+        </div>
+        <p class="preview-label">Pré-visualização (aproximada)</p>
+        <p class="destino-tag">Abre em <code id="prevUrl">/index.html</code></p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ⚠️ Ajuste aqui se a URL do seu Worker for diferente.
+  const WORKER_URL = 'https://aden-push-worker.eusouocris-84.workers.dev/notify/custom-broadcast';
+  const ASSET_PREFIX = 'https://aden-rpg.pages.dev/assets/';
+  const STORAGE_KEY = 'aden_admin_secret';
+
+  const gate = document.getElementById('gate');
+  const panel = document.getElementById('panel');
+  const sessionPill = document.getElementById('sessionPill');
+  const secretInput = document.getElementById('secretInput');
+  const rememberChk = document.getElementById('rememberChk');
+  const unlockBtn = document.getElementById('unlockBtn');
+  const gateError = document.getElementById('gateError');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  const fTitle = document.getElementById('fTitle');
+  const fBody = document.getElementById('fBody');
+  const fImage = document.getElementById('fImage');
+  const fPage = document.getElementById('fPage');
+  const sendBtn = document.getElementById('sendBtn');
+  const statusBox = document.getElementById('statusBox');
+  const titleCount = document.getElementById('titleCount');
+  const bodyCount = document.getElementById('bodyCount');
+
+  const prevTitle = document.getElementById('prevTitle');
+  const prevBody = document.getElementById('prevBody');
+  const prevImg = document.getElementById('prevImg');
+  const prevUrl = document.getElementById('prevUrl');
+
+  let adminSecret = null;
+
+  // ---------- sessão / senha ----------
+  function openPanel(secret){
+    adminSecret = secret;
+    gate.style.display = 'none';
+    panel.classList.add('show');
+    sessionPill.classList.add('show');
+  }
+
+  function tryStoredSecret(){
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) openPanel(stored);
+    } catch(e){}
+  }
+
+  unlockBtn.addEventListener('click', () => {
+    const val = secretInput.value.trim();
+    if (!val) { gateError.textContent = 'Digite a senha.'; return; }
+    gateError.textContent = '';
+    if (rememberChk.checked) {
+      try { localStorage.setItem(STORAGE_KEY, val); } catch(e){}
+    }
+    openPanel(val);
+    // A senha só é validada de verdade quando o primeiro envio acontece
+    // (o Worker responde 401 se estiver errada) — evitamos qualquer
+    // checagem de senha aqui no cliente.
+  });
+  secretInput.addEventListener('keydown', e => { if (e.key === 'Enter') unlockBtn.click(); });
+
+  logoutBtn.addEventListener('click', () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+    adminSecret = null;
+    panel.classList.remove('show');
+    sessionPill.classList.remove('show');
+    gate.style.display = 'block';
+    secretInput.value = '';
+    secretInput.focus();
+  });
+
+  tryStoredSecret();
+
+  // ---------- preview ao vivo ----------
+  function updatePreview(){
+    titleCount.textContent = fTitle.value.length + '/60';
+    bodyCount.textContent = fBody.value.length + '/160';
+
+    prevTitle.textContent = fTitle.value.trim() || 'Título do aviso';
+    prevBody.textContent = fBody.value.trim() || 'O texto do aviso aparece aqui.';
+
+    const imgName = fImage.value.trim();
+    if (imgName) {
+      prevImg.classList.add('show');
+      prevImg.classList.remove('err');
+      prevImg.style.backgroundImage = `url('${ASSET_PREFIX}${imgName}')`;
+      const test = new Image();
+      test.onerror = () => prevImg.classList.add('err');
+      test.onload = () => prevImg.classList.remove('err');
+      test.src = ASSET_PREFIX + imgName;
+    } else {
+      prevImg.classList.remove('show');
+      prevImg.classList.remove('err');
+    }
+
+    prevUrl.textContent = fPage.value.trim() || '/index.html';
+  }
+  [fTitle, fBody, fImage, fPage].forEach(el => el.addEventListener('input', updatePreview));
+  updatePreview();
+
+  // ---------- status box ----------
+  function showStatus(kind, msg){
+    statusBox.className = 'status show ' + kind;
+    statusBox.textContent = msg;
+  }
+  function hideStatus(){
+    statusBox.className = 'status';
+  }
+
+  // ---------- confirmação simples (evita disparo acidental) ----------
+  function confirmSend(){
+    const title = fTitle.value.trim();
+    return window.confirm(`Enviar esta notificação para TODOS os jogadores com push ativo?\n\n"${title}"`);
+  }
+
+  // ---------- envio ----------
+  sendBtn.addEventListener('click', async () => {
+    hideStatus();
+    const title = fTitle.value.trim();
+    const body = fBody.value.trim();
+    const image = fImage.value.trim();
+    const pageUrl = fPage.value.trim() || '/index.html';
+
+    if (!title || !body) {
+      showStatus('err', 'Preencha ao menos o título e o texto.');
+      return;
+    }
+    if (!confirmSend()) return;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Enviando…';
+
+    try {
+      const resp = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': adminSecret || '',
+        },
+        body: JSON.stringify({
+          title,
+          body,
+          image: image ? (ASSET_PREFIX + image) : undefined,
+          url: pageUrl,
+        }),
+      });
+
+      let data = {};
+      try { data = await resp.json(); } catch(e){}
+
+      if (resp.status === 401) {
+        showStatus('err', 'Senha incorreta. Sua sessão foi encerrada — recarregue e tente de novo.');
+        try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Enviar para todo o reino';
+        return;
+      }
+
+      if (!resp.ok || !data.ok) {
+        showStatus('err', 'Erro: ' + (data.error || 'Falha ao enviar.'));
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Enviar para todo o reino';
+        return;
+      }
+
+      showStatus('ok', `Enviado! Fila com ${data.queued ?? '?'} inscrição(ões). Pode levar alguns instantes para todo mundo receber.`);
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Enviar para todo o reino';
+
+    } catch (err) {
+      showStatus('err', 'Falha de rede ao contactar o Worker. Tente novamente.');
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Enviar para todo o reino';
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>

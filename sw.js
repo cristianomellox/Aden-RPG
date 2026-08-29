@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v24'; // v24: ícone da notificação pode vir do payload ("icon", ex: avatar de quem mandou a mensagem)
+const CACHE_NAME = 'aden-rpg-assets-v25'; // v24: ícone da notificação pode vir do payload ("icon", ex: avatar de quem mandou a mensagem)
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições
@@ -166,9 +166,14 @@ self.addEventListener('push', event => {
         icon: payload.icon || '/assets/notification-icon-192.png',
         badge: '/assets/badge-icon.png',            // ícone pequeno da status bar (Android tinge de branco/tema)
         data: { url: payload.url || '/index.html' },
-        vibrate: [100, 50, 100],
-    };
+        vibrate: [200, 100, 200],
 
+renotify: true,
+        tag: payload.tag || 'aden-notification',
+        timestamp: Date.now(),
+        // requireInteraction: false 
+        
+};
     // Banner grande (proporção 2:1, ex: 1024x512), opcional por evento.
     if (payload.image) {
         options.image = payload.image;

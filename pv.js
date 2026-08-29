@@ -769,6 +769,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ============================================================
+    // Chama uma RPC do Supabase com 1 retry automático quando a falha é
+    // de rede (ex.: "Failed to fetch"). Isso acontece esporadicamente
+    // quando o Service Worker troca de versão em segundo plano
+    // (self.skipWaiting() + clients.claim() no sw.js assumem o controle
+    // da página imediatamente, o que pode derrubar uma requisição que já
+    // estava em voo). É transitório: tentar de novo alguns instantes
+    // depois quase sempre resolve, então automatizamos isso aqui em vez
+    // de deixar o jogador ver o erro e ter que clicar de novo.
+    // ============================================================
+    async function callRpcWithRetry(fnName, params, retries = 1) {
+        const result = await supabaseClient.rpc(fnName, params);
+        const msg = result?.error?.message || '';
+        if (result?.error && /failed to fetch/i.test(msg) && retries > 0) {
+            await new Promise(r => setTimeout(r, 700));
+            return callRpcWithRetry(fnName, params, retries - 1);
+        }
+        return result;
+    }
+
+    // ============================================================
     // SISTEMA DE COMÉRCIO ENTRE JOGADORES
     // ============================================================
 
@@ -944,7 +964,7 @@ document.addEventListener("DOMContentLoaded", () => {
         offerBtn.textContent = 'Criando oferta...';
 
         try {
-            const { data, error } = await supabaseClient.rpc('create_player_trade', {
+            const { data, error } = await callRpcWithRetry('create_player_trade', {
                 p_conversation_id: parseInt(currentOpenConversationId),
                 p_buyer_id:        currentOtherPlayerId,
                 p_item_id:         selectedTradeItem.id,
@@ -977,7 +997,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function fetchTradeStatuses(tradeIds) {
         if (!tradeIds || tradeIds.length === 0) return {};
         try {
-            const { data, error } = await supabaseClient.rpc('get_trade_statuses', {
+            const { data, error } = await callRpcWithRetry('get_trade_statuses', {
                 p_trade_ids: tradeIds
             });
             if (error || !data) return {};
@@ -992,7 +1012,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const btns = footerEl.querySelectorAll('.pv-trade-action-btn');
                 btns.forEach(b => b.disabled = true);
 
-                const { data, error } = await supabaseClient.rpc('accept_player_trade', { p_trade_id: tradeId });
+                const { data, error } = await callRpcWithRetry('accept_player_trade', { p_trade_id: tradeId });
 
                 if (error || !data?.success) {
                     showFloatingMessage(`Erro: ${(data?.message) || error?.message || 'Falha.'}`);
@@ -1030,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const btns = footerEl.querySelectorAll('.pv-trade-action-btn');
             btns.forEach(b => b.disabled = true);
 
-            const { data, error } = await supabaseClient.rpc('cancel_player_trade', { p_trade_id: tradeId });
+            const { data, error } = await callRpcWithRetry('cancel_player_trade', { p_trade_id: tradeId });
 
             if (error || !data?.success) {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
@@ -1646,7 +1666,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         btn.disabled = true; btn.textContent = 'Enviando...';
         try {
-            const { data, error } = await supabaseClient.rpc('create_player_gift', {
+            const { data, error } = await callRpcWithRetry('create_player_gift', {
                 p_conversation_id: parseInt(currentOpenConversationId),
                 p_receiver_id:     currentOtherPlayerId,
                 p_item_id:         selectedGiftItem.id,
@@ -1671,7 +1691,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function fetchGiftStatuses(giftIds) {
         if (!giftIds || giftIds.length === 0) return {};
         try {
-            const { data, error } = await supabaseClient.rpc('get_gift_statuses', { p_gift_ids: giftIds });
+            const { data, error } = await callRpcWithRetry('get_gift_statuses', { p_gift_ids: giftIds });
             if (error || !data) return {};
             return data;
         } catch { return {}; }
@@ -1681,7 +1701,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showConfirmModal('Aceitar este presente?', async () => {
             const btns = footerEl.querySelectorAll('.pv-gift-btn');
             btns.forEach(b => b.disabled = true);
-            const { data, error } = await supabaseClient.rpc('accept_player_gift', { p_gift_id: giftId });
+            const { data, error } = await callRpcWithRetry('accept_player_gift', { p_gift_id: giftId });
             if (error || !data?.success) {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
                 btns.forEach(b => b.disabled = false); return;
@@ -1721,7 +1741,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showConfirmModal(isSender ? 'Cancelar este presente? A skin será devolvida para você.' : 'Recusar este presente?', async () => {
             const btns = footerEl.querySelectorAll('.pv-gift-btn');
             btns.forEach(b => b.disabled = true);
-            const { data, error } = await supabaseClient.rpc('cancel_player_gift', { p_gift_id: giftId });
+            const { data, error } = await callRpcWithRetry('cancel_player_gift', { p_gift_id: giftId });
             if (error || !data?.success) {
                 showFloatingMessage(`Erro: ${data?.message || error?.message || 'Falha.'}`);
                 btns.forEach(b => b.disabled = false); return;
@@ -1830,7 +1850,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 statusEl.textContent = `Jogador encontrado: ${target.name}`; statusEl.className = 'ok';
                 btn.textContent = 'Abrindo...';
-                const { data: convoData, error: convoErr } = await supabaseClient.rpc('get_or_create_private_conversation', { target_player_id: target.id });
+                const { data: convoData, error: convoErr } = await callRpcWithRetry('get_or_create_private_conversation', { target_player_id: target.id });
                 if (convoErr) throw convoErr;
                 const convoId = convoData?.conversation_id;
                 if (!convoId) throw new Error('Não foi possível criar a conversa.');
@@ -2011,7 +2031,7 @@ document.addEventListener("DOMContentLoaded", () => {
             sendMessageBtn.style.pointerEvents = 'none';
             chatInput.disabled = true;
 
-            const { data, error } = await supabaseClient.rpc('send_private_message', {
+            const { data, error } = await callRpcWithRetry('send_private_message', {
                 conversation_id: currentOpenConversationId,
                 message_text:    messageText
             });

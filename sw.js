@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v22'; // v21: corrige caminho dos ícones de notificação (/icons/ -> /assets/)
+const CACHE_NAME = 'aden-rpg-assets-v23'; // v23: adiciona suporte ao campo "image" (banner grande) nas push notifications
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições
@@ -136,10 +136,15 @@ self.addEventListener('fetch', event => {
 });
 
 // =========================================================
-// >>> PUSH NOTIFICATIONS (infra pronta para os gatilhos futuros) <<<
+// >>> PUSH NOTIFICATIONS <<<
 // =========================================================
-// Quando o backend enviar um push (ex: "mineração concluída", "você foi
-// atacado", "nova mensagem privada"), este handler exibe a notificação.
+// Quando o backend enviar um push (mensagem privada, evento de horário
+// marcado, etc.), este handler exibe a notificação.
+//
+// payload esperado (todos os campos com fallback, exceto "image" que é opcional):
+// { title, body, url, image }
+// "image" é o banner grande (tipo YouTube/jogos) — se ausente, a notificação
+// aparece normalmente só com título + texto + ícone.
 self.addEventListener('push', event => {
     let payload = { title: 'Aden RPG Online', body: 'Você tem uma novidade no jogo!', url: '/index.html' };
 
@@ -158,6 +163,11 @@ self.addEventListener('push', event => {
         data: { url: payload.url || '/index.html' },
         vibrate: [100, 50, 100],
     };
+
+    // Banner grande (proporção 2:1, ex: 1024x512), opcional por evento.
+    if (payload.image) {
+        options.image = payload.image;
+    }
 
     event.waitUntil(self.registration.showNotification(payload.title, options));
 });

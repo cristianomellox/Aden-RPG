@@ -3765,6 +3765,14 @@ button, .btn {
     border-bottom: 1px solid var(--aaa-border-soft);
     max-height: none;
     flex-shrink: 0;
+    /* Fixa o cabeçalho (voltar + menu de 3 pontos) no topo mesmo com o
+       scroll da conversa — antes ele rolava junto com as mensagens e
+       ficava escondido em conversas longas. */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: var(--aaa-bg-panel);
+    background-image: var(--aaa-texture), linear-gradient(165deg, #211b10 0%, #120f09 55%, #0a0805 100%);
 }
 #pvModal #pv-back-to-list-btn {
     color: var(--aaa-gold-light);

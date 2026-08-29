@@ -350,22 +350,20 @@ function injectTradeStyles() {
 .pv-trade-msg-status.status-declined  { background: rgba(120,60,20,.3);  color: #e09060; border: 1px solid rgba(180,80,30,.3);  }
 .pv-trade-msg-status.status-expired   { background: rgba(60,60,60,.3);   color: #909090; border: 1px solid rgba(90,90,90,.3);   }
 .pv-trade-msg-status.status-pending   { background: rgba(80,40,140,.25); color: #b090e0; border: 1px solid rgba(120,60,200,.3); }
-.pv-trade-msg-actions { display: flex; gap: 8px; width: 100%; box-sizing: border-box; }
+.pv-trade-msg-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; box-sizing: border-box; }
 .pv-trade-action-btn {
-    flex: 1 1 0;
-    padding: 9px 6px; border: none; border-radius: 7px;
+    flex: 1 1 auto;
+    min-width: 100px;
+    padding: 9px 8px; border: none; border-radius: 7px;
     font-size: .8em; font-weight: bold; cursor: pointer;
     transition: opacity .15s, transform .1s;
     box-sizing: border-box; text-align: center;
-    /* "word-break: break-word" combinado com "flex: 1 1 0" fazia o texto
-       quebrar letra por letra em telas estreitas (o item de flex podia
-       encolher até a largura de 1 caractere). Com nowrap + ellipsis como
-       rede de segurança, o texto nunca quebra — só corta com "…" no
-       caso extremo de uma tela absurdamente estreita. */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.2;
+    /* min-width garante que o botão nunca fique menor que o texto some
+       confortavelmente; se não couber os dois lado a lado, o flex-wrap
+       do container acima joga o segundo botão pra uma nova linha em vez
+       de truncar ou quebrar letra por letra. */
+    white-space: normal;
+    line-height: 1.25;
 }
 .pv-trade-action-btn:active { transform: scale(.96); }
 .pv-trade-action-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -522,7 +520,7 @@ function injectTradeStyles() {
 
 /* ── CARD MENSAGEM DE PRESENTE ── */
 .pv-gift-msg {
-    width: 100%; max-width: 300px; min-width: 0; box-sizing: border-box;
+    width: 100%; max-width: 360px; min-width: 0; box-sizing: border-box;
     background: linear-gradient(140deg, #1a0d1a, #0e0718);
     border: 1px solid #7a3090; border-radius: 12px; overflow: hidden;
     box-shadow: 0 2px 16px rgba(120,30,160,.35); font-size: .85em;
@@ -546,11 +544,12 @@ function injectTradeStyles() {
 .pv-gift-status.status-declined  { background: rgba(120,60,20,.3);  color: #e09060; border: 1px solid rgba(180,80,30,.3);  }
 .pv-gift-status.status-expired   { background: rgba(60,60,60,.3);   color: #909090; border: 1px solid rgba(90,90,90,.3);   }
 .pv-gift-status.status-pending   { background: rgba(100,30,140,.25);color: #c060e0; border: 1px solid rgba(140,60,180,.3); }
-.pv-gift-actions { display: flex; gap: 8px; width: 100%; box-sizing: border-box; }
+.pv-gift-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; box-sizing: border-box; }
 .pv-gift-btn {
-    flex: 1 1 0; padding: 8px 6px; border: none; border-radius: 7px;
+    flex: 1 1 auto; min-width: 100px; padding: 8px 6px; border: none; border-radius: 7px;
     font-size: .82em; font-weight: bold; cursor: pointer;
     transition: opacity .15s, transform .1s; box-sizing: border-box; text-align: center;
+    white-space: normal; line-height: 1.25;
 }
 .pv-gift-btn:active  { transform: scale(.96); }
 .pv-gift-btn:disabled{ opacity: .4; cursor: not-allowed; }
@@ -1444,6 +1443,7 @@ document.addEventListener("DOMContentLoaded", () => {
             msgDiv.classList.add(msg.sender_id === currentPlayer.id ? 'sent' : 'received');
 
             if (msg.text === '__TRADE__' && msg.trade_id != null) {
+                msgDiv.classList.add('chat-message-rich');
                 const tradeHtml = buildTradeMessageHtml(msg, tradeStatuses);
                 msgDiv.innerHTML = tradeHtml;
                 const tradeId  = Number(msg.trade_id);
@@ -1457,6 +1457,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (cancelBtn  && footer) cancelBtn.addEventListener('click',  () => handleCancelTrade(tradeId, msg.trade_item_id, msg.trade_quantity, footer, true));
 
             } else if (msg.text === '__GIFT__' && msg.gift_id != null) {
+                msgDiv.classList.add('chat-message-rich');
                 msgDiv.innerHTML = buildGiftMessageHtml(msg, giftStatuses);
                 const giftId  = Number(msg.gift_id);
                 const footer  = msgDiv.querySelector('.pv-gift-msg-footer');

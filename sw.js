@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v23'; // v23: adiciona suporte ao campo "image" (banner grande) nas push notifications
+const CACHE_NAME = 'aden-rpg-assets-v24'; // v24: ícone da notificação pode vir do payload ("icon", ex: avatar de quem mandou a mensagem)
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições
@@ -141,10 +141,12 @@ self.addEventListener('fetch', event => {
 // Quando o backend enviar um push (mensagem privada, evento de horário
 // marcado, etc.), este handler exibe a notificação.
 //
-// payload esperado (todos os campos com fallback, exceto "image" que é opcional):
-// { title, body, url, image }
+// payload esperado (todos os campos com fallback, "image" e "icon" opcionais):
+// { title, body, url, image, icon }
 // "image" é o banner grande (tipo YouTube/jogos) — se ausente, a notificação
 // aparece normalmente só com título + texto + ícone.
+// "icon" é o ícone quadrado exibido no corpo da notificação (ex: avatar de
+// quem mandou a mensagem privada) — se ausente, usa o ícone padrão do jogo.
 self.addEventListener('push', event => {
     let payload = { title: 'Aden RPG Online', body: 'Você tem uma novidade no jogo!', url: '/index.html' };
 
@@ -158,7 +160,10 @@ self.addEventListener('push', event => {
 
     const options = {
         body: payload.body,
-        icon: '/assets/notification-icon-192.png', // ícone maior exibido no corpo da notificação
+        // Ícone maior exibido no corpo da notificação. Se o payload trouxer
+        // um "icon" (ex: avatar de quem enviou a mensagem privada), usamos
+        // ele; senão cai no ícone padrão do jogo.
+        icon: payload.icon || '/assets/notification-icon-192.png',
         badge: '/assets/badge-icon.png',            // ícone pequeno da status bar (Android tinge de branco/tema)
         data: { url: payload.url || '/index.html' },
         vibrate: [100, 50, 100],

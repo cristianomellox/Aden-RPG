@@ -290,7 +290,7 @@ function injectTradeStyles() {
 
 /* ── MENSAGEM DE TRADE NO CHAT ── */
 .pv-trade-msg {
-    width: 100%; max-width: 300px;
+    width: 100%; max-width: 360px;
     min-width: 0;
     box-sizing: border-box;
     background: linear-gradient(140deg, #1a0d2e, #0e0720);
@@ -353,11 +353,18 @@ function injectTradeStyles() {
 .pv-trade-msg-actions { display: flex; gap: 8px; width: 100%; box-sizing: border-box; }
 .pv-trade-action-btn {
     flex: 1 1 0;
-    padding: 8px 6px; border: none; border-radius: 7px;
-    font-size: .82em; font-weight: bold; cursor: pointer;
+    padding: 9px 6px; border: none; border-radius: 7px;
+    font-size: .8em; font-weight: bold; cursor: pointer;
     transition: opacity .15s, transform .1s;
     box-sizing: border-box; text-align: center;
-    white-space: normal; word-break: break-word;
+    /* "word-break: break-word" combinado com "flex: 1 1 0" fazia o texto
+       quebrar letra por letra em telas estreitas (o item de flex podia
+       encolher até a largura de 1 caractere). Com nowrap + ellipsis como
+       rede de segurança, o texto nunca quebra — só corta com "…" no
+       caso extremo de uma tela absurdamente estreita. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     line-height: 1.2;
 }
 .pv-trade-action-btn:active { transform: scale(.96); }

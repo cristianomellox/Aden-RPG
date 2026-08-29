@@ -3846,6 +3846,12 @@ button, .btn {
     line-height: 1.4;
     box-shadow: 0 3px 8px rgba(0,0,0,0.35);
 }
+/* Cards de troca/presente têm mais conteúdo (item, preço, botões) do que uma
+   bolha de texto normal — 75% de largura espremia demais e cortava o texto
+   dos botões. Essas mensagens usam a classe .chat-message-rich (ver pv.js). */
+#pvModal .chat-message.chat-message-rich {
+    max-width: 94%;
+}
 #pvModal .chat-message.sent {
     background: linear-gradient(135deg, #6b4d10, var(--aaa-gold-dark));
     color: #fdf3d8;

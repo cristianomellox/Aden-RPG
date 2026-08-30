@@ -69,8 +69,18 @@ function syncSelectorWithCookie() {
 // ======================================================================
 // 5. Trocar idioma via cookies
 // ======================================================================
+// Espera uma Promise, mas nunca por mais que `ms` — usado pra garantir que
+// o reload sempre acontece, mesmo se a gravação no banco travar por algum
+// motivo (rede lenta, etc).
+function withTimeout(promise, ms) {
+    return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(resolve, ms)),
+    ]);
+}
+
 // Exposta globalmente para ser usada pelo Modal de Intro
-window.changeLanguage = function(lang) {
+window.changeLanguage = async function(lang) {
     if (lang === DEFAULT_LANG) {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
@@ -82,16 +92,19 @@ window.changeLanguage = function(lang) {
 
     // Também salva o idioma no banco (players.language) — é o que o worker
     // de push usa pra traduzir as notificações, já que ele roda fora do
-    // navegador e não tem acesso a cookie nenhum. Best-effort: se o
-    // jogador ainda não estiver logado ou a página não tiver o
-    // supabaseClient carregado, só ignora — a tradução da página em si
-    // continua funcionando normalmente via cookie, só as notificações
-    // ficam sem sincronizar até ele logar.
+    // navegador e não tem acesso a cookie nenhum. IMPORTANTE: precisa
+    // terminar ANTES do reload, senão o navegador cancela a requisição no
+    // meio (é exatamente o que estava acontecendo). Best-effort: se o
+    // jogador ainda não estiver logado, a página não tiver o
+    // supabaseClient carregado, ou a gravação demorar mais que 2.5s, só
+    // segue com o reload mesmo assim — a tradução da PÁGINA continua
+    // funcionando via cookie de qualquer jeito, só as notificações ficam
+    // sem sincronizar até uma próxima troca de idioma bem-sucedida.
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.rpc) {
-            supabaseClient.rpc('set_player_language', { p_lang: lang }).catch(() => {});
+            await withTimeout(supabaseClient.rpc('set_player_language', { p_lang: lang }), 2500);
         }
-    } catch (_) { /* supabaseClient indisponível nesta página */ }
+    } catch (_) { /* segue mesmo assim */ }
 
     window.location.reload();
 }

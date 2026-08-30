@@ -2953,6 +2953,23 @@ button, .btn {
     z-index: 1000;
 }
 
+/* Botão de configurações — canto superior esquerdo da topbar, sobre o avatar */
+#topBarConfigBtn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 20px;
+    z-index: 10001;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Nome do jogador também abre o modal de conta (mesmo comportamento do avatar) */
+#playerNameText {
+    cursor: pointer;
+}
+
 #footerMenu {
     background-color: var(--iron-dark) !important;
     background-image: 
@@ -3132,6 +3149,82 @@ button, .btn {
     margin: 6px 0 4px;
     text-align: center;
     line-height: 1.4;
+}
+
+/* ══════════════ MODAL: PREFERÊNCIAS DE NOTIFICAÇÕES ══════════════ */
+#notifPrefsModal.modal {
+    background: rgba(4,3,1,0.86);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    margin-top: 0;
+}
+.notif-prefs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 18px;
+}
+.notif-pref-item {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid var(--aaa-border-soft) !important;
+    border-radius: 10px;
+    padding: 13px 14px !important;
+    color: #e8dfc4 !important;
+    font-weight: 600;
+    font-size: 0.85em !important;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s;
+    box-sizing: border-box;
+}
+.notif-pref-item:hover {
+    background: rgba(201,169,74,0.12) !important;
+    border-color: var(--aaa-border) !important;
+}
+.notif-pref-label { flex-grow: 1; padding-right: 10px; }
+.notif-pref-check-wrap {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.notif-pref-checkbox {
+    position: absolute;
+    inset: 0;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+.notif-pref-check-box {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--aaa-border-soft);
+    background: rgba(0,0,0,0.35);
+    color: transparent;
+    font-size: 0.9em;
+    font-weight: 900;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.notif-pref-checkbox:checked ~ .notif-pref-check-box {
+    background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark));
+    border-color: var(--aaa-gold);
+    color: #241a05;
+}
+.notif-pref-checkbox:disabled ~ .notif-pref-check-box {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ══════════════ MODAL DE CONTA (avatar da topbar) ══════════════ */
@@ -3845,12 +3938,6 @@ button, .btn {
     font-size: 0.88em;
     line-height: 1.4;
     box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-}
-/* Cards de troca/presente têm mais conteúdo (item, preço, botões) do que uma
-   bolha de texto normal — 75% de largura espremia demais e cortava o texto
-   dos botões. Essas mensagens usam a classe .chat-message-rich (ver pv.js). */
-#pvModal .chat-message.chat-message-rich {
-    max-width: 94%;
 }
 #pvModal .chat-message.sent {
     background: linear-gradient(135deg, #6b4d10, var(--aaa-gold-dark));

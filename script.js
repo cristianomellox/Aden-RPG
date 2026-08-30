@@ -2180,38 +2180,49 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
 
 
 
-// --- Modal de avatar ---
-document.addEventListener('DOMContentLoaded', () => {
-    const avatar = document.getElementById('playerAvatar');
+// --- Modal de avatar / conta (abre pelo avatar, nome ou botão de config) ---
+function openPlayerInfoModal() {
     const modal = document.getElementById('playerInfoModal');
     const modalContent = document.getElementById('modalPlayerInfoContent');
+    if (!modal || !modalContent || !playerInfoDiv) return;
+
+    modalContent.innerHTML = playerInfoDiv.innerHTML;
+    modal.style.display = 'flex';
+    const modalEditProfileBtn = modal.querySelector('#editProfileBtn');
+    if (modalEditProfileBtn) {
+        modalEditProfileBtn.onclick = () => {
+            modal.style.display = 'none';
+            document.getElementById('editProfileIcon').click();
+        };
+    }
+    const modalSignOutBtn = modal.querySelector('#signOutBtn');
+    if (modalSignOutBtn) {
+        modalSignOutBtn.onclick = () => {
+            modal.style.display = 'none';
+            signOut();
+        };
+    }
+    const modalChangePasswordBtn = modal.querySelector('#changePasswordBtn');
+    if (modalChangePasswordBtn) {
+        modalChangePasswordBtn.onclick = () => {
+            modal.style.display = 'none';
+            openChangePasswordModal();
+        };
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const avatar = document.getElementById('playerAvatar');
+    const nameText = document.getElementById('playerNameText');
+    const configBtn = document.getElementById('topBarConfigBtn');
+    const modal = document.getElementById('playerInfoModal');
     const closeBtn = document.getElementById('closePlayerInfoBtn');
-    if (avatar && modal && closeBtn && modalContent && playerInfoDiv) {
-        avatar.addEventListener('click', () => {
-            modalContent.innerHTML = playerInfoDiv.innerHTML;
-            modal.style.display = 'flex';
-            const modalEditProfileBtn = modal.querySelector('#editProfileBtn');
-            if (modalEditProfileBtn) {
-                modalEditProfileBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    document.getElementById('editProfileIcon').click();
-                };
-            }
-            const modalSignOutBtn = modal.querySelector('#signOutBtn');
-            if (modalSignOutBtn) {
-                modalSignOutBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    signOut();
-                };
-            }
-            const modalChangePasswordBtn = modal.querySelector('#changePasswordBtn');
-            if (modalChangePasswordBtn) {
-                modalChangePasswordBtn.onclick = () => {
-                    modal.style.display = 'none';
-                    openChangePasswordModal();
-                };
-            }
-        });
+
+    if (avatar) avatar.addEventListener('click', openPlayerInfoModal);
+    if (nameText) nameText.addEventListener('click', openPlayerInfoModal);
+    if (configBtn) configBtn.addEventListener('click', openPlayerInfoModal);
+
+    if (modal && closeBtn) {
         closeBtn.addEventListener('click', () => {
             modal.style.display = 'none';
         });
@@ -2221,7 +2232,79 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- Modal de Alterar Senha (acessível pelo menu de conta) ---
+// --- Modal de Preferências de Notificações Push (menu Opções > Notificações) ---
+async function openNotifPrefsModal() {
+    const modal = document.getElementById('notifPrefsModal');
+    const msgEl = document.getElementById('notifPrefsMsg');
+    if (!modal) return;
+
+    // Fecha o submenu de opções, se estiver aberto
+    const maisSubmenu = document.getElementById('maisSubmenu');
+    if (maisSubmenu) maisSubmenu.style.display = 'none';
+
+    modal.style.display = 'flex';
+    if (msgEl) { msgEl.style.color = '#aaa'; msgEl.textContent = 'Carregando...'; }
+
+    const checkboxes = modal.querySelectorAll('.notif-pref-checkbox');
+    checkboxes.forEach(cb => { cb.disabled = true; });
+
+    try {
+        const { data, error } = await supabaseClient.rpc('get_notification_preferences');
+        if (error || !data || data.success === false) {
+            throw new Error((data && data.error) || (error && error.message) || 'Erro ao carregar preferências');
+        }
+        checkboxes.forEach(cb => {
+            const key = cb.dataset.pref;
+            cb.checked = data[key] !== false; // default: marcado (recebendo)
+            cb.disabled = false;
+        });
+        if (msgEl) msgEl.textContent = '';
+    } catch (err) {
+        console.error('Erro ao carregar preferências de notificação:', err);
+        // Fallback: mantém tudo marcado por padrão, mas libera a interação
+        checkboxes.forEach(cb => { cb.checked = true; cb.disabled = false; });
+        if (msgEl) { msgEl.style.color = '#e55'; msgEl.textContent = 'Não foi possível carregar suas preferências salvas.'; }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('notifPrefsModal');
+    const closeBtn = document.getElementById('closeNotifPrefsBtn');
+    const msgEl = document.getElementById('notifPrefsMsg');
+    if (!modal) return;
+
+    closeBtn && closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    modal.querySelectorAll('.notif-pref-checkbox').forEach(cb => {
+        cb.addEventListener('change', async () => {
+            const key = cb.dataset.pref;
+            const enabled = cb.checked;
+            cb.disabled = true;
+            if (msgEl) { msgEl.style.color = '#aaa'; msgEl.textContent = 'Salvando...'; }
+            try {
+                const { data, error } = await supabaseClient.rpc('set_notification_preference', {
+                    p_key: key,
+                    p_enabled: enabled
+                });
+                if (error || !data || data.success === false) {
+                    throw new Error((data && data.error) || (error && error.message) || 'Erro ao salvar');
+                }
+                if (msgEl) { msgEl.style.color = '#7dc97d'; msgEl.textContent = '✅ Preferência salva.'; }
+            } catch (err) {
+                console.error('Erro ao salvar preferência de notificação:', err);
+                cb.checked = !enabled; // reverte visualmente
+                if (msgEl) { msgEl.style.color = '#e55'; msgEl.textContent = 'Não foi possível salvar. Tente novamente.'; }
+            } finally {
+                cb.disabled = false;
+            }
+        });
+    });
+});
+
+
 function openChangePasswordModal() {
     const modal = document.getElementById('changePasswordModal');
     if (!modal) return;

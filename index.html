@@ -53,6 +53,7 @@
 <body>
   <div id="floatingMessage" style="display: none;"></div>
 <div id="playerTopBar">
+<img id="topBarConfigBtn" src="/assets/config.webp" alt="Configurações" title="Configurações"/>
 <div id="playerAvatarContainer">
 <img alt="Avatar" id="playerAvatar" src=""/>
 <span id="playerLevel">Nv. 1</span>
@@ -422,6 +423,7 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 </div>
 <div id="maisSubmenu" class="footer-submenu" style="display:none;">
   
+   <div id="btnNotifPrefs" onclick="openNotifPrefsModal()" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/notif.webp" class="submenu-icon">Notificações</div>
    <div onclick="window.location.href = 'tutorial.html'" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/tutorial.webp" class="submenu-icon">Tutorial</div>
   <div href="javascript:void(0)" id="musicToggleBtn" class="footer-submenu-btn"><img src="https://aden-rpg.pages.dev/assets/bmg.webp" class="submenu-icon">
     <p id="musicIcon">Músicas ON/OFF</p></div>
@@ -1148,6 +1150,50 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 </button>
 <div id="modalPlayerInfoContent"></div>
 </div>
+</div>
+
+<!-- ══ MODAL: PREFERÊNCIAS DE NOTIFICAÇÕES PUSH ══ -->
+<div class="modal" id="notifPrefsModal" style="display:none;">
+  <div class="aaa-account-box">
+    <button id="closeNotifPrefsBtn" class="aaa-modal-close" aria-label="Fechar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="acc-modal-header">
+      <p class="acc-modal-name">🔔 Notificações</p>
+      <p class="aaa-modal-subtitle">Escolha quais avisos push você quer receber.</p>
+    </div>
+    <div id="notifPrefsList" class="notif-prefs-list">
+      <label class="notif-pref-item">
+        <span class="notif-pref-label">Mensagens privadas</span>
+        <span class="notif-pref-check-wrap">
+          <input type="checkbox" class="notif-pref-checkbox" id="notifPref_private_message" data-pref="private_message">
+          <span class="notif-pref-check-box">✔</span>
+        </span>
+      </label>
+      <label class="notif-pref-item">
+        <span class="notif-pref-label">Mineração (nova sessão)</span>
+        <span class="notif-pref-check-wrap">
+          <input type="checkbox" class="notif-pref-checkbox" id="notifPref_mining" data-pref="mining">
+          <span class="notif-pref-check-box">✔</span>
+        </span>
+      </label>
+      <label class="notif-pref-item">
+        <span class="notif-pref-label">Instâncias (Ruínas Ancestrais)</span>
+        <span class="notif-pref-check-wrap">
+          <input type="checkbox" class="notif-pref-checkbox" id="notifPref_ruins" data-pref="ruins">
+          <span class="notif-pref-check-box">✔</span>
+        </span>
+      </label>
+      <label class="notif-pref-item">
+        <span class="notif-pref-label">Batalha de guilda (inscrição e início)</span>
+        <span class="notif-pref-check-wrap">
+          <input type="checkbox" class="notif-pref-checkbox" id="notifPref_guild_battle" data-pref="guild_battle">
+          <span class="notif-pref-check-box">✔</span>
+        </span>
+      </label>
+    </div>
+    <p id="notifPrefsMsg" class="aaa-modal-message"></p>
+  </div>
 </div>
 
 <!-- ══ MODAL: ALTERAR SENHA DA CONTA ══ -->

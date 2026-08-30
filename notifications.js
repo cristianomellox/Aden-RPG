@@ -232,6 +232,34 @@
   }
 
   // ─────────────────────────────────────────────
+  // Rastreio do último estado de permissão conhecido (persiste entre sessões
+  // no localStorage — a Notification API não avisa "acabou de mudar de X pra
+  // granted", só dá o estado atual). Usado pra saber se um "granted" agora é
+  // uma ativação NOVA (primeira vez, ou reativação depois de ter desligado)
+  // ou só o estado de sempre se repetindo — só no primeiro caso abrimos o
+  // modal de preferências.
+  // ─────────────────────────────────────────────
+  const PERMISSION_STATE_KEY = 'aden_notif_last_permission_state';
+
+  function getLastKnownPermissionState() {
+    try { return localStorage.getItem(PERMISSION_STATE_KEY); } catch (_) { return null; }
+  }
+
+  function setLastKnownPermissionState(state) {
+    try { localStorage.setItem(PERMISSION_STATE_KEY, state); } catch (_) {}
+  }
+
+  // Abre o modal de preferências de notificação (definido em script.js, no
+  // index — mesmo modal do menu Opções → Notificações). Se ainda não tiver
+  // carregado por algum motivo, falha em silêncio: o jogador sempre pode
+  // abrir manualmente depois pelo menu.
+  function openPrefsModalAfterFreshGrant() {
+    if (typeof window.openNotifPrefsModal === 'function') {
+      try { window.openNotifPrefsModal(); } catch (e) { console.warn('[Notif] Falha ao abrir modal de preferências:', e); }
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // Pedido de permissão + recompensa + inscrição no push
   // ─────────────────────────────────────────────
   async function requestPermissionFlow() {
@@ -245,8 +273,15 @@
     }
 
     if (result === 'granted') {
+      const wasGrantedBefore = getLastKnownPermissionState() === 'granted';
       await grantRewardIfFirstTime();
-      subscribeToPush().catch(e => console.warn('[Notif] push subscribe falhou (normal se VAPID ainda não configurado):', e));
+      await subscribeToPush().catch(e => console.warn('[Notif] push subscribe falhou (normal se VAPID ainda não configurado):', e));
+      setLastKnownPermissionState('granted');
+      // Primeira vez OU reativação depois de ter desligado: deixa o jogador
+      // já escolher o que quer receber.
+      if (!wasGrantedBefore) openPrefsModalAfterFreshGrant();
+    } else {
+      setLastKnownPermissionState(result);
     }
     // Se negou ou fechou sem decidir: nada a fazer agora. Na próxima entrada
     // no index o fluxo roda de novo (mostra o tutorial de desbloqueio se negou).
@@ -385,9 +420,14 @@
   async function recheckPermission() {
     if (!supportsNotifications()) return;
     if (Notification.permission === 'granted') {
+      const wasGrantedBefore = getLastKnownPermissionState() === 'granted';
       closeAnyOpenModal();
       await grantRewardIfFirstTime();
-      subscribeToPush().catch(() => {});
+      await subscribeToPush().catch(() => {});
+      setLastKnownPermissionState('granted');
+      if (!wasGrantedBefore) openPrefsModalAfterFreshGrant();
+    } else {
+      setLastKnownPermissionState(Notification.permission);
     }
   }
 

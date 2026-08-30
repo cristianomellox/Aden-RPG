@@ -90,21 +90,20 @@ window.changeLanguage = async function(lang) {
         document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
     }
 
-    // Também salva o idioma no banco (players.language) — é o que o worker
-    // de push usa pra traduzir as notificações, já que ele roda fora do
-    // navegador e não tem acesso a cookie nenhum. IMPORTANTE: precisa
-    // terminar ANTES do reload, senão o navegador cancela a requisição no
-    // meio (é exatamente o que estava acontecendo). Best-effort: se o
-    // jogador ainda não estiver logado, a página não tiver o
-    // supabaseClient carregado, ou a gravação demorar mais que 2.5s, só
-    // segue com o reload mesmo assim — a tradução da PÁGINA continua
-    // funcionando via cookie de qualquer jeito, só as notificações ficam
-    // sem sincronizar até uma próxima troca de idioma bem-sucedida.
+    // >>> DEBUG TEMPORÁRIO — mostra na tela o resultado real da chamada,
+    // já que não dá pra abrir o console no celular. Remover depois de
+    // descobrir o problema (ver comentário mais abaixo, antes do reload).
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.rpc) {
-            await withTimeout(supabaseClient.rpc('set_player_language', { p_lang: lang }), 2500);
+            const result = await withTimeout(supabaseClient.rpc('set_player_language', { p_lang: lang }), 2500);
+            alert('DEBUG set_player_language:\n' + JSON.stringify(result, null, 2));
+        } else {
+            alert('DEBUG: supabaseClient não está definido nesta página (typeof = ' + typeof supabaseClient + ')');
         }
-    } catch (_) { /* segue mesmo assim */ }
+    } catch (err) {
+        alert('DEBUG: erro ao chamar set_player_language:\n' + (err && err.message ? err.message : String(err)));
+    }
+    // >>> FIM DO DEBUG TEMPORÁRIO <<<
 
     window.location.reload();
 }

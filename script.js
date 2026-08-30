@@ -387,27 +387,38 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.appendChild(modal);
 
         // --- Ação do Botão Confirmar ---
-        okBtn.addEventListener('click', function(ev) {
+        okBtn.addEventListener('click', async function(ev) {
             ev.stopPropagation();
+            okBtn.disabled = true;
 
-            // 1. Aplica o Cookie de Tradução
-            if (selectedLang !== 'pt') {
-                const cookieValue = `/pt/${selectedLang}`;
-                const domain = window.location.hostname;
-                document.cookie = `googtrans=${cookieValue}; path=/;`;
-                document.cookie = `googtrans=${cookieValue}; domain=.${domain}; path=/;`;
-            } else {
-                // Limpa cookie se for PT
-                document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+            // window.changeLanguage (auto_translate.js) cuida do cookie E do
+            // salvamento em players.language (usado pelo worker de push pra
+            // traduzir notificações) — precisa terminar ANTES de prosseguir,
+            // senão a gravação no banco corre risco de ser cortada pelo reload.
+            if (typeof window.changeLanguage !== 'function') {
+                console.warn('[Idioma] window.changeLanguage não disponível — auto_translate.js carregou?');
             }
 
-            // 2. Decide o fluxo (Update vs Intro)
             if (isUpdateMode) {
-                // Modo Update: Apenas recarrega para aplicar a tradução
-                window.location.reload();
+                // Modo Update: window.changeLanguage já salva e recarrega.
+                if (typeof window.changeLanguage === 'function') {
+                    await window.changeLanguage(selectedLang);
+                } else {
+                    // Fallback (não deveria acontecer): pelo menos aplica o cookie e recarrega.
+                    window.location.reload();
+                }
             } else {
-                // Modo Intro: Inicia música/vídeo
+                // Modo Intro: salva o idioma (sem recarregar — o vídeo/música
+                // começa em seguida) e só então segue o fluxo normal.
+                if (typeof window.changeLanguage === 'function') {
+                    await window.changeLanguage(selectedLang, /* skipReload */ true);
+                } else if (selectedLang !== 'pt') {
+                    // Fallback: pelo menos o cookie, se o outro script não carregou.
+                    const cookieValue = `/pt/${selectedLang}`;
+                    document.cookie = `googtrans=${cookieValue}; path=/;`;
+                    document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
+                }
+
                 if (typeof window.startBackgroundMusic === 'function') {
                     window.startBackgroundMusic(true);
                 }

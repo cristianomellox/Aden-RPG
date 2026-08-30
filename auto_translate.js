@@ -79,8 +79,13 @@ function withTimeout(promise, ms) {
     ]);
 }
 
-// Exposta globalmente para ser usada pelo Modal de Intro
-window.changeLanguage = async function(lang) {
+// Exposta globalmente — usada tanto pelo seletor #languageSelector (se
+// existir na página) quanto pelo Modal de Idioma em script.js
+// (window.openLanguageModal, tanto no Intro quanto no botão "Idioma" do
+// menu Opções). skipReload=true é usado pelo fluxo de Intro, que não
+// recarrega a página (só inicia o vídeo de abertura) — mesmo assim o
+// idioma precisa ser salvo no banco antes de prosseguir.
+window.changeLanguage = async function(lang, skipReload) {
     if (lang === DEFAULT_LANG) {
         document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = `googtrans=; domain=.${window.location.hostname}; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
@@ -105,7 +110,7 @@ window.changeLanguage = async function(lang) {
     }
     // >>> FIM DO DEBUG TEMPORÁRIO <<<
 
-    window.location.reload();
+    if (!skipReload) window.location.reload();
 }
 
 // ======================================================================

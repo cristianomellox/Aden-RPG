@@ -79,6 +79,20 @@ window.changeLanguage = function(lang) {
         document.cookie = `googtrans=${cookieValue}; path=/;`;
         document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
     }
+
+    // Também salva o idioma no banco (players.language) — é o que o worker
+    // de push usa pra traduzir as notificações, já que ele roda fora do
+    // navegador e não tem acesso a cookie nenhum. Best-effort: se o
+    // jogador ainda não estiver logado ou a página não tiver o
+    // supabaseClient carregado, só ignora — a tradução da página em si
+    // continua funcionando normalmente via cookie, só as notificações
+    // ficam sem sincronizar até ele logar.
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.rpc) {
+            supabaseClient.rpc('set_player_language', { p_lang: lang }).catch(() => {});
+        }
+    } catch (_) { /* supabaseClient indisponível nesta página */ }
+
     window.location.reload();
 }
 

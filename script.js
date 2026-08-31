@@ -1489,6 +1489,67 @@ async function signOut() {
     window.location.reload();
 }
 
+// === Animação da barra de EXP (apenas apresentação visual) ===
+// Detecta quando o valor de EXP aumenta e anima o preenchimento da barra
+// lentamente, com brilho, parando ao terminar. No primeiro carregamento
+// (ou antes da página estar totalmente pronta) o valor é apenas aplicado
+// direto, sem animação, para não rodar algo que o jogador ainda não vê.
+let __xpBarLastPercent = null;
+let __xpBarPageFullyLoaded = (document.readyState === 'complete');
+window.addEventListener('load', () => { __xpBarPageFullyLoaded = true; });
+
+function updateXpBar(xpPercent, xpLabel) {
+    const container = document.getElementById('xpBarContainer');
+    const xpBar = document.getElementById('xpBar');
+    const xpTextEl = document.getElementById('xpText');
+    if (!container || !xpBar || !xpTextEl) return;
+
+    const clampedPercent = Math.max(0, Math.min(100, xpPercent));
+
+    const applyInstant = () => {
+        xpBar.style.transition = 'none';
+        xpBar.style.width = `${clampedPercent}%`;
+        // Força reflow para garantir que a próxima transição funcione normalmente
+        void xpBar.offsetWidth;
+        xpBar.style.transition = '';
+        xpTextEl.textContent = xpLabel;
+        container.classList.remove('xp-filling');
+        __xpBarLastPercent = clampedPercent;
+    };
+
+    // Primeira renderização (ou página ainda carregando): aplica direto, sem animação
+    if (__xpBarLastPercent === null || !__xpBarPageFullyLoaded) {
+        applyInstant();
+        return;
+    }
+
+    // Sem crescimento real (diminuiu, ex.: novo nível reiniciando a barra) — aplica direto
+    if (clampedPercent <= __xpBarLastPercent) {
+        applyInstant();
+        return;
+    }
+
+    // Houve ganho de EXP: anima o crescimento lentamente com brilho
+    const delta = clampedPercent - __xpBarLastPercent;
+    const duration = Math.min(2.4, Math.max(0.9, delta / 100 * 3.2)); // 0.9s ~ 2.4s
+
+    xpTextEl.textContent = xpLabel;
+    container.classList.add('xp-filling');
+    xpBar.style.transition = `width ${duration}s ease-in-out`;
+    // Garante que o navegador registre o estado anterior antes de mudar
+    void xpBar.offsetWidth;
+    xpBar.style.width = `${clampedPercent}%`;
+
+    const onTransitionEnd = (e) => {
+        if (e.propertyName !== 'width') return;
+        xpBar.removeEventListener('transitionend', onTransitionEnd);
+        container.classList.remove('xp-filling');
+    };
+    xpBar.addEventListener('transitionend', onTransitionEnd);
+
+    __xpBarLastPercent = clampedPercent;
+}
+
 // Função helper para renderizar a UI com os dados do jogador
 // ALTERADO: Removidos stats detalhados (Atk, Def, HP, Crit, Evasão)
 // Apenas exibe Nome, Facção e Botões
@@ -1536,8 +1597,7 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
     document.getElementById('playerCrystals').innerHTML = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 17px; height: 17px; vertical-align: -4px;"> ${formatNumberCompact(player.crystals)}`;
     const xpPercent = Math.min(100, Math.floor((player.xp / player.xp_needed_for_level) * 100));
     document.getElementById('xpBarContainer').style.display = 'flex';
-    document.getElementById('xpBar').style.width = `${xpPercent}%`;
-    document.getElementById('xpText').textContent = `${player.xp} / ${player.xp_needed_for_level}`;
+    updateXpBar(xpPercent, `${player.xp} / ${player.xp_needed_for_level}`);
     document.getElementById('playerTopBar').style.display = 'flex';
     if (welcomeContainer && player && player.name) {
         welcomeContainer.innerHTML = `
@@ -2904,6 +2964,201 @@ function closeProgressionModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+    closeMissionDetailPopover();
+}
+
+/**
+ * ══════════════════════════════════════════════════════════════════
+ * Renderização do modal de Progressão — versão "cards de conquista"
+ * Mostra TODAS as missões de cada categoria (não só a atual), separadas
+ * visualmente em "Concluídas" e "Pendentes/Bloqueadas", com clique para
+ * abrir um card flutuante com a descrição completa. A lógica de resgate
+ * (handleProgressionClaim / checkMiscRequirement / RPC) não foi alterada.
+ * ══════════════════════════════════════════════════════════════════
+ */
+
+// Cache em memória dos dados de cada missão renderizada, usado pelo popover
+// de detalhes ao clicar em um card (evita reprocessar/reconsultar nada).
+let __progressionMissionCache = {};
+
+const PROG_CATEGORY_META = {
+    level: {
+        title: 'Progresso de Nível',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>'
+    },
+    afk: {
+        title: 'Progresso de Aventura (AFK)',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M3 20l6-14 4 9 3-6 5 11"/></svg>'
+    },
+    misc: {
+        title: 'Missões Diversas',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6l-6-4.4h7.6z"/></svg>'
+    }
+};
+
+/**
+ * Retorna {current, required} para a barra de progresso de uma missão,
+ * ou null quando a categoria não tem um valor numérico comparável (misc).
+ */
+function getMissionProgressInfo(categoryKey, mission, player) {
+    if (categoryKey === 'level') {
+        return { current: player.level || 0, required: mission.req };
+    }
+    if (categoryKey === 'afk') {
+        return { current: player.current_afk_stage || 0, required: mission.req };
+    }
+    return null;
+}
+
+function buildMissionRewardLabel(mission) {
+    if (mission.crystals !== undefined) return `x${mission.qty}`;
+    if (mission.gold !== undefined) return `x${mission.qty}`;
+    return `x${mission.qty}`;
+}
+
+/**
+ * Monta o HTML de um card de missão (usado tanto para a missão ativa quanto
+ * para as futuras/bloqueadas). completed=true gera o mini-badge da tira de
+ * concluídas em vez de um card grande.
+ */
+function renderMissionCardHTML(categoryKey, idx, mission, status, progressInfo, canClaim) {
+    const key = `${categoryKey}-${idx}`;
+    const rewardLabel = buildMissionRewardLabel(mission);
+
+    let progressHTML = '';
+    if (progressInfo && (status === 'active' || status === 'locked')) {
+        const pct = Math.max(0, Math.min(100, Math.round((progressInfo.current / progressInfo.required) * 100)));
+        progressHTML = `
+            <div class="mission-card-progress-bar"><div class="mission-card-progress-fill" style="width:${pct}%;"></div></div>
+            <span class="mission-card-progress-text">${Math.min(progressInfo.current, progressInfo.required)} / ${progressInfo.required}</span>
+        `;
+    }
+
+    let statusIconHTML = '';
+    let actionsHTML = '';
+    if (status === 'active') {
+        statusIconHTML = canClaim
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+        actionsHTML = `
+            <div class="mission-actions">
+                <button class="claim-btn" data-category="${categoryKey}" ${canClaim ? '' : 'disabled'}>
+                    Resgatar
+                </button>
+            </div>
+        `;
+    } else if (status === 'locked') {
+        statusIconHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+    }
+
+    return `
+        <div class="mission-card status-${status}${status === 'active' && canClaim ? ' claimable' : ''}" data-mission-key="${key}">
+            <div class="mission-reward">
+                <img src="${mission.img}" alt="Recompensa">
+                <span>${rewardLabel}</span>
+            </div>
+            <div class="mission-details">
+                <p>${mission.desc}</p>
+                ${progressHTML}
+            </div>
+            ${status === 'locked' ? `<div class="mission-status-icon">${statusIconHTML}</div>` : ''}
+            ${actionsHTML}
+        </div>
+    `;
+}
+
+function renderMiniBadgeHTML(categoryKey, idx, mission) {
+    const key = `${categoryKey}-${idx}`;
+    return `
+        <div class="mini-badge" data-mission-key="${key}" title="${mission.desc}">
+            <img src="${mission.img}" alt="Recompensa">
+            <span class="mini-badge-check">✓</span>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza um bloco completo de categoria (título, contador, tira de
+ * concluídas e trilha de pendentes/bloqueadas) e devolve o elemento pronto.
+ */
+async function renderProgressionCategoryBlock(categoryKey, player, state) {
+    const defs = mission_definitions[categoryKey];
+    const stateIndex = state[categoryKey] || 0;
+    const meta = PROG_CATEGORY_META[categoryKey];
+
+    const block = document.createElement('div');
+    block.className = 'prog-category-block';
+
+    const completedCount = Math.min(stateIndex, defs.length);
+    block.innerHTML = `
+        <div class="prog-category-header">
+            <div class="prog-category-icon">${meta.icon}</div>
+            <div class="prog-category-title">${meta.title}</div>
+            <div class="prog-count-badge">${completedCount}/${defs.length}</div>
+        </div>
+    `;
+
+    // --- Concluídas (tira de mini-badges) ---
+    if (completedCount > 0) {
+        const completedLabel = document.createElement('div');
+        completedLabel.className = 'prog-subsection-label completed-label';
+        completedLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Concluídas`;
+        block.appendChild(completedLabel);
+
+        const strip = document.createElement('div');
+        strip.className = 'prog-completed-strip';
+        let stripHTML = '';
+        for (let i = 0; i < completedCount; i++) {
+            const mission = defs[i];
+            __progressionMissionCache[`${categoryKey}-${i}`] = { categoryKey, idx: i, mission, status: 'completed', progressInfo: null, canClaim: false };
+            stripHTML += renderMiniBadgeHTML(categoryKey, i, mission);
+        }
+        strip.innerHTML = stripHTML;
+        block.appendChild(strip);
+    }
+
+    // --- Pendentes / Bloqueadas (trilha de cards) ---
+    if (stateIndex >= defs.length) {
+        const doneMsg = document.createElement('p');
+        doneMsg.className = 'mission-complete-message';
+        doneMsg.textContent = 'Missões dessa categoria completas!';
+        block.appendChild(doneMsg);
+    } else {
+        const pendingLabel = document.createElement('div');
+        pendingLabel.className = 'prog-subsection-label pending-label';
+        pendingLabel.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Próximas Missões`;
+        block.appendChild(pendingLabel);
+
+        const track = document.createElement('div');
+        track.className = 'prog-pending-track';
+        let trackHTML = '';
+
+        for (let i = stateIndex; i < defs.length; i++) {
+            const mission = defs[i];
+            const status = (i === stateIndex) ? 'active' : 'locked';
+            const progressInfo = getMissionProgressInfo(categoryKey, mission, player);
+
+            let canClaim = false;
+            if (status === 'active') {
+                if (categoryKey === 'level') {
+                    canClaim = player.level >= mission.req;
+                } else if (categoryKey === 'afk') {
+                    canClaim = player.current_afk_stage >= mission.req;
+                } else if (categoryKey === 'misc') {
+                    // Verificação assíncrona apenas para a missão atual (igual ao comportamento original)
+                    canClaim = await checkMiscRequirement(i, player);
+                }
+            }
+
+            __progressionMissionCache[`${categoryKey}-${i}`] = { categoryKey, idx: i, mission, status, progressInfo, canClaim };
+            trackHTML += renderMissionCardHTML(categoryKey, i, mission, status, progressInfo, canClaim);
+        }
+
+        track.innerHTML = trackHTML;
+        block.appendChild(track);
+    }
+
+    return block;
 }
 
 /**
@@ -2917,106 +3172,93 @@ async function renderProgressionModal() {
         container.innerHTML = '<p>Erro ao carregar dados do jogador. Tente novamente.</p>';
         return;
     }
-    
+
     container.innerHTML = ''; // Limpa o conteúdo
+    __progressionMissionCache = {};
     const player = currentPlayerData;
     const state = player.progression_state || { level: 0, afk: 0, misc: 0 };
 
-    // --- Categoria 1: Nível ---
-    const levelIndex = state.level || 0;
-    const levelCatDiv = document.createElement('div');
-    levelCatDiv.className = 'progression-category';
-    levelCatDiv.innerHTML = '<h3>Progresso de Nível</h3>';
-    
-    if (levelIndex >= mission_definitions.level.length) {
-        levelCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
-    } else {
-        const mission = mission_definitions.level[levelIndex];
-        const canClaim = player.level >= mission.req;
-        levelCatDiv.innerHTML += `
-            <div class="mission-item">
-                <div class="mission-reward">
-                    <img src="${mission.img}" alt="Recompensa">
-                    <span>x${mission.qty}</span>
-                </div>
-                <div class="mission-details">
-                    <p>${mission.desc}</p>
-                </div>
-                <div class="mission-actions">
-                    <button class="claim-btn" data-category="level" ${canClaim ? '' : 'disabled'}>
-                        Resgatar
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-    container.appendChild(levelCatDiv);
+    const levelBlock = await renderProgressionCategoryBlock('level', player, state);
+    container.appendChild(levelBlock);
 
-    // --- Categoria 2: AFK ---
-    const afkIndex = state.afk || 0;
-    const afkCatDiv = document.createElement('div');
-    afkCatDiv.className = 'progression-category';
-    afkCatDiv.innerHTML = '<h3>Progresso de Aventura (AFK)</h3>';
+    const afkBlock = await renderProgressionCategoryBlock('afk', player, state);
+    container.appendChild(afkBlock);
 
-    if (afkIndex >= mission_definitions.afk.length) {
-        afkCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
-    } else {
-        const mission = mission_definitions.afk[afkIndex];
-        const canClaim = player.current_afk_stage >= mission.req;
-        afkCatDiv.innerHTML += `
-            <div class="mission-item">
-                <div class="mission-reward">
-                    <img src="${mission.img}" alt="Recompensa">
-                    <span>x${mission.qty}</span>
-                </div>
-                <div class="mission-details">
-                    <p>${mission.desc}</p>
-                </div>
-                <div class="mission-actions">
-                    <button class="claim-btn" data-category="afk" ${canClaim ? '' : 'disabled'}>
-                        Resgatar
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-    container.appendChild(afkCatDiv);
+    const miscBlock = await renderProgressionCategoryBlock('misc', player, state);
+    container.appendChild(miscBlock);
 
-    // --- Categoria 3: Diversos ---
-    const miscIndex = state.misc || 0;
-    const miscCatDiv = document.createElement('div');
-    miscCatDiv.className = 'progression-category';
-    miscCatDiv.innerHTML = '<h3>Missões Diversas</h3>';
-
-    if (miscIndex >= mission_definitions.misc.length) {
-        miscCatDiv.innerHTML += '<p class="mission-complete-message">Missões dessa categoria completas!</p>';
-    } else {
-        const mission = mission_definitions.misc[miscIndex];
-        // A verificação de "canClaim" para "misc" é assíncrona ou depende de dados variados
-        const canClaim = await checkMiscRequirement(miscIndex, player);
-        miscCatDiv.innerHTML += `
-            <div class="mission-item">
-                <div class="mission-reward">
-                    <img src="${mission.img}" alt="Recompensa">
-                    <span>x${mission.qty}</span>
-                </div>
-                <div class="mission-details">
-                    <p>${mission.desc}</p>
-                </div>
-                <div class="mission-actions">
-                    <button class="claim-btn" data-category="misc" ${canClaim ? '' : 'disabled'}>
-                        Resgatar
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-    container.appendChild(miscCatDiv);
-    
     // Adiciona listeners aos botões de resgate
     container.querySelectorAll('.claim-btn').forEach(btn => {
-        btn.addEventListener('click', handleProgressionClaim);
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evita abrir o popover de detalhes ao clicar em Resgatar
+            handleProgressionClaim(e);
+        });
     });
+
+    // Clique em qualquer card ou mini-badge abre o balão de detalhes completos
+    container.querySelectorAll('.mission-card, .mini-badge').forEach(el => {
+        el.addEventListener('click', () => {
+            const key = el.getAttribute('data-mission-key');
+            const data = __progressionMissionCache[key];
+            if (data) openMissionDetailPopover(data);
+        });
+    });
+}
+
+/**
+ * Abre um card flutuante com a descrição completa da missão, recompensa e
+ * status (concluída / disponível / em progresso / bloqueada).
+ */
+function openMissionDetailPopover(data) {
+    closeMissionDetailPopover(); // Garante que só exista um popover por vez
+
+    const { mission, status, progressInfo } = data;
+
+    const statusLabels = {
+        completed: 'Concluída',
+        active: 'Disponível',
+        locked: 'Bloqueada'
+    };
+    let statusLabel = statusLabels[status] || '';
+    if (status === 'active' && progressInfo && progressInfo.current < progressInfo.required) {
+        statusLabel = 'Em Progresso';
+    }
+
+    let progressHTML = '';
+    if (progressInfo) {
+        const pct = Math.max(0, Math.min(100, Math.round((progressInfo.current / progressInfo.required) * 100)));
+        progressHTML = `
+            <p class="mission-popover-progress-text">Progresso: ${Math.min(progressInfo.current, progressInfo.required)} / ${progressInfo.required}</p>
+            <div class="mission-card-progress-bar"><div class="mission-card-progress-fill" style="width:${pct}%;"></div></div>
+        `;
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'mission-popover-backdrop';
+    backdrop.id = 'missionDetailPopoverBackdrop';
+    backdrop.innerHTML = `
+        <div class="mission-popover">
+            <div class="mission-popover-close" id="missionDetailPopoverClose">&times;</div>
+            <img class="mission-popover-reward" src="${mission.img}" alt="Recompensa">
+            <div class="mission-popover-qty">${buildMissionRewardLabel(mission)}</div>
+            <span class="mission-popover-status ${status}">${statusLabel}</span>
+            <p class="mission-popover-desc">${mission.desc}</p>
+            ${progressHTML}
+        </div>
+    `;
+
+    document.body.appendChild(backdrop);
+
+    const close = () => closeMissionDetailPopover();
+    backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) close();
+    });
+    document.getElementById('missionDetailPopoverClose').addEventListener('click', close);
+}
+
+function closeMissionDetailPopover() {
+    const existing = document.getElementById('missionDetailPopoverBackdrop');
+    if (existing) existing.remove();
 }
 
 /**
@@ -3376,49 +3618,89 @@ confirmDrawBtn.addEventListener('click', async () => {
     }
 });
 
+// === Animação de revelação do gacha (apenas apresentação visual) ===
+// Mostra um overlay com um "núcleo" girando/brilhando por um curto período
+// antes de revelar a grade de resultados já montada. Não altera nenhuma
+// lógica de sorteio/inventário — só atrasa visualmente a exibição.
+function playGachaRevealAnimation(onDone) {
+    const overlay = document.createElement('div');
+    overlay.className = 'gacha-reveal-overlay';
+    overlay.innerHTML = `
+        <div class="gacha-reveal-core-wrap">
+            <div class="gacha-reveal-ring r1"></div>
+            <div class="gacha-reveal-ring r2"></div>
+            <div class="gacha-reveal-ring r3"></div>
+            <div class="gacha-reveal-core"></div>
+            <div class="gacha-reveal-burst"></div>
+            <span class="gacha-reveal-label">Sorteando...</span>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Pequeno "flash" de explosão de luz pouco antes de revelar
+    setTimeout(() => overlay.classList.add('burst'), 900);
+
+    setTimeout(() => {
+        overlay.remove();
+        if (typeof onDone === 'function') onDone();
+    }, 1350);
+}
+
 function displayDrawResults(itemsMap) {
     drawResultsGrid.innerHTML = '';
-    
-    if (!itemsMap || Object.keys(itemsMap).length === 0) {
-        drawResultsGrid.innerHTML = '<p>Nenhum item.</p>';
-        drawResultsModal.style.display = 'flex';
-        return;
-    }
 
-    // Itera sobre o mapa simples ID -> Qtd
-    for (const [itemIdStr, qty] of Object.entries(itemsMap)) {
-        const itemId = parseInt(itemIdStr, 10);
-        
-        // 1. Busca definição no CACHE LOCAL (Sem ir ao servidor)
-        // Se itemDefinitions ainda não carregou, tenta recarregar (fallback seguro)
-        let itemDef = itemDefinitions.get(itemId);
-        
-        // Se não achou, define placeholders seguros
-        const name = itemDef ? itemDef.name : `Item #${itemId}`;
-        
-        // URL da imagem
-        let imgUrl;
-        if (itemDef) {
-             imgUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
-        } else {
-             // Fallback para imagem desconhecida ou placeholder
-             console.warn(`Definição de item ${itemId} não encontrada no cache local.`);
-             imgUrl = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`; 
+    const hasItems = itemsMap && Object.keys(itemsMap).length > 0;
+
+    const renderGrid = () => {
+        if (!hasItems) {
+            drawResultsGrid.innerHTML = '<p>Nenhum item.</p>';
+            drawResultsModal.style.display = 'flex';
+            return;
         }
 
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'result-item';
-        // Adiciona classe de raridade se disponível para efeito visual extra (opcional)
-        if (itemDef && itemDef.rarity) itemDiv.classList.add(`rarity-${itemDef.rarity.toLowerCase()}`);
-        
-        itemDiv.innerHTML = `
-            <img src="${imgUrl}" alt="${name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
-            <span>x${qty}</span>
-        `;
-        drawResultsGrid.appendChild(itemDiv);
-    }
-    
-    drawResultsModal.style.display = 'flex';
+        // Itera sobre o mapa simples ID -> Qtd
+        let cardIndex = 0;
+        for (const [itemIdStr, qty] of Object.entries(itemsMap)) {
+            const itemId = parseInt(itemIdStr, 10);
+
+            // 1. Busca definição no CACHE LOCAL (Sem ir ao servidor)
+            // Se itemDefinitions ainda não carregou, tenta recarregar (fallback seguro)
+            let itemDef = itemDefinitions.get(itemId);
+
+            // Se não achou, define placeholders seguros
+            const name = itemDef ? itemDef.name : `Item #${itemId}`;
+
+            // URL da imagem
+            let imgUrl;
+            if (itemDef) {
+                 imgUrl = `https://aden-rpg.pages.dev/assets/itens/${itemDef.name}.webp`;
+            } else {
+                 // Fallback para imagem desconhecida ou placeholder
+                 console.warn(`Definição de item ${itemId} não encontrada no cache local.`);
+                 imgUrl = `https://aden-rpg.pages.dev/assets/itens/unknown.webp`;
+            }
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'result-item';
+            // Adiciona classe de raridade se disponível para efeito visual extra
+            if (itemDef && itemDef.rarity) itemDiv.classList.add(`rarity-${itemDef.rarity.toLowerCase()}`);
+            // Atraso escalonado por card para a animação de revelação em cascata
+            itemDiv.style.setProperty('--reveal-delay', `${Math.min(cardIndex * 0.08, 1.2)}s`);
+
+            itemDiv.innerHTML = `
+                <img src="${imgUrl}" alt="${name}" onerror="this.src='https://aden-rpg.pages.dev/assets/itens/unknown.webp'">
+                <span>x${qty}</span>
+            `;
+            drawResultsGrid.appendChild(itemDiv);
+            cardIndex++;
+        }
+
+        drawResultsModal.style.display = 'flex';
+    };
+
+    // Roda a animação de sorteio primeiro, depois revela os itens já com a
+    // grade montada (cascata de entrada controlada via --reveal-delay).
+    playGachaRevealAnimation(renderGrid);
 }
 
 // ===============================================

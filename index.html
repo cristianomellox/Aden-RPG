@@ -561,6 +561,10 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
 
 <div id="spiralModal" class="modal-container" style="display:none;">
   <div class="modal-content">
+    <div class="gacha-header-badge">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2H22l-6 4.4 2.3 7.2L12 16.4 5.7 20.8 8 13.6l-6-4.4h7.6z"/></svg>
+      Forja da Espiral
+    </div>
     <div class="spiral-tabs">
       <button class="tab-btn active" data-tab="common">Espiral Comum</button>
       <button class="tab-btn" data-tab="advanced">Espiral Avançado</button>
@@ -569,7 +573,12 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
     <div id="common-spiral" class="spiral-content">
       <h2>Espiral Comum</h2>
       <p>Use <span style="color: gold;">Cartão de Espiral Comum</span> para sortear fragmentos de equipamentos R.</p>
-      <div style="width:300px; height:180px;"></div>
+      <div class="gacha-orb-stage">
+        <div class="gacha-ring gacha-ring--1"></div>
+        <div class="gacha-ring gacha-ring--2"></div>
+        <div class="gacha-orb-shadow"></div>
+        <div class="gacha-orb-core"><span class="gacha-orb-glint"></span></div>
+      </div>
       <div class="card-info">
         <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_comum.webp" alt="Cartão Comum" style="width:60px; height:60px;">
         <span id="commonCardCount" style="margin-left: -10px;">x 0</span>
@@ -599,7 +608,12 @@ document.getElementById('emailLoginModal').addEventListener('click', function(e)
     <div id="advanced-spiral" class="spiral-content" style="display:none;">
       <h2>Espiral Avançado</h2>
       <p>Use <span style="color: gold;">Cartão de Espiral Avançado</span> para sortear fragmentos de equipamentos SR.</p>
-      <div style="width:300px; height:180px;"></div>
+      <div class="gacha-orb-stage advanced">
+        <div class="gacha-ring gacha-ring--1"></div>
+        <div class="gacha-ring gacha-ring--2"></div>
+        <div class="gacha-orb-shadow"></div>
+        <div class="gacha-orb-core"><span class="gacha-orb-glint"></span></div>
+      </div>
       <div class="card-info">
         <img src="https://aden-rpg.pages.dev/assets/itens/cartao_de_espiral_avancado.webp" alt="Cartão Avançado" style="width:60px; height:60px;">
         <span id="advancedCardCount" style="margin-left: -10px;">x 0</span>

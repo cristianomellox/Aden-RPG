@@ -305,7 +305,7 @@
             border-radius: 10px; padding: 20px 18px;
             transition: border-color 0.25s, transform 0.2s, box-shadow 0.2s;
             box-shadow: 0 2px 12px rgba(0,0,0,0.5);
-            min-width: 300px;
+            min-width: 255px;
         }
         .feat-card:hover {
             border-color: var(--gold-dark); transform: translateY(-5px);
@@ -822,11 +822,11 @@
     <!-- ══ DOWNLOAD SECTION ══ -->
     <section id="download-section">
         <div class="section-header">
-            <h2 data-i18n="dl_title" data-lang-en="Choose Your Platform">Escolha Sua Plataforma</h2>
+            <h2 data-i18n="dl_title" data-lang-en="Choose Your Platform">Instale o jogo</h2>
         </div>
 
         <!-- Android notice -->
-        <div style="text-align:center; margin-bottom:16px;">
+        <div style="text-align:center; margin-bottom:16px; display: none;">
             <span class="android-notice">
                 
                 <span data-i18n="android_notice" data-lang-en="Mobile version available for Android only.">Versão mobile disponível apenas para Android.</span><br>
@@ -836,7 +836,7 @@
 
         <div class="dl-grid">
             <!-- Google Drive -->
-            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://drive.google.com/file/d/17KXAyMqTeXT71DNjtXvsG4nIuMd2Jpw7')" aria-label="Baixar via Google Drive">
+            <div class="dl-btn" style="display: none;" role="button" tabindex="0" onclick="openDriveModal('https://drive.google.com/file/d/17KXAyMqTeXT71DNjtXvsG4nIuMd2Jpw7')" aria-label="Baixar via Google Drive">
                 <svg class="dl-btn-icon" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
                     <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
                     <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
@@ -851,29 +851,10 @@
                 </div>
             </div>
 
-            <!-- Google Play (em breve) -->
-            <div class="dl-btn" role="button" tabindex="0" onclick="openModal('modal-soon')" aria-label="Google Play - Em breve">
-                <span class="dl-btn-badge" data-i18n="coming_soon" data-lang-en="COMING SOON">EM BREVE</span>
-                <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none">
-                    <defs>
-                        <linearGradient id="gp1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#0087ff"/></linearGradient>
-                        <linearGradient id="gp2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffde00"/><stop offset="100%" stop-color="#ff8e00"/></linearGradient>
-                        <linearGradient id="gp3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3a44"/><stop offset="100%" stop-color="#c00"/></linearGradient>
-                        <linearGradient id="gp4" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#00f076"/><stop offset="100%" stop-color="#00c650"/></linearGradient>
-                    </defs>
-                    <path d="M3.18 23.5c.4.22.88.22 1.3-.02l12.5-7.23-2.73-2.73z" fill="url(#gp4)"/>
-                    <path d="M21.5 10.5c-.5-.28-1.18-.28-1.68 0l-2.64 1.53 2.73 2.73 1.6-.93c.92-.54.92-1.79-.01-2.33z" fill="url(#gp2)"/>
-                    <path d="M3.18.5C2.72.78 2.5 1.27 2.5 1.78V22.2c0 .51.22 1 .68 1.28L14.25 12z" fill="url(#gp1)"/>
-                    <path d="M17.18 12 14.25 9.07 3.18.5l11.07 11.5z" fill="url(#gp3)"/>
-                </svg>
-                <div class="dl-btn-label">
-                    <span class="dl-btn-sub" data-i18n="dl_play_sub" data-lang-en="Android">Android</span>
-                    <span class="dl-btn-main">Google Play</span>
-                </div>
-            </div>
+         
 
             <!-- APKPure -->
-            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://apkpure.com/p/com.cmellox.aden')" aria-label="Baixar no APKPure">
+            <div class="dl-btn" style="display: none;" role="button" tabindex="0" onclick="openDriveModal('https://apkpure.com/p/com.cmellox.aden')" aria-label="Baixar no APKPure">
                 <svg class="dl-btn-icon" viewBox="0 0 100 100" fill="none">
                     <circle cx="50" cy="50" r="46" fill="#5E35B1"/>
                     <rect x="30" y="22" width="40" height="56" rx="5" fill="white" opacity="0.92"/>
@@ -889,14 +870,21 @@
 
             <!-- Versão Web -->
             <div class="dl-btn web-btn" role="button" tabindex="0" onclick="openModal('modal-web')" aria-label="Versão Web">
-                <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none" stroke="#c9a94a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none">
+                    <defs>
+                        <linearGradient id="gp1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#0087ff"/></linearGradient>
+                        <linearGradient id="gp2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffde00"/><stop offset="100%" stop-color="#ff8e00"/></linearGradient>
+                        <linearGradient id="gp3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3a44"/><stop offset="100%" stop-color="#c00"/></linearGradient>
+                        <linearGradient id="gp4" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#00f076"/><stop offset="100%" stop-color="#00c650"/></linearGradient>
+                    </defs>
+                    <path d="M3.18 23.5c.4.22.88.22 1.3-.02l12.5-7.23-2.73-2.73z" fill="url(#gp4)"/>
+                    <path d="M21.5 10.5c-.5-.28-1.18-.28-1.68 0l-2.64 1.53 2.73 2.73 1.6-.93c.92-.54.92-1.79-.01-2.33z" fill="url(#gp2)"/>
+                    <path d="M3.18.5C2.72.78 2.5 1.27 2.5 1.78V22.2c0 .51.22 1 .68 1.28L14.25 12z" fill="url(#gp1)"/>
+                    <path d="M17.18 12 14.25 9.07 3.18.5l11.07 11.5z" fill="url(#gp3)"/>
                 </svg>
                 <div class="dl-btn-label">
-                    <span class="dl-btn-sub" data-i18n="dl_web_sub" data-lang-en="Limited" style="color: rgba(201,169,74,0.65);">Limitada</span>
-                    <span class="dl-btn-main" data-i18n="dl_web_main" data-lang-en="Web Version">Versão Web</span>
+                    <span class="dl-btn-sub" data-i18n="dl_play_sub" data-lang-en="Android, iOS and PC">Android, iOS e PC</span>
+                    <span class="dl-btn-main" data-i18n="dl_web_main" data-lang-en="Download">Baixar</span>
                 </div>
             </div>
         </div>
@@ -1060,21 +1048,25 @@
         <h2 data-i18n="cta_title" data-lang-en="Start Your Legacy Now">Comece Seu Legado Agora</h2>
         <p data-i18n="cta_sub" data-lang-en="Download Aden RPG Online and write your story.">Baixe Aden RPG Online e escreva sua história.</p>
         <div class="dl-grid" style="justify-content:center;">
-            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://drive.google.com/file/d/1ylZx3fiqqxca3e9Aw-oaPI60aDAGTVVB')" aria-label="Google Drive">
-                <svg class="dl-btn-icon" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-                    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                    <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
-                    <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-                    <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-                    <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-                    <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+            <div class="dl-btn web-btn" role="button" tabindex="0" onclick="openModal('modal-web')" aria-label="Versão Web">
+                <svg class="dl-btn-icon" viewBox="0 0 24 24" fill="none">
+                    <defs>
+                        <linearGradient id="gp1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#0087ff"/></linearGradient>
+                        <linearGradient id="gp2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffde00"/><stop offset="100%" stop-color="#ff8e00"/></linearGradient>
+                        <linearGradient id="gp3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff3a44"/><stop offset="100%" stop-color="#c00"/></linearGradient>
+                        <linearGradient id="gp4" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#00f076"/><stop offset="100%" stop-color="#00c650"/></linearGradient>
+                    </defs>
+                    <path d="M3.18 23.5c.4.22.88.22 1.3-.02l12.5-7.23-2.73-2.73z" fill="url(#gp4)"/>
+                    <path d="M21.5 10.5c-.5-.28-1.18-.28-1.68 0l-2.64 1.53 2.73 2.73 1.6-.93c.92-.54.92-1.79-.01-2.33z" fill="url(#gp2)"/>
+                    <path d="M3.18.5C2.72.78 2.5 1.27 2.5 1.78V22.2c0 .51.22 1 .68 1.28L14.25 12z" fill="url(#gp1)"/>
+                    <path d="M17.18 12 14.25 9.07 3.18.5l11.07 11.5z" fill="url(#gp3)"/>
                 </svg>
                 <div class="dl-btn-label">
-                    <span class="dl-btn-sub" data-i18n="dl_drive_sub" data-lang-en="Direct APK">APK Direto</span>
-                    <span class="dl-btn-main">Google Drive</span>
+                    <span class="dl-btn-sub" data-i18n="dl_play_sub" data-lang-en="Android, iOS and PC">Android, iOS e PC</span>
+                    <span class="dl-btn-main" data-i18n="dl_web_main" data-lang-en="Download">Baixar</span>
                 </div>
             </div>
-            <div class="dl-btn" role="button" tabindex="0" onclick="openDriveModal('https://apkpure.com/p/com.cmellox.aden')" aria-label="APKPure">
+            <div class="dl-btn" style="display: none;" role="button" tabindex="0" onclick="openDriveModal('https://apkpure.com/p/com.cmellox.aden')" aria-label="APKPure">
                 <svg class="dl-btn-icon" viewBox="0 0 100 100" fill="none">
                     <circle cx="50" cy="50" r="46" fill="#5E35B1"/>
                     <rect x="30" y="22" width="40" height="56" rx="5" fill="white" opacity="0.92"/>

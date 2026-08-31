@@ -3638,12 +3638,12 @@ function playGachaRevealAnimation(onDone) {
     document.body.appendChild(overlay);
 
     // Pequeno "flash" de explosão de luz pouco antes de revelar
-    setTimeout(() => overlay.classList.add('burst'), 900);
+    setTimeout(() => overlay.classList.add('burst'), 3500);
 
     setTimeout(() => {
         overlay.remove();
         if (typeof onDone === 'function') onDone();
-    }, 1350);
+    }, 4000);
 }
 
 function displayDrawResults(itemsMap) {

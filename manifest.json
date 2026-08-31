@@ -25,5 +25,10 @@
       "url": "/index.html?source=pwa-shortcut",
       "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
     }
+  ],
+  "url_handlers": [
+    {
+      "origin": "https://aden-rpg.pages.dev"
+    }
   ]
 }

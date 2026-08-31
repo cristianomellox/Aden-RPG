@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v26'; // v24: ícone da notificação pode vir do payload ("icon", ex: avatar de quem mandou a mensagem)
+const CACHE_NAME = 'aden-rpg-assets-v27'; // v24: ícone da notificação pode vir do payload ("icon", ex: avatar de quem mandou a mensagem)
 const ASSET_PREFIX = '/assets/';
 
 // Domínio do Cloudinary para identificar as requisições

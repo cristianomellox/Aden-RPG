@@ -1,0 +1,10 @@
+{
+  "web_apps": [
+    {
+      "manifest": "https://aden-rpg.pages.dev/manifest.json",
+      "details": {
+        "paths": ["/*"]
+      }
+    }
+  ]
+}

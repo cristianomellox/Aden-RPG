@@ -93,7 +93,7 @@ button, .btn {
         background-position: center center; 
         background-size: cover;
         box-sizing: border-box;
-        background-color: none;
+    
         border: none;
         cursor: pointer;
 
@@ -2463,9 +2463,7 @@ textarea:focus, textarea:active {
     outline: none !important;
     -webkit-tap-highlight-color: transparent !important;
 }
-button, .btn {
-  background-color: transparent!important;
-}
+
 .hellop {
   font-size: 1.8em;
   font-weight: bold;

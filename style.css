@@ -93,7 +93,7 @@ button, .btn {
         background-position: center center; 
         background-size: cover;
         box-sizing: border-box;
-    
+        background-color: none;
         border: none;
         cursor: pointer;
 
@@ -2438,9 +2438,34 @@ font > font {
 }
 
 /* Remove destaque e bordas de todos os elementos clicáveis */
-
-
-
+a,
+button,
+img,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"],
+label,
+select,
+textarea {
+    outline: none !important;
+    
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-focus-ring-color: transparent !important;
+    touch-action: manipulation;
+}
+a:focus, a:active,
+button:focus, button:active,
+img:focus, img:active,
+input:focus, input:active,
+select:focus, select:active,
+textarea:focus, textarea:active {
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+button, .btn {
+  background-color: transparent!important;
+}
 .hellop {
   font-size: 1.8em;
   font-weight: bold;
@@ -3081,7 +3106,6 @@ font > font {
     width: 100%;
     padding: 14px 18px !important;
     background: linear-gradient(180deg, #e6c977 0%, var(--aaa-gold) 45%, var(--aaa-gold-dark) 100%) !important;
-    background-image: none !important;
     border: 1px solid #8a6e24 !important;
     border-radius: 10px;
     color: #fff !important;
@@ -4107,6 +4131,9 @@ font > font {
 }
 
 /* ═══════════════════════════ ESPIRAL (GACHA) ═══════════════════════════ */
+/* Tudo escopado sob #spiralModal para nunca vazar para outras páginas/telas
+   que possam reutilizar nomes de classe genéricos como .tab-btn, .card-info
+   etc. (ex.: menus de outras páginas como a da guilda). */
 
 #spiralModal .modal-content {
   position: relative;
@@ -4124,7 +4151,7 @@ font > font {
   50%      { box-shadow: var(--aaa-shadow-deep), 0 0 55px rgba(79,216,232,0.4), inset 0 0 40px rgba(0,0,0,0.4); }
 }
 
-.gacha-header-badge {
+#spiralModal .gacha-header-badge {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4144,7 +4171,7 @@ font > font {
   margin-right: auto;
 }
 
-.spiral-tabs {
+#spiralModal .spiral-tabs {
   display: flex;
   justify-content: center;
   gap: 6px;
@@ -4155,7 +4182,7 @@ font > font {
   padding: 4px;
   border: 1px solid var(--aaa-border-soft);
 }
-.tab-btn {
+#spiralModal .tab-btn {
   flex: 1;
   padding: 10px 14px !important;
   font-size: 0.85em !important;
@@ -4170,32 +4197,32 @@ font > font {
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
   text-shadow: none !important;
 }
-.tab-btn.active {
+#spiralModal .tab-btn.active {
   color: #1a1409 !important;
   background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark)) !important;
   box-shadow: 0 4px 14px rgba(201,169,74,0.35);
   border-bottom: none !important;
 }
 
-.spiral-content {
+#spiralModal .spiral-content {
   text-align: center;
   text-shadow: none;
 }
-.spiral-content h2 {
+#spiralModal .spiral-content h2 {
   font-family: 'Cinzel', serif;
   color: var(--aaa-gold-light);
   letter-spacing: 0.04em;
   margin-bottom: 4px;
   text-shadow: 0 2px 8px rgba(0,0,0,0.8);
 }
-.spiral-content > p {
+#spiralModal .spiral-content > p {
   color: #cfc6ab;
   font-size: 0.85em;
   margin-bottom: 10px;
 }
 
 /* Palco do orbe / cápsula do gacha (reaproveita a div vazia já existente) */
-.gacha-orb-stage {
+#spiralModal .gacha-orb-stage {
   position: relative;
   width: 100% !important;
   max-width: 300px;
@@ -4205,16 +4232,16 @@ font > font {
   align-items: center;
   justify-content: center;
 }
-.gacha-orb-stage .gacha-ring {
+#spiralModal .gacha-orb-stage .gacha-ring {
   position: absolute;
   border-radius: 50%;
   border: 1px solid rgba(79,216,232,0.35);
 }
-.gacha-orb-stage .gacha-ring--1 { width: 150px; height: 150px; animation: gachaSpinSlow 12s linear infinite; }
-.gacha-orb-stage .gacha-ring--2 { width: 110px; height: 110px; border-style: dashed; animation: gachaSpinSlow 9s linear infinite reverse; }
+#spiralModal .gacha-orb-stage .gacha-ring--1 { width: 150px; height: 150px; animation: gachaSpinSlow 12s linear infinite; }
+#spiralModal .gacha-orb-stage .gacha-ring--2 { width: 110px; height: 110px; border-style: dashed; animation: gachaSpinSlow 9s linear infinite reverse; }
 @keyframes gachaSpinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-.gacha-orb-stage .gacha-orb-core {
+#spiralModal .gacha-orb-stage .gacha-orb-core {
   position: relative;
   width: 82px;
   height: 82px;
@@ -4227,7 +4254,7 @@ font > font {
   0%, 100% { transform: scale(1); filter: brightness(1); }
   50%      { transform: scale(1.06); filter: brightness(1.25); }
 }
-.gacha-orb-stage .gacha-orb-glint {
+#spiralModal .gacha-orb-stage .gacha-orb-glint {
   position: absolute;
   top: 14%;
   left: 22%;
@@ -4237,20 +4264,20 @@ font > font {
   border-radius: 50%;
   filter: blur(2px);
 }
-.gacha-orb-stage .gacha-orb-shadow {
+#spiralModal .gacha-orb-stage .gacha-orb-shadow {
   position: absolute;
   bottom: 6px;
   width: 110px;
   height: 16px;
   background: radial-gradient(ellipse, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%);
 }
-.gacha-orb-stage.advanced .gacha-orb-core {
+#spiralModal .gacha-orb-stage.advanced .gacha-orb-core {
   background: radial-gradient(circle at 35% 30%, #fff0c2 0%, var(--aaa-gold) 35%, #5c4310 75%, #140d02 100%);
   box-shadow: 0 0 25px rgba(201,169,74,0.55), 0 0 55px rgba(201,169,74,0.4), inset 0 0 18px rgba(255,255,255,0.35);
 }
-.gacha-orb-stage.advanced .gacha-ring { border-color: rgba(201,169,74,0.4); }
+#spiralModal .gacha-orb-stage.advanced .gacha-ring { border-color: rgba(201,169,74,0.4); }
 
-.card-info {
+#spiralModal .card-info {
   display: flex;
   background: linear-gradient(180deg, rgba(30,26,16,0.9), rgba(10,8,5,0.9));
   width: auto;
@@ -4268,23 +4295,21 @@ font > font {
   color: var(--aaa-gold-light);
   font-weight: 700;
 }
-.card-info img { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6)); }
+#spiralModal .card-info img { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6)); }
 
-.plus-btn {
+#spiralModal .plus-btn {
   border-radius: 50% !important;
   background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark)) !important;
-  background-image: none !important;
   border: 1px solid #8a6e24 !important;
   color: #241a05 !important;
   box-shadow: 0 4px 10px rgba(201,169,74,0.35);
 }
 
-.draw-btn {
+#spiralModal .draw-btn {
   width: 100%;
   padding: 16px 20px !important;
   font-size: 1.05em !important;
   background: linear-gradient(180deg, #6fe6f2 0%, var(--aaa-cyan) 45%, #0f6470 100%) !important;
-  background-image: none !important;
   border: 1px solid #0d5865 !important;
   border-radius: 12px;
   color: #04262b !important;
@@ -4296,17 +4321,17 @@ font > font {
   transition: transform 0.15s, box-shadow 0.15s;
   margin-top: 8px;
 }
-.draw-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(79,216,232,0.55), inset 0 1px 0 rgba(255,255,255,0.4); }
-.draw-btn:active { transform: translateY(0); }
-#advanced-spiral .draw-btn {
+#spiralModal .draw-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(79,216,232,0.55), inset 0 1px 0 rgba(255,255,255,0.4); }
+#spiralModal .draw-btn:active { transform: translateY(0); }
+#spiralModal #advanced-spiral .draw-btn {
   background: linear-gradient(180deg, #f5dd9a 0%, var(--aaa-gold) 45%, var(--aaa-gold-dark) 100%) !important;
   border: 1px solid #8a6e24 !important;
   color: #2a1e06 !important;
   box-shadow: 0 8px 22px rgba(201,169,74,0.4), inset 0 1px 0 rgba(255,255,255,0.4);
 }
-#advanced-spiral .draw-btn:hover { box-shadow: 0 12px 28px rgba(201,169,74,0.55), inset 0 1px 0 rgba(255,255,255,0.4); }
+#spiralModal #advanced-spiral .draw-btn:hover { box-shadow: 0 12px 28px rgba(201,169,74,0.55), inset 0 1px 0 rgba(255,255,255,0.4); }
 
-.close-spiral-modal {
+#spiralModal .close-spiral-modal {
   margin-top: 12px;
   width: 100%;
   background: rgba(255,255,255,0.04) !important;
@@ -4318,9 +4343,9 @@ font > font {
   padding: 12px !important;
   text-shadow: none !important;
 }
-.close-spiral-modal:hover { background: rgba(201,169,74,0.1) !important; border-color: var(--aaa-gold) !important; }
+#spiralModal .close-spiral-modal:hover { background: rgba(201,169,74,0.1) !important; border-color: var(--aaa-gold) !important; }
 
-.spiral-chances-btn {
+#spiralModal .spiral-chances-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4334,13 +4359,13 @@ font > font {
   cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
-.spiral-chances-btn:hover {
+#spiralModal .spiral-chances-btn:hover {
   background: rgba(201, 169, 74, 0.14);
   border-color: var(--aaa-gold);
   color: var(--aaa-gold-light);
 }
 
-/* Modal de chances / compra / confirmação — reskin leve */
+/* Modal de chances / compra / confirmação — reskin leve (já escopados por ID) */
 #spiralChancesModal .modal-content,
 #buyCardsModal .modal-content,
 #drawConfirmModal .modal-content {
@@ -4360,7 +4385,6 @@ font > font {
 #confirmPurchaseBtn, #confirmDrawBtn {
   width: 100%;
   background: linear-gradient(180deg, #e6c977 0%, var(--aaa-gold) 45%, var(--aaa-gold-dark) 100%) !important;
-  background-image: none !important;
   border: 1px solid #8a6e24 !important;
   border-radius: 10px !important;
   color: #241a05 !important;
@@ -4386,7 +4410,7 @@ font > font {
   padding: 8px;
 }
 
-/* ─── Animação de sorteio (revelação) ─── */
+/* ─── Animação de sorteio (revelação) — nomes de classe exclusivos, sem risco de vazamento ─── */
 .gacha-reveal-overlay {
   position: fixed;
   inset: 0;
@@ -4452,7 +4476,7 @@ font > font {
 }
 @keyframes aaaFlicker { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
-/* ─── Grade de resultados ─── */
+/* ─── Grade de resultados (já escopada sob #drawResultsModal) ─── */
 #drawResultsModal .modal-content {
   max-width: 420px;
   width: 94vw;
@@ -4468,7 +4492,7 @@ font > font {
   color: var(--aaa-gold-light);
   margin-bottom: 12px;
 }
-.results-grid {
+#drawResultsModal .results-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 12px;
@@ -4477,7 +4501,7 @@ font > font {
   overflow-y: auto;
   padding: 4px;
 }
-.result-item {
+#drawResultsModal .result-item {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -4496,24 +4520,24 @@ font > font {
   60%  { opacity: 1; transform: translateY(-3px) scale(1.05); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-.result-item img {
+#drawResultsModal .result-item img {
   width: 58px;
   height: 58px;
   object-fit: contain;
   filter: drop-shadow(0 3px 6px rgba(0,0,0,0.6));
 }
-.result-item span {
+#drawResultsModal .result-item span {
   font-size: 0.95em;
   font-weight: 800;
   margin-top: 6px;
   color: #fff;
 }
-.result-item.rarity-r { border-color: var(--aaa-rarity-r-glow); box-shadow: 0 0 12px rgba(111,224,138,0.18), inset 0 0 12px rgba(111,224,138,0.06); }
-.result-item.rarity-r::before { content: 'R'; }
-.result-item.rarity-sr { border-color: var(--aaa-rarity-sr-glow); box-shadow: 0 0 16px rgba(87,179,255,0.3), inset 0 0 14px rgba(87,179,255,0.08); }
-.result-item.rarity-sr::before { content: 'SR'; }
-.result-item.rarity-r::before,
-.result-item.rarity-sr::before {
+#drawResultsModal .result-item.rarity-r { border-color: var(--aaa-rarity-r-glow); box-shadow: 0 0 12px rgba(111,224,138,0.18), inset 0 0 12px rgba(111,224,138,0.06); }
+#drawResultsModal .result-item.rarity-r::before { content: 'R'; }
+#drawResultsModal .result-item.rarity-sr { border-color: var(--aaa-rarity-sr-glow); box-shadow: 0 0 16px rgba(87,179,255,0.3), inset 0 0 14px rgba(87,179,255,0.08); }
+#drawResultsModal .result-item.rarity-sr::before { content: 'SR'; }
+#drawResultsModal .result-item.rarity-r::before,
+#drawResultsModal .result-item.rarity-sr::before {
   position: absolute;
   top: 4px;
   left: 4px;
@@ -4524,9 +4548,9 @@ font > font {
   border-radius: 6px;
   background: rgba(0,0,0,0.55);
 }
-.result-item.rarity-r::before { color: var(--aaa-rarity-r); }
-.result-item.rarity-sr::before { color: var(--aaa-rarity-sr); }
-.result-item.rarity-sr {
+#drawResultsModal .result-item.rarity-r::before { color: var(--aaa-rarity-r); }
+#drawResultsModal .result-item.rarity-sr::before { color: var(--aaa-rarity-sr); }
+#drawResultsModal .result-item.rarity-sr {
   animation-name: resultCardIn, srShine;
   animation-duration: 0.45s, 1.6s;
   animation-delay: var(--reveal-delay, 0s), calc(var(--reveal-delay, 0s) + 0.45s);
@@ -4539,7 +4563,6 @@ font > font {
 #closeDrawResultsModalBtn {
   width: 100%;
   background: linear-gradient(180deg, #e6c977 0%, var(--aaa-gold) 45%, var(--aaa-gold-dark) 100%) !important;
-  background-image: none !important;
   border: 1px solid #8a6e24 !important;
   border-radius: 10px !important;
   color: #241a05 !important;
@@ -4549,14 +4572,21 @@ font > font {
 }
 
 /* ═══════════════════════════════ LOJA ═══════════════════════════════ */
+/* Reestruturação completa em grid de 2 colunas com faixas de categoria,
+   inspirada em lojas de jogos AAA (estilo Clash Royale). Tudo escopado sob
+   #shopModal para não vazar para outras páginas. */
 
 #shopModal .modal-content {
   border: 1px solid var(--aaa-border);
   border-radius: 14px;
   box-shadow: var(--aaa-shadow-deep), 0 0 34px rgba(201,169,74,0.18);
+  max-width: 460px;
+  width: 95vw;
+  max-height: 88vh;
+  overflow-y: auto;
 }
 #closeShopModalBtn {
-  background: rgba(0,0,0,0.5) !important;
+  background: rgba(0,0,0,0.55) !important;
   border: 1px solid var(--aaa-border) !important;
   color: var(--aaa-gold-light) !important;
   width: 30px;
@@ -4567,51 +4597,109 @@ font > font {
   justify-content: center;
   top: 8px !important;
   right: 8px !important;
+  z-index: 5;
   transition: transform 0.15s, background 0.15s;
 }
 #closeShopModalBtn:hover { background: rgba(201,169,74,0.2) !important; transform: rotate(90deg); }
 
-.shop-tabs {
+#shopModal .shop-tabs {
   gap: 4px;
   background: rgba(0,0,0,0.35);
   border-radius: 12px;
   border: 1px solid var(--aaa-border-soft);
-  border-bottom: 1px solid var(--aaa-border-soft);
   padding: 4px;
-  margin: 4px auto 10px;
+  margin: 4px auto 12px;
   max-width: 460px;
 }
-.shop-tab-btn {
+#shopModal .shop-tab-btn {
   flex: 1;
   border-radius: 9px;
   padding: 9px 4px !important;
   color: #9a9488 !important;
   font-weight: 700;
+  font-size: 0.78em !important;
   transition: background 0.2s, color 0.2s;
 }
-.shop-tab-btn.active {
+#shopModal .shop-tab-btn.active {
   color: #1a1409 !important;
   background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark)) !important;
   border-bottom: none !important;
   box-shadow: 0 4px 12px rgba(201,169,74,0.3);
 }
 
-.shop-content h2 {
+#shopModal .shop-content {
+  text-align: center;
+  text-shadow: none;
+}
+#shopModal .shop-content h2 {
   font-family: 'Cinzel', serif;
   color: var(--aaa-gold-light);
   text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  margin-bottom: 2px;
+}
+#shopModal .shop-content > p:first-of-type {
+  color: #cfc6ab;
+  font-size: 0.82em;
+  margin-bottom: 4px;
 }
 
-.shop-item {
+/* Faixa/ribbon de categoria, estilo "Gemas" / "Ouro" de lojas AAA */
+#shopModal .shop-category-banner {
+  grid-column: 1 / -1;
   position: relative;
+  margin: 16px 6px 4px;
+  padding: 7px 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark));
+  clip-path: polygon(1.5% 0%, 98.5% 0%, 100% 50%, 98.5% 100%, 1.5% 100%, 0% 50%);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+#shopModal .shop-category-banner:first-of-type { margin-top: 6px; }
+#shopModal .shop-category-banner span {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #241a05;
+  font-size: 0.9em;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+}
+
+/* Grade de 2 colunas para a Loja e a Recarga */
+#shopModal #shop-main,
+#shopModal #shop-recharge {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 2px 2px 6px;
+}
+#shopModal #shop-main > h2,
+#shopModal #shop-main > p,
+#shopModal #shop-recharge > h2,
+#shopModal #shop-recharge > p,
+#shopModal #shopMessage {
+  grid-column: 1 / -1;
+}
+
+/* Card de item — estilo vertical AAA (imagem no topo, preço e CTA embaixo) */
+#shopModal .shop-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  margin: 0;
+  padding: 14px 10px 12px;
+  border-radius: 14px;
   background: linear-gradient(160deg, rgba(38,32,18,0.92) 0%, rgba(14,12,7,0.95) 60%, rgba(38,32,18,0.92) 100%);
   border: 1px solid var(--aaa-border);
-  border-radius: 14px;
   box-shadow: var(--aaa-shadow-deep), inset 0 1px 0 rgba(255,255,255,0.05);
   overflow: hidden;
+  text-shadow: none;
+  color: inherit;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
-.shop-item::before {
+#shopModal .shop-item::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -4619,65 +4707,134 @@ font > font {
   background: linear-gradient(90deg, transparent, var(--aaa-gold), transparent);
   opacity: 0.7;
 }
-.shop-item:hover {
+#shopModal .shop-item:hover {
   transform: translateY(-2px);
   box-shadow: var(--aaa-shadow-deep), 0 0 22px rgba(201,169,74,0.28), inset 0 1px 0 rgba(255,255,255,0.08);
 }
-.shop-item-img {
+#shopModal .shop-item-img {
+  width: 72px !important;
+  height: 72px !important;
+  margin: 0 auto 8px !important;
+  object-fit: contain;
   filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6));
 }
-.shop-item-details h3 {
+#shopModal .shop-item-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  flex-grow: 1;
+  color: inherit;
+}
+#shopModal .shop-item-details h3 {
   font-family: 'Cinzel', serif;
   color: var(--aaa-gold-light) !important;
-  font-size: 1.15em !important;
+  font-size: 0.86em !important;
+  line-height: 1.25;
+  margin: 0 0 4px !important;
   text-shadow: 0 1px 4px rgba(0,0,0,0.8);
 }
-.shop-item-details p {
+#shopModal .shop-item-details p {
   color: #cfc6ab !important;
+  font-size: 0.68em !important;
+  line-height: 1.32;
+  margin: 0 0 8px !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5em;
 }
-.shop-item-cost {
+#shopModal .shop-item-cost {
   background: rgba(0,0,0,0.4);
   display: inline-flex !important;
-  padding: 4px 10px;
+  align-items: center;
+  padding: 3px 10px;
   border-radius: 20px;
   border: 1px solid var(--aaa-border-soft);
   color: var(--aaa-gold-light) !important;
+  font-size: 0.82em !important;
+  margin: 0 0 9px !important;
 }
-.shop-buy-btn {
+#shopModal .shop-item-cost img { width: 16px !important; height: 16px !important; margin-right: 4px !important; }
+#shopModal .shop-buy-btn {
+  width: 100%;
+  margin-top: auto;
+  padding: 9px 6px !important;
+  font-size: 0.78em !important;
   background: linear-gradient(180deg, #e6c977 0%, var(--aaa-gold) 45%, var(--aaa-gold-dark) 100%) !important;
-  background-image: none !important;
   border: 1px solid #8a6e24 !important;
-  border-radius: 10px !important;
+  border-radius: 9px !important;
   color: #241a05 !important;
   text-shadow: none !important;
   font-weight: 800 !important;
-  letter-spacing: 0.03em;
-  box-shadow: 0 6px 16px rgba(201,169,74,0.3), inset 0 1px 0 rgba(255,255,255,0.35);
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 14px rgba(201,169,74,0.3), inset 0 1px 0 rgba(255,255,255,0.35);
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.shop-buy-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(201,169,74,0.42), inset 0 1px 0 rgba(255,255,255,0.35); }
+#shopModal .shop-buy-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(201,169,74,0.42), inset 0 1px 0 rgba(255,255,255,0.35); }
 
-.recharge-item {
+/* Recarga de Ouro */
+#shopModal .recharge-item {
   border-color: var(--aaa-cyan-glow) !important;
+  justify-content: center;
 }
-.recharge-item .shop-item-details span { color: var(--aaa-cyan) !important; text-shadow: 0 0 10px rgba(79,216,232,0.4); }
+#shopModal .recharge-item .shop-item-img { width: 58px !important; height: 58px !important; }
+#shopModal .recharge-item .shop-item-details h3 {
+  font-size: 0.8em !important;
+  color: #e8dfc4 !important;
+}
+#shopModal .recharge-item .shop-item-details span {
+  color: var(--aaa-cyan) !important;
+  text-shadow: 0 0 10px rgba(79,216,232,0.4);
+  font-size: 1.15em !important;
+  font-weight: 800;
+}
+#shopModal .recharge-item .formas {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.62em !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9a9488 !important;
+}
+#shopModal .recharge-item #soon {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--aaa-border-soft);
+  color: #9a9488;
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
-.video-reward-card {
+/* Aba de vídeos */
+#shopModal .video-rewards-container { gap: 12px; }
+#shopModal .video-reward-card {
   background: linear-gradient(160deg, rgba(38,32,18,0.92), rgba(14,12,7,0.95)) !important;
   border: 1px solid var(--aaa-border);
   border-radius: 12px;
   box-shadow: var(--aaa-shadow-deep);
 }
-.video-reward-card img { filter: drop-shadow(0 3px 8px rgba(0,0,0,0.6)); }
-.video-reward-card span { color: var(--aaa-gold-light); }
-.video-reward-card button {
+#shopModal .video-reward-card img { filter: drop-shadow(0 3px 8px rgba(0,0,0,0.6)); }
+#shopModal .video-reward-card span { color: var(--aaa-gold-light); font-size: 0.82em !important; }
+#shopModal .video-reward-card button {
   background: linear-gradient(180deg, #6fe6f2 0%, var(--aaa-cyan) 45%, #0f6470 100%) !important;
-  background-image: none !important;
   border: 1px solid #0d5865 !important;
   color: #04262b !important;
   text-shadow: none !important;
   border-radius: 8px !important;
   font-weight: 800 !important;
+}
+
+@media (max-width: 380px) {
+  #shopModal #shop-main, #shopModal #shop-recharge { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  #shopModal .shop-item { padding: 10px 6px 10px; }
 }
 
 /* ═══════════════════════ MISSÕES DE PROGRESSÃO ═══════════════════════ */
@@ -4704,7 +4861,7 @@ font > font {
   margin-bottom: 8px;
 }
 
-.progression-list {
+#progressionModal .progression-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -4712,13 +4869,13 @@ font > font {
   text-align: left;
 }
 
-.prog-category-block {
+#progressionModal .prog-category-block {
   background: rgba(0,0,0,0.28);
   border: 1px solid var(--aaa-border-soft);
   border-radius: 14px;
   padding: 12px 12px 14px;
 }
-.prog-category-header {
+#progressionModal .prog-category-header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4726,7 +4883,7 @@ font > font {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--aaa-border-soft);
 }
-.prog-category-icon {
+#progressionModal .prog-category-icon {
   width: 26px;
   height: 26px;
   flex-shrink: 0;
@@ -4738,14 +4895,14 @@ font > font {
   color: #241a05;
   font-size: 0.85em;
 }
-.prog-category-title {
+#progressionModal .prog-category-title {
   flex-grow: 1;
   font-family: 'Cinzel', serif;
   color: var(--aaa-gold-light);
   font-size: 1.02em;
   letter-spacing: 0.02em;
 }
-.prog-count-badge {
+#progressionModal .prog-count-badge {
   font-size: 0.72em;
   font-weight: 800;
   color: var(--aaa-gold-light);
@@ -4756,7 +4913,7 @@ font > font {
   flex-shrink: 0;
 }
 
-.prog-subsection-label {
+#progressionModal .prog-subsection-label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4767,20 +4924,20 @@ font > font {
   color: #9a9488;
   margin: 10px 0 8px;
 }
-.prog-subsection-label.completed-label { color: var(--aaa-green); }
-.prog-subsection-label.pending-label { color: var(--aaa-gold-light); }
+#progressionModal .prog-subsection-label.completed-label { color: var(--aaa-green); }
+#progressionModal .prog-subsection-label.pending-label { color: var(--aaa-gold-light); }
 
 /* Tira de conquistas concluídas (mini badges) */
-.prog-completed-strip {
+#progressionModal .prog-completed-strip {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   padding-bottom: 4px;
   scrollbar-width: thin;
 }
-.prog-completed-strip::-webkit-scrollbar { height: 5px; }
-.prog-completed-strip::-webkit-scrollbar-thumb { background: var(--aaa-gold-dark); border-radius: 3px; }
-.mini-badge {
+#progressionModal .prog-completed-strip::-webkit-scrollbar { height: 5px; }
+#progressionModal .prog-completed-strip::-webkit-scrollbar-thumb { background: var(--aaa-gold-dark); border-radius: 3px; }
+#progressionModal .mini-badge {
   position: relative;
   flex-shrink: 0;
   width: 46px;
@@ -4794,9 +4951,9 @@ font > font {
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.mini-badge:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 4px 12px rgba(94,203,125,0.3); }
-.mini-badge img { width: 26px; height: 26px; object-fit: contain; opacity: 0.9; }
-.mini-badge .mini-badge-check {
+#progressionModal .mini-badge:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 4px 12px rgba(94,203,125,0.3); }
+#progressionModal .mini-badge img { width: 26px; height: 26px; object-fit: contain; opacity: 0.9; }
+#progressionModal .mini-badge .mini-badge-check {
   position: absolute;
   bottom: -4px;
   right: -4px;
@@ -4814,13 +4971,13 @@ font > font {
 }
 
 /* Trilha de missões (ativa + bloqueadas) */
-.prog-pending-track {
+#progressionModal .prog-pending-track {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.mission-card {
+#progressionModal .mission-card {
   position: relative;
   display: flex;
   align-items: center;
@@ -4832,24 +4989,24 @@ font > font {
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
-.mission-card:hover { transform: translateY(-1px); border-color: var(--aaa-border); }
+#progressionModal .mission-card:hover { transform: translateY(-1px); border-color: var(--aaa-border); }
 
-.mission-card .mission-reward {
+#progressionModal .mission-card .mission-reward {
   width: 52px;
   flex-shrink: 0;
 }
-.mission-card .mission-reward img {
+#progressionModal .mission-card .mission-reward img {
   width: 46px;
   height: 46px;
   object-fit: contain;
   filter: drop-shadow(0 3px 6px rgba(0,0,0,0.6));
 }
-.mission-card .mission-reward span {
+#progressionModal .mission-card .mission-reward span {
   font-size: 0.78em;
   color: #cfc6ab;
 }
-.mission-card .mission-details { flex-grow: 1; min-width: 0; }
-.mission-card .mission-details p {
+#progressionModal .mission-card .mission-details { flex-grow: 1; min-width: 0; }
+#progressionModal .mission-card .mission-details p {
   font-size: 0.88em;
   color: #e8dfc4;
   margin: 0 0 5px;
@@ -4858,26 +5015,26 @@ font > font {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mission-card-progress-bar {
+#progressionModal .mission-card-progress-bar {
   height: 6px;
   border-radius: 4px;
   background: rgba(0,0,0,0.45);
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.06);
 }
-.mission-card-progress-fill {
+#progressionModal .mission-card-progress-fill {
   height: 100%;
   border-radius: 4px;
   background: linear-gradient(90deg, var(--aaa-cyan), #8be6f0);
   transition: width 0.4s ease;
 }
-.mission-card-progress-text {
+#progressionModal .mission-card-progress-text {
   font-size: 0.68em;
   color: #9a9488;
   margin-top: 3px;
   display: block;
 }
-.mission-card .mission-status-icon {
+#progressionModal .mission-card .mission-status-icon {
   flex-shrink: 0;
   width: 30px;
   height: 30px;
@@ -4889,43 +5046,42 @@ font > font {
 }
 
 /* Estado: ativa/disponível */
-.mission-card.status-active {
+#progressionModal .mission-card.status-active {
   background: linear-gradient(90deg, rgba(201,169,74,0.14), rgba(255,255,255,0.03));
   border-color: var(--aaa-gold);
   box-shadow: 0 0 0 1px rgba(201,169,74,0.15), 0 6px 18px rgba(201,169,74,0.15);
 }
-.mission-card.status-active.claimable {
+#progressionModal .mission-card.status-active.claimable {
   animation: missionClaimablePulse 1.8s ease-in-out infinite;
 }
 @keyframes missionClaimablePulse {
   0%, 100% { box-shadow: 0 0 0 1px rgba(201,169,74,0.2), 0 0 14px rgba(201,169,74,0.25); }
   50%      { box-shadow: 0 0 0 1px rgba(201,169,74,0.45), 0 0 26px rgba(201,169,74,0.55); }
 }
-.mission-card.status-active .mission-status-icon {
+#progressionModal .mission-card.status-active .mission-status-icon {
   background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark));
   color: #241a05;
 }
 
 /* Estado: bloqueada / futura */
-.mission-card.status-locked {
+#progressionModal .mission-card.status-locked {
   opacity: 0.55;
   filter: grayscale(45%);
 }
-.mission-card.status-locked .mission-status-icon {
+#progressionModal .mission-card.status-locked .mission-status-icon {
   background: rgba(255,255,255,0.06);
   color: #9a9488;
   border: 1px solid var(--aaa-border-soft);
 }
-.mission-card.status-locked:hover { opacity: 0.75; }
+#progressionModal .mission-card.status-locked:hover { opacity: 0.75; }
 
 /* Botão resgatar dentro do card */
-.mission-actions { width: 84px; flex-shrink: 0; }
-.mission-actions .claim-btn {
+#progressionModal .mission-actions { width: 84px; flex-shrink: 0; }
+#progressionModal .mission-actions .claim-btn {
   width: 100%;
   padding: 10px 0 !important;
   font-size: 0.78em !important;
   background: linear-gradient(180deg, #e6c977 0%, var(--aaa-gold) 45%, var(--aaa-gold-dark) 100%) !important;
-  background-image: none !important;
   border: 1px solid #8a6e24 !important;
   border-radius: 8px !important;
   color: #241a05 !important;
@@ -4933,7 +5089,7 @@ font > font {
   font-weight: 800 !important;
   margin-top: 0;
 }
-.mission-actions .claim-btn:disabled {
+#progressionModal .mission-actions .claim-btn:disabled {
   filter: grayscale(60%) brightness(0.7);
   background: rgba(255,255,255,0.06) !important;
   background-image: none !important;
@@ -4943,14 +5099,14 @@ font > font {
   pointer-events: none;
 }
 
-.mission-complete-message {
+#progressionModal .mission-complete-message {
   font-size: 0.92em;
   color: var(--aaa-green);
   font-weight: 700;
   text-align: center;
   padding: 14px 0 4px;
 }
-.prog-empty-note {
+#progressionModal .prog-empty-note {
   font-size: 0.78em;
   color: #776f60;
   text-align: center;

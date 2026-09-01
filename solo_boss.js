@@ -60,7 +60,6 @@ function _injectBossEpicStyles() {
     const css = `
     @keyframes sb-boss-flash  { 0%{filter:brightness(1) drop-shadow(0 0 16px #f80);} 35%{filter:brightness(3.8) drop-shadow(0 0 30px #fff);} 100%{filter:brightness(1) drop-shadow(0 0 8px rgba(255,80,0,.4));} }
     @keyframes sb-boss-crit   { 0%{filter:sepia(1) saturate(4) brightness(1) drop-shadow(0 0 16px #fa0);} 35%{filter:sepia(1) saturate(7) brightness(3.5) drop-shadow(0 0 40px #ffd700);} 100%{filter:brightness(1) drop-shadow(0 0 8px rgba(255,80,0,.4));} }
-    @keyframes sb-boss-float  { 0%,100%{transform:scaleY(1) translateY(0);} 40%,60%{transform:scaleY(1.020) translateY(-1px);} }
     @keyframes sb-ring        { 0%{transform:translate(-50%,-50%) scale(0.1);opacity:.95;} 100%{transform:translate(-50%,-50%) scale(3.2);opacity:0;} }
     @keyframes sb-ring2       { 0%{transform:translate(-50%,-50%) scale(0.1);opacity:.85;} 100%{transform:translate(-50%,-50%) scale(2.8);opacity:0;} }
     @keyframes sb-spark       { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0);opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d));opacity:0;} }
@@ -90,12 +89,13 @@ function _epicPlayerAttack(isCrit) {
     const flash   = document.getElementById('sb-screen-flash');
     if (!bossEl || !container) return;
 
-    // Boss image flash
+    // Boss image flash (só filter/drop-shadow — a respiração orgânica em JS
+    // continua controlando o transform o tempo todo, sem ser sobrescrita)
     bossEl.style.animation = 'none';
     void bossEl.offsetWidth;
     bossEl.style.animation = isCrit
-        ? 'sb-boss-crit 0.6s ease-out forwards, sb-boss-float 4.2s ease-in-out infinite 0.61s'
-        : 'sb-boss-flash 0.42s ease-out forwards, sb-boss-float 4.2s ease-in-out infinite 0.43s';
+        ? 'sb-boss-crit 0.6s ease-out forwards'
+        : 'sb-boss-flash 0.42s ease-out forwards';
 
     // Screen flash
     if (flash) {
@@ -333,6 +333,10 @@ let loops = { timer: null, combat: null };
 // Além disso há um leve balanço de peso (rotação + deslocamento
 // horizontal mínimos) para parecer vivo — nunca usamos translateY,
 // então ele não flutua, só respira e balança sutilmente.
+// IMPORTANTE: esta função controla `bossEl.style.transform` sem parar.
+// O flash de dano (_epicPlayerAttack) usa apenas `style.animation`
+// sobre `filter`/`drop-shadow`, nunca sobre `transform`, então os
+// dois nunca brigam pelo mesmo controle.
 // =================================================================
 function initOrganicBreathing(elementId) {
     const img = document.getElementById(elementId);
@@ -967,14 +971,12 @@ async function finishBattle(victory) {
 function triggerShake(elementId) {
     const el = document.getElementById(elementId);
     if(el) {
-        el.classList.remove('anim-float'); 
         el.classList.remove('shake-animation');
         void el.offsetWidth; 
         el.classList.add('shake-animation');
         
         setTimeout(() => {
             el.classList.remove('shake-animation');
-            if(elementId === 'bossImage') el.classList.add('anim-float');
         }, 500); 
     }
 }

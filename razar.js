@@ -895,7 +895,7 @@ function enableMapInteraction() {
 }
 
 // ── WANDER ───────────────────────────────────────────────────
-function startWander(el,w,h,delay){const move=()=>{el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=Math.max(0,Math.random()*(w-70))+'px';el.style.top=Math.max(0,Math.random()*(h-90))+'px';wanderTimers.push(setTimeout(pause,3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
 function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.src=spot.mobImg;av.onerror=()=>{av.src=DEFAULT_AVATAR;};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
@@ -2484,7 +2484,7 @@ function _triggerMobDeath(mobEl, spot){
 
 
 // =================================================================
-// ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO DOS MOBS (mapa de caça)
+// ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO + DESLOCAMENTO DOS MOBS (mapa de caça)
 // -----------------------------------------------------------------
 // Substitui o @keyframes fixo (mob-breathe/mob-float, que fazia todos
 // os mobs respirarem em sincronia e sempre do mesmo jeito) por uma
@@ -2495,6 +2495,22 @@ function _triggerMobDeath(mobEl, spot){
 // (um "suspiro"), sempre subindo/descendo suavemente, sem saltos.
 // Há também um leve balanço de peso (rotação + deslocamento horizontal
 // mínimos) — nunca translateY, então nenhum mob flutua.
+//
+// Além da respiração, como não temos sprites de caminhada, simulamos
+// o deslocamento (startWander) com truques puramente de transform,
+// sem precisar de nenhuma imagem nova:
+//   1) Virada horizontal (espelhamento): quando o mob anda para a
+//      esquerda ele espelha (scaleX negativo) suavemente, como se
+//      virasse de fato — em vez de deslizar de lado sempre com a
+//      mesma "cara".
+//   2) Leve inclinação na direção do movimento ("lean"): um par de
+//      graus de rotação enquanto anda, voltando ao normal ao parar —
+//      dá a sensação de peso/impulso, como alguém se inclinando pra
+//      andar.
+//   3) Squash & stretch sutil no início e no fim de cada passo: um
+//      leve achatamento/alongamento (scale, nunca translateY) que
+//      simula o "impulso" de sair do lugar e o "assentar" ao parar.
+//
 // Funciona para qualquer número de mobs na tela e se adapta sozinha
 // quando eles são recriados (renderSpots): os estados ficam num
 // WeakMap por elemento, sem precisar reconectar nada.
@@ -2512,6 +2528,10 @@ function _mobBreathNewState() {
         nextDriftChange: 0,
         nextDeepBreath: 4000 + Math.random() * 5000,
         deepBreathBoost: 0, deepBreathTarget: 0, deepBreathHold: 0,
+        // Estado de deslocamento (virada, inclinação e squash/stretch)
+        facing: 1, facingTarget: 1,
+        leanCurrent: 0, leanTarget: 0,
+        moveBoost: 0, moveBoostTarget: 0, moveBoostHold: 0,
         lastTime: performance.now()
     };
     _mobBreathPickTargets(st);
@@ -2525,6 +2545,33 @@ function _mobBreathPickTargets(st) {
     st.nextDriftChange = 3000 + Math.random() * 5000;    // novo alvo a cada 3–8s
 }
 
+function _mobBreathGetState(img) {
+    let st = _mobBreathStates.get(img);
+    if (!st) { st = _mobBreathNewState(); _mobBreathStates.set(img, st); }
+    return st;
+}
+
+// Chamado por startWander quando o mob começa a andar até um novo ponto
+function _mobWalkOnMoveStart(img, deltaX) {
+    if (!img) return;
+    const st = _mobBreathGetState(img);
+    if (Math.abs(deltaX) > 4) {
+        st.facingTarget = deltaX < 0 ? -1 : 1;
+    }
+    st.leanTarget = st.facingTarget * 1.6; // leve inclinação na direção do passo (graus)
+    st.moveBoostTarget = 1;
+    st.moveBoostHold = 260; // ms de "impulso" (squash/stretch) logo no início do passo
+}
+
+// Chamado quando o mob chega ao destino e para de andar
+function _mobWalkOnMoveEnd(img) {
+    if (!img) return;
+    const st = _mobBreathGetState(img);
+    st.leanTarget = 0;
+    st.moveBoostTarget = 1; // pequeno "assentar" ao chegar/parar
+    st.moveBoostHold = 220;
+}
+
 function initMobAvatarBreathing() {
     function tick(now) {
         if (!document.hidden) {
@@ -2534,8 +2581,7 @@ function initMobAvatarBreathing() {
                 const wrap = img.closest('.mob-wrapper');
                 if (wrap && (wrap.classList.contains('mob-dying') || wrap.classList.contains('mob-respawning'))) return;
 
-                let st = _mobBreathStates.get(img);
-                if (!st) { st = _mobBreathNewState(); _mobBreathStates.set(img, st); }
+                const st = _mobBreathGetState(img);
 
                 const dt = Math.min(now - st.lastTime, 100); // evita saltos ao voltar de aba oculta/hit
                 st.lastTime = now;
@@ -2568,17 +2614,36 @@ function initMobAvatarBreathing() {
                 const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
 
                 const breathAmount = asym * 0.022 * st.breathDepth * (1 + st.deepBreathBoost * 0.9);
-                const scaleY = 1 + breathAmount;
-                const scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
+                let scaleY = 1 + breathAmount;
+                let scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
 
                 // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
                 const sway = Math.sin(st.swayPhase) * 0.6 + Math.sin(st.swayPhase * 0.47 + 1.3) * 0.3;
                 const rotateDeg = sway * 0.12;
                 const translateXpx = sway * 0.3;
 
+                // --- Deslocamento: virada suave (espelhamento), inclinação e squash/stretch ---
+                st.facing += (st.facingTarget - st.facing) * 0.006 * dt;
+
+                st.leanCurrent += (st.leanTarget - st.leanCurrent) * 0.006 * dt;
+
+                if (st.moveBoostHold > 0) {
+                    st.moveBoostHold -= dt;
+                } else {
+                    st.moveBoostTarget = 0;
+                }
+                st.moveBoost += (st.moveBoostTarget - st.moveBoost) * 0.012 * dt;
+
+                const squash = st.moveBoost * 0.045; // até ~4.5% de achatamento/alongamento no pico do passo
+                scaleY *= (1 - squash);
+                scaleX *= (1 + squash * 0.6);
+
+                const totalRotateDeg = rotateDeg + st.leanCurrent;
+                const scaleXFinal = scaleX * st.facing;
+
                 img.style.transform =
-                    `translateX(${translateXpx.toFixed(2)}px) rotate(${rotateDeg.toFixed(2)}deg) ` +
-                    `scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+                    `translateX(${translateXpx.toFixed(2)}px) rotate(${totalRotateDeg.toFixed(2)}deg) ` +
+                    `scale(${scaleXFinal.toFixed(4)}, ${scaleY.toFixed(4)})`;
             });
         }
         requestAnimationFrame(tick);

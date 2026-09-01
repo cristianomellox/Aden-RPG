@@ -1197,7 +1197,7 @@ async function _executeSignUp() {
         signUpBtn.style.display = 'none';
         passwordInput.style.display = 'none';
         const _googleBtn = document.getElementById('googleSignInBtn');
-        if (_googleBtn) _googleBtn.style.display = 'none';
+        if (_googleBtn) _googleBtn.style.display = 'flex';
         // Abre o modal de e-mail automaticamente para o usuário ver o campo OTP
         const _emlModal = document.getElementById('emailLoginModal');
         if (_emlModal && _emlModal.style.display === 'none') _emlModal.style.display = 'flex';

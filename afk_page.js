@@ -300,8 +300,8 @@ function initOrganicBreathing(elementId) {
 
         // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
         const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;
-        const rotateDeg = sway * 0.5;
-        const translateXpx = sway * 1.4;
+        const rotateDeg = sway * 0.12;
+        const translateXpx = sway * 0.3;
 
         img.style.transform =
             `translateX(${translateXpx.toFixed(2)}px) rotate(${rotateDeg.toFixed(2)}deg) ` +

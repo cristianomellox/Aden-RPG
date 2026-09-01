@@ -1926,7 +1926,7 @@ window.updateUIVisibility = (isLoggedIn, activeContainerId = null) => {
     passwordInput.style.display = 'block';
     otpInputContainer.style.display = 'none';
     const _googleSignInBtn = document.getElementById('googleSignInBtn');
-    if (_googleSignInBtn) _googleSignInBtn.style.display = 'none';
+    if (_googleSignInBtn) _googleSignInBtn.style.display = 'flex';
     const _emailOpenBtn = document.getElementById('emailLoginOpenBtn');
     if (_emailOpenBtn) _emailOpenBtn.style.display = 'flex';
     authMessage.textContent = '';

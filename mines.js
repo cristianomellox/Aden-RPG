@@ -526,6 +526,109 @@ document.addEventListener("DOMContentLoaded", async () => {
   const monsterHpTextOverlay = document.getElementById("monsterHpTextOverlay");
   const monsterArea = document.getElementById("monsterArea");
   const damageRankingList = document.getElementById("damageRankingList");
+
+  // =================================================================
+  // 3.1 ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO DO MONSTRO
+  // -----------------------------------------------------------------
+  // Em vez de um @keyframes fixo (que repete sempre o mesmo padrão e
+  // fica robótico), a respiração é calculada quadro a quadro com
+  // pequenas variações aleatórias: a velocidade e a "profundidade"
+  // do fôlego derivam lentamente ao longo do tempo, a curva de
+  // inspiração/expiração é assimétrica (como uma respiração real) e,
+  // de tempos em tempos, o monstro dá uma respirada mais funda (um
+  // "suspiro"), quebrando a repetição perceptível.
+  //
+  // Além da respiração, há um leve balanço de peso (rotação e um
+  // deslocamento horizontal mínimos) para dar sensação de que o
+  // monstro está "vivo" e apoiado no chão — nunca usamos translateY,
+  // então ele não flutua, só respira e balança sutilmente.
+  // =================================================================
+  (function initMonsterBreathing() {
+    const img = document.getElementById("monsterImage");
+    if (!img) return;
+
+    let breathPhase = Math.random() * Math.PI * 2;
+    let swayPhase = Math.random() * Math.PI * 2;
+
+    let breathSpeed = 1;     // multiplicador de velocidade do ciclo de respiração
+    let breathDepth = 1;     // multiplicador de intensidade (respiração funda/rasa)
+    let swaySpeed = 0.35;
+
+    let targetBreathSpeed = breathSpeed;
+    let targetBreathDepth = breathDepth;
+    let targetSwaySpeed = swaySpeed;
+    let nextDriftChange = 0;
+
+    // "Suspiro" ocasional: uma respirada mais profunda que as outras
+    let nextDeepBreath = 4000 + Math.random() * 5000;
+    let deepBreathBoost = 0;
+
+    let lastTime = performance.now();
+
+    function pickNewDriftTargets() {
+      targetBreathSpeed = 0.82 + Math.random() * 0.4;  // ~0.82x–1.22x
+      targetBreathDepth = 0.75 + Math.random() * 0.55; // ~0.75x–1.3x
+      targetSwaySpeed = 0.25 + Math.random() * 0.25;
+      nextDriftChange = 3000 + Math.random() * 5000;   // novo alvo a cada 3–8s
+    }
+    pickNewDriftTargets();
+
+    function tick(now) {
+      const dt = Math.min(now - lastTime, 100); // evita saltos ao voltar de aba oculta
+      lastTime = now;
+
+      // Só calcula quando a aba está visível e o elemento aparece na tela
+      if (document.hidden || img.offsetParent === null) {
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      // Não brigar com a animação de "tremida" ao levar dano
+      if (img.classList.contains("shake-animation")) {
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      nextDriftChange -= dt;
+      if (nextDriftChange <= 0) pickNewDriftTargets();
+
+      // Transição suave para os novos alvos (evita mudanças bruscas)
+      breathSpeed += (targetBreathSpeed - breathSpeed) * 0.0015 * dt;
+      breathDepth += (targetBreathDepth - breathDepth) * 0.0015 * dt;
+      swaySpeed += (targetSwaySpeed - swaySpeed) * 0.0015 * dt;
+
+      nextDeepBreath -= dt;
+      if (nextDeepBreath <= 0) {
+        deepBreathBoost = 1;
+        nextDeepBreath = 7000 + Math.random() * 8000;
+      }
+      deepBreathBoost *= 0.985; // decai suavemente após o suspiro
+
+      breathPhase += (dt / 1000) * breathSpeed * ((Math.PI * 2) / 4.2);
+      swayPhase += (dt / 1000) * swaySpeed * (Math.PI * 2);
+
+      // Curva assimétrica: inspiração mais rápida, expiração mais lenta (mais realista que um seno puro)
+      const raw = Math.sin(breathPhase);
+      const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
+
+      const breathAmount = asym * 0.022 * breathDepth * (1 + deepBreathBoost * 0.9);
+      const scaleY = 1 + breathAmount;
+      const scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
+
+      // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
+      const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;
+      const rotateDeg = sway * 0.5;
+      const translateXpx = sway * 1.4;
+
+      img.style.transform =
+        `translateX(${translateXpx.toFixed(2)}px) rotate(${rotateDeg.toFixed(2)}deg) ` +
+        `scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+
+      requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  })();
   
   // Modal Confirmação/Alerta
   const confirmModal = document.getElementById("confirmModal");

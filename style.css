@@ -1500,9 +1500,9 @@ margin-right: 15px;
 }
 
 .draw-btn {
-  width: 80%;
+  width: 50%;
   padding: 20px 40px;
-  font-size: 1.2em;
+  font-size: 1.6em;
 }
 
 .close-spiral-modal {
@@ -4333,7 +4333,7 @@ button, .btn {
 
 #spiralModal .close-spiral-modal {
   margin-top: 12px;
-  width: 100%;
+  width: 50%;
   background: rgba(255,255,255,0.04) !important;
   background-image: none !important;
   border: 1px solid var(--aaa-border-soft) !important;

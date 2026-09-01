@@ -351,6 +351,8 @@ function initOrganicBreathing(elementId) {
 
     let nextDeepBreath = 4000 + Math.random() * 5000;
     let deepBreathBoost = 0;
+    let deepBreathTarget = 0;
+    let deepBreathHold = 0;
 
     let lastTime = performance.now();
 
@@ -385,10 +387,16 @@ function initOrganicBreathing(elementId) {
 
         nextDeepBreath -= dt;
         if (nextDeepBreath <= 0) {
-            deepBreathBoost = 1;
+            deepBreathTarget = 1;
+            deepBreathHold = 900; // ms segurando o pico antes de soltar o ar
             nextDeepBreath = 7000 + Math.random() * 8000;
         }
-        deepBreathBoost *= 0.985; // decai suavemente após o suspiro
+        if (deepBreathTarget > 0) {
+            deepBreathHold -= dt;
+            if (deepBreathHold <= 0) deepBreathTarget = 0;
+        }
+        // Sobe e desce suavemente (sem saltos) — simula inspirar fundo e soltar o ar aos poucos
+        deepBreathBoost += (deepBreathTarget - deepBreathBoost) * 0.005 * dt;
 
         breathPhase += (dt / 1000) * breathSpeed * ((Math.PI * 2) / 4.2);
         swayPhase += (dt / 1000) * swaySpeed * (Math.PI * 2);

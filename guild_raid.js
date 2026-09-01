@@ -553,13 +553,14 @@ function _injectRaidEpicStyles() {
 function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     targetEl.style.position = targetEl.style.position || 'relative';
 
-    // Flash on monster image (restore floatY animation after)
+    // Flash on monster image (só filter/drop-shadow — a respiração orgânica
+    // em JS continua controlando o transform o tempo todo, sem ser sobrescrita)
     const monsterImg = document.getElementById('raidMonsterImage');
     if (monsterImg) {
         monsterImg.style.animation = isCrit
-            ? 'raid-monster-crit 0.65s ease-out, floatY 4.2s ease-in-out infinite'
-            : 'raid-monster-hit 0.42s ease-out, floatY 4.2s ease-in-out infinite';
-        setTimeout(() => { if (monsterImg) monsterImg.style.animation = 'floatY 4.2s ease-in-out infinite'; }, isCrit ? 680 : 460);
+            ? 'raid-monster-crit 0.65s ease-out'
+            : 'raid-monster-hit 0.42s ease-out';
+        setTimeout(() => { if (monsterImg) monsterImg.style.animation = ''; }, isCrit ? 680 : 460);
     }
 
     // Screen edge flash (player perspective - orange/gold glow on attack)
@@ -2096,6 +2097,10 @@ function bindEvents() {
 // Além disso há um leve balanço de peso (rotação + deslocamento
 // horizontal mínimos) para parecer vivo — nunca usamos translateY,
 // então ele não flutua, só respira e balança sutilmente.
+// IMPORTANTE: esta função controla `raidMonsterImage.style.transform`
+// sem parar. O flash de dano (_epicRaidPlayerAttack) usa apenas
+// `style.animation` sobre `filter`/`drop-shadow`, nunca sobre
+// `transform`, então os dois nunca brigam pelo mesmo controle.
 // =================================================================
 function initOrganicBreathing(elementId) {
   const img = document.getElementById(elementId);

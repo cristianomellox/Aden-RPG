@@ -4298,6 +4298,8 @@ button, .btn {
 #spiralModal .card-info img { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6)); }
 
 #spiralModal .plus-btn {
+  width: 15px;
+  height: 15px;
   border-radius: 50% !important;
   background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark)) !important;
   border: 1px solid #8a6e24 !important;
@@ -4306,9 +4308,9 @@ button, .btn {
 }
 
 #spiralModal .draw-btn {
-  width: 100%;
+  width: 50%;
   padding: 16px 20px !important;
-  font-size: 1.05em !important;
+  font-size: 1.3em !important;
   background: linear-gradient(180deg, #6fe6f2 0%, var(--aaa-cyan) 45%, #0f6470 100%) !important;
   border: 1px solid #0d5865 !important;
   border-radius: 12px;

@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.cmellox.adenrpg",
+        "sha256_cert_fingerprints": ["3C:0C:E4:80:C8:99:F6:45:77:3F:BF:32:D2:87:4B:E5:51:45:F7:74:52:DC:32:D6:85:29:6C:40:16:7B:A4:D4"]
+      }
+    }]

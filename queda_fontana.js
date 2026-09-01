@@ -2479,7 +2479,112 @@ function _triggerMobDeath(mobEl, spot){
     }, 9000);
 }
 
+
+// =================================================================
+// ANIMAÇÃO ORGÂNICA DE RESPIRAÇÃO DOS MOBS (mapa de caça)
+// -----------------------------------------------------------------
+// Substitui o @keyframes fixo (mob-breathe/mob-float, que fazia todos
+// os mobs respirarem em sincronia e sempre do mesmo jeito) por uma
+// respiração calculada quadro a quadro e independente para CADA mob:
+// velocidade e profundidade do fôlego derivam lentamente e sozinhas,
+// a curva de inspiração/expiração é assimétrica (como uma respiração
+// real) e, de tempos em tempos, cada mob dá uma respirada mais funda
+// (um "suspiro"), sempre subindo/descendo suavemente, sem saltos.
+// Há também um leve balanço de peso (rotação + deslocamento horizontal
+// mínimos) — nunca translateY, então nenhum mob flutua.
+// Funciona para qualquer número de mobs na tela e se adapta sozinha
+// quando eles são recriados (renderSpots): os estados ficam num
+// WeakMap por elemento, sem precisar reconectar nada.
+// Pausa automaticamente durante shake-animation (dano) e durante
+// mob-dying/mob-respawning (que já controlam o transform sozinhos).
+// =================================================================
+const _mobBreathStates = new WeakMap();
+
+function _mobBreathNewState() {
+    const st = {
+        breathPhase: Math.random() * Math.PI * 2,
+        swayPhase: Math.random() * Math.PI * 2,
+        breathSpeed: 1, breathDepth: 1, swaySpeed: 0.35,
+        targetBreathSpeed: 1, targetBreathDepth: 1, targetSwaySpeed: 0.35,
+        nextDriftChange: 0,
+        nextDeepBreath: 4000 + Math.random() * 5000,
+        deepBreathBoost: 0, deepBreathTarget: 0, deepBreathHold: 0,
+        lastTime: performance.now()
+    };
+    _mobBreathPickTargets(st);
+    return st;
+}
+
+function _mobBreathPickTargets(st) {
+    st.targetBreathSpeed = 0.82 + Math.random() * 0.4;   // ~0.82x–1.22x
+    st.targetBreathDepth = 0.75 + Math.random() * 0.55;  // ~0.75x–1.3x
+    st.targetSwaySpeed = 0.25 + Math.random() * 0.25;
+    st.nextDriftChange = 3000 + Math.random() * 5000;    // novo alvo a cada 3–8s
+}
+
+function initMobAvatarBreathing() {
+    function tick(now) {
+        if (!document.hidden) {
+            document.querySelectorAll('.mob-avatar').forEach(img => {
+                if (img.offsetParent === null) return;
+                if (img.classList.contains('shake-animation')) return;
+                const wrap = img.closest('.mob-wrapper');
+                if (wrap && (wrap.classList.contains('mob-dying') || wrap.classList.contains('mob-respawning'))) return;
+
+                let st = _mobBreathStates.get(img);
+                if (!st) { st = _mobBreathNewState(); _mobBreathStates.set(img, st); }
+
+                const dt = Math.min(now - st.lastTime, 100); // evita saltos ao voltar de aba oculta/hit
+                st.lastTime = now;
+
+                st.nextDriftChange -= dt;
+                if (st.nextDriftChange <= 0) _mobBreathPickTargets(st);
+
+                st.breathSpeed += (st.targetBreathSpeed - st.breathSpeed) * 0.0015 * dt;
+                st.breathDepth += (st.targetBreathDepth - st.breathDepth) * 0.0015 * dt;
+                st.swaySpeed += (st.targetSwaySpeed - st.swaySpeed) * 0.0015 * dt;
+
+                st.nextDeepBreath -= dt;
+                if (st.nextDeepBreath <= 0) {
+                    st.deepBreathTarget = 1;
+                    st.deepBreathHold = 900; // ms segurando o pico antes de soltar o ar
+                    st.nextDeepBreath = 7000 + Math.random() * 8000;
+                }
+                if (st.deepBreathTarget > 0) {
+                    st.deepBreathHold -= dt;
+                    if (st.deepBreathHold <= 0) st.deepBreathTarget = 0;
+                }
+                // Sobe e desce suavemente (sem saltos) — simula inspirar fundo e soltar o ar aos poucos
+                st.deepBreathBoost += (st.deepBreathTarget - st.deepBreathBoost) * 0.005 * dt;
+
+                st.breathPhase += (dt / 1000) * st.breathSpeed * ((Math.PI * 2) / 4.2);
+                st.swayPhase += (dt / 1000) * st.swaySpeed * (Math.PI * 2);
+
+                // Curva assimétrica: inspiração mais rápida, expiração mais lenta
+                const raw = Math.sin(st.breathPhase);
+                const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
+
+                const breathAmount = asym * 0.022 * st.breathDepth * (1 + st.deepBreathBoost * 0.9);
+                const scaleY = 1 + breathAmount;
+                const scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
+
+                // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
+                const sway = Math.sin(st.swayPhase) * 0.6 + Math.sin(st.swayPhase * 0.47 + 1.3) * 0.3;
+                const rotateDeg = sway * 0.12;
+                const translateXpx = sway * 0.3;
+
+                img.style.transform =
+                    `translateX(${translateXpx.toFixed(2)}px) rotate(${rotateDeg.toFixed(2)}deg) ` +
+                    `scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+            });
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+}
+
 document.addEventListener('DOMContentLoaded',async()=>{
+    initMobAvatarBreathing();
     enableMapInteraction();
     document.getElementById('pauseHuntBtn').addEventListener('click',handlePauseHunt);
     document.getElementById('activateShieldBtn').addEventListener('click',handleActivateShield);

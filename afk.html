@@ -194,10 +194,12 @@
     #monsterImage {
       display:block; width:180px; height:320px; margin:0 auto 10px;
       object-fit:contain; filter: drop-shadow(0 0 12px rgba(255,60,0,0.5));
-      animation: float 4.2s ease-in-out infinite;
+      /* A respiração agora é controlada via JS (initOrganicBreathing em afk_page.js),
+         para variar de forma orgânica em vez de repetir sempre o mesmo ciclo.
+         Nunca usamos translateY aqui, só scale/rotate/translateX leves, então não flutua. */
       transform-origin: bottom center;
+      will-change: transform;
     }
-    @keyframes float { 0%,100%{transform:scaleY(1) translateY(0);} 40%,60%{transform:scaleY(1.020) translateY(-1px);} }
     @keyframes shake {
       0%{transform:translate(1px,1px) rotate(0deg);} 10%{transform:translate(-2px,-2px) rotate(-1deg);}
       20%{transform:translate(-3px,0) rotate(1deg);} 30%{transform:translate(3px,2px) rotate(0deg);}

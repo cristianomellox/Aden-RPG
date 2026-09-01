@@ -964,13 +964,12 @@ body {
   font-size: 0.8em;
   z-index: 998;
 }
-@keyframes floatY {
-  0%,100% { transform: scaleY(1) translateY(0); }
-  40%,60% { transform: scaleY(1.020) translateY(-1px); }
-}
 #raidMonsterImage {
-  animation: floatY 4.2s ease-in-out infinite;
+  /* A respiração agora é controlada via JS (initOrganicBreathing em guild_raid.js),
+     para variar de forma orgânica em vez de repetir sempre o mesmo ciclo.
+     Nunca usamos translateY aqui, só scale/rotate/translateX leves, então não flutua. */
   transform-origin: bottom center;
+  will-change: transform;
 }
 
 #raidMonsterHpBar {
@@ -1307,7 +1306,7 @@ hr {
 
 /* --- CORREÇÃO: Classe genérica para ser usada em qualquer elemento --- */
 .shake-animation {
-  /* !important garante que esta animação sobreponha outras (como a floatY do monstro) */
+  /* !important garante que esta animação sobreponha a respiração orgânica do monstro (controlada via JS) */
   animation: shake-monster 1s ease-in-out !important;
 }
 

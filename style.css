@@ -4308,7 +4308,7 @@ button, .btn {
 }
 
 #spiralModal .draw-btn {
-  width: 75%;
+  width: 80%;
   padding: 16px 20px !important;
   font-size: 1.3em !important;
   background: linear-gradient(180deg, #6fe6f2 0%, var(--aaa-cyan) 45%, #0f6470 100%) !important;

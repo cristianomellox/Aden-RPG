@@ -110,9 +110,12 @@ if ('serviceWorker' in navigator) {
             min-width: 660px;
             min-height: 770px;
             object-fit: contain;
-            animation: floatY 4.2s ease-in-out infinite;
+            /* A respiração agora é controlada via JS (initOrganicBreathing em solo_boss.js),
+               para variar de forma orgânica em vez de repetir sempre o mesmo ciclo.
+               Nunca usamos translateY aqui, só scale/rotate/translateX leves, então o boss não flutua. */
             margin-top: 150px;
             transform-origin: bottom center;
+            will-change: transform;
         }
 
         /* ÁREA DE UI (Frente) - Contém HP do Boss e Player */
@@ -237,7 +240,6 @@ if ('serviceWorker' in navigator) {
         }
 
         /* Animações e Utilitários */
-        @keyframes floatY { 0%,100% { transform: scaleY(1) translateY(0); } 40%,60% { transform: scaleY(1.020) translateY(-1px); } }
         @keyframes shake-monster {
             0%, 100% { transform: translateX(0); }
             10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }

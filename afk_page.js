@@ -118,7 +118,7 @@ function _injectAfkEpicStyles() {
     @keyframes afk-ring              { 0%{transform:translate(-50%,-50%) scale(0.2);opacity:.9;} 100%{transform:translate(-50%,-50%) scale(2.8);opacity:0;} }
     @keyframes afk-spark             { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0);opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d));opacity:0;} }
     @keyframes afk-edge-flash        { 0%,100%{opacity:0;} 30%{opacity:1;} }
-    @keyframes afk-floatY            { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-16px);} }
+    @keyframes afk-floatY            { 0%,100%{transform:scaleY(1) translateY(0);} 40%,60%{transform:scaleY(1.020) translateY(-1px);} }
     @keyframes afk-crit-label        { 0%{opacity:0;transform:translateX(-50%) scale(0.5);} 20%{opacity:1;transform:translateX(-50%) scale(1.1);} 80%{opacity:1;} 100%{opacity:0;transform:translateX(-50%) translateY(-18px);} }
     .afk-epic-ring { position:absolute; border-radius:50%; pointer-events:none; z-index:12;
         transform:translate(-50%,-50%); animation:afk-ring 0.6s ease-out forwards; }
@@ -146,8 +146,8 @@ function _epicAfkAttack(targetEl, dmg, isCrit) {
     // Monster flash
     targetEl.style.animation = 'none';
     void targetEl.offsetWidth;
-    targetEl.style.animation = isCrit ? 'afk-monster-crit 0.55s ease-out forwards, afk-floatY 3s ease-in-out infinite 0.56s'
-                                      : 'afk-monster-flash 0.4s ease-out forwards, afk-floatY 3s ease-in-out infinite 0.41s';
+    targetEl.style.animation = isCrit ? 'afk-monster-crit 0.55s ease-out forwards, afk-floatY 4.2s ease-in-out infinite 0.56s'
+                                      : 'afk-monster-flash 0.4s ease-out forwards, afk-floatY 4.2s ease-in-out infinite 0.41s';
 
     // Monster shake on crit
     if (isCrit) {

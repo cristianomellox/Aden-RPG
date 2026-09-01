@@ -557,9 +557,9 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     const monsterImg = document.getElementById('raidMonsterImage');
     if (monsterImg) {
         monsterImg.style.animation = isCrit
-            ? 'raid-monster-crit 0.65s ease-out, floatY 3s ease-in-out infinite'
-            : 'raid-monster-hit 0.42s ease-out, floatY 3s ease-in-out infinite';
-        setTimeout(() => { if (monsterImg) monsterImg.style.animation = 'floatY 3s ease-in-out infinite'; }, isCrit ? 680 : 460);
+            ? 'raid-monster-crit 0.65s ease-out, floatY 4.2s ease-in-out infinite'
+            : 'raid-monster-hit 0.42s ease-out, floatY 4.2s ease-in-out infinite';
+        setTimeout(() => { if (monsterImg) monsterImg.style.animation = 'floatY 4.2s ease-in-out infinite'; }, isCrit ? 680 : 460);
     }
 
     // Screen edge flash (player perspective - orange/gold glow on attack)

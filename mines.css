@@ -662,15 +662,11 @@ body {
     margin: -40px auto 0;
     object-fit: contain;
     filter: none;
-    /* Animação de respiração */
-    animation: float 4.2s ease-in-out infinite;
+    /* A respiração agora é controlada via JS (ver initMonsterBreathing em mines.js),
+       para variar de forma orgânica em vez de repetir sempre o mesmo ciclo.
+       Os pés permanecem fixos: nunca usamos translateY aqui, só scale/rotate/translateX leves. */
     transform-origin: bottom center;
-}
-
-/* Keyframes para a animação de respiração */
-@keyframes float {
-    0%,100% { transform: scaleY(1) translateY(0); }
-    40%,60% { transform: scaleY(1.020) translateY(-1px); }
+    will-change: transform;
 }
 /* --- Animação de Tremida (Shake) --- */
 @keyframes shake {

@@ -1556,6 +1556,11 @@ function updateXpBar(xpPercent, xpLabel) {
 function renderPlayerUI(player, preserveActiveContainer = false) {
     authContainer.style.display = 'none';
     const avatarSrc = player.avatar_url || 'https://aden-rpg.pages.dev/avatar01.webp';
+    // Contas 100% Google (sem identidade "email"/senha no Supabase Auth) não
+    // têm senha para trocar — o fluxo de "Alterar Senha" exige reautenticar
+    // com a senha atual, o que nunca existiu para essas contas. Por isso o
+    // botão fica oculto nesse caso (ver updateAuthProviderFlag).
+    const canChangePassword = window.hasPasswordIdentity !== false;
     playerInfoDiv.innerHTML = `
       <div class="acc-modal-header">
         <div class="acc-modal-avatar-wrap">
@@ -1571,11 +1576,12 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
           <span class="acc-menu-label">Editar Perfil</span>
           <span class="acc-menu-arrow">&rsaquo;</span>
         </button>
+        ${canChangePassword ? `
         <button class="acc-menu-item" id="changePasswordBtn" type="button">
           <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
           <span class="acc-menu-label">Alterar Senha</span>
           <span class="acc-menu-arrow">&rsaquo;</span>
-        </button>
+        </button>` : ''}
         <button class="acc-menu-item acc-menu-danger" id="signOutBtn" type="button">
           <span class="acc-menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
           <span class="acc-menu-label">Deslogar</span>
@@ -1640,6 +1646,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
                 currentPlayerId = cachedPlayer.id;
                 renderPlayerUI(cachedPlayer, preserveActiveContainer);
                 checkProgressionNotifications(cachedPlayer);
+                enforceBirthDateCompliance(cachedPlayer);
                 
                 // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
                 if (!localStorage.getItem('aden_starter_pack_given_' + cachedPlayer.id)) {
@@ -1689,6 +1696,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
             rank,
             is_banned,
             ban_reason,
+            birth_date,
             daily_rewards_log 
         `;
 
@@ -1766,6 +1774,7 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
         renderPlayerUI(player, preserveActiveContainer);
         checkProgressionNotifications(player);
+        enforceBirthDateCompliance(player);
 
         // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
         if (!localStorage.getItem('aden_starter_pack_given_' + player.id)) {
@@ -1789,6 +1798,143 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         window.isPlayerLoading = false; // Libera o semáforo
     }
 }
+
+// =======================================================================
+// DATA DE NASCIMENTO OBRIGATÓRIA (Lei 15.211/2025) — contas via Google
+// =======================================================================
+// O cadastro por e-mail já força a coleta da data de nascimento antes de
+// enviar o OTP (ver _executeSignUp). O login/registro via Google (OAuth
+// redirect ou One Tap) autentica direto com o Google e não passa por essa
+// etapa, então a conta pode ser criada sem birth_date.
+//
+// Não é possível pedir a data ANTES do jogador escolher a conta do Google:
+// nesse momento ainda não sabemos se é uma conta nova ou uma já existente,
+// e travar o próprio seletor de contas do Google não é algo controlável
+// pelo app. Por isso, a checagem é feita DEPOIS da autenticação: sempre
+// que os dados do jogador são carregados (renderPlayerUI/fetchAndDisplayPlayerInfo)
+// e a coluna birth_date está vazia, um modal bloqueante é exibido — cobre
+// tanto contas novas via Google quanto contas Google antigas que ainda não
+// tinham essa exigência.
+function enforceBirthDateCompliance(player) {
+    const modal = document.getElementById('googleBirthDateModal');
+    if (!modal) return;
+
+    if (!player || player.birth_date) {
+        // Já possui data de nascimento cadastrada — garante que o modal esteja fechado
+        if (modal.style.display !== 'none') {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        return;
+    }
+
+    // Não exibe por cima do modal de banimento (prioridade)
+    const banModal = document.getElementById('banModalOverlay');
+    if (banModal && banModal.style.display === 'flex') return;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+window.enforceBirthDateCompliance = enforceBirthDateCompliance;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const gDaySelect  = document.getElementById('googleBirthDaySelect');
+    const gYearSelect = document.getElementById('googleBirthYearSelect');
+    const gMsg        = document.getElementById('googleBirthDateMessage');
+    const gConfirmBtn = document.getElementById('googleBirthDateConfirmBtn');
+    const gLogoutBtn  = document.getElementById('googleBirthDateLogoutBtn');
+
+    if (!gConfirmBtn) return; // Modal não presente nesta página
+
+    // Popula dias (01–31)
+    if (gDaySelect) {
+        for (let d = 1; d <= 31; d++) {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = String(d).padStart(2, '0');
+            gDaySelect.appendChild(opt);
+        }
+    }
+
+    // Popula anos (ano atual descendo até 1950)
+    if (gYearSelect) {
+        const currentYear = new Date().getFullYear();
+        for (let y = currentYear; y >= 1950; y--) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            gYearSelect.appendChild(opt);
+        }
+    }
+
+    gConfirmBtn.addEventListener('click', async () => {
+        const day   = gDaySelect ? parseInt(gDaySelect.value) : 0;
+        const month = document.getElementById('googleBirthMonthSelect') ? parseInt(document.getElementById('googleBirthMonthSelect').value) : 0;
+        const year  = gYearSelect ? parseInt(gYearSelect.value) : 0;
+
+        if (gMsg) { gMsg.style.color = '#ff6b6b'; gMsg.textContent = ''; }
+
+        if (!day || !month || !year) {
+            if (gMsg) gMsg.textContent = '⚠️ Por favor, preencha sua data de nascimento completa.';
+            return;
+        }
+
+        const born  = new Date(year, month - 1, day);
+        const today = new Date();
+        let age = today.getFullYear() - born.getFullYear();
+        const monthDiff = today.getMonth() - born.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < born.getDate())) age--;
+
+        if (age < 18) {
+            if (gMsg) gMsg.textContent = '🔞 Acesso negado. Este jogo é destinado a maiores de 18 anos (Lei 15.211/2025).';
+            return;
+        }
+
+        if (!currentPlayerId) {
+            if (gMsg) gMsg.textContent = 'Não foi possível identificar sua conta. Tente sair e entrar novamente.';
+            return;
+        }
+
+        gConfirmBtn.disabled = true;
+        if (gMsg) { gMsg.style.color = '#aaa'; gMsg.textContent = 'Salvando...'; }
+
+        const birthDateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+        try {
+            const { error } = await supabaseClient
+                .from('players')
+                .update({ birth_date: birthDateStr })
+                .eq('id', currentPlayerId);
+
+            if (error) {
+                if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = translateSupabaseError(error.message); }
+                gConfirmBtn.disabled = false;
+                return;
+            }
+
+            if (currentPlayerData) currentPlayerData.birth_date = birthDateStr;
+            GlobalDB.updatePlayerPartial({ birth_date: birthDateStr });
+
+            const modal = document.getElementById('googleBirthDateModal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+            if (gMsg) gMsg.textContent = '';
+        } catch (err) {
+            console.error('Erro ao salvar data de nascimento:', err);
+            if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = 'Ocorreu um erro ao salvar. Tente novamente.'; }
+        } finally {
+            gConfirmBtn.disabled = false;
+        }
+    });
+
+    if (gLogoutBtn) {
+        gLogoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.body.style.overflow = '';
+            signOut();
+        });
+    }
+});
 
 // === Botão de copiar ID do jogador ===
 document.addEventListener('DOMContentLoaded', () => {
@@ -2002,6 +2148,30 @@ function googleOAuthRedirect() {
 }
 
 /**
+ * Detecta se a conta logada possui uma identidade "email" vinculada (ou seja,
+ * se ela tem senha própria no Supabase Auth). Contas criadas 100% via Google
+ * (OAuth ou One Tap) não possuem senha — nesse caso "Alterar Senha" não se
+ * aplica: o fluxo de troca de senha exige reautenticar com email+senha atual,
+ * e uma conta Google-only nunca teve uma senha para reautenticar.
+ *
+ * Fica salvo em window.hasPasswordIdentity e é usado por renderPlayerUI()
+ * para decidir se exibe o botão "Alterar Senha" no menu da conta.
+ * Por segurança, se não conseguirmos determinar (dado ausente/inesperado),
+ * assumimos true (mostra o botão) para nunca esconder a opção de quem
+ * realmente precisa dela.
+ */
+function updateAuthProviderFlag(session) {
+    try {
+        const identities = (session && session.user && session.user.identities) || [];
+        window.hasPasswordIdentity = identities.length === 0
+            ? true
+            : identities.some(identity => identity.provider === 'email');
+    } catch (e) {
+        window.hasPasswordIdentity = true;
+    }
+}
+
+/**
  * Callback chamado pelo SDK do Google após o usuário escolher uma conta.
  * Troca o credential (JWT) por uma sessão Supabase via signInWithIdToken.
  */
@@ -2039,6 +2209,7 @@ async function handleGoogleOneTapCredential(response) {
         // Trata o sucesso diretamente — não depende do onAuthStateChange,
         // que pode ser bloqueado pelo guard initialLoadDone=true de cache anterior.
         await GlobalDB.setAuth(data.session);
+        updateAuthProviderFlag(data.session);
         currentPlayerId = data.session.user.id;
         window.initialLoadDone = false;
         window.isPlayerLoading = false;
@@ -2049,6 +2220,7 @@ async function handleGoogleOneTapCredential(response) {
         const { data: sd } = await supabaseClient.auth.getSession();
         if (sd?.session) {
             await GlobalDB.setAuth(sd.session);
+            updateAuthProviderFlag(sd.session);
             currentPlayerId = sd.session.user.id;
             window.initialLoadDone = false;
             window.isPlayerLoading = false;
@@ -2144,6 +2316,7 @@ async function checkAuthStatus() {
         if (cachedAuth && cachedAuth.user) {
              console.log("⚡ [Auth] Sessão válida recuperada do IndexedDB Global.");
              currentPlayerId = cachedAuth.user.id;
+             updateAuthProviderFlag(cachedAuth);
              window.authCheckComplete = true;
 
              // Carrega jogador via DB ou rede se necessário (FALSE para respeitar cache)
@@ -2162,6 +2335,7 @@ async function checkAuthStatus() {
 
         if (session) {
             currentPlayerId = session.user.id;
+            updateAuthProviderFlag(session);
             window.authCheckComplete = true;
             
             // Salva no Global DB para a próxima vez ser Zero Egress
@@ -2222,6 +2396,7 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
         // e o evento SIGNED_IN chegaria tarde, mas o return antecipado impedia
         // de salvar a nova sessão → usuário fica deslogado ao reabrir o app.
         await GlobalDB.setAuth(session);
+        updateAuthProviderFlag(session);
 
         if (event === 'SIGNED_IN') {
             // Login real. Garante carregamento mesmo quando initialLoadDone=true
@@ -2242,6 +2417,7 @@ supabaseClient.auth.onAuthStateChange(async (event, session) => {
         // Salva o token renovado no IndexedDB para persistir entre sessões.
         // Sem isso, o IndexedDB ficaria com um token expirado após algumas horas.
         await GlobalDB.setAuth(session);
+        updateAuthProviderFlag(session);
     } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('player_data_cache');
         await GlobalDB.clearAuth();
@@ -2379,6 +2555,12 @@ document.addEventListener('DOMContentLoaded', () => {
 function openChangePasswordModal() {
     const modal = document.getElementById('changePasswordModal');
     if (!modal) return;
+    // Segurança extra: contas 100% Google não têm senha para trocar.
+    // O botão já fica oculto em renderPlayerUI, isso é só um cinto de segurança.
+    if (window.hasPasswordIdentity === false) {
+        showFloatingMessage('Sua conta usa login com Google e não possui senha para alterar.');
+        return;
+    }
     const curEl = document.getElementById('cpwCurrentPwd');
     const p1El  = document.getElementById('cpwNewPwd');
     const p2El  = document.getElementById('cpwConfirmPwd');

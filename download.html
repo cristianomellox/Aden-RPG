@@ -1586,5 +1586,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 })();
 </script>
+<script>
+// Registra o Service Worker para garantir que a página seja reconhecida como PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+                console.log('✅ SW registrado na página de download. Escopo:', reg.scope);
+            })
+            .catch(err => {
+                console.error('❌ Erro ao registrar SW na página de download:', err);
+            });
+    });
+}
+</script>
 </body>
 </html>

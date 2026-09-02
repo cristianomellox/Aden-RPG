@@ -1901,13 +1901,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const birthDateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 
         try {
-            const { error } = await supabaseClient
-                .from('players')
-                .update({ birth_date: birthDateStr })
-                .eq('id', currentPlayerId);
+            const { data, error } = await supabaseClient.rpc('set_player_birth_date', {
+                p_birth_date: birthDateStr
+            });
 
-            if (error) {
-                if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = translateSupabaseError(error.message); }
+            if (error || !data || data.success === false) {
+                const msg = (data && data.error) || (error && translateSupabaseError(error.message)) || 'Não foi possível salvar sua data de nascimento.';
+                if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = msg; }
                 gConfirmBtn.disabled = false;
                 return;
             }

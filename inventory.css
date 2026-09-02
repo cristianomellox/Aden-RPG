@@ -428,8 +428,8 @@
     font-family: 'Cinzel', serif;
     font-size: 0.68em;
     font-weight: bold;
-    color: #0d0d0d;
-    background: linear-gradient(180deg, #f0d68a, #a88235);
+    color: #fff;
+    background: linear-gradient(180deg, #444, #000);
     line-height: 1!important;
     padding: 0 3px 0 3px;
     border-radius: 999px;

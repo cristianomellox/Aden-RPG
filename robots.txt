@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
 
-User-agent: facebookexternalhit
-Allow: /
+Sitemap: https://aden-rpg.pages.dev/sitemap.xml

@@ -18,6 +18,7 @@
     var _ring      = null;
     var _curTarget = null;
     var _curClickH = null;
+    var _curReFind = null; // função opcional p/ relocalizar o alvo se ele for removido do DOM (re-render)
     var _observers = [];
     var _recalcTid = null;
 
@@ -191,8 +192,33 @@
     ───────────────────────────────────────────────────────── */
     function recalc() {
         if (!_curTarget) return;
+
+        // O alvo pode ter sido removido do DOM por um re-render (ex: bagItemsGrid.innerHTML
+        // é recriado do zero a cada renderUI()/loadItems()). Nesse caso _curTarget fica "morto"
+        // (getBoundingClientRect sempre 0x0) e o spotlight congelava na última posição válida,
+        // ficando "preso" numa posição errada até o usuário fechar e reabrir o app.
+        // Se uma função de relocalização foi fornecida, tenta achar o elemento atual equivalente.
+        if (!document.body.contains(_curTarget)) {
+            if (_curReFind) {
+                var fresh = _curReFind();
+                if (fresh && fresh !== _curTarget) {
+                    if (_curClickH) {
+                        fresh.addEventListener('click',    _curClickH, { capture: true, once: true });
+                        fresh.addEventListener('touchend', _curClickH, { capture: true, once: true, passive: true });
+                    }
+                    _curTarget = fresh;
+                } else {
+                    return; // ainda não há substituto válido; espera o próximo ciclo
+                }
+            } else {
+                return;
+            }
+        }
+
         var r = _curTarget.getBoundingClientRect();
-        if (r.width === 0 && r.height === 0) return; // elemento oculto: não reposiciona
+        // Antes: `r.width === 0 && r.height === 0` deixava passar retângulos degenerados
+        // (ex: largura 0 mas altura > 0), produzindo um "buraco"/seta praticamente invisíveis.
+        if (r.width <= 0 || r.height <= 0) return; // elemento oculto/degenerado: não reposiciona
         var vh = window.innerHeight;
         var vw = window.innerWidth;
         // Se o alvo estiver completamente fora da viewport (ex: abaixo do fold),
@@ -221,6 +247,7 @@
         window.removeEventListener('scroll', recalc);
 
         _curTarget = el;
+        _curReFind = opts.reFind || null;
         if (_tooltip) _tooltip.textContent = text;
 
         var r = el.getBoundingClientRect();
@@ -269,6 +296,7 @@
         if (_tooltip) { try { _tooltip.remove(); } catch(e) {} _tooltip = null; }
         _curClickH = null;
         _curTarget = null;
+        _curReFind = null;
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -293,6 +321,32 @@
                 if (r) { clearInterval(tid); res(r); return; }
                 if (Date.now() - t0 > timeout) { clearInterval(tid); rej(); }
             }, interval);
+        });
+    }
+
+    /* ─────────────────────────────────────────────────────────
+       waitStableRect
+       Espera o elemento parar de se mover/redimensionar antes de
+       "travar" o spotlight nele. Protege contra o caso do carregamento
+       a frio (conta nova, cache vazio): imagens do topo (retrato,
+       slots de equipamento) ainda estão baixando e podem empurrar o
+       grid de itens para uma posição diferente logo após a 1ª medição,
+       o que fazia a seta/anel aparecerem fora do lugar (ou "some­rem")
+       na primeira visita, mas nunca mais depois (cache quente = tudo
+       carrega rápido, sem esse deslocamento).
+    ───────────────────────────────────────────────────────── */
+    function waitStableRect(el, cb, tries) {
+        tries = tries || 0;
+        var r1 = el.getBoundingClientRect();
+        requestAnimationFrame(function () {
+            var r2 = el.getBoundingClientRect();
+            var stable = r1.top === r2.top && r1.left === r2.left &&
+                         r1.width === r2.width && r1.height === r2.height;
+            if (stable || tries >= 12) {
+                cb();
+            } else {
+                waitStableRect(el, cb, tries + 1);
+            }
         });
     }
 
@@ -473,6 +527,12 @@
             if (obsGrid)  { obsGrid.disconnect();  obsGrid  = null; }
         };
 
+        // Evita disparar mais de uma espera de estabilização em paralelo quando
+        // vários gatilhos (poll, MutationObserver, hook do renderUI) caem quase
+        // juntos — o que é comum bem no momento em que o inventário acaba de
+        // carregar pela 1ª vez.
+        var settling = false;
+
         var tryShow = function () {
             if (done || getStep() !== '2') { cleanup(); return true; }
 
@@ -480,22 +540,40 @@
             // (pode ter acontecido entre ciclos de polling)
             checkModal();
             if (done) return true;
+            if (settling) return true;
 
             var card = findSwordCard();
             if (!card) return false;
             var r = card.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) return false;
+            if (r.width <= 0 || r.height <= 0) return false;
 
             stopPolling();
+            settling = true;
 
-            // Listener de clique no card como reforço ao obsModal.
-            // Se o card correto for encontrado e clicado, avança imediatamente
-            // sem esperar o MutationObserver do modal.
-            showStep(
-                card,
-                '⚔️ Esta é sua Espada de Ferro!\nToque nela para inspecioná-la.',
-                function () { advance(); }
-            );
+            // Numa conta nova (cache local vazio), o inventário renderiza em 2
+            // etapas: 1) lista vazia (otimista) e 2) lista real após o download
+            // completo do servidor. Nesse momento outras imagens da tela (retrato,
+            // slots de equipamento) ainda podem estar carregando e empurrando o
+            // layout. Por isso esperamos o retângulo do card parar de se mexer
+            // antes de travar o spotlight nele — evita seta/anel fora de posição
+            // (ou "sumindo") só na primeira visita.
+            waitStableRect(card, function () {
+                settling = false;
+                if (done || getStep() !== '2') return;
+                // Reconfirma o alvo mais atual (o grid pode ter sido re-renderizado
+                // durante a espera).
+                var freshCard = findSwordCard() || card;
+
+                // Listener de clique no card como reforço ao obsModal.
+                // Se o card correto for encontrado e clicado, avança imediatamente
+                // sem esperar o MutationObserver do modal.
+                showStep(
+                    freshCard,
+                    '⚔️ Esta é sua Espada de Ferro!\nToque nela para inspecioná-la.',
+                    function () { advance(); },
+                    { reFind: findSwordCard }
+                );
+            });
             return true;
         };
 
@@ -656,23 +734,36 @@
             return null;
         };
 
+        var settling = false;
+
         var tryShow = function () {
             if (done || getStep() !== '3c') { cleanup(); return true; }
             checkSkinBtn(); if (done) return true;
+            if (settling) return true;
 
             var card = findFoxCard();
             if (!card) return false;
             var r = card.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) return false;
+            if (r.width <= 0 || r.height <= 0) return false;
 
             if (pid) { clearInterval(pid); pid = null; }
             if (obsGrid) { obsGrid.disconnect(); obsGrid = null; }
+            settling = true;
 
-            showStep(
-                card,
-                '🦊 Esta é a Moldura de Raposa!\nToque nela para ativá-la.',
-                function () { advance(); }
-            );
+            // Mesmo cuidado do step2: espera o layout estabilizar antes de travar
+            // o spotlight (evita seta/anel fora de posição na 1ª visita, quando
+            // outras imagens da tela ainda podem estar carregando).
+            waitStableRect(card, function () {
+                settling = false;
+                if (done || getStep() !== '3c') return;
+                var freshCard = findFoxCard() || card;
+                showStep(
+                    freshCard,
+                    '🦊 Esta é a Moldura de Raposa!\nToque nela para ativá-la.',
+                    function () { advance(); },
+                    { reFind: findFoxCard }
+                );
+            });
             return true;
         };
 

@@ -1491,52 +1491,78 @@ async function signOut() {
 
 // === Animação da barra de EXP (apenas apresentação visual) ===
 // Detecta quando o valor de EXP aumenta e anima o preenchimento da barra
-// lentamente, com brilho, parando ao terminar. No primeiro carregamento
-// (ou antes da página estar totalmente pronta) o valor é apenas aplicado
-// direto, sem animação, para não rodar algo que o jogador ainda não vê.
+// lentamente, com brilho, DEPOIS que a página estiver totalmente carregada
+// visualmente.
+//
+// IMPORTANTE: o ganho de EXP quase sempre já chega pronto no primeiro fetch
+// do jogador (a ação que deu XP aconteceu antes/em outra tela, e o valor
+// novo vem junto com o carregamento da página). Por isso não basta comparar
+// com o estado em memória — que sempre começa "null" a cada load, fazendo
+// cair sempre no caminho "aplica direto". É preciso lembrar qual foi o
+// ÚLTIMO valor que o jogador efetivamente VIU na barra, persistido em
+// localStorage por jogador. Assim, ao carregar a página:
+//   1. Mostra IMEDIATAMENTE o valor antigo (o que ele já tinha visto).
+//   2. Espera a página terminar de carregar (evento 'load').
+//   3. Só então anima lentamente, com brilho, até o valor novo.
 let __xpBarLastPercent = null;
+let __xpBarPendingAnimation = null; // { percent, label } aguardando o load completo
 let __xpBarPageFullyLoaded = (document.readyState === 'complete');
-window.addEventListener('load', () => { __xpBarPageFullyLoaded = true; });
+window.addEventListener('load', () => {
+    __xpBarPageFullyLoaded = true;
+    if (__xpBarPendingAnimation) {
+        const { percent, label } = __xpBarPendingAnimation;
+        __xpBarPendingAnimation = null;
+        // Pequeno respiro pra garantir que tudo (imagens, layout) já assentou
+        // visualmente antes de começar a animação.
+        setTimeout(() => __animateXpBarTo(percent, label), 400);
+    }
+});
 
-function updateXpBar(xpPercent, xpLabel) {
+function __xpBarStorageKey(playerId) {
+    return `aden_xp_bar_state_${playerId || 'anon'}`;
+}
+
+function __loadXpBarState(playerId) {
+    try {
+        const raw = localStorage.getItem(__xpBarStorageKey(playerId));
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function __saveXpBarState(playerId, level, percent) {
+    try {
+        localStorage.setItem(__xpBarStorageKey(playerId), JSON.stringify({ level, percent }));
+    } catch (e) { /* localStorage indisponível — ignora, é só cosmético */ }
+}
+
+function __applyXpBarInstant(percent, label) {
     const container = document.getElementById('xpBarContainer');
     const xpBar = document.getElementById('xpBar');
     const xpTextEl = document.getElementById('xpText');
     if (!container || !xpBar || !xpTextEl) return;
 
-    const clampedPercent = Math.max(0, Math.min(100, xpPercent));
+    xpBar.style.transition = 'none';
+    xpBar.style.width = `${percent}%`;
+    void xpBar.offsetWidth; // força reflow p/ a próxima transição funcionar
+    xpBar.style.transition = '';
+    xpTextEl.textContent = label;
+    container.classList.remove('xp-filling');
+}
 
-    const applyInstant = () => {
-        xpBar.style.transition = 'none';
-        xpBar.style.width = `${clampedPercent}%`;
-        // Força reflow para garantir que a próxima transição funcione normalmente
-        void xpBar.offsetWidth;
-        xpBar.style.transition = '';
-        xpTextEl.textContent = xpLabel;
-        container.classList.remove('xp-filling');
-        __xpBarLastPercent = clampedPercent;
-    };
+function __animateXpBarTo(clampedPercent, xpLabel) {
+    const container = document.getElementById('xpBarContainer');
+    const xpBar = document.getElementById('xpBar');
+    const xpTextEl = document.getElementById('xpText');
+    if (!container || !xpBar || !xpTextEl) return;
 
-    // Primeira renderização (ou página ainda carregando): aplica direto, sem animação
-    if (__xpBarLastPercent === null || !__xpBarPageFullyLoaded) {
-        applyInstant();
-        return;
-    }
-
-    // Sem crescimento real (diminuiu, ex.: novo nível reiniciando a barra) — aplica direto
-    if (clampedPercent <= __xpBarLastPercent) {
-        applyInstant();
-        return;
-    }
-
-    // Houve ganho de EXP: anima o crescimento lentamente com brilho
-    const delta = clampedPercent - __xpBarLastPercent;
+    const delta = clampedPercent - (__xpBarLastPercent || 0);
     const duration = Math.min(2.4, Math.max(0.9, delta / 100 * 3.2)); // 0.9s ~ 2.4s
 
     xpTextEl.textContent = xpLabel;
     container.classList.add('xp-filling');
     xpBar.style.transition = `width ${duration}s ease-in-out`;
-    // Garante que o navegador registre o estado anterior antes de mudar
     void xpBar.offsetWidth;
     xpBar.style.width = `${clampedPercent}%`;
 
@@ -1548,6 +1574,61 @@ function updateXpBar(xpPercent, xpLabel) {
     xpBar.addEventListener('transitionend', onTransitionEnd);
 
     __xpBarLastPercent = clampedPercent;
+}
+
+function updateXpBar(xpPercent, xpLabel, playerId, playerLevel) {
+    const container = document.getElementById('xpBarContainer');
+    const xpBar = document.getElementById('xpBar');
+    const xpTextEl = document.getElementById('xpText');
+    if (!container || !xpBar || !xpTextEl) return;
+
+    const clampedPercent = Math.max(0, Math.min(100, xpPercent));
+
+    // Primeira chamada nesta sessão da página: decide com base no que foi
+    // salvo da última vez que o jogador viu a barra (outra sessão/reload),
+    // não apenas no estado em memória (que sempre começa vazio).
+    if (__xpBarLastPercent === null) {
+        const stored = __loadXpBarState(playerId);
+
+        // Sem estado anterior comparável, subiu de nível, ou não houve
+        // crescimento real (ex.: diminuiu) — aplica direto, sem animação.
+        if (!stored || stored.level !== playerLevel || clampedPercent <= stored.percent) {
+            __applyXpBarInstant(clampedPercent, xpLabel);
+            __xpBarLastPercent = clampedPercent;
+            __saveXpBarState(playerId, playerLevel, clampedPercent);
+            return;
+        }
+
+        // Houve ganho real de EXP desde a última vez que o jogador viu a
+        // barra. Mostra primeiro o valor ANTIGO (o que ele já conhecia) e
+        // só anima para o novo valor depois que a página carregar de vez.
+        __applyXpBarInstant(stored.percent, xpLabel);
+        __xpBarLastPercent = stored.percent;
+        __saveXpBarState(playerId, playerLevel, clampedPercent);
+
+        if (__xpBarPageFullyLoaded) {
+            setTimeout(() => __animateXpBarTo(clampedPercent, xpLabel), 400);
+        } else {
+            __xpBarPendingAnimation = { percent: clampedPercent, label: xpLabel };
+        }
+        return;
+    }
+
+    // Já existe estado em memória nesta mesma página (XP mudou durante o
+    // uso, sem reload — ex.: recompensa recebida na hora).
+    __saveXpBarState(playerId, playerLevel, clampedPercent);
+
+    if (clampedPercent <= __xpBarLastPercent) {
+        __applyXpBarInstant(clampedPercent, xpLabel);
+        __xpBarLastPercent = clampedPercent;
+        return;
+    }
+
+    if (__xpBarPageFullyLoaded) {
+        __animateXpBarTo(clampedPercent, xpLabel);
+    } else {
+        __xpBarPendingAnimation = { percent: clampedPercent, label: xpLabel };
+    }
 }
 
 // Função helper para renderizar a UI com os dados do jogador
@@ -1603,7 +1684,7 @@ function renderPlayerUI(player, preserveActiveContainer = false) {
     document.getElementById('playerCrystals').innerHTML = `<img src="https://aden-rpg.pages.dev/assets/cristais.webp" style="width: 17px; height: 17px; vertical-align: -4px;"> ${formatNumberCompact(player.crystals)}`;
     const xpPercent = Math.min(100, Math.floor((player.xp / player.xp_needed_for_level) * 100));
     document.getElementById('xpBarContainer').style.display = 'flex';
-    updateXpBar(xpPercent, `${player.xp} / ${player.xp_needed_for_level}`);
+    updateXpBar(xpPercent, `${player.xp} / ${player.xp_needed_for_level}`, player.id, player.level);
     document.getElementById('playerTopBar').style.display = 'flex';
     if (welcomeContainer && player && player.name) {
         welcomeContainer.innerHTML = `

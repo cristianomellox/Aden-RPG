@@ -1,6 +1,36 @@
 // auto_translate.js — Versão Multi-Language + Fix TopBar
 
 const DEFAULT_LANG = "pt"; 
+const SUPPORTED_LANGS = ["pt","en","es","zh-CN","ja","ko","id","tl","ru","it","fr","hi","ms","vi","ar"];
+
+// ======================================================================
+// 0. Suporte a link compartilhado com idioma (?lang=xx)
+// ======================================================================
+// Quando alguém compartilha o jogo (menu Opções > Compartilhar), o link
+// pode vir com "?lang=xx" embutido (idioma que o jogador que compartilhou
+// tinha selecionado). Se quem RECEBEU o link ainda não tem preferência de
+// idioma salva no cookie, aplicamos esse idioma automaticamente ANTES do
+// Google Translate inicializar, pra página já abrir traduzida — sem
+// precisar de reload nem de páginas duplicadas por idioma.
+// Isso roda uma única vez, no topo do arquivo, antes de qualquer outra
+// coisa, porque o cookie precisa estar pronto quando googleTranslateElementInit()
+// rodar (o script do Google carrega de forma assíncrona depois deste arquivo).
+(function applyLangFromSharedLink() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const sharedLang = params.get('lang');
+        if (!sharedLang || !SUPPORTED_LANGS.includes(sharedLang) || sharedLang === DEFAULT_LANG) return;
+
+        const alreadyHasCookie = document.cookie.split(";").some(c => c.trim().startsWith("googtrans="));
+        if (alreadyHasCookie) return; // não sobrescreve preferência de quem já jogou antes
+
+        const cookieValue = `/${DEFAULT_LANG}/${sharedLang}`;
+        document.cookie = `googtrans=${cookieValue}; path=/;`;
+        document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
+    } catch (e) {
+        // best-effort — se der erro, a página só abre no idioma padrão
+    }
+})();
 
 // ======================================================================
 // 1. Inicialização do Google Translate
@@ -9,7 +39,7 @@ function googleTranslateElementInit() {
     new google.translate.TranslateElement({
         pageLanguage: DEFAULT_LANG,
         // LISTA ATUALIZADA DE IDIOMAS SOLICITADOS
-        includedLanguages: "pt,en,es,zh-CN,ja,ko,id,tl,ru,it,fr,hi,ms,vi,ar",
+        includedLanguages: SUPPORTED_LANGS.join(","),
         layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
         autoDisplay: false
     }, "google_translate_element");
@@ -95,20 +125,17 @@ window.changeLanguage = async function(lang, skipReload) {
         document.cookie = `googtrans=${cookieValue}; domain=.${window.location.hostname}; path=/;`;
     }
 
-    // >>> DEBUG TEMPORÁRIO — mostra na tela o resultado real da chamada,
-    // já que não dá pra abrir o console no celular. Remover depois de
-    // descobrir o problema (ver comentário mais abaixo, antes do reload).
+    // Best-effort: tenta persistir o idioma no banco (usado pelo worker de
+    // push pra traduzir notificações). Se o jogador não estiver logado, ou
+    // se der erro de rede, apenas ignora — a troca de idioma da PÁGINA já
+    // aconteceu via cookie e continua funcionando normalmente.
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.rpc) {
-            const result = await withTimeout(supabaseClient.rpc('set_player_language', { p_lang: lang }), 2500);
-            alert('DEBUG set_player_language:\n' + JSON.stringify(result, null, 2));
-        } else {
-            alert('DEBUG: supabaseClient não está definido nesta página (typeof = ' + typeof supabaseClient + ')');
+            await withTimeout(supabaseClient.rpc('set_player_language', { p_lang: lang }), 2500);
         }
     } catch (err) {
-        alert('DEBUG: erro ao chamar set_player_language:\n' + (err && err.message ? err.message : String(err)));
+        console.warn('[auto_translate] Falha ao sincronizar idioma com o servidor:', err);
     }
-    // >>> FIM DO DEBUG TEMPORÁRIO <<<
 
     if (!skipReload) window.location.reload();
 }
@@ -124,3 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
     syncSelectorWithCookie();
     window.onload = fixGoogleLayout;
 });
+
+// Exposto globalmente — usado pelo modal de Compartilhar (index.html) para
+// montar o link com "?lang=xx" no idioma atual do jogador.
+window.getCurrentLangFromCookie = getCurrentLangFromCookie;
+window.ADEN_SUPPORTED_LANGS = SUPPORTED_LANGS;

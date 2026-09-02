@@ -1779,23 +1779,63 @@ document.addEventListener("DOMContentLoaded", () => {
 (function () {
   /* ── URL e textos fixos da página /download ── */
   var DOWNLOAD_PAGE = 'https://aden-rpg.pages.dev/download';
-  var ENC_URL  = encodeURIComponent(DOWNLOAD_PAGE);
-  var TEXT_PT  = encodeURIComponent('Entre no continente de Aden! Um RPG estratégico épico – sem Pay-to-Win. Forje seu legado!');
-  var TEXT_EN  = encodeURIComponent('Join the continent of Aden! An epic strategy RPG – no Pay-to-Win. Forge your legacy!');
+  var TEXT_PT  = 'Entre no continente de Aden! Um RPG estratégico épico – sem Pay-to-Win. Forje seu legado!';
+  var TEXT_EN  = 'Join the continent of Aden! An epic strategy RPG – no Pay-to-Win. Forge your legacy!';
 
-  /* ── Monta os hrefs de compartilhamento ── */
+  // Cache em memória pra não rebuscar toda vez que o modal abre no mesmo idioma
+  var __shareTextCache = { pt: TEXT_PT, en: TEXT_EN };
+
+  /* ── Idioma atual do jogador (mesmo cookie usado pelo Google Translate) ── */
+  function getCurrentShareLang() {
+    if (typeof window.getCurrentLangFromCookie === 'function') {
+      return window.getCurrentLangFromCookie();
+    }
+    return 'pt';
+  }
+
+  /* ── Busca o texto de compartilhamento traduzido (com cache/fallback) ──
+       Endpoint leve hospedado na mesma Cloudflare Function que já traduz
+       as notificações push — sem precisar de pastas/páginas por idioma.
+       Se o endpoint falhar (offline, idioma raro etc.), cai pro PT/EN. ── */
+  function getShareText(lang) {
+    if (__shareTextCache[lang]) return Promise.resolve(__shareTextCache[lang]);
+    return fetch('/api/share-meta?lang=' + encodeURIComponent(lang))
+      .then(function (r) { if (!r.ok) throw new Error('share-meta fail'); return r.json(); })
+      .then(function (data) {
+        var text = (data && data.shareText) ? data.shareText : TEXT_PT;
+        __shareTextCache[lang] = text;
+        return text;
+      })
+      .catch(function () {
+        return TEXT_PT;
+      });
+  }
+
+  /* ── Monta os hrefs de compartilhamento no idioma atual do jogador ── */
   function buildAdenShareLinks(lang) {
-    var txt = (lang === 'en') ? TEXT_EN : TEXT_PT;
-    document.getElementById('aden-share-whatsapp').href  = 'https://wa.me/?text=' + txt + '%20' + ENC_URL;
-    document.getElementById('aden-share-telegram').href  = 'https://t.me/share/url?url=' + ENC_URL + '&text=' + txt;
-    document.getElementById('aden-share-twitter').href   = 'https://twitter.com/intent/tweet?text=' + txt + '&url=' + ENC_URL;
-    document.getElementById('aden-share-facebook').href  = 'https://www.facebook.com/sharer/sharer.php?u=' + ENC_URL;
-    document.getElementById('aden-share-reddit').href    = 'https://www.reddit.com/submit?url=' + ENC_URL + '&title=' + txt;
+    getShareText(lang).then(function (rawText) {
+      var txt = encodeURIComponent(rawText);
+      // Embute o idioma na URL compartilhada: quem abrir o link vê a
+      // página (e o preview gerado pelo Cloudflare) já traduzidos.
+      var shareUrl = (lang && lang !== 'pt')
+        ? DOWNLOAD_PAGE + '?lang=' + encodeURIComponent(lang)
+        : DOWNLOAD_PAGE;
+      var ENC_URL = encodeURIComponent(shareUrl);
+
+      document.getElementById('aden-share-whatsapp').href  = 'https://wa.me/?text=' + txt + '%20' + ENC_URL;
+      document.getElementById('aden-share-telegram').href  = 'https://t.me/share/url?url=' + ENC_URL + '&text=' + txt;
+      document.getElementById('aden-share-twitter').href   = 'https://twitter.com/intent/tweet?text=' + txt + '&url=' + ENC_URL;
+      document.getElementById('aden-share-facebook').href  = 'https://www.facebook.com/sharer/sharer.php?u=' + ENC_URL;
+      document.getElementById('aden-share-reddit').href    = 'https://www.reddit.com/submit?url=' + ENC_URL + '&title=' + txt;
+
+      // Guarda a URL atual (com lang) pro botão "Copiar link"
+      document.getElementById('aden-share-modal-backdrop').dataset.shareUrl = shareUrl;
+    });
   }
 
   /* ── Abre / fecha o modal ── */
   function openAdenShareModal() {
-    buildAdenShareLinks('pt'); // usa PT por padrão; troque para 'en' se o index tiver idioma
+    buildAdenShareLinks(getCurrentShareLang());
     document.getElementById('aden-share-modal-backdrop').classList.add('open');
     document.body.style.overflow = 'hidden';
   }
@@ -1806,7 +1846,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ── Copiar link ── */
   function adenShareCopyLink() {
-    navigator.clipboard.writeText(DOWNLOAD_PAGE).then(function () {
+    var backdrop = document.getElementById('aden-share-modal-backdrop');
+    var urlToCopy = backdrop.dataset.shareUrl || DOWNLOAD_PAGE;
+    navigator.clipboard.writeText(urlToCopy).then(function () {
       var lbl = document.getElementById('aden-share-copy-label');
       var orig = lbl.textContent;
       lbl.textContent = 'Copiado!';

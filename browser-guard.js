@@ -395,12 +395,13 @@
       <div class="pay-status" id="pay-pix-status"></div>
     `);
 
-    // Copiar código Pix
+    // Copiar código Pix (botão)
     document.getElementById('pay-pix-copy').addEventListener('click', () => {
       const btn = document.getElementById('pay-pix-copy');
       navigator.clipboard.writeText(pkg.pixCode).then(() => {
         btn.textContent = '✅ Código copiado!';
         btn.style.background = 'linear-gradient(to top, #0d4d1e, #1a8c3d)';
+        markPendingRecharge(pkgIndex, 'pix');
         setTimeout(() => {
           btn.textContent = '📋 Copiar código Pix';
           btn.style.background = '';
@@ -416,6 +417,11 @@
         btn.textContent = '✅ Seleccionado — Ctrl+C para copiar';
         setTimeout(() => { btn.textContent = '📋 Copiar código Pix'; }, 3000);
       });
+    });
+
+    // Copiar código Pix (seleção manual do texto + Ctrl+C, sem usar o botão)
+    document.getElementById('pix-code-text').addEventListener('copy', () => {
+      markPendingRecharge(pkgIndex, 'pix');
     });
 
     // Enviar comprovante
@@ -441,7 +447,7 @@
       <p class="pay-desc">Clique no botão abaixo para realizar o pagamento pelo PayPal. Após concluir, volte aqui e envie o comprovante.</p>
 
       <div class="pay-paypal-btn-wrap">
-        <a href="${paypalUrl}" target="_blank" rel="noopener noreferrer">
+        <a href="${paypalUrl}" target="_blank" rel="noopener noreferrer" id="pay-paypal-goto-btn">
           <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg"
                onerror="this.style.display='none'" alt="PayPal">
           Pagar com PayPal
@@ -460,6 +466,11 @@
       <button class="pay-btn pay-btn-send" id="pay-paypal-send">Enviar comprovante</button>
       <div class="pay-status" id="pay-paypal-status"></div>
     `);
+
+    // Clicou em "Pagar com PayPal" → trava até enviar comprovante
+    document.getElementById('pay-paypal-goto-btn').addEventListener('click', () => {
+      markPendingRecharge(pkgIndex, 'paypal');
+    });
 
     // Enviar comprovante
     document.getElementById('pay-paypal-send').addEventListener('click', () => {
@@ -492,7 +503,42 @@
   }
 
   // ─────────────────────────────────────────────
-  
+  // CONTROLE DE RECARGA PENDENTE (comprovante não enviado)
+  // ─────────────────────────────────────────────
+  // Guarda no localStorage (sobrevive a fechar a aba/app) assim que o
+  // jogador copia o código Pix (botão OU seleção manual + Ctrl+C) ou clica
+  // em "Pagar com PayPal" — sinal de que ele SAIU pra pagar. Se ele voltar
+  // sem ter enviado o comprovante, mostramos o lembrete na próxima vez que
+  // o jogo abrir. Só é limpo quando: (a) o comprovante é enviado com
+  // sucesso, ou (b) o jogador clica em "Eu não fiz recarga."
+  const PENDING_RECHARGE_KEY = 'aden_pending_recharge';
+
+  function markPendingRecharge(pkgIndex, method) {
+    const pkg = PACKAGES[pkgIndex];
+    try {
+      localStorage.setItem(PENDING_RECHARGE_KEY, JSON.stringify({
+        pkgIndex,
+        method,               // 'pix' | 'paypal'
+        displayName: pkg.displayName,
+        telegramLabel: pkg.telegramLabel,
+        ts: Date.now()
+      }));
+    } catch (_) { /* localStorage indisponível — a trava só não persiste entre sessões */ }
+  }
+
+  function getPendingRecharge() {
+    try {
+      const raw = localStorage.getItem(PENDING_RECHARGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+
+  function clearPendingRecharge() {
+    try { localStorage.removeItem(PENDING_RECHARGE_KEY); } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────
+
   const SUPABASE_FN_URL = 'https://lqzlblvmkuwedcofmgfb.functions.supabase.co';
 
   async function enviarComprovanteTelegram(fileInput, statusEl, pkg, methodLabel, onSuccess) {
@@ -551,6 +597,7 @@
       const result = await response.json().catch(() => ({}));
 
       if (response.ok && result.ok) {
+        clearPendingRecharge(); // comprovante enviado — a trava não faz mais sentido
         onSuccess();
       } else {
         throw new Error(result.error || 'Resposta inválida do servidor');
@@ -632,6 +679,13 @@
         if (obs) obs.disconnect();
         // Pequeno delay para o layout estabilizar antes do modal
         setTimeout(showBrowserWarning, 600);
+        // O lembrete de recarga pendente usa um overlay com z-index menor
+        // (3500) que o do aviso de navegador (praticamente o máximo
+        // possível) — se os dois disparam juntos, o aviso de navegador fica
+        // por cima e some primeiro; o lembrete continua por baixo e vira
+        // visível assim que o jogador fecha o aviso. Por isso não precisa
+        // de nenhuma lógica extra de fila entre os dois.
+        setTimeout(showPendingRechargeReminder, 800);
       }
     }
 
@@ -649,6 +703,53 @@
   }
 
   document.addEventListener('DOMContentLoaded', setupWarningTrigger);
+
+  // ─────────────────────────────────────────────
+  // 1B. LEMBRETE DE RECARGA PENDENTE (comprovante não enviado)
+  // ─────────────────────────────────────────────
+  function showPendingRechargeReminder() {
+    const pending = getPendingRecharge();
+    if (!pending) return;
+
+    const methodStr = pending.method === 'pix' ? 'Pix' : 'PayPal';
+    const pkg = PACKAGES[pending.pkgIndex] || { displayName: pending.displayName, telegramLabel: pending.telegramLabel };
+
+    _createPayOverlay(`
+      <h3>Comprovante pendente</h3>
+      <p class="pay-sub">${pkg.displayName || pending.displayName}</p>
+      <p class="pay-desc">
+        Parece que você tentou fazer uma recarga via ${methodStr} mas não enviou
+        o comprovante de pagamento. A recarga só é finalizada após o envio
+        do print do comprovante.
+      </p>
+
+      <label class="pay-file-label">Anexar print do comprovante:</label>
+      <input type="file" accept="image/*" class="pay-file-input" id="pending-comprovante-input">
+
+      <button class="pay-btn pay-btn-send" id="pay-pending-send">Enviar comprovante</button>
+      <div class="pay-status" id="pay-pending-status"></div>
+
+      <p style="margin-top:16px;">
+        <a href="#" id="pay-pending-not-made" style="color:#999; font-size:.82em; text-decoration:underline;">
+          Eu não fiz recarga.
+        </a>
+      </p>
+    `);
+
+    document.getElementById('pay-pending-send').addEventListener('click', () => {
+      const fileInput = document.getElementById('pending-comprovante-input');
+      const statusEl  = document.getElementById('pay-pending-status');
+      enviarComprovanteTelegram(fileInput, statusEl, pkg, methodStr, () => {
+        showPaySuccessModal();
+      });
+    });
+
+    document.getElementById('pay-pending-not-made').addEventListener('click', (e) => {
+      e.preventDefault();
+      clearPendingRecharge();
+      _removePayOverlay();
+    });
+  }
 
   // ─────────────────────────────────────────────
   // 3. INTERCEPTAR NAVEGAÇÃO PARA PÁGINAS BLOQUEADAS

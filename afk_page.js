@@ -119,6 +119,8 @@ function _injectAfkEpicStyles() {
     @keyframes afk-spark             { 0%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(0);opacity:1;} 100%{transform:translate(-50%,-50%) rotate(var(--a)) translateX(var(--d));opacity:0;} }
     @keyframes afk-edge-flash        { 0%,100%{opacity:0;} 30%{opacity:1;} }
     @keyframes afk-crit-label        { 0%{opacity:0;transform:translateX(-50%) scale(0.5);} 20%{opacity:1;transform:translateX(-50%) scale(1.1);} 80%{opacity:1;} 100%{opacity:0;transform:translateX(-50%) translateY(-18px);} }
+    @keyframes afk-float-dmg  { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.4);} 8%{opacity:1;transform:translate(-50%,-50%) translateY(-14px) scale(1.35);} 20%{opacity:1;transform:translate(-50%,-50%) translateY(-24px) scale(1.0);} 75%{opacity:1;transform:translate(-50%,-50%) translateY(-95px) scale(1.0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-135px) scale(0.92);} }
+    @keyframes afk-float-crit { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.25) rotate(-8deg);} 7%{opacity:1;transform:translate(-50%,-50%) translateY(-20px) scale(1.55) rotate(6deg);} 18%{opacity:1;transform:translate(-50%,-50%) translateY(-32px) scale(1.05) rotate(-2deg);} 75%{opacity:1;transform:translate(-50%,-50%) translateY(-112px) scale(1.0) rotate(0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-152px) scale(0.92) rotate(0);} }
     .afk-epic-ring { position:absolute; border-radius:50%; pointer-events:none; z-index:12;
         transform:translate(-50%,-50%); animation:afk-ring 0.6s ease-out forwards; }
     .afk-epic-ring2 { position:absolute; border-radius:50%; pointer-events:none; z-index:12;
@@ -1139,10 +1141,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     function displayDamageNumber(damage, isCrit) {
         const container = combatScreen;
         if (!container) return;
+        _injectAfkEpicStyles();
         const el = document.createElement("div");
         el.textContent = formatNumberCompact(damage);
         el.className = isCrit ? "crit-damage-number" : "normal-damage-number";
-        el.style.cssText = `position:absolute;left:50%;top:35%;transform:translate(-50%,-50%);animation:floatAndFade 1.4s forwards;pointer-events:none;`;
+        el.style.cssText = isCrit
+            ? `position:absolute;left:50%;top:35%;transform:translate(-50%,-50%);animation:afk-float-crit 3.7s ease-out forwards;pointer-events:none;`
+            : `position:absolute;left:50%;top:35%;transform:translate(-50%,-50%);animation:afk-float-dmg 3.4s ease-out forwards;pointer-events:none;`;
         if (isCrit) el.textContent = `⚡ ${formatNumberCompact(damage)} ⚡`;
         container.appendChild(el);
         el.addEventListener("animationend", () => el.remove());

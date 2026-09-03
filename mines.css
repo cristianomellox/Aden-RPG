@@ -792,7 +792,7 @@ p {
     font-weight: bold;
     color: #fff;
     text-shadow: 2px 2px 4px #000;
-    animation: floating-damage 1.5s ease-out forwards;
+    animation: floating-damage 3.4s ease-out forwards;
 }
 
 .crit-damage-number {
@@ -811,32 +811,23 @@ p {
         2px 2px 0 yellow;
     position: absolute;
     left: 50%;
-    animation: floating-damage-crit 3s ease-out forwards;
+    animation: floating-damage-crit 3.7s ease-out forwards;
 }
 
 @keyframes floating-damage {
-    from {
-        opacity: 1;
-        transform: translateY(0);
-    }
-    to {
-        opacity: 0;
-        transform: translateY(-50px);
-    }
+    0%   { opacity: 0; transform: translateY(0) scale(0.4); }
+    8%   { opacity: 1; transform: translateY(-14px) scale(1.35); }
+    20%  { opacity: 1; transform: translateY(-24px) scale(1.0); }
+    75%  { opacity: 1; transform: translateY(-95px) scale(1.0); }
+    100% { opacity: 0; transform: translateY(-135px) scale(0.92); }
 }
 
 @keyframes floating-damage-crit {
-    0% {
-        opacity: 1;
-        transform: translateY(0) scale(1.0);
-    }
-    50% {
-        transform: translateY(-25px) scale(1.2);
-    }
-    100% {
-        opacity: 0;
-        transform: translateY(-50px) scale(1.0);
-    }
+    0%   { opacity: 0; transform: translateY(0) scale(0.3); }
+    7%   { opacity: 1; transform: translateY(-18px) scale(1.5); }
+    18%  { opacity: 1; transform: translateY(-30px) scale(1.05); }
+    75%  { opacity: 1; transform: translateY(-110px) scale(1.0); }
+    100% { opacity: 0; transform: translateY(-145px) scale(0.92); }
 }
 #monsterHpBar {
             position: relative; /* Isso é crucial para que o texto fique dentro da barra */
@@ -1194,7 +1185,7 @@ p {
   font-family: Georgia, serif;
   font-size: 23px;
   color: #fff;
-  animation: floating-damage 1.5s ease-out forwards;
+  animation: floating-damage 3.4s ease-out forwards;
 }
 
 .crit-damage-number {
@@ -1211,7 +1202,7 @@ p {
       2px -2px 0 yellow,
       -2px 2px 0 yellow,
       2px 2px 0 yellow;
-  animation: floating-damage-crit 1.5s ease-out forwards;
+  animation: floating-damage-crit 3.7s ease-out forwards;
 }
 
 .evade-text {
@@ -1220,30 +1211,21 @@ p {
     animation: floating-damage 2s forwards; /* Reutiliza a animação existente */
 }
 
-/* Animação dos textos de dano */
+/* Animação dos textos de dano: explosão rápida + flutuação suave + fade no final */
 @keyframes floating-damage {
-    0% {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-    }
-    100% {
-        opacity: 0;
-        transform: translate(-50%, -150%) scale(1.5);
-    }
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    8%   { opacity: 1; transform: translate(-50%, -90%) scale(1.35); }
+    20%  { opacity: 1; transform: translate(-50%, -110%) scale(1.0); }
+    75%  { opacity: 1; transform: translate(-50%, -280%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -380%) scale(0.92); }
 }
 
 @keyframes floating-damage-crit {
-    0% {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1.0);
-    }
-    50% {
-        transform: translate(-50%, -75%) scale(1.4);
-    }
-    100% {
-        opacity: 0;
-        transform: translate(-50%, -150%) scale(1.0);
-    }
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+    7%   { opacity: 1; transform: translate(-50%, -100%) scale(1.5); }
+    18%  { opacity: 1; transform: translate(-50%, -130%) scale(1.05); }
+    75%  { opacity: 1; transform: translate(-50%, -320%) scale(1.0); }
+    100% { opacity: 0; transform: translate(-50%, -420%) scale(0.92); }
 }
 
 #playerFooterBar {

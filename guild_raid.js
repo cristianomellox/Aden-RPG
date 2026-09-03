@@ -497,13 +497,13 @@ function _injectRaidEpicStyles() {
     s.id = 'raid-epic-styles';
     s.textContent = `
         /* ── Floating numbers ── */
-        @keyframes raid-float-dmg  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.4);}12%{transform:translateX(-50%) translateY(-22px) scale(1.35);}100%{opacity:0;transform:translateX(-50%) translateY(-90px) scale(0.95);} }
-        @keyframes raid-float-crit { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.25) rotate(-6deg);}10%{transform:translateX(-50%) translateY(-28px) scale(1.7) rotate(5deg);}22%{transform:translateX(-50%) translateY(-42px) scale(1.4) rotate(-1deg);}100%{opacity:0;transform:translateX(-50%) translateY(-115px) scale(0.9) rotate(0);} }
+        @keyframes raid-float-dmg  { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.4);}8%{opacity:1;transform:translateX(-50%) translateY(-18px) scale(1.4);}20%{opacity:1;transform:translateX(-50%) translateY(-30px) scale(1.0);}75%{opacity:1;transform:translateX(-50%) translateY(-110px) scale(1.0);}100%{opacity:0;transform:translateX(-50%) translateY(-155px) scale(0.92);} }
+        @keyframes raid-float-crit { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.25) rotate(-6deg);}7%{opacity:1;transform:translateX(-50%) translateY(-26px) scale(1.75) rotate(5deg);}18%{opacity:1;transform:translateX(-50%) translateY(-42px) scale(1.1) rotate(-1deg);}75%{opacity:1;transform:translateX(-50%) translateY(-130px) scale(1.0) rotate(0);}100%{opacity:0;transform:translateX(-50%) translateY(-180px) scale(0.92) rotate(0);} }
         @keyframes raid-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);}100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(1.15);} }
         @keyframes raid-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);}18%{opacity:1;transform:translateX(-50%) scale(1.5);}65%{opacity:1;transform:translateX(-50%) scale(1.05);}100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
 
-        .raid-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:2.4em;font-weight:bold;color:#fff;text-shadow:2px 2px 5px #000,0 0 22px rgba(255,100,0,0.75);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-dmg 1.5s ease-out forwards; }
-        .raid-crit-num { font-family:'Cinzel',Georgia,serif;font-size:3.2em;font-weight:bold;color:#ffdd00;text-shadow:-2px -2px 0 #900,2px -2px 0 #900,-2px 2px 0 #900,2px 2px 0 #900,0 0 22px #ff8800,0 0 44px #ff4400;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-crit 1.9s ease-out forwards; }
+        .raid-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:2.4em;font-weight:bold;color:#fff;text-shadow:2px 2px 5px #000,0 0 22px rgba(255,100,0,0.75);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-dmg 3.4s ease-out forwards; }
+        .raid-crit-num { font-family:'Cinzel',Georgia,serif;font-size:3.2em;font-weight:bold;color:#ffdd00;text-shadow:-2px -2px 0 #900,2px -2px 0 #900,-2px 2px 0 #900,2px 2px 0 #900,0 0 22px #ff8800,0 0 44px #ff4400;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-crit 3.7s ease-out forwards; }
         .raid-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.8em;font-weight:bold;color:cyan;text-shadow:0 0 12px cyan,1px 1px 2px #000;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-evd 1.2s ease-out forwards; }
         .raid-crit-lbl { font-family:'Cinzel',serif;font-size:1.05em;font-weight:bold;color:#ffdd00;text-shadow:0 0 12px #f80,1px 1px 2px #000;position:absolute;left:50%;z-index:1000;white-space:nowrap;pointer-events:none;animation:raid-crit-lbl 1.2s ease-out forwards; }
 
@@ -621,7 +621,7 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     }
     targetEl.appendChild(dmgEl);
     dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
-    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 2600);
+    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 3900);
 }
 
 // ── Epic boss-attacks-player ──────────────────────────────
@@ -721,7 +721,7 @@ function _epicRaidBossAttack(targetEl, val, isCrit, isEvade) {
     }
     targetEl.appendChild(dmgEl);
     dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
-    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 2600);
+    setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 3900);
 }
 
 function displayFloatingDamageOver(targetEl, val, isCrit) {

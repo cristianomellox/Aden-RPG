@@ -67,6 +67,25 @@ function _injectBossEpicStyles() {
     @keyframes sb-shake-cont  { 0%{transform:translate(0,0);} 10%{transform:translate(-5px,-4px);} 20%{transform:translate(6px,3px);} 30%{transform:translate(-6px,4px);} 40%{transform:translate(5px,-3px);} 50%{transform:translate(-4px,5px);} 60%{transform:translate(6px,-4px);} 70%{transform:translate(-5px,3px);} 80%{transform:translate(4px,-5px);} 90%{transform:translate(-3px,4px);} 100%{transform:translate(0,0);} }
     @keyframes sb-player-flash{ 0%{filter:brightness(1);} 30%{filter:brightness(2.5) saturate(0);} 100%{filter:brightness(1);} }
     @keyframes sb-crit-label  { 0%{opacity:0;transform:translateX(-50%) scale(0.4);} 15%{opacity:1;transform:translateX(-50%) scale(1.15);} 80%{opacity:1;} 100%{opacity:0;transform:translateX(-50%) translateY(-22px);} }
+    @keyframes sb-float-dmg   { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.4);} 8%{opacity:1;transform:translate(-50%,-50%) translateY(-14px) scale(1.35);} 20%{opacity:1;transform:translate(-50%,-50%) translateY(-24px) scale(1.0);} 75%{opacity:1;transform:translate(-50%,-50%) translateY(-95px) scale(1.0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-135px) scale(0.92);} }
+    @keyframes sb-float-crit  { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.25) rotate(-8deg);} 7%{opacity:1;transform:translate(-50%,-50%) translateY(-20px) scale(1.55) rotate(6deg);} 18%{opacity:1;transform:translate(-50%,-50%) translateY(-32px) scale(1.05) rotate(-2deg);} 75%{opacity:1;transform:translate(-50%,-50%) translateY(-112px) scale(1.0) rotate(0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-152px) scale(0.92) rotate(0);} }
+    @keyframes sb-float-status{ 0%{opacity:0;transform:translate(-50%,-50%) scale(0.5);} 12%{opacity:1;transform:translate(-50%,-50%) translateY(-10px) scale(1.2);} 70%{opacity:1;transform:translate(-50%,-50%) translateY(-45px) scale(1.0);} 100%{opacity:0;transform:translate(-50%,-50%) translateY(-65px) scale(0.95);} }
+    .sb-fdmg-normal { font-family:'Cinzel',Georgia,serif; font-size:1.6em; font-weight:bold; color:#fff;
+        text-shadow:2px 2px 4px #000,0 0 14px rgba(255,120,0,0.55); position:absolute; left:50%; top:35%;
+        transform:translate(-50%,-50%); z-index:23; pointer-events:none; white-space:nowrap;
+        animation:sb-float-dmg 3.4s ease-out forwards; }
+    .sb-fdmg-crit { font-family:'Cinzel',Georgia,serif; font-size:2.2em; font-weight:bold; color:#ffdd00;
+        text-shadow:-1px -1px 0 #900,1px -1px 0 #900,-1px 1px 0 #900,1px 1px 0 #900,0 0 14px #ff8800,0 0 28px #ff4400;
+        position:absolute; left:50%; top:35%; transform:translate(-50%,-50%); z-index:23; pointer-events:none;
+        white-space:nowrap; animation:sb-float-crit 3.7s ease-out forwards; }
+    .sb-fdmg-player { font-family:'Cinzel',Georgia,serif; font-size:1.5em; font-weight:bold; color:#ff6666;
+        text-shadow:2px 2px 4px #000,0 0 12px rgba(255,0,0,0.5); position:absolute; left:50%; top:35%;
+        transform:translate(-50%,-50%); z-index:23; pointer-events:none; white-space:nowrap;
+        animation:sb-float-dmg 3.4s ease-out forwards; }
+    .sb-fdmg-status { font-family:'Cinzel',Georgia,serif; font-size:1.3em; font-weight:bold; color:#fff;
+        text-shadow:2px 2px 4px #000,0 0 10px rgba(255,255,255,0.4); position:absolute; left:50%; top:35%;
+        transform:translate(-50%,-50%); z-index:23; pointer-events:none; white-space:nowrap;
+        animation:sb-float-status 2.2s ease-out forwards; }
     .sb-ring  { position:absolute; border-radius:50%; pointer-events:none; z-index:20; transform:translate(-50%,-50%); animation:sb-ring  0.65s ease-out forwards; }
     .sb-ring2 { position:absolute; border-radius:50%; pointer-events:none; z-index:20; transform:translate(-50%,-50%); animation:sb-ring2 0.8s  ease-out 0.07s forwards; }
     .sb-spark { position:absolute; border-radius:50%; pointer-events:none; z-index:21; transform:translate(-50%,-50%); animation:sb-spark 0.55s ease-out forwards; }
@@ -1081,8 +1100,16 @@ function updateBars() {
 }
 
 function createFloatingText(text, className, targetId) {
+    _injectBossEpicStyles();
     const el = document.createElement('div');
-    el.className = `floating-dmg ${className}`;
+    const classMap = {
+        'crit': 'sb-fdmg-crit',
+        'normal': 'sb-fdmg-normal',
+        'player-dmg': 'sb-fdmg-player',
+        'player-dead': 'sb-fdmg-status'
+    };
+    const mappedClass = classMap[className] || 'sb-fdmg-status';
+    el.className = mappedClass;
     el.textContent = text;
     
     const target = document.getElementById(targetId);
@@ -1099,7 +1126,8 @@ function createFloatingText(text, className, targetId) {
     el.style.top = topPos + 'px';
     
     container.appendChild(el);
-    setTimeout(() => el.remove(), 800);
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
 }
 
 function playVideo(src, callback) {

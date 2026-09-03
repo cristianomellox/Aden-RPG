@@ -2,44 +2,49 @@
 //
 // Roda em toda requisição do Cloudflare Pages. Sem KV — como o
 // compartilhamento não é uma ação frequente, cada requisição que precisa
-// de tradução simplesmente chama a Workers AI na hora (mesmo modelo já
-// usado pelo worker de push: @cf/meta/m2m100-1.2b). Se você notar volume
-// alto no futuro (Analytics do Pages Functions) e quiser reduzir custo de
-// neurons, dá pra reintroduzir cache com KV depois — mas por enquanto fica
+// de tradução simplesmente chama a Workers AI na hora. Se um dia notar
+// volume alto (Analytics do Pages Functions) e quiser reduzir custo de
+// neurons, dá pra reintroduzir cache com KV depois — por enquanto fica
 // simples assim.
 //
-// Faz duas coisas:
+// Faz três coisas:
 //
 // 1) GET /api/share-meta?lang=xx
-//    Retorna JSON { title, description, shareText } traduzidos.
-//    Usado pelo modal de Compartilhar (index.html) pra montar o texto que
-//    vai pro WhatsApp/Telegram/Twitter/Reddit no idioma do jogador — sem
-//    nenhuma página duplicada por idioma.
+//    Retorna JSON { title, description, shareText } traduzidos — texto
+//    FIXO do jogo (usado pelo modal de Compartilhar do menu Opções, que
+//    aponta pra /download). Sem pastas duplicadas por idioma.
 //
-// 2) Qualquer página HTML com "?lang=xx" na URL (ex.: /download?lang=es):
-//    Reescreve as tags <meta og:*>, <meta twitter:*> e <meta name="description">
-//    da resposta ANTES de devolver ao navegador. É isso que faz o preview
-//    (imagem/título/descrição) aparecer traduzido quando alguém abre o link
-//    compartilhado no WhatsApp/Telegram/Facebook/Twitter — esses apps
-//    buscam a página com um bot que NÃO executa JavaScript nem lê cookies,
-//    então a tradução via Google Translate (client-side) nunca chegaria
-//    até eles. Fazer isso no edge é o único jeito sem duplicar HTML.
+// 2) POST /api/translate  { text: "...", lang: "xx" }
+//    Endpoint genérico pra traduzir texto DINÂMICO (ex.: "Meus amigos e eu
+//    estamos na Taverna X" — o nome da sala é livre, não dá pra
+//    pré-traduzir). Usado pelas tavernas.
+//
+// 3) Qualquer página HTML com "?lang=xx" na URL (ex.: /download?lang=es):
+//    Reescreve <meta og:*>, <meta twitter:*> e <meta name="description">
+//    da resposta ANTES de devolver ao navegador — é o que faz o preview
+//    aparecer traduzido quando alguém abre o link no WhatsApp/Telegram/
+//    Facebook/Twitter (esses bots não executam JS nem leem cookies, então
+//    o Google Translate client-side nunca chegaria até eles).
+//    IMPORTANTE: NÃO se aplica a /compartilhar — essa rota já é uma Pages
+//    Function própria (compartilhar.js) que gera OG tags DINÂMICOS por
+//    item (craft/level/refine) e já traduz sozinha internamente. Se esse
+//    middleware também tentasse reescrever a resposta dela, sobrescreveria
+//    o título/descrição certos do item pelos textos genéricos do jogo.
 //
 // ── CONFIGURAÇÃO NECESSÁRIA NO PAINEL DO CLOUDFLARE PAGES ──
 //   Settings > Functions > Bindings > adicionar binding de Workers AI:
 //     Variable name: AI
-//   (o mesmo tipo de binding que o worker de push já usa — só precisa
-//   habilitar aqui também, no projeto Pages, não tem custo/conta extra.)
-//   Não precisa de KV nem de nenhuma outra configuração.
+//   Isso é PRECISO fazer aqui mesmo já existindo no worker de push — cada
+//   Worker/Pages Function é um serviço separado na Cloudflare, cada um
+//   precisa do binding declarado nele. É o mesmo produto (Workers AI, sem
+//   custo/conta extra), só precisa "plugar" neste projeto também.
+//   Não precisa de KV.
 
-const SUPPORTED_LANGS = ["pt","en","es","zh-CN","ja","ko","id","tl","ru","it","fr","hi","ms","vi","ar"];
-const DEFAULT_LANG = "pt";
+import { SUPPORTED_LANGS, DEFAULT_LANG, isValidLang, translateText, translateStrings } from './_lib/translate.js';
 
-// Mesma exceção usada no worker de push: m2m100 não tem variante regional
-// de chinês, só "zh".
-const LANG_CODE_TO_M2M = {
-  'zh-CN': 'zh',
-};
+// Rotas que têm sua própria lógica de OG tags dinâmicos e NÃO devem ser
+// tocadas pela reescrita genérica da Rota 3.
+const SKIP_META_REWRITE_PATHS = ['/compartilhar'];
 
 // Textos-fonte em PT — copiados exatamente das meta tags de download.html,
 // que é a página de fato compartilhada (ver DOWNLOAD_PAGE no index.html).
@@ -51,51 +56,6 @@ const SOURCE_STRINGS = {
   twitterDescription: "Entre no continente de Aden. Forje seu legado em batalhas épicas, guildas e um mundo repleto de segredos.",
   shareText: "Entre no continente de Aden! Um RPG estratégico épico – sem Pay-to-Win. Forje seu legado!",
 };
-
-function isValidLang(lang) {
-  return typeof lang === "string" && SUPPORTED_LANGS.includes(lang);
-}
-
-// Idêntica à função translateText() do worker de push — mesmo modelo,
-// mesmo formato de chamada — só pra manter uma única "fonte da verdade"
-// de como o site traduz texto em todo lugar.
-async function translateText(text, targetLangM2M, env) {
-  const result = await env.AI.run('@cf/meta/m2m100-1.2b', {
-    text,
-    source_lang: 'pt',
-    target_lang: targetLangM2M,
-  });
-  return (result && result.translated_text) || null;
-}
-
-// Traduz todas as strings-fonte pro idioma pedido. Sem cache: chama a IA
-// a cada request. Em qualquer falha (binding ausente, timeout, resposta
-// incompleta), devolve o texto original em PT — tradução nunca pode
-// quebrar o compartilhamento.
-async function getTranslatedStrings(env, lang) {
-  if (!lang || lang === DEFAULT_LANG) return SOURCE_STRINGS;
-  if (!env.AI) {
-    console.warn("[share-meta] Binding AI não configurado — devolvendo texto em PT.");
-    return SOURCE_STRINGS;
-  }
-
-  const m2mLang = LANG_CODE_TO_M2M[lang] || lang;
-  const keys = Object.keys(SOURCE_STRINGS);
-
-  try {
-    const translations = await Promise.all(
-      keys.map(key => translateText(SOURCE_STRINGS[key], m2mLang, env))
-    );
-    const result = {};
-    keys.forEach((key, i) => {
-      result[key] = translations[i] || SOURCE_STRINGS[key]; // fallback item a item
-    });
-    return result;
-  } catch (e) {
-    console.warn(`[share-meta] Falha ao traduzir pra "${lang}", devolvendo PT:`, e);
-    return SOURCE_STRINGS;
-  }
-}
 
 // Reescreve as meta tags do <head> pro idioma solicitado
 class MetaTagRewriter {
@@ -121,33 +81,48 @@ class HtmlLangRewriter {
   element(el) { el.setAttribute("lang", this.lang); }
 }
 
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
 export async function onRequest(context) {
   const { request, env, next } = context;
   const url = new URL(request.url);
 
-  // ── Rota 1: API de texto de compartilhamento ──
+  // ── Rota 1: texto fixo de compartilhamento do jogo (/download) ──
   if (url.pathname === "/api/share-meta") {
     const lang = url.searchParams.get("lang") || DEFAULT_LANG;
-    if (!isValidLang(lang)) {
-      return new Response(JSON.stringify({ error: "idioma_invalido" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    const strings = await getTranslatedStrings(env, lang);
-    return new Response(JSON.stringify({
+    if (!isValidLang(lang)) return jsonResponse({ error: "idioma_invalido" }, 400);
+
+    const strings = await translateStrings(SOURCE_STRINGS, lang, env);
+    return jsonResponse({
       title: strings.ogTitle,
       description: strings.ogDescription,
       shareText: strings.shareText,
-    }), {
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store", // sem KV — não faz sentido cachear no browser também
-      },
     });
   }
 
-  // ── Rota 2: qualquer página HTML com ?lang=xx → reescreve meta tags ──
+  // ── Rota 2: tradução genérica de texto dinâmico (tavernas etc.) ──
+  if (url.pathname === "/api/translate" && request.method === "POST") {
+    let body;
+    try { body = await request.json(); } catch { return jsonResponse({ error: "json_invalido" }, 400); }
+
+    const { text, lang } = body || {};
+    if (!text || typeof text !== 'string') return jsonResponse({ error: "texto_ausente" }, 400);
+    if (!isValidLang(lang)) return jsonResponse({ error: "idioma_invalido" }, 400);
+
+    const translated = await translateText(text, lang, env);
+    return jsonResponse({ translated: translated || text });
+  }
+
+  // ── Rota 3: qualquer página HTML com ?lang=xx → reescreve meta tags ──
+  if (SKIP_META_REWRITE_PATHS.includes(url.pathname)) {
+    return next();
+  }
+
   const lang = url.searchParams.get("lang");
   const response = await next();
 
@@ -156,7 +131,7 @@ export async function onRequest(context) {
     return response;
   }
 
-  const strings = await getTranslatedStrings(env, lang);
+  const strings = await translateStrings(SOURCE_STRINGS, lang, env);
   const rewriter = new HTMLRewriter()
     .on("meta", new MetaTagRewriter(strings, url.toString()))
     .on("html", new HtmlLangRewriter(lang));

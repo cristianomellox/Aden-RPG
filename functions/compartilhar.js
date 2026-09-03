@@ -12,9 +12,20 @@
  *   display  — nome de exibição (ex: "Espada do Dragão")
  *   estrelas — número de estrelas totais (ex: "5")
  *   nivel    — nível do item (só para acao=level)
+ *   lang     — idioma do jogador (opcional). Se informado e diferente de
+ *              "pt", título/descrição são traduzidos via Workers AI (mesmo
+ *              modelo usado no worker de push) antes de ir pros meta tags.
+ *   format   — se "json", devolve { titulo, descricao } já traduzidos em
+ *              JSON em vez do HTML completo. Usado pelo inventory.html/
+ *              tavernas.html pra montar o texto que vai pro corpo da
+ *              mensagem do WhatsApp/Telegram/Twitter (que não passa pelos
+ *              meta tags, então precisa vir já traduzido do servidor).
  */
+import { isValidLang, translateStrings } from './_lib/translate.js';
+
 export async function onRequest(context) {
-  const url      = new URL(context.request.url);
+  const { request, env } = context;
+  const url      = new URL(request.url);
   const p        = url.searchParams;
 
   const acao     = p.get('acao')     || 'craft';
@@ -22,13 +33,17 @@ export async function onRequest(context) {
   const display  = p.get('display')  || nome;        // nome de exibição → textos
   const estrelas = p.get('estrelas') || '1';
   const nivel    = p.get('nivel')    || '';
+  const langRaw  = p.get('lang')     || '';
+  const lang     = isValidLang(langRaw) ? langRaw : 'pt';
+  const format   = p.get('format')   || '';
 
   const BASE        = 'https://aden-rpg.pages.dev';
   const imageUrl    = `${BASE}/assets/itens/${nome}_${estrelas}estrelas.webp`;
   const downloadUrl = `${BASE}/download`;
   const siteUrl     = url.toString(); // URL canônica desta página (para og:url)
 
-  // Monta título e descrição conforme a ação
+  // Monta título e descrição conforme a ação (sempre em PT primeiro —
+  // são a "fonte da verdade" que depois pode ser traduzida abaixo).
   let titulo, descricao;
   if (acao === 'craft') {
     titulo    = `${display} criado! — Aden RPG`;
@@ -44,6 +59,23 @@ export async function onRequest(context) {
     descricao = 'Venha fazer parte dessa jornada em Aden RPG Online!';
   }
 
+  // Traduz, se pedido. Nomes próprios (display) e números não sofrem — só
+  // as frases ao redor. Em qualquer falha, translateStrings devolve o
+  // texto original em PT (nunca lança), então isso nunca quebra o share.
+  if (lang !== 'pt') {
+    const translated = await translateStrings({ titulo, descricao }, lang, env);
+    titulo    = translated.titulo;
+    descricao = translated.descricao;
+  }
+
+  // ── Variante JSON: usada pelo client pra montar o texto do WhatsApp/
+  // Telegram/Twitter (esses não leem meta tags, precisam do texto pronto) ──
+  if (format === 'json') {
+    return new Response(JSON.stringify({ titulo, descricao }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  }
+
   // Escapa HTML para evitar injeção nos atributos dos meta tags
   const esc = (s) => String(s)
     .replace(/&/g, '&amp;')
@@ -52,7 +84,7 @@ export async function onRequest(context) {
     .replace(/>/g, '&gt;');
 
   const html = `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${esc(lang === 'pt' ? 'pt-BR' : lang)}">
 <head>
   <meta charset="UTF-8">
   <title>${esc(titulo)}</title>
@@ -66,7 +98,7 @@ export async function onRequest(context) {
   <meta property="og:image:width"  content="512">
   <meta property="og:image:height" content="512">
   <meta property="og:site_name"    content="Aden RPG Online">
-  <meta property="og:locale"       content="pt_BR">
+  <meta property="og:locale"       content="${esc(lang === 'pt' ? 'pt_BR' : lang)}">
 
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card"        content="summary_large_image">

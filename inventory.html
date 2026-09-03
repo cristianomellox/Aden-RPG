@@ -1212,7 +1212,7 @@ document.addEventListener("DOMContentLoaded", () => {
  * Bots de redes sociais vão ler os OG meta tags dinâmicos dessa URL.
  * Humanos que clicarem no link são redirecionados para /download.
  */
-function buildShareUrl(action, ctx) {
+function buildShareUrl(action, ctx, lang) {
     var BASE = 'https://aden-rpg.pages.dev';
 
     // Extrai o número de estrelas diretamente da URL da imagem do item
@@ -1229,12 +1229,14 @@ function buildShareUrl(action, ctx) {
 
     if (action === 'level'  && ctx.level)  params.set('nivel', ctx.level);
     if (action === 'refine' && ctx.stars)  params.set('estrelas', String(ctx.stars));
+    if (lang && lang !== 'pt')             params.set('lang', lang);
 
     return BASE + '/compartilhar?' + params.toString();
 }
 
 function showItemActionSuccess(action, ctx) {
     var DL = 'https://aden-rpg.pages.dev/download';
+    var lang = (typeof window.getCurrentLangFromCookie === 'function') ? window.getCurrentLangFromCookie() : 'pt';
     var title, text, sparkle;
 
     if (action === 'craft') {
@@ -1250,10 +1252,32 @@ function showItemActionSuccess(action, ctx) {
 
     // ── URL de compartilhamento com OG dinâmico ──────────────────────────
     // shareUrl aponta para /compartilhar?... (Pages Function com og:image do item)
-    // O bot da rede social crawleia ESSA URL e vê a imagem certa.
+    // O bot da rede social crawleia ESSA URL e vê a imagem certa, já traduzida
+    // se lang !== 'pt' (a própria compartilhar.js traduz título/descrição).
     // Humanos que clicam no link são redirecionados para /download.
-    var shareUrl = buildShareUrl(action, ctx);
+    var shareUrl = buildShareUrl(action, ctx, lang);
 
+    // Preenche a UI com o texto em PT imediatamente (não trava esperando
+    // rede) — se o jogador estiver com outro idioma selecionado, troca pro
+    // texto traduzido assim que a busca terminar, ANTES de montar os links
+    // finais de compartilhamento (o texto que vai pro corpo da mensagem do
+    // WhatsApp/Telegram/Twitter não passa por meta tag nenhuma, então
+    // precisa vir já traduzido — diferente do card de preview do link).
+    renderShareModal(title, sparkle, text, ctx, shareUrl);
+
+    if (lang !== 'pt') {
+        fetch(shareUrl + '&format=json')
+            .then(function (r) { if (!r.ok) throw new Error('fail'); return r.json(); })
+            .then(function (data) {
+                if (data && data.descricao) {
+                    renderShareModal(title, sparkle, data.descricao, ctx, shareUrl);
+                }
+            })
+            .catch(function () { /* mantém o texto em PT já exibido */ });
+    }
+}
+
+function renderShareModal(title, sparkle, text, ctx, shareUrl) {
     var eUrl  = encodeURIComponent(shareUrl);
     var eFull = encodeURIComponent(text + ' ' + shareUrl);
     var eText = encodeURIComponent(text);

@@ -5573,9 +5573,34 @@ const _TAV_SHARE_BASE_URL = 'https://aden-rpg.pages.dev/tavernas';
 function openTavernShareModal() {
   if (!currentRoom) return;
   const roomName = currentRoom.name || 'esta Taverna';
-  const shareText = `Meus amigos e eu estamos reunidos conversando na ${roomName}. Venha se juntar a nós!`;
+  const shareTextPt = `Meus amigos e eu estamos reunidos conversando na ${roomName}. Venha se juntar a nós!`;
   const shareUrl  = _TAV_SHARE_BASE_URL;
+  const lang = (typeof window.getCurrentLangFromCookie === 'function') ? window.getCurrentLangFromCookie() : 'pt';
 
+  // Renderiza imediatamente com o texto em PT (não trava esperando rede).
+  renderTavernShareLinks(shareTextPt, shareUrl);
+
+  // roomName é texto livre (o jogador escolhe o nome da sala), então não
+  // dá pra pré-traduzir como o resto do site — usamos o endpoint genérico
+  // de tradução (mesma IA do worker de push) e trocamos os links assim que
+  // a tradução chegar. Se falhar por qualquer motivo, mantém o texto em PT.
+  if (lang !== 'pt') {
+    fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: shareTextPt, lang })
+    })
+      .then(r => { if (!r.ok) throw new Error('fail'); return r.json(); })
+      .then(data => {
+        if (data && data.translated) renderTavernShareLinks(data.translated, shareUrl);
+      })
+      .catch(() => { /* mantém o texto em PT já exibido */ });
+  }
+
+  document.getElementById('tav-share-modal')?.classList.add('open');
+}
+
+function renderTavernShareLinks(shareText, shareUrl) {
   // Popula subtítulo
   const subEl = document.getElementById('tav-share-sub');
   if (subEl) subEl.textContent = `"${shareText}"`;
@@ -5591,8 +5616,6 @@ function openTavernShareModal() {
   set('tav-share-twitter',  `https://twitter.com/intent/tweet?text=${txt}&url=${url}`);
   set('tav-share-facebook', `https://www.facebook.com/sharer/sharer.php?u=${url}`);
   set('tav-share-reddit',   `https://www.reddit.com/submit?url=${url}&title=${txt}`);
-
-  document.getElementById('tav-share-modal')?.classList.add('open');
 }
 
 function closeTavernShareModal() {

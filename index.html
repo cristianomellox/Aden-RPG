@@ -1780,10 +1780,14 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ── URL e textos fixos da página /download ── */
   var DOWNLOAD_PAGE = 'https://aden-rpg.pages.dev/download';
   var TEXT_PT  = 'Entre no continente de Aden! Um RPG estratégico épico – sem Pay-to-Win. Forje seu legado!';
-  var TEXT_EN  = 'Join the continent of Aden! An epic strategy RPG – no Pay-to-Win. Forge your legacy!';
+  // Fallback de ÚLTIMO caso, só se a chamada ao /api/share-meta falhar
+  // (offline, erro no worker etc.) — em uso normal, o texto em EN também
+  // vem traduzido pelo servidor, igual a qualquer outro idioma, pra usar
+  // sempre a mesma fonte de tradução em vez de um texto fixo divergente.
+  var TEXT_EN_FALLBACK = 'Join the continent of Aden! An epic strategy RPG – no Pay-to-Win. Forge your legacy!';
 
   // Cache em memória pra não rebuscar toda vez que o modal abre no mesmo idioma
-  var __shareTextCache = { pt: TEXT_PT, en: TEXT_EN };
+  var __shareTextCache = { pt: TEXT_PT };
 
   /* ── Idioma atual do jogador (mesmo cookie usado pelo Google Translate) ── */
   function getCurrentShareLang() {
@@ -1807,7 +1811,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return text;
       })
       .catch(function () {
-        return TEXT_PT;
+        return (lang === 'en') ? TEXT_EN_FALLBACK : TEXT_PT;
       });
   }
 

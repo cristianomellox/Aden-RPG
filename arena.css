@@ -323,12 +323,46 @@ body, html {
     100% { opacity:0; transform:translate(-50%,-190px) scale(0.9) rotate(0); }
 }
 
-/* --- Modal de Ranking --- */
+/* --- Modal de Ranking (padrão AAA) --- */
 .ranking-modal-content {
     width: 95vw;
+    max-width: 460px;
     max-height: 90vh;
     overflow-y: auto;
     box-sizing: border-box;
+    background: linear-gradient(180deg, #1c1710 0%, #12100c 45%, #1c1710 100%);
+    border: 1px solid rgba(201,169,74,0.55);
+    border-radius: 16px;
+    box-shadow:
+        0 0 0 1px rgba(0,0,0,0.6),
+        0 0 30px rgba(201,169,74,0.18),
+        0 20px 45px rgba(0,0,0,0.75),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    position: relative;
+}
+.ranking-modal-content::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255,224,130,0.7), rgba(201,169,74,0.05) 30%, rgba(201,169,74,0.05) 70%, rgba(255,224,130,0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+}
+.ranking-modal-content > h2 {
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 0.06em;
+    font-size: 1.25em;
+    margin: 4px 0 14px;
+    background: linear-gradient(180deg, #fff3c4, #d9b23f 55%, #a9821f);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    text-transform: uppercase;
 }
 .close-btn {
     color: #aaa;
@@ -488,63 +522,145 @@ body, html {
   color: #000;
   box-shadow: 0 0 8px #c9a94a!important;
 }
-/* --- Estilos para o Top 3 da Arena --- */
+/* --- Top 3 da Arena agora é renderizado como pódio (ver bloco .ar-podium) --- */
 
-/* 1º Lugar (Ouro) */
-#rankingList li:nth-child(1) {
-    /* Fundo sutil e borda de destaque para o item da lista */
-    background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09);
-    border-left: 5px solid gold;
+/* ================================================================
+   PÓDIO TOP 3 (padrão AAA) — usado nas abas "Atual" e "Passada"
+   ================================================================ */
+.ar-podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 26px 4px 14px;
+    margin-bottom: 10px;
+    position: relative;
 }
-#rankingList li:nth-child(1) .rank-position,
-#rankingList li:nth-child(1) .rank-points {
-    /* Cor e sombra de texto para Ouro */
-    color: #FFD700; /* Ouro */
-    font-size: 0.9em; /* Destaque */
-    text-shadow: 0 0 8px #FFD700, 0 0 15px #000;
+.ar-podium::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(60% 70% at 50% 15%, rgba(255,215,0,0.14), transparent 70%),
+        linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.35));
+    border-radius: 14px;
+    pointer-events: none;
 }
-#rankingList li:nth-child(1) .rank-avatar {
-    /* Borda do avatar */
-    border: 6px solid #FFD700!important;
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+.ar-podium-place {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1 1 0;
+    max-width: 130px;
+    z-index: 1;
+}
+.ar-podium-1 { order: 2; z-index: 2; }
+.ar-podium-2 { order: 1; }
+.ar-podium-3 { order: 3; }
+
+.ar-podium-crown {
+    font-size: 1.6em;
+    margin-bottom: -6px;
+    filter: drop-shadow(0 0 6px rgba(255,215,0,0.9));
+    animation: ar-podium-float 2.4s ease-in-out infinite;
+}
+@keyframes ar-podium-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
 }
 
-/* 2º Lugar (Prata) */
-#rankingList li:nth-child(2) {
-    /* Fundo sutil e borda de destaque para o item da lista */
-    background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c);
-    border-left: 5px solid silver;
+.ar-podium-avatar-wrap {
+    position: relative;
+    margin-bottom: 6px;
 }
-#rankingList li:nth-child(2) .rank-position,
-#rankingList li:nth-child(2) .rank-points {
-    /* Cor e sombra de texto para Prata */
-    color: silver; /* Prata */
-    font-size: 0.9em;
-    text-shadow: 0 0 8px silver;
+.ar-podium-avatar {
+    display: block;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #222;
 }
-#rankingList li:nth-child(2) .rank-avatar {
-    /* Borda do avatar */
-    border: 6px solid silver!important;
-    box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
+.ar-podium-1 .ar-podium-avatar { width: 78px; height: 78px; border: 4px solid #FFD700; box-shadow: 0 0 16px rgba(255,215,0,0.85), 0 0 34px rgba(255,215,0,0.4); animation: pulse 2s infinite; }
+.ar-podium-2 .ar-podium-avatar { width: 62px; height: 62px; border: 4px solid #C7CCD6; box-shadow: 0 0 12px rgba(199,204,214,0.7); }
+.ar-podium-3 .ar-podium-avatar { width: 62px; height: 62px; border: 4px solid #CD7F32; box-shadow: 0 0 12px rgba(205,127,50,0.7); }
+
+.ar-podium-badge {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: bold;
+    font-size: 0.85em;
+    color: #1a1204;
+    border: 2px solid rgba(0,0,0,0.5);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+}
+.ar-podium-1 .ar-podium-badge { background: linear-gradient(180deg, #fff3b0, #FFD700 45%, #b8860b); width: 30px; height: 30px; font-size: 0.95em; }
+.ar-podium-2 .ar-podium-badge { background: linear-gradient(180deg, #f2f4f8, #C7CCD6 45%, #8a90a0); }
+.ar-podium-3 .ar-podium-badge { background: linear-gradient(180deg, #f0b784, #CD7F32 45%, #8a5322); }
+
+.ar-podium-name {
+    font-size: 0.88em;
+    font-weight: bold;
+    color: #f2ecd8;
+    text-align: center;
+    max-width: 118px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px 2px #000, 0 0 6px rgba(0,0,0,0.7);
+    margin-top: 6px;
+}
+.ar-podium-guild {
+    font-size: 0.68em;
+    color: lightblue;
+    font-weight: bold;
+    max-width: 118px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px 2px #000;
+}
+.ar-podium-value {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: gold;
+    margin-top: 2px;
+    text-shadow: 1px 1px 2px #000, 0 0 6px rgba(255,215,0,0.5);
+    white-space: nowrap;
 }
 
-/* 3º Lugar (Bronze) */
-#rankingList li:nth-child(3) {
-    /* Fundo sutil e borda de destaque para o item da lista */
-    background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5));;
-    border-left: 5px solid #CD7F32; /* Bronze (hex) */
+.ar-podium-step {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 4px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: bold;
+    font-size: 1.3em;
+    box-shadow: inset 0 3px 6px rgba(255,255,255,0.25), 0 -2px 10px rgba(0,0,0,0.4);
 }
-#rankingList li:nth-child(3) .rank-position,
-#rankingList li:nth-child(3) .rank-points {
-    /* Cor e sombra de texto para Bronze */
-    color: #CD7F32; /* Bronze */
-    font-size: 0.9em;
-    text-shadow: 0 0 8px #CD7F32;
-}
-#rankingList li:nth-child(3) .rank-avatar {
-    /* Borda do avatar */
-    border: 6px solid #CD7F32!important;
-    box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
+.ar-podium-1 .ar-podium-step { height: 58px; background: linear-gradient(180deg, #ffdf6b, #c9a227 55%, #8a6d10); color: #3a2c02; text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
+.ar-podium-2 .ar-podium-step { height: 42px; background: linear-gradient(180deg, #e4e8f0, #a9afbd 55%, #6d7280); color: #23252b; }
+.ar-podium-3 .ar-podium-step { height: 30px; background: linear-gradient(180deg, #e8a465, #b06a2e 55%, #6e3f16); color: #2a1502; }
+
+/* Lista "4º ao 10º" abaixo do pódio — visual mais discreto/uniforme */
+#rankingList li, #rankingListPast li {
+    border-radius: 8px;
+    margin-bottom: 4px;
+    background: rgba(255,255,255,0.03);
 }
 
 
@@ -629,54 +745,7 @@ body, html {
   min-width: 80px;
 }
 
-/* EFEITO TOP 3 (igual ao da aba "Atual") */
-#rankingListPast li:nth-child(1) {
-  background: linear-gradient(180deg, #b79c09, #8b7601, #b79c09);
-  border-left: 5px solid gold;
-}
-
-#rankingListPast li:nth-child(1) .rank-position,
-#rankingListPast li:nth-child(1) .rank-points {
-  color: #FFD700;
-  text-shadow: 0 0 6px #FFD700, 0 0 10px #000;
-}
-
-#rankingListPast li:nth-child(1) .rank-avatar {
-  border: 6px solid #FFD700!important;
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
-}
-
-#rankingListPast li:nth-child(2) {
-  background: linear-gradient(180deg, #a88c8c, #8b6363, #a88c8c);
-  border-left: 5px solid silver;
-}
-
-#rankingListPast li:nth-child(2) .rank-position,
-#rankingListPast li:nth-child(2) .rank-points {
-  color: silver;
-  text-shadow: 0 0 6px silver;
-}
-
-#rankingListPast li:nth-child(2) .rank-avatar {
-  border: 6px solid silver!important;
-  box-shadow: 0 0 10px rgba(192, 192, 192, 0.7);
-}
-
-#rankingListPast li:nth-child(3) {
-  background: linear-gradient(180deg, rgba(173, 99, 26, 0.5), rgba(152, 81, 11, 0.7), rgba(173, 99, 26, 0.5));
-  border-left: 5px solid #CD7F32;
-}
-
-#rankingListPast li:nth-child(3) .rank-position,
-#rankingListPast li:nth-child(3) .rank-points {
-  color: #CD7F32;
-  text-shadow: 0 0 6px #CD7F32;
-}
-
-#rankingListPast li:nth-child(3) .rank-avatar {
-  border: 6px solid #CD7F32!important;
-  box-shadow: 0 0 10px rgba(205, 127, 50, 0.7);
-}
+/* Top 3 da temporada passada também usa o pódio (.ar-podium) */
 
 /* Fim da lista */
 #rankingListPast li:last-child {
@@ -1010,19 +1079,7 @@ textarea:focus, textarea:active {
     100%{box-shadow:0 0 0 rgba(255,215,0,0.8);}
 }
 
-/* Trecho a ser MODIFICADO (Ranking Atual) */
-#rankingList li:nth-child(1) .rank-avatar { /* Borda do avatar */ 
-    border: 3px solid #FFD700; 
-    /* Adicionado o efeito de pulse */
-    animation: pulse 2s infinite; 
-}
-
-/* Trecho a ser MODIFICADO (Ranking Passada) */
-#rankingListPast li:nth-child(1) .rank-avatar { 
-    border: 3px solid #FFD700; 
-    /* Adicionado o efeito de pulse */
-    animation: pulse 2s infinite; 
-}
+/* O pulse do 1º lugar agora vive em .ar-podium-1 .ar-podium-avatar (ver bloco do pódio) */
 
 /* === BARRA FIXA DE RANKING DO JOGADOR (ARENA) === */
 #fixedArenaRank {

@@ -3768,7 +3768,7 @@ document.getElementById('closeDrawResultsModalBtn').addEventListener('click', ()
 
 buyCommonCardBtn.addEventListener('click', () => {
     cardQtyToBuySpan.textContent = '1';
-    totalCrystalCostSpan.textContent = '250';
+    totalCrystalCostSpan.textContent = '350';
     buyCardsMessage.textContent = '';
     buyCardsModal.style.display = 'flex';
 });
@@ -3776,7 +3776,7 @@ buyCommonCardBtn.addEventListener('click', () => {
 increaseCardQtyBtn.addEventListener('click', () => {
     let qty = parseInt(cardQtyToBuySpan.textContent) + 1;
     cardQtyToBuySpan.textContent = qty;
-    totalCrystalCostSpan.textContent = qty * 250;
+    totalCrystalCostSpan.textContent = qty * 350;
 });
 
 decreaseCardQtyBtn.addEventListener('click', () => {
@@ -3784,7 +3784,7 @@ decreaseCardQtyBtn.addEventListener('click', () => {
     if (qty > 1) {
         qty--;
         cardQtyToBuySpan.textContent = qty;
-        totalCrystalCostSpan.textContent = qty * 250;
+        totalCrystalCostSpan.textContent = qty * 350;
     }
 });
 

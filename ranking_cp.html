@@ -26,7 +26,7 @@
 
     .loading{text-align:center;padding:20px;font-size:1.05em;opacity:.9;}
     .pulse{animation:pulse 2s infinite;}
-    @keyframes pulse{0%{box-shadow:0 0 0 rgba(255,215,0,1);}70%{box-shadow:2px 2px 56px rgba(255,215,0,.9);}100%{box-shadow:0 0 0 rgba(255,215,0,.8);}}
+    @keyframes pulse{0%{box-shadow:0 0 8px rgba(255,215,0,.55);}50%{box-shadow:0 0 26px rgba(255,215,0,1),0 0 46px rgba(255,215,0,.55);}100%{box-shadow:0 0 8px rgba(255,215,0,.55);}}
     .shimmer{background:linear-gradient(-90deg,#383838 0%,#444 50%,#383838 100%);background-size:400% 400%;animation:shimmer 1.2s ease-in-out infinite;color:transparent!important;}
     @keyframes shimmer{0%{background-position:-100% 0}100%{background-position:100% 0}}
     .shimmer::before{content:'\00a0';}
@@ -168,7 +168,8 @@
     .cp-podium-avatar{display:block;border-radius:50%;object-fit:cover;background:#222;}
     .cp-podium-avatar.is-flag{border-radius:8px;}
     .cp-podium-1 .cp-podium-avatar{width:78px;height:78px;border:4px solid #FFD700;
-      box-shadow:0 0 16px rgba(255,215,0,.85),0 0 34px rgba(255,215,0,.4);animation:pulse 2s infinite;}
+      box-shadow:0 0 16px rgba(255,215,0,.85),0 0 34px rgba(255,215,0,.4);animation:pulse 2s infinite;
+      will-change:box-shadow;transform:translateZ(0);}
     .cp-podium-2 .cp-podium-avatar{width:62px;height:62px;border:4px solid #C7CCD6;
       box-shadow:0 0 12px rgba(199,204,214,.7);}
     .cp-podium-3 .cp-podium-avatar{width:62px;height:62px;border:4px solid #CD7F32;

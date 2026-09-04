@@ -1263,9 +1263,9 @@ body {
 
 /* Pulse no avatar do 1º lugar — reaproveitado pelo pódio */
 @keyframes ruins-pulse {
-    0%   { box-shadow: 0 0 0px rgba(255,215,0,1); }
-    70%  { box-shadow: 2px 2px 56px rgba(255,215,0,0.9); }
-    100% { box-shadow: 0 0 0 rgba(255,215,0,0.8); }
+    0%   { box-shadow: 0 0 8px rgba(255,215,0,0.55); }
+    50%  { box-shadow: 0 0 26px rgba(255,215,0,1), 0 0 46px rgba(255,215,0,0.55); }
+    100% { box-shadow: 0 0 8px rgba(255,215,0,0.55); }
 }
 .rk-pulse {
     animation: ruins-pulse 2s infinite;
@@ -1311,7 +1311,7 @@ body {
 }
 .rk-podium-avatar-wrap { position: relative; margin-bottom: 5px; }
 .rk-podium-avatar { display: block; border-radius: 50%; object-fit: cover; background: #222; }
-.rk-podium-1 .rk-podium-avatar { width: 68px; height: 68px; border: 3px solid #FFD700; box-shadow: 0 0 14px rgba(255,215,0,0.85); }
+.rk-podium-1 .rk-podium-avatar { width: 68px; height: 68px; border: 3px solid #FFD700; box-shadow: 0 0 14px rgba(255,215,0,0.85); will-change: box-shadow; transform: translateZ(0); }
 .rk-podium-2 .rk-podium-avatar { width: 54px; height: 54px; border: 3px solid #C7CCD6; box-shadow: 0 0 10px rgba(199,204,214,0.7); }
 .rk-podium-3 .rk-podium-avatar { width: 54px; height: 54px; border: 3px solid #CD7F32; box-shadow: 0 0 10px rgba(205,127,50,0.7); }
 

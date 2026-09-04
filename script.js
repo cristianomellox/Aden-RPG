@@ -1298,8 +1298,8 @@ document.addEventListener('DOMContentLoaded', () => {
         common: {
             title: 'Espiral Comum — Chances',
             rows: [
-                { rarity: 'R',  label: 'Fragmento R',  chance: '95%', color: 'lightgreen' },
-                { rarity: 'SR', label: 'Fragmento SR', chance: '5%',  color: 'lightblue' },
+                { rarity: 'R',  label: 'Fragmento R',  chance: '97%', color: 'lightgreen' },
+                { rarity: 'SR', label: 'Fragmento SR', chance: '3%',  color: 'lightblue' },
             ]
         },
         advanced: {

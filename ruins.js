@@ -1575,12 +1575,47 @@ function renderRuinsKillsRanking(data) {
     const top10      = data.top10 || [];
     const esc        = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+    // --- Pódio (Top 3) no padrão AAA ---
+    const podiumEl = widget.querySelector('.rk-podium');
+    if (podiumEl) {
+        const top3 = top10.slice(0, 3);
+        if (!top3.length) {
+            podiumEl.innerHTML = '';
+        } else {
+            const order = [2, 1, 3];
+            let podiumHtml = '';
+            for (const rank of order) {
+                const p = top3[rank - 1];
+                if (!p) continue;
+                const avatar = p.avatar_url || DEF_AVATAR;
+                const name   = esc(p.name || 'Desconhecido');
+                const guild  = esc(p.guild_name || '');
+                const kills  = Number(p.kills || 0);
+                podiumHtml += `
+                <div class="rk-podium-place rk-podium-${rank}">
+                    ${rank === 1 ? '<div class="rk-podium-crown">👑</div>' : ''}
+                    <div class="rk-podium-avatar-wrap">
+                        <img class="rk-podium-avatar${rank === 1 ? ' rk-pulse' : ''}" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
+                        <div class="rk-podium-badge">${rank}</div>
+                    </div>
+                    <div class="rk-podium-name">${name}</div>
+                    ${guild ? `<div class="rk-podium-guild">${guild}</div>` : ''}
+                    <div class="rk-podium-kills">${kills} ☠</div>
+                    <div class="rk-podium-step">${rank}</div>
+                </div>`;
+            }
+            podiumEl.innerHTML = podiumHtml;
+        }
+    }
+
+    // --- Lista (4º ao 10º) ---
+    const rest = top10.slice(3);
     let listHtml = '';
     if (top10.length === 0) {
         listHtml = '<li class="rk-loading">Nenhuma eliminação ainda este mês.</li>';
     } else {
-        top10.forEach((p, i) => {
-            const pos       = i + 1;
+        rest.forEach((p, idx) => {
+            const pos       = idx + 4;
             const avatar    = p.avatar_url || DEF_AVATAR;
             const name      = esc(p.name       || 'Desconhecido');
             const guild     = esc(p.guild_name || '');
@@ -1590,9 +1625,9 @@ function renderRuinsKillsRanking(data) {
                 ? `<span class="rk-guild">${guild}</span>`
                 : '';
             listHtml += `
-            <li class="rk-item rk-p${pos}${isMe ? ' rk-me' : ''}">
+            <li class="rk-item${isMe ? ' rk-me' : ''}">
                 <span class="rk-pos">${pos}.</span>
-                <img class="rk-avatar${pos === 1 ? ' rk-pulse' : ''}" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
+                <img class="rk-avatar" src="${avatar}" onerror="this.src='${DEF_AVATAR}'">
                 <div class="rk-info">
                     <span class="rk-name">${name}</span>
                     ${guildHtml}

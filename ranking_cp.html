@@ -94,16 +94,7 @@
     .rank-power-cp{font-size:1em;font-weight:bold;color:#4CAF50;text-align:right;min-width:70px;flex-shrink:0;}
     .rank-eye-icon{width:20px;height:20px;fill:#fff;cursor:pointer;opacity:.8;transition:opacity .2s,transform .2s;flex-shrink:0;}
     .rank-eye-icon:hover{opacity:1;transform:scale(1.1);filter:drop-shadow(0 0 2px gold);}
-    /* Top 3 CP */
-    #rankingListCP li:nth-child(1){background:linear-gradient(180deg,#b79c09,#8b7601,#b79c09);border-left:5px solid gold;}
-    #rankingListCP li:nth-child(1) .rank-position-cp,#rankingListCP li:nth-child(1) .rank-power-cp{color:#FFD700;font-size:1.2em;text-shadow:0 0 8px #FFD700,0 0 15px #000;}
-    #rankingListCP li:nth-child(1) .rank-avatar-cp{border:6px solid #FFD700;box-shadow:0 0 10px rgba(255,215,0,.7);}
-    #rankingListCP li:nth-child(2){background:linear-gradient(180deg,#a88c8c,#8b6363,#a88c8c);border-left:5px solid silver;}
-    #rankingListCP li:nth-child(2) .rank-position-cp,#rankingListCP li:nth-child(2) .rank-power-cp{color:silver;font-size:1.15em;text-shadow:0 0 8px silver;}
-    #rankingListCP li:nth-child(2) .rank-avatar-cp{border:6px solid silver;box-shadow:0 0 10px rgba(192,192,192,.7);}
-    #rankingListCP li:nth-child(3){background:linear-gradient(180deg,rgba(173,99,26,.5),rgba(152,81,11,.7),rgba(173,99,26,.5));border-left:5px solid #CD7F32;}
-    #rankingListCP li:nth-child(3) .rank-position-cp,#rankingListCP li:nth-child(3) .rank-power-cp{color:#CD7F32;font-size:1.1em;text-shadow:0 0 8px #CD7F32;}
-    #rankingListCP li:nth-child(3) .rank-avatar-cp{border:6px solid #CD7F32;box-shadow:0 0 10px rgba(205,127,50,.7);}
+    /* Top 3 agora vira pódio (.cp-podium), ver bloco dedicado abaixo */
     @media(max-width:700px){
       .rank-player-name-cp{max-width:90px;font-size:.85em}
       .rank-guild-name-cp{font-size:.72em}
@@ -128,16 +119,11 @@
     .rli:nth-child(1){animation-delay:.02s}.rli:nth-child(2){animation-delay:.05s}
     .rli:nth-child(3){animation-delay:.08s}.rli:nth-child(4){animation-delay:.1s}
     .rli:nth-child(5){animation-delay:.12s}
-    .rli.top-1{background:linear-gradient(90deg,rgba(183,156,9,.52) 0%,rgba(90,68,0,.28) 100%);border-left:4px solid #FFD700;}
-    .rli.top-2{background:linear-gradient(90deg,rgba(168,140,140,.42) 0%,rgba(80,60,60,.22) 100%);border-left:4px solid silver;}
-    .rli.top-3{background:linear-gradient(90deg,rgba(173,99,26,.38) 0%,rgba(80,40,8,.22) 100%);border-left:4px solid #CD7F32;}
     .rli.is-me{outline:1px solid rgba(120,200,255,.28);}
     .rli.footer-personal{background:rgba(10,20,35,.65);border-top:2px dashed rgba(100,160,255,.3);border-bottom:none;}
     .rli-pos{font-size:1.05em;font-weight:bold;color:#FFC107;width:30px;flex-shrink:0;text-align:center;}
     .rli-av{width:44px;height:44px;border-radius:50%;border:2px solid #666;flex-shrink:0;object-fit:cover;}
-    .rli.top-1 .rli-av{border-color:#FFD700;box-shadow:0 0 10px rgba(255,215,0,.65);animation:pulse 2s infinite;}
-    .rli.top-2 .rli-av{border-color:silver;}
-    .rli.top-3 .rli-av{border-color:#CD7F32;}
+    /* Destaque top-1/2/3 nas listas agora vive no pódio (.cp-podium) */
     .rli-info{flex-grow:1;min-width:0;}
     .rli-name{display:block;font-size:.97em;font-weight:bold;color:#e0dccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
     .rli-name:hover{color:gold;text-decoration:underline;}
@@ -154,17 +140,64 @@
       border-bottom:1px solid rgba(201,169,74,.14);background:rgba(18,15,8,.48);
       transition:background .2s;cursor:pointer;animation:itemIn .3s ease both;}
     .gli:hover{background:rgba(201,169,74,.08);}
-    .gli.top-1{background:linear-gradient(90deg,rgba(183,156,9,.52) 0%,rgba(90,68,0,.28) 100%);border-left:4px solid #FFD700;}
-    .gli.top-2{background:linear-gradient(90deg,rgba(168,140,140,.42) 0%,rgba(80,60,60,.22) 100%);border-left:4px solid silver;}
-    .gli.top-3{background:linear-gradient(90deg,rgba(173,99,26,.38) 0%,rgba(80,40,8,.22) 100%);border-left:4px solid #CD7F32;}
+    /* Destaque top-1/2/3 da lista de guildas agora vive no pódio (.cp-podium) */
     .gli-pos{font-size:1.05em;font-weight:bold;color:#FFC107;width:30px;flex-shrink:0;text-align:center;}
     .gli-flag{width:44px;height:44px;border-radius:6px;object-fit:cover;border:2px solid #666;flex-shrink:0;}
-    .gli.top-1 .gli-flag{border-color:#FFD700;box-shadow:0 0 8px rgba(255,215,0,.55);animation:pulse 2s infinite;}
-    .gli.top-2 .gli-flag{border-color:silver;}
-    .gli.top-3 .gli-flag{border-color:#CD7F32;}
+    /* Destaque top-1/2/3 do flag de guilda agora vive no pódio (.cp-podium) */
     .gli-info{flex-grow:1;min-width:0;}
     .gli-name{display:block;font-size:.97em;font-weight:bold;color:#e0dccc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .gli-power{font-size:1em;font-weight:bold;color:#FF9800;text-align:right;flex-shrink:0;min-width:80px;}
+
+    /* ===================================================================
+       PÓDIO TOP 3 (padrão AAA) — reutilizado nas abas CP, Guilda, Arena e Ruínas
+    =================================================================== */
+    .cp-podium{display:flex;align-items:flex-end;justify-content:center;gap:6px;
+      width:100%;box-sizing:border-box;padding:26px 4px 14px;margin-bottom:6px;position:relative;}
+    .cp-podium::before{content:'';position:absolute;inset:0;border-radius:14px;
+      background:radial-gradient(60% 70% at 50% 15%, rgba(255,215,0,.14), transparent 70%),
+      linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35));pointer-events:none;}
+    .cp-podium-place{position:relative;display:flex;flex-direction:column;align-items:center;
+      flex:1 1 0;max-width:130px;z-index:1;}
+    .cp-podium-1{order:2;z-index:2;}
+    .cp-podium-2{order:1;}
+    .cp-podium-3{order:3;}
+    .cp-podium-crown{font-size:1.6em;margin-bottom:-6px;filter:drop-shadow(0 0 6px rgba(255,215,0,.9));
+      animation:cpPodiumFloat 2.4s ease-in-out infinite;}
+    @keyframes cpPodiumFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+    .cp-podium-avatar-wrap{position:relative;margin-bottom:6px;}
+    .cp-podium-avatar{display:block;border-radius:50%;object-fit:cover;background:#222;}
+    .cp-podium-avatar.is-flag{border-radius:8px;}
+    .cp-podium-1 .cp-podium-avatar{width:78px;height:78px;border:4px solid #FFD700;
+      box-shadow:0 0 16px rgba(255,215,0,.85),0 0 34px rgba(255,215,0,.4);animation:pulse 2s infinite;}
+    .cp-podium-2 .cp-podium-avatar{width:62px;height:62px;border:4px solid #C7CCD6;
+      box-shadow:0 0 12px rgba(199,204,214,.7);}
+    .cp-podium-3 .cp-podium-avatar{width:62px;height:62px;border:4px solid #CD7F32;
+      box-shadow:0 0 12px rgba(205,127,50,.7);}
+    .cp-podium-badge{position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);
+      width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      font-family:'Cinzel',Georgia,serif;font-weight:bold;font-size:.85em;color:#1a1204;
+      border:2px solid rgba(0,0,0,.5);box-shadow:0 2px 4px rgba(0,0,0,.6);}
+    .cp-podium-1 .cp-podium-badge{background:linear-gradient(180deg,#fff3b0,#FFD700 45%,#b8860b);width:30px;height:30px;font-size:.95em;}
+    .cp-podium-2 .cp-podium-badge{background:linear-gradient(180deg,#f2f4f8,#C7CCD6 45%,#8a90a0);}
+    .cp-podium-3 .cp-podium-badge{background:linear-gradient(180deg,#f0b784,#CD7F32 45%,#8a5322);}
+    .cp-podium-name{font-size:.85em;font-weight:bold;color:#f2ecd8;text-align:center;max-width:118px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      text-shadow:1px 1px 2px #000,0 0 6px rgba(0,0,0,.7);margin-top:6px;cursor:pointer;}
+    .cp-podium-name:hover{color:gold;text-decoration:underline;}
+    .cp-podium-guild{font-size:.66em;color:lightblue;font-weight:bold;max-width:118px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:1px 1px 2px #000;}
+    .cp-podium-value{font-size:.8em;font-weight:bold;margin-top:2px;
+      text-shadow:1px 1px 2px #000,0 0 6px rgba(255,215,0,.5);white-space:nowrap;}
+    .cp-podium-value.val-cp{color:#4CAF50;}
+    .cp-podium-value.val-arena{color:#FFD700;}
+    .cp-podium-value.val-ruins{color:#ff6b6b;}
+    .cp-podium-value.val-guild{color:#FF9800;}
+    .cp-podium-step{width:100%;margin-top:10px;border-radius:8px 8px 0 0;display:flex;
+      align-items:flex-start;justify-content:center;padding-top:4px;font-family:'Cinzel',Georgia,serif;
+      font-weight:bold;font-size:1.3em;box-shadow:inset 0 3px 6px rgba(255,255,255,.25),0 -2px 10px rgba(0,0,0,.4);}
+    .cp-podium-1 .cp-podium-step{height:58px;background:linear-gradient(180deg,#ffdf6b,#c9a227 55%,#8a6d10);color:#3a2c02;text-shadow:0 1px 0 rgba(255,255,255,.4);}
+    .cp-podium-2 .cp-podium-step{height:42px;background:linear-gradient(180deg,#e4e8f0,#a9afbd 55%,#6d7280);color:#23252b;}
+    .cp-podium-3 .cp-podium-step{height:30px;background:linear-gradient(180deg,#e8a465,#b06a2e 55%,#6e3f16);color:#2a1502;}
 
     /* ===================================================================
        BARRA FIXA DO JOGADOR
@@ -694,6 +727,49 @@ const SKULL_SVG =
               m1-5.5a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2z"/>
    </svg>`;
 
+/* ─────────────────────────────────────────
+   PÓDIO TOP 3 (padrão AAA) — usado por CP, Guilda, Arena e Ruínas
+───────────────────────────────────────── */
+function buildCpPodiumHTML(top3, opts){
+  opts = opts || {};
+  const avatarField = opts.avatarField || 'avatar_url';
+  const defImg       = opts.defImg || DEF_AV;
+  const isFlag        = !!opts.isFlag;
+  const getValue      = opts.getValue || (() => '');
+  const getGuild       = opts.getGuild || (p => p.guild_name || '');
+  const getName        = opts.getName || (p => p.name || 'Desconhecido');
+  const getId           = opts.getId || (p => p.id);
+  const valueClass      = opts.valueClass || '';
+  const clickable        = opts.clickable !== false;
+
+  if(!top3 || !top3.length) return '';
+  const order = [2, 1, 3];
+  let html = '<div class="cp-podium">';
+  for(const rank of order){
+    const p = top3[rank-1];
+    if(!p) continue;
+    const img   = esc(p[avatarField]) || defImg;
+    const name  = esc(getName(p));
+    const guild = esc(getGuild(p));
+    const val   = getValue(p);
+    const pid   = getId(p);
+    html += `
+    <div class="cp-podium-place cp-podium-${rank}">
+      ${rank===1 ? '<div class="cp-podium-crown">👑</div>' : ''}
+      <div class="cp-podium-avatar-wrap">
+        <img class="cp-podium-avatar${isFlag?' is-flag':''}" src="${img}" onerror="this.src='${defImg}'">
+        <div class="cp-podium-badge">${rank}</div>
+      </div>
+      <div class="cp-podium-name"${clickable && pid ? ` data-player-id="${esc(pid)}"` : ''}>${name}</div>
+      ${guild ? `<div class="cp-podium-guild">${guild}</div>` : ''}
+      <div class="cp-podium-value ${valueClass}">${val}</div>
+      <div class="cp-podium-step">${rank}</div>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
 function openPlayerModal(pid){
   if(!pid) return;
   const m = document.getElementById('playerModal');
@@ -704,7 +780,7 @@ function openPlayerModal(pid){
 function delegateListClicks(container){
   container?.addEventListener('click',(e)=>{
     const t = e.target.closest('.rli-name') || e.target.closest('.rank-eye-icon') ||
-              e.target.closest('.rank-player-name-cp');
+              e.target.closest('.rank-player-name-cp') || e.target.closest('.cp-podium-name');
     if(t && t.dataset.playerId) openPlayerModal(t.dataset.playerId);
   });
 }
@@ -1189,13 +1265,20 @@ async function loadCPRanking(){
     if(!finalList || !finalList.length){
       w.innerHTML = '<div class="loading">Nenhum jogador encontrado.</div>';
     }else{
-      let html = '<ol id="rankingListCP">';
-      finalList.slice(0,10).forEach((p,i)=>{
-        const pos = i+1;
+      const top3 = finalList.slice(0,3);
+      const rest = finalList.slice(3,10);
+      let html = buildCpPodiumHTML(top3, {
+        valueClass: 'val-cp',
+        getValue: p => formatNumberCompact(Number(p.cp||0)),
+        avatarField: 'avatar_url'
+      });
+      html += '<ol id="rankingListCP">';
+      rest.forEach((p,idx)=>{
+        const pos = idx+4;
         const av  = esc(p.avatar_url)||DEF_AV;
         html += `<li data-player-id="${esc(p.id)}">
           <span class="rank-position-cp">${pos}</span>
-          <img class="rank-avatar-cp ${pos===1?'pulse':''}" src="${av}" onerror="this.src='${DEF_AV}'">
+          <img class="rank-avatar-cp" src="${av}" onerror="this.src='${DEF_AV}'">
           <div class="rank-player-info-cp">
             <div class="rank-player-name-wrapper">
               <span class="rank-player-name-cp" data-player-id="${esc(p.id)}">${esc(p.name)}</span>
@@ -1208,7 +1291,7 @@ async function loadCPRanking(){
       });
       html += '</ol>';
       w.innerHTML = html;
-      delegateListClicks(document.getElementById('rankingListCP'));
+      delegateListClicks(w);
     }
 
     // Rank pessoal (barra fixa)
@@ -1269,16 +1352,27 @@ async function loadGuildRanking(){
 
 function renderGuildList(data, myId, container){
   if(!data || !data.length){ container.innerHTML='<div class="loading">Nenhuma guilda encontrada.</div>'; return; }
-  let html = '<ul class="guild-rank-list">';
-  data.forEach((g,i)=>{
-    const pos  = i+1;
+
+  const top3 = data.slice(0,3);
+  const rest = data.slice(3,10);
+
+  let html = buildCpPodiumHTML(top3, {
+    avatarField: 'flag_url',
+    defImg: DEF_FLAG,
+    isFlag: true,
+    clickable: false,
+    getName: g => g.name,
+    getGuild: () => '',
+    getValue: g => formatNumberCompact(Number(g.total_power||0)),
+    valueClass: 'val-guild'
+  });
+
+  html += '<ul class="guild-rank-list">';
+  rest.forEach((g,idx)=>{
+    const pos  = idx+4;
     const flag = esc(g.flag_url)||DEF_FLAG;
     const pwr  = formatNumberCompact(Number(g.total_power||0));
-    let cls = 'gli';
-    if(pos===1) cls+=' top-1';
-    else if(pos===2) cls+=' top-2';
-    else if(pos===3) cls+=' top-3';
-    html += `<li class="${cls}" data-guild-id="${esc(g.guild_id)}">
+    html += `<li class="gli" data-guild-id="${esc(g.guild_id)}">
       <span class="gli-pos">${pos}</span>
       <img class="gli-flag" src="${flag}" onerror="this.src='${DEF_FLAG}'">
       <div class="gli-info"><span class="gli-name">${esc(g.name)}</span></div>
@@ -1361,12 +1455,21 @@ async function loadArenaRanking(){
 
 function renderArenaList(data, myId, container){
   if(!data || !data.length){ container.innerHTML='<div class="loading">Nenhum jogador classificado ainda.</div>'; return; }
-  let html = '<ul class="rank-list-u">';
-  data.slice(0,10).forEach((p,i)=>{
-    const pos = i+1;
+
+  const top3 = data.slice(0,3);
+  const rest = data.slice(3,10);
+
+  let html = buildCpPodiumHTML(top3, {
+    avatarField: 'avatar_url',
+    getValue: p => `${Number(p.ranking_points||0).toLocaleString()} pts`,
+    valueClass: 'val-arena'
+  });
+
+  html += '<ul class="rank-list-u">';
+  rest.forEach((p,idx)=>{
+    const pos = idx+4;
     const av  = esc(p.avatar_url||p.avatar)||DEF_AV;
     let cls = 'rli';
-    if(pos===1) cls+=' top-1'; else if(pos===2) cls+=' top-2'; else if(pos===3) cls+=' top-3';
     if(p.id===myId) cls+=' is-me';
     const pts = Number(p.ranking_points||0).toLocaleString();
     html += `<li class="${cls}">
@@ -1382,7 +1485,7 @@ function renderArenaList(data, myId, container){
   });
   html += '</ul>';
   container.innerHTML = html;
-  delegateListClicks(container.querySelector('.rank-list-u'));
+  delegateListClicks(container);
 
   // Rank pessoal arena
   if(myId){
@@ -1460,14 +1563,23 @@ function renderRuinsList(data, container){
   const top10 = data.top10||[];
   if(!top10.length){ container.innerHTML='<div class="loading">Nenhuma eliminação este mês.</div>'; return; }
 
-  let html = '<ul class="rank-list-u">';
-  top10.forEach((p,i)=>{
-    const pos  = i+1;
+  const top3 = top10.slice(0,3);
+  const rest = top10.slice(3);
+
+  let html = buildCpPodiumHTML(top3, {
+    avatarField: 'avatar_url',
+    getName: p => p.name || 'Desconhecido',
+    getValue: p => `${Number(p.kills||0)}&nbsp;${SKULL_SVG}`,
+    valueClass: 'val-ruins'
+  });
+
+  html += '<ul class="rank-list-u">';
+  rest.forEach((p,idx)=>{
+    const pos  = idx+4;
     const av   = esc(p.avatar_url)||DEF_AV;
     const kills = Number(p.kills||0);
     const isMe = p.id === data.my_id;
     let cls = 'rli';
-    if(pos===1) cls+=' top-1'; else if(pos===2) cls+=' top-2'; else if(pos===3) cls+=' top-3';
     if(isMe) cls+=' is-me';
     const gH = p.guild_name ? `<span class="rli-guild">${esc(p.guild_name)}</span>` : '';
     html += `<li class="${cls}">
@@ -1498,7 +1610,7 @@ function renderRuinsList(data, container){
   }
   html += '</ul>';
   container.innerHTML = html;
-  delegateListClicks(container.querySelector('.rank-list-u'));
+  delegateListClicks(container);
 
   // Rank pessoal ruínas → footer fixo
   myRankData.ruins = data;

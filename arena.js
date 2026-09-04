@@ -642,8 +642,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         applyEffect(target, itemId) {
             const id = parseInt(itemId);
-            if (id === 43) target.hp = Math.min(target.maxHp, target.hp + 500);
-            else if (id === 44) target.hp = Math.min(target.maxHp, target.hp + 1000);
+            // Poções de cura agora curam por porcentagem do HP máximo:
+            // R (id 43) = 4% do HP máx. | SR (id 44) = 10% do HP máx.
+            if (id === 43) target.hp = Math.min(target.maxHp, target.hp + Math.ceil(target.maxHp * 0.04));
+            else if (id === 44) target.hp = Math.min(target.maxHp, target.hp + Math.ceil(target.maxHp * 0.10));
             else {
                 let type = 'ATK';
                 if ([45,46].includes(id)) type = 'FURY';
@@ -703,6 +705,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const openRankingBtn = document.getElementById("openRankingBtn");
     const closeRankingBtn = document.getElementById("closeRankingBtn");
     const rankingList = document.getElementById("rankingList");
+    const rankingPodium = document.getElementById("rankingPodium");
+    const rankingPodiumPast = document.getElementById("rankingPodiumPast");
     const seasonInfoSpan = document.getElementById("seasonInfo");
     const rankingListPast = document.getElementById("rankingListPast");
     const rankingHistoryList = document.getElementById("rankingHistoryList");
@@ -1910,6 +1914,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch { return []; }
     }
 
+    // Constrói o HTML do pódio (Top 3) no padrão AAA — usado nas abas "Atual" e "Passada"
+    function buildArenaPodiumHTML(top3, defaultAvatar) {
+        defaultAvatar = defaultAvatar || 'https://aden-rpg.pages.dev/avatar01.webp';
+        const order = [2, 1, 3]; // ordem visual: 2º, 1º (centro), 3º
+        let html = "";
+        for (const rank of order) {
+            const p = top3[rank - 1];
+            if (!p) continue;
+            const avatar = p.avatar_url || p.avatar || defaultAvatar;
+            html += `
+            <div class="ar-podium-place ar-podium-${rank}">
+                ${rank === 1 ? '<div class="ar-podium-crown">👑</div>' : ''}
+                <div class="ar-podium-avatar-wrap">
+                    <img class="ar-podium-avatar" src="${esc(avatar)}" onerror="this.src='${defaultAvatar}'">
+                    <div class="ar-podium-badge">${rank}</div>
+                </div>
+                <div class="ar-podium-name">${esc(p.name)}</div>
+                <div class="ar-podium-guild">${esc(p.guild_name) || 'Sem Guilda'}</div>
+                <div class="ar-podium-value">${Number(p.ranking_points || 0).toLocaleString()} pts</div>
+                <div class="ar-podium-step">${rank}</div>
+            </div>`;
+        }
+        return html;
+    }
+
     function renderRanking(data) {
         if (seasonInfoSpan) {
             const now = new Date();
@@ -1918,9 +1947,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (!rankingList) return;
         rankingList.innerHTML = "";
+        if (rankingPodium) rankingPodium.innerHTML = "";
         if (!data || !data.length) { rankingList.innerHTML = "<li style='text-align:center; padding: 20px; color: #aaa;'>Nenhum jogador classificado ainda.</li>"; return; }
         const defaultAvatar = 'https://aden-rpg.pages.dev/avatar01.webp';
-        for (const [i, p] of data.entries()) {
+
+        // Top 3 vira pódio; do 4º em diante continua em lista
+        if (rankingPodium) rankingPodium.innerHTML = buildArenaPodiumHTML(data.slice(0, 3), defaultAvatar);
+
+        const rest = data.slice(3);
+        for (const [idx, p] of rest.entries()) {
+            const i = idx + 3;
             const avatar = p.avatar_url || p.avatar || defaultAvatar;
             const li = document.createElement("li");
             li.innerHTML = `<span class="rank-position">${i + 1}.</span><img src="${esc(avatar)}" onerror="this.src='${defaultAvatar}'" class="rank-avatar"><div class="rank-player-info"><span class="rank-player-name">${esc(p.name)}</span><span class="rank-guild-name">${esc(p.guild_name) || 'Sem Guilda'}</span></div><span class="rank-points">${Number(p.ranking_points || 0).toLocaleString()} pts</span>`;
@@ -1977,13 +2013,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (seasonPastInfoSpan) seasonPastInfoSpan.textContent = seasonInfoText;
 
             if (!d || !d.length) {
+                if (rankingPodiumPast) rankingPodiumPast.innerHTML = "";
                 if (rankingListPast) rankingListPast.innerHTML = "<li style='padding:12px;text-align:center;color:#aaa;'>Ainda não houve temporada passada.</li>";
             } else {
                 rankingListPast.innerHTML = "";
                 const defAv = 'https://aden-rpg.pages.dev/avatar01.webp';
-                d.forEach((p, i) => {
+
+                // Top 3 vira pódio; do 4º em diante continua em lista
+                if (rankingPodiumPast) rankingPodiumPast.innerHTML = buildArenaPodiumHTML(d.slice(0, 3), defAv);
+
+                d.slice(3).forEach((p, idx) => {
+                    const i = idx + 3;
                     const av = p.avatar_url || p.avatar || defAv;
-                    rankingListPast.innerHTML += `<li id="rankingListPast" style="width:100%;box-sizing:border-box;"><span style="width:40px;flex-shrink:0;font-weight:bold;color:#FFC107;">${i+1}.</span><img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%;flex-shrink:0;"><div style="flex-grow:1;min-width:0;text-align:left;"><div class="rank-player-name">${esc(p.name)}</div><div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div></div><div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div></li>`;
+                    rankingListPast.innerHTML += `<li style="width:100%;box-sizing:border-box;"><span style="width:40px;flex-shrink:0;font-weight:bold;color:#FFC107;">${i+1}.</span><img class="rank-avatar" src="${esc(av)}" onerror="this.src='${defAv}'" style="width:45px;height:45px;border-radius:50%;flex-shrink:0;"><div style="flex-grow:1;min-width:0;text-align:left;"><div class="rank-player-name">${esc(p.name)}</div><div class="rank-guild-name" style="font-weight: bold;">${esc(p.guild_name||'Sem Guilda')}</div></div><div class="rank-points">${Number(p.ranking_points||0).toLocaleString()} pts</div></li>`;
                 });
 
                 // === LÓGICA DO RODAPÉ FIXO (PASSADO) ===

@@ -275,34 +275,117 @@ const ATTACK_VIDEOS = [
 const videoBlobCache = {};
 
 // Função para pré-carregar vídeos em memória (Buffer) com Progresso
+//
+// A barra combina dois sinais e sempre mostra o MAIOR dos dois:
+//
+// 1) Progresso REAL, por bytes baixados (via streaming + Content-Length),
+//    que atualiza a cada pedaço recebido — não só quando um vídeo inteiro
+//    termina. Isso já elimina a maior parte da sensação de "travado",
+//    porque o primeiro vídeo começa a mexer a barra assim que os primeiros
+//    pacotes chegam, em vez de só quando o download completo termina.
+//
+// 2) Um "ticker otimista", que sobe 1% a cada ~150ms sozinho, independente
+//    da rede. Ele serve de piso: se a conexão demorar pra responder o
+//    primeiro byte (TLS handshake, DNS, fila do servidor etc.), o jogador
+//    ainda vê a barra andando desde o primeiro instante, em vez de ficar
+//    parada em 0%. Ele nunca passa de 95% sozinho — os últimos % só fecham
+//    quando os downloads realmente terminam, pra barra nunca "mentir" que
+//    já acabou.
 async function bufferBattleVideos(onProgress) {
     const allVideos = [...ATTACK_VIDEOS, VIDEO_INTRO, VIDEO_DEATH];
-    let loadedCount = 0;
-    const total = allVideos.length;
+    const totalCount = allVideos.length;
 
-    // Função auxiliar para baixar um único vídeo
-    const fetchVideo = async (url) => {
+    let optimisticPct = 0;
+    let realPct = 0;
+    let finished = false;
+
+    const report = () => { if (onProgress) onProgress(Math.min(99, Math.max(optimisticPct, realPct))); };
+
+    // Sobe 1% de cada vez, sem depender de nenhuma resposta de rede.
+    const optimisticTicker = setInterval(() => {
+        if (finished) return;
+        if (optimisticPct < 95) {
+            optimisticPct += 1;
+            report();
+        }
+    }, 150);
+
+    // --- Progresso real por bytes ---
+    let totalBytesExpected = 0;
+    let totalBytesLoaded = 0;
+    const sizeKnownFor = new Array(allVideos.length).fill(false);
+    let allSizesKnown = false;
+
+    function recheckAllSizesKnown() {
+        allSizesKnown = sizeKnownFor.every(Boolean);
+    }
+
+    let loadedCount = 0;
+    function bumpCountFallback() {
+        loadedCount++;
+        // Fallback por contagem de arquivos concluídos — usado quando não
+        // sabemos o tamanho (Content-Length) de todos os vídeos ainda.
+        const countPct = Math.floor((loadedCount / totalCount) * 100);
+        realPct = Math.max(realPct, countPct);
+    }
+
+    // Função auxiliar para baixar um único vídeo, com leitura em streaming
+    // para conseguir progresso por bytes (não só ao final do download).
+    const fetchVideo = async (url, idx) => {
         if (videoBlobCache[url]) {
-            loadedCount++;
-            if (onProgress) onProgress(Math.floor((loadedCount / total) * 100));
+            sizeKnownFor[idx] = true;
+            recheckAllSizesKnown();
+            bumpCountFallback();
+            report();
             return;
         }
 
         try {
             const response = await fetch(url);
-            const blob = await response.blob();
-            videoBlobCache[url] = URL.createObjectURL(blob);
+            const lenHeader = response.headers.get('content-length');
+            const expectedBytes = lenHeader ? parseInt(lenHeader, 10) : 0;
+
+            if (expectedBytes > 0 && response.body && response.body.getReader) {
+                sizeKnownFor[idx] = true;
+                recheckAllSizesKnown();
+                totalBytesExpected += expectedBytes;
+
+                const reader = response.body.getReader();
+                const chunks = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    totalBytesLoaded += value.length;
+                    if (allSizesKnown && totalBytesExpected > 0) {
+                        realPct = Math.max(realPct, Math.floor((totalBytesLoaded / totalBytesExpected) * 100));
+                        report();
+                    }
+                }
+                const blob = new Blob(chunks);
+                videoBlobCache[url] = URL.createObjectURL(blob);
+            } else {
+                // Sem Content-Length disponível: baixa normalmente, sem
+                // progresso por bytes só para este arquivo (o ticker
+                // otimista e o fallback por contagem cobrem esse caso).
+                const blob = await response.blob();
+                videoBlobCache[url] = URL.createObjectURL(blob);
+            }
         } catch (e) {
             console.warn("Falha ao criar buffer do vídeo:", url, e);
         } finally {
-            loadedCount++;
-            if (onProgress) onProgress(Math.floor((loadedCount / total) * 100));
+            bumpCountFallback();
+            report();
         }
     };
 
     // Dispara todos os downloads em paralelo
-    const promises = allVideos.map(url => fetchVideo(url));
+    const promises = allVideos.map((url, idx) => fetchVideo(url, idx));
     await Promise.allSettled(promises);
+
+    finished = true;
+    clearInterval(optimisticTicker);
+    if (onProgress) onProgress(100);
 }
 
 const AUDIO_HIT = new Audio("https://aden-rpg.pages.dev/assets/normal_hit.mp3");
@@ -424,9 +507,9 @@ function initOrganicBreathing(elementId) {
         const raw = Math.sin(breathPhase);
         const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
 
-        const breathAmount = asym * 0.022 * breathDepth * (1 + deepBreathBoost * 0.9);
+        const breathAmount = asym * 0.012 * breathDepth * (1 + deepBreathBoost * 0.9);
         const scaleY = 1 + breathAmount;
-        const scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
+        const scaleX = 1 + breathAmount * 0.43; // o "peito" também expande um pouco na largura
 
         // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
         const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;

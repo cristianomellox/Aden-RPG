@@ -619,9 +619,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       const raw = Math.sin(breathPhase);
       const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
 
-      const breathAmount = asym * 0.022 * breathDepth * (1 + deepBreathBoost * 0.9);
+      const breathAmount = asym * 0.012 * breathDepth * (1 + deepBreathBoost * 0.9);
       const scaleY = 1 + breathAmount;
-      const scaleX = 1 + breathAmount * 0.28; // o "peito" também expande um pouco na largura
+      const scaleX = 1 + breathAmount * 0.43; // o "peito" também expande um pouco na largura
 
       // Balanço leve de peso — só rotação e translateX mínimos, sem flutuar
       const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;

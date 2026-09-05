@@ -499,17 +499,24 @@ function _injectRaidEpicStyles() {
         /* ── Floating numbers ── */
         @keyframes raid-float-dmg  { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.4);}8%{opacity:1;transform:translateX(-50%) translateY(-18px) scale(1.4);}20%{opacity:1;transform:translateX(-50%) translateY(-30px) scale(1.0);}75%{opacity:1;transform:translateX(-50%) translateY(-110px) scale(1.0);}100%{opacity:0;transform:translateX(-50%) translateY(-155px) scale(0.92);} }
         @keyframes raid-float-crit { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.25) rotate(-6deg);}7%{opacity:1;transform:translateX(-50%) translateY(-26px) scale(1.75) rotate(5deg);}18%{opacity:1;transform:translateX(-50%) translateY(-42px) scale(1.1) rotate(-1deg);}75%{opacity:1;transform:translateX(-50%) translateY(-130px) scale(1.0) rotate(0);}100%{opacity:0;transform:translateX(-50%) translateY(-180px) scale(0.92) rotate(0);} }
+        @keyframes raid-float-heal { 0%{opacity:0;transform:translateX(-50%) translateY(0) scale(0.4);}8%{opacity:1;transform:translateX(-50%) translateY(-18px) scale(1.3);}20%{opacity:1;transform:translateX(-50%) translateY(-30px) scale(1.0);}75%{opacity:1;transform:translateX(-50%) translateY(-110px) scale(1.0);}100%{opacity:0;transform:translateX(-50%) translateY(-155px) scale(0.92);} }
         @keyframes raid-float-evd  { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(0.8);}100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(1.15);} }
         @keyframes raid-crit-lbl   { 0%{opacity:0;transform:translateX(-50%) scale(0.4);}18%{opacity:1;transform:translateX(-50%) scale(1.5);}65%{opacity:1;transform:translateX(-50%) scale(1.05);}100%{opacity:0;transform:translateX(-50%) scale(0.85);} }
 
         .raid-dmg-num  { font-family:'Cinzel',Georgia,serif;font-size:2.4em;font-weight:bold;color:#fff;text-shadow:2px 2px 5px #000,0 0 22px rgba(255,100,0,0.75);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-dmg 3.4s ease-out forwards; }
         .raid-crit-num { font-family:'Cinzel',Georgia,serif;font-size:3.2em;font-weight:bold;color:#ffdd00;text-shadow:-2px -2px 0 #900,2px -2px 0 #900,-2px 2px 0 #900,2px 2px 0 #900,0 0 22px #ff8800,0 0 44px #ff4400;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-crit 3.7s ease-out forwards; }
+        .raid-heal-num { font-family:'Cinzel',Georgia,serif;font-size:2.2em;font-weight:bold;color:#e0aaff;text-shadow:2px 2px 5px #000,0 0 22px rgba(180,60,255,0.85),0 0 40px rgba(140,0,255,0.55);position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-heal 3.4s ease-out forwards; }
         .raid-evd-txt  { font-family:'Cinzel',Georgia,serif;font-size:1.8em;font-weight:bold;color:cyan;text-shadow:0 0 12px cyan,1px 1px 2px #000;position:absolute;left:50%;z-index:999;white-space:nowrap;pointer-events:none;animation:raid-float-evd 1.2s ease-out forwards; }
         .raid-crit-lbl { font-family:'Cinzel',serif;font-size:1.05em;font-weight:bold;color:#ffdd00;text-shadow:0 0 12px #f80,1px 1px 2px #000;position:absolute;left:50%;z-index:1000;white-space:nowrap;pointer-events:none;animation:raid-crit-lbl 1.2s ease-out forwards; }
 
         /* ── Monster flash ── */
         @keyframes raid-monster-hit  { 0%,100%{filter:drop-shadow(0 0 0 transparent);}15%{filter:brightness(4) saturate(0.05) drop-shadow(0 0 28px white);}45%{filter:brightness(2.2) saturate(0.35);}80%{filter:brightness(1.5);} }
         @keyframes raid-monster-crit { 0%{filter:brightness(1);}8%{filter:brightness(6) saturate(0) sepia(1) hue-rotate(12deg) drop-shadow(0 0 40px gold);}28%{filter:brightness(3.5) saturate(0.25) sepia(0.4) drop-shadow(0 0 25px orange);}65%{filter:brightness(2);}100%{filter:brightness(1);} }
+        @keyframes raid-monster-heal { 0%,100%{filter:brightness(1) drop-shadow(0 0 0 transparent);}20%{filter:brightness(1.8) saturate(1.3) hue-rotate(15deg) drop-shadow(0 0 26px #b060ff);}55%{filter:brightness(1.4) drop-shadow(0 0 18px #9020ff);}100%{filter:brightness(1);} }
+
+        /* ── Regeneração mística (rings) ── */
+        @keyframes raid-sw-heal { 0%{transform:translate(-50%,-50%) scale(0);opacity:0.85;border-width:4px;}100%{transform:translate(-50%,-50%) scale(3.6);opacity:0;border-width:1px;} }
+        .raid-ring-heal { position:absolute;width:100px;height:100px;border-radius:50%;border:4px solid rgba(180,60,255,0.85);pointer-events:none;z-index:997;animation:raid-sw-heal 0.9s ease-out forwards; }
 
         /* ── Player avatar flash ── */
         @keyframes raid-player-hit  { 0%,100%{filter:brightness(1);}16%{filter:brightness(4.5) saturate(0) drop-shadow(0 0 24px red);}48%{filter:brightness(2.5) saturate(0.25);}82%{filter:brightness(1.6);} }
@@ -622,6 +629,65 @@ function _epicRaidPlayerAttack(targetEl, dmg, isCrit) {
     targetEl.appendChild(dmgEl);
     dmgEl.addEventListener('animationend', () => dmgEl.remove(), { once: true });
     setTimeout(() => { if (dmgEl.parentNode) dmgEl.remove(); }, 3900);
+}
+
+// ── Regeneração mística do chefe (habilidade do Imperador Veinur) ──
+// Usada sempre que o sync com o servidor revela que o HP do monstro
+// SUBIU em relação ao que estava sendo exibido localmente (drift do
+// dano otimista do cliente vs. o valor real). Em vez de simplesmente
+// "pular" a barra de vida pra cima sem explicação, mostramos como a
+// cura do chefe — visualmente distinta do dano (tom púrpura, sem o
+// impacto/tremida do golpe).
+function _epicRaidMonsterHeal(targetEl, healAmount) {
+    targetEl.style.position = targetEl.style.position || 'relative';
+
+    const monsterImg = document.getElementById('raidMonsterImage');
+    if (monsterImg) {
+        monsterImg.style.animation = 'raid-monster-heal 0.9s ease-out';
+        setTimeout(() => { if (monsterImg) monsterImg.style.animation = ''; }, 920);
+    }
+
+    const rTop = '38%', rLeft = '50%';
+    const ring = document.createElement('div');
+    ring.className = 'raid-ring-heal';
+    ring.style.top = rTop; ring.style.left = rLeft;
+    targetEl.appendChild(ring);
+    ring.addEventListener('animationend', () => ring.remove(), { once: true });
+
+    // Partículas místicas subindo (ao contrário do dano, que radia pra fora)
+    const spN = 10;
+    const spCols = ['#c060ff', '#e0aaff', '#9020ff', '#f0d0ff'];
+    for (let i = 0; i < spN; i++) {
+        const sp = document.createElement('div');
+        sp.className = 'raid-spark';
+        const ang = -90 + (Math.random() * 70 - 35); // sobe em leque, não radia
+        const dist = 45 + Math.random() * 70;
+        const sz = 4 + Math.random() * 4;
+        sp.style.setProperty('--a', ang + 'deg');
+        sp.style.setProperty('--d', dist + 'px');
+        sp.style.width = sz + 'px'; sp.style.height = sz + 'px';
+        sp.style.top = rTop; sp.style.left = rLeft;
+        sp.style.background = spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.boxShadow = '0 0 6px ' + spCols[Math.floor(Math.random() * spCols.length)];
+        sp.style.animationDelay = (Math.random() * 0.12) + 's';
+        targetEl.appendChild(sp);
+        sp.addEventListener('animationend', () => sp.remove(), { once: true });
+    }
+
+    const healEl = document.createElement('div');
+    healEl.className = 'raid-heal-num';
+    healEl.innerHTML = '✚ +' + Number(healAmount).toLocaleString();
+    healEl.style.top = '31%';
+    targetEl.appendChild(healEl);
+    healEl.addEventListener('animationend', () => healEl.remove(), { once: true });
+    setTimeout(() => { if (healEl.parentNode) healEl.remove(); }, 3900);
+}
+
+// Chamar isto sempre que detectar que o HP do mob/chefe subiu no sync.
+function displayFloatingHealOver(targetEl, healAmount) {
+    if (!targetEl || !(healAmount > 0)) return;
+    _injectRaidEpicStyles();
+    _epicRaidMonsterHeal(targetEl, healAmount);
 }
 
 // ── Epic boss-attacks-player ──────────────────────────────
@@ -861,6 +927,13 @@ function setPlayerReviveOverlayText(remainingSeconds) {
   }
   overlay.style.display = "flex";
   reviveText.innerHTML = `Revivendo em: <strong>${remainingSeconds}s</strong>`;
+}
+
+function getDisplayedMonsterHp() {
+  const el = $id("raidMonsterHpText");
+  if (!el || !el.textContent) return null;
+  const n = Number(el.textContent.split('/')[0].replace(/[^\d]/g, ''));
+  return Number.isFinite(n) ? n : null;
 }
 
 function updateHpBar(cur, max) {
@@ -1523,7 +1596,7 @@ async function performAttackOptimistic() {
     displayFloatingDamageOver($id("raidMonsterArea"), damage, isCrit);
     playHitSound(isCrit);
     
-    const currentMonsterHp = Number($id("raidMonsterHpText").textContent.split('/')[0].replace(/[^\d]/g, ''));
+    const currentMonsterHp = getDisplayedMonsterHp() ?? maxMonsterHealth;
     const newVisualHp = Math.max(0, currentMonsterHp - damage);
     updateHpBar(newVisualHp, maxMonsterHealth);
 
@@ -1609,7 +1682,15 @@ async function triggerBatchSync() {
             throw new Error(data.message || "Erro no sync");
         }
 
+        // Detecta drift do dano otimista: se o servidor devolveu um HP
+        // MAIOR do que o exibido localmente, ilustramos isso como a
+        // habilidade de regeneração do chefe, em vez de só corrigir a
+        // barra em silêncio.
+        const previousDisplayedHp = getDisplayedMonsterHp();
         updateHpBar(data.monster_health, data.max_monster_health);
+        if (data.monster_health > 0 && previousDisplayedHp !== null && data.monster_health > previousDisplayedHp) {
+            displayFloatingHealOver($id("raidMonsterArea"), data.monster_health - previousDisplayedHp);
+        }
         
         if (data.player_health !== undefined) {
              localPlayerHp = Math.min(localPlayerHp, data.player_health);

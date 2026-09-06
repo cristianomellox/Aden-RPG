@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
@@ -147,63 +148,33 @@ const ALL_DROPS = {
     // adicione outros drops aqui
 };
 
+// ═══════════════════════════════════════════════════════════
+// SKYBOX 360° — imagem panorâmica equiretangular (mesmo arquivo,
+// você vai substituir o PNG atual pela versão 360 no repositório).
+// ═══════════════════════════════════════════════════════════
+const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/vale_arcano.png';
+
+// SPOTS agora usam coordenadas ESFÉRICAS em vez de px num mapa plano:
+//   yaw   → ângulo horizontal em graus (-180 a 180, "para onde olhar")
+//   pitch → ângulo vertical em graus (-89 a 89, negativo = olhar para baixo)
+//   width/height → tamanho BASE em px na tela do "hitbox" do spot (igual
+//                  antes: é dentro dessa caixa que mobs/avatares/labels
+//                  são posicionados — essa lógica não mudou em nada).
+// ⚠️ Os valores de yaw/pitch abaixo são um CHUTE inicial (distribuídos
+// ao redor do horizonte) — eles vão precisar de calibração visual.
+// Abra a página com ?debugSpots=1 na URL: isso mostra a borda verde de
+// cada spot e faz um clique no céu logar (e mostrar na tela) o yaw/pitch
+// exato daquele ponto, pra você copiar aqui.
 const SPOTS = [
-    { id:'quar', name:'Quar',  top:260, left:190,  width:500, height:380,
+    { id:'quar',   name:'Quar',   yaw:-135, pitch:-12, width:500, height:380,
       itemId:84, mobImg:'https://aden-rpg.pages.dev/assets/quar.webp', labelColor:'silver' },
-    { id:'limut',    name:'Limut',       top:430, left:960, width:490, height:400,
+    { id:'limut',  name:'Limut',  yaw:-45,  pitch:-12, width:490, height:400,
       itemId:71, mobImg:'https://aden-rpg.pages.dev/assets/limut.webp',     labelColor:'lightgreen' },
-    { id:'duende',   name:'Duende',      top:1050, left:30, width:480, height:390,
+    { id:'duende', name:'Duende', yaw:45,   pitch:-15, width:480, height:390,
       itemId:74, mobImg:'https://aden-rpg.pages.dev/assets/duende.webp',    labelColor:'orange' },
-    { id:'pixie', name:'Pixie',   top:1070, left:1080, width:380, height:370,
+    { id:'pixie',  name:'Pixie',  yaw:135,  pitch:-15, width:380, height:370,
       itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/pixie.webp', labelColor:'gray' },
 ];
-
-// ── CONFIG DO MAPA 360° (parede curva em 3D) ─────────────────────────
-// Não é uma esfera tipo Street View: é uma "parede curva" que cobre um
-// arco (não o círculo inteiro), porque a arte panorâmica não é seamless
-// (a borda esquerda não encaixa com a direita). Isso evita qualquer
-// costura visível e ainda dá a sensação de profundidade/3D ao arrastar.
-const PANO_IMG          = 'https://aden-rpg.pages.dev/assets/vale_arcano_pano.png';
-const PANO_IMG_W        = 1774;   // largura real do arquivo da imagem
-const PANO_IMG_H        = 887;    // altura real do arquivo da imagem
-const PANO_ARC_DEG      = 120;    // arco total navegável (graus)
-const PANO_SEGMENTS     = 28;     // nº de "placas" que compõem a curva (mais = mais suave)
-const PANO_RADIUS       = 1300;   // raio do cilindro (tamanho físico do "cenário")
-const PANO_FOV_DEG      = 62;     // campo de visão alvo — igual em qualquer tamanho de tela
-const PANO_Y_SCALE      = 0.6;    // achata/estica a posição vertical dos spots na curva
-const PANO_SPOT_RADIUS_FACTOR = 0.9; // spots ficam um pouco "à frente" da parede (não colados)
-const PANO_ZOOM_MIN     = 0.7;
-const PANO_ZOOM_MAX     = 2.6;
-// zoom inicial: telas "retrato" (celular) precisam de mais zoom pra
-// preencher verticalmente do que telas "paisagem" (desktop). Interpolado
-// entre um ponto calibrado no desktop (aspecto ~0.67 → zoom 1.0) e um
-// calibrado no celular (aspecto ~2.16 → zoom 2.2).
-function panoDefaultZoom(cont){
-    const aspect = (cont.clientHeight || window.innerHeight) / (cont.clientWidth || window.innerWidth);
-    const z = 1.0 + (aspect - 0.67) / 1.49 * 1.2;
-    return Math.max(PANO_ZOOM_MIN, Math.min(PANO_ZOOM_MAX, z));
-}
-
-// Ângulo (em graus, dentro de -PANO_ARC_DEG/2..+PANO_ARC_DEG/2) de cada spot
-// na NOVA arte panorâmica. Comece com os valores automáticos (baseados na
-// posição antiga do spot no mapa plano) e depois ajuste manualmente aqui
-// olhando para onde cada área realmente fica no cenário novo — adicione
-// ?panodebug=1 na URL para ver um mostrador do ângulo atual na tela.
-const PANO_SPOT_THETA_OVERRIDE = {
-    // quar: -40, limut: 10, duende: 35, pixie: 55,
-};
-
-function _panoAutoTheta(spot){
-    const cxOld = spot.left + spot.width/2;
-    return -PANO_ARC_DEG/2 + (cxOld/1500)*PANO_ARC_DEG;
-}
-function panoSpotTheta(spot){
-    return PANO_SPOT_THETA_OVERRIDE[spot.id] ?? _panoAutoTheta(spot);
-}
-function panoSpotY(spot){
-    const cyOld = spot.top + spot.height/2;
-    return (cyOld - 750) * PANO_Y_SCALE;
-}
 
 const SHIELD_ITEM_ID = 85;
 const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
@@ -627,22 +598,32 @@ async function preloadUrl(name, url) {
     } catch {}
 }
 
-// ── VOLUME ADAPTATIVO — baseado na posição VISUAL da câmera no mapa ──────────
-function _getViewportYaw() {
+// ── VOLUME ADAPTATIVO — baseado para onde a câmera 360 está olhando ──────────
+// Antes: distância em px entre o centro da tela (no mapa 2D) e o spot.
+// Agora: distância ANGULAR (graus) entre a direção da câmera e o spot,
+// lida direto do dataset do #map (gravado pelo skybox a cada frame).
+function _getViewportCenter() {
     const map = document.getElementById('map');
-    if (!map) return 0;
-    const t = map.style.transform || '';
-    const m = t.match(/rotateY\(([-\d.]+)deg\)/);
-    return m ? parseFloat(m[1]) : 0;
+    if (!map || !map.dataset.yaw) return null;
+    return { yaw: parseFloat(map.dataset.yaw), pitch: parseFloat(map.dataset.pitch) };
+}
+function _angularDist(yaw1, pitch1, yaw2, pitch2) {
+    // distância angular esférica aproximada (graus), suficiente para o falloff de volume
+    const y1 = THREE.MathUtils.degToRad(yaw1), p1 = THREE.MathUtils.degToRad(pitch1);
+    const y2 = THREE.MathUtils.degToRad(yaw2), p2 = THREE.MathUtils.degToRad(pitch2);
+    const d1 = new THREE.Vector3(Math.sin(y1)*Math.cos(p1), Math.sin(p1), Math.cos(y1)*Math.cos(p1));
+    const d2 = new THREE.Vector3(Math.sin(y2)*Math.cos(p2), Math.sin(p2), Math.cos(y2)*Math.cos(p2));
+    return THREE.MathUtils.radToDeg(d1.angleTo(d2));
 }
 function _spotVolume(spotId) {
-    const yaw  = _getViewportYaw();
+    const vc   = _getViewportCenter();
     const spot = SPOTS.find(s => s.id === spotId);
-    if (spot == null) return 0.8;
-    const theta = panoSpotTheta(spot);
-    // distância angular até para onde a câmera está olhando agora
-    const dist = Math.abs(theta - yaw);
-    return Math.max(0.08, Math.exp(-dist / 22));
+    if (!vc || !spot) return 0.8;
+    const distDeg = _angularDist(vc.yaw, vc.pitch, spot.yaw, spot.pitch);
+    // Falloff em graus (equivalente ao antigo Math.exp(-dist/300) em px).
+    // Ajuste ANGULAR_FALLOFF se o som cair rápido/devagar demais ao girar a câmera.
+    const ANGULAR_FALLOFF = 55; // graus — quanto maior, mais "abrangente" o som
+    return Math.max(0.08, Math.exp(-distDeg / ANGULAR_FALLOFF));
 }
 
 const amb=new Audio(SRC.ambient);amb.volume=0.08;amb.loop=true;
@@ -746,63 +727,231 @@ async function handleActivateHourglass(){
     finally{hideLoading();}
 }
 
-// ── DRAG DO MAPA (agora: gira a parede 3D em vez de arrastar um plano) ──
+// ═══════════════════════════════════════════════════════════════════════
+// SKYBOX 360° (Three.js) ──────────────────────────────────────────────
+// Substitui o antigo mapa plano 1500x1500 (background-image + transform:
+// translate/scale). Agora existe uma câmera dentro de uma esfera com a
+// imagem panorâmica projetada por dentro. Arrastar = girar a câmera
+// (yaw/pitch). "Zoom" = estreitar/alargar o FOV. Como é uma esfera
+// fechada, é IMPOSSÍVEL ver área preta nas bordas em qualquer zoom —
+// o problema de "black bars" deixa de existir estruturalmente.
+//
+// IMPORTANTE: os .hunt-spot (e tudo dentro deles — mobs, avatares de
+// jogadores, PvP, wander, animações de respiração) continuam sendo
+// elementos DOM comuns, criados exatamente como antes por renderSpots().
+// A ÚNICA coisa nova é que a posição na tela (left/top) e a escala
+// (transform:scale) de cada .hunt-spot são recalculadas a cada frame,
+// projetando sua coordenada esférica (yaw/pitch) para pixels de tela.
+// Ou seja: NENHUMA lógica de jogo (cliques, PvP, drops, timers, mobs)
+// foi tocada — só a camada visual/posicional do mapa.
+// ═══════════════════════════════════════════════════════════════════════
+
+let _sky = null; // { scene, camera, renderer, canvas, cont }
+let camYaw = 0, camPitch = -6, camFov = 75;
+const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
+const FOV_MIN = 35, FOV_MAX = 100;     // limites de zoom (menor FOV = mais zoom)
+const PITCH_LIMIT = 89;                // evita "capotar" ao olhar reto pra cima/baixo
+const SPOT_SPHERE_RADIUS = 400;        // raio (arbitrário) onde os spots "vivem"
+
+// Converte yaw/pitch (graus) num vetor direção unitário (ou escalado por radius).
+// yaw=0,pitch=0 aponta para +Z — usado tanto pela câmera quanto pelos spots,
+// então os dois sistemas ficam sempre consistentes entre si.
+function yawPitchToVector(yawDeg, pitchDeg, radius = 1) {
+    const yaw = THREE.MathUtils.degToRad(yawDeg);
+    const pitch = THREE.MathUtils.degToRad(pitchDeg);
+    return new THREE.Vector3(
+        radius * Math.sin(yaw) * Math.cos(pitch),
+        radius * Math.sin(pitch),
+        radius * Math.cos(yaw) * Math.cos(pitch)
+    );
+}
+
+function initSkybox() {
+    const cont   = document.getElementById('mapContainer');
+    const canvas = document.getElementById('skyboxCanvas');
+    const map    = document.getElementById('map');
+    if (!cont || !canvas || !map || _sky) return;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(camFov, cont.clientWidth / cont.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(cont.clientWidth, cont.clientHeight);
+
+    // Esfera "por dentro": normais invertidas (scale.x = -1) para a textura
+    // ficar visível de dentro, como um skybox tradicional.
+    const geometry = new THREE.SphereGeometry(500, 60, 40);
+    geometry.scale(-1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0x0d1a0d });
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
+
+    new THREE.TextureLoader().load(
+        MAP_IMAGE_URL,
+        (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            material.map = tex;
+            material.color.set(0xffffff);
+            material.needsUpdate = true;
+        },
+        undefined,
+        (err) => console.error('[Vale Arcano] Falha ao carregar a imagem 360 do mapa:', err)
+    );
+
+    _sky = { scene, camera, renderer, canvas, cont };
+
+    updateCameraLook();
+
+    function onResize() {
+        const w = cont.clientWidth, h = cont.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', onResize);
+
+    (function loop() {
+        renderer.render(scene, camera);
+        updateAllSpotProjections();
+        requestAnimationFrame(loop);
+    })();
+}
+
+// Aplica camYaw/camPitch/camFov na câmera real e publica o estado atual
+// no dataset do #map (lido por _getViewportCenter, sem acoplar módulos).
+function updateCameraLook() {
+    if (!_sky) return;
+    camPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, camPitch));
+    camFov   = Math.max(FOV_MIN, Math.min(FOV_MAX, camFov));
+    _sky.camera.fov = camFov;
+    _sky.camera.updateProjectionMatrix();
+    const dir = yawPitchToVector(camYaw, camPitch, 1);
+    _sky.camera.lookAt(dir.x, dir.y, dir.z);
+    const map = document.getElementById('map');
+    if (map) { map.dataset.yaw = camYaw; map.dataset.pitch = camPitch; map.dataset.fov = camFov; }
+}
+
+// ── Projeção dos spots (yaw/pitch → posição/escala na tela) ─────────────
+const registeredSpots = []; // { spot, el, dirVec, unitDir }
+
+function clearRegisteredSpots() { registeredSpots.length = 0; }
+
+function registerSpotForProjection(spot, el) {
+    const dirVec  = yawPitchToVector(spot.yaw, spot.pitch, SPOT_SPHERE_RADIUS);
+    const unitDir = dirVec.clone().normalize();
+    registeredSpots.push({ spot, el, dirVec, unitDir });
+    updateAllSpotProjections(); // posiciona imediatamente, sem esperar o próximo frame
+}
+
+function updateAllSpotProjections() {
+    if (!_sky || !registeredSpots.length) return;
+    const { camera, cont } = _sky;
+    const cw = cont.clientWidth, ch = cont.clientHeight;
+    const camDir = camera.getWorldDirection(new THREE.Vector3());
+    const baseK  = Math.tan(THREE.MathUtils.degToRad(INITIAL_FOV / 2));
+    const curK   = Math.tan(THREE.MathUtils.degToRad(camFov / 2));
+    const zoomScale = baseK / curK; // >1 quando dá zoom (fov menor que o inicial)
+
+    for (const rs of registeredSpots) {
+        if (rs.dot === undefined) rs.dot = 0;
+        rs.dot = camDir.dot(rs.unitDir);
+        if (rs.dot <= 0.05) { rs.el.style.display = 'none'; continue; }
+        rs.el.style.display = '';
+        const proj = rs.dirVec.clone().project(camera);
+        const sx = (proj.x * 0.5 + 0.5) * cw;
+        const sy = (1 - (proj.y * 0.5 + 0.5)) * ch;
+        rs.el.style.left = sx + 'px';
+        rs.el.style.top  = sy + 'px';
+        rs.el.style.transform = `translate(-50%, -50%) scale(${zoomScale.toFixed(3)})`;
+    }
+}
+
+// ── Ferramenta de calibração (?debugSpots=1) ─────────────────────────────
+// Mostra a borda verde dos spots e, ao clicar em qualquer ponto do céu,
+// loga (e exibe na tela) o yaw/pitch daquele ponto — cole os números no
+// SPOTS lá em cima para realinhar depois de trocar a imagem por uma 360.
+function initSpotDebugTool() {
+    let enabled = false;
+    try { enabled = new URLSearchParams(location.search).get('debugSpots') === '1'; } catch {}
+    if (!enabled) return;
+    document.body.classList.add('debug-align');
+
+    const raycaster = new THREE.Raycaster();
+    document.getElementById('mapContainer').addEventListener('click', (e) => {
+        if (!_sky || e.target.closest('.hunt-spot')) return; // não atrapalha clique em spot
+        const rect = _sky.cont.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -(((e.clientY - rect.top) / rect.height) * 2 - 1)
+        );
+        raycaster.setFromCamera(ndc, _sky.camera);
+        const dir = raycaster.ray.direction.clone().normalize();
+        const yaw   = THREE.MathUtils.radToDeg(Math.atan2(dir.x, dir.z));
+        const pitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1)));
+        const txt = `yaw: ${yaw.toFixed(1)}, pitch: ${pitch.toFixed(1)}`;
+        console.log('[debugSpots]', txt);
+
+        const tip = document.createElement('div');
+        tip.textContent = txt;
+        tip.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;transform:translate(-50%,-130%);
+            background:rgba(0,0,0,.85);color:#7f7;font:bold 12px monospace;padding:4px 8px;border:1px solid #0f0;
+            border-radius:4px;z-index:99999;pointer-events:none;white-space:nowrap;`;
+        document.body.appendChild(tip);
+        setTimeout(() => tip.remove(), 2500);
+    });
+}
+
+// ── DRAG / PINCH / WHEEL DO MAPA ─────────────────────────────────────
+// Mesmo padrão de eventos de antes (mouse + touch + inércia), só que
+// em vez de mover translate/scale de um <div>, agora gira a câmera
+// (camYaw/camPitch) e ajusta o FOV (camFov).
 function enableMapInteraction() {
-    const cont = document.getElementById('mapContainer');
-    const map  = document.getElementById('map');
-    if (!map || !cont) return;
+    const cont   = document.getElementById('mapContainer');
+    const canvas = document.getElementById('skyboxCanvas');
+    if (!canvas || !cont) return;
 
     // Guard contra dupla inicialização
-    if (map._interactionEnabled) return;
-    map._interactionEnabled = true;
+    if (canvas._interactionEnabled) return;
+    canvas._interactionEnabled = true;
 
-    buildPanoRing();
-
-    // ── Perspective responsivo ────────────────────────────────────────
-    // O `perspective` fixo em CSS fica "teleobjetiva" em telas estreitas
-    // (poucos segmentos cabem, tudo parece muito ampliado, emendas feias).
-    // Recalcular a partir da largura real do container mantém o mesmo
-    // campo de visão (graus) tanto no celular quanto no desktop.
-    function applyResponsivePerspective() {
-        const w = cont.clientWidth || window.innerWidth;
-        const px = (w / 2) / Math.tan((PANO_FOV_DEG / 2) * Math.PI / 180);
-        cont.style.perspective = px + 'px';
-    }
-    applyResponsivePerspective();
-    window.addEventListener('resize', applyResponsivePerspective);
-
-    // ── Estado: yaw (rotação horizontal, graus) + zoom ───────────────────
-    let yaw = 0, zoom = panoDefaultZoom(cont);
-    const YAW_MIN = -PANO_ARC_DEG / 2, YAW_MAX = PANO_ARC_DEG / 2;
-
-    // ── Inércia (mesma sensação de antes, agora em graus/s) ──────────────
-    let vYaw = 0, lt = 0, aId = null;
+    // ── Inércia ─────────────────────────────────────────────────────────
+    let vx = 0, vy = 0, lt = 0, aId = null;
     const FRICTION = 0.94;
+    const DRAG_SENS = 1.0; // sensibilidade do arraste — ajuste fino se necessário
 
     // ── Drag ────────────────────────────────────────────────────────────
-    let drag = false, sx = 0;
+    let drag = false, sx = 0, sy = 0;
 
     // ── Pinch ───────────────────────────────────────────────────────────
     let isPinching = false;
-    let pinchStartDist = 0, pinchStartZoom = 1;
+    let pinchStartDist = 0, pinchStartFov = camFov;
 
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    canvas.style.touchAction = 'none';
+    canvas.style.userSelect  = 'none';
 
-    function render() {
-        map.style.transform = `scale(${zoom}) rotateY(${yaw}deg)`;
-        if (_panoDebugEl) _panoDebugEl.textContent = `yaw ${yaw.toFixed(1)}° · zoom ${zoom.toFixed(2)}`;
+    function degPerPx() {
+        // graus por pixel arrastado, proporcional ao FOV atual (mesma
+        // sensação de arraste em qualquer nível de zoom)
+        return camFov / (cont.clientHeight || window.innerHeight);
     }
 
-    function setYaw(v) { yaw = clamp(v, YAW_MIN, YAW_MAX); render(); }
-    function setZoom(z) { zoom = clamp(z, PANO_ZOOM_MIN, PANO_ZOOM_MAX); render(); }
+    function applyDelta(dx, dy) {
+        const dpp = degPerPx();
+        camYaw   -= dx * dpp * DRAG_SENS;
+        camPitch += dy * dpp * DRAG_SENS;
+        updateCameraLook();
+    }
 
     // ── Inércia ─────────────────────────────────────────────────────────
     function inertia() {
         cancelAnimationFrame(aId);
         if (drag) return;
-        vYaw *= FRICTION;
-        setYaw(yaw + vYaw);
-        if (Math.abs(vYaw) > 0.03) aId = requestAnimationFrame(inertia);
+        vx *= FRICTION; vy *= FRICTION;
+        applyDelta(vx, vy);
+        if (Math.abs(vx) > 0.02 || Math.abs(vy) > 0.02)
+            aId = requestAnimationFrame(inertia);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
@@ -818,9 +967,10 @@ function enableMapInteraction() {
         // Resume áudio (mantém lógica original)
         try { if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {}
         amb.play().catch(() => {});
-        map.style.cursor = 'grabbing';
+        canvas.classList.add('dragging');
         sx = e.clientX ?? e.touches[0].clientX;
-        vYaw = 0;
+        sy = e.clientY ?? e.touches[0].clientY;
+        vx = vy = 0;
         lt = performance.now();
         cancelAnimationFrame(aId);
     }
@@ -829,19 +979,19 @@ function enableMapInteraction() {
         if (!drag) return;
         e.preventDefault();
         const nx = e.clientX ?? e.touches[0].clientX;
+        const ny = e.clientY ?? e.touches[0].clientY;
         const dt = performance.now() - lt;
-        const dx = nx - sx;
-        const dDeg = dx * 0.15; // sensibilidade do arrasto → graus
-        if (dt > 0) vYaw = dDeg / (dt / 16.7); // ~graus por frame, p/ inércia
-        setYaw(yaw + dDeg);
-        sx = nx;
+        const dx = nx - sx, dy = ny - sy;
+        if (dt > 0) { vx = dx / dt * 16; vy = dy / dt * 16; } // normaliza p/ ~1 frame (16ms)
+        applyDelta(dx, dy);
+        sx = nx; sy = ny;
         lt = performance.now();
     }
 
     function endDrag() {
         drag = false;
-        map.style.cursor = 'grab';
-        if (Math.abs(vYaw) > 0.15) { inertia(); }
+        canvas.classList.remove('dragging');
+        if (Math.abs(vx) > 0.05 || Math.abs(vy) > 0.05) inertia();
     }
 
     // ── Touch unificado (drag + pinch) ──────────────────────────────────
@@ -851,7 +1001,7 @@ function enableMapInteraction() {
             drag = false;
             cancelAnimationFrame(aId);
             pinchStartDist = touchDist(e);
-            pinchStartZoom = zoom;
+            pinchStartFov  = camFov;
         } else if (e.touches.length === 1 && !isPinching) {
             startDrag(e);
         }
@@ -860,7 +1010,9 @@ function enableMapInteraction() {
     function onTouchMove(e) {
         if (e.touches.length >= 2 && isPinching) {
             e.preventDefault();
-            setZoom(pinchStartZoom * (touchDist(e) / pinchStartDist));
+            const ratio = touchDist(e) / pinchStartDist;
+            camFov = pinchStartFov / ratio; // afastar dedos (ratio>1) = zoom in = fov menor
+            updateCameraLook();
         } else if (e.touches.length === 1 && !isPinching) {
             onDrag(e);
         }
@@ -869,88 +1021,37 @@ function enableMapInteraction() {
     function onTouchEnd(e) {
         if (isPinching && e.touches.length < 2) {
             isPinching = false;
-            vYaw = 0;
+            vx = vy = 0;
         }
         if (e.touches.length === 0) endDrag();
     }
 
+    // ── Wheel (zoom no desktop — bônus: antes não existia zoom no mouse) ──
+    function onWheel(e) {
+        e.preventDefault();
+        camFov += e.deltaY * 0.05;
+        updateCameraLook();
+    }
+
     // ── Mouse (desktop) ─────────────────────────────────────────────────
-    // IMPORTANTE: o listener fica no #mapContainer (cobre a tela toda),
-    // não no #map — o #map agora é só um pivô 3D sem área própria, e o
-    // fundo (.pano-seg) tem pointer-events:none, então um listener em
-    // #map nunca receberia o toque em boa parte da tela.
-    cont.addEventListener('mousedown', startDrag, { passive: true });
+    canvas.addEventListener('mousedown', startDrag, { passive: true });
     window.addEventListener('mousemove', onDrag,    { passive: false });
     window.addEventListener('mouseup',   endDrag,   { passive: true });
-
-    // ── Roda do mouse = zoom (desktop) ────────────────────────────────────
-    cont.addEventListener('wheel', e => {
-        e.preventDefault();
-        setZoom(zoom * (e.deltaY < 0 ? 1.08 : 0.93));
-    }, { passive: false });
+    canvas.addEventListener('wheel', onWheel, { passive: false });
 
     // ── Touch (mobile) ──────────────────────────────────────────────────
-    cont.addEventListener('touchstart', onTouchStart, { passive: true });
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend',  onTouchEnd,  { passive: true });
 
-    map.style.touchAction = 'none';
-    map.style.cursor = 'grab';
-    render();
-
-    // ── Debug opcional: ?panodebug=1 mostra o ângulo atual na tela,
-    // útil para calibrar PANO_SPOT_THETA_OVERRIDE olhando a arte nova.
-    if (new URLSearchParams(location.search).get('panodebug') === '1') {
-        _panoDebugEl = document.createElement('div');
-        _panoDebugEl.style.cssText = 'position:fixed;top:54px;left:8px;z-index:99999;background:rgba(0,0,0,.7);color:#7f7;font:12px monospace;padding:4px 8px;border-radius:4px;pointer-events:none;';
-        document.body.appendChild(_panoDebugEl);
-        render();
-    }
+    initSpotDebugTool();
 }
-let _panoDebugEl = null;
 
 // ── WANDER ───────────────────────────────────────────────────
 function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
-// ── PAREDE PANORÂMICA 3D ───────────────────────────────────────
-// Monta N placas planas em volta do pivô #map, cada uma mostrando uma
-// fatia da imagem, viradas para dentro (para quem "olha do centro").
-// Chamada 1x em enableMapInteraction(). Não mexe em nada dos spots/mobs.
-function buildPanoRing(){
-    const map = document.getElementById('map');
-    if(!map || map.querySelector('.pano-seg')) return; // já construído
-    const segAngle = PANO_ARC_DEG / PANO_SEGMENTS;
-    const segAngleRad = segAngle * Math.PI/180;
-    const segW = 2 * PANO_RADIUS * Math.tan(segAngleRad/2);
-    const totalW = PANO_SEGMENTS * segW;
-    const totalH = PANO_IMG_H * (totalW / PANO_IMG_W);
-    const frag = document.createDocumentFragment();
-    for(let i=0;i<PANO_SEGMENTS;i++){
-        const theta = -PANO_ARC_DEG/2 + segAngle/2 + i*segAngle;
-        const seg = document.createElement('div');
-        seg.className = 'pano-seg';
-        Object.assign(seg.style,{
-            width: segW+'px', height: totalH+'px',
-            marginLeft: (-segW/2)+'px', marginTop: (-totalH/2)+'px',
-            backgroundImage: `url('${PANO_IMG}')`,
-            backgroundSize: `${totalW}px ${totalH}px`,
-            backgroundPosition: `${-i*segW}px 0px`,
-            transform: `rotateY(${theta}deg) translateZ(${-PANO_RADIUS}px)`
-        });
-        frag.appendChild(seg);
-    }
-    map.insertBefore(frag, map.firstChild);
-}
-
 // ── SPOTS + MOBS ─────────────────────────────────────────────
-function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;
-        const _theta=panoSpotTheta(spot), _y=panoSpotY(spot);
-        Object.assign(el.style,{
-            width:spot.width+'px',height:spot.height+'px',
-            marginLeft:(-spot.width/2)+'px',marginTop:(-spot.height/2)+'px',
-            transform:`translateY(${_y}px) rotateY(${_theta}deg) translateZ(${-PANO_RADIUS*PANO_SPOT_RADIUS_FACTOR}px)`
-        });
-        el.dataset.panoTheta=_theta;const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
+function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){
@@ -2755,6 +2856,7 @@ function initMobAvatarBreathing() {
 
 document.addEventListener('DOMContentLoaded',async()=>{
     initMobAvatarBreathing();
+    initSkybox();
     enableMapInteraction();
     document.getElementById('pauseHuntBtn').addEventListener('click',handlePauseHunt);
     document.getElementById('activateShieldBtn').addEventListener('click',handleActivateShield);

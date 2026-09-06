@@ -892,10 +892,10 @@ function enableMapInteraction() {
 }
 
 // ── WANDER ───────────────────────────────────────────────────
-function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
-function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.src=spot.mobImg;av.onerror=()=>{av.src=DEFAULT_AVATAR;};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
+function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){
@@ -2529,6 +2529,10 @@ function _mobBreathNewState() {
         facing: 1, facingTarget: 1,
         leanCurrent: 0, leanTarget: 0,
         moveBoost: 0, moveBoostTarget: 0, moveBoostHold: 0,
+        // Direção vertical do passo atual: null = usa o sprite padrão
+        // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
+        // sprite dedicado (_up.webp / _down.webp), sem espelhar.
+        vertical: null, verticalApplied: undefined,
         lastTime: performance.now()
     };
     _mobBreathPickTargets(st);
@@ -2548,14 +2552,57 @@ function _mobBreathGetState(img) {
     return st;
 }
 
-// Chamado por startWander quando o mob começa a andar até um novo ponto
-function _mobWalkOnMoveStart(img, deltaX) {
+// Remove um sufixo _up/_down que já esteja no fim do nome do arquivo
+// (antes da extensão), para sempre recalcular a partir do sprite base.
+function _mobStripDirSuffix(src) {
+    return src.replace(/_(?:up|down)(\.[a-zA-Z0-9]+)(\?.*)?$/, '$1$2');
+}
+
+// Monta a URL da variante vertical do sprite (dir = 'up' | 'down'); sem
+// direção definida, devolve o sprite base (padrão direita/esquerda).
+function _mobDirSrc(baseSrc, dir) {
+    if (dir !== 'up' && dir !== 'down') return baseSrc;
+    const m = baseSrc.match(/^(.*?)(\.[a-zA-Z0-9]+)(\?.*)?$/);
+    if (!m) return baseSrc;
+    return `${m[1]}_${dir}${m[2]}${m[3] || ''}`;
+}
+
+// Troca a imagem do mob pela variante _up/_down (ou volta ao sprite padrão),
+// só quando a direção realmente muda — nunca reatribui `src` a cada frame.
+function _mobApplyDirSprite(img, st) {
+    if (st.verticalApplied === st.vertical) return;
+    st.verticalApplied = st.vertical;
+    const base = img.dataset.baseSrc || _mobStripDirSuffix(img.getAttribute('src') || img.src);
+    img.dataset.baseSrc = base;
+    img.src = _mobDirSrc(base, st.vertical);
+}
+
+// Chamado por startWander quando o mob começa a andar até um novo ponto.
+// deltaX/deltaY = deslocamento horizontal/vertical do passo que está começando.
+function _mobWalkOnMoveStart(img, deltaX, deltaY) {
     if (!img) return;
     const st = _mobBreathGetState(img);
-    if (Math.abs(deltaX) > 4) {
-        st.facingTarget = deltaX < 0 ? -1 : 1;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY || 0);
+
+    // O eixo dominante do passo decide o "grupo" de direção:
+    //  - deslocamento vertical maior que o horizontal → passo para cima/baixo
+    //    (inclui as diagonais mais verticais) → troca para o sprite _up/_down
+    //    dedicado, sem espelhar.
+    //  - caso contrário → passo para a direita/esquerda (inclui as diagonais
+    //    mais horizontais) → mantém o sprite padrão, espelhando (scaleX
+    //    negativo) quando o passo é para a esquerda, como antes.
+    if (absY > absX && absY > 4) {
+        st.vertical = deltaY < 0 ? 'up' : 'down';
+    } else {
+        st.vertical = null;
+        if (absX > 4) st.facingTarget = deltaX < 0 ? -1 : 1;
     }
-    st.leanTarget = st.facingTarget * 1.6; // leve inclinação na direção do passo (graus)
+    _mobApplyDirSprite(img, st);
+
+    // A inclinação (lean) segue a componente horizontal do passo mesmo
+    // numa diagonal vertical, para preservar a noção de "para que lado".
+    st.leanTarget = absX > 4 ? (deltaX < 0 ? -1 : 1) * 1.6 : 0;
     st.moveBoostTarget = 1;
     st.moveBoostHold = 260; // ms de "impulso" (squash/stretch) logo no início do passo
 }
@@ -2636,7 +2683,10 @@ function initMobAvatarBreathing() {
                 scaleX *= (1 + squash * 0.6);
 
                 const totalRotateDeg = rotateDeg + st.leanCurrent;
-                const scaleXFinal = scaleX * st.facing;
+                // O sprite vertical (_up/_down) já vem desenhado corretamente
+                // e não deve ser espelhado — só os sprites padrão
+                // (direita/esquerda) usam o scaleX negativo.
+                const scaleXFinal = scaleX * (st.vertical ? 1 : st.facing);
 
                 img.style.transform =
                     `translateX(${translateXpx.toFixed(2)}px) rotate(${totalRotateDeg.toFixed(2)}deg) ` +

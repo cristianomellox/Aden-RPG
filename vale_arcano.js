@@ -163,7 +163,7 @@ const SPOTS = [
 // arco (não o círculo inteiro), porque a arte panorâmica não é seamless
 // (a borda esquerda não encaixa com a direita). Isso evita qualquer
 // costura visível e ainda dá a sensação de profundidade/3D ao arrastar.
-const PANO_IMG          = 'vale_arcano_pano.png'; // troque pela URL final no CDN
+const PANO_IMG          = 'https://aden-rpg.pages.dev/assets/vale_arcano_pano.png'; // troque pela URL final no CDN
 const PANO_IMG_W        = 1774;   // largura real do arquivo da imagem
 const PANO_IMG_H        = 887;    // altura real do arquivo da imagem
 const PANO_ARC_DEG      = 120;    // arco total navegável (graus)

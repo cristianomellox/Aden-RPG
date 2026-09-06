@@ -110,12 +110,18 @@ body{display:flex;flex-direction:column;align-items:center;background:#121212;mi
 .top-bar-link{color:#fff;text-decoration:none;display:flex;align-items:center;}
 #pageTitle{color:#ffb3b3;font-size:1.2em;font-weight:bold;text-shadow:1px 1px 2px #000;}
 
-#mapContainer{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;z-index:1;background:#0d1a0d;}
-#map{background-image:url('https://aden-rpg.pages.dev/assets/vale_arcano.png');background-size:contain;background-repeat:no-repeat;background-position:top left;width:1500px;height:1500px;position:absolute;cursor:grab;transform-origin:top left;transform:scale(1.1);user-select:none;}
+#mapContainer{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;z-index:1;background:#050a05;perspective:1300px;perspective-origin:50% 50%;}
+/* #map agora é o grupo "câmera": não tem mais tamanho/imagem própria —
+   é só um pivô 3D que gira (rotateY) quando o jogador arrasta.
+   Os pedaços da imagem panorâmica (.pano-seg) e os spots (.hunt-spot)
+   ficam pendurados nele como placas voltadas para o centro. */
+#map{position:absolute;top:50%;left:50%;width:0;height:0;transform-style:preserve-3d;cursor:grab;user-select:none;}
 
-.hunt-spot{position:absolute;border:2px dashed transparent;
+.pano-seg{position:absolute;top:50%;left:50%;background-repeat:no-repeat;backface-visibility:hidden;pointer-events:none;}
+
+.hunt-spot{position:absolute;top:50%;left:50%;border:2px dashed transparent;
 /*border:2px dashed #0f0;*/
-border-radius:8px;cursor:default;overflow:visible;z-index:5;}
+border-radius:8px;cursor:default;overflow:visible;z-index:5;backface-visibility:hidden;}
 .hunt-spot:hover,.hunt-spot:focus,.hunt-spot:active{border-color:transparent;outline:none;}
 .spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;display:none;}
 .hunt-spot.active-spot{cursor:default!important;}

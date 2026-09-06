@@ -158,6 +158,44 @@ const SPOTS = [
       itemId:51, mobImg:'https://aden-rpg.pages.dev/assets/pixie.webp', labelColor:'gray' },
 ];
 
+// ── CONFIG DO MAPA 360° (parede curva em 3D) ─────────────────────────
+// Não é uma esfera tipo Street View: é uma "parede curva" que cobre um
+// arco (não o círculo inteiro), porque a arte panorâmica não é seamless
+// (a borda esquerda não encaixa com a direita). Isso evita qualquer
+// costura visível e ainda dá a sensação de profundidade/3D ao arrastar.
+const PANO_IMG          = 'vale_arcano_pano.png'; // troque pela URL final no CDN
+const PANO_IMG_W        = 1774;   // largura real do arquivo da imagem
+const PANO_IMG_H        = 887;    // altura real do arquivo da imagem
+const PANO_ARC_DEG      = 120;    // arco total navegável (graus)
+const PANO_SEGMENTS     = 20;     // nº de "placas" que compõem a curva
+const PANO_RADIUS       = 1300;   // raio do cilindro (deixe perto do perspective abaixo)
+const PANO_PERSPECTIVE  = 1300;   // precisa bater com o `perspective` do CSS #mapContainer
+const PANO_Y_SCALE      = 0.6;    // achata/estica a posição vertical dos spots na curva
+const PANO_SPOT_RADIUS_FACTOR = 0.9; // spots ficam um pouco "à frente" da parede (não colados)
+const PANO_ZOOM_MIN     = 0.7;
+const PANO_ZOOM_MAX     = 1.8;
+
+// Ângulo (em graus, dentro de -PANO_ARC_DEG/2..+PANO_ARC_DEG/2) de cada spot
+// na NOVA arte panorâmica. Comece com os valores automáticos (baseados na
+// posição antiga do spot no mapa plano) e depois ajuste manualmente aqui
+// olhando para onde cada área realmente fica no cenário novo — adicione
+// ?panodebug=1 na URL para ver um mostrador do ângulo atual na tela.
+const PANO_SPOT_THETA_OVERRIDE = {
+    // quar: -40, limut: 10, duende: 35, pixie: 55,
+};
+
+function _panoAutoTheta(spot){
+    const cxOld = spot.left + spot.width/2;
+    return -PANO_ARC_DEG/2 + (cxOld/1500)*PANO_ARC_DEG;
+}
+function panoSpotTheta(spot){
+    return PANO_SPOT_THETA_OVERRIDE[spot.id] ?? _panoAutoTheta(spot);
+}
+function panoSpotY(spot){
+    const cyOld = spot.top + spot.height/2;
+    return (cyOld - 750) * PANO_Y_SCALE;
+}
+
 const SHIELD_ITEM_ID = 85;
 const SHIELD_IMG     = 'https://aden-rpg.pages.dev/assets/itens/escudo_de_caca.webp';
 const HOURGLASS_ITEM_ID = 99;
@@ -581,28 +619,21 @@ async function preloadUrl(name, url) {
 }
 
 // ── VOLUME ADAPTATIVO — baseado na posição VISUAL da câmera no mapa ──────────
-function _getViewportCenter() {
-    const map  = document.getElementById('map');
-    const cont = document.getElementById('mapContainer');
-    if (!map || !cont) return null;
-    const t  = map.style.transform || '';
-    const tm = t.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
-    const sm = t.match(/scale\(([^)]+)\)/);
-    const tx = tm ? parseFloat(tm[1]) : 0;
-    const ty = tm ? parseFloat(tm[2]) : 0;
-    const sc = sm ? parseFloat(sm[1]) : 1.1;
-    const cw = cont.clientWidth  || window.innerWidth;
-    const ch = cont.clientHeight || window.innerHeight;
-    return { x: (cw / 2 - tx) / sc, y: (ch / 2 - ty) / sc };
+function _getViewportYaw() {
+    const map = document.getElementById('map');
+    if (!map) return 0;
+    const t = map.style.transform || '';
+    const m = t.match(/rotateY\(([-\d.]+)deg\)/);
+    return m ? parseFloat(m[1]) : 0;
 }
 function _spotVolume(spotId) {
-    const vc   = _getViewportCenter();
+    const yaw  = _getViewportYaw();
     const spot = SPOTS.find(s => s.id === spotId);
-    if (!vc || !spot) return 0.8;
-    const cx   = spot.left + spot.width  / 2;
-    const cy   = spot.top  + spot.height / 2;
-    const dist = Math.hypot(vc.x - cx, vc.y - cy);
-    return Math.max(0.08, Math.exp(-dist / 300));
+    if (spot == null) return 0.8;
+    const theta = panoSpotTheta(spot);
+    // distância angular até para onde a câmera está olhando agora
+    const dist = Math.abs(theta - yaw);
+    return Math.max(0.08, Math.exp(-dist / 22));
 }
 
 const amb=new Audio(SRC.ambient);amb.volume=0.08;amb.loop=true;
@@ -706,7 +737,7 @@ async function handleActivateHourglass(){
     finally{hideLoading();}
 }
 
-// ── DRAG DO MAPA ─────────────────────────────────────────────
+// ── DRAG DO MAPA (agora: gira a parede 3D em vez de arrastar um plano) ──
 function enableMapInteraction() {
     const cont = document.getElementById('mapContainer');
     const map  = document.getElementById('map');
@@ -716,78 +747,40 @@ function enableMapInteraction() {
     if (map._interactionEnabled) return;
     map._interactionEnabled = true;
 
-    // ── Estado de posição e escala ──────────────────────────────────────
-    // Lê a escala inicial que o CSS já definiu (ex: scale(1.1))
-    const cssScale = (() => {
-        const m = map.style.transform.match(/scale\(([^)]+)\)/);
-        return m ? parseFloat(m[1]) : 1.1;
-    })();
-    let cx = 0, cy = 0, currentScale = cssScale;
-    let MIN_SCALE = 0.5;     // zoom-out mínimo (recalculado dinamicamente)
-    const MAX_SCALE = 3.0;   // zoom-in máximo (inalterado)
+    buildPanoRing();
 
-    // ── Inércia ─────────────────────────────────────────────────────────
-    let vx = 0, vy = 0, lt = 0, aId = null;
+    // ── Estado: yaw (rotação horizontal, graus) + zoom ───────────────────
+    let yaw = 0, zoom = 1;
+    const YAW_MIN = -PANO_ARC_DEG / 2, YAW_MAX = PANO_ARC_DEG / 2;
+
+    // ── Inércia (mesma sensação de antes, agora em graus/s) ──────────────
+    let vYaw = 0, lt = 0, aId = null;
     const FRICTION = 0.94;
 
     // ── Drag ────────────────────────────────────────────────────────────
-    let drag = false, sx = 0, sy = 0;
+    let drag = false, sx = 0;
 
     // ── Pinch ───────────────────────────────────────────────────────────
     let isPinching = false;
-    let pinchStartDist = 0, pinchStartScale = 1;
-    let pinchFocalX = 0, pinchFocalY = 0;
-    let pinchStartTx = 0, pinchStartTy = 0;
+    let pinchStartDist = 0, pinchStartZoom = 1;
 
-    // ── Limites dinâmicos ───────────────────────────────────────────────
-    let minX = 0, maxX = 0, minY = 0, maxY = 0;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-    function recalcLimits() {
-        const cr = cont.getBoundingClientRect();
-        // Zoom-out mínimo dinâmico: impede afastar além da tela (mesma lógica do forte.js)
-        MIN_SCALE = Math.max(cr.width / 1500, cr.height / 1500);
-        // Se a escala atual ficou abaixo do mínimo (ex: tela maior após resize), corrige
-        if (currentScale < MIN_SCALE) {
-            currentScale = MIN_SCALE;
-            map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
-        }
-        minX = Math.min(0, cr.width  - 1500 * currentScale);
-        minY = Math.min(0, cr.height - 1500 * currentScale);
-        maxX = 0; maxY = 0;
-    }
-    recalcLimits();
-    window.addEventListener('resize', recalcLimits);
-
-    map.style.touchAction = 'none';
-    map.style.userSelect  = 'none';
-
-    // Aplica transform completo (pinch) — recalcula limites com nova escala
-    function applyTransform(x, y, s) {
-        s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
-        const cr = cont.getBoundingClientRect();
-        const sw = 1500 * s, sh = 1500 * s;
-        x = Math.max(Math.min(0, cr.width  - sw), Math.min(0, x));
-        y = Math.max(Math.min(0, cr.height - sh), Math.min(0, y));
-        cx = x; cy = y; currentScale = s;
-        map.style.transform = `translate(${x}px,${y}px) scale(${s})`;
-        recalcLimits();
+    function render() {
+        map.style.transform = `scale(${zoom}) rotateY(${yaw}deg)`;
+        if (_panoDebugEl) _panoDebugEl.textContent = `yaw ${yaw.toFixed(1)}° · zoom ${zoom.toFixed(2)}`;
     }
 
-    // Aplica transform leve (drag/inércia) — usa limites já calculados
-    function setPos(x, y) {
-        cx = Math.max(minX, Math.min(maxX, x));
-        cy = Math.max(minY, Math.min(maxY, y));
-        map.style.transform = `translate(${cx}px,${cy}px) scale(${currentScale})`;
-    }
+    function setYaw(v) { yaw = clamp(v, YAW_MIN, YAW_MAX); render(); }
+    function setZoom(z) { zoom = clamp(z, PANO_ZOOM_MIN, PANO_ZOOM_MAX); render(); }
 
     // ── Inércia ─────────────────────────────────────────────────────────
     function inertia() {
         cancelAnimationFrame(aId);
         if (drag) return;
-        vx *= FRICTION; vy *= FRICTION;
-        setPos(cx + vx, cy + vy);
-        if (Math.abs(vx) > 0.4 || Math.abs(vy) > 0.4)
-            aId = requestAnimationFrame(inertia);
+        vYaw *= FRICTION;
+        setYaw(yaw + vYaw);
+        if (Math.abs(vYaw) > 0.03) aId = requestAnimationFrame(inertia);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
@@ -795,12 +788,6 @@ function enableMapInteraction() {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         return Math.sqrt(dx * dx + dy * dy);
-    }
-    function touchMid(e) {
-        return {
-            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-        };
     }
 
     // ── Drag handlers ───────────────────────────────────────────────────
@@ -811,8 +798,7 @@ function enableMapInteraction() {
         amb.play().catch(() => {});
         map.style.cursor = 'grabbing';
         sx = e.clientX ?? e.touches[0].clientX;
-        sy = e.clientY ?? e.touches[0].clientY;
-        vx = vy = 0;
+        vYaw = 0;
         lt = performance.now();
         cancelAnimationFrame(aId);
     }
@@ -821,18 +807,19 @@ function enableMapInteraction() {
         if (!drag) return;
         e.preventDefault();
         const nx = e.clientX ?? e.touches[0].clientX;
-        const ny = e.clientY ?? e.touches[0].clientY;
         const dt = performance.now() - lt;
-        if (dt > 0) { vx = (nx - sx) / dt; vy = (ny - sy) / dt; }
-        setPos(cx + (nx - sx), cy + (ny - sy));
-        sx = nx; sy = ny;
+        const dx = nx - sx;
+        const dDeg = dx * 0.15; // sensibilidade do arrasto → graus
+        if (dt > 0) vYaw = dDeg / (dt / 16.7); // ~graus por frame, p/ inércia
+        setYaw(yaw + dDeg);
+        sx = nx;
         lt = performance.now();
     }
 
     function endDrag() {
         drag = false;
         map.style.cursor = 'grab';
-        if (Math.abs(vx) > 0.2 || Math.abs(vy) > 0.2) { vx *= 10; vy *= 10; inertia(); }
+        if (Math.abs(vYaw) > 0.15) { inertia(); }
     }
 
     // ── Touch unificado (drag + pinch) ──────────────────────────────────
@@ -841,14 +828,8 @@ function enableMapInteraction() {
             isPinching = true;
             drag = false;
             cancelAnimationFrame(aId);
-            pinchStartDist  = touchDist(e);
-            pinchStartScale = currentScale;
-            const mid = touchMid(e);
-            const cr  = cont.getBoundingClientRect();
-            pinchFocalX = mid.x - cr.left;
-            pinchFocalY = mid.y - cr.top;
-            pinchStartTx = cx;
-            pinchStartTy = cy;
+            pinchStartDist = touchDist(e);
+            pinchStartZoom = zoom;
         } else if (e.touches.length === 1 && !isPinching) {
             startDrag(e);
         }
@@ -857,14 +838,7 @@ function enableMapInteraction() {
     function onTouchMove(e) {
         if (e.touches.length >= 2 && isPinching) {
             e.preventDefault();
-            const newScale  = pinchStartScale * (touchDist(e) / pinchStartDist);
-            const mapPointX = (pinchFocalX - pinchStartTx) / pinchStartScale;
-            const mapPointY = (pinchFocalY - pinchStartTy) / pinchStartScale;
-            applyTransform(
-                pinchFocalX - mapPointX * newScale,
-                pinchFocalY - mapPointY * newScale,
-                newScale
-            );
+            setZoom(pinchStartZoom * (touchDist(e) / pinchStartDist));
         } else if (e.touches.length === 1 && !isPinching) {
             onDrag(e);
         }
@@ -873,8 +847,7 @@ function enableMapInteraction() {
     function onTouchEnd(e) {
         if (isPinching && e.touches.length < 2) {
             isPinching = false;
-            vx = vy = 0;
-            recalcLimits();
+            vYaw = 0;
         }
         if (e.touches.length === 0) endDrag();
     }
@@ -884,19 +857,74 @@ function enableMapInteraction() {
     window.addEventListener('mousemove', onDrag,    { passive: false });
     window.addEventListener('mouseup',   endDrag,   { passive: true });
 
+    // ── Roda do mouse = zoom (desktop) ────────────────────────────────────
+    cont.addEventListener('wheel', e => {
+        e.preventDefault();
+        setZoom(zoom * (e.deltaY < 0 ? 1.08 : 0.93));
+    }, { passive: false });
+
     // ── Touch (mobile) ──────────────────────────────────────────────────
     map.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend',  onTouchEnd,  { passive: true });
 
+    map.style.touchAction = 'none';
     map.style.cursor = 'grab';
+    render();
+
+    // ── Debug opcional: ?panodebug=1 mostra o ângulo atual na tela,
+    // útil para calibrar PANO_SPOT_THETA_OVERRIDE olhando a arte nova.
+    if (new URLSearchParams(location.search).get('panodebug') === '1') {
+        _panoDebugEl = document.createElement('div');
+        _panoDebugEl.style.cssText = 'position:fixed;top:54px;left:8px;z-index:99999;background:rgba(0,0,0,.7);color:#7f7;font:12px monospace;padding:4px 8px;border-radius:4px;pointer-events:none;';
+        document.body.appendChild(_panoDebugEl);
+        render();
+    }
 }
+let _panoDebugEl = null;
 
 // ── WANDER ───────────────────────────────────────────────────
 function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
+// ── PAREDE PANORÂMICA 3D ───────────────────────────────────────
+// Monta N placas planas em volta do pivô #map, cada uma mostrando uma
+// fatia da imagem, viradas para dentro (para quem "olha do centro").
+// Chamada 1x em enableMapInteraction(). Não mexe em nada dos spots/mobs.
+function buildPanoRing(){
+    const map = document.getElementById('map');
+    if(!map || map.querySelector('.pano-seg')) return; // já construído
+    const segAngle = PANO_ARC_DEG / PANO_SEGMENTS;
+    const segAngleRad = segAngle * Math.PI/180;
+    const segW = 2 * PANO_RADIUS * Math.tan(segAngleRad/2);
+    const totalW = PANO_SEGMENTS * segW;
+    const totalH = PANO_IMG_H * (totalW / PANO_IMG_W);
+    const frag = document.createDocumentFragment();
+    for(let i=0;i<PANO_SEGMENTS;i++){
+        const theta = -PANO_ARC_DEG/2 + segAngle/2 + i*segAngle;
+        const seg = document.createElement('div');
+        seg.className = 'pano-seg';
+        Object.assign(seg.style,{
+            width: segW+'px', height: totalH+'px',
+            marginLeft: (-segW/2)+'px', marginTop: (-totalH/2)+'px',
+            backgroundImage: `url('${PANO_IMG}')`,
+            backgroundSize: `${totalW}px ${totalH}px`,
+            backgroundPosition: `${-i*segW}px 0px`,
+            transform: `rotateY(${theta}deg) translateZ(${-PANO_RADIUS}px)`
+        });
+        frag.appendChild(seg);
+    }
+    map.insertBefore(frag, map.firstChild);
+}
+
 // ── SPOTS + MOBS ─────────────────────────────────────────────
-function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{top:spot.top+'px',left:spot.left+'px',width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
+function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;
+        const _theta=panoSpotTheta(spot), _y=panoSpotY(spot);
+        Object.assign(el.style,{
+            width:spot.width+'px',height:spot.height+'px',
+            marginLeft:(-spot.width/2)+'px',marginTop:(-spot.height/2)+'px',
+            transform:`translateY(${_y}px) rotateY(${_theta}deg) translateZ(${-PANO_RADIUS*PANO_SPOT_RADIUS_FACTOR}px)`
+        });
+        el.dataset.panoTheta=_theta;const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);});}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){

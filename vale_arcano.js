@@ -913,8 +913,8 @@ function enableMapInteraction() {
     if (!canvas || !cont) return;
 
     // Guard contra dupla inicialização
-    if (canvas._interactionEnabled) return;
-    canvas._interactionEnabled = true;
+    if (cont._interactionEnabled) return;
+    cont._interactionEnabled = true;
 
     // ── Inércia ─────────────────────────────────────────────────────────
     let vx = 0, vy = 0, lt = 0, aId = null;
@@ -939,8 +939,10 @@ function enableMapInteraction() {
 
     function applyDelta(dx, dy) {
         const dpp = degPerPx();
-        camYaw   -= dx * dpp * DRAG_SENS;
-        camPitch += dy * dpp * DRAG_SENS;
+        // Invertido a pedido: arrastar p/ esquerda → câmera olha p/ direita;
+        // arrastar p/ cima → câmera olha p/ baixo.
+        camYaw   += dx * dpp * DRAG_SENS;
+        camPitch -= dy * dpp * DRAG_SENS;
         updateCameraLook();
     }
 
@@ -1034,13 +1036,17 @@ function enableMapInteraction() {
     }
 
     // ── Mouse (desktop) ─────────────────────────────────────────────────
-    canvas.addEventListener('mousedown', startDrag, { passive: true });
+    // Anexado ao mapContainer (não só ao canvas): os .hunt-spot ficam numa
+    // camada irmã (#map) por cima do canvas, então um mousedown que começa
+    // em cima de um spot/mob nunca chegaria ao canvas — precisa ser
+    // capturado no ancestral comum a ambos.
+    cont.addEventListener('mousedown', startDrag, { passive: true });
     window.addEventListener('mousemove', onDrag,    { passive: false });
     window.addEventListener('mouseup',   endDrag,   { passive: true });
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    cont.addEventListener('wheel', onWheel, { passive: false });
 
     // ── Touch (mobile) ──────────────────────────────────────────────────
-    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+    cont.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend',  onTouchEnd,  { passive: true });
 

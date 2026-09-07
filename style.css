@@ -3267,17 +3267,17 @@ button, .btn {
 .acc-modal-level {
     position: absolute;
     bottom: -4px;
-    left: 50%;
+    left: 53%;
     transform: translateX(-50%);
-    background: linear-gradient(180deg, #e6c977, var(--aaa-gold-dark));
-    color: #241a05;
+    background: linear-gradient(180deg, #444, #000);
+    color: white;
     font-size: 0.62em;
     font-weight: 800;
     padding: 2px 9px;
     border-radius: 20px;
     border: 1px solid rgba(0,0,0,0.4);
     white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  
 }
 .acc-modal-name {
     margin: 8px 0 2px;
@@ -4784,13 +4784,13 @@ button, .btn {
 }
 #shopModal .recharge-item .shop-item-img { width: 58px !important; height: 58px !important; }
 #shopModal .recharge-item .shop-item-details h3 {
-  font-size: 0.8em !important;
+  font-size: 1.8em !important;
   color: #e8dfc4 !important;
 }
 #shopModal .recharge-item .shop-item-details span {
   color: var(--aaa-cyan) !important;
   text-shadow: 0 0 10px rgba(79,216,232,0.4);
-  font-size: 1.15em !important;
+  font-size: 1.4em !important;
   font-weight: 800;
 }
 #shopModal .recharge-item .formas {

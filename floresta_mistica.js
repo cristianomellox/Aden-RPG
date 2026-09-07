@@ -1053,7 +1053,7 @@ function enableMapInteraction() {
 }
 
 // ── WANDER ───────────────────────────────────────────────────
-function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);},2650+Math.random()*150));wanderTimers.push(setTimeout(()=>{pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
 function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const shadow=document.createElement('div');shadow.className='mob-shadow';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(shadow);wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
@@ -2695,7 +2695,7 @@ function _mobBreathNewState() {
         walking: false, walkAmp: 0,
         stepPhase: Math.random() * Math.PI * 2,
         stepSpeed: 0.9 + Math.random() * 0.35,   // ciclos/seg (cada ciclo = 2 "passadas")
-        bobAmp: 1.4 + Math.random() * 1.0,        // px de subida no meio do passo (sutil)
+        bobAmp: 1.0 + Math.random() * 0.7,        // px de subida no meio do passo (bem sutil)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
@@ -2853,13 +2853,16 @@ function initMobAvatarBreathing() {
 
                 // --- Bounce de passada: sobe/desce em sincronia com a sombra,
                 // simulando o alternar dos pés sem precisar de sprites de perna.
-                st.walkAmp += ((st.walking ? 1 : 0) - st.walkAmp) * 0.006 * dt;
+                // walkAmp sobe suave ao começar a andar, mas cai bem mais rápido
+                // ao parar — assim o bounce não fica "quicando parado" na chegada.
+                const walkAmpRate = st.walking ? 0.006 : 0.026;
+                st.walkAmp += ((st.walking ? 1 : 0) - st.walkAmp) * walkAmpRate * dt;
                 st.stepPhase += (dt / 1000) * st.stepSpeed * (Math.PI * 2);
                 const stepRaw = Math.abs(Math.sin(st.stepPhase)); // 0 = pé no chão, 1 = meio do passo (mais alto)
                 const liftAmt = stepRaw * st.walkAmp;              // o quanto o corpo está "no ar" agora
                 const contactAmt = (1 - stepRaw) * st.walkAmp;     // pico no instante em que o pé toca o chão
                 const bobY = -liftAmt * st.bobAmp;                 // px — negativo sobe na tela
-                const stepSquash = contactAmt * 0.016;             // pequeno "thump" extra a cada passada
+                const stepSquash = contactAmt * 0.010;             // pequeno "thump" extra a cada passada
                 scaleY *= (1 - stepSquash);
                 scaleX *= (1 + stepSquash * 0.6);
 

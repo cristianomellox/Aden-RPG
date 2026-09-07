@@ -143,8 +143,11 @@ transform-origin:center center;}
 .mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
 .mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .mob-avatar{width:105px;height:140px;transform-origin:bottom center;will-change:transform;}
-/* Sombra de contato no chão — dá peso e ancoragem visual ao mob */
-.mob-shadow{position:absolute;left:50%;bottom:3px;width:58px;height:16px;transform:translateX(-50%);background:radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, rgba(0,0,0,.36) 45%, rgba(0,0,0,0) 75%);filter:blur(2px);pointer-events:none;z-index:0;will-change:transform,opacity;}
+/* Sombra de contato no chão — dá peso e ancoragem visual ao mob.
+   mix-blend-mode:multiply faz ela escurecer a textura do chão por
+   baixo (em vez de colar uma mancha cinza por cima), o que é o que
+   faz uma sombra parecer real e não um adesivo. */
+.mob-shadow{position:absolute;left:50%;bottom:1px;width:86px;height:26px;transform:translateX(-50%);background:radial-gradient(ellipse at center, rgba(0,0,0,.9) 0%, rgba(0,0,0,.62) 32%, rgba(0,0,0,.3) 55%, rgba(0,0,0,0) 78%);filter:blur(1.5px);mix-blend-mode:multiply;pointer-events:none;z-index:0;will-change:transform,opacity;}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}

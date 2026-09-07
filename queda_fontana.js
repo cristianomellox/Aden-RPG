@@ -746,9 +746,9 @@ async function handleActivateHourglass(){
 // ═══════════════════════════════════════════════════════════════════════
 
 let _sky = null; // { scene, camera, renderer, canvas, cont }
-let camYaw = 0, camPitch = -6, camFov = 75;
+let camYaw = 0, camPitch = -6, camFov = 110;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
-const FOV_MIN = 35, FOV_MAX = 100;     // limites de zoom (menor FOV = mais zoom)
+const FOV_MIN = 75, FOV_MAX = 110;     // limites de zoom (menor FOV = mais zoom)
 const PITCH_LIMIT = 89;                // evita "capotar" ao olhar reto pra cima/baixo
 const SPOT_SPHERE_RADIUS = 400;        // raio (arbitrário) onde os spots "vivem"
 
@@ -1055,7 +1055,7 @@ function enableMapInteraction() {
 function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;el.style.transition='left 3s ease-in-out,top 3s ease-in-out';el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);pause();},3100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
-function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
+function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);for(let i=0;i<5;i++){const col=i%3,row=Math.floor(i/3);const wrap=document.createElement('div');wrap.className='mob-wrapper';Object.assign(wrap.style,{left:Math.min(10+col*80+Math.random()*20,spot.width-70)+'px',top:Math.min(15+row*80+Math.random()*20,spot.height-90)+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const shadow=document.createElement('div');shadow.className='mob-shadow';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(shadow);wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){
@@ -2689,6 +2689,12 @@ function _mobBreathNewState() {
         facing: 1, facingTarget: 1,
         leanCurrent: 0, leanTarget: 0,
         moveBoost: 0, moveBoostTarget: 0, moveBoostHold: 0,
+        // Passada: bounce vertical do corpo + pulso na sombra, sincronizados,
+        // pra simular passos sem precisar de sprites de perna.
+        walking: false, walkAmp: 0,
+        stepPhase: Math.random() * Math.PI * 2,
+        stepSpeed: 0.9 + Math.random() * 0.35,   // ciclos/seg (cada ciclo = 2 "passadas")
+        bobAmp: 1.4 + Math.random() * 1.0,        // px de subida no meio do passo (sutil)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
@@ -2765,6 +2771,7 @@ function _mobWalkOnMoveStart(img, deltaX, deltaY) {
     st.leanTarget = absX > 4 ? (deltaX < 0 ? -1 : 1) * 1.6 : 0;
     st.moveBoostTarget = 1;
     st.moveBoostHold = 260; // ms de "impulso" (squash/stretch) logo no início do passo
+    st.walking = true; // liga o bounce de passada, que só desliga no fim do trecho
 }
 
 // Chamado quando o mob chega ao destino e para de andar
@@ -2774,6 +2781,7 @@ function _mobWalkOnMoveEnd(img) {
     st.leanTarget = 0;
     st.moveBoostTarget = 1; // pequeno "assentar" ao chegar/parar
     st.moveBoostHold = 220;
+    st.walking = false; // o bounce de passada esmaece suavemente (walkAmp) em vez de cortar seco
 }
 
 function initMobAvatarBreathing() {
@@ -2842,6 +2850,18 @@ function initMobAvatarBreathing() {
                 scaleY *= (1 - squash);
                 scaleX *= (1 + squash * 0.6);
 
+                // --- Bounce de passada: sobe/desce em sincronia com a sombra,
+                // simulando o alternar dos pés sem precisar de sprites de perna.
+                st.walkAmp += ((st.walking ? 1 : 0) - st.walkAmp) * 0.006 * dt;
+                st.stepPhase += (dt / 1000) * st.stepSpeed * (Math.PI * 2);
+                const stepRaw = Math.abs(Math.sin(st.stepPhase)); // 0 = pé no chão, 1 = meio do passo (mais alto)
+                const liftAmt = stepRaw * st.walkAmp;              // o quanto o corpo está "no ar" agora
+                const contactAmt = (1 - stepRaw) * st.walkAmp;     // pico no instante em que o pé toca o chão
+                const bobY = -liftAmt * st.bobAmp;                 // px — negativo sobe na tela
+                const stepSquash = contactAmt * 0.016;             // pequeno "thump" extra a cada passada
+                scaleY *= (1 - stepSquash);
+                scaleX *= (1 + stepSquash * 0.6);
+
                 const totalRotateDeg = rotateDeg + st.leanCurrent;
                 // O sprite vertical (_up/_down) já vem desenhado corretamente
                 // e não deve ser espelhado — só os sprites padrão
@@ -2849,8 +2869,19 @@ function initMobAvatarBreathing() {
                 const scaleXFinal = scaleX * (st.vertical ? 1 : st.facing);
 
                 img.style.transform =
-                    `translateX(${translateXpx.toFixed(2)}px) rotate(${totalRotateDeg.toFixed(2)}deg) ` +
+                    `translateX(${translateXpx.toFixed(2)}px) translateY(${bobY.toFixed(2)}px) rotate(${totalRotateDeg.toFixed(2)}deg) ` +
                     `scale(${scaleXFinal.toFixed(4)}, ${scaleY.toFixed(4)})`;
+
+                // Sombra de contato: acompanha o "peso" do passo (achata/escurece
+                // no impacto, encolhe/clareia quando o corpo está no alto do
+                // bounce) e a respiração — como uma sombra real reagiria.
+                if (!st.shadowEl) st.shadowEl = wrap ? wrap.querySelector('.mob-shadow') : null;
+                if (st.shadowEl) {
+                    const shadowScale = 1 + squash * 1.35 + stepSquash * 1.8 - liftAmt * 0.16 + Math.max(0, breathAmount) * 0.12;
+                    const shadowOpacity = 0.82 + squash * 1.4 + contactAmt * 0.22 - liftAmt * 0.22 - Math.max(0, breathAmount) * 0.08;
+                    st.shadowEl.style.transform = `translateX(-50%) scale(${shadowScale.toFixed(3)})`;
+                    st.shadowEl.style.opacity = Math.min(1, Math.max(0.35, shadowOpacity)).toFixed(3);
+                }
             });
         }
         requestAnimationFrame(tick);

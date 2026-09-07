@@ -2695,7 +2695,7 @@ function _mobBreathNewState() {
         walking: false, walkAmp: 0,
         stepPhase: Math.random() * Math.PI * 2,
         stepSpeed: 0.9 + Math.random() * 0.35,   // ciclos/seg (cada ciclo = 2 "passadas")
-        bobAmp: 2.2 + Math.random() * 1.6,        // px de subida no meio do passo
+        bobAmp: 1.4 + Math.random() * 1.0,        // px de subida no meio do passo (sutil)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
@@ -2859,7 +2859,7 @@ function initMobAvatarBreathing() {
                 const liftAmt = stepRaw * st.walkAmp;              // o quanto o corpo está "no ar" agora
                 const contactAmt = (1 - stepRaw) * st.walkAmp;     // pico no instante em que o pé toca o chão
                 const bobY = -liftAmt * st.bobAmp;                 // px — negativo sobe na tela
-                const stepSquash = contactAmt * 0.028;             // pequeno "thump" extra a cada passada
+                const stepSquash = contactAmt * 0.016;             // pequeno "thump" extra a cada passada
                 scaleY *= (1 - stepSquash);
                 scaleX *= (1 + stepSquash * 0.6);
 
@@ -2878,8 +2878,8 @@ function initMobAvatarBreathing() {
                 // bounce) e a respiração — como uma sombra real reagiria.
                 if (!st.shadowEl) st.shadowEl = wrap ? wrap.querySelector('.mob-shadow') : null;
                 if (st.shadowEl) {
-                    const shadowScale = 1 + squash * 1.35 + stepSquash * 1.8 - liftAmt * 0.22 + Math.max(0, breathAmount) * 0.12;
-                    const shadowOpacity = 0.82 + squash * 1.4 + contactAmt * 0.3 - liftAmt * 0.3 - Math.max(0, breathAmount) * 0.08;
+                    const shadowScale = 1 + squash * 1.35 + stepSquash * 1.8 - liftAmt * 0.16 + Math.max(0, breathAmount) * 0.12;
+                    const shadowOpacity = 0.82 + squash * 1.4 + contactAmt * 0.22 - liftAmt * 0.22 - Math.max(0, breathAmount) * 0.08;
                     st.shadowEl.style.transform = `translateX(-50%) scale(${shadowScale.toFixed(3)})`;
                     st.shadowEl.style.opacity = Math.min(1, Math.max(0.35, shadowOpacity)).toFixed(3);
                 }

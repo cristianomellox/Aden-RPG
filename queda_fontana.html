@@ -143,6 +143,7 @@ transform-origin:center center;}
 .mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
 .mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .mob-avatar{width:105px;height:140px;transform-origin:bottom center;will-change:transform;}
+.mob-shadow{position:absolute;left:50%;bottom:1px;width:86px;height:26px;transform:translateX(-50%);background:radial-gradient(ellipse at center, rgba(0,0,0,.9) 0%, rgba(0,0,0,.62) 32%, rgba(0,0,0,.3) 55%, rgba(0,0,0,0) 78%);filter:blur(1.5px);mix-blend-mode:multiply;pointer-events:none;z-index:0;will-change:transform,opacity;}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}
@@ -221,6 +222,10 @@ transform-origin:center center;}
 .mob-dying .mob-name{animation:mob-death-fade 0.65s ease-out forwards!important;}
 .mob-respawning .mob-avatar{animation:mob-respawn 0.7s cubic-bezier(.22,1,.36,1) forwards!important;}
 .mob-respawning .mob-name{animation:mob-respawn 0.55s cubic-bezier(.22,1,.36,1) forwards!important;}
+.mob-dying .mob-shadow{animation:mob-shadow-fade-out 0.7s ease-out forwards!important;}
+.mob-respawning .mob-shadow{animation:mob-shadow-fade-in 0.6s cubic-bezier(.22,1,.36,1) forwards!important;}
+@keyframes mob-shadow-fade-out{0%{opacity:1;transform:translateX(-50%) scale(1);}100%{opacity:0;transform:translateX(-50%) scale(.45);}}
+@keyframes mob-shadow-fade-in{0%{opacity:0;transform:translateX(-50%) scale(.35);}60%{opacity:.85;transform:translateX(-50%) scale(1.1);}100%{opacity:1;transform:translateX(-50%) scale(1);}}
 .player-lunging .avatar-frame-wrap{animation:player-lunge 0.45s ease-out!important;}
 .mob-impact-flash .mob-avatar{animation:mob-impact-flash 0.28s ease-out!important;}
 

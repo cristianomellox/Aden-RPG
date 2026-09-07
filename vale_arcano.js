@@ -939,9 +939,8 @@ function enableMapInteraction() {
 
     function applyDelta(dx, dy) {
         const dpp = degPerPx();
-        // Invertido a pedido: arrastar p/ esquerda → câmera olha p/ direita;
-        // arrastar p/ cima → câmera olha p/ baixo.
-        camYaw   += dx * dpp * DRAG_SENS;
+        // Navegação sempre na direção OPOSTA ao arraste (nos dois eixos).
+        camYaw   -= dx * dpp * DRAG_SENS;
         camPitch -= dy * dpp * DRAG_SENS;
         updateCameraLook();
     }

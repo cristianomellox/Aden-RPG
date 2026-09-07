@@ -111,12 +111,32 @@ body{display:flex;flex-direction:column;align-items:center;background:#121212;mi
 #pageTitle{color:#ffb3b3;font-size:1em;font-weight:bold;text-shadow:1px 1px 2px #000;}
 
 #mapContainer{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;z-index:1;background:#0d1a0d;}
-#map{background-image:url('https://aden-rpg.pages.dev/assets/erbaria.png');background-size:contain;background-repeat:no-repeat;background-position:top left;width:1500px;height:1500px;position:absolute;cursor:grab;transform-origin:top left;transform:scale(1.1);user-select:none;}
+
+/* ══════════════════════════════════════════════════════════════
+   SKYBOX 360° (Three.js) — substitui o antigo mapa plano 1500x1500.
+   #skyboxCanvas renderiza a esfera panorâmica (WebGL).
+   #map continua existindo como camada transparente por cima do
+   canvas: é nela que os .hunt-spot (e tudo dentro deles: mobs,
+   avatares, labels) são inseridos, exatamente como antes. A única
+   mudança é que cada .hunt-spot agora tem sua posição (left/top)
+   e escala (transform) recalculadas a cada frame em JS, projetando
+   sua coordenada esférica (yaw/pitch) para a tela — em vez de usar
+   um top/left fixo dentro de um mapa 2D com transform:scale.
+   ══════════════════════════════════════════════════════════════ */
+#skyboxCanvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;z-index:0;outline:none;cursor:grab;}
+#skyboxCanvas.dragging{cursor:grabbing;}
+#map{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none;user-select:none;}
 
 .hunt-spot{position:absolute;border:2px dashed transparent;
-/*border:8px dashed #0f0;*/
-border-radius:8px;cursor:default;overflow:visible;z-index:5;}
+border-radius:8px;cursor:default;overflow:visible;z-index:5;pointer-events:auto;
+transform-origin:center center;}
+/* Debug de alinhamento: ative com ?debugSpots=1 na URL (veja vale_arcano.js).
+   Também pode ser forçado manualmente removendo o comentário abaixo. */
+.debug-align .hunt-spot{border-color:#0f0!important;}
+.debug-align .spot-label{display:block!important;}
+/*border:2px dashed #0f0;*/
 .hunt-spot:hover,.hunt-spot:focus,.hunt-spot:active{border-color:transparent;outline:none;}
+.debug-align .hunt-spot:hover,.debug-align .hunt-spot:focus,.debug-align .hunt-spot:active{border-color:#0f0!important;}
 .spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;display:none;}
 .hunt-spot.active-spot{cursor:default!important;}
 
@@ -304,7 +324,7 @@ border-radius:8px;cursor:default;overflow:visible;z-index:5;}
     <img id="tutorialBtn" src="https://aden-rpg.pages.dev/assets/tutorialbtn.webp" alt="Tutorial" style="width:30px;height:30px;cursor:pointer;">
 </div>
 
-<div id="mapContainer"><div id="map"></div></div>
+<div id="mapContainer"><canvas id="skyboxCanvas"></canvas><div id="map"></div></div>
 
 <div id="contentOverlay">
     <div id="huntingHud">

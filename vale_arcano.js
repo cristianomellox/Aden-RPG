@@ -940,8 +940,8 @@ function enableMapInteraction() {
     function applyDelta(dx, dy) {
         const dpp = degPerPx();
         // Navegação sempre na direção OPOSTA ao arraste (nos dois eixos).
-        camYaw   -= dx * dpp * DRAG_SENS;
-        camPitch -= dy * dpp * DRAG_SENS;
+        camYaw   += dx * dpp * DRAG_SENS;
+        camPitch += dy * dpp * DRAG_SENS;
         updateCameraLook();
     }
 

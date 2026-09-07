@@ -1056,9 +1056,9 @@ function enableMapInteraction() {
 // Velocidade de caminhada constante (px/s) — a duração do deslocamento
 // agora é calculada pela distância, então perto ou longe o mob sempre
 // parece andar no mesmo ritmo, em vez de deslizar rápido nos trechos longos.
-const MOB_WALK_SPEED_PX_S = 105;
+const MOB_WALK_SPEED_PX_S = 55;
 const MOB_WALK_MIN_MS = 900;
-const MOB_WALK_MAX_MS = 6000;
+const MOB_WALK_MAX_MS = 10000;
 function startWander(el,w,h,delay){const img=el.querySelector('.mob-avatar');const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const newLeft=Math.max(0,Math.random()*(w-70));const newTop=Math.max(0,Math.random()*(h-90));const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;const dist=Math.sqrt(deltaX*deltaX+deltaY*deltaY);const durationMs=Math.min(MOB_WALK_MAX_MS,Math.max(MOB_WALK_MIN_MS,(dist/MOB_WALK_SPEED_PX_S)*1000));const durationS=(durationMs/1000).toFixed(2);el.style.transition=`left ${durationS}s ease-in-out,top ${durationS}s ease-in-out`;el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);const leadOut=Math.min(350,durationMs*0.2);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);},Math.max(0,durationMs-leadOut)));wanderTimers.push(setTimeout(()=>{pause();},durationMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────

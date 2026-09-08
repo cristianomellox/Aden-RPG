@@ -23,7 +23,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/capital.png'; // mesmo nome de arquivo — só troque o PNG no repositório
 
-let camYaw = 0, camPitch = -6, camFov = 110;
+let camYaw = 0, camPitch = -6, camFov = 75;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
 const FOV_MIN = 75, FOV_MAX = 110;   // limites de zoom normal (arrastar/pinch)
 const PITCH_LIMIT = 89;
@@ -150,7 +150,7 @@ function updateAllSpotProjections() {
 
         const dot = camDir.dot(rs.unitDir);
         if (dot <= 0.05) { rs.el.style.display = 'none'; continue; }
-        rs.el.style.display = '';
+        rs.el.style.display = 'flex';
         const proj = rs.dirVec.clone().project(camera);
         const sx = (proj.x * 0.5 + 0.5) * cw;
         const sy = (1 - (proj.y * 0.5 + 0.5)) * ch;
@@ -443,4 +443,64 @@ document.addEventListener('DOMContentLoaded', () => {
     initSkybox();
     enableMapInteraction();
     initShopTransitions();
+    initGuildVictoryModal();
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// MODAL ÉPICO: GUILDA REGENTE — abre ao clicar no spot da bandeira/nome
+// da guilda regente (#cityGuildHotspot). O nome e a bandeira são lidos
+// ao vivo de #guild_name_capital/#guild_flag_capital (já preenchidos por
+// fetchAndDisplayCityOwner, em capital.html). Se não houver guilda regente
+// no momento (dataset.cityHidden === '1'), o clique não faz nada.
+// ════════════════════════════════════════════════════════════════════════════
+
+const GUILD_ID_SUFFIX = 'capital';
+
+function initGuildVictoryModal() {
+    const hotspot = document.getElementById('cityGuildHotspot');
+    const modal   = document.getElementById('guildVictoryModal');
+    const closeBtn = document.getElementById('closeGuildVictoryBtn');
+    if (!hotspot || !modal) return;
+
+    function openModal() {
+        if (hotspot.dataset.cityHidden === '1') return; // sem guilda regente agora
+
+        const flagEl = document.getElementById('guild_flag_' + GUILD_ID_SUFFIX);
+        const nameEl = document.getElementById('guild_name_' + GUILD_ID_SUFFIX);
+        const guildName = (nameEl?.textContent || '').trim() || 'Desconhecida';
+        const flagSrc = flagEl?.getAttribute('src') || '';
+        const cityDisplayName = window.MERCHANT_CITY || document.title || '';
+
+        const vFlag = document.getElementById('guildVictoryFlag');
+        const vName = document.getElementById('guildVictoryName');
+        const vMsg  = document.getElementById('guildVictoryMessage');
+        if (vFlag) vFlag.setAttribute('src', flagSrc);
+        if (vName) vName.textContent = guildName;
+        if (vMsg) {
+            vMsg.innerHTML = `A guilda <strong>${guildName}</strong> venceu a última batalha de guilda em <strong>${cityDisplayName}</strong> e se tornou a Guilda Regente!`;
+        }
+
+        // Reinicia a animação de entrada mesmo se o modal for aberto de novo.
+        const content = modal.querySelector('.gv-content');
+        if (content) {
+            content.style.animation = 'none';
+            void content.offsetWidth; // força reflow
+            content.style.animation = '';
+        }
+
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    hotspot.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display !== 'none') closeModal();
+    });
+}

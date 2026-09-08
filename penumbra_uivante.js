@@ -1061,10 +1061,74 @@ const MOB_WALK_MIN_MS = 900;
 const MOB_WALK_MAX_MS = 10000;
 const MOB_MIN_DIST_PX = 40; // distância mínima entre mobs para evitar que se esbarrem
 const MOB_HITBOX_W = 70, MOB_HITBOX_H = 90;
+const MOB_AVOID_MARGIN_PX = MOB_MIN_DIST_PX + 8; // folga extra usada só pra decidir se o caminho reto passa perto demais de outro mob
 function _mobDistSq(aLeft,aTop,bLeft,bTop){const acx=aLeft+MOB_HITBOX_W/2,acy=aTop+MOB_HITBOX_H/2;const bcx=bLeft+MOB_HITBOX_W/2,bcy=bTop+MOB_HITBOX_H/2;const dx=acx-bcx,dy=acy-bcy;return dx*dx+dy*dy;}
 function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
 function _pickMobPosition(w,h,group,self){const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);let best=null,bestScore=-1;for(let tries=0;tries<24;tries++){const left=Math.random()*maxLeft,top=Math.random()*maxTop;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>=MOB_MIN_DIST_PX)return{left,top};if(minDist>bestScore){bestScore=minDist;best={left,top};}}if(best)return best;const cols=6,rows=6;let gLeft=0,gTop=0,gScore=-1;for(let r=0;r<=rows;r++){for(let c=0;c<=cols;c++){const left=(maxLeft*c)/cols,top=(maxTop*r)/rows;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>gScore){gScore=minDist;gLeft=left;gTop=top;}}}return{left:gLeft,top:gTop};}
-function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group){el.__wanderPos={left:parseFloat(el.style.left)||0,top:parseFloat(el.style.top)||0};if(!group.includes(el))group.push(el);}const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;if(group)el.__wanderPos={left:newLeft,top:newTop};const deltaX=newLeft-oldLeft;const deltaY=newTop-oldTop;const dist=Math.sqrt(deltaX*deltaX+deltaY*deltaY);const durationMs=Math.min(MOB_WALK_MAX_MS,Math.max(MOB_WALK_MIN_MS,(dist/MOB_WALK_SPEED_PX_S)*1000));const durationS=(durationMs/1000).toFixed(2);el.style.transition=`left ${durationS}s ease-in-out,top ${durationS}s ease-in-out`;el.style.left=newLeft+'px';el.style.top=newTop+'px';if(img)_mobWalkOnMoveStart(img,deltaX,deltaY);const leadOut=Math.min(350,durationMs*0.2);wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);},Math.max(0,durationMs-leadOut)));wanderTimers.push(setTimeout(()=>{pause();},durationMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+// Distância do ponto (px,py) até o segmento AB — usada pra saber se um trecho do caminho passa perto demais de outro mob.
+function _mobPointSegDist(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((px-ax)*dx+(py-ay)*dy)/lenSq:0;t=Math.max(0,Math.min(1,t));const cx=ax+dx*t,cy=ay+dy*t;return Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));}
+// Menor distância de um único trecho AB até qualquer outro mob do grupo.
+function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
+// Menor distância considerando os dois trechos de um caminho com desvio (origem→waypoint→destino).
+function _mobPathMinClearance(oldLeft,oldTop,waypoint,newLeft,newTop,group,self){const ax=oldLeft+MOB_HITBOX_W/2,ay=oldTop+MOB_HITBOX_H/2;const wx=waypoint.left+MOB_HITBOX_W/2,wy=waypoint.top+MOB_HITBOX_H/2;const bx=newLeft+MOB_HITBOX_W/2,by=newTop+MOB_HITBOX_H/2;return Math.min(_mobSegMinClearance(ax,ay,wx,wy,group,self),_mobSegMinClearance(wx,wy,bx,by,group,self));}
+// Gera os dois pontos de desvio possíveis (um pra cada lado do trajeto), contornando o obstáculo (ox,oy).
+function _mobDetourCandidates(ax,ay,bx,by,ox,oy,margin){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((ox-ax)*dx+(oy-ay)*dy)/lenSq:0.5;t=Math.max(0.2,Math.min(0.8,t));const cx=ax+dx*t,cy=ay+dy*t;const len=Math.sqrt(lenSq)||1;const px=-dy/len,py=dx/len;const distToObs=Math.sqrt((ox-cx)*(ox-cx)+(oy-cy)*(oy-cy));const push=Math.max(margin-distToObs,0)+margin*0.55;return[{left:cx+px*push-MOB_HITBOX_W/2,top:cy+py*push-MOB_HITBOX_H/2},{left:cx-px*push-MOB_HITBOX_W/2,top:cy-py*push-MOB_HITBOX_H/2}];}
+// Verifica se o trajeto reto de "self" até (newLeft,newTop) passaria perto demais de outro mob do grupo;
+// se sim, testa um waypoint de desvio pra cada lado do caminho e só usa o desvio se ele realmente
+// deixar mais espaço livre (considerando os dois trechos) do que seguir reto — nunca piora a rota.
+function _mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,self){
+    const straight=[{left:newLeft,top:newTop}];
+    if(!group||!group.length)return straight;
+    const ax=oldLeft+MOB_HITBOX_W/2,ay=oldTop+MOB_HITBOX_H/2;
+    const bx=newLeft+MOB_HITBOX_W/2,by=newTop+MOB_HITBOX_H/2;
+    const straightClearance=_mobSegMinClearance(ax,ay,bx,by,group,self);
+    if(straightClearance>=MOB_AVOID_MARGIN_PX)return straight; // já tem folga suficiente, não precisa desviar
+    let closest=null,closestDist=Infinity;
+    for(const other of group){
+        if(other===self)continue;
+        const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};
+        const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;
+        const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);
+        if(d<closestDist){closestDist=d;closest={ox,oy};}
+    }
+    if(!closest)return straight;
+    const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);
+    const candidates=_mobDetourCandidates(ax,ay,bx,by,closest.ox,closest.oy,MOB_AVOID_MARGIN_PX)
+        .map(c=>({left:Math.min(maxLeft,Math.max(0,c.left)),top:Math.min(maxTop,Math.max(0,c.top))}));
+    let bestWaypoint=null,bestClearance=straightClearance; // só troca se realmente melhorar em relação à rota reta
+    for(const cand of candidates){
+        const clearance=_mobPathMinClearance(oldLeft,oldTop,cand,newLeft,newTop,group,self);
+        if(clearance>bestClearance){bestClearance=clearance;bestWaypoint=cand;}
+    }
+    return bestWaypoint?[bestWaypoint,{left:newLeft,top:newTop}]:straight;
+}
+// Anda por um ou mais pontos em sequência (waypoint de desvio + destino final), respeitando a
+// velocidade constante do mob e disparando o bounce de passada a cada trecho. Retorna a duração total (ms).
+function _mobWalkPath(el,img,startLeft,startTop,points){
+    let curLeft=startLeft,curTop=startTop,totalDist=0;
+    const segs=points.map(p=>{const dx=p.left-curLeft,dy=p.top-curTop;const dist=Math.sqrt(dx*dx+dy*dy);const seg={from:{left:curLeft,top:curTop},to:p,dist};curLeft=p.left;curTop=p.top;return seg;});
+    totalDist=segs.reduce((sum,s)=>sum+s.dist,0);
+    const totalDurationMs=Math.min(MOB_WALK_MAX_MS,Math.max(MOB_WALK_MIN_MS,(totalDist/MOB_WALK_SPEED_PX_S)*1000));
+    let elapsed=0;
+    segs.forEach((seg,idx)=>{
+        const isLast=idx===segs.length-1;
+        const segDurationMs=totalDist>0?Math.max(60,(seg.dist/totalDist)*totalDurationMs):totalDurationMs/segs.length;
+        wanderTimers.push(setTimeout(()=>{
+            const durationS=(segDurationMs/1000).toFixed(2);
+            el.style.transition=`left ${durationS}s ease-in-out,top ${durationS}s ease-in-out`;
+            el.style.left=seg.to.left+'px';
+            el.style.top=seg.to.top+'px';
+            if(img)_mobWalkOnMoveStart(img,seg.to.left-seg.from.left,seg.to.top-seg.from.top);
+            if(isLast){
+                const leadOut=Math.min(350,segDurationMs*0.2);
+                wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);},Math.max(0,segDurationMs-leadOut)));
+            }
+        },elapsed));
+        elapsed+=segDurationMs;
+    });
+    return elapsed;
+}
+function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group){el.__wanderPos={left:parseFloat(el.style.left)||0,top:parseFloat(el.style.top)||0};if(!group.includes(el))group.push(el);}const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;if(group)el.__wanderPos={left:newLeft,top:newTop};const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
 function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);const mobGroup=[];for(let i=0;i<5;i++){const wrap=document.createElement('div');wrap.className='mob-wrapper';const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);Object.assign(wrap.style,{left:_initPos.left+'px',top:_initPos.top+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const shadow=document.createElement('div');shadow.className='mob-shadow';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(shadow);wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000,mobGroup);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
@@ -2703,7 +2767,7 @@ function _mobBreathNewState() {
         // pra simular passos sem precisar de sprites de perna.
         walking: false, walkAmp: 0,
         stepPhase: Math.random() * Math.PI * 2,
-        stepSpeed: 0.9 + Math.random() * 0.35,   // ciclos/seg (cada ciclo = 2 "passadas")
+        stepSpeed: 0.72 + Math.random() * 0.28,  // ciclos/seg (cada ciclo = 2 "passadas") — intervalo entre passadas um pouco maior (bounce menos acelerado)
         bobAmp: 1.0 + Math.random() * 0.7,        // px de subida no meio do passo (bem sutil)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o

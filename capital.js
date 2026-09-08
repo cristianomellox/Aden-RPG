@@ -36,7 +36,7 @@ const CAPITAL_SPOTS = [
     { id: 'btnOficina',       yaw:  -151, pitch: -20, width: 150, height: 180 },
     { id: 'btnPotionMaster',  yaw:  -83, pitch: -39, width: 80, height: 200 },
     { id: 'btnChancelaria',   yaw:   -113, pitch:  -9, width: 250, height: 200 },
-    { id: 'cityGuildHotspot', yaw:   -99, pitch:  40, width: 140, height: 150 },
+    { id: 'cityGuildHotspot', yaw:   -100, pitch:  40, width: 140, height: 150 },
 ];
 
 function yawPitchToVector(yawDeg, pitchDeg, radius = 1) {

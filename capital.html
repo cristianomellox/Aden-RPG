@@ -613,7 +613,7 @@ font > font {
     justify-content: center;
     width: 100%;
     min-height: 0;
-    opacity: 0.65;
+    opacity: 0.7;
 }
 
 /* Feixe de luz — mesma técnica das minas, mas AJUSTÁVEL POR HOTSPOT:
@@ -747,6 +747,125 @@ font > font {
     text-overflow: ellipsis;
 }
 
+
+/* ================================================================= */
+/* === MODAL ÉPICO: GUILDA REGENTE ================================= */
+/* Abre ao clicar no spot da bandeira/nome da guilda regente. Nome e   */
+/* bandeira são lidos ao vivo de #guild_name_*/#guild_flag_* (já        */
+/* preenchidos por fetchAndDisplayCityOwner) — ver initGuildVictoryModal */
+/* no módulo .js da cidade.                                           */
+/* ================================================================= */
+.guild-victory-modal {
+    background: radial-gradient(ellipse at center, rgba(32,21,6,0.94) 0%, rgba(0,0,0,0.97) 78%);
+    z-index: 3200;
+}
+.guild-victory-modal .gv-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 48px 34px 36px;
+    max-width: 460px;
+    width: 88%;
+    background: linear-gradient(180deg, rgba(44,30,10,0.92), rgba(8,6,3,0.96));
+    border: 2px solid #caa24a;
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px rgba(255,215,120,0.25), 0 0 70px rgba(255,190,60,0.35), 0 20px 60px rgba(0,0,0,0.65);
+    text-align: center;
+    overflow: hidden;
+    animation: gv-pop-in .55s cubic-bezier(.2,1.4,.4,1) both;
+}
+@keyframes gv-pop-in {
+    0%   { transform: scale(.75); opacity: 0; }
+    60%  { transform: scale(1.045); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.guild-victory-modal .gv-rays {
+    position: absolute;
+    top: -46%; left: 50%;
+    width: 900px; height: 900px;
+    transform: translateX(-50%);
+    background: conic-gradient(from 0deg,
+        rgba(255,215,120,0.18) 0deg, transparent 14deg, transparent 26deg,
+        rgba(255,215,120,0.18) 40deg, transparent 54deg, transparent 66deg,
+        rgba(255,215,120,0.18) 80deg, transparent 94deg, transparent 106deg,
+        rgba(255,215,120,0.18) 120deg, transparent 134deg, transparent 146deg,
+        rgba(255,215,120,0.18) 160deg, transparent 174deg, transparent 186deg,
+        rgba(255,215,120,0.18) 200deg, transparent 214deg, transparent 226deg,
+        rgba(255,215,120,0.18) 240deg, transparent 254deg, transparent 266deg,
+        rgba(255,215,120,0.18) 280deg, transparent 294deg, transparent 306deg,
+        rgba(255,215,120,0.18) 320deg, transparent 334deg, transparent 346deg,
+        rgba(255,215,120,0.18) 360deg);
+    animation: gv-rotate 24s linear infinite;
+    pointer-events: none;
+    opacity: 0.85;
+}
+@keyframes gv-rotate {
+    from { transform: translateX(-50%) rotate(0deg); }
+    to   { transform: translateX(-50%) rotate(360deg); }
+}
+.guild-victory-modal .gv-ribbon {
+    position: relative;
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 0.8em;
+    letter-spacing: 3px;
+    color: #2a1a04;
+    background: linear-gradient(180deg, #ffe9a8, #d9a53c 55%, #a9762a);
+    padding: 5px 18px;
+    border-radius: 3px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.5);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+.guild-victory-modal .gv-flag-wrap {
+    position: relative;
+    width: 132px; height: 132px;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 4px;
+}
+.guild-victory-modal .gv-flag-glow {
+    position: absolute; inset: -18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,210,110,0.55) 0%, rgba(255,210,110,0) 70%);
+    animation: gv-pulse 2.2s ease-in-out infinite;
+}
+@keyframes gv-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.95); }
+    50%      { opacity: 1;    transform: scale(1.08); }
+}
+.guild-victory-modal .gv-flag {
+    position: relative;
+    width: 112px; height: 112px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 3px solid #ffd77a;
+    box-shadow: 0 0 0 4px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.6);
+    background: #1a1206;
+}
+.guild-victory-modal .gv-name {
+    position: relative;
+    font-family: 'Cinzel', serif;
+    font-size: 1.6em;
+    margin: 2px 0 0;
+    background: linear-gradient(180deg, #fff3cf, #e8b34a 60%, #a9762a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 2px 10px rgba(255,190,60,0.35);
+    letter-spacing: 1px;
+}
+.guild-victory-modal .gv-message {
+    position: relative;
+    color: #e8dfc8;
+    font-size: 1em;
+    line-height: 1.55;
+    margin: 0;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+}
+.guild-victory-modal .gv-message strong {
+    color: #ffd77a;
+}
 </style>
 <body>
 
@@ -807,7 +926,7 @@ font > font {
                  bloco inteiro via dataset.cityHidden — quando não há guilda
                  regente, nem a imagem nem o nome aparecem. Começa oculto
                  (data-city-hidden="1") até a busca confirmar se há guilda. -->
-            <div id="cityGuildHotspot" class="city-hotspot non-interactive" data-city-hidden="1">
+            <div id="cityGuildHotspot" class="city-hotspot" data-city-hidden="1">
                 <div class="guild-flag-glow-slot">
                     <div class="city-hotspot-glow" style="--beam-top:-16px; --beam-height:132px; --beam-column-width:120px; --glow-rgb:255,215,0;"></div>
                 </div>
@@ -820,7 +939,7 @@ font > font {
             <div id="btnChancelaria" class="city-hotspot">
                 <span class="city-hotspot-name">Chancelaria</span>
                 <div class="city-hotspot-glow-slot">
-                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:300px; --beam-column-width:220px; --glow-rgb:255,140,40;"></div>
+                    <div class="city-hotspot-glow" style="--beam-top:1px; --beam-height:290px; --beam-column-width:240px; --glow-rgb:255,140,40;"></div>
                 </div>
             </div>
         </div>
@@ -829,6 +948,23 @@ font > font {
     <!-- Overlay de fade para preto — efeito de "entrar no prédio" ao clicar
          num hotspot de loja, e o inverso ao fechar (ver capital.js). -->
     <div id="screenFade"></div>
+    <!-- Modal épico: Guilda Regente vitoriosa. Abre ao clicar no spot da
+         bandeira/nome da guilda regente (ver initGuildVictoryModal em
+         capital.js). Não abre se não houver guilda regente no momento. -->
+    <div id="guildVictoryModal" class="modal-container guild-victory-modal">
+        <div class="gv-content">
+            <span class="close-btn" id="closeGuildVictoryBtn">&times;</span>
+            <div class="gv-rays"></div>
+            <div class="gv-ribbon">Guilda Regente</div>
+            <div class="gv-flag-wrap">
+                <div class="gv-flag-glow"></div>
+                <img id="guildVictoryFlag" class="gv-flag" src="" alt="Bandeira da Guilda Regente">
+            </div>
+            <h2 id="guildVictoryName" class="gv-name"></h2>
+            <p id="guildVictoryMessage" class="gv-message"></p>
+        </div>
+    </div>
+
 
     <!-- Modal Mestre de Poções -->
     <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
@@ -1911,7 +2047,7 @@ document.addEventListener("DOMContentLoaded", () => {
      chancelaria/mestre de poções acima — só intercepta o clique nos
      hotspots para tocar a animação antes de deixá-lo prosseguir. -->
 <script type="module" src="capital.js"></script>
-
+<script src="browser-guard2.js"></script>
 <script>
 (function() {
     const style = document.createElement('style');

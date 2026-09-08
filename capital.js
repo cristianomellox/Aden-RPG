@@ -477,15 +477,16 @@ function initGuildVictoryModal() {
         if (vFlag) vFlag.setAttribute('src', flagSrc);
         if (vName) vName.textContent = guildName;
         if (vMsg) {
-            vMsg.innerHTML = `A guilda <strong>${guildName}</strong> venceu a última batalha de guilda em <strong>${cityDisplayName}</strong> e se tornou a Guilda Regente!`;
+            vMsg.innerHTML = `A guilda <strong style="color:#ffd77a;">${guildName}</strong> venceu a última batalha de guilda em <strong style="color:#ffd77a;">${cityDisplayName}</strong> e se tornou a Guilda Regente!`;
         }
 
         // Reinicia a animação de entrada mesmo se o modal for aberto de novo.
         const content = modal.querySelector('.gv-content');
         if (content) {
+            const POP_ANIM = "gv-pop-in .55s cubic-bezier(.2,1.4,.4,1) both";
             content.style.animation = 'none';
             void content.offsetWidth; // força reflow
-            content.style.animation = '';
+            content.style.animation = POP_ANIM;
         }
 
         modal.style.display = 'flex';

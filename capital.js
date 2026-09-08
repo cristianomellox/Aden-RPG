@@ -23,7 +23,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/capital.png'; // mesmo nome de arquivo — só troque o PNG no repositório
 
-let camYaw = 0, camPitch = -6, camFov = 75;
+let camYaw = 0, camPitch = -6, camFov = 110;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
 const FOV_MIN = 75, FOV_MAX = 110;   // limites de zoom normal (arrastar/pinch)
 const PITCH_LIMIT = 89;

@@ -1,26 +1,4 @@
-// ══════════════════════════════════════════════════════════════════════
-// POSTFX — Camada de pós-processamento WebGL (Three.js) para o skybox 360°
-// ──────────────────────────────────────────────────────────────────────
-// Pipeline real (roda na GPU via WebGLRenderer + EffectComposer):
-//   RenderPass → UnrealBloomPass (brilho/bloom) → ColorGradePass (tint
-//   ambiente + contraste + saturação + vinheta) → MotionBlurPass (borrão
-//   direcional proporcional à velocidade angular real da câmera) → OutputPass.
-//
-// Sobre limites honestos: isto roda sobre uma única esfera (skybox), então
-// Global Illumination "de verdade" (luz que bate e ricocheteia entre
-// superfícies) e SSAO "de verdade" (oclusão calculada a partir de
-// profundidade/normais de uma cena 3D complexa) não fazem sentido físico
-// aqui — não existe geometria suficiente pra isso simular algo visível.
-// Em vez de fingir algo que não existiria, este módulo entrega o que É
-// real e visível: "iluminação ambiente global" na forma de um tint de cor
-// configurável (exatamente o que motores usam pra dar "mood" de cor geral
-// à cena), e compensa a falta de AO 3D reforçando o contato/vinheta na
-// camada 2D (sombras dos mobs, escurecimento nas bordas) — ver
-// applyDomLayer() mais abaixo, chamado a partir do mesmo config.
-// ══════════════════════════════════════════════════════════════════════
 
-// Usa os specifiers "three" e "three/addons/" do import map (declarado no
-// <head> de cada página, antes do <script type="module">). Isso é necessário
 // porque os módulos de postprocessing do Three.js importam 'three' internamente
 // como specifier nu — sem o import map, o navegador não consegue resolver isso.
 import * as THREE from 'three';
@@ -36,7 +14,7 @@ export const POSTFX_CONFIG = {
     // foi desenhado com base no bloom da Unreal Engine).
     bloom: {
         enabled: true,
-        strength: 0.55,   // intensidade do brilho
+        strength: 0.65,   // intensidade do brilho
         radius: 0.55,     // o quanto o brilho "espalha"
         threshold: 0.72,  // só pixels mais claros que isso brilham (0-1)
     },
@@ -47,7 +25,7 @@ export const POSTFX_CONFIG = {
         tintStrength: 0.16,        // 0 = neutro, 1 = tint total
         contrast: 1.04,
         saturation: 1.2,
-        vignetteStrength: 0.26,
+        vignetteStrength: 0.22,
     },
     // Cintilação automática (sparkle) em áreas azuis/brilhantes já renderizadas —
     // detecta água, cristais, magia etc. pela COR do pixel final, sem precisar
@@ -56,8 +34,8 @@ export const POSTFX_CONFIG = {
         enabled: true,
         threshold: 0.15,   // quanto o azul precisa "dominar" pra contar como água/cristal
         brightMin: 0.22,   // brilho mínimo do pixel pra poder cintilar
-        intensity: 0.1,    // força do brilho do sparkle
-        density: 120.0,    // quantos pontos de sparkle "cabem" na tela (maior = mais pontos, menores)
+        intensity: 0.5,    // força do brilho do sparkle
+        density: 420.0,    // quantos pontos de sparkle "cabem" na tela (maior = mais pontos, menores)
         speed: 0.7,        // velocidade da cintilação ao longo do tempo
         color: [0.65, 0.88, 1.0],
     },
@@ -67,18 +45,18 @@ export const POSTFX_CONFIG = {
     lensFlare: {
         enabled: true,
         threshold: 0.8,     // só pixels bem claros geram flare
-        intensity: 0.15,    // força geral do efeito
+        intensity: 0.55,    // força geral do efeito
         ghosts: 5,          // nº de "fantasmas" (reflexos) ao longo da linha até o centro
-        streak: 0.2,        // força da estria horizontal anamórfica
+        streak: 0.7,        // força da estria horizontal anamórfica
         chromaticAberration: 0.006,
     },
-   
+  
     // Motion blur direcional, proporcional à velocidade angular real da câmera.
     motionBlur: {
         enabled: true,
         sensitivity: 5.2,   // quanto maior, mais sensível a giros rápidos
-        maxAmount: 0.8,   // borrão máximo (em UV, ~ % da tela)
-        smoothing: 0.45,    // suavização entre frames (0-1, maior = mais suave)
+        maxAmount: 0.045,   // borrão máximo (em UV, ~ % da tela)
+        smoothing: 0.35,    // suavização entre frames (0-1, maior = mais suave)
     },
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo
     // parecer uma cena só, e reforça sombra de contato (fake AO) + vinheta.

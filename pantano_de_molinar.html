@@ -142,8 +142,21 @@ transform-origin:center center;}
 
 .mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
 .mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
-.mob-avatar{width:105px;height:140px;transform-origin:bottom center;will-change:transform;}
-.mob-shadow{position:absolute;left:50%;bottom:1px;width:86px;height:26px;transform:translateX(-50%);background:radial-gradient(ellipse at center, rgba(0,0,0,.9) 0%, rgba(0,0,0,.62) 32%, rgba(0,0,0,.3) 55%, rgba(0,0,0,0) 78%);filter:blur(1.5px);mix-blend-mode:multiply;pointer-events:none;z-index:0;will-change:transform,opacity;}
+.mob-avatar{width:115px;height:150px;transform-origin:bottom center;
+will-change: transform, filter;;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.85)) 
+            drop-shadow(0px 0px 8px rgba(150, 255, 150, 0.15)) 
+            brightness(1.15) 
+            saturate(1.15);
+}
+.mob-shadow{position:absolute;left:50%;bottom:1px;width:86px;height:26px;transform:translateX(-50%);background: radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0.75) 32%, rgba(0,0,0,0.4) 55%, rgba(0,0,0,0) 78%);
+    filter: blur(1.5px);
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    z-index: 0;
+    will-change: transform, opacity;
+
+}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}
@@ -217,7 +230,20 @@ transform-origin:center center;}
 @keyframes mob-death-fade{0%{opacity:1;transform:scale(1);}60%{opacity:.3;transform:scale(0.7) translateY(8px);}100%{opacity:0;transform:scale(0.4) translateY(18px);}}
 @keyframes mob-respawn{0%{opacity:0;transform:scale(0.3) translateY(-14px);}60%{opacity:.9;transform:scale(1.12) translateY(-3px);}100%{opacity:1;transform:scale(1) translateY(0);}}
 @keyframes player-lunge{0%{transform:scale(1);}40%{transform:scale(1.18) rotate(-6deg);}70%{transform:scale(1.08) rotate(3deg);}100%{transform:scale(1) rotate(0deg);}}
-@keyframes mob-impact-flash{0%,100%{filter:brightness(1);}35%{filter:brightness(2.4) saturate(0.2);}}
+@keyframes mob-impact-flash {
+    0%, 100% {
+        filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.85)) 
+                drop-shadow(0px 0px 8px rgba(150, 255, 150, 0.15)) 
+                brightness(1.15) 
+                saturate(1.15);
+    }
+    35% {
+      filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.85)) 
+                drop-shadow(0px 0px 8px rgba(150, 255, 150, 0.15)) 
+                brightness(2.6) 
+                saturate(0.2);
+    }
+}
 .mob-dying .mob-avatar{animation:mob-death-fade 0.85s ease-out forwards!important;}
 .mob-dying .mob-name{animation:mob-death-fade 0.65s ease-out forwards!important;}
 .mob-respawning .mob-avatar{animation:mob-respawn 0.7s cubic-bezier(.22,1,.36,1) forwards!important;}

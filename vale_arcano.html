@@ -241,22 +241,7 @@ background: radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0.75
 @keyframes mob-death-fade{0%{opacity:1;transform:scale(1);}60%{opacity:.3;transform:scale(0.7) translateY(8px);}100%{opacity:0;transform:scale(0.4) translateY(18px);}}
 @keyframes mob-respawn{0%{opacity:0;transform:scale(0.3) translateY(-14px);}60%{opacity:.9;transform:scale(1.12) translateY(-3px);}100%{opacity:1;transform:scale(1) translateY(0);}}
 @keyframes player-lunge{0%{transform:scale(1);}40%{transform:scale(1.18) rotate(-6deg);}70%{transform:scale(1.08) rotate(3deg);}100%{transform:scale(1) rotate(0deg);}}
-
-@keyframes mob-impact-flash {
-    0%, 100% {
-        filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.85)) 
-                drop-shadow(0px 0px 8px rgba(150, 255, 150, 0.15)) 
-                brightness(1.15) 
-                saturate(1.15);
-    }
-    35% {
-filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.85)) 
-                drop-shadow(0px 0px 8px rgba(150, 255, 150, 0.15)) 
-                brightness(2.6) 
-                saturate(0.2);
-    }
-}
-
+@keyframes mob-impact-flash{0%,100%{filter:brightness(1);}35%{filter:brightness(2.4) saturate(0.2);}}
 .mob-dying .mob-avatar{animation:mob-death-fade 0.85s ease-out forwards!important;}
 .mob-dying .mob-name{animation:mob-death-fade 0.65s ease-out forwards!important;}
 .mob-dying .mob-shadow{animation:mob-shadow-fade-out 0.7s ease-out forwards!important;}

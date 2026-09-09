@@ -45,19 +45,12 @@ export const POSTFX_CONFIG = {
     lensFlare: {
         enabled: true,
         threshold: 0.8,     // só pixels bem claros geram flare
-        intensity: 0.55,    // força geral do efeito
-        ghosts: 5,          // nº de "fantasmas" (reflexos) ao longo da linha até o centro
-        streak: 0.7,        // força da estria horizontal anamórfica
+        intensity: 0.40,    // força geral do efeito
+        ghosts: 3,          // nº de "fantasmas" (reflexos) ao longo da linha até o centro
+        streak: 0.5,        // força da estria horizontal anamórfica
         chromaticAberration: 0.006,
     },
   
-    // Motion blur direcional, proporcional à velocidade angular real da câmera.
-    motionBlur: {
-        enabled: true,
-        sensitivity: 5.2,   // quanto maior, mais sensível a giros rápidos
-        maxAmount: 0.045,   // borrão máximo (em UV, ~ % da tela)
-        smoothing: 0.35,    // suavização entre frames (0-1, maior = mais suave)
-    },
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo
     // parecer uma cena só, e reforça sombra de contato (fake AO) + vinheta.
     domLayer: {

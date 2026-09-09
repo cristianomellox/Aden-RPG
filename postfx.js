@@ -36,7 +36,7 @@ export const POSTFX_CONFIG = {
     // foi desenhado com base no bloom da Unreal Engine).
     bloom: {
         enabled: true,
-        strength: 0.75,   // intensidade do brilho
+        strength: 0.55,   // intensidade do brilho
         radius: 0.65,     // o quanto o brilho "espalha"
         threshold: 0.72,  // só pixels mais claros que isso brilham (0-1)
     },
@@ -53,7 +53,7 @@ export const POSTFX_CONFIG = {
     motionBlur: {
         enabled: true,
         sensitivity: 5.2,   // quanto maior, mais sensível a giros rápidos
-        maxAmount: 0.045,   // borrão máximo (em UV, ~ % da tela)
+        maxAmount: 0.2,   // borrão máximo (em UV, ~ % da tela)
         smoothing: 0.45,    // suavização entre frames (0-1, maior = mais suave)
     },
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo

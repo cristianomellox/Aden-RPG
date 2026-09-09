@@ -2958,7 +2958,7 @@ function initMobAvatarBreathing() {
                 const translateXpx = sway * 0.3;
 
                 // --- Deslocamento: virada suave (espelhamento), inclinação e squash/stretch ---
-                st.facing += (st.facingTarget - st.facing) * 0.006 * dt;
+                st.facing = st.facingTarget;
 
                 st.leanCurrent += (st.leanTarget - st.leanCurrent) * 0.006 * dt;
 

@@ -1079,7 +1079,7 @@ function enableMapInteraction() {
 // Velocidade de caminhada constante (px/s) — a duração do deslocamento
 // agora é calculada pela distância, então perto ou longe o mob sempre
 // parece andar no mesmo ritmo, em vez de deslizar rápido nos trechos longos.
-const MOB_WALK_SPEED_PX_S = 55;
+const MOB_WALK_SPEED_PX_S = 40;
 const MOB_WALK_MIN_MS = 900;
 const MOB_WALK_MAX_MS = 10000;
 const MOB_MIN_DIST_PX = 40; // distância mínima entre mobs para evitar que se esbarrem
@@ -2957,7 +2957,7 @@ function initMobAvatarBreathing() {
                 const translateXpx = sway * 0.3;
 
                 // --- Deslocamento: virada suave (espelhamento), inclinação e squash/stretch ---
-                st.facing += (st.facingTarget - st.facing) * 0.006 * dt;
+                st.facing = st.facingTarget;
 
                 st.leanCurrent += (st.leanTarget - st.leanCurrent) * 0.006 * dt;
 

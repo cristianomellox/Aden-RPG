@@ -56,8 +56,8 @@ export const POSTFX_CONFIG = {
         enabled: true,
         threshold: 0.15,   // quanto o azul precisa "dominar" pra contar como água/cristal
         brightMin: 0.22,   // brilho mínimo do pixel pra poder cintilar
-        intensity: 0.2,    // força do brilho do sparkle
-        density: 420.0,    // quantos pontos de sparkle "cabem" na tela (maior = mais pontos, menores)
+        intensity: 0.1,    // força do brilho do sparkle
+        density: 120.0,    // quantos pontos de sparkle "cabem" na tela (maior = mais pontos, menores)
         speed: 0.7,        // velocidade da cintilação ao longo do tempo
         color: [0.65, 0.88, 1.0],
     },
@@ -67,9 +67,9 @@ export const POSTFX_CONFIG = {
     lensFlare: {
         enabled: true,
         threshold: 0.8,     // só pixels bem claros geram flare
-        intensity: 0.35,    // força geral do efeito
+        intensity: 0.15,    // força geral do efeito
         ghosts: 5,          // nº de "fantasmas" (reflexos) ao longo da linha até o centro
-        streak: 0.5,        // força da estria horizontal anamórfica
+        streak: 0.2,        // força da estria horizontal anamórfica
         chromaticAberration: 0.006,
     },
     // Poeira mágica flutuante — partículas 100% procedurais (sem imagem externa),
@@ -79,11 +79,11 @@ export const POSTFX_CONFIG = {
         enabled: true,
         count: 160,
         color: [0.72, 0.88, 1.0],
-        size: 26.0,          // tamanho base do ponto (em pixels, antes da atenuação por distância)
+        size: 06.0,          // tamanho base do ponto (em pixels, antes da atenuação por distância)
         opacity: 0.55,
         driftSpeed: 1.6,     // velocidade de flutuação
         radiusMin: 25,
-        radiusMax: 100,
+        radiusMax: 40,
     },
     // Motion blur direcional, proporcional à velocidade angular real da câmera.
     motionBlur: {

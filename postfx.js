@@ -1,27 +1,4 @@
-// ══════════════════════════════════════════════════════════════════════
-// POSTFX — Camada de pós-processamento WebGL (Three.js) para o skybox 360°
-// ──────────────────────────────────────────────────────────────────────
-// Pipeline real (roda na GPU via WebGLRenderer + EffectComposer):
-//   RenderPass → UnrealBloomPass (brilho/bloom) → ColorGradePass (tint
-//   ambiente + contraste + saturação + vinheta) → MotionBlurPass (borrão
-//   direcional proporcional à velocidade angular real da câmera) → OutputPass.
-//
-// Sobre limites honestos: isto roda sobre uma única esfera (skybox), então
-// Global Illumination "de verdade" (luz que bate e ricocheteia entre
-// superfícies) e SSAO "de verdade" (oclusão calculada a partir de
-// profundidade/normais de uma cena 3D complexa) não fazem sentido físico
-// aqui — não existe geometria suficiente pra isso simular algo visível.
-// Em vez de fingir algo que não existiria, este módulo entrega o que É
-// real e visível: "iluminação ambiente global" na forma de um tint de cor
-// configurável (exatamente o que motores usam pra dar "mood" de cor geral
-// à cena), e compensa a falta de AO 3D reforçando o contato/vinheta na
-// camada 2D (sombras dos mobs, escurecimento nas bordas) — ver
-// applyDomLayer() mais abaixo, chamado a partir do mesmo config.
-// ══════════════════════════════════════════════════════════════════════
 
-// Usa os specifiers "three" e "three/addons/" do import map (declarado no
-// <head> de cada página, antes do <script type="module">). Isso é necessário
-// porque os módulos de postprocessing do Three.js importam 'three' internamente
 // como specifier nu — sem o import map, o navegador não consegue resolver isso.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -49,13 +26,7 @@ export const POSTFX_CONFIG = {
         saturation: 1.2,
         vignetteStrength: 0.22,
     },
-    // Motion blur direcional, proporcional à velocidade angular real da câmera.
-    motionBlur: {
-        enabled: true,
-        sensitivity: 6.2,   // quanto maior, mais sensível a giros rápidos
-        maxAmount: 0.5,   // borrão máximo (em UV, ~ % da tela)
-        smoothing: 0.45,    // suavização entre frames (0-1, maior = mais suave)
-    },
+
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo
     // parecer uma cena só, e reforça sombra de contato (fake AO) + vinheta.
     domLayer: {

@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient.js';
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { initPostFX } from './postfx.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
@@ -801,6 +802,16 @@ function initSkybox() {
 
     _sky = { scene, camera, renderer, canvas, cont };
 
+    // Pós-processamento (bloom, iluminação ambiente/contraste/saturação, motion blur).
+    // Envolvido em try/catch: se algo falhar (navegador sem suporte, erro de rede no
+    // módulo, etc.), o jogo continua funcionando normalmente sem os efeitos extras.
+    try {
+        _sky.pfx = initPostFX({ scene, camera, renderer, cont });
+    } catch (e) {
+        console.error('[PostFX] Falha ao iniciar pós-processamento, usando renderização padrão:', e);
+        _sky.pfx = null;
+    }
+
     updateCameraLook();
 
     function onResize() {
@@ -808,11 +819,24 @@ function initSkybox() {
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
+        if (_sky.pfx) {
+            try { _sky.pfx.resize(w, h); } catch (e) { console.error('[PostFX] Erro no resize:', e); }
+        }
     }
     window.addEventListener('resize', onResize);
 
     (function loop() {
-        renderer.render(scene, camera);
+        if (_sky.pfx) {
+            try {
+                _sky.pfx.render(scene, camera);
+            } catch (e) {
+                console.error('[PostFX] Erro ao renderizar, desativando pós-processamento:', e);
+                _sky.pfx = null;
+                renderer.render(scene, camera);
+            }
+        } else {
+            renderer.render(scene, camera);
+        }
         updateAllSpotProjections();
         requestAnimationFrame(loop);
     })();

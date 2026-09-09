@@ -79,7 +79,7 @@ export const POSTFX_CONFIG = {
         enabled: true,
         count: 160,
         color: [0.72, 0.88, 1.0],
-        size: 06.0,          // tamanho base do ponto (em pixels, antes da atenuação por distância)
+        size: 11.0,          // tamanho base do ponto (em pixels, antes da atenuação por distância)
         opacity: 0.55,
         driftSpeed: 1.6,     // velocidade de flutuação
         radiusMin: 25,

@@ -36,8 +36,8 @@ export const POSTFX_CONFIG = {
     // foi desenhado com base no bloom da Unreal Engine).
     bloom: {
         enabled: true,
-        strength: 0.55,   // intensidade do brilho
-        radius: 0.55,     // o quanto o brilho "espalha"
+        strength: 0.75,   // intensidade do brilho
+        radius: 0.65,     // o quanto o brilho "espalha"
         threshold: 0.72,  // só pixels mais claros que isso brilham (0-1)
     },
     // "Iluminação ambiente global" (tint de cor) + contraste/saturação + vinheta.
@@ -45,16 +45,16 @@ export const POSTFX_CONFIG = {
         enabled: true,
         tint: [1.0, 0.965, 0.9],  // cor da luz ambiente (levemente quente/dourada)
         tintStrength: 0.16,        // 0 = neutro, 1 = tint total
-        contrast: 1.08,
-        saturation: 1.2,
-        vignetteStrength: 0.32,
+        contrast: 0.5,
+        saturation: 1.0,
+        vignetteStrength: 0.22,
     },
     // Motion blur direcional, proporcional à velocidade angular real da câmera.
     motionBlur: {
         enabled: true,
         sensitivity: 5.2,   // quanto maior, mais sensível a giros rápidos
-        maxAmount: 0.045,   // borrão máximo (em UV, ~ % da tela)
-        smoothing: 0.35,    // suavização entre frames (0-1, maior = mais suave)
+        maxAmount: 0.2,   // borrão máximo (em UV, ~ % da tela)
+        smoothing: 0.45,    // suavização entre frames (0-1, maior = mais suave)
     },
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo
     // parecer uma cena só, e reforça sombra de contato (fake AO) + vinheta.

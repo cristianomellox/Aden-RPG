@@ -318,6 +318,15 @@ transform-origin:center center;}
     90%  { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -20px); }
 }
+.mob-wrapper {
+    filter: none !important; /* não herda o grading do fundo */
+}
+.mob-avatar {
+    filter:
+        drop-shadow(0 0 2px rgba(0,0,0,.85))
+        drop-shadow(0 0 5px rgba(0,0,0,.55))
+        drop-shadow(0 3px 6px rgba(0,0,0,.4));
+}
 </style>
 <body>
 

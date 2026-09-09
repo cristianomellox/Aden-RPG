@@ -53,7 +53,7 @@ export const POSTFX_CONFIG = {
     motionBlur: {
         enabled: true,
         sensitivity: 5.2,   // quanto maior, mais sensível a giros rápidos
-        maxAmount: 0.2,   // borrão máximo (em UV, ~ % da tela)
+        maxAmount: 0.045,   // borrão máximo (em UV, ~ % da tela)
         smoothing: 0.45,    // suavização entre frames (0-1, maior = mais suave)
     },
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo

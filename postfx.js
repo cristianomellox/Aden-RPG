@@ -36,7 +36,7 @@ export const POSTFX_CONFIG = {
     // foi desenhado com base no bloom da Unreal Engine).
     bloom: {
         enabled: true,
-        strength: 0.65,   // intensidade do brilho
+        strength: 0.55,   // intensidade do brilho
         radius: 0.55,     // o quanto o brilho "espalha"
         threshold: 0.72,  // só pixels mais claros que isso brilham (0-1)
     },
@@ -56,7 +56,7 @@ export const POSTFX_CONFIG = {
         enabled: true,
         threshold: 0.15,   // quanto o azul precisa "dominar" pra contar como água/cristal
         brightMin: 0.22,   // brilho mínimo do pixel pra poder cintilar
-        intensity: 0.5,    // força do brilho do sparkle
+        intensity: 0.2,    // força do brilho do sparkle
         density: 420.0,    // quantos pontos de sparkle "cabem" na tela (maior = mais pontos, menores)
         speed: 0.7,        // velocidade da cintilação ao longo do tempo
         color: [0.65, 0.88, 1.0],
@@ -67,9 +67,9 @@ export const POSTFX_CONFIG = {
     lensFlare: {
         enabled: true,
         threshold: 0.8,     // só pixels bem claros geram flare
-        intensity: 0.55,    // força geral do efeito
+        intensity: 0.35,    // força geral do efeito
         ghosts: 5,          // nº de "fantasmas" (reflexos) ao longo da linha até o centro
-        streak: 0.7,        // força da estria horizontal anamórfica
+        streak: 0.5,        // força da estria horizontal anamórfica
         chromaticAberration: 0.006,
     },
     // Poeira mágica flutuante — partículas 100% procedurais (sem imagem externa),
@@ -77,18 +77,18 @@ export const POSTFX_CONFIG = {
     // fazerem parte da cena 3D renderizada.
     dust: {
         enabled: true,
-        count: 220,
+        count: 160,
         color: [0.72, 0.88, 1.0],
-        size: 46.0,          // tamanho base do ponto (em pixels, antes da atenuação por distância)
+        size: 26.0,          // tamanho base do ponto (em pixels, antes da atenuação por distância)
         opacity: 0.55,
         driftSpeed: 1.6,     // velocidade de flutuação
         radiusMin: 25,
-        radiusMax: 170,
+        radiusMax: 100,
     },
     // Motion blur direcional, proporcional à velocidade angular real da câmera.
     motionBlur: {
         enabled: true,
-        sensitivity: 6.2,   // quanto maior, mais sensível a giros rápidos
+        sensitivity: 5.2,   // quanto maior, mais sensível a giros rápidos
         maxAmount: 0.8,   // borrão máximo (em UV, ~ % da tela)
         smoothing: 0.45,    // suavização entre frames (0-1, maior = mais suave)
     },

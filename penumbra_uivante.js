@@ -1061,7 +1061,8 @@ const MOB_WALK_MIN_MS = 900;
 const MOB_WALK_MAX_MS = 10000;
 const MOB_MIN_DIST_PX = 40; // distância mínima entre mobs para evitar que se esbarrem
 const MOB_HITBOX_W = 70, MOB_HITBOX_H = 90;
-const MOB_AVOID_MARGIN_PX = MOB_MIN_DIST_PX + 8; // folga extra usada só pra decidir se o caminho reto passa perto demais de outro mob
+const MOB_AVOID_MARGIN_PX = MOB_MIN_DIST_PX + 8; // folga extra usada só pra decidir se um trecho do caminho passa perto demais de outro mob
+const MOB_MAX_DETOURS = 4; // limite de waypoints de desvio numa mesma caminhada (evita ficar recalculando pra sempre num spot muito cheio)
 function _mobDistSq(aLeft,aTop,bLeft,bTop){const acx=aLeft+MOB_HITBOX_W/2,acy=aTop+MOB_HITBOX_H/2;const bcx=bLeft+MOB_HITBOX_W/2,bcy=bTop+MOB_HITBOX_H/2;const dx=acx-bcx,dy=acy-bcy;return dx*dx+dy*dy;}
 function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
 function _pickMobPosition(w,h,group,self){const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);let best=null,bestScore=-1;for(let tries=0;tries<24;tries++){const left=Math.random()*maxLeft,top=Math.random()*maxTop;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>=MOB_MIN_DIST_PX)return{left,top};if(minDist>bestScore){bestScore=minDist;best={left,top};}}if(best)return best;const cols=6,rows=6;let gLeft=0,gTop=0,gScore=-1;for(let r=0;r<=rows;r++){for(let c=0;c<=cols;c++){const left=(maxLeft*c)/cols,top=(maxTop*r)/rows;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>gScore){gScore=minDist;gLeft=left;gTop=top;}}}return{left:gLeft,top:gTop};}
@@ -1069,40 +1070,62 @@ function _pickMobPosition(w,h,group,self){const maxLeft=Math.max(0,w-MOB_HITBOX_
 function _mobPointSegDist(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((px-ax)*dx+(py-ay)*dy)/lenSq:0;t=Math.max(0,Math.min(1,t));const cx=ax+dx*t,cy=ay+dy*t;return Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));}
 // Menor distância de um único trecho AB até qualquer outro mob do grupo.
 function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
-// Menor distância considerando os dois trechos de um caminho com desvio (origem→waypoint→destino).
-function _mobPathMinClearance(oldLeft,oldTop,waypoint,newLeft,newTop,group,self){const ax=oldLeft+MOB_HITBOX_W/2,ay=oldTop+MOB_HITBOX_H/2;const wx=waypoint.left+MOB_HITBOX_W/2,wy=waypoint.top+MOB_HITBOX_H/2;const bx=newLeft+MOB_HITBOX_W/2,by=newTop+MOB_HITBOX_H/2;return Math.min(_mobSegMinClearance(ax,ay,wx,wy,group,self),_mobSegMinClearance(wx,wy,bx,by,group,self));}
-// Gera os dois pontos de desvio possíveis (um pra cada lado do trajeto), contornando o obstáculo (ox,oy).
-function _mobDetourCandidates(ax,ay,bx,by,ox,oy,margin){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((ox-ax)*dx+(oy-ay)*dy)/lenSq:0.5;t=Math.max(0.2,Math.min(0.8,t));const cx=ax+dx*t,cy=ay+dy*t;const len=Math.sqrt(lenSq)||1;const px=-dy/len,py=dx/len;const distToObs=Math.sqrt((ox-cx)*(ox-cx)+(oy-cy)*(oy-cy));const push=Math.max(margin-distToObs,0)+margin*0.55;return[{left:cx+px*push-MOB_HITBOX_W/2,top:cy+py*push-MOB_HITBOX_H/2},{left:cx-px*push-MOB_HITBOX_W/2,top:cy-py*push-MOB_HITBOX_H/2}];}
-// Verifica se o trajeto reto de "self" até (newLeft,newTop) passaria perto demais de outro mob do grupo;
-// se sim, testa um waypoint de desvio pra cada lado do caminho e só usa o desvio se ele realmente
-// deixar mais espaço livre (considerando os dois trechos) do que seguir reto — nunca piora a rota.
-function _mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,self){
-    const straight=[{left:newLeft,top:newTop}];
-    if(!group||!group.length)return straight;
-    const ax=oldLeft+MOB_HITBOX_W/2,ay=oldTop+MOB_HITBOX_H/2;
-    const bx=newLeft+MOB_HITBOX_W/2,by=newTop+MOB_HITBOX_H/2;
-    const straightClearance=_mobSegMinClearance(ax,ay,bx,by,group,self);
-    if(straightClearance>=MOB_AVOID_MARGIN_PX)return straight; // já tem folga suficiente, não precisa desviar
-    let closest=null,closestDist=Infinity;
-    for(const other of group){
-        if(other===self)continue;
-        const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};
-        const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;
-        const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);
-        if(d<closestDist){closestDist=d;closest={ox,oy};}
+// Menor distância ao longo do caminho INTEIRO (origem passando por cada waypoint até o destino).
+function _mobFullPathClearance(oldLeft,oldTop,path,group,self){let curLeft=oldLeft,curTop=oldTop,min=Infinity;for(const p of path){const ax=curLeft+MOB_HITBOX_W/2,ay=curTop+MOB_HITBOX_H/2;const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;const c=_mobSegMinClearance(ax,ay,bx,by,group,self);if(c<min)min=c;curLeft=p.left;curTop=p.top;}return min;}
+// Acha, ao longo do caminho inteiro, o trecho que passa mais perto de algum outro mob (abaixo da folga mínima).
+// Retorna o índice do trecho (no array "path") e o obstáculo responsável, ou null se o caminho já está livre.
+function _mobFindWorstSegment(oldLeft,oldTop,path,group,self){
+    let worstIdx=-1,worstObstacle=null,worstDist=MOB_AVOID_MARGIN_PX;
+    let curLeft=oldLeft,curTop=oldTop;
+    for(let i=0;i<path.length;i++){
+        const p=path[i];
+        const ax=curLeft+MOB_HITBOX_W/2,ay=curTop+MOB_HITBOX_H/2;
+        const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;
+        for(const other of group){
+            if(other===self)continue;
+            const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};
+            const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;
+            const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);
+            if(d<worstDist){worstDist=d;worstIdx=i;worstObstacle={ox,oy};}
+        }
+        curLeft=p.left;curTop=p.top;
     }
-    if(!closest)return straight;
-    const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);
-    const candidates=_mobDetourCandidates(ax,ay,bx,by,closest.ox,closest.oy,MOB_AVOID_MARGIN_PX)
-        .map(c=>({left:Math.min(maxLeft,Math.max(0,c.left)),top:Math.min(maxTop,Math.max(0,c.top))}));
-    let bestWaypoint=null,bestClearance=straightClearance; // só troca se realmente melhorar em relação à rota reta
-    for(const cand of candidates){
-        const clearance=_mobPathMinClearance(oldLeft,oldTop,cand,newLeft,newTop,group,self);
-        if(clearance>bestClearance){bestClearance=clearance;bestWaypoint=cand;}
-    }
-    return bestWaypoint?[bestWaypoint,{left:newLeft,top:newTop}]:straight;
+    return worstIdx===-1?null:{idx:worstIdx,obstacle:worstObstacle};
 }
-// Anda por um ou mais pontos em sequência (waypoint de desvio + destino final), respeitando a
+// Gera os dois pontos de desvio possíveis (um pra cada lado do trajeto), contornando o obstáculo (ox,oy).
+function _mobDetourCandidates(ax,ay,bx,by,ox,oy,margin){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((ox-ax)*dx+(oy-ay)*dy)/lenSq:0.5;t=Math.max(0.2,Math.min(0.8,t));const cx=ax+dx*t,cy=ay+dy*t;const len=Math.sqrt(lenSq)||1;const px=-dy/len,py=dx/len;const distToObs=Math.sqrt((ox-cx)*(ox-cx)+(oy-cy)*(oy-cy));const basePush=Math.max(margin-distToObs,0)+margin*0.55;const out=[];for(const m of[1,1.8,2.8]){const push=basePush*m;out.push({left:cx+px*push-MOB_HITBOX_W/2,top:cy+py*push-MOB_HITBOX_H/2});out.push({left:cx-px*push-MOB_HITBOX_W/2,top:cy-py*push-MOB_HITBOX_H/2});}return out;}
+// Monta o caminho de "self" até (newLeft,newTop) desviando de outros mobs. Funciona em rodadas: acha o
+// trecho que mais se aproxima de algum mob, insere um waypoint de desvio ali (testando os dois lados e
+// ficando com o que deixa mais espaço livre no caminho INTEIRO), e repete — assim, se o desvio escolhido
+// esbarrar em OUTRO mob mais adiante, a próxima rodada detecta e ajusta esse novo trecho também.
+// Só aceita cada novo waypoint se ele realmente melhorar a folga total; nunca deixa o caminho pior que
+// a rota anterior, e para depois de MOB_MAX_DETOURS tentativas pra não recalcular pra sempre.
+function _mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,self){
+    let path=[{left:newLeft,top:newTop}];
+    if(!group||!group.length)return path;
+    const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);
+    for(let iter=0;iter<MOB_MAX_DETOURS;iter++){
+        const worst=_mobFindWorstSegment(oldLeft,oldTop,path,group,self);
+        if(!worst)break; // caminho inteiro já está livre, com folga suficiente de todos os mobs
+        const segFrom=worst.idx===0?{left:oldLeft,top:oldTop}:path[worst.idx-1];
+        const segTo=path[worst.idx];
+        const ax=segFrom.left+MOB_HITBOX_W/2,ay=segFrom.top+MOB_HITBOX_H/2;
+        const bx=segTo.left+MOB_HITBOX_W/2,by=segTo.top+MOB_HITBOX_H/2;
+        const candidates=_mobDetourCandidates(ax,ay,bx,by,worst.obstacle.ox,worst.obstacle.oy,MOB_AVOID_MARGIN_PX)
+            .map(c=>({left:Math.min(maxLeft,Math.max(0,c.left)),top:Math.min(maxTop,Math.max(0,c.top))}));
+        const currentClearance=_mobFullPathClearance(oldLeft,oldTop,path,group,self);
+        let bestCandidate=null,bestClearance=currentClearance;
+        for(const cand of candidates){
+            const trialPath=path.slice(0,worst.idx).concat([cand],path.slice(worst.idx));
+            const clearance=_mobFullPathClearance(oldLeft,oldTop,trialPath,group,self);
+            if(clearance>bestClearance){bestClearance=clearance;bestCandidate=cand;}
+        }
+        if(!bestCandidate)break; // nenhum dos dois lados melhora a situação — mantém o caminho como está
+        path=path.slice(0,worst.idx).concat([bestCandidate],path.slice(worst.idx));
+    }
+    return path;
+}
+// Anda por um ou mais pontos em sequência (waypoints de desvio + destino final), respeitando a
 // velocidade constante do mob e disparando o bounce de passada a cada trecho. Retorna a duração total (ms).
 function _mobWalkPath(el,img,startLeft,startTop,points){
     let curLeft=startLeft,curTop=startTop,totalDist=0;

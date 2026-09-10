@@ -563,7 +563,7 @@ const PM_NPC_PROXY_ID    = 'mdpNpcSpot'; // elemento DOM invisível — só rece
 
 // Onde o vendedor fica DENTRO do cenário 360° (mundo 3D, não a tela).
 const PM_NPC_SPOT = {
-    yaw: 0, pitch: -49,   // direção dele dentro do cenário — ajuste com ?debugSpots=1
+    yaw: 0, pitch: -54,   // direção dele dentro do cenário — ajuste com ?debugSpots=1
     distance: 250,       // distância dele até a câmera (unidades do mundo 3D)
     heightFrac: 0.42,    // fração da altura da tela que ele ocupa, calibrada no FOV de referência (PM_INITIAL_FOV)
 };

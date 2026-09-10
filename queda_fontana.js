@@ -2827,8 +2827,8 @@ function _mobBreathNewState() {
         //  - andando p/ os lados (sprite padrão, espelhado) → a alternância
         //    vira uma leve báscula frente/trás (rotateX com perspectiva),
         //    como o corpo "cabeceia" a cada passada, visto de perfil.
-        stepTiltZAmp: 2.6 + Math.random() * 1.6,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
-        stepTiltXAmp: 4.5 + Math.random() * 2.5,   // graus — báscula frente/trás (andar p/ os lados)
+        stepTiltZAmp: 1.8 + Math.random() * 1.1,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
+        stepTiltXAmp: 6.2 + Math.random() * 3.3,   // graus — báscula frente/trás (andar p/ os lados)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.

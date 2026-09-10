@@ -1446,7 +1446,7 @@ function injectOficinaStyles() {
 // 7 páginas de cidade.
 // ════════════════════════════════════════════════════════════════════════════
 
-const OF_SCENE_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/anao_oficina.webp'; // mesma imagem do fundo do modal da oficina
+const OF_SCENE_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/anao_oficina.png'; // mesma imagem do fundo do modal da oficina
 const OF_NPC_IMAGE_URL   = 'https://aden-rpg.pages.dev/assets/npc_ferreiro.webp';
 const OF_TUTORIAL_KEY    = 'ofTutorialSeen'; // sem sufixo de cidade: o Artesão viaja, o tutorial é o mesmo em qualquer lugar
 const OF_NPC_PROXY_ID    = 'ofNpcSpot'; // elemento DOM invisível — só recebe .click() sintético quando o raycaster acerta o sprite

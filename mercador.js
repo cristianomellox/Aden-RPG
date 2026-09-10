@@ -821,7 +821,7 @@ async function initRunicCoinsFromCache() {
 // ser tocado nas 7 páginas de cidade.
 // ════════════════════════════════════════════════════════════════════════════
 
-const MC_SCENE_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/mercador.webp'; // mesma imagem do fundo do modal da loja
+const MC_SCENE_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/mercador.png'; // mesma imagem do fundo do modal da loja
 const MC_NPC_IMAGE_URL   = 'https://aden-rpg.pages.dev/assets/npc_mercador.webp';
 const MC_TUTORIAL_KEY    = 'mcTutorialSeen'; // sem sufixo de cidade: o Mercador viaja, o tutorial é o mesmo em qualquer lugar
 const MC_NPC_PROXY_ID    = 'mcNpcSpot'; // elemento DOM invisível — só recebe .click() sintético quando o raycaster acerta o sprite

@@ -14,7 +14,7 @@ const CITY_LABELS = {
 };
 
 const EPOCH   = new Date('2025-01-01T01:00:00Z').getTime(); // +1h vs mercador
-const SLOT_MS = 24 * 60 * 60 * 1000;                        // 4 horas
+const SLOT_MS = 2 * 24 * 60 * 60 * 1000;                        // 2 dias
 
 function getOficinaState() {
     const now       = Date.now();
@@ -1457,7 +1457,7 @@ const OF_NPC_PROXY_ID    = 'ofNpcSpot'; // elemento DOM invisível — só receb
 // onde ele deveria ficar — aparece um tooltip com yaw/pitch. Copie os
 // números para cá.
 const OF_NPC_SPOT = {
-    yaw: 0, pitch: -54,
+    yaw: 5, pitch: -54,
     distance: 250,
     heightFrac: 0.34,
 };

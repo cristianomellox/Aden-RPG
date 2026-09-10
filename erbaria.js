@@ -2819,6 +2819,18 @@ function _mobBreathNewState() {
         stepPhase: Math.random() * Math.PI * 2,
         stepSpeed: 0.72 + Math.random() * 0.28,  // ciclos/seg (cada ciclo = 2 "passadas") — intervalo entre passadas um pouco maior (bounce menos acelerado)
         bobAmp: 1.0 + Math.random() * 0.7,        // px de subida no meio do passo (bem sutil)
+        // Inclinação de passada: alterna de sinal a cada passo (não em módulo,
+        // como o bounce), simulando a troca de apoio entre as pernas esquerda/
+        // direita. O eixo em que ela aparece depende da direção do mob:
+        //  - andando p/ cima ou p/ baixo (sprite frontal/de costas, sem
+        //    espelhamento) → a alternância vira uma leve báscula lateral
+        //    (rotação no eixo Z, esquerda/direita), como o quadril bascula
+        //    entre um pé e outro visto de frente.
+        //  - andando p/ os lados (sprite padrão, espelhado) → a alternância
+        //    vira uma leve báscula frente/trás (rotateX com perspectiva),
+        //    como o corpo "cabeceia" a cada passada, visto de perfil.
+        stepTiltZAmp: 2.6 + Math.random() * 1.6,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
+        stepTiltXAmp: 4.5 + Math.random() * 2.5,   // graus — báscula frente/trás (andar p/ os lados)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
@@ -2989,14 +3001,29 @@ function initMobAvatarBreathing() {
                 scaleY *= (1 - stepSquash);
                 scaleX *= (1 + stepSquash * 0.6);
 
-                const totalRotateDeg = rotateDeg + st.leanCurrent;
+                // Sinal alternado do mesmo ciclo do passo (positivo numa passada,
+                // negativo na seguinte) — é o que dá a alternância esquerda/
+                // direita (ou frente/trás) de um passo pro outro, em vez de uma
+                // inclinação sempre pro mesmo lado (o que ficava "robótico").
+                const stepSigned = Math.sin(st.stepPhase);
+                const stepTiltAmt = stepSigned * st.walkAmp;
+                const tiltZ = st.vertical ? stepTiltAmt * st.stepTiltZAmp : 0;
+                const tiltX = st.vertical ? 0 : stepTiltAmt * st.stepTiltXAmp;
+
+                const totalRotateDeg = rotateDeg + st.leanCurrent + tiltZ;
                 // O sprite vertical (_up/_down) já vem desenhado corretamente
                 // e não deve ser espelhado — só os sprites padrão
                 // (direita/esquerda) usam o scaleX negativo.
                 const scaleXFinal = scaleX * (st.vertical ? 1 : st.facing);
 
+                // perspective() no mesmo transform dá "profundidade" local ao
+                // elemento, permitindo o rotateX (báscula frente/trás) sem
+                // precisar de perspective no elemento pai. transform-origin
+                // já é bottom center, então ambas as básculas giram a partir
+                // dos "pés" do mob, como uma inclinação de caminhada real.
                 img.style.transform =
-                    `translateX(${translateXpx.toFixed(2)}px) translateY(${bobY.toFixed(2)}px) rotate(${totalRotateDeg.toFixed(2)}deg) ` +
+                    `perspective(600px) translateX(${translateXpx.toFixed(2)}px) translateY(${bobY.toFixed(2)}px) ` +
+                    `rotateX(${tiltX.toFixed(2)}deg) rotate(${totalRotateDeg.toFixed(2)}deg) ` +
                     `scale(${scaleXFinal.toFixed(4)}, ${scaleY.toFixed(4)})`;
 
                 // Sombra de contato: acompanha o "peso" do passo (achata/escurece

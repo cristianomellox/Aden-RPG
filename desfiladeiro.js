@@ -1080,10 +1080,10 @@ function enableMapInteraction() {
 // Velocidade de caminhada constante (px/s) — a duração do deslocamento
 // agora é calculada pela distância, então perto ou longe o mob sempre
 // parece andar no mesmo ritmo, em vez de deslizar rápido nos trechos longos.
-const MOB_WALK_SPEED_PX_S = 40;
+const MOB_WALK_SPEED_PX_S = 20;
 const MOB_WALK_MIN_MS = 900;
-const MOB_WALK_MAX_MS = 10000;
-const MOB_MIN_DIST_PX = 40; // distância mínima entre mobs para evitar que se esbarrem
+const MOB_WALK_MAX_MS = 15000;
+const MOB_MIN_DIST_PX = 60; // distância mínima entre mobs para evitar que se esbarrem
 const MOB_HITBOX_W = 70, MOB_HITBOX_H = 90;
 const MOB_AVOID_MARGIN_PX = MOB_MIN_DIST_PX + 8; // folga extra usada só pra decidir se um trecho do caminho passa perto demais de outro mob
 const MOB_MAX_DETOURS = 4; // limite de waypoints de desvio numa mesma caminhada (evita ficar recalculando pra sempre num spot muito cheio)
@@ -1178,7 +1178,7 @@ function _mobWalkPath(el,img,startLeft,startTop,points){
 function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group){el.__wanderPos={left:parseFloat(el.style.left)||0,top:parseFloat(el.style.top)||0};if(!group.includes(el))group.push(el);}const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;if(group)el.__wanderPos={left:newLeft,top:newTop};const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
-function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);const mobGroup=[];for(let i=0;i<5;i++){const wrap=document.createElement('div');wrap.className='mob-wrapper';const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);Object.assign(wrap.style,{left:_initPos.left+'px',top:_initPos.top+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const shadow=document.createElement('div');shadow.className='mob-shadow';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(shadow);wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000,mobGroup);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
+function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);const mobGroup=[];for(let i=0;i<8;i++){const wrap=document.createElement('div');wrap.className='mob-wrapper';const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);Object.assign(wrap.style,{left:_initPos.left+'px',top:_initPos.top+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const shadow=document.createElement('div');shadow.className='mob-shadow';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(shadow);wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000,mobGroup);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){
@@ -2828,7 +2828,7 @@ function _mobBreathNewState() {
         //  - andando p/ os lados (sprite padrão, espelhado) → a alternância
         //    vira uma leve báscula frente/trás (rotateX com perspectiva),
         //    como o corpo "cabeceia" a cada passada, visto de perfil.
-        stepTiltZAmp: 1.0 + Math.random() * 0.9,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
+        stepTiltZAmp: 0.5 + Math.random() * 0.5,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
         stepTiltXAmp: 6.2 + Math.random() * 3.3,   // graus — báscula frente/trás (andar p/ os lados)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o

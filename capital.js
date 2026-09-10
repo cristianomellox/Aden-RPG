@@ -590,12 +590,20 @@ function createPmShadowTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext('2d');
+    // IMPORTANTE: THREE.MultiplyBlending multiplica o RGB da textura pelo
+    // RGB já desenhado na tela e IGNORA o alpha por completo — por isso
+    // "rgba(0,0,0,0)" (preto transparente) não funciona como "sem sombra"
+    // aqui: o preto (0,0,0) continua multiplicando pra preto mesmo com
+    // alpha 0, o que criava aquele retângulo escuro sólido (os cantos do
+    // sprite, fora do "raio" do degradê, ficavam pretos em vez de sumir).
+    // A correção certa pra multiply-blend é usar BRANCO como "sem sombra"
+    // (multiplicar por 1 não altera nada) e escurecer pra preto no centro.
     const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0.00, 'rgba(0,0,0,0.9)');
-    grad.addColorStop(0.32, 'rgba(0,0,0,0.62)');
-    grad.addColorStop(0.55, 'rgba(0,0,0,0.3)');
-    grad.addColorStop(0.78, 'rgba(0,0,0,0)');
-    grad.addColorStop(1.00, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.00, 'rgb(26,26,26)');    // centro — equivale à antiga alpha 0.9 (90% de escurecimento)
+    grad.addColorStop(0.32, 'rgb(97,97,97)');    // equivale à alpha 0.62
+    grad.addColorStop(0.55, 'rgb(179,179,179)'); // equivale à alpha 0.3
+    grad.addColorStop(0.78, 'rgb(255,255,255)'); // sem escurecimento
+    grad.addColorStop(1.00, 'rgb(255,255,255)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
     const tex = new THREE.CanvasTexture(canvas);
@@ -1032,18 +1040,18 @@ function initPmNpcBreathing() {
             _pmNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
-        // Sombra reage à respiração — mesma fórmula/coeficientes da área de
-        // caça (só sem os termos de passo/andar, que não existem aqui: o
-        // vendedor fica parado no lugar).
+        // Sombra reage à respiração (só o tamanho — "opacity" no material
+        // não tem efeito nenhum com THREE.MultiplyBlending, que ignora o
+        // alpha; ver createPmShadowTexture). Mesmo coeficiente de escala
+        // da área de caça, sem os termos de passo/andar (o vendedor fica
+        // parado no lugar).
         if (_pmNpcShadowSprite) {
             const shadowScale = 1 + Math.max(0, breathAmount) * 0.12;
-            const shadowOpacity = 0.82 - Math.max(0, breathAmount) * 0.08;
             _pmNpcShadowSprite.scale.set(
                 _pmNpcBaseScale.x * (86 / 125) * shadowScale,
                 _pmNpcBaseScale.y * (26 / 160) * shadowScale,
                 1
             );
-            _pmNpcShadowSprite.material.opacity = Math.min(1, Math.max(0.35, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

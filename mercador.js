@@ -14,7 +14,7 @@ const CITY_LABELS = {
 };
 
 const EPOCH = new Date('2025-01-01T00:00:00Z').getTime();
-const SLOT_MS = 24 * 60 * 60 * 1000; // 4 horas
+const SLOT_MS = 2 * 24 * 60 * 60 * 1000; // 2 dias
 
 function getMerchantState() {
     const now = Date.now();

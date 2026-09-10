@@ -1,5 +1,7 @@
 
 import { supabase } from './supabaseClient.js';
+import * as THREE from 'three';
+import { initPostFX } from './postfx.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTAÇÃO  (epoch +1h para não viajar junto com o mercador)
@@ -767,7 +769,7 @@ async function openOficinaModal() {
         const nextLabel = CITY_LABELS[CITIES[(state.cityIndex + 1) % CITIES.length]] || '';
         content.innerHTML =
             '<div class="oficina-absent">' +
-                '<img src="https://aden-rpg.pages.dev/assets/anao_oficina.webp" class="oficina-absent-img" alt="Artesão">' +
+                '<img src="' + OF_NPC_IMAGE_URL + '" class="oficina-absent-img" alt="Artesão">' +
                 '<p class="oficina-absent-text">Estou trabalhando na minha forja em <strong>' + destLabel + '</strong>. Volto em breve!</p>' +
                 '<p class="oficina-absent-sub">Próxima parada: <strong>' + nextLabel + '</strong></p>' +
                 '<p class="oficina-absent-timer">Parte desta cidade em:<br>' +
@@ -1423,15 +1425,692 @@ function injectOficinaStyles() {
     document.head.appendChild(style);
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// FERREIRO (OFICINA) — CENÁRIO 3D (skybox próprio + NPC clicável)
+// Mesmo padrão do Mestre de Poções (ver mitrar.js) e do Mercador (ver
+// mercador.js): ao clicar no hotspot "Ferreiro" da cidade, se o Artesão
+// estiver presente nesta cidade agora, abre-se primeiro este "cômodo" 360°
+// com o NPC dentro do mundo 3D — um sprite billboard (sempre de frente pra
+// câmera, nunca entorta ao girar). Só ao clicar NELE é que a oficina de
+// fato (#oficinaModal, injetado dinamicamente por injectOficinaModal) abre
+// por cima. Se o Artesão NÃO estiver nesta cidade agora, mantém o
+// comportamento antigo: abre direto o aviso de que ele está em outra
+// cidade (agora com o avatar do NPC — ver OF_NPC_IMAGE_URL, também usado
+// dentro do aviso de ausência em openOficinaModal()).
+//
+// Como oficina.js roda em TODAS as cidades (o Artesão viaja entre elas), a
+// cena e a imagem do NPC são as MESMAS em qualquer cidade — só a checagem
+// de presença muda (getOficinaState() + window.MERCHANT_CITY, já existente
+// acima). O cenário/modal/estilos são criados dinamicamente aqui (mesmo
+// padrão de injectOficinaModal), então nenhum HTML precisa ser tocado nas
+// 7 páginas de cidade.
+// ════════════════════════════════════════════════════════════════════════════
+
+const OF_SCENE_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/anao_oficina.webp'; // mesma imagem do fundo do modal da oficina
+const OF_NPC_IMAGE_URL   = 'https://aden-rpg.pages.dev/assets/npc_ferreiro.webp';
+const OF_TUTORIAL_KEY    = 'ofTutorialSeen'; // sem sufixo de cidade: o Artesão viaja, o tutorial é o mesmo em qualquer lugar
+const OF_NPC_PROXY_ID    = 'ofNpcSpot'; // elemento DOM invisível — só recebe .click() sintético quando o raycaster acerta o sprite
+
+// Onde o Artesão fica DENTRO do cenário 360° (mundo 3D, não a tela).
+// CALIBRAÇÃO: abra a página com ?debugSpots=1, entre no cenário do Ferreiro
+// (ele precisa estar presente nesta cidade no momento) e clique perto de
+// onde ele deveria ficar — aparece um tooltip com yaw/pitch. Copie os
+// números para cá.
+const OF_NPC_SPOT = {
+    yaw: 0, pitch: -54,
+    distance: 250,
+    heightFrac: 0.34,
+};
+
+const OF_INITIAL_YAW = 0, OF_INITIAL_PITCH = -6, OF_INITIAL_FOV = 110;
+const OF_FOV_MIN = 75, OF_FOV_MAX = 110;
+const OF_START_FOV = OF_FOV_MAX;
+const OF_PITCH_LIMIT = 89;
+
+let ofYaw = OF_INITIAL_YAW, ofPitch = OF_INITIAL_PITCH, ofFov = OF_START_FOV;
+
+let _ofSky = null;
+let _ofNpcSprite = null, _ofNpcMaterial = null;
+let _ofNpcBaseScale = { x: 1, y: 1 };
+let _ofNpcShadowSprite = null;
+let _oficinaSceneActive = false; // true quando a oficina foi aberta a partir do cenário 3D (Artesão presente)
+
+// Mesmo efeito de "flash pra preto e volta" usado nas cidades ao sair de
+// uma loja (ver instantFadeThenReveal em mitrar.js) — replicado aqui de
+// forma independente porque #screenFade é um elemento comum a todas as
+// páginas de cidade, então não precisamos tocar nos scripts delas.
+function ofFlashScreenFade() {
+    const fade = document.getElementById('screenFade');
+    if (!fade) return;
+    fade.style.transition = 'none';
+    fade.classList.add('active');
+    requestAnimationFrame(() => {
+        fade.style.transition = 'opacity .45s ease';
+        requestAnimationFrame(() => fade.classList.remove('active'));
+    });
+}
+
+function injectOficinaSceneStyles() {
+    if (document.getElementById('ofSceneStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'ofSceneStyles';
+    style.textContent = `
+#oficinaSceneModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background-color: #0d1a0d;
+    overflow: hidden;
+}
+#ofSceneContainer { position: absolute; inset: 0; overflow: hidden; }
+#ofSceneCanvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block; outline: none; cursor: grab;
+}
+#ofSceneCanvas.dragging { cursor: grabbing; }
+#ofSceneMap {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; user-select: none;
+}
+.of-tutorial-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    pointer-events: none; opacity: 0;
+    transition: opacity .35s ease;
+    background: radial-gradient(circle at var(--of-spot-x, 50%) var(--of-spot-y, 45%),
+        rgba(0,0,0,0) 0%, rgba(0,0,0,0) var(--of-spot-r, 18%),
+        rgba(0,0,0,0.5) calc(var(--of-spot-r, 18%) + 22%));
+}
+.of-tutorial-overlay.active { opacity: 1; }
+.of-tutorial-text {
+    position: absolute; top: 64px; right: 14px; z-index: 20;
+    max-width: 220px; background: rgba(0,0,0,0.75);
+    border: 1px solid #ffd77a; color: #ffe9b8;
+    font-weight: bold; font-size: 0.95em; line-height: 1.35;
+    padding: 10px 14px; border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    opacity: 0; transform: translateY(-8px);
+    transition: opacity .35s ease, transform .35s ease;
+    pointer-events: none;
+}
+.of-tutorial-text.active { opacity: 1; transform: translateY(0); }
+.of-scene-exit-btn {
+    position: absolute; top: 14px; right: 14px; z-index: 30;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,215,120,0.55);
+    border-radius: 50%; cursor: pointer; color: #ffd77a;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.of-scene-exit-btn:hover { background: rgba(0,0,0,0.75); }
+.of-scene-exit-btn svg { width: 20px; height: 20px; }
+`;
+    document.head.appendChild(style);
+}
+
+function injectOficinaSceneModal() {
+    if (document.getElementById('oficinaSceneModal')) return;
+    const div = document.createElement('div');
+    div.id = 'oficinaSceneModal';
+    div.innerHTML = `
+        <div id="ofSceneContainer">
+            <canvas id="ofSceneCanvas"></canvas>
+            <div id="ofSceneMap">
+                <div id="${OF_NPC_PROXY_ID}" style="display:none;" aria-hidden="true"></div>
+            </div>
+            <div id="ofSceneTutorialOverlay" class="of-tutorial-overlay"></div>
+            <div id="ofSceneTutorialText" class="of-tutorial-text">👆 Clique no ferreiro para forjar!</div>
+            <div id="closeOficinaSceneBtn" class="of-scene-exit-btn" title="Sair">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </div>
+        </div>`;
+    document.body.appendChild(div);
+    document.getElementById('closeOficinaSceneBtn').addEventListener('click', closeOficinaScene);
+}
+
+function ofYawPitchToVector(yawDeg, pitchDeg, radius = 1) {
+    const yaw = THREE.MathUtils.degToRad(yawDeg);
+    const pitch = THREE.MathUtils.degToRad(pitchDeg);
+    return new THREE.Vector3(
+        radius * Math.sin(yaw) * Math.cos(pitch),
+        radius * Math.sin(pitch),
+        radius * Math.cos(yaw) * Math.cos(pitch)
+    );
+}
+
+function updateOfCameraLook() {
+    if (!_ofSky) return;
+    ofPitch = Math.max(-OF_PITCH_LIMIT, Math.min(OF_PITCH_LIMIT, ofPitch));
+    ofFov   = Math.max(OF_FOV_MIN, Math.min(OF_FOV_MAX, ofFov));
+    _ofSky.camera.fov = ofFov;
+    _ofSky.camera.updateProjectionMatrix();
+    const dir = ofYawPitchToVector(ofYaw, ofPitch, 1);
+    _ofSky.camera.lookAt(dir.x, dir.y, dir.z);
+}
+
+// Sombra de contato do NPC — mesma técnica usada no Mestre de Poções
+// (ver createPmShadowTexture em mitrar.js): gradiente radial num <canvas>,
+// aplicado como sprite (blend alfa padrão, não multiply).
+function createOfShadowTexture() {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0.00, 'rgba(0,0,0,0.85)');
+    grad.addColorStop(0.32, 'rgba(0,0,0,0.6)');
+    grad.addColorStop(0.55, 'rgba(0,0,0,0.3)');
+    grad.addColorStop(0.78, 'rgba(0,0,0,0)');
+    grad.addColorStop(1.00, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+}
+
+function initOficinaSkybox() {
+    const cont   = document.getElementById('ofSceneContainer');
+    const canvas = document.getElementById('ofSceneCanvas');
+    const map    = document.getElementById('ofSceneMap');
+    if (!cont || !canvas || !map || _ofSky) return;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(ofFov, cont.clientWidth / cont.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(cont.clientWidth, cont.clientHeight);
+
+    const geometry = new THREE.SphereGeometry(500, 60, 40);
+    geometry.scale(-1, 1, 1); // normais invertidas: textura visível de dentro
+    const material = new THREE.MeshBasicMaterial({ color: 0x0d1a0d });
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
+
+    new THREE.TextureLoader().load(
+        OF_SCENE_IMAGE_URL,
+        (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            material.map = tex;
+            material.color.set(0xffffff);
+            material.needsUpdate = true;
+        },
+        undefined,
+        (err) => console.error('[Ferreiro] Falha ao carregar o skybox do cenário:', err)
+    );
+
+    _ofSky = { scene, camera, renderer, canvas, cont };
+
+    // Mesmo pós-processamento (bloom, grading de cor, motion blur) do resto
+    // do jogo — em try/catch: se falhar, a cena continua com render padrão.
+    try {
+        _ofSky.pfx = initPostFX({ scene, camera, renderer, cont, mapEl: map });
+    } catch (e) {
+        console.error('[PostFX] Falha ao iniciar pós-processamento no cenário do Ferreiro:', e);
+        _ofSky.pfx = null;
+    }
+
+    updateOfCameraLook();
+
+    window.addEventListener('resize', () => {
+        if (!_ofSky || !cont.offsetParent) return;
+        const w = cont.clientWidth, h = cont.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+        if (_ofSky.pfx) {
+            try { _ofSky.pfx.resize(w, h); } catch (e) { console.error('[PostFX] Erro no resize:', e); }
+        }
+    });
+
+    (function loop() {
+        requestAnimationFrame(loop);
+        if (!cont.offsetParent) return; // cenário fechado — não desperdiça frame
+        if (_ofSky.pfx) {
+            try {
+                _ofSky.pfx.render(scene, camera);
+            } catch (e) {
+                console.error('[PostFX] Erro ao renderizar o cenário do Ferreiro, desativando efeitos:', e);
+                _ofSky.pfx = null;
+                renderer.render(scene, camera);
+            }
+        } else {
+            renderer.render(scene, camera);
+        }
+        updateOfTutorialSpotlight();
+    })();
+
+    initOfNpcSprite();
+    enableOfSceneInteraction();
+    initOfNpcClickHandler();
+}
+
+// NPC como sprite 3D — sempre de frente pra câmera (billboard), nunca
+// entorta ao girar, e continua fixo na posição dele dentro do cenário.
+function initOfNpcSprite() {
+    if (!_ofSky) return;
+    new THREE.TextureLoader().load(
+        OF_NPC_IMAGE_URL,
+        (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            _ofNpcMaterial = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+            const sprite = new THREE.Sprite(_ofNpcMaterial);
+            sprite.center.set(0.5, 0);
+
+            const aspect = tex.image.width / tex.image.height;
+            const fovRad = THREE.MathUtils.degToRad(OF_INITIAL_FOV);
+            const worldHeight = 2 * OF_NPC_SPOT.distance * Math.tan(fovRad / 2) * OF_NPC_SPOT.heightFrac;
+            const worldWidth = worldHeight * aspect;
+            sprite.scale.set(worldWidth, worldHeight, 1);
+            _ofNpcBaseScale = { x: worldWidth, y: worldHeight };
+
+            sprite.position.copy(ofYawPitchToVector(OF_NPC_SPOT.yaw, OF_NPC_SPOT.pitch, OF_NPC_SPOT.distance));
+            sprite.renderOrder = 999;
+
+            _ofSky.scene.add(sprite);
+            _ofNpcSprite = sprite;
+
+            const shadowMaterial = new THREE.SpriteMaterial({
+                map: createOfShadowTexture(),
+                transparent: true,
+                depthWrite: false,
+                depthTest: false,
+            });
+            const shadowSprite = new THREE.Sprite(shadowMaterial);
+            shadowSprite.center.set(0.5, 0.5);
+            shadowSprite.scale.set(worldWidth * (86 / 125), worldHeight * (26 / 160), 1);
+            shadowSprite.position.copy(sprite.position);
+            shadowSprite.renderOrder = 998;
+            _ofSky.scene.add(shadowSprite);
+            _ofNpcShadowSprite = shadowSprite;
+
+            initOfNpcBreathing();
+        },
+        undefined,
+        (err) => console.error('[Ferreiro] Falha ao carregar o NPC:', err)
+    );
+}
+
+// Clique no NPC (raycast) — abre a oficina; fora dele, com ?debugSpots=1,
+// mostra o yaw/pitch do clique pra calibrar OF_NPC_SPOT.
+function initOfNpcClickHandler() {
+    const canvas = document.getElementById('ofSceneCanvas');
+    if (!canvas || canvas._ofClickBound) return;
+    canvas._ofClickBound = true;
+
+    let debugOn = false;
+    try { debugOn = new URLSearchParams(location.search).get('debugSpots') === '1'; } catch {}
+
+    const raycaster = new THREE.Raycaster();
+    let downX = 0, downY = 0, moved = false;
+
+    canvas.addEventListener('pointerdown', (e) => {
+        downX = e.clientX; downY = e.clientY; moved = false;
+    });
+    canvas.addEventListener('pointermove', (e) => {
+        if (Math.abs(e.clientX - downX) > 6 || Math.abs(e.clientY - downY) > 6) moved = true;
+    });
+    canvas.addEventListener('pointerup', (e) => {
+        if (moved || !_ofSky) return;
+        const rect = canvas.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -(((e.clientY - rect.top) / rect.height) * 2 - 1)
+        );
+        raycaster.setFromCamera(ndc, _ofSky.camera);
+
+        if (_ofNpcSprite) {
+            const hit = raycaster.intersectObject(_ofNpcSprite)[0];
+            if (hit) {
+                const proxy = document.getElementById(OF_NPC_PROXY_ID);
+                if (proxy) proxy.click();
+                return;
+            }
+        }
+
+        if (debugOn) {
+            const dir = raycaster.ray.direction.clone().normalize();
+            const yaw   = THREE.MathUtils.radToDeg(Math.atan2(dir.x, dir.z));
+            const pitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1)));
+            const txt = `yaw: ${yaw.toFixed(1)}, pitch: ${pitch.toFixed(1)}`;
+            console.log('[debugSpots][Ferreiro]', txt);
+
+            const tip = document.createElement('div');
+            tip.textContent = txt;
+            tip.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;transform:translate(-50%,-130%);
+                background:rgba(0,0,0,.85);color:#7f7;font:bold 12px monospace;padding:4px 8px;border:1px solid #0f0;
+                border-radius:4px;z-index:99999;pointer-events:none;white-space:nowrap;`;
+            document.body.appendChild(tip);
+            setTimeout(() => tip.remove(), 2500);
+        }
+    });
+}
+
+// Vinheta do tutorial — segue a projeção do NPC na tela a cada frame.
+function updateOfTutorialSpotlight() {
+    const overlay = document.getElementById('ofSceneTutorialOverlay');
+    if (!overlay || !overlay.classList.contains('active') || !_ofSky || !_ofNpcSprite) return;
+    const { camera, cont } = _ofSky;
+    const cw = cont.clientWidth, ch = cont.clientHeight;
+    if (!cw || !ch) return;
+
+    const worldPoint = _ofNpcSprite.position.clone();
+    worldPoint.y += _ofNpcBaseScale.y * 0.55;
+    const proj = worldPoint.project(camera);
+    if (proj.z > 1) return;
+
+    const sx = (proj.x * 0.5 + 0.5) * cw;
+    const sy = (1 - (proj.y * 0.5 + 0.5)) * ch;
+    overlay.style.setProperty('--of-spot-x', ((sx / cw) * 100).toFixed(1) + '%');
+    overlay.style.setProperty('--of-spot-y', ((sy / ch) * 100).toFixed(1) + '%');
+    overlay.style.setProperty('--of-spot-r', '16%');
+}
+
+// DRAG / PINCH / WHEEL do cenário — livre nos dois eixos.
+function enableOfSceneInteraction() {
+    const cont   = document.getElementById('ofSceneContainer');
+    const canvas = document.getElementById('ofSceneCanvas');
+    if (!canvas || !cont || cont._interactionEnabled) return;
+    cont._interactionEnabled = true;
+
+    let vx = 0, vy = 0, lt = 0, aId = null;
+    const FRICTION = 0.94;
+    const DRAG_SENS = 1.0;
+
+    let drag = false, sx = 0, sy = 0;
+    let isPinching = false;
+    let pinchStartDist = 0, pinchStartFov = ofFov;
+
+    canvas.style.touchAction = 'none';
+    canvas.style.userSelect  = 'none';
+
+    function degPerPx() { return ofFov / (cont.clientHeight || window.innerHeight); }
+
+    function applyDelta(dx, dy) {
+        const dpp = degPerPx();
+        ofYaw   += dx * dpp * DRAG_SENS;
+        ofPitch += dy * dpp * DRAG_SENS;
+        updateOfCameraLook();
+    }
+
+    function inertia() {
+        cancelAnimationFrame(aId);
+        if (drag) return;
+        vx *= FRICTION; vy *= FRICTION;
+        applyDelta(vx, vy);
+        if (Math.abs(vx) > 0.02 || Math.abs(vy) > 0.02)
+            aId = requestAnimationFrame(inertia);
+    }
+
+    function touchDist(e) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function startDrag(e) {
+        drag = true;
+        canvas.classList.add('dragging');
+        sx = e.clientX ?? e.touches[0].clientX;
+        sy = e.clientY ?? e.touches[0].clientY;
+        vx = vy = 0;
+        lt = performance.now();
+        cancelAnimationFrame(aId);
+    }
+
+    function onDrag(e) {
+        if (!drag) return;
+        e.preventDefault();
+        const nx = e.clientX ?? e.touches[0].clientX;
+        const ny = e.clientY ?? e.touches[0].clientY;
+        const dt = performance.now() - lt;
+        const dx = nx - sx, dy = ny - sy;
+        if (dt > 0) { vx = dx / dt * 16; vy = dy / dt * 16; }
+        applyDelta(dx, dy);
+        sx = nx; sy = ny;
+        lt = performance.now();
+    }
+
+    function endDrag() {
+        drag = false;
+        canvas.classList.remove('dragging');
+        if (Math.abs(vx) > 0.05 || Math.abs(vy) > 0.05) inertia();
+    }
+
+    function onTouchStart(e) {
+        if (e.touches.length >= 2) {
+            isPinching = true;
+            drag = false;
+            cancelAnimationFrame(aId);
+            pinchStartDist = touchDist(e);
+            pinchStartFov  = ofFov;
+        } else if (e.touches.length === 1 && !isPinching) {
+            startDrag(e);
+        }
+    }
+
+    function onTouchMove(e) {
+        if (e.touches.length >= 2 && isPinching) {
+            e.preventDefault();
+            const ratio = touchDist(e) / pinchStartDist;
+            ofFov = pinchStartFov / ratio;
+            updateOfCameraLook();
+        } else if (e.touches.length === 1 && !isPinching) {
+            onDrag(e);
+        }
+    }
+
+    function onTouchEnd(e) {
+        if (isPinching && e.touches.length < 2) {
+            isPinching = false;
+            vx = vy = 0;
+        }
+        if (e.touches.length === 0) endDrag();
+    }
+
+    function onWheel(e) {
+        e.preventDefault();
+        ofFov += e.deltaY * 0.05;
+        updateOfCameraLook();
+    }
+
+    cont.addEventListener('mousedown', startDrag, { passive: true });
+    window.addEventListener('mousemove', onDrag,    { passive: false });
+    window.addEventListener('mouseup',   endDrag,   { passive: true });
+    cont.addEventListener('wheel', onWheel, { passive: false });
+
+    cont.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend',  onTouchEnd,  { passive: true });
+}
+
+// Respiração orgânica do NPC — mesma lógica do Mestre de Poções (ver
+// initPmNpcBreathing em mitrar.js).
+function initOfNpcBreathing() {
+    if (!_ofNpcSprite || _ofNpcSprite._ofBreathingStarted) return;
+    _ofNpcSprite._ofBreathingStarted = true;
+
+    let breathPhase = Math.random() * Math.PI * 2;
+    let swayPhase = Math.random() * Math.PI * 2;
+
+    let breathSpeed = 1, breathDepth = 1, swaySpeed = 0.35;
+    let targetBreathSpeed = breathSpeed, targetBreathDepth = breathDepth, targetSwaySpeed = swaySpeed;
+    let nextDriftChange = 0;
+
+    let nextDeepBreath = 4000 + Math.random() * 5000;
+    let deepBreathBoost = 0, deepBreathTarget = 0, deepBreathHold = 0;
+
+    let lastTime = performance.now();
+
+    function pickNewDriftTargets() {
+        targetBreathSpeed = 0.82 + Math.random() * 0.4;
+        targetBreathDepth = 0.75 + Math.random() * 0.55;
+        targetSwaySpeed = 0.25 + Math.random() * 0.25;
+        nextDriftChange = 3000 + Math.random() * 5000;
+    }
+    pickNewDriftTargets();
+
+    function tick(now) {
+        const dt = Math.min(now - lastTime, 100);
+        lastTime = now;
+
+        if (document.hidden || !_ofSky || !_ofSky.cont.offsetParent) {
+            requestAnimationFrame(tick);
+            return;
+        }
+
+        nextDriftChange -= dt;
+        if (nextDriftChange <= 0) pickNewDriftTargets();
+
+        breathSpeed += (targetBreathSpeed - breathSpeed) * 0.0015 * dt;
+        breathDepth += (targetBreathDepth - breathDepth) * 0.0015 * dt;
+        swaySpeed += (targetSwaySpeed - swaySpeed) * 0.0015 * dt;
+
+        nextDeepBreath -= dt;
+        if (nextDeepBreath <= 0) {
+            deepBreathTarget = 1;
+            deepBreathHold = 900;
+            nextDeepBreath = 7000 + Math.random() * 8000;
+        }
+        if (deepBreathTarget > 0) {
+            deepBreathHold -= dt;
+            if (deepBreathHold <= 0) deepBreathTarget = 0;
+        }
+        deepBreathBoost += (deepBreathTarget - deepBreathBoost) * 0.005 * dt;
+
+        breathPhase += (dt / 1000) * breathSpeed * ((Math.PI * 2) / 4.2);
+        swayPhase += (dt / 1000) * swaySpeed * (Math.PI * 2);
+
+        const raw = Math.sin(breathPhase);
+        const asym = raw >= 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.4);
+
+        const breathAmount = asym * 0.012 * breathDepth * (1 + deepBreathBoost * 0.9);
+        const scaleY = 1 + breathAmount;
+        const scaleX = 1 + breathAmount * 0.43;
+
+        const sway = Math.sin(swayPhase) * 0.6 + Math.sin(swayPhase * 0.47 + 1.3) * 0.3;
+        const rotateDeg = sway * 0.12;
+
+        if (_ofNpcSprite) {
+            _ofNpcSprite.scale.set(_ofNpcBaseScale.x * scaleX, _ofNpcBaseScale.y * scaleY, 1);
+        }
+        if (_ofNpcMaterial) {
+            _ofNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
+        }
+
+        if (_ofNpcShadowSprite) {
+            const shadowScale = 1 + Math.max(0, breathAmount) * 0.12;
+            const shadowOpacity = 0.82 - Math.max(0, breathAmount) * 0.08;
+            _ofNpcShadowSprite.scale.set(
+                _ofNpcBaseScale.x * (86 / 125) * shadowScale,
+                _ofNpcBaseScale.y * (26 / 160) * shadowScale,
+                1
+            );
+            _ofNpcShadowSprite.material.opacity = Math.min(1, Math.max(0.35, shadowOpacity));
+        }
+
+        requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+}
+
+// Tutorial "clique no ferreiro" — só na 1ª vez, nunca mais repete (chave
+// global, sem sufixo de cidade, já que o Artesão viaja).
+function ofShouldShowTutorial() {
+    try { return localStorage.getItem(OF_TUTORIAL_KEY) !== '1'; } catch { return true; }
+}
+function ofMarkTutorialSeen() {
+    try { localStorage.setItem(OF_TUTORIAL_KEY, '1'); } catch {}
+}
+function showOfTutorial() {
+    const overlay = document.getElementById('ofSceneTutorialOverlay');
+    const text = document.getElementById('ofSceneTutorialText');
+    const cont = document.getElementById('ofSceneContainer');
+    if (!overlay || !text || !cont) return;
+    overlay.classList.add('active');
+    text.classList.add('active');
+
+    function dismiss() {
+        overlay.classList.remove('active');
+        text.classList.remove('active');
+        ofMarkTutorialSeen();
+    }
+    cont.addEventListener('click', dismiss, { capture: true, once: true });
+}
+
+// Abrir / fechar o cenário 3D do Ferreiro.
+function openOficinaScene() {
+    injectOficinaSceneModal();
+    const modal = document.getElementById('oficinaSceneModal');
+    if (!modal) return;
+    modal.style.display = 'block';
+    if (!_ofSky) {
+        initOficinaSkybox();
+    } else {
+        ofYaw = OF_INITIAL_YAW; ofPitch = OF_INITIAL_PITCH; ofFov = OF_START_FOV;
+        updateOfCameraLook();
+        const { camera, renderer, cont } = _ofSky;
+        const w = cont.clientWidth, h = cont.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+    }
+    if (ofShouldShowTutorial()) showOfTutorial();
+}
+
+function closeOficinaScene() {
+    const modal = document.getElementById('oficinaSceneModal');
+    if (modal) modal.style.display = 'none';
+    ofFlashScreenFade(); // volta pra cidade — mesmo efeito do closePmSceneBtn
+}
+
+// Clique no hotspot da cidade: se o Artesão estiver aqui agora, abre o
+// cenário 3D (o clique NO NPC dentro dele é que abre a oficina de fato);
+// se não estiver, mantém o comportamento antigo — abre direto o aviso de
+// ausência dentro do próprio #oficinaModal.
+function handleOficinaHotspotClick() {
+    const state = getOficinaState();
+    const thisCity = (window.MERCHANT_CITY || '').toLowerCase();
+    if (state.currentCity !== thisCity) {
+        _oficinaSceneActive = false;
+        openOficinaModal();
+    } else {
+        openOficinaScene();
+    }
+}
+
+// Delegação no document: funciona mesmo antes do proxy existir (ele só é
+// criado na 1ª vez que o cenário abre, via injectOficinaSceneModal).
+function initOficinaSceneNpcProxy() {
+    document.addEventListener('click', (e) => {
+        if (e.target && e.target.id === OF_NPC_PROXY_ID) {
+            _oficinaSceneActive = true;
+            openOficinaModal();
+        }
+    });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // INICIALIZAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     injectOficinaStyles();
+    injectOficinaSceneStyles();
+    initOficinaSceneNpcProxy();
 
     var openBtn = document.getElementById('btnOficina');
     if (openBtn) {
-        openBtn.addEventListener('click', function() { openOficinaModal(); });
+        openBtn.addEventListener('click', function() { handleOficinaHotspotClick(); });
     }
 
     // Fechar o modal principal (injetado dinamicamente)
@@ -1440,6 +2119,15 @@ document.addEventListener('DOMContentLoaded', function() {
             var m = document.getElementById('oficinaModal');
             if (m) m.style.display = 'none';
             if (_countdownInterval) clearInterval(_countdownInterval);
+            if (_oficinaSceneActive) {
+                // Veio do cenário 3D (Artesão presente) — volta pra ele,
+                // sem flash, igual ao closePotionMasterBtn em mitrar.html.
+                var sceneModal = document.getElementById('oficinaSceneModal');
+                if (sceneModal) sceneModal.style.display = 'block';
+            } else {
+                // Aviso de ausência — fecha direto pra cidade, com flash.
+                ofFlashScreenFade();
+            }
         }
     });
 });

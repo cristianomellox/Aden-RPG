@@ -27,6 +27,15 @@ export const POSTFX_CONFIG = {
         vignetteStrength: 0.22,
     },
 
+    // Motion blur direcional, proporcional à velocidade angular real da
+    // câmera (ver updateMotionBlur) — some sozinho quando a câmera para.
+    motionBlur: {
+        enabled: true,
+        maxAmount: 0.035,   // teto do deslocamento de amostragem (em UV, 0-1)
+        sensitivity: 2.2,   // rad/frame → uAmount
+        smoothing: 0.72,    // 0 = reage instantâneo, 1 = nunca muda (suaviza o "liga/desliga")
+    },
+
     // Reflete o mesmo grading na camada 2D (mobs/HUD sobre o mapa) pra tudo
     // parecer uma cena só, e reforça sombra de contato (fake AO) + vinheta.
     domLayer: {
@@ -119,28 +128,39 @@ const MotionBlurShader = {
 };
 
 // ── Camada 2D (mobs/HUD sobre o mapa): mesmo grading + vinheta + tint ───
-function applyDomLayer(cont) {
-    if (document.getElementById('pfx-dom-style')) return; // já injetado (evita duplicar)
+// mapEl: elemento cuja filter (contraste/saturação, e depois o blur do
+// motion blur) recebe o grading — passe explicitamente quando houver mais
+// de um skybox+camada-2D na mesma página (ex.: mapa da cidade + cenário do
+// Mestre de Poções), senão cai no #map padrão (compatível com covil_de_kelts.js).
+function applyDomLayer(cont, mapEl) {
     const cfg = POSTFX_CONFIG.colorGrade;
-    const style = document.createElement('style');
-    style.id = 'pfx-dom-style';
-    style.textContent = `
-        #map {
-            filter: contrast(${cfg.contrast}) saturate(${cfg.saturation});
-            transition: filter .18s linear;
-        }
-        .pfx-vignette {
-            position: absolute; inset: 0; z-index: 2; pointer-events: none;
-            background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,${(0.55 * cfg.vignetteStrength).toFixed(3)}) 100%);
-        }
-        .pfx-ambient {
-            position: absolute; inset: 0; z-index: 2; pointer-events: none;
-            mix-blend-mode: soft-light;
-            background: rgb(${Math.round(cfg.tint[0] * 255)}, ${Math.round(cfg.tint[1] * 255)}, ${Math.round(cfg.tint[2] * 255)});
-            opacity: ${cfg.tintStrength};
-        }
-    `;
-    document.head.appendChild(style);
+    const target = mapEl || document.getElementById('map');
+    if (target) {
+        target.style.filter = `contrast(${cfg.contrast}) saturate(${cfg.saturation})`;
+        target.style.transition = 'filter .18s linear';
+    }
+
+    // O <style> com .pfx-vignette/.pfx-ambient é compartilhado (classes
+    // genéricas, sem depender de qual página/skybox chamou) — só injeta uma
+    // vez. IMPORTANTE: isso não pode pular a criação das divs abaixo, ou a
+    // segunda chamada (2º skybox da mesma página) fica sem vinheta/ambient.
+    if (!document.getElementById('pfx-dom-style')) {
+        const style = document.createElement('style');
+        style.id = 'pfx-dom-style';
+        style.textContent = `
+            .pfx-vignette {
+                position: absolute; inset: 0; z-index: 2; pointer-events: none;
+                background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,${(0.55 * cfg.vignetteStrength).toFixed(3)}) 100%);
+            }
+            .pfx-ambient {
+                position: absolute; inset: 0; z-index: 2; pointer-events: none;
+                mix-blend-mode: soft-light;
+                background: rgb(${Math.round(cfg.tint[0] * 255)}, ${Math.round(cfg.tint[1] * 255)}, ${Math.round(cfg.tint[2] * 255)});
+                opacity: ${cfg.tintStrength};
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     const vignette = document.createElement('div');
     vignette.className = 'pfx-vignette';
@@ -154,7 +174,7 @@ function applyDomLayer(cont) {
 // Chame depois de criar scene/camera/renderer do skybox. Retorna um objeto
 // com render(scene,camera) e resize(w,h) — use no lugar de renderer.render()
 // direto no loop, e no listener de resize.
-export function initPostFX({ scene, camera, renderer, cont }) {
+export function initPostFX({ scene, camera, renderer, cont, mapEl }) {
     const width = cont.clientWidth, height = cont.clientHeight;
 
     const composer = new EffectComposer(renderer);
@@ -192,12 +212,12 @@ export function initPostFX({ scene, camera, renderer, cont }) {
 
     composer.addPass(new OutputPass());
 
-    if (POSTFX_CONFIG.domLayer.enabled) applyDomLayer(cont);
+    if (POSTFX_CONFIG.domLayer.enabled) applyDomLayer(cont, mapEl);
 
     // ── Rastreamento de velocidade angular real da câmera (pra motion blur) ──
     const prevDir = camera.getWorldDirection(new THREE.Vector3());
     let smoothedAmount = 0;
-    const map = document.getElementById('map');
+    const map = mapEl || document.getElementById('map');
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function updateMotionBlur(cam) {

@@ -8,6 +8,18 @@
     <meta name="robots" content="index, follow">
     <meta name="googlebot" content="index, follow">
     <title>Mitrar - Aden RPG</title> 
+    <!-- Import map exigido pelo postfx.js (bloom/color-grade/motion blur do
+         skybox) — ele importa 'three' e 'three/addons/...' como specifiers
+         nus, que só o navegador resolve com isso presente. Mesma versão do
+         Three.js já usada em mitrar.js (0.160.0), então não há conflito. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="maintenance.js"></script>
     <link rel="stylesheet" href="style.css" />
@@ -304,7 +316,7 @@ body {
       rgba(0, 0, 30, 0.2),
       rgba(0, 0, 0, 0)
     ),
-    url('https://aden-rpg.pages.dev/assets/mdp_mitrar.webp');
+    url('https://aden-rpg.pages.dev/assets/mdp_mitrar.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -398,6 +410,109 @@ body {
         transform: translateY(0);
     }
 }
+
+/* ================================================================= */
+/* === MESTRE DE POÇÕES — CENÁRIO 3D (skybox + NPC clicável) ======== */
+/* Mesmo padrão de #mapContainer/#skyboxCanvas/#map da cidade, mas    */
+/* como um "cômodo" à parte que abre por cima do mapa (modal          */
+/* fullscreen, sem topbar). O NPC é um sprite 3D dentro do próprio    */
+/* canvas (sempre de frente pra câmera — nunca entorta ao girar; ver  */
+/* mitrar.js/initPmNpcSprite), não um elemento do DOM. #mdpNpcSpot   */
+/* abaixo é só um proxy invisível pro clique (ver initPmNpcClickHandler).*/
+/* ================================================================= */
+#potionMasterSceneModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background-color: #0d1a0d;
+    overflow: hidden;
+}
+
+#pmSceneContainer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+#pmSceneCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+    outline: none;
+    cursor: grab;
+}
+#pmSceneCanvas.dragging { cursor: grabbing; }
+
+#pmSceneMap {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Tutorial "clique no vendedor" — só na 1ª vez que o jogador entra   */
+/* neste cenário (ver localStorage em mitrar.js). Escurece tudo     */
+/* ~50% com uma vinheta que segue a projeção do NPC na tela, deixando */
+/* só ele bem visível — como nos tutoriais de apontar-e-clicar. Some  */
+/* ao primeiro clique na tela (no NPC ou fora dele) e não volta mais. */
+.pm-tutorial-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    background: radial-gradient(circle at var(--pm-spot-x, 50%) var(--pm-spot-y, 45%),
+        rgba(0,0,0,0) 0%,
+        rgba(0,0,0,0) var(--pm-spot-r, 18%),
+        rgba(0,0,0,0.5) calc(var(--pm-spot-r, 18%) + 22%));
+}
+.pm-tutorial-overlay.active { opacity: 1; }
+
+.pm-tutorial-text {
+    position: absolute;
+    top: 64px;
+    right: 14px;
+    z-index: 20;
+    max-width: 220px;
+    background: rgba(0,0,0,0.75);
+    border: 1px solid #ffd77a;
+    color: #ffe9b8;
+    font-weight: bold;
+    font-size: 0.95em;
+    line-height: 1.35;
+    padding: 10px 14px;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity .35s ease, transform .35s ease;
+    pointer-events: none;
+}
+.pm-tutorial-text.active { opacity: 1; transform: translateY(0); }
+
+.pm-scene-exit-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,215,120,0.55);
+    border-radius: 50%;
+    cursor: pointer;
+    color: #ffd77a;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.pm-scene-exit-btn:hover { background: rgba(0,0,0,0.75); }
+.pm-scene-exit-btn svg { width: 20px; height: 20px; }
 
 .potion-card {
     background: linear-gradient(180deg, #2a2a2aBF, #1a1a1aBF);
@@ -871,6 +986,34 @@ body {
 
     
     
+        <!-- Modal Mestre de Poções — CENÁRIO 3D (abre primeiro, ao clicar no
+         hotspot da cidade). Fullscreen, sem topbar. O jogador anda a
+         câmera livremente (o NPC é um sprite 3D dentro do canvas — ver
+         initPmNpcSprite em mitrar.js, sempre de frente pra câmera, nunca
+         entorta) e só a loja de fato (mais abaixo) abre ao clicar nele.
+         Ver initPmScene()/openPmScene() em mitrar.js. -->
+    <div id="potionMasterSceneModal">
+        <div id="pmSceneContainer">
+            <canvas id="pmSceneCanvas"></canvas>
+            <div id="pmSceneMap">
+                <!-- Proxy invisível: recebe um .click() sintético quando o
+                     raycaster acerta o sprite do NPC no canvas (ver
+                     initPmNpcClickHandler em mitrar.js). O vendedor em si
+                     não é um elemento do DOM. -->
+                <div id="mdpNpcSpot" style="display:none;" aria-hidden="true"></div>
+            </div>
+            <div id="pmSceneTutorialOverlay" class="pm-tutorial-overlay"></div>
+            <div id="pmSceneTutorialText" class="pm-tutorial-text">👆 Clique no vendedor para comprar poções!</div>
+            <div id="closePmSceneBtn" class="pm-scene-exit-btn" title="Sair">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Mestre de Poções -->
     <div id="potionMasterModal" class="modal-container" style="display:none; z-index: 3005;">
         <div class="modal-content potion-master-content">
@@ -1517,7 +1660,10 @@ async function buyPotion(id) {
 
 // Inicialização do Modal
 document.addEventListener('DOMContentLoaded', () => {
-    const openBtn = document.getElementById('btnPotionMaster');
+    // Botão que abre a loja (agora é o NPC dentro do cenário 3D — ver
+    // #mdpNpcSpot/openPmScene em mitrar.js; btnPotionMaster só abre o
+    // cenário, não mais a loja direto)
+    const openBtn = document.getElementById('mdpNpcSpot');
     const modal = document.getElementById('potionMasterModal');
     const closeBtn = document.getElementById('closePotionMasterBtn');
 
@@ -1555,7 +1701,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (closeBtn && modal) {
         closeBtn.addEventListener('click', () => {
+            // Fecha a loja e volta para o cenário 3D do Mestre de Poções
+            // (não volta direto pro mapa da cidade — isso só acontece pelo
+            // ícone de saída do próprio cenário, ver #closePmSceneBtn).
             modal.style.display = 'none';
+            const sceneModal = document.getElementById('potionMasterSceneModal');
+            if (sceneModal) sceneModal.style.display = 'block';
         });
     }
 });

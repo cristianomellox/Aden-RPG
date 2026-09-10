@@ -1146,7 +1146,7 @@ function injectOficinaStyles() {
 #oficinaModal {
     background-image:
         linear-gradient(rgba(0,0,10,.30), rgba(0,0,0,0)),
-        url('https://aden-rpg.pages.dev/assets/anao_oficina.webp');
+        url('https://aden-rpg.pages.dev/assets/anao_oficina.png');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;

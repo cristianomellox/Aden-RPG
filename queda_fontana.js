@@ -1079,7 +1079,7 @@ function enableMapInteraction() {
 // Velocidade de caminhada constante (px/s) — a duração do deslocamento
 // agora é calculada pela distância, então perto ou longe o mob sempre
 // parece andar no mesmo ritmo, em vez de deslizar rápido nos trechos longos.
-const MOB_WALK_SPEED_PX_S = 40;
+const MOB_WALK_SPEED_PX_S = 30;
 const MOB_WALK_MIN_MS = 900;
 const MOB_WALK_MAX_MS = 10000;
 const MOB_MIN_DIST_PX = 40; // distância mínima entre mobs para evitar que se esbarrem
@@ -2827,7 +2827,7 @@ function _mobBreathNewState() {
         //  - andando p/ os lados (sprite padrão, espelhado) → a alternância
         //    vira uma leve báscula frente/trás (rotateX com perspectiva),
         //    como o corpo "cabeceia" a cada passada, visto de perfil.
-        stepTiltZAmp: 1.0 + Math.random() * 0.9,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
+        stepTiltZAmp: 0.5 + Math.random() * 0.6,   // graus — báscula esquerda/direita (andar p/ cima/baixo)
         stepTiltXAmp: 6.2 + Math.random() * 3.3,   // graus — báscula frente/trás (andar p/ os lados)
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o

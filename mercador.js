@@ -624,7 +624,7 @@ function injectStyles() {
 /* ─── MODAL MERCADOR ─── */
 #mercadorModal {
     background-image: linear-gradient(rgba(0,0,30,.25), rgba(0,0,0,0)),
-        url('https://aden-rpg.pages.dev/assets/mercador.webp');
+        url('https://aden-rpg.pages.dev/assets/mercador.png');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;

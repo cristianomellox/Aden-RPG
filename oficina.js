@@ -1457,7 +1457,7 @@ const OF_NPC_PROXY_ID    = 'ofNpcSpot'; // elemento DOM invisível — só receb
 // onde ele deveria ficar — aparece um tooltip com yaw/pitch. Copie os
 // números para cá.
 const OF_NPC_SPOT = {
-    yaw: 5, pitch: -54,
+    yaw: -5, pitch: -54,
     distance: 250,
     heightFrac: 0.34,
 };

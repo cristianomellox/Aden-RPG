@@ -565,7 +565,7 @@ const PM_NPC_PROXY_ID    = 'mdpNpcSpot'; // elemento DOM invisível — só rece
 const PM_NPC_SPOT = {
     yaw: 0, pitch: -54,   // direção dele dentro do cenário — ajuste com ?debugSpots=1
     distance: 250,       // distância dele até a câmera (unidades do mundo 3D)
-    heightFrac: 0.42,    // fração da altura da tela que ele ocupa, calibrada no FOV de referência (PM_INITIAL_FOV)
+    heightFrac: 0.39,    // fração da altura da tela que ele ocupa, calibrada no FOV de referência (PM_INITIAL_FOV)
 };
 
 const PM_INITIAL_YAW = 0, PM_INITIAL_PITCH = -6, PM_INITIAL_FOV = 110; // referência de câmera/escala ao (re)entrar no cenário

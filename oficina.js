@@ -1176,7 +1176,7 @@ function injectOficinaStyles() {
     border-radius: 12px; max-width: 460px; margin: auto;
     opacity: 0; animation: fadeCardIn 3s ease-out forwards;
 }
-.oficina-absent-img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid #c9a94a; }
+.oficina-absent-img { width: 100px; height: 100px; border-radius: 50%; object-fit: contain; border: 2px solid #c9a94a; }
 .oficina-absent-text  { color: #e0dccc; font-size: 1.05em; margin: 0; }
 .oficina-absent-sub   { color: #aaa; font-size: .9em; margin: 0; }
 .oficina-absent-timer { color: #ddd; font-size: .9em; margin: 0; }

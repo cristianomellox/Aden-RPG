@@ -663,7 +663,7 @@ function injectStyles() {
     border-radius: 12px; max-width: 460px; margin: auto;
     opacity: 0; animation: fadeCardIn 3s ease-out forwards;
 }
-.mercador-absent-img { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid #c9a94a; }
+.mercador-absent-img { width: 90px; height: 90px; border-radius: 50%; object-fit: contain; border: 2px solid #c9a94a; }
 .mercador-absent-text { color: #e0dccc; font-size: 1.05em; margin: 0; }
 .mercador-absent-sub  { color: #aaa; font-size: .9em; margin: 0; }
 .mercador-absent-timer{ color: #ddd; font-size: .9em; margin: 0; }

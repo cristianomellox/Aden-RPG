@@ -568,7 +568,7 @@ const PM_NPC_PROXY_ID    = 'mdpNpcSpot'; // elemento DOM invisível — só rece
 const PM_NPC_SPOT = {
     yaw: 0, pitch: -54,   // direção dele dentro do cenário — ajuste com ?debugSpots=1
     distance: 250,       // distância dele até a câmera (unidades do mundo 3D)
-    heightFrac: 0.45,    // fração da altura da tela que ele ocupa, calibrada no FOV de referência (PM_INITIAL_FOV)
+    heightFrac: 0.41,    // fração da altura da tela que ele ocupa, calibrada no FOV de referência (PM_INITIAL_FOV)
 };
 
 const PM_INITIAL_YAW = 0, PM_INITIAL_PITCH = -6, PM_INITIAL_FOV = 110; // referência de câmera/escala ao (re)entrar no cenário
@@ -593,20 +593,16 @@ function createPmShadowTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext('2d');
-    // IMPORTANTE: THREE.MultiplyBlending multiplica o RGB da textura pelo
-    // RGB já desenhado na tela e IGNORA o alpha por completo — por isso
-    // "rgba(0,0,0,0)" (preto transparente) não funciona como "sem sombra"
-    // aqui: o preto (0,0,0) continua multiplicando pra preto mesmo com
-    // alpha 0, o que criava aquele retângulo escuro sólido (os cantos do
-    // sprite, fora do "raio" do degradê, ficavam pretos em vez de sumir).
-    // A correção certa pra multiply-blend é usar BRANCO como "sem sombra"
-    // (multiplicar por 1 não altera nada) e escurecer pra preto no centro.
+    // Preto com alpha de verdade (blend alfa padrão, não multiply) — assim
+    // a sombra escurece de forma confiável e previsível, sem depender da
+    // cor do que está por baixo (multiply ficava imperceptível em pisos
+    // já escuros, como percebemos ao testar).
     const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0.00, 'rgb(26,26,26)');    // centro — equivale à antiga alpha 0.9 (90% de escurecimento)
-    grad.addColorStop(0.32, 'rgb(97,97,97)');    // equivale à alpha 0.62
-    grad.addColorStop(0.55, 'rgb(179,179,179)'); // equivale à alpha 0.3
-    grad.addColorStop(0.78, 'rgb(255,255,255)'); // sem escurecimento
-    grad.addColorStop(1.00, 'rgb(255,255,255)');
+    grad.addColorStop(0.00, 'rgba(0,0,0,0.85)');
+    grad.addColorStop(0.32, 'rgba(0,0,0,0.6)');
+    grad.addColorStop(0.55, 'rgba(0,0,0,0.3)');
+    grad.addColorStop(0.78, 'rgba(0,0,0,0)');
+    grad.addColorStop(1.00, 'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
     const tex = new THREE.CanvasTexture(canvas);
@@ -750,7 +746,9 @@ function initPmNpcSprite() {
                 transparent: true,
                 depthWrite: false,
                 depthTest: false,
-                blending: THREE.MultiplyBlending,
+                // Blend alfa padrão (NormalBlending, sem "blending:" custom) —
+                // já usa o alpha da textura corretamente, sem o problema do
+                // multiply (que ignora alpha e ficava imperceptível/errado).
             });
             const shadowSprite = new THREE.Sprite(shadowMaterial);
             shadowSprite.center.set(0.5, 0.5);
@@ -1043,18 +1041,19 @@ function initPmNpcBreathing() {
             _pmNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
-        // Sombra reage à respiração (só o tamanho — "opacity" no material
-        // não tem efeito nenhum com THREE.MultiplyBlending, que ignora o
-        // alpha; ver createPmShadowTexture). Mesmo coeficiente de escala
-        // da área de caça, sem os termos de passo/andar (o vendedor fica
-        // parado no lugar).
+        // Sombra reage à respiração — mesma fórmula/coeficientes da área de
+        // caça (só sem os termos de passo/andar, que não existem aqui: o
+        // vendedor fica parado no lugar). Agora com blend alfa padrão,
+        // "opacity" funciona normalmente de novo.
         if (_pmNpcShadowSprite) {
             const shadowScale = 1 + Math.max(0, breathAmount) * 0.12;
+            const shadowOpacity = 0.82 - Math.max(0, breathAmount) * 0.08;
             _pmNpcShadowSprite.scale.set(
                 _pmNpcBaseScale.x * (86 / 125) * shadowScale,
                 _pmNpcBaseScale.y * (26 / 160) * shadowScale,
                 1
             );
+            _pmNpcShadowSprite.material.opacity = Math.min(1, Math.max(0.35, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

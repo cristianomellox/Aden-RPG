@@ -1080,7 +1080,7 @@ function enableMapInteraction() {
 // Velocidade de caminhada constante (px/s) — a duração do deslocamento
 // agora é calculada pela distância, então perto ou longe o mob sempre
 // parece andar no mesmo ritmo, em vez de deslizar rápido nos trechos longos.
-const MOB_WALK_SPEED_PX_S = 20;
+const MOB_WALK_SPEED_PX_S = 30;
 const MOB_WALK_MIN_MS = 900;
 const MOB_WALK_MAX_MS = 15000;
 const MOB_MIN_DIST_PX = 60; // distância mínima entre mobs para evitar que se esbarrem

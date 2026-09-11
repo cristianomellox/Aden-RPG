@@ -1,7 +1,7 @@
 
 import { supabase } from './supabaseClient.js';
 import * as THREE from 'three';
-import { initPostFX } from './postfx.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight } from './postfx.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTAÇÃO  (epoch +1h para não viajar junto com o mercador)
@@ -1462,6 +1462,10 @@ const OF_NPC_SPOT = {
     heightFrac: 0.34,
 };
 
+// Ver PM_LIGHT_OVERRIDE em mitrar.js — mesma ideia, pra forçar manualmente
+// a direção da luz caso a auto-detecção erre nesta cena.
+const OF_LIGHT_OVERRIDE = null;
+
 const OF_INITIAL_YAW = 0, OF_INITIAL_PITCH = -6, OF_INITIAL_FOV = 110;
 const OF_FOV_MIN = 75, OF_FOV_MAX = 110;
 const OF_START_FOV = OF_FOV_MAX;
@@ -1472,7 +1476,8 @@ let ofYaw = OF_INITIAL_YAW, ofPitch = OF_INITIAL_PITCH, ofFov = OF_START_FOV;
 let _ofSky = null;
 let _ofNpcSprite = null, _ofNpcMaterial = null;
 let _ofNpcBaseScale = { x: 1, y: 1 };
-let _ofNpcShadowSprite = null;
+let _ofNpcShadow = null; // { mesh, baseStretch, lightYaw, lightPitch } — ver createNpcGroundShadow em postfx.js
+let _ofLightDir = { yaw: 200, pitch: 55 }; // atualizado assim que o skybox termina de carregar
 let _oficinaSceneActive = false; // true quando a oficina foi aberta a partir do cenário 3D (Artesão presente)
 
 // Mesmo efeito de "flash pra preto e volta" usado nas cidades ao sair de
@@ -1595,27 +1600,6 @@ function updateOfCameraLook() {
     _ofSky.camera.lookAt(dir.x, dir.y, dir.z);
 }
 
-// Sombra de contato do NPC — mesma técnica usada no Mestre de Poções
-// (ver createPmShadowTexture em mitrar.js): gradiente radial num <canvas>,
-// aplicado como sprite (blend alfa padrão, não multiply).
-function createOfShadowTexture() {
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0.00, 'rgba(0,0,0,0.85)');
-    grad.addColorStop(0.32, 'rgba(0,0,0,0.6)');
-    grad.addColorStop(0.55, 'rgba(0,0,0,0.3)');
-    grad.addColorStop(0.78, 'rgba(0,0,0,0)');
-    grad.addColorStop(1.00, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    return tex;
-}
-
 function initOficinaSkybox() {
     const cont   = document.getElementById('ofSceneContainer');
     const canvas = document.getElementById('ofSceneCanvas');
@@ -1643,6 +1627,12 @@ function initOficinaSkybox() {
             material.map = tex;
             material.color.set(0xffffff);
             material.needsUpdate = true;
+
+            // Detecta o ponto mais claro do skybox pra orientar a sombra do
+            // NPC (ver estimateLightDirectionFromEquirect em postfx.js).
+            const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
+            _ofLightDir = Of_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
+            if (_ofNpcShadow) updateNpcGroundShadowLight(_ofNpcShadow, _ofLightDir.yaw, _ofLightDir.pitch);
         },
         undefined,
         (err) => console.error('[Ferreiro] Falha ao carregar o skybox do cenário:', err)
@@ -1719,19 +1709,18 @@ function initOfNpcSprite() {
             _ofSky.scene.add(sprite);
             _ofNpcSprite = sprite;
 
-            const shadowMaterial = new THREE.SpriteMaterial({
-                map: createOfShadowTexture(),
-                transparent: true,
-                depthWrite: false,
-                depthTest: false,
+            // Sombra projetada: clone da silhueta do próprio NPC, deitada no
+            // chão e apontando pro lado oposto ao ponto de luz mais forte do
+            // skybox (ver createNpcGroundShadow em postfx.js).
+            _ofNpcShadow = createNpcGroundShadow({
+                scene: _ofSky.scene,
+                npcTexture: tex,
+                worldWidth,
+                worldHeight,
+                feetPosition: sprite.position,
+                lightYaw: _ofLightDir.yaw,
+                lightPitch: _ofLightDir.pitch,
             });
-            const shadowSprite = new THREE.Sprite(shadowMaterial);
-            shadowSprite.center.set(0.5, 0.5);
-            shadowSprite.scale.set(worldWidth * (86 / 125), worldHeight * (26 / 160), 1);
-            shadowSprite.position.copy(sprite.position);
-            shadowSprite.renderOrder = 998;
-            _ofSky.scene.add(shadowSprite);
-            _ofNpcShadowSprite = shadowSprite;
 
             initOfNpcBreathing();
         },
@@ -2007,15 +1996,11 @@ function initOfNpcBreathing() {
             _ofNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
-        if (_ofNpcShadowSprite) {
-            const shadowScale = 1 + Math.max(0, breathAmount) * 0.12;
-            const shadowOpacity = 0.82 - Math.max(0, breathAmount) * 0.08;
-            _ofNpcShadowSprite.scale.set(
-                _ofNpcBaseScale.x * (86 / 125) * shadowScale,
-                _ofNpcBaseScale.y * (26 / 160) * shadowScale,
-                1
-            );
-            _ofNpcShadowSprite.material.opacity = Math.min(1, Math.max(0.35, shadowOpacity));
+        if (_ofNpcShadow) {
+            const shadowPulse = 1 + Math.max(0, breathAmount) * 0.12;
+            const shadowOpacity = 0.55 - Math.max(0, breathAmount) * 0.05;
+            _ofNpcShadow.mesh.scale.set(shadowPulse, _ofNpcShadow.baseStretch * shadowPulse, 1);
+            _ofNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.3, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

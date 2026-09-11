@@ -1,7 +1,7 @@
 
 import { supabase } from './supabaseClient.js';
 import * as THREE from 'three';
-import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight } from './postfx.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight, updateNpcGroundShadowCamera } from './postfx.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTAÇÃO
@@ -1007,7 +1007,7 @@ function initMercadorSkybox() {
             // NPC (ver estimateLightDirectionFromEquirect em postfx.js).
             const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
             _mcLightDir = Mc_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
-            if (_mcNpcShadow) updateNpcGroundShadowLight(_mcNpcShadow, _mcLightDir.yaw, _mcLightDir.pitch);
+            if (_mcNpcShadow) updateNpcGroundShadowLight(_mcNpcShadow, _mcLightDir.yaw, _mcLightDir.pitch, mcYaw);
         },
         undefined,
         (err) => console.error('[Mercador] Falha ao carregar o skybox do cenário:', err)
@@ -1095,6 +1095,7 @@ function initMcNpcSprite() {
                 feetPosition: sprite.position,
                 lightYaw: _mcLightDir.yaw,
                 lightPitch: _mcLightDir.pitch,
+                cameraYaw: mcYaw, // ângulo da câmera AGORA — a sombra vai lembrar seu ângulo relativo a partir daqui
             });
 
             initMcNpcBreathing();
@@ -1371,11 +1372,22 @@ function initMcNpcBreathing() {
             _mcNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
+        // Gira a sombra junto com a câmera (ver updateNpcGroundShadowCamera em
+        // postfx.js) — sem isso ela fica "presa" numa direção fixa do mundo
+        // enquanto o NPC (um billboard) parece girar pra sempre encarar a
+        // câmera, dando a sensação de dois corpos desconectados.
+        if (_mcNpcShadow) updateNpcGroundShadowCamera(_mcNpcShadow, mcYaw);
+
+        // Sombra reage à respiração (mesma ideia de antes: incha/opaca um
+        // pouco a mais no pico da inspiração). O "comprimento" já embute o
+        // achatamento + o alongamento pela altura da luz (baseStretch,
+        // calculado em updateNpcGroundShadowLight); aqui só multiplicamos
+        // por um pulso pequeno em cima disso.
         if (_mcNpcShadow) {
             const shadowPulse = 1 + Math.max(0, breathAmount) * 0.12;
-            const shadowOpacity = 0.55 - Math.max(0, breathAmount) * 0.05;
+            const shadowOpacity = 0.7 - Math.max(0, breathAmount) * 0.05;
             _mcNpcShadow.mesh.scale.set(shadowPulse, _mcNpcShadow.baseStretch * shadowPulse, 1);
-            _mcNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.3, shadowOpacity));
+            _mcNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.25, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

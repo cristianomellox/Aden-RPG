@@ -7,6 +7,11 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
+// Marcador de versão — se essa linha NÃO aparecer no console do navegador
+// ao abrir a loja, o arquivo que está rodando é uma versão em cache, não
+// esta aqui. Force um hard refresh (Ctrl+Shift+R) ou limpe o cache.
+console.log('[postfx.js] versão carregada: sombra-v3 (renderOrder acima do NPC + map em vez de alphaMap)');
+
 // ── CONFIGURAÇÃO (ajuste os números à vontade) ──────────────────────────
 export const POSTFX_CONFIG = {
     // Bloom (UnrealBloomPass oficial do Three.js — o nome não é coincidência,
@@ -47,10 +52,11 @@ export const POSTFX_CONFIG = {
     // deita no "chão" na direção oposta ao ponto mais claro do skybox 360°.
     npcShadow: {
         enabled: true,
-        opacity: 0.5,       // opacidade no repouso (0 = invisível, 1 = totalmente preta)
-        baseSquash: 0.34,   // o quanto a silhueta é achatada antes de esticar pela luz
+        opacity: 0.5,        // opacidade no centro (as bordas já ficam mais claras sozinhas, por causa do desfoque)
+        blurFrac: 0.180,     // raio do desfoque como fração da largura da imagem do NPC (não px fixo — se adapta a qualquer resolução de asset). Suba pra sombra mais "nublada", desça pra mais definida
+        baseSquash: 0.64,   // o quanto a silhueta é achatada antes de esticar pela luz
         minStretch: 0.7,    // sombra mínima (luz quase a pino)
-        maxStretch: 2.6,    // sombra máxima (luz rente ao horizonte)
+        maxStretch: 1.7,    // sombra máxima (luz rente ao horizonte)
     },
 };
 
@@ -242,7 +248,7 @@ export function estimateLightDirectionFromEquirect(texture, { debug = false } = 
         yaw = ((yaw % 360) + 360) % 360;
         pitch = THREE.MathUtils.clamp(pitch, -85, 85);
 
-        if (debug) console.log('[Sombra] Luz estimada do skybox → yaw:', yaw.toFixed(1), 'pitch:', pitch.toFixed(1));
+        console.log('[Sombra] Luz estimada do skybox → yaw:', yaw.toFixed(1), '° pitch:', pitch.toFixed(1), '° (imagem', img.width + 'x' + img.height + ')');
         return { yaw, pitch };
     } catch (e) {
         console.error('[Sombra] Não foi possível ler os pixels do skybox (provável CORS na imagem) — usando direção de luz padrão.', e);
@@ -285,11 +291,58 @@ function stretchFromPitch(lightPitchDeg) {
 }
 
 // cont/mapEl não são necessários aqui (a sombra vive só no mundo 3D).
-export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeight, feetPosition, lightYaw = 200, lightPitch = 55 }) {
+// ── Versão suave/desfocada da silhueta do NPC ───────────────────────────
+// Usar o recorte nítido do personagem direto como sombra parece um
+// "decalque" colado no chão. Jogos AAA usam sombras de contato bem
+// suaves — aqui desenhamos o personagem num canvas com blur real do
+// Canvas 2D (ctx.filter = 'blur()') numa margem extra ao redor (senão o
+// desfoque corta feio na borda do canvas). Como isso aumenta o tamanho
+// da imagem, devolvemos também os fatores de escala e onde ficam os
+// "pés" dentro da imagem nova, pra createNpcGroundShadow conseguir
+// recalcular o tamanho/âncora do plano corretamente.
+function createSoftSilhouetteTexture(npcTexture, blurFrac) {
+    const img = npcTexture.image;
+    // Raio do desfoque em PROPORÇÃO à resolução real da imagem do NPC, não
+    // um valor fixo em px — assim funciona igual não importa se o asset é
+    // um PNG pequeno ou uma imagem gigante em alta resolução.
+    const blurPx = Math.max(4, Math.round(img.width * blurFrac));
+    const pad = Math.max(2, Math.round(blurPx * 3)); // margem suficiente pro blur não cortar na borda
+    const w = img.width + pad * 2;
+    const h = img.height + pad * 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.filter = `blur(${blurPx}px)`;
+    ctx.drawImage(img, pad, pad, img.width, img.height);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+
+    return {
+        texture: tex,
+        scaleX: w / img.width,
+        scaleY: h / img.height,
+        feetFrac: pad / h, // fração da altura nova que fica ABAIXO dos pés originais (a margem de baixo)
+    };
+}
+
+export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeight, feetPosition, lightYaw = 200, lightPitch = 55, cameraYaw = 0 }) {
+  try {
     const cfg = POSTFX_CONFIG.npcShadow;
+    const soft = createSoftSilhouetteTexture(npcTexture, cfg.blurFrac);
+    const shadowTexture = soft.texture;
+    // O plano cresce um pouco (pela margem do blur) — reescala mantendo o
+    // "pé" do personagem no mesmo lugar do mundo.
+    const paddedWidth = worldWidth * soft.scaleX;
+    const paddedHeight = worldHeight * soft.scaleY;
 
     const material = new THREE.MeshBasicMaterial({
-        map: npcTexture,        // usa a MESMA textura do NPC — a forma da sombra é o recorte real do personagem
+        map: shadowTexture,     // versão suave/desfocada (ver createSoftSilhouetteTexture acima) — não a textura nítida do NPC
         color: 0x000000,        // força preto puro (o RGB do sprite é multiplicado pela cor, então zera as cores originais)
         // IMPORTANTE: é "map", não "alphaMap". alphaMap no three.js lê o
         // canal VERDE do RGB (não o canal alfa de verdade) — com um NPC de
@@ -304,8 +357,12 @@ export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeig
         toneMapped: false,
     });
 
-    const geometry = new THREE.PlaneGeometry(worldWidth, worldHeight, 1, 1);
-    geometry.translate(0, worldHeight / 2, 0); // pivô nos "pés" (mesma âncora do sprite do NPC), silhueta se estende a partir daí
+    const geometry = new THREE.PlaneGeometry(paddedWidth, paddedHeight, 1, 1);
+    // Pivô nos "pés" — mas agora precisa descontar a margem extra que o
+    // blur adicionou embaixo (soft.feetFrac), senão a sombra flutua
+    // deslocada dos pés de verdade do NPC.
+    const feetOffsetWorld = paddedHeight * soft.feetFrac;
+    geometry.translate(0, paddedHeight / 2 - feetOffsetWorld, 0);
 
     const mesh = new THREE.Mesh(geometry, material);
     // IMPORTANTE: renderOrder ACIMA do sprite do NPC (999), não abaixo.
@@ -325,20 +382,64 @@ export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeig
 
     scene.add(mesh);
 
+    // Log sempre ativo (não só com ?debugShadow=1) — assim dá pra conferir
+    // no console do navegador se a sombra foi criada e com que valores,
+    // sem precisar de parâmetro nenhum na URL.
+    console.log('[Sombra] NPC shadow criada:', {
+        posição: mesh.position.toArray().map(n => +n.toFixed(1)),
+        larguraMundo: +worldWidth.toFixed(1),
+        alturaMundo: +worldHeight.toFixed(1),
+        opacidade: material.opacity,
+        renderOrder: mesh.renderOrder,
+        lightYaw, lightPitch,
+    });
+
     const state = { mesh, baseStretch: cfg.baseSquash };
-    updateNpcGroundShadowLight(state, lightYaw, lightPitch);
+    updateNpcGroundShadowLight(state, lightYaw, lightPitch, cameraYaw);
     return state;
+  } catch (e) {
+    // Se isso disparar, o erro ficaria mudo antes (a criação da sombra
+    // rodava dentro do mesmo callback de carga da textura do NPC — uma
+    // exceção aqui abortava silenciosamente o resto da inicialização,
+    // inclusive a respiração). Agora fica logado e a função só retorna
+    // null, sem quebrar o resto do fluxo.
+    console.error('[Sombra] Falha ao criar a sombra do NPC:', e);
+    return null;
+  }
 }
 
 // Chame de novo sempre que a estimativa de luz mudar (ex.: quando a
 // textura do skybox termina de carregar depois do NPC).
-export function updateNpcGroundShadowLight(state, lightYaw, lightPitch) {
+export function updateNpcGroundShadowLight(state, lightYaw, lightPitch, cameraYaw = 0) {
     if (!state || !state.mesh) return;
-    state.mesh.quaternion.copy(buildShadowQuaternion(lightYaw));
+    // Guarda o ângulo relativo entre a luz e a câmera no momento do
+    // cálculo — não o yaw absoluto. É esse ângulo relativo que fica fixo
+    // (ver updateNpcGroundShadowCamera), não a direção no mundo.
+    state.relativeYaw = lightYaw - cameraYaw;
+    state.mesh.quaternion.copy(buildShadowQuaternion(lightYaw)); // aplica de imediato, na orientação atual da câmera
     state.baseStretch = POSTFX_CONFIG.npcShadow.baseSquash * stretchFromPitch(lightPitch);
     state.mesh.scale.set(1, state.baseStretch, 1);
     state.lightYaw = lightYaw;
     state.lightPitch = lightPitch;
+}
+
+// ── Sombra "gruda" no giro da câmera (chame isso a cada frame) ──────────
+// O sprite do NPC é um billboard: sempre vira pra encarar a câmera, então
+// dá a impressão de "girar junto" conforme o jogador olha ao redor. Uma
+// sombra com direção fixa no MUNDO não acompanha esse giro (ela fica
+// "parada" enquanto o personagem parece girar) — e é isso que cria a
+// sensação de dois corpos separados.
+//
+// A correção: manter fixo o ÂNGULO RELATIVO entre a câmera e a sombra
+// (calculado uma vez em updateNpcGroundShadowLight, guardado em
+// state.relativeYaw), e a cada frame reaplicar esse ângulo relativo em
+// cima do yaw ATUAL da câmera. Na prática, a sombra passa a girar junto
+// com o "giro" aparente do personagem, como se estivesse soldada nele —
+// exatamente como um billboard, só que deitada no chão em vez de sempre
+// de frente pra câmera.
+export function updateNpcGroundShadowCamera(state, cameraYawDeg) {
+    if (!state || !state.mesh || state.relativeYaw == null) return;
+    state.mesh.quaternion.copy(buildShadowQuaternion(state.relativeYaw + cameraYawDeg));
 }
 
 // ── Inicialização principal ─────────────────────────────────────────────

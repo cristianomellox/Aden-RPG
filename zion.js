@@ -1,5 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight } from './postfx.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight, updateNpcGroundShadowCamera } from './postfx.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // ZION — SKYBOX 360° (Three.js)
@@ -646,7 +646,7 @@ function initPmSkybox() {
             // é garantida), reaplica a direção na sombra que já existe.
             const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
             _pmLightDir = PM_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
-            if (_pmNpcShadow) updateNpcGroundShadowLight(_pmNpcShadow, _pmLightDir.yaw, _pmLightDir.pitch);
+            if (_pmNpcShadow) updateNpcGroundShadowLight(_pmNpcShadow, _pmLightDir.yaw, _pmLightDir.pitch, pmYaw);
         },
         undefined,
         (err) => console.error('[MestreDePoções] Falha ao carregar o skybox do cenário:', err)
@@ -742,6 +742,7 @@ function initPmNpcSprite() {
                 feetPosition: sprite.position,
                 lightYaw: _pmLightDir.yaw,
                 lightPitch: _pmLightDir.pitch,
+                cameraYaw: pmYaw, // ângulo da câmera AGORA — a sombra vai lembrar seu ângulo relativo a partir daqui
             });
 
             initPmNpcBreathing();
@@ -1027,6 +1028,12 @@ function initPmNpcBreathing() {
             _pmNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
+        // Gira a sombra junto com a câmera (ver updateNpcGroundShadowCamera em
+        // postfx.js) — sem isso ela fica "presa" numa direção fixa do mundo
+        // enquanto o NPC (um billboard) parece girar pra sempre encarar a
+        // câmera, dando a sensação de dois corpos desconectados.
+        if (_pmNpcShadow) updateNpcGroundShadowCamera(_pmNpcShadow, pmYaw);
+
         // Sombra reage à respiração (mesma ideia de antes: incha/opaca um
         // pouco a mais no pico da inspiração). O "comprimento" já embute o
         // achatamento + o alongamento pela altura da luz (baseStretch,
@@ -1034,9 +1041,9 @@ function initPmNpcBreathing() {
         // por um pulso pequeno em cima disso.
         if (_pmNpcShadow) {
             const shadowPulse = 1 + Math.max(0, breathAmount) * 0.12;
-            const shadowOpacity = 0.55 - Math.max(0, breathAmount) * 0.05;
+            const shadowOpacity = 0.7 - Math.max(0, breathAmount) * 0.05;
             _pmNpcShadow.mesh.scale.set(shadowPulse, _pmNpcShadow.baseStretch * shadowPulse, 1);
-            _pmNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.3, shadowOpacity));
+            _pmNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.25, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

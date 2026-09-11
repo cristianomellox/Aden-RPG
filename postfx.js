@@ -53,7 +53,7 @@ export const POSTFX_CONFIG = {
     npcShadow: {
         enabled: true,
         opacity: 0.5,        // opacidade no centro (as bordas já ficam mais claras sozinhas, por causa do desfoque)
-        blurFrac: 0.180,     // raio do desfoque como fração da largura da imagem do NPC (não px fixo — se adapta a qualquer resolução de asset). Suba pra sombra mais "nublada", desça pra mais definida
+        blurFrac: 0.090,     // raio do desfoque como fração da largura da imagem do NPC (não px fixo — se adapta a qualquer resolução de asset). Suba pra sombra mais "nublada", desça pra mais definida
         baseSquash: 0.64,   // o quanto a silhueta é achatada antes de esticar pela luz
         minStretch: 0.7,    // sombra mínima (luz quase a pino)
         maxStretch: 1.7,    // sombra máxima (luz rente ao horizonte)

@@ -1,7 +1,7 @@
 
 import { supabase } from './supabaseClient.js';
 import * as THREE from 'three';
-import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight } from './postfx.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight, updateNpcGroundShadowCamera } from './postfx.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO DE ROTAÇÃO  (epoch +1h para não viajar junto com o mercador)
@@ -1632,7 +1632,7 @@ function initOficinaSkybox() {
             // NPC (ver estimateLightDirectionFromEquirect em postfx.js).
             const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
             _ofLightDir = Of_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
-            if (_ofNpcShadow) updateNpcGroundShadowLight(_ofNpcShadow, _ofLightDir.yaw, _ofLightDir.pitch);
+            if (_ofNpcShadow) updateNpcGroundShadowLight(_ofNpcShadow, _ofLightDir.yaw, _ofLightDir.pitch, ofYaw);
         },
         undefined,
         (err) => console.error('[Ferreiro] Falha ao carregar o skybox do cenário:', err)
@@ -1720,6 +1720,7 @@ function initOfNpcSprite() {
                 feetPosition: sprite.position,
                 lightYaw: _ofLightDir.yaw,
                 lightPitch: _ofLightDir.pitch,
+                cameraYaw: ofYaw, // ângulo da câmera AGORA — a sombra vai lembrar seu ângulo relativo a partir daqui
             });
 
             initOfNpcBreathing();
@@ -1996,11 +1997,22 @@ function initOfNpcBreathing() {
             _ofNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
+        // Gira a sombra junto com a câmera (ver updateNpcGroundShadowCamera em
+        // postfx.js) — sem isso ela fica "presa" numa direção fixa do mundo
+        // enquanto o NPC (um billboard) parece girar pra sempre encarar a
+        // câmera, dando a sensação de dois corpos desconectados.
+        if (_ofNpcShadow) updateNpcGroundShadowCamera(_ofNpcShadow, ofYaw);
+
+        // Sombra reage à respiração (mesma ideia de antes: incha/opaca um
+        // pouco a mais no pico da inspiração). O "comprimento" já embute o
+        // achatamento + o alongamento pela altura da luz (baseStretch,
+        // calculado em updateNpcGroundShadowLight); aqui só multiplicamos
+        // por um pulso pequeno em cima disso.
         if (_ofNpcShadow) {
             const shadowPulse = 1 + Math.max(0, breathAmount) * 0.12;
-            const shadowOpacity = 0.55 - Math.max(0, breathAmount) * 0.05;
+            const shadowOpacity = 0.7 - Math.max(0, breathAmount) * 0.05;
             _ofNpcShadow.mesh.scale.set(shadowPulse, _ofNpcShadow.baseStretch * shadowPulse, 1);
-            _ofNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.3, shadowOpacity));
+            _ofNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.25, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

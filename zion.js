@@ -1,5 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import { initPostFX } from './postfx.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight } from './postfx.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // ZION — SKYBOX 360° (Three.js)
@@ -571,6 +571,14 @@ const PM_NPC_SPOT = {
     heightFrac: 0.34,    // fração da altura da tela que ele ocupa, calibrada no FOV de referência (PM_INITIAL_FOV)
 };
 
+// A sombra do NPC normalmente se auto-calibra lendo a imagem do skybox
+// (ver estimateLightDirectionFromEquirect em postfx.js). Se a direção
+// ficar estranha nessa cena específica (ex.: imagem sem CORS, ou fonte de
+// luz "errada" sendo detectada), force manualmente aqui — mesma ideia do
+// ?debugSpots=1: abra com ?debugShadow=1 pra ver no console qual yaw/pitch
+// foi detectado, e troque `null` por algo como { yaw: 120, pitch: 40 }.
+const PM_LIGHT_OVERRIDE = null;
+
 const PM_INITIAL_YAW = 0, PM_INITIAL_PITCH = -6, PM_INITIAL_FOV = 110; // referência de câmera/escala ao (re)entrar no cenário
 const PM_FOV_MIN = 75, PM_FOV_MAX = 110; // limites de zoom (arrastar/pinch) — mesmos da cidade
 const PM_START_FOV = PM_FOV_MAX;         // sempre entra no zoom mínimo (bem aberto), igual à cidade
@@ -581,34 +589,8 @@ let pmYaw = PM_INITIAL_YAW, pmPitch = PM_INITIAL_PITCH, pmFov = PM_START_FOV;
 let _pmSky = null;
 let _pmNpcSprite = null, _pmNpcMaterial = null;
 let _pmNpcBaseScale = { x: 1, y: 1 };
-let _pmNpcShadowSprite = null;
-
-// Sombra de contato do NPC — mesmo visual do .mob-shadow da área de caça
-// (covil_de_kelts.html): elipse radial escura, borda suave, mix-blend
-// "multiply". Como o NPC aqui é um sprite 3D (não um <img> do DOM), a
-// sombra também precisa ser um sprite — geramos a textura num <canvas>
-// reproduzindo os mesmos stops do gradiente CSS.
-function createPmShadowTexture() {
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    // Preto com alpha de verdade (blend alfa padrão, não multiply) — assim
-    // a sombra escurece de forma confiável e previsível, sem depender da
-    // cor do que está por baixo (multiply ficava imperceptível em pisos
-    // já escuros, como percebemos ao testar).
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0.00, 'rgba(0,0,0,0.85)');
-    grad.addColorStop(0.32, 'rgba(0,0,0,0.6)');
-    grad.addColorStop(0.55, 'rgba(0,0,0,0.3)');
-    grad.addColorStop(0.78, 'rgba(0,0,0,0)');
-    grad.addColorStop(1.00, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    return tex;
-}
+let _pmNpcShadow = null; // { mesh, baseStretch, lightYaw, lightPitch } — ver createNpcGroundShadow em postfx.js
+let _pmLightDir = { yaw: 200, pitch: 55 }; // atualizado assim que o skybox termina de carregar (ver initPmSkybox)
 
 function pmYawPitchToVector(yawDeg, pitchDeg, radius = 1) {
     const yaw = THREE.MathUtils.degToRad(yawDeg);
@@ -657,6 +639,14 @@ function initPmSkybox() {
             material.map = tex;
             material.color.set(0xffffff);
             material.needsUpdate = true;
+
+            // Detecta o ponto mais claro do skybox pra orientar a sombra do
+            // NPC (ver estimateLightDirectionFromEquirect em postfx.js).
+            // Se o NPC já tiver sido criado antes disso (ordem de carga não
+            // é garantida), reaplica a direção na sombra que já existe.
+            const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
+            _pmLightDir = PM_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
+            if (_pmNpcShadow) updateNpcGroundShadowLight(_pmNpcShadow, _pmLightDir.yaw, _pmLightDir.pitch);
         },
         undefined,
         (err) => console.error('[MestreDePoções] Falha ao carregar o skybox do cenário:', err)
@@ -738,25 +728,21 @@ function initPmNpcSprite() {
             _pmSky.scene.add(sprite);
             _pmNpcSprite = sprite;
 
-            // Sombra — mesma proporção do .mob-shadow em relação ao
-            // .mob-avatar na área de caça (86/125 de largura, 26/160 de
-            // altura), ancorada no mesmo ponto (os "pés" do NPC).
-            const shadowMaterial = new THREE.SpriteMaterial({
-                map: createPmShadowTexture(),
-                transparent: true,
-                depthWrite: false,
-                depthTest: false,
-                // Blend alfa padrão (NormalBlending, sem "blending:" custom) —
-                // já usa o alpha da textura corretamente, sem o problema do
-                // multiply (que ignora alpha e ficava imperceptível/errado).
+            // Sombra projetada: clone da silhueta do próprio NPC, deitada no
+            // chão e apontando pro lado oposto ao ponto de luz mais forte do
+            // skybox (ver createNpcGroundShadow em postfx.js). Se o skybox
+            // ainda não tiver terminado de carregar, usa _pmLightDir com o
+            // valor padrão por enquanto — é recalibrada automaticamente
+            // assim que a análise da imagem terminar.
+            _pmNpcShadow = createNpcGroundShadow({
+                scene: _pmSky.scene,
+                npcTexture: tex,
+                worldWidth,
+                worldHeight,
+                feetPosition: sprite.position,
+                lightYaw: _pmLightDir.yaw,
+                lightPitch: _pmLightDir.pitch,
             });
-            const shadowSprite = new THREE.Sprite(shadowMaterial);
-            shadowSprite.center.set(0.5, 0.5);
-            shadowSprite.scale.set(worldWidth * (86 / 125), worldHeight * (26 / 160), 1);
-            shadowSprite.position.copy(sprite.position);
-            shadowSprite.renderOrder = 998; // sempre atrás do NPC
-            _pmSky.scene.add(shadowSprite);
-            _pmNpcShadowSprite = shadowSprite;
 
             initPmNpcBreathing();
         },
@@ -1041,19 +1027,16 @@ function initPmNpcBreathing() {
             _pmNpcMaterial.rotation = THREE.MathUtils.degToRad(rotateDeg);
         }
 
-        // Sombra reage à respiração — mesma fórmula/coeficientes da área de
-        // caça (só sem os termos de passo/andar, que não existem aqui: o
-        // vendedor fica parado no lugar). Agora com blend alfa padrão,
-        // "opacity" funciona normalmente de novo.
-        if (_pmNpcShadowSprite) {
-            const shadowScale = 1 + Math.max(0, breathAmount) * 0.12;
-            const shadowOpacity = 0.82 - Math.max(0, breathAmount) * 0.08;
-            _pmNpcShadowSprite.scale.set(
-                _pmNpcBaseScale.x * (86 / 125) * shadowScale,
-                _pmNpcBaseScale.y * (26 / 160) * shadowScale,
-                1
-            );
-            _pmNpcShadowSprite.material.opacity = Math.min(1, Math.max(0.35, shadowOpacity));
+        // Sombra reage à respiração (mesma ideia de antes: incha/opaca um
+        // pouco a mais no pico da inspiração). O "comprimento" já embute o
+        // achatamento + o alongamento pela altura da luz (baseStretch,
+        // calculado em updateNpcGroundShadowLight); aqui só multiplicamos
+        // por um pulso pequeno em cima disso.
+        if (_pmNpcShadow) {
+            const shadowPulse = 1 + Math.max(0, breathAmount) * 0.12;
+            const shadowOpacity = 0.55 - Math.max(0, breathAmount) * 0.05;
+            _pmNpcShadow.mesh.scale.set(shadowPulse, _pmNpcShadow.baseStretch * shadowPulse, 1);
+            _pmNpcShadow.mesh.material.opacity = Math.min(1, Math.max(0.3, shadowOpacity));
         }
 
         requestAnimationFrame(tick);

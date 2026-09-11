@@ -41,6 +41,17 @@ export const POSTFX_CONFIG = {
     domLayer: {
         enabled: true,
     },
+
+    // Sombra projetada do NPC (mestre de poções / ferreiro / mercador):
+    // clona a silhueta do próprio sprite do NPC (via alphaMap) e deita no
+    // "chão" na direção oposta ao ponto mais claro do skybox 360°.
+    npcShadow: {
+        enabled: true,
+        opacity: 0.5,       // opacidade no repouso (0 = invisível, 1 = totalmente preta)
+        baseSquash: 0.34,   // o quanto a silhueta é achatada antes de esticar pela luz
+        minStretch: 0.7,    // sombra mínima (luz quase a pino)
+        maxStretch: 2.6,    // sombra máxima (luz rente ao horizonte)
+    },
 };
 
 // ── Shaders customizados ────────────────────────────────────────────────
@@ -168,6 +179,148 @@ function applyDomLayer(cont, mapEl) {
     ambient.className = 'pfx-ambient';
     cont.appendChild(vignette);
     cont.appendChild(ambient);
+}
+
+// ── Detecção do ponto de luz mais forte do skybox 360° ──────────────────
+// A imagem do skybox é equirretangular (mapeada na SphereGeometry com
+// .scale(-1,1,1) — ver initXxSkybox). Aqui a gente desenha essa imagem
+// num canvas pequeno (rápido), acha a região mais clara (mesmo critério
+// de luminância do ColorGradeShader acima) e converte a posição do pixel
+// pra yaw/pitch usando a MESMA convenção de pmYawPitchToVector/
+// ofYawPitchToVector/mcYawPitchToVector (derivado da geometria real da
+// esfera: u=phi/2π, v=1-theta/π, com a imagem lida top-down e
+// texture.flipY padrão do three.js). Não precisa bater 100% no primeiro
+// teste — ver DEBUG abaixo pra calibrar visualmente, e dá pra sobrescrever
+// manualmente por loja (ver PM_LIGHT_OVERRIDE nos arquivos de cidade).
+export function estimateLightDirectionFromEquirect(texture, { debug = false } = {}) {
+    const fallback = { yaw: 200, pitch: 55 }; // luz genérica vinda de trás/cima, caso a leitura falhe (ex.: canvas "tainted" por CORS)
+    try {
+        const img = texture.image;
+        if (!img || !img.width || !img.height) return fallback;
+
+        const W = 96, H = 48; // downscale — só precisa achar a região mais clara, não detalhe
+        const canvas = document.createElement('canvas');
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, W, H);
+        const { data } = ctx.getImageData(0, 0, W, H);
+
+        // Luminância por pixel (mesmos coeficientes do ColorGradeShader).
+        const luma = new Float32Array(W * H);
+        let maxL = 0, sumL = 0;
+        for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+            const l = (data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722) / 255;
+            luma[p] = l;
+            if (l > maxL) maxL = l;
+            sumL += l;
+        }
+        const avgL = sumL / luma.length;
+
+        // Centróide ponderado só dos pixels realmente "quentes" (ex.: janela,
+        // tocha, brasa, feixe de sol) — evita que o piso claro médio puxe o
+        // resultado pro meio do chão.
+        const threshold = Math.max(avgL + (maxL - avgL) * 0.55, maxL * 0.75, 0.001);
+        let sw = 0, sx = 0, sy = 0;
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const l = luma[y * W + x];
+                if (l < threshold) continue;
+                const w = (l - threshold) + 0.001;
+                sw += w; sx += w * (x + 0.5); sy += w * (y + 0.5);
+            }
+        }
+        if (sw <= 0) return fallback; // cena muito uniforme/escura — sem ponto de luz claro
+
+        const px = sx / sw, py = sy / sw;
+        const uFrac = px / W, vFrac = py / H;
+
+        // phi = uFrac*2π, theta = vFrac*π (topo da imagem = zênite, base = nadir).
+        // yaw = 90° - phi, pitch = 90° - theta (graus) — ver derivação nos
+        // comentários de createNpcGroundShadow logo abaixo.
+        let yaw = 90 - uFrac * 360;
+        let pitch = 90 - vFrac * 180;
+        yaw = ((yaw % 360) + 360) % 360;
+        pitch = THREE.MathUtils.clamp(pitch, -85, 85);
+
+        if (debug) console.log('[Sombra] Luz estimada do skybox → yaw:', yaw.toFixed(1), 'pitch:', pitch.toFixed(1));
+        return { yaw, pitch };
+    } catch (e) {
+        console.error('[Sombra] Não foi possível ler os pixels do skybox (provável CORS na imagem) — usando direção de luz padrão.', e);
+        return fallback;
+    }
+}
+
+// ── Sombra projetada do NPC (silhueta clonada, deitada no "chão") ───────
+// Em vez do círculo/elipse genérico de antes, usa a MESMA textura do
+// sprite do NPC como alphaMap de um plano preto e transparente: o formato
+// da sombra é o recorte real do personagem. O plano é deitado no chão
+// (fica perpendicular à esfera do skybox, não mais um billboard voltado
+// pra câmera) e girado pra apontar pro lado OPOSTO ao ponto de luz mais
+// forte — por isso, ao girar o cenário, ela se comporta como uma sombra
+// de verdade (a perspectiva muda com o ângulo de visão), em vez de ficar
+// sempre de frente pra câmera como antes.
+//
+// Matemática (resumo p/ quem for mexer depois): o plano nasce no eixo XY
+// (ThreE.PlaneGeometry) com a base (pé do NPC) na origem. Aplicamos duas
+// rotações via quaternion, NA ORDEM CERTA (por isso não usamos
+// mesh.rotation.x/y direto — a ordem padrão XYZ do Euler do three.js
+// combinaria as rotações fora de ordem e tornaria o "chão" torto):
+//   1) "deitar" -90° no eixo X local (a silhueta passa a ficar plana,
+//      no plano XZ do mundo);
+//   2) "girar" no eixo Y do MUNDO pelo ângulo da luz — prova-se que esse
+//      ângulo de giro é exatamente igual ao yaw da luz (em radianos),
+//      sem precisar somar/inverter nada.
+function buildShadowQuaternion(lightYawDeg) {
+    const flatten = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    const spin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(lightYawDeg));
+    return spin.multiply(flatten); // aplica "flatten" primeiro, "spin" depois
+}
+
+function stretchFromPitch(lightPitchDeg) {
+    const cfg = POSTFX_CONFIG.npcShadow;
+    const p = THREE.MathUtils.clamp(lightPitchDeg, 8, 85); // luz muito rasteira (<8°) já vira sombra absurdamente comprida — trava
+    const stretch = 1 / Math.tan(THREE.MathUtils.degToRad(p));
+    return THREE.MathUtils.clamp(stretch, cfg.minStretch, cfg.maxStretch);
+}
+
+// cont/mapEl não são necessários aqui (a sombra vive só no mundo 3D).
+export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeight, feetPosition, lightYaw = 200, lightPitch = 55 }) {
+    const cfg = POSTFX_CONFIG.npcShadow;
+
+    const material = new THREE.MeshBasicMaterial({
+        alphaMap: npcTexture,   // usa só o alfa do NPC → a forma da sombra é o recorte real do personagem
+        color: 0x000000,
+        transparent: true,
+        opacity: cfg.opacity,
+        depthWrite: false,
+        depthTest: false,       // mesmo critério do sprite antigo — nunca é "engolida" pela esfera do skybox
+        side: THREE.DoubleSide,
+        toneMapped: false,
+    });
+
+    const geometry = new THREE.PlaneGeometry(worldWidth, worldHeight, 1, 1);
+    geometry.translate(0, worldHeight / 2, 0); // pivô nos "pés" (mesma âncora do sprite do NPC), silhueta se estende a partir daí
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 998; // sempre atrás do NPC (que usa 999)
+    mesh.position.copy(feetPosition);
+
+    scene.add(mesh);
+
+    const state = { mesh, baseStretch: cfg.baseSquash };
+    updateNpcGroundShadowLight(state, lightYaw, lightPitch);
+    return state;
+}
+
+// Chame de novo sempre que a estimativa de luz mudar (ex.: quando a
+// textura do skybox termina de carregar depois do NPC).
+export function updateNpcGroundShadowLight(state, lightYaw, lightPitch) {
+    if (!state || !state.mesh) return;
+    state.mesh.quaternion.copy(buildShadowQuaternion(lightYaw));
+    state.baseStretch = POSTFX_CONFIG.npcShadow.baseSquash * stretchFromPitch(lightPitch);
+    state.mesh.scale.set(1, state.baseStretch, 1);
+    state.lightYaw = lightYaw;
+    state.lightPitch = lightPitch;
 }
 
 // ── Inicialização principal ─────────────────────────────────────────────

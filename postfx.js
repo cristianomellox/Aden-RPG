@@ -43,8 +43,8 @@ export const POSTFX_CONFIG = {
     },
 
     // Sombra projetada do NPC (mestre de poções / ferreiro / mercador):
-    // clona a silhueta do próprio sprite do NPC (via alphaMap) e deita no
-    // "chão" na direção oposta ao ponto mais claro do skybox 360°.
+    // clona a silhueta do próprio sprite do NPC (via "map" + cor preta) e
+    // deita no "chão" na direção oposta ao ponto mais claro do skybox 360°.
     npcShadow: {
         enabled: true,
         opacity: 0.5,       // opacidade no repouso (0 = invisível, 1 = totalmente preta)
@@ -252,10 +252,11 @@ export function estimateLightDirectionFromEquirect(texture, { debug = false } = 
 
 // ── Sombra projetada do NPC (silhueta clonada, deitada no "chão") ───────
 // Em vez do círculo/elipse genérico de antes, usa a MESMA textura do
-// sprite do NPC como alphaMap de um plano preto e transparente: o formato
-// da sombra é o recorte real do personagem. O plano é deitado no chão
-// (fica perpendicular à esfera do skybox, não mais um billboard voltado
-// pra câmera) e girado pra apontar pro lado OPOSTO ao ponto de luz mais
+// sprite do NPC (via "map" + color preto — não "alphaMap", ver comentário
+// na função abaixo) num plano preto e transparente: o formato da sombra é
+// o recorte real do personagem. O plano é deitado no chão (fica
+// perpendicular à esfera do skybox, não mais um billboard voltado pra
+// câmera) e girado pra apontar pro lado OPOSTO ao ponto de luz mais
 // forte — por isso, ao girar o cenário, ela se comporta como uma sombra
 // de verdade (a perspectiva muda com o ângulo de visão), em vez de ficar
 // sempre de frente pra câmera como antes.
@@ -288,8 +289,13 @@ export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeig
     const cfg = POSTFX_CONFIG.npcShadow;
 
     const material = new THREE.MeshBasicMaterial({
-        alphaMap: npcTexture,   // usa só o alfa do NPC → a forma da sombra é o recorte real do personagem
-        color: 0x000000,
+        map: npcTexture,        // usa a MESMA textura do NPC — a forma da sombra é o recorte real do personagem
+        color: 0x000000,        // força preto puro (o RGB do sprite é multiplicado pela cor, então zera as cores originais)
+        // IMPORTANTE: é "map", não "alphaMap". alphaMap no three.js lê o
+        // canal VERDE do RGB (não o canal alfa de verdade) — com um NPC de
+        // roupa escura isso deixava o alfa calculado perto de zero na
+        // maior parte do corpo e a sombra ficava praticamente invisível.
+        // "map" usa o alfa real do PNG/WEBP, que é o que precisamos.
         transparent: true,
         opacity: cfg.opacity,
         depthWrite: false,

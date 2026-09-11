@@ -308,7 +308,19 @@ export function createNpcGroundShadow({ scene, npcTexture, worldWidth, worldHeig
     geometry.translate(0, worldHeight / 2, 0); // pivô nos "pés" (mesma âncora do sprite do NPC), silhueta se estende a partir daí
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 998; // sempre atrás do NPC (que usa 999)
+    // IMPORTANTE: renderOrder ACIMA do sprite do NPC (999), não abaixo.
+    // O NPC é um recorte 2D achatado (sprite), sem volume de verdade. Toda
+    // vez que a luz vem de trás/de cima da câmera (ex.: um lampião no teto,
+    // atrás do personagem — o caso mais comum nessas lojas), a sombra "cai"
+    // pra dentro da tela, na mesma região de tela que o corpo do próprio
+    // NPC — e como o NPC não tem profundidade real, ele simplesmente
+    // tampava a sombra por completo (foi isso que reproduzimos e
+    // confirmamos com um teste de renderização real antes de corrigir).
+    // Desenhando a sombra por cima, ela sempre aparece; o único efeito
+    // colateral é que, nesse ângulo específico de luz, ela pode encostar
+    // visualmente na base da bota do NPC em vez de ficar 100% atrás — troca
+    // justa por nunca mais sumir.
+    mesh.renderOrder = 1000;
     mesh.position.copy(feetPosition);
 
     scene.add(mesh);

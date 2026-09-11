@@ -37,8 +37,8 @@ const SPOT_SPHERE_RADIUS = 400;
 // AJUSTE com ?debugSpots=1 (ver comentário acima).
 const CITY_SPOTS = [
     { id: 'btnMercador', yaw: -2, pitch: -10, width: 460, height: 300 },
-    { id: 'btnOficina', yaw: 156, pitch: -32, width: 420, height: 440 },
-    { id: 'btnPotionMaster', yaw: -33, pitch: -50, width: 260, height: 420 },
+    { id: 'btnOficina', yaw: 156, pitch: -30, width: 420, height: 440 },
+    { id: 'btnPotionMaster', yaw: -33, pitch: -40, width: 260, height: 420 },
     { id: 'btnChancelaria', yaw: 21, pitch: 25, width: 170, height: 150 },
     { id: 'cityGuildHotspot', yaw: -125, pitch: 22, width: 140, height: 150 },
 ];

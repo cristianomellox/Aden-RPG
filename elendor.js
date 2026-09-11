@@ -38,7 +38,7 @@ const SPOT_SPHERE_RADIUS = 400;
 const CITY_SPOTS = [
     { id: 'btnMercador', yaw: 4, pitch: -32, width: 280, height: 300 },
     { id: 'btnOficina', yaw: -167, pitch: -44, width: 180, height: 370 },
-    { id: 'btnPotionMaster', yaw: -76, pitch: -45, width: 260, height: 320 },
+    { id: 'btnPotionMaster', yaw: -76, pitch: -50, width: 260, height: 320 },
     { id: 'btnChancelaria', yaw: -160, pitch: -10, width: 220, height: 220 },
     { id: 'cityGuildHotspot', yaw: -145, pitch: 32, width: 140, height: 150 },
 ];

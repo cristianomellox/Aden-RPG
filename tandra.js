@@ -27,9 +27,9 @@ import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, 
 
 const MAP_IMAGE_URL = 'https://aden-rpg.pages.dev/assets/tandra.png'; // mesmo nome de arquivo — só troque o PNG no repositório
 
-let camYaw = 0, camPitch = -6, camFov = 110;
+let camYaw = 0, camPitch = -6, camFov = 120;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
-const FOV_MIN = 75, FOV_MAX = 110;   // limites de zoom normal (arrastar/pinch)
+const FOV_MIN = 120, FOV_MAX = 120;   // limites de zoom normal (arrastar/pinch)
 const PITCH_LIMIT = 89;
 const SPOT_SPHERE_RADIUS = 400;
 

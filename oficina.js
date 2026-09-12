@@ -1466,8 +1466,8 @@ const OF_NPC_SPOT = {
 // a direção da luz caso a auto-detecção erre nesta cena.
 const OF_LIGHT_OVERRIDE = null;
 
-const OF_INITIAL_YAW = 0, OF_INITIAL_PITCH = -6, OF_INITIAL_FOV = 110;
-const OF_FOV_MIN = 75, OF_FOV_MAX = 110;
+const OF_INITIAL_YAW = 0, OF_INITIAL_PITCH = -6, OF_INITIAL_FOV = 120;
+const OF_FOV_MIN = 120, OF_FOV_MAX = 120;
 const OF_START_FOV = OF_FOV_MAX;
 const OF_PITCH_LIMIT = 89;
 
@@ -1631,7 +1631,7 @@ function initOficinaSkybox() {
             // Detecta o ponto mais claro do skybox pra orientar a sombra do
             // NPC (ver estimateLightDirectionFromEquirect em postfx.js).
             const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
-            _ofLightDir = Of_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
+            _ofLightDir = OF_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
             if (_ofNpcShadow) updateNpcGroundShadowLight(_ofNpcShadow, _ofLightDir.yaw, _ofLightDir.pitch, ofYaw);
         },
         undefined,

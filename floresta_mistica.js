@@ -1274,6 +1274,7 @@ function _mobProjectScreen(world) {
     return { x: (proj.x * 0.5 + 0.5) * cw, y: (1 - (proj.y * 0.5 + 0.5)) * ch };
 }
 const _mobProjDirScratch = new THREE.Vector3();
+const _mobCamUpScratch = new THREE.Vector3();
 
 function updateAllMobVisuals() {
     if (!_sky) return;
@@ -1293,24 +1294,20 @@ function updateAllMobVisuals() {
             updateNpcGroundShadowCamera(state.shadow, camYaw);
             state.shadow.mesh.position.copy(world);
         }
-        // Nome do mob: agora calculado em PIXELS DE TELA a partir do ponto dos
-        // pés já projetado, e não mais deslocando no eixo "up" do mundo do
-        // spot. Motivo: o THREE.Sprite sempre se orienta pelo "up" da CÂMERA
-        // (billboard), não pelo "up" tangente que uso pra posicionar o mob no
-        // mundo — em ângulos de câmera diferentes do "up" do spot, os dois
-        // eixos não coincidem, e por isso o nome desviava (mais quanto mais
-        // longe do centro do spot o mob estivesse, e piorava ao andar).
-        // Calculando em px de tela (mesma lógica usada pra definir o tamanho
-        // aparente do sprite), o nome acompanha o topo real do billboard não
-        // importa o ângulo da câmera.
-        const screenFeet = _mobProjectScreen(world);
-        if (screenFeet) {
-            const distToCam = Math.max(1, world.length()); // câmera sempre em (0,0,0)
-            const fovRad = THREE.MathUtils.degToRad(camFov);
-            const pxPerWorldUnit = _sky.cont.clientHeight / (2 * distToCam * Math.tan(fovRad / 2));
+        // Nome do mob: uso o "up" REAL da câmera (extraído da matriz de mundo —
+        // exatamente o mesmo vetor que o THREE.Sprite usa por baixo dos panos
+        // pra se orientar) e projeto o ponto com a perspectiva completa da
+        // câmera, sem fórmula aproximada. A tentativa anterior (converter
+        // px-por-unidade-de-mundo com uma fórmula linear) só era exata perto
+        // do centro da tela — perto das bordas (câmera bem aberta, 120° de
+        // FOV) o erro crescia, exatamente onde o problema ainda aparecia.
+        _mobCamUpScratch.setFromMatrixColumn(_sky.camera.matrixWorld, 1).normalize();
+        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * 1.05);
+        const screenHead = _mobProjectScreen(headWorld);
+        if (screenHead) {
             el.style.display = '';
-            el.style.left = screenFeet.x + 'px';
-            el.style.top = (screenFeet.y - state.baseH * 1.05 * pxPerWorldUnit) + 'px';
+            el.style.left = screenHead.x + 'px';
+            el.style.top = screenHead.y + 'px';
         } else {
             el.style.display = 'none';
         }

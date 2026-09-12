@@ -3477,7 +3477,7 @@ function initMobAvatarBreathing() {
                 // NPC do Mestre de Poções), não mais um div CSS.
                 if (visual && visual.ready && visual.shadow) {
                     const shadowScale = 1 + squash * 1.35 + stepSquash * 1.8 - liftAmt * 0.16 + Math.max(0, breathAmount) * 0.12;
-                    const shadowOpacity = 0.82 + squash * 0.5 + contactAmt * 0.08 - liftAmt * 0.22 - Math.max(0, breathAmount) * 0.08;
+                    const shadowOpacity = 0.62 + squash * 0.5 + contactAmt * 0.08 - liftAmt * 0.22 - Math.max(0, breathAmount) * 0.08;
 visual.shadow.mesh.material.opacity = Math.min(0.9, Math.max(0.35, shadowOpacity));
                 }
             });

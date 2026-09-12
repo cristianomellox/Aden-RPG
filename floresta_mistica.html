@@ -140,8 +140,8 @@ transform-origin:center center;}
 .spot-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.65);font-size:.6em;font-weight:bold;text-shadow:1px 1px 3px #000;white-space:nowrap;pointer-events:none;display:none;}
 .hunt-spot.active-spot{cursor:default!important;}
 
-.mob-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:6;pointer-events:none;}
-.mob-name{font-size:.65em;font-weight:bold;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.mob-wrapper{position:absolute;pointer-events:none;z-index:6;width:120px;}
+.mob-name{position:absolute;top:0;left:0;width:100%;text-align:center;font-size:.78em;font-weight:bold;color:#fff!important;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 /* O visual do mob agora é um THREE.Sprite 3D (billboard, sempre de frente pra
    câmera — nunca inclina/flutua ao girar o céu), renderizado no mesmo canvas
    do skybox. Este <img> e a sombra CSS abaixo continuam existindo no DOM só

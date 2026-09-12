@@ -1210,7 +1210,7 @@ function _mobGetLogical(el) {
 
 // Fração da altura da tela ocupada pelo mob (no FOV fixo deste mapa) — ajuste
 // aqui se o tamanho visual dos mobs precisar mudar depois de calibrar ao vivo.
-const MOB_HEIGHT_FRAC = 0.11;
+const MOB_HEIGHT_FRAC = 0.05;
 
 function _mobCreateVisual(spot, baseImgUrl) {
     const state = { sprite: null, material: null, shadow: null, baseW: 0, baseH: 0, ready: false };

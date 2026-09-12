@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js';
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import { initPostFX } from './postfx.js';
+import { initPostFX, estimateLightDirectionFromEquirect, createNpcGroundShadow, updateNpcGroundShadowLight, updateNpcGroundShadowCamera } from './postfx.js';
+import * as TWEEN from '@tweenjs/tween.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SKIN HELPERS — Molduras de avatar (Áreas de Caça)
@@ -747,6 +748,7 @@ async function handleActivateHourglass(){
 // ═══════════════════════════════════════════════════════════════════════
 
 let _sky = null; // { scene, camera, renderer, canvas, cont }
+let _lightDir = { yaw: 200, pitch: 55 }; // atualizado quando o skybox termina de carregar (ver initSkybox) — usado pra orientar a sombra 3D dos mobs
 let camYaw = 0, camPitch = -6, camFov = 120;
 const INITIAL_YAW = 0, INITIAL_PITCH = -6, INITIAL_FOV = 75;
 const FOV_MIN = 120, FOV_MAX = 120;     // limites de zoom (menor FOV = mais zoom)
@@ -795,6 +797,18 @@ function initSkybox() {
             material.map = tex;
             material.color.set(0xffffff);
             material.needsUpdate = true;
+
+            // Detecta o ponto mais claro do skybox pra orientar a sombra dos
+            // mobs (mesma técnica do NPC do Mestre de Poções — ver
+            // estimateLightDirectionFromEquirect em postfx.js). Se algum mob
+            // já tiver sombra criada antes disso, reaplica a direção nela.
+            const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
+            _lightDir = estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
+            for (const el of _mobVisualRegistry) {
+                if (el.__mobVisual && el.__mobVisual.shadow) {
+                    updateNpcGroundShadowLight(el.__mobVisual.shadow, _lightDir.yaw, _lightDir.pitch, camYaw);
+                }
+            }
         },
         undefined,
         (err) => console.error('[Vale Arcano] Falha ao carregar a imagem 360 do mapa:', err)
@@ -825,7 +839,15 @@ function initSkybox() {
     }
     window.addEventListener('resize', onResize);
 
-    (function loop() {
+    let _lastLoopTs = performance.now();
+    (function loop(ts) {
+        const dt = Math.min(ts - _lastLoopTs, 100);
+        _lastLoopTs = ts;
+
+        TWEEN.update(ts); // avança a caminhada dos mobs (ver _mobWalkPath) — mesmo relógio do render, nunca dessincroniza
+        _updateMobSeparation(dt); // rede de segurança física — nunca deixa dois mobs se sobreporem visualmente
+        updateAllMobVisuals(); // reprojeta cada mob individualmente no mundo 3D (billboard, nunca inclina/flutua)
+
         if (_sky.pfx) {
             try {
                 _sky.pfx.render(scene, camera);
@@ -839,7 +861,7 @@ function initSkybox() {
         }
         updateAllSpotProjections();
         requestAnimationFrame(loop);
-    })();
+    })(_lastLoopTs);
 }
 
 // Aplica camYaw/camPitch/camFov na câmera real e publica o estado atual
@@ -1075,6 +1097,337 @@ function enableMapInteraction() {
     initSpotDebugTool();
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// MOBS COMO SPRITES 3D (billboard) — mesma técnica do NPC do Mestre de
+// Poções: cada mob é um THREE.Sprite (sempre de frente pra câmera,
+// nunca deforma/inclina) ancorado numa posição real do mundo 3D.
+//
+// Antes, os mobs eram <img> posicionados via CSS dentro de uma caixa
+// (.hunt-spot) que só era transladada/escalada como um bloco só — ao
+// girar a câmera, essa aproximação não acompanhava a perspectiva real
+// do ponto onde cada mob estava, dando a sensação de flutuar/inclinar.
+// Agora cada mob tem seu próprio ponto no mundo, projetado
+// individualmente a cada frame (updateAllMobVisuals), exatamente como
+// o NPC — então nunca destoa da câmera.
+//
+// A caminhada (wander) e o desvio entre mobs CONTINUAM em coordenadas
+// "locais" (px dentro da caixa do spot, 0..spot.width/height) — só a
+// CAMADA VISUAL mudou. Isso preserva quase 100% da lógica de
+// posicionamento/desvio/combate já existente, que lê e escreve em
+// el.style.left/top normalmente.
+//
+// O QUE REALMENTE MUDOU: a animação da caminhada, que antes usava CSS
+// `transition: left/top` (o navegador anima "por fora" — o JS não sabe
+// o valor exato durante o trajeto, por isso o desvio usava
+// __wanderPos, o DESTINO, em vez da posição real do mob), agora usa
+// tween.js. Como o tween atualiza el.style.left/top a cada frame de
+// verdade, o cálculo de desvio passa a enxergar a posição REAL de cada
+// mob a qualquer instante — não mais só o destino — corrigindo o
+// "atravessar" inconsistente. Além disso, _updateMobSeparation aplica
+// uma leve repulsão contínua (só visual, nunca escrita de volta em
+// style.left/top) como última rede de segurança física: mesmo que o
+// planejamento de rota falhe, dois mobs nunca chegam a se sobrepor.
+// ═══════════════════════════════════════════════════════════════════
+
+const _mobTexCache = new Map(); // key -> {tex, waiters[]} — textura compartilhada entre mobs do mesmo tipo
+// IMPORTANTE: THREE.Sprite ignora o SINAL da escala — o renderer extrai a
+// escala a partir do comprimento (sempre positivo) das colunas da matriz do
+// mundo, então `sprite.scale.x = -1` não espelha nada (silenciosamente vira
+// o mesmo que 1). Por isso o espelhamento (mob virando pra esquerda) precisa
+// ser feito trocando a TEXTURA por uma cópia espelhada (repeat.x=-1), não a
+// escala — ver `flip` abaixo.
+function _mobGetTexture(url, flip, onReady) {
+    const key = url + (flip ? '#flip' : '');
+    let entry = _mobTexCache.get(key);
+    if (entry) { if (entry.tex) onReady(entry.tex); else entry.waiters.push(onReady); return; }
+    entry = { tex: null, waiters: [onReady] };
+    _mobTexCache.set(key, entry);
+    if (flip) {
+        // Reaproveita a textura normal (já em cache ou carregada agora) e cria uma
+        // CÓPIA espelhada via repeat/offset — sem baixar a imagem de novo.
+        _mobGetTexture(url, false, (baseTex) => {
+            const flipped = baseTex.clone();
+            flipped.wrapS = THREE.RepeatWrapping;
+            flipped.repeat.x = -1;
+            flipped.offset.x = 1;
+            flipped.needsUpdate = true;
+            entry.tex = flipped;
+            entry.waiters.forEach(fn => fn(flipped));
+            entry.waiters.length = 0;
+        });
+        return;
+    }
+    new THREE.TextureLoader().load(
+        url,
+        (tex) => { tex.colorSpace = THREE.SRGBColorSpace; entry.tex = tex; entry.waiters.forEach(fn => fn(tex)); entry.waiters.length = 0; },
+        undefined,
+        (err) => { console.error('[Mobs3D] Falha ao carregar textura', url, err); _mobTexCache.delete(key); }
+    );
+}
+
+// Base tangente (right/up) no ponto onde o spot "vive" na esfera — usada pra
+// converter a posição local (px dentro da caixa) numa posição real do mundo,
+// como se fosse um "chão" plano ancorado naquele trecho do céu.
+const _spotTangentCache = new Map();
+function _spotTangent(spot) {
+    let t = _spotTangentCache.get(spot.id);
+    if (t) return t;
+    const center = yawPitchToVector(spot.yaw, spot.pitch, SPOT_SPHERE_RADIUS);
+    const dir = center.clone().normalize();
+    let right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), dir);
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0); // spot quase no zênite/nadir
+    right.normalize();
+    const up = new THREE.Vector3().crossVectors(dir, right).normalize();
+    t = { center, right, up };
+    _spotTangentCache.set(spot.id, t);
+    return t;
+}
+
+const MOB_WORLD_PER_PX = 1; // 1 unidade de mundo por px local — mesma escala do resto da cena (raio da esfera, distâncias etc.)
+function _mobLocalToWorld(spot, leftPx, topPx) {
+    const t = _spotTangent(spot);
+    const dx = (leftPx + MOB_HITBOX_W / 2) - spot.width / 2;
+    const dy = (topPx + MOB_HITBOX_H) - spot.height / 2; // pés = base da hitbox
+    return t.center.clone()
+        .addScaledVector(t.right, dx * MOB_WORLD_PER_PX)
+        .addScaledVector(t.up, -dy * MOB_WORLD_PER_PX);
+}
+
+// Posição "LÓGICA" do mob (px dentro da caixa do spot) — é o que o wander, o
+// desvio e o combate leem/escrevem, exatamente como antes. Antes ela vivia em
+// el.style.left/top; agora mora aqui, separada, porque style.left/top do wrap
+// passou a ser a posição em TELA (ver updateAllMobVisuals) — a mesma projeção
+// 3D usada pelo sprite. Antes as duas coisas eram a mesma (a caixa do spot
+// inteira só transladava/escalava), então o nome ficava sempre grudado no
+// mob "de graça"; com o sprite agora projetado individualmente (pra corrigir
+// o inclinar/flutuar), se o nome continuasse preso à caixa antiga ele iria
+// se descolando do sprite ao andar — por isso o nome também passou a usar
+// esta mesma projeção, e não mais style.left/top como posição lógica.
+function _mobGetLogical(el) {
+    return el.__logicalPos || (el.__logicalPos = { left: 0, top: 0 });
+}
+
+// Fração da altura da tela ocupada pelo mob (no FOV fixo deste mapa) — ajuste
+// aqui se o tamanho visual dos mobs precisar mudar depois de calibrar ao vivo.
+const MOB_HEIGHT_FRAC = 0.09;
+
+function _mobCreateVisual(spot, baseImgUrl) {
+    const state = { sprite: null, material: null, shadow: null, baseW: 0, baseH: 0, ready: false };
+    _mobGetTexture(baseImgUrl, false, (tex) => {
+        if (!_sky) return;
+        const aspect = tex.image.width / tex.image.height;
+        const fovRad = THREE.MathUtils.degToRad(camFov);
+        const worldHeight = 2 * SPOT_SPHERE_RADIUS * Math.tan(fovRad / 2) * MOB_HEIGHT_FRAC;
+        const worldWidth = worldHeight * aspect;
+        const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+        const sprite = new THREE.Sprite(material);
+        sprite.center.set(0.5, 0); // pivô nos "pés" — igual ao NPC do Mestre de Poções
+        sprite.scale.set(worldWidth, worldHeight, 1);
+        sprite.renderOrder = 5;
+        _sky.scene.add(sprite);
+        state.sprite = sprite;
+        state.material = material;
+        state.baseW = worldWidth;
+        state.baseH = worldHeight;
+        try {
+            state.shadow = createNpcGroundShadow({
+                scene: _sky.scene,
+                npcTexture: tex,
+                worldWidth,
+                worldHeight,
+                feetPosition: sprite.position,
+                lightYaw: _lightDir.yaw,
+                lightPitch: _lightDir.pitch,
+                cameraYaw: camYaw,
+            });
+        } catch (e) { console.error('[Mobs3D] Falha ao criar sombra do mob:', e); }
+        state.ready = true;
+    });
+    return state;
+}
+
+function _mobSetTexture(state, url, flip) {
+    if (!state || !state.material) return;
+    _mobGetTexture(url, !!flip, (tex) => { if (state.material) { state.material.map = tex; state.material.needsUpdate = true; } });
+}
+
+function _mobDestroyVisual(state) {
+    if (!state) return;
+    if (state.sprite && _sky) _sky.scene.remove(state.sprite);
+    if (state.shadow && state.shadow.mesh && _sky) _sky.scene.remove(state.shadow.mesh);
+}
+
+// Todos os mobs vivos na página (reprojetados a cada frame) e todos os grupos
+// (um por spot) usados pela repulsão contínua (ver _updateMobSeparation).
+const _mobVisualRegistry = [];
+const _allMobGroups = [];
+
+function _mobProjectScreen(world) {
+    if (!_sky) return null;
+    const { camera, cont } = _sky;
+    const camDir = camera.getWorldDirection(_mobProjDirScratch);
+    const toPoint = world.clone().sub(camera.position).normalize();
+    if (camDir.dot(toPoint) <= 0.05) return null; // atrás da câmera — some, igual aos spots
+    const proj = world.clone().project(camera);
+    const cw = cont.clientWidth, ch = cont.clientHeight;
+    return { x: (proj.x * 0.5 + 0.5) * cw, y: (1 - (proj.y * 0.5 + 0.5)) * ch };
+}
+const _mobProjDirScratch = new THREE.Vector3();
+const _mobCamUpScratch = new THREE.Vector3();
+
+function updateAllMobVisuals() {
+    if (!_sky) return;
+    for (const el of _mobVisualRegistry) {
+        const state = el.__mobVisual;
+        if (!state || !state.ready || !el.isConnected) continue;
+        const spot = el.__mobSpot;
+        const { left, top } = _mobGetLogical(el);
+        const sep = el.__mobSepOffset || { x: 0, y: 0 };
+        const fx = el.__mobFx || { swayX: 0, bobY: 0 };
+        const world = _mobLocalToWorld(spot, left + sep.x, top + sep.y);
+        const t = _spotTangent(spot);
+        world.addScaledVector(t.right, fx.swayX * MOB_WORLD_PER_PX);
+        world.addScaledVector(t.up, -fx.bobY * MOB_WORLD_PER_PX);
+        state.sprite.position.copy(world);
+        if (state.shadow) {
+            updateNpcGroundShadowCamera(state.shadow, camYaw);
+            state.shadow.mesh.position.copy(world);
+        }
+        // Nome do mob: uso o "up" REAL da câmera (extraído da matriz de mundo —
+        // exatamente o mesmo vetor que o THREE.Sprite usa por baixo dos panos
+        // pra se orientar) e projeto o ponto com a perspectiva completa da
+        // câmera, sem fórmula aproximada. A tentativa anterior (converter
+        // px-por-unidade-de-mundo com uma fórmula linear) só era exata perto
+        // do centro da tela — perto das bordas (câmera bem aberta, 120° de
+        // FOV) o erro crescia, exatamente onde o problema ainda aparecia.
+        _mobCamUpScratch.setFromMatrixColumn(_sky.camera.matrixWorld, 1).normalize();
+        const headWorld = world.clone().addScaledVector(_mobCamUpScratch, state.baseH * 1.05);
+        const screenHead = _mobProjectScreen(headWorld);
+        if (screenHead) {
+            el.style.display = '';
+            el.style.left = screenHead.x + 'px';
+            el.style.top = screenHead.y + 'px';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+}
+
+// Repulsão contínua entre mobs do mesmo spot — só ajusta a posição
+// RENDERIZADA (nunca escreve na posição lógica, que continua sendo a
+// verdade usada pelo planejamento de rota). É a última rede de segurança:
+// se o desvio planejado falhar e dois mobs chegarem perto demais, isso
+// evita que fiquem visualmente sobrepostos.
+//
+// A direção do empurrão é TRAVADA no instante em que o contato começa (a
+// partir da posição relativa NAQUELE momento) e mantida reta enquanto durar
+// o contato — só a magnitude (que segue a proximidade atual) varia. Antes eu
+// tentava suavizar a direção continuamente a cada frame, mas como o alvo
+// (a direção crua entre os dois mobs) muda o tempo todo enquanto eles se
+// cruzam, suavizar a direção só fazia o empurrão "varrer" um arco enquanto
+// perseguia esse alvo em movimento — visualmente um giro. Travando a
+// direção uma vez, o empurrão vira sempre um simples empurrão reto, nunca
+// uma curva.
+const MOB_SEP_PUSH_MAX = 18; // px máx. de empurrão visual
+function _updateMobSeparation(dt) {
+    for (const group of _allMobGroups) {
+        for (const el of group) {
+            if (el.classList.contains('mob-dying') || el.classList.contains('mob-respawning')) { el.__mobSepOffset = { x: 0, y: 0 }; el.__mobPushDir = null; continue; }
+            // Viés fixo por mob (sorteado uma vez) — desempata casos quase perfeitamente
+            // simétricos (dois mobs exatamente sobrepostos), onde a direção "certa" do
+            // empurrão é ambígua.
+            const bias = el.__mobAvoidBias || (el.__mobAvoidBias = { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 });
+            const { left, top } = _mobGetLogical(el);
+            const cx = left + MOB_HITBOX_W / 2, cy = top + MOB_HITBOX_H / 2;
+            let pushX = 0, pushY = 0;
+            for (const other of group) {
+                if (other === el || other.classList.contains('mob-dying')) continue;
+                const ol = _mobGetLogical(other).left, ot = _mobGetLogical(other).top;
+                const ocx = ol + MOB_HITBOX_W / 2, ocy = ot + MOB_HITBOX_H / 2;
+                let dx = cx - ocx, dy = cy - ocy;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1) { dx = bias.x || 1; dy = bias.y; dist = Math.sqrt(dx * dx + dy * dy) || 1; }
+                if (dist < MOB_MIN_DIST_PX) {
+                    const strength = (MOB_MIN_DIST_PX - dist) / MOB_MIN_DIST_PX;
+                    pushX += (dx / dist) * strength + bias.x * 0.15 * strength;
+                    pushY += (dy / dist) * strength + bias.y * 0.15 * strength;
+                }
+            }
+            const rawMag = Math.sqrt(pushX * pushX + pushY * pushY);
+            let targetX = 0, targetY = 0;
+            if (rawMag > 0.001) {
+                if (!el.__mobPushDir) {
+                    // Início de um novo contato — trava a direção agora (reta), não recalcula depois.
+                    el.__mobPushDir = { x: pushX / rawMag, y: pushY / rawMag };
+                }
+                const mag = Math.min(1, rawMag);
+                targetX = el.__mobPushDir.x * MOB_SEP_PUSH_MAX * mag;
+                targetY = el.__mobPushDir.y * MOB_SEP_PUSH_MAX * mag;
+            } else {
+                el.__mobPushDir = null; // saiu do contato — próxima vez trava uma direção nova
+            }
+            const prev = el.__mobSepOffset || { x: 0, y: 0 };
+            const rate = Math.min(1, dt * 0.02); // pode reagir mais rápido agora — a direção já não muda de repente
+            el.__mobSepOffset = { x: prev.x + (targetX - prev.x) * rate, y: prev.y + (targetY - prev.y) * rate };
+        }
+    }
+}
+
+// ── Efeitos de combate portados pra o sprite 3D (flash de impacto, tremor,
+// morte e respawn) — antes eram só @keyframes CSS no <img>; como o visual
+// agora é o sprite Three.js, essas mesmas sensações são recriadas com tween.js.
+function _mobVisualFlash(el) {
+    const state = el.__mobVisual;
+    if (!state || !state.material) return;
+    const c = state.material.color;
+    c.setRGB(1, 1, 1);
+    new TWEEN.Tween(c).to({ r: 2.2, g: 2.2, b: 1.5 }, 90).easing(TWEEN.Easing.Quadratic.Out)
+        .chain(new TWEEN.Tween(c).to({ r: 1, g: 1, b: 1 }, 190).easing(TWEEN.Easing.Quadratic.In))
+        .start();
+}
+
+function _mobVisualShake(el) {
+    el.__mobShake = { x: 0, rot: 0 };
+    const obj = { t: 0 };
+    new TWEEN.Tween(obj).to({ t: 1 }, 350)
+        .onUpdate(() => {
+            const decay = 1 - obj.t;
+            const wob = Math.sin(obj.t * Math.PI * 5);
+            el.__mobShake = { x: wob * 6 * decay, rot: wob * 3 * decay };
+        })
+        .onComplete(() => { el.__mobShake = { x: 0, rot: 0 }; })
+        .start();
+}
+
+function _mobVisualDie(el) {
+    const state = el.__mobVisual;
+    if (el.__walkTween) { el.__walkTween.stop(); el.__walkTween = null; }
+    if (!state || !state.material) return;
+    const obj = { scale: 1, opacity: 1 };
+    new TWEEN.Tween(obj).to({ scale: 0.4, opacity: 0 }, 850).easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => {
+            state.material.opacity = obj.opacity;
+            state.sprite.scale.set(state.baseW * obj.scale, state.baseH * obj.scale, 1);
+            if (state.shadow) state.shadow.mesh.material.opacity = obj.opacity * 0.8;
+        })
+        .start();
+}
+
+function _mobVisualRespawn(el) {
+    const state = el.__mobVisual;
+    if (!state || !state.material) return;
+    const obj = { scale: 0.3, opacity: 0 };
+    state.material.opacity = 0;
+    new TWEEN.Tween(obj).to({ scale: 1, opacity: 1 }, 700).easing(TWEEN.Easing.Back.Out)
+        .onUpdate(() => {
+            const op = Math.min(1, obj.opacity);
+            state.material.opacity = op;
+            state.sprite.scale.set(state.baseW * obj.scale, state.baseH * obj.scale, 1);
+            if (state.shadow) state.shadow.mesh.material.opacity = op * 0.8;
+        })
+        .start();
+}
+
 // ── WANDER ───────────────────────────────────────────────────
 // Velocidade de caminhada constante (px/s) — a duração do deslocamento
 // agora é calculada pela distância, então perto ou longe o mob sempre
@@ -1087,12 +1440,18 @@ const MOB_HITBOX_W = 70, MOB_HITBOX_H = 90;
 const MOB_AVOID_MARGIN_PX = MOB_MIN_DIST_PX + 8; // folga extra usada só pra decidir se um trecho do caminho passa perto demais de outro mob
 const MOB_MAX_DETOURS = 4; // limite de waypoints de desvio numa mesma caminhada (evita ficar recalculando pra sempre num spot muito cheio)
 function _mobDistSq(aLeft,aTop,bLeft,bTop){const acx=aLeft+MOB_HITBOX_W/2,acy=aTop+MOB_HITBOX_H/2;const bcx=bLeft+MOB_HITBOX_W/2,bcy=bTop+MOB_HITBOX_H/2;const dx=acx-bcx,dy=acy-bcy;return dx*dx+dy*dy;}
-function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
+// IMPORTANTE: usa sempre a posição REAL e atual do outro mob (style.left/top,
+// que agora é atualizado a cada frame pelo tween.js — ver _mobWalkPath), nunca
+// o destino planejado. Antes, durante uma transição CSS, style.left/top já
+// valia o destino final mesmo com o mob ainda no meio do caminho, então o
+// desvio comparava contra um ponto onde o outro mob nem estava ainda — essa
+// era a causa do "atravessar" inconsistente.
+function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot=_mobGetLogical(other);const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
 function _pickMobPosition(w,h,group,self){const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);let best=null,bestScore=-1;for(let tries=0;tries<24;tries++){const left=Math.random()*maxLeft,top=Math.random()*maxTop;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>=MOB_MIN_DIST_PX)return{left,top};if(minDist>bestScore){bestScore=minDist;best={left,top};}}if(best)return best;const cols=6,rows=6;let gLeft=0,gTop=0,gScore=-1;for(let r=0;r<=rows;r++){for(let c=0;c<=cols;c++){const left=(maxLeft*c)/cols,top=(maxTop*r)/rows;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>gScore){gScore=minDist;gLeft=left;gTop=top;}}}return{left:gLeft,top:gTop};}
 // Distância do ponto (px,py) até o segmento AB — usada pra saber se um trecho do caminho passa perto demais de outro mob.
 function _mobPointSegDist(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((px-ax)*dx+(py-ay)*dy)/lenSq:0;t=Math.max(0,Math.min(1,t));const cx=ax+dx*t,cy=ay+dy*t;return Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));}
 // Menor distância de um único trecho AB até qualquer outro mob do grupo.
-function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
+function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot=_mobGetLogical(other);const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
 // Menor distância ao longo do caminho INTEIRO (origem passando por cada waypoint até o destino).
 function _mobFullPathClearance(oldLeft,oldTop,path,group,self){let curLeft=oldLeft,curTop=oldTop,min=Infinity;for(const p of path){const ax=curLeft+MOB_HITBOX_W/2,ay=curTop+MOB_HITBOX_H/2;const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;const c=_mobSegMinClearance(ax,ay,bx,by,group,self);if(c<min)min=c;curLeft=p.left;curTop=p.top;}return min;}
 // Acha, ao longo do caminho inteiro, o trecho que passa mais perto de algum outro mob (abaixo da folga mínima).
@@ -1106,7 +1465,7 @@ function _mobFindWorstSegment(oldLeft,oldTop,path,group,self){
         const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;
         for(const other of group){
             if(other===self)continue;
-            const ot=other.__wanderPos||{left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};
+            const ot=_mobGetLogical(other);
             const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;
             const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);
             if(d<worstDist){worstDist=d;worstIdx=i;worstObstacle={ox,oy};}
@@ -1150,34 +1509,102 @@ function _mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,self){
 }
 // Anda por um ou mais pontos em sequência (waypoints de desvio + destino final), respeitando a
 // velocidade constante do mob e disparando o bounce de passada a cada trecho. Retorna a duração total (ms).
+//
+// Antes disso era feito com `el.style.transition` (CSS) + setTimeout por trecho: o navegador
+// animava o movimento "por fora" do JS, então style.left/top já valia o DESTINO do trecho assim
+// que era escrito, mesmo com o mob ainda a caminho — daí o desvio (_mobMinDistTo/_mobSegMinClearance)
+// enxergar só o destino, nunca a posição real durante o trajeto. Com tween.js, cada frame de verdade
+// atualiza style.left/top (onUpdate), então a posição real fica sempre disponível pra quem precisar dela.
 function _mobWalkPath(el,img,startLeft,startTop,points){
+    if(el.__walkTween){el.__walkTween.stop();el.__walkTween=null;}
     let curLeft=startLeft,curTop=startTop,totalDist=0;
     const segs=points.map(p=>{const dx=p.left-curLeft,dy=p.top-curTop;const dist=Math.sqrt(dx*dx+dy*dy);const seg={from:{left:curLeft,top:curTop},to:p,dist};curLeft=p.left;curTop=p.top;return seg;});
     totalDist=segs.reduce((sum,s)=>sum+s.dist,0);
     const totalDurationMs=Math.min(MOB_WALK_MAX_MS,Math.max(MOB_WALK_MIN_MS,(totalDist/MOB_WALK_SPEED_PX_S)*1000));
-    let elapsed=0;
+    const pos={left:startLeft,top:startTop};
+    let first=null,chain=null;
     segs.forEach((seg,idx)=>{
         const isLast=idx===segs.length-1;
         const segDurationMs=totalDist>0?Math.max(60,(seg.dist/totalDist)*totalDurationMs):totalDurationMs/segs.length;
-        wanderTimers.push(setTimeout(()=>{
-            const durationS=(segDurationMs/1000).toFixed(2);
-            el.style.transition=`left ${durationS}s ease-in-out,top ${durationS}s ease-in-out`;
-            el.style.left=seg.to.left+'px';
-            el.style.top=seg.to.top+'px';
-            if(img)_mobWalkOnMoveStart(img,seg.to.left-seg.from.left,seg.to.top-seg.from.top);
-            if(isLast){
-                const leadOut=Math.min(350,segDurationMs*0.2);
-                wanderTimers.push(setTimeout(()=>{if(img)_mobWalkOnMoveEnd(img);},Math.max(0,segDurationMs-leadOut)));
-            }
-        },elapsed));
-        elapsed+=segDurationMs;
+        const tw=new TWEEN.Tween(pos)
+            .to({left:seg.to.left,top:seg.to.top},segDurationMs)
+            .easing(TWEEN.Easing.Quadratic.InOut)
+            .onStart(()=>{if(img)_mobWalkOnMoveStart(el,img,seg.to.left-seg.from.left,seg.to.top-seg.from.top);})
+            .onUpdate(()=>{const lp=_mobGetLogical(el);lp.left=pos.left;lp.top=pos.top;})
+            .onComplete(()=>{if(isLast&&img)_mobWalkOnMoveEnd(img);});
+        if(chain)chain.chain(tw);else first=tw;
+        chain=tw;
     });
-    return elapsed;
+    el.__walkTween=first;
+    if(first)first.start();
+    return totalDurationMs;
 }
-function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group){el.__wanderPos={left:parseFloat(el.style.left)||0,top:parseFloat(el.style.top)||0};if(!group.includes(el))group.push(el);}const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;if(group)el.__wanderPos={left:newLeft,top:newTop};const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group&&!group.includes(el))group.push(el);const move=()=>{const lp=_mobGetLogical(el);const oldLeft=lp.left;const oldTop=lp.top;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
-function renderSpots(){const map=document.getElementById('map');map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());clearRegisteredSpots();SPOTS.forEach(spot=>{const el=document.createElement('div');el.className='hunt-spot';el.id=`spot-${spot.id}`;Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});const lbl=document.createElement('div');lbl.className='spot-label';lbl.textContent=spot.name;lbl.style.color=spot.labelColor||'#fff';el.appendChild(lbl);const mobGroup=[];for(let i=0;i<5;i++){const wrap=document.createElement('div');wrap.className='mob-wrapper';const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);Object.assign(wrap.style,{left:_initPos.left+'px',top:_initPos.top+'px'});const nm=document.createElement('div');nm.className='mob-name';nm.textContent=spot.name;nm.style.color=spot.labelColor||'#fcc';const shadow=document.createElement('div');shadow.className='mob-shadow';const av=document.createElement('img');av.className='mob-avatar';av.dataset.baseSrc=spot.mobImg;av.src=spot.mobImg;av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;wrap.appendChild(shadow);wrap.appendChild(nm);wrap.appendChild(av);el.appendChild(wrap);startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000,mobGroup);}el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});map.appendChild(el);registerSpotForProjection(spot,el);});}
+// Cada mob continua sendo um <div class="mob-wrapper"> comum (mesma lógica de
+// posição/desvio/combate de sempre), só que agora fica invisível (opacity:0
+// via CSS) e serve só de "cérebro": guarda a posição lógica (style.left/top),
+// o estado de respiração/passo e os nomes/números de dano. O visual de
+// verdade é o THREE.Sprite criado em _mobCreateVisual, reprojetado a cada
+// frame em updateAllMobVisuals — nunca inclina/flutua ao girar a câmera.
+function renderSpots(){
+    const map=document.getElementById('map');
+    map.querySelectorAll('.hunt-spot').forEach(e=>e.remove());
+    clearRegisteredSpots();
+    // Destrói sprites/sombras de uma renderização anterior (evita vazamento de memória e mobs duplicados no céu).
+    for(const el of _mobVisualRegistry)_mobDestroyVisual(el.__mobVisual);
+    _mobVisualRegistry.length=0;
+    _allMobGroups.length=0;
+    SPOTS.forEach(spot=>{
+        const el=document.createElement('div');
+        el.className='hunt-spot';
+        el.id=`spot-${spot.id}`;
+        Object.assign(el.style,{width:spot.width+'px',height:spot.height+'px'});
+        const lbl=document.createElement('div');
+        lbl.className='spot-label';
+        lbl.textContent=spot.name;
+        lbl.style.color=spot.labelColor||'#fff';
+        el.appendChild(lbl);
+        const mobGroup=[];
+        _allMobGroups.push(mobGroup);
+        for(let i=0;i<5;i++){
+            const wrap=document.createElement('div');
+            wrap.className='mob-wrapper';
+            const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);
+            Object.assign(_mobGetLogical(wrap),_initPos);
+            wrap.style.transform='translate(-50%, 0)'; // centraliza o nome no ponto projetado (ver updateAllMobVisuals)
+            const nm=document.createElement('div');
+            nm.className='mob-name';
+            nm.textContent=spot.name;
+            const shadow=document.createElement('div');
+            shadow.className='mob-shadow';
+            const av=document.createElement('img');
+            av.className='mob-avatar';
+            av.dataset.baseSrc=spot.mobImg;
+            av.src=spot.mobImg;
+            av.onerror=()=>{if(av.src!==spot.mobImg&&(av.src.includes('_up.')||av.src.includes('_down.'))){av.src=spot.mobImg;}else{av.src=DEFAULT_AVATAR;}};
+            av.style.animationDelay=`-${(Math.random()*3.2).toFixed(2)}s, -${(Math.random()*4.5).toFixed(2)}s`;
+            wrap.appendChild(shadow);
+            wrap.appendChild(nm);
+            wrap.appendChild(av);
+            // IMPORTANTE: o wrap vai direto pro #map (não pra dentro da .hunt-spot),
+            // porque a .hunt-spot ainda tem seu próprio transform:scale/translate (a
+            // mesma caixa aproximada de antes). Se o nome ficasse dentro dela, as
+            // coordenadas de tela calculadas em updateAllMobVisuals (que já são px
+            // reais da viewport) seriam escaladas/deslocadas de novo por cima —
+            // exatamente o desalinhamento que estava acontecendo.
+            map.appendChild(wrap);
+            wrap.__mobSpot=spot;
+            wrap.__mobVisual=_mobCreateVisual(spot,spot.mobImg);
+            _mobVisualRegistry.push(wrap);
+            startWander(wrap,spot.width,spot.height,i*1400+Math.random()*3000,mobGroup);
+        }
+        el.addEventListener('click',e=>{if(e.target.closest('.other-player-wrapper'))return;handleSpotClick(spot);});
+        map.appendChild(el);
+        registerSpotForProjection(spot,el);
+    });
+}
 
 // ── AVATAR DO JOGADOR NO SPOT ────────────────────────────────
 function renderPlayerOnSpot(spotId){
@@ -1195,7 +1622,7 @@ function renderPlayerOnSpot(spotId){
     if(myGuildName){
         const gb=document.createElement('div');
         gb.className='player-name-label';
-        gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
+        gb.style.cssText='font-size:1.15em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
         gb.textContent=esc(myGuildName);
         wrap.appendChild(gb);
         gb.style.marginBottom='30px';
@@ -1265,7 +1692,7 @@ function renderOtherPlayers(players){
         if(guildName){
             const gb=document.createElement('div');
             gb.className='other-player-name';
-            gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;';
+            gb.style.cssText='font-size:1.15em;color:silver;margin-top:-3px;';
             gb.textContent=esc(guildName);
             wrap.appendChild(gb);
             gb.style.marginBottom='30px';
@@ -2640,12 +3067,16 @@ async function _otherCombatGlobalTick(){
 // isAlive: function returning bool — gates the await checkpoints
 async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive){
     const isOwn = soundVolume === null; // own player uses null volume
-    const mobs = [...spotEl.querySelectorAll('.mob-wrapper')].filter(m=>!m.classList.contains('mob-dying'));
+    // O wrap não é mais filho de spotEl (agora vai direto pro #map — ver
+    // renderSpots), então filtramos pelo spot guardado em wrap.__mobSpot
+    // em vez de spotEl.querySelectorAll.
+    const mobs = _mobVisualRegistry.filter(m=>m.__mobSpot===spot && !m.classList.contains('mob-dying'));
     if(mobs.length === 0) return true;
 
     const targetMob = mobs[Math.floor(Math.random() * mobs.length)];
-    const mobL = parseFloat(targetMob.style.left) || targetMob.offsetLeft;
-    const mobT = parseFloat(targetMob.style.top)  || targetMob.offsetTop;
+    const _mlp = _mobGetLogical(targetMob);
+    const mobL = _mlp.left;
+    const mobT = _mlp.top;
     const pW = 70, pH = 90;
 
     const rawLeft  = mobL - pW - 4 + (Math.random()*16 - 8);
@@ -2678,6 +3109,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     void targetMob.offsetWidth;
     targetMob.classList.add('mob-impact-flash');
     setTimeout(()=>targetMob.classList.remove('mob-impact-flash'), 320);
+    _mobVisualFlash(targetMob); // mesmo flash, só que no sprite 3D (o <img> agora é invisível)
 
     // Damage number suppressed in spot animation — sounds and shake only
     // _showMobDmgNumber(targetMob, dmg, isCrit, isEvade);
@@ -2695,6 +3127,7 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
         void mobAv.offsetWidth;
         mobAv.classList.add('shake-animation');
         setTimeout(()=>mobAv.classList.remove('shake-animation'), 400);
+        _mobVisualShake(targetMob); // mesmo tremor, só que no sprite 3D
     }
 
     await _delay(750);
@@ -2746,17 +3179,17 @@ function _showMobDmgNumber(mobEl, dmg, crit, evaded){
 function _triggerMobDeath(mobEl, spot){
     if(mobEl.classList.contains('mob-dying') || mobEl.classList.contains('mob-respawning')) return;
     mobEl.classList.add('mob-dying');
+    _mobVisualDie(mobEl); // esmaece/encolhe o sprite 3D (e sua sombra) em vez do <img>, que agora é invisível
 
     setTimeout(()=>{
         if(!mobEl.parentElement) return;
         const newL = 8 + Math.random() * Math.max(10, spot.width  - 80);
         const newT = 8 + Math.random() * Math.max(10, spot.height - 95);
-        mobEl.style.transition = 'none';
-        mobEl.style.left = newL + 'px';
-        mobEl.style.top  = newT + 'px';
+        Object.assign(_mobGetLogical(mobEl), { left: newL, top: newT });
         mobEl.classList.remove('mob-dying');
         mobEl.classList.add('mob-respawning');
         void mobEl.offsetWidth;
+        _mobVisualRespawn(mobEl); // sprite reaparece com um leve "estouro" (Back.Out), mesma sensação do CSS antigo
         setTimeout(()=>{ mobEl.classList.remove('mob-respawning'); }, 800);
     }, 9000);
 }
@@ -2832,7 +3265,7 @@ function _mobBreathNewState() {
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
-        vertical: null, verticalApplied: undefined,
+        vertical: null, verticalApplied: undefined, flipApplied: undefined,
         lastTime: performance.now()
     };
     _mobBreathPickTargets(st);
@@ -2867,19 +3300,24 @@ function _mobDirSrc(baseSrc, dir) {
     return `${m[1]}_${dir}${m[2]}${m[3] || ''}`;
 }
 
-// Troca a imagem do mob pela variante _up/_down (ou volta ao sprite padrão),
-// só quando a direção realmente muda — nunca reatribui `src` a cada frame.
-function _mobApplyDirSprite(img, st) {
-    if (st.verticalApplied === st.vertical) return;
+// Troca a textura do mob pela variante _up/_down, ou espelha a textura padrão
+// quando ele vira pra esquerda (ver nota sobre THREE.Sprite acima) — só
+// quando o estado realmente muda, nunca a cada frame.
+function _mobApplyDirSprite(el, img, st) {
+    const wantFlip = !st.vertical && st.facingTarget > 0;
+    if (st.verticalApplied === st.vertical && st.flipApplied === wantFlip) return;
     st.verticalApplied = st.vertical;
+    st.flipApplied = wantFlip;
     const base = img.dataset.baseSrc || _mobStripDirSuffix(img.getAttribute('src') || img.src);
     img.dataset.baseSrc = base;
-    img.src = _mobDirSrc(base, st.vertical);
+    const url = _mobDirSrc(base, st.vertical);
+    img.src = url; // <img> continua só como "cérebro" (invisível), sem precisar espelhar via CSS
+    if (el && el.__mobVisual) _mobSetTexture(el.__mobVisual, url, wantFlip);
 }
 
 // Chamado por startWander quando o mob começa a andar até um novo ponto.
 // deltaX/deltaY = deslocamento horizontal/vertical do passo que está começando.
-function _mobWalkOnMoveStart(img, deltaX, deltaY) {
+function _mobWalkOnMoveStart(el, img, deltaX, deltaY) {
     if (!img) return;
     const st = _mobBreathGetState(img);
     const absX = Math.abs(deltaX);
@@ -2898,7 +3336,7 @@ function _mobWalkOnMoveStart(img, deltaX, deltaY) {
         st.vertical = null;
         if (absX > 4) st.facingTarget = deltaX < 0 ? -1 : 1;
     }
-    _mobApplyDirSprite(img, st);
+    _mobApplyDirSprite(el, img, st);
 
     // A inclinação (lean) segue a componente horizontal do passo mesmo
     // numa diagonal vertical, para preservar a noção de "para que lado".
@@ -2923,7 +3361,6 @@ function initMobAvatarBreathing() {
         if (!document.hidden) {
             document.querySelectorAll('.mob-avatar').forEach(img => {
                 if (img.offsetParent === null) return;
-                if (img.classList.contains('shake-animation')) return;
                 const wrap = img.closest('.mob-wrapper');
                 if (wrap && (wrap.classList.contains('mob-dying') || wrap.classList.contains('mob-respawning'))) return;
 
@@ -3008,31 +3445,40 @@ function initMobAvatarBreathing() {
                 const tiltZ = st.vertical ? stepTiltAmt * st.stepTiltZAmp : 0;
                 const tiltX = st.vertical ? 0 : stepTiltAmt * st.stepTiltXAmp;
 
-                const totalRotateDeg = rotateDeg + st.leanCurrent + tiltZ;
-                // O sprite vertical (_up/_down) já vem desenhado corretamente
-                // e não deve ser espelhado — só os sprites padrão
-                // (direita/esquerda) usam o scaleX negativo.
-                const scaleXFinal = scaleX * (st.vertical ? 1 : st.facing);
+                // tiltX (báscula frente/trás) não tem equivalente direto num billboard
+                // (que sempre encara a câmera) — dobramos seu efeito num leve extra de
+                // squash em vez de um rotateX 3D de verdade, mantendo a sensação de peso.
+                const totalRotateDeg = rotateDeg + st.leanCurrent + tiltZ + (wrap && wrap.__mobShake ? wrap.__mobShake.rot : 0);
+                const tiltXSquash = Math.abs(tiltX) * 0.0015;
+                scaleY *= (1 - tiltXSquash);
+                // O espelhamento esquerda/direita agora é feito trocando a textura (ver
+                // _mobApplyDirSprite) — THREE.Sprite ignora o sinal da escala, então não
+                // multiplicamos mais por st.facing aqui (ficaria sem efeito).
+                const scaleXFinal = scaleX;
 
-                // perspective() no mesmo transform dá "profundidade" local ao
-                // elemento, permitindo o rotateX (báscula frente/trás) sem
-                // precisar de perspective no elemento pai. transform-origin
-                // já é bottom center, então ambas as básculas giram a partir
-                // dos "pés" do mob, como uma inclinação de caminhada real.
-                img.style.transform =
-                    `perspective(600px) translateX(${translateXpx.toFixed(2)}px) translateY(${bobY.toFixed(2)}px) ` +
-                    `rotateX(${tiltX.toFixed(2)}deg) rotate(${totalRotateDeg.toFixed(2)}deg) ` +
-                    `scale(${scaleXFinal.toFixed(4)}, ${scaleY.toFixed(4)})`;
+                // Aplica no THREE.Sprite (billboard 3D) em vez do <img> — sempre de
+                // frente pra câmera, então esse mesmo transform nunca "vaza" ao girar
+                // o céu, diferente do CSS antigo que dependia da caixa pai aproximada.
+                const visual = wrap ? wrap.__mobVisual : null;
+                if (visual && visual.ready) {
+                    visual.sprite.scale.set(visual.baseW * scaleXFinal, visual.baseH * scaleY, 1);
+                    visual.material.rotation = THREE.MathUtils.degToRad(totalRotateDeg);
+                }
+                if (wrap) {
+                    const shakeX = wrap.__mobShake ? wrap.__mobShake.x : 0;
+                    wrap.__mobFx = { swayX: translateXpx + shakeX, bobY: bobY };
+                }
 
                 // Sombra de contato: acompanha o "peso" do passo (achata/escurece
                 // no impacto, encolhe/clareia quando o corpo está no alto do
-                // bounce) e a respiração — como uma sombra real reagiria.
-                if (!st.shadowEl) st.shadowEl = wrap ? wrap.querySelector('.mob-shadow') : null;
-                if (st.shadowEl) {
+                // bounce) e a respiração — como uma sombra real reagiria. Agora é
+                // a malha 3D criada por createNpcGroundShadow (mesma técnica do
+                // NPC do Mestre de Poções), não mais um div CSS.
+                if (visual && visual.ready && visual.shadow) {
                     const shadowScale = 1 + squash * 1.35 + stepSquash * 1.8 - liftAmt * 0.16 + Math.max(0, breathAmount) * 0.12;
                     const shadowOpacity = 0.82 + squash * 1.4 + contactAmt * 0.22 - liftAmt * 0.22 - Math.max(0, breathAmount) * 0.08;
-                    st.shadowEl.style.transform = `translateX(-50%) scale(${shadowScale.toFixed(3)})`;
-                    st.shadowEl.style.opacity = Math.min(1, Math.max(0.35, shadowOpacity)).toFixed(3);
+                    visual.shadow.mesh.scale.set(shadowScale, visual.shadow.baseStretch * shadowScale, 1);
+                    visual.shadow.mesh.material.opacity = Math.min(1, Math.max(0.35, shadowOpacity));
                 }
             });
         }

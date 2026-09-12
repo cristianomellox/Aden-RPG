@@ -141,7 +141,7 @@ transform-origin:center center;}
 .hunt-spot.active-spot{cursor:default!important;}
 
 .mob-wrapper{position:absolute;pointer-events:none;z-index:6;width:120px;}
-.mob-name{position:absolute;top:0;left:0;width:100%;text-align:center;font-size:.68em;font-weight:bold;color:#fff!important;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.mob-name{position:absolute;top:0;left:0;width:100%;text-align:center;font-size:.48em;font-weight:bold;color:#fff!important;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 /* O visual do mob agora é um THREE.Sprite 3D (billboard, sempre de frente pra
    câmera — nunca inclina/flutua ao girar o céu), renderizado no mesmo canvas
    do skybox. Este <img> e a sombra CSS abaixo continuam existindo no DOM só
@@ -155,13 +155,13 @@ transform-origin:center center;}
 
 .player-avatar-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:10;pointer-events:none;}
 .player-shield-icon{width:30px;height:30px;object-fit:contain;}
-.player-name-label{font-size:0.95em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.player-name-label{font-size:1.15em;font-weight:bold;color:#ff8;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .avatar-frame-wrap{position:relative;width:60px;height:60px;flex-shrink:0;}
 .player-spot-avatar{position:absolute;top:0;left:0;width:60px;height:60px;border-radius:50%;border:3px solid #fc0;object-fit:cover;background:#222;}
 
 .other-player-wrapper{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:9;cursor:pointer;}
 .other-player-shield{width:30px;height:30px;object-fit:contain;}
-.other-player-name{font-size:0.95em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
+.other-player-name{font-size:1.15em;font-weight:bold;color:#8cf;text-shadow:1px 1px 2px #000;white-space:nowrap;}
 .other-player-avatar{position:absolute;top:0;left:0;width:60px;height:60px;border-radius:50%;border:3px solid #48f;object-fit:cover;background:#222;transition:filter .3s;}
 .other-player-avatar.eliminated{filter:grayscale(100%) brightness(.6);}
 .other-eliminated-label{font-size:.55em;color:#ffc3c3;font-weight:bold;text-shadow:1px 1px 2px #000;}

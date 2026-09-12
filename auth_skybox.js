@@ -15,16 +15,20 @@ import { initPostFX, POSTFX_CONFIG } from './postfx.js';
 // mas sempre respeitando uma distância mínima entre os dois dragões pra
 // eles nunca "passarem um por dentro do outro" na tela.
 //
-// AJUSTE DE PÓS-PROCESSAMENTO (só nesta página): o postfx.js é
-// COMPARTILHADO com outras telas (Floresta Mística etc.), então ele não é
-// editado. Só ajustamos, em runtime, os números de POSTFX_CONFIG.bloom
-// ANTES de chamar initPostFX() — isso só existe dentro da instância deste
-// módulo carregada por ESTA página (cada página carrega sua própria cópia
-// do postfx.js), então não afeta nenhuma outra tela do jogo. Isso faz o
-// bloom pegar também os raios do céu, não só o sol. Além disso, o fogo
-// saindo da boca do dragão ganha um brilho aditivo dedicado (um sprite
-// extra, pulsante), pra garantir o efeito "prestes a cuspir fogo" mesmo
-// que o bloom genérico não pegue bem aquela região da arte.
+// MOVIMENTO DO VOO (ver dragonFlightEase mais abaixo): antes, o tween
+// usava Sinusoidal.InOut do início ao fim do voo inteiro — como o voo
+// dura vários segundos, a velocidade ficava praticamente ZERO por 2-3s
+// logo na largada e de novo perto do fim, dando a impressão de o dragão
+// "congelar" antes de começar/depois de terminar. Agora:
+//   - a aceleração inicial acontece só numa fatia BEM curta do progresso
+//     (o suficiente pra ele ainda estar fora da tela quando ganha
+//     velocidade de cruzeiro — ver DRAGON_NDC_EDGE/DRAGON_ENTRY_FRAC);
+//   - não existe desaceleração no final — ele sai de cena na velocidade
+//     de cruzeiro, e o "sumiço" agora é um FADE de opacidade (não um
+//     corte abrupto de visibilidade);
+//   - uma pequena ondulação de velocidade (bem sutil, nunca inverte o
+//     sentido do voo) quebra a monotonia de uma reta perfeita, pra não
+//     parecer "pipa puxada por um fio".
 // ═══════════════════════════════════════════════════════════════════════
 
 const SKY_IMAGE_URL    = '/assets/aden_ini_sb.png';
@@ -43,7 +47,8 @@ const DRAGON_DIST_MAX       = 380;              // dá uma leve variação de pr
 const DRAGON_BOB_AMPL       = 0.018;            // leve ondulação vertical (efeito de planar)
 const DRAGON_BOB_FREQ_HZ    = 0.22;
 const DRAGON_TILT_AMPL_RAD  = 0.035;            // leve inclinação, como se o vento balançasse o voo
-const DRAGON_NDC_EDGE       = 1.2;              // ponto de entrada/saída de tela (um pouco além de ±1 = fora da tela)
+const DRAGON_NDC_EDGE       = 1.3;              // ponto de entrada/saída de tela — margem generosa fora da
+                                                 // visão (-1..1) pra caber a rampa de aceleração inicial
 const DRAGON_FLIGHT_MS_MIN  = 13000;
 const DRAGON_FLIGHT_MS_MAX  = 19000;            // duração do voo sorteada — evita ficar robótico
 const DRAGON_PAUSE_MS_MIN   = 3000;
@@ -51,6 +56,17 @@ const DRAGON_PAUSE_MS_MAX   = 15000;            // pausa entre voos sorteada —
                                                  // às vezes só um, às vezes nenhum por um tempo
 const DRAGON_FIRST_DELAY_MIN = 1200;
 const DRAGON_FIRST_DELAY_MAX = 4500;
+
+// ── Curva de movimento do voo (ver dragonFlightEase) ─────────────────────
+const DRAGON_ENTRY_FRAC     = 0.09;  // fração do progresso (0..1) usada só pra ganhar velocidade na largada
+const DRAGON_WOBBLE_AMPL    = 0.012; // ondulação de velocidade — bem sutil, nunca inverte o sentido do voo
+const DRAGON_WOBBLE_CYCLES  = 3;     // quantas "ondas" de variação de velocidade ao longo do voo inteiro
+
+// ── Fade-in / fade-out (substitui o sumiço abrupto) ──────────────────────
+const DRAGON_FADE_IN_MS_MIN  = 1000;
+const DRAGON_FADE_IN_MS_MAX  = 1700;
+const DRAGON_FADE_OUT_MS_MIN = 1600;
+const DRAGON_FADE_OUT_MS_MAX = 2400;
 
 // Faixa vertical (em NDC, -1..1) onde os dragões podem aparecer — região
 // do céu, acima da caixa de login.
@@ -61,14 +77,6 @@ const DRAGON_Y_MAX           = 0.70;
 // 2×DRAGON_HEIGHT_FRAC ≈ 0.26 — por isso a folga aqui é maior que isso).
 const DRAGON_MIN_Y_GAP        = 0.30;
 
-// Posição aproximada da boca (fração da imagem ORIGINAL, sem espelhar:
-// 0 = borda esquerda/topo, 1 = borda direita/base). A cabeça do dragão
-// fica do lado direito da arte, com a boca aberta soltando uma luz
-// amarela — ajuste esses dois números se a arte final não bater 100%.
-const MOUTH_FRAC_X = 0.90;
-const MOUTH_FRAC_Y = 0.47;
-const MOUTH_GLOW_SIZE_FRAC = 0.55; // tamanho do brilho, relativo à altura do dragão
-
 // ── Configuração dos dois dragões: direção, ponto de entrada/saída e se
 // usa a textura espelhada (ver nota sobre THREE.Sprite mais abaixo). ────
 const DRAGON_PROFILES = [
@@ -77,14 +85,28 @@ const DRAGON_PROFILES = [
 ];
 
 let _sky = null;      // { scene, camera, renderer, canvas, cont, running, raf, pfx, _onResize }
-let _dragons = [];    // [{ id, sprite, material, glowSprite, glowMaterial, ndcX, ndcY, ... }]
+let _dragons = [];    // [{ id, sprite, material, ndcX, ndcY, tween, fadeInTween, fadeOutTween, ... }]
 let _camYaw = 0;
 let _lastTs = 0;
 
 const _dragonTexCache = { base: null, flipped: null };
-let _glowTexture = null;
 
 function randBetween(min, max) { return min + Math.random() * (max - min); }
+
+// Curva de progresso do voo (0..1 → 0..1): aceleração curta na largada,
+// cruzeiro com leve ondulação, SEM desaceleração no final.
+function dragonFlightEase(t) {
+    const k = DRAGON_ENTRY_FRAC;
+    let base;
+    if (t < k) {
+        const local = t / k;
+        base = k * local * local; // ease-in quadrático só na largada
+    } else {
+        base = t; // depois disso, progresso linear — nunca desacelera perto do fim
+    }
+    const wobble = DRAGON_WOBBLE_AMPL * Math.sin(t * Math.PI * 2 * DRAGON_WOBBLE_CYCLES);
+    return Math.min(1, Math.max(0, base + wobble));
+}
 
 // Converte yaw/pitch (graus) num vetor direção unitário — mesma convenção
 // usada na Floresta Mística (yaw=0,pitch=0 aponta pra +Z).
@@ -144,30 +166,6 @@ function buildDom() {
     layer.appendChild(canvas);
     authContainer.insertBefore(layer, authContainer.firstChild);
     return layer;
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// TEXTURA DO BRILHO DE FOGO (gerada em canvas — sem depender de asset) ──
-// Um gradiente radial quente com blending ADITIVO: fica "queimando" por
-// cima de qualquer coisa atrás dele, garantindo o efeito de brasa/fogo na
-// boca do dragão independentemente do bloom genérico da cena.
-// ═══════════════════════════════════════════════════════════════════════
-function getGlowTexture() {
-    if (_glowTexture) return _glowTexture;
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0,    'rgba(255,248,214,1)');
-    grad.addColorStop(0.30, 'rgba(255,190,90,0.95)');
-    grad.addColorStop(0.62, 'rgba(255,110,30,0.45)');
-    grad.addColorStop(1,    'rgba(255,60,0,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    _glowTexture = new THREE.CanvasTexture(canvas);
-    _glowTexture.needsUpdate = true;
-    return _glowTexture;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -231,50 +229,27 @@ function createDragonEntry(profile) {
     const worldHeight = 2 * DRAGON_REF_DISTANCE * Math.tan(fovRad / 2) * DRAGON_HEIGHT_FRAC;
     const worldWidth = worldHeight * aspect;
 
-    const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0 });
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(worldWidth, worldHeight, 1);
     sprite.renderOrder = 5;
     sprite.visible = false;
     _sky.scene.add(sprite);
 
-    const glowMaterial = new THREE.SpriteMaterial({
-        map: getGlowTexture(),
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        depthWrite: false,
-        opacity: 0.8,
-    });
-    const glowSprite = new THREE.Sprite(glowMaterial);
-    const glowSize = worldHeight * MOUTH_GLOW_SIZE_FRAC;
-    glowSprite.scale.set(glowSize, glowSize, 1);
-    glowSprite.renderOrder = 6; // acima do próprio dragão
-    glowSprite.visible = false;
-    _sky.scene.add(glowSprite);
-
-    // Deslocamento local (em unidades de mundo) do centro do dragão até a
-    // boca. Espelha o eixo X junto com a textura, senão o brilho fica do
-    // lado errado quando o dragão está voando pra esquerda.
-    const mouthLocalX = (MOUTH_FRAC_X - 0.5) * worldWidth * (profile.flip ? -1 : 1);
-    const mouthLocalY = (0.5 - MOUTH_FRAC_Y) * worldHeight;
-
     return {
         id: profile.id,
         profile,
         sprite,
         material,
-        glowSprite,
-        glowMaterial,
         worldWidth,
         worldHeight,
-        mouthLocalX,
-        mouthLocalY,
-        glowPhase: Math.random() * Math.PI * 2, // fase aleatória — os dois brilhos não "piscam" em sincronia
         ndcX: profile.startNdcX,
         ndcY: DRAGON_Y_MIN,
         flightDistance: DRAGON_REF_DISTANCE,
         flightStartTs: 0,
         tween: null,
+        fadeInTween: null,
+        fadeOutTween: null,
         timeout: null,
     };
 }
@@ -299,22 +274,45 @@ function startDragonFlight(dragon) {
     dragon.ndcY = pickDragonY(dragon.id);
     dragon.flightDistance = randBetween(DRAGON_DIST_MIN, DRAGON_DIST_MAX);
     dragon.flightStartTs = performance.now();
+    dragon.material.opacity = 0;
     dragon.sprite.visible = true;
-    dragon.glowSprite.visible = true;
 
     const flightMs = randBetween(DRAGON_FLIGHT_MS_MIN, DRAGON_FLIGHT_MS_MAX);
+
+    // ── Posição: um único tween cobrindo o voo inteiro, com a curva
+    // customizada (ver dragonFlightEase) — sem parada no início nem no
+    // fim, com uma leve ondulação de velocidade no meio pra não parecer
+    // uma reta perfeita (pipa puxada por um fio).
     const state = { x: dragon.profile.startNdcX };
     dragon.tween = new TWEEN.Tween(state)
         .to({ x: dragon.profile.endNdcX }, flightMs)
-        // Sinusoidal.InOut: entra e sai de tela suavemente, com um leve
-        // "pico" de velocidade no meio do trajeto — planar, não deslizar.
-        .easing(TWEEN.Easing.Sinusoidal.InOut)
+        .easing(dragonFlightEase)
         .onUpdate(() => { dragon.ndcX = state.x; })
         .onComplete(() => {
             dragon.sprite.visible = false;
-            dragon.glowSprite.visible = false;
             scheduleDragonFlight(dragon, randBetween(DRAGON_PAUSE_MS_MIN, DRAGON_PAUSE_MS_MAX));
         })
+        .start();
+
+    // ── Fade-in: entra em cena suavemente (não "pisca" já com opacidade
+    // total), coincidindo com a rampa de aceleração inicial.
+    const fadeInMs = randBetween(DRAGON_FADE_IN_MS_MIN, DRAGON_FADE_IN_MS_MAX);
+    dragon.fadeInTween = new TWEEN.Tween(dragon.material)
+        .to({ opacity: 1 }, fadeInMs)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+
+    // ── Fade-out: em vez de cortar a visibilidade de golpe no final do
+    // voo, dissolve a opacidade nos últimos instantes — o "delay" faz
+    // esse fade terminar bem perto do fim do voo (ver DRAGON_NDC_EDGE:
+    // como o dragão já saiu da área visível bem antes disso, o fade
+    // acontece majoritariamente fora de tela, mas garante que NUNCA haja
+    // um corte abrupto caso ele ainda esteja com uma ponta visível).
+    const fadeOutMs = randBetween(DRAGON_FADE_OUT_MS_MIN, DRAGON_FADE_OUT_MS_MAX);
+    dragon.fadeOutTween = new TWEEN.Tween(dragon.material)
+        .to({ opacity: 0 }, fadeOutMs)
+        .delay(Math.max(0, flightMs - fadeOutMs))
+        .easing(TWEEN.Easing.Quadratic.In)
         .start();
 }
 
@@ -323,12 +321,8 @@ function startDragonFlight(dragon) {
 // o caminho fica sempre "colado" na tela, mesmo com a câmera girando
 // sozinha por trás.
 const _ndcScratch = new THREE.Vector3();
-const _camRight = new THREE.Vector3();
-const _camUp = new THREE.Vector3();
 function updateDragonsVisual(ts) {
     if (!_dragons.length) return;
-    _camRight.setFromMatrixColumn(_sky.camera.matrixWorld, 0);
-    _camUp.setFromMatrixColumn(_sky.camera.matrixWorld, 1);
 
     for (const dragon of _dragons) {
         if (!dragon.sprite.visible) continue;
@@ -342,22 +336,6 @@ function updateDragonsVisual(ts) {
 
         dragon.sprite.position.copy(worldPos);
         dragon.material.rotation = Math.sin(elapsedSec * 2.1) * DRAGON_TILT_AMPL_RAD;
-
-        // Brilho da boca: acompanha o dragão, deslocado pelos vetores
-        // direita/cima DA CÂMERA (não do mundo) — assim ele fica sempre
-        // "grudado" na boca do sprite billboard, que sempre encara a
-        // câmera. Um flicker rápido (~9Hz, com fase própria) simula o
-        // fogo tremulando, como se estivesse prestes a cuspir uma
-        // labareda.
-        const flicker = 0.7 + 0.3 * Math.sin(elapsedSec * 9 + dragon.glowPhase)
-                             + 0.12 * Math.sin(elapsedSec * 23 + dragon.glowPhase * 1.7);
-        const glowWorldPos = worldPos.clone()
-            .addScaledVector(_camRight, dragon.mouthLocalX)
-            .addScaledVector(_camUp, dragon.mouthLocalY);
-        dragon.glowSprite.position.copy(glowWorldPos);
-        const glowScale = dragon.worldHeight * MOUTH_GLOW_SIZE_FRAC * (0.8 + 0.25 * flicker);
-        dragon.glowSprite.scale.set(glowScale, glowScale, 1);
-        dragon.glowMaterial.opacity = 0.5 + 0.4 * flicker;
     }
 }
 
@@ -436,7 +414,7 @@ function startAuthSkybox() {
     // Isso NÃO afeta nenhuma outra tela do jogo (cada página carrega sua
     // própria cópia do postfx.js). O threshold padrão (0.72) foi calibrado
     // pra cenas de interior da Floresta e só pegava o sol nesta imagem —
-    // baixando ele, os raios do céu (e o fogo do dragão) também brilham.
+    // baixando ele, os raios do céu também brilham.
     POSTFX_CONFIG.bloom.threshold = 0.42;
     POSTFX_CONFIG.bloom.strength  = 0.9;
     POSTFX_CONFIG.bloom.radius    = 0.65;
@@ -479,6 +457,8 @@ function stopAuthSkybox() {
     for (const dragon of _dragons) {
         if (dragon.timeout) clearTimeout(dragon.timeout);
         if (dragon.tween) dragon.tween.stop();
+        if (dragon.fadeInTween) dragon.fadeInTween.stop();
+        if (dragon.fadeOutTween) dragon.fadeOutTween.stop();
     }
 
     try {
@@ -499,7 +479,6 @@ function stopAuthSkybox() {
 
     _dragonTexCache.base = null;
     _dragonTexCache.flipped = null;
-    _glowTexture = null;
     _dragons = [];
     _sky = null;
 }

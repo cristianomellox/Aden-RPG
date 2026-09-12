@@ -1210,7 +1210,7 @@ function _mobGetLogical(el) {
 
 // Fração da altura da tela ocupada pelo mob (no FOV fixo deste mapa) — ajuste
 // aqui se o tamanho visual dos mobs precisar mudar depois de calibrar ao vivo.
-const MOB_HEIGHT_FRAC = 0.09;
+const MOB_HEIGHT_FRAC = 0.11;
 
 function _mobCreateVisual(spot, baseImgUrl) {
     const state = { sprite: null, material: null, shadow: null, baseW: 0, baseH: 0, ready: false };
@@ -1293,15 +1293,24 @@ function updateAllMobVisuals() {
             updateNpcGroundShadowCamera(state.shadow, camYaw);
             state.shadow.mesh.position.copy(world);
         }
-        // Nome do mob: projeta um ponto logo acima da cabeça usando a MESMA
-        // técnica do sprite (não mais a caixa antiga do spot), pra nunca mais
-        // se descolar dele ao andar ou ao girar a câmera.
-        const headWorld = world.clone().addScaledVector(t.up, state.baseH * 1.04);
-        const screen = _mobProjectScreen(headWorld);
-        if (screen) {
+        // Nome do mob: agora calculado em PIXELS DE TELA a partir do ponto dos
+        // pés já projetado, e não mais deslocando no eixo "up" do mundo do
+        // spot. Motivo: o THREE.Sprite sempre se orienta pelo "up" da CÂMERA
+        // (billboard), não pelo "up" tangente que uso pra posicionar o mob no
+        // mundo — em ângulos de câmera diferentes do "up" do spot, os dois
+        // eixos não coincidem, e por isso o nome desviava (mais quanto mais
+        // longe do centro do spot o mob estivesse, e piorava ao andar).
+        // Calculando em px de tela (mesma lógica usada pra definir o tamanho
+        // aparente do sprite), o nome acompanha o topo real do billboard não
+        // importa o ângulo da câmera.
+        const screenFeet = _mobProjectScreen(world);
+        if (screenFeet) {
+            const distToCam = Math.max(1, world.length()); // câmera sempre em (0,0,0)
+            const fovRad = THREE.MathUtils.degToRad(camFov);
+            const pxPerWorldUnit = _sky.cont.clientHeight / (2 * distToCam * Math.tan(fovRad / 2));
             el.style.display = '';
-            el.style.left = screen.x + 'px';
-            el.style.top = screen.y + 'px';
+            el.style.left = screenFeet.x + 'px';
+            el.style.top = (screenFeet.y - state.baseH * 1.05 * pxPerWorldUnit) + 'px';
         } else {
             el.style.display = 'none';
         }

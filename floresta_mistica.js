@@ -1130,17 +1130,39 @@ function enableMapInteraction() {
 // planejamento de rota falhe, dois mobs nunca chegam a se sobrepor.
 // ═══════════════════════════════════════════════════════════════════
 
-const _mobTexCache = new Map(); // url -> {tex, waiters[]} — textura compartilhada entre mobs do mesmo tipo
-function _mobGetTexture(url, onReady) {
-    let entry = _mobTexCache.get(url);
+const _mobTexCache = new Map(); // key -> {tex, waiters[]} — textura compartilhada entre mobs do mesmo tipo
+// IMPORTANTE: THREE.Sprite ignora o SINAL da escala — o renderer extrai a
+// escala a partir do comprimento (sempre positivo) das colunas da matriz do
+// mundo, então `sprite.scale.x = -1` não espelha nada (silenciosamente vira
+// o mesmo que 1). Por isso o espelhamento (mob virando pra esquerda) precisa
+// ser feito trocando a TEXTURA por uma cópia espelhada (repeat.x=-1), não a
+// escala — ver `flip` abaixo.
+function _mobGetTexture(url, flip, onReady) {
+    const key = url + (flip ? '#flip' : '');
+    let entry = _mobTexCache.get(key);
     if (entry) { if (entry.tex) onReady(entry.tex); else entry.waiters.push(onReady); return; }
     entry = { tex: null, waiters: [onReady] };
-    _mobTexCache.set(url, entry);
+    _mobTexCache.set(key, entry);
+    if (flip) {
+        // Reaproveita a textura normal (já em cache ou carregada agora) e cria uma
+        // CÓPIA espelhada via repeat/offset — sem baixar a imagem de novo.
+        _mobGetTexture(url, false, (baseTex) => {
+            const flipped = baseTex.clone();
+            flipped.wrapS = THREE.RepeatWrapping;
+            flipped.repeat.x = -1;
+            flipped.offset.x = 1;
+            flipped.needsUpdate = true;
+            entry.tex = flipped;
+            entry.waiters.forEach(fn => fn(flipped));
+            entry.waiters.length = 0;
+        });
+        return;
+    }
     new THREE.TextureLoader().load(
         url,
         (tex) => { tex.colorSpace = THREE.SRGBColorSpace; entry.tex = tex; entry.waiters.forEach(fn => fn(tex)); entry.waiters.length = 0; },
         undefined,
-        (err) => { console.error('[Mobs3D] Falha ao carregar textura', url, err); _mobTexCache.delete(url); }
+        (err) => { console.error('[Mobs3D] Falha ao carregar textura', url, err); _mobTexCache.delete(key); }
     );
 }
 
@@ -1178,7 +1200,7 @@ const MOB_HEIGHT_FRAC = 0.11;
 
 function _mobCreateVisual(spot, baseImgUrl) {
     const state = { sprite: null, material: null, shadow: null, baseW: 0, baseH: 0, ready: false };
-    _mobGetTexture(baseImgUrl, (tex) => {
+    _mobGetTexture(baseImgUrl, false, (tex) => {
         if (!_sky) return;
         const aspect = tex.image.width / tex.image.height;
         const fovRad = THREE.MathUtils.degToRad(camFov);
@@ -1211,9 +1233,9 @@ function _mobCreateVisual(spot, baseImgUrl) {
     return state;
 }
 
-function _mobSetTexture(state, url) {
+function _mobSetTexture(state, url, flip) {
     if (!state || !state.material) return;
-    _mobGetTexture(url, (tex) => { if (state.material) { state.material.map = tex; state.material.needsUpdate = true; } });
+    _mobGetTexture(url, !!flip, (tex) => { if (state.material) { state.material.map = tex; state.material.needsUpdate = true; } });
 }
 
 function _mobDestroyVisual(state) {
@@ -1254,32 +1276,57 @@ function updateAllMobVisuals() {
 // verdade usada pelo planejamento de rota). É a "física" que garante que,
 // mesmo se o desvio planejado falhar por algum motivo, os mobs nunca
 // cheguem a se sobrepor visualmente na tela.
-const MOB_SEP_PUSH_MAX = 26; // px máx. de empurrão visual
+//
+// A direção do empurrão é suavizada em DOIS estágios (ângulo e depois
+// magnitude) — não só a magnitude como numa mola simples. Sem isso, quando
+// dois mobs se cruzam (a caminho de pontos opostos), o vetor bruto (posição
+// de um menos a do outro) inverte de sinal de repente bem no meio do
+// cruzamento; a magnitude suavizada sozinha ainda seguia essa direção que
+// vira instantaneamente, e o resultado visual era os dois "girando" um em
+// torno do outro por um instante. Suavizando o ÂNGULO também (bem mais
+// devagar que a magnitude), o empurrão gira aos poucos até a nova direção
+// em vez de virar de uma vez — sem mais giro, só um leve desvio ao esbarrar.
+const MOB_SEP_PUSH_MAX = 18; // px máx. de empurrão visual
 function _updateMobSeparation(dt) {
     for (const group of _allMobGroups) {
         for (const el of group) {
-            if (el.classList.contains('mob-dying') || el.classList.contains('mob-respawning')) { el.__mobSepOffset = { x: 0, y: 0 }; continue; }
+            if (el.classList.contains('mob-dying') || el.classList.contains('mob-respawning')) { el.__mobSepOffset = { x: 0, y: 0 }; el.__mobPushAngle = undefined; continue; }
             const left = parseFloat(el.style.left) || 0, top = parseFloat(el.style.top) || 0;
             const cx = left + MOB_HITBOX_W / 2, cy = top + MOB_HITBOX_H / 2;
+            // Viés fixo por mob (sorteado uma vez) — desempata casos quase perfeitamente
+            // simétricos (dois mobs exatamente sobrepostos), onde a direção "certa" do
+            // empurrão é ambígua e ficaria oscilando/girando sem um critério de desempate.
+            const bias = el.__mobAvoidBias || (el.__mobAvoidBias = { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 });
             let pushX = 0, pushY = 0;
             for (const other of group) {
                 if (other === el || other.classList.contains('mob-dying')) continue;
                 const ol = parseFloat(other.style.left) || 0, ot = parseFloat(other.style.top) || 0;
                 const ocx = ol + MOB_HITBOX_W / 2, ocy = ot + MOB_HITBOX_H / 2;
-                const dx = cx - ocx, dy = cy - ocy;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+                let dx = cx - ocx, dy = cy - ocy;
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1) { dx = bias.x || 1; dy = bias.y; dist = Math.sqrt(dx * dx + dy * dy) || 1; }
                 if (dist < MOB_MIN_DIST_PX) {
                     const strength = (MOB_MIN_DIST_PX - dist) / MOB_MIN_DIST_PX;
-                    pushX += (dx / dist) * strength;
-                    pushY += (dy / dist) * strength;
+                    pushX += (dx / dist) * strength + bias.x * 0.15 * strength;
+                    pushY += (dy / dist) * strength + bias.y * 0.15 * strength;
                 }
             }
-            const mag = Math.min(1, Math.sqrt(pushX * pushX + pushY * pushY));
-            const norm = Math.sqrt(pushX * pushX + pushY * pushY) || 1;
-            const targetX = (pushX / norm) * MOB_SEP_PUSH_MAX * mag;
-            const targetY = (pushY / norm) * MOB_SEP_PUSH_MAX * mag;
+            const rawMag = Math.sqrt(pushX * pushX + pushY * pushY);
+            let targetX = 0, targetY = 0;
+            if (rawMag > 0.001) {
+                const rawAngle = Math.atan2(pushY, pushX);
+                const prevAngle = el.__mobPushAngle ?? rawAngle;
+                let diff = rawAngle - prevAngle;
+                diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // normaliza a diferença pra [-π, π]
+                const dirRate = Math.min(1, dt * 0.006); // ângulo muda BEM devagar — é isso que impede o giro
+                const smoothAngle = prevAngle + diff * dirRate;
+                el.__mobPushAngle = smoothAngle;
+                const mag = Math.min(1, rawMag);
+                targetX = Math.cos(smoothAngle) * MOB_SEP_PUSH_MAX * mag;
+                targetY = Math.sin(smoothAngle) * MOB_SEP_PUSH_MAX * mag;
+            }
             const prev = el.__mobSepOffset || { x: 0, y: 0 };
-            const rate = Math.min(1, dt * 0.012);
+            const rate = Math.min(1, dt * 0.008);
             el.__mobSepOffset = { x: prev.x + (targetX - prev.x) * rate, y: prev.y + (targetY - prev.y) * rate };
         }
     }
@@ -3169,7 +3216,7 @@ function _mobBreathNewState() {
         // Direção vertical do passo atual: null = usa o sprite padrão
         // (direita/esquerda, com espelhamento); 'up'/'down' = troca para o
         // sprite dedicado (_up.webp / _down.webp), sem espelhar.
-        vertical: null, verticalApplied: undefined,
+        vertical: null, verticalApplied: undefined, flipApplied: undefined,
         lastTime: performance.now()
     };
     _mobBreathPickTargets(st);
@@ -3204,18 +3251,19 @@ function _mobDirSrc(baseSrc, dir) {
     return `${m[1]}_${dir}${m[2]}${m[3] || ''}`;
 }
 
-// Troca a imagem do mob pela variante _up/_down (ou volta ao sprite padrão),
-// só quando a direção realmente muda — nunca reatribui `src`/textura a cada frame.
-// Troca tanto o <img> (mantido como "cérebro" invisível) quanto a textura do
-// THREE.Sprite visível (ver _mobSetTexture).
+// Troca a textura do mob pela variante _up/_down, ou espelha a textura padrão
+// quando ele vira pra esquerda (ver nota sobre THREE.Sprite acima) — só
+// quando o estado realmente muda, nunca a cada frame.
 function _mobApplyDirSprite(el, img, st) {
-    if (st.verticalApplied === st.vertical) return;
+    const wantFlip = !st.vertical && st.facingTarget < 0;
+    if (st.verticalApplied === st.vertical && st.flipApplied === wantFlip) return;
     st.verticalApplied = st.vertical;
+    st.flipApplied = wantFlip;
     const base = img.dataset.baseSrc || _mobStripDirSuffix(img.getAttribute('src') || img.src);
     img.dataset.baseSrc = base;
     const url = _mobDirSrc(base, st.vertical);
-    img.src = url;
-    if (el && el.__mobVisual) _mobSetTexture(el.__mobVisual, url);
+    img.src = url; // <img> continua só como "cérebro" (invisível), sem precisar espelhar via CSS
+    if (el && el.__mobVisual) _mobSetTexture(el.__mobVisual, url, wantFlip);
 }
 
 // Chamado por startWander quando o mob começa a andar até um novo ponto.
@@ -3354,10 +3402,10 @@ function initMobAvatarBreathing() {
                 const totalRotateDeg = rotateDeg + st.leanCurrent + tiltZ + (wrap && wrap.__mobShake ? wrap.__mobShake.rot : 0);
                 const tiltXSquash = Math.abs(tiltX) * 0.0015;
                 scaleY *= (1 - tiltXSquash);
-                // O sprite vertical (_up/_down) já vem desenhado corretamente
-                // e não deve ser espelhado — só os sprites padrão
-                // (direita/esquerda) usam o scaleX negativo.
-                const scaleXFinal = scaleX * (st.vertical ? 1 : st.facing);
+                // O espelhamento esquerda/direita agora é feito trocando a textura (ver
+                // _mobApplyDirSprite) — THREE.Sprite ignora o sinal da escala, então não
+                // multiplicamos mais por st.facing aqui (ficaria sem efeito).
+                const scaleXFinal = scaleX;
 
                 // Aplica no THREE.Sprite (billboard 3D) em vez do <img> — sempre de
                 // frente pra câmera, então esse mesmo transform nunca "vaza" ao girar

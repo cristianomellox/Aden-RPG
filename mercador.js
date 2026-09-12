@@ -832,7 +832,7 @@ const MC_NPC_PROXY_ID    = 'mcNpcSpot'; // elemento DOM invisível — só receb
 // onde ele deveria ficar — aparece um tooltip com yaw/pitch. Copie os
 // números para cá.
 const MC_NPC_SPOT = {
-    yaw: 0, pitch: -54,
+    yaw: -10, pitch: -54,
     distance: 250,
     heightFrac: 0.34,
 };

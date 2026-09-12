@@ -1194,6 +1194,20 @@ function _mobLocalToWorld(spot, leftPx, topPx) {
         .addScaledVector(t.up, -dy * MOB_WORLD_PER_PX);
 }
 
+// Posição "LÓGICA" do mob (px dentro da caixa do spot) — é o que o wander, o
+// desvio e o combate leem/escrevem, exatamente como antes. Antes ela vivia em
+// el.style.left/top; agora mora aqui, separada, porque style.left/top do wrap
+// passou a ser a posição em TELA (ver updateAllMobVisuals) — a mesma projeção
+// 3D usada pelo sprite. Antes as duas coisas eram a mesma (a caixa do spot
+// inteira só transladava/escalava), então o nome ficava sempre grudado no
+// mob "de graça"; com o sprite agora projetado individualmente (pra corrigir
+// o inclinar/flutuar), se o nome continuasse preso à caixa antiga ele iria
+// se descolando do sprite ao andar — por isso o nome também passou a usar
+// esta mesma projeção, e não mais style.left/top como posição lógica.
+function _mobGetLogical(el) {
+    return el.__logicalPos || (el.__logicalPos = { left: 0, top: 0 });
+}
+
 // Fração da altura da tela ocupada pelo mob (no FOV fixo deste mapa) — ajuste
 // aqui se o tamanho visual dos mobs precisar mudar depois de calibrar ao vivo.
 const MOB_HEIGHT_FRAC = 0.11;
@@ -1249,14 +1263,25 @@ function _mobDestroyVisual(state) {
 const _mobVisualRegistry = [];
 const _allMobGroups = [];
 
+function _mobProjectScreen(world) {
+    if (!_sky) return null;
+    const { camera, cont } = _sky;
+    const camDir = camera.getWorldDirection(_mobProjDirScratch);
+    const toPoint = world.clone().sub(camera.position).normalize();
+    if (camDir.dot(toPoint) <= 0.05) return null; // atrás da câmera — some, igual aos spots
+    const proj = world.clone().project(camera);
+    const cw = cont.clientWidth, ch = cont.clientHeight;
+    return { x: (proj.x * 0.5 + 0.5) * cw, y: (1 - (proj.y * 0.5 + 0.5)) * ch };
+}
+const _mobProjDirScratch = new THREE.Vector3();
+
 function updateAllMobVisuals() {
     if (!_sky) return;
     for (const el of _mobVisualRegistry) {
         const state = el.__mobVisual;
         if (!state || !state.ready || !el.isConnected) continue;
         const spot = el.__mobSpot;
-        const left = parseFloat(el.style.left) || 0;
-        const top = parseFloat(el.style.top) || 0;
+        const { left, top } = _mobGetLogical(el);
         const sep = el.__mobSepOffset || { x: 0, y: 0 };
         const fx = el.__mobFx || { swayX: 0, bobY: 0 };
         const world = _mobLocalToWorld(spot, left + sep.x, top + sep.y);
@@ -1268,39 +1293,51 @@ function updateAllMobVisuals() {
             updateNpcGroundShadowCamera(state.shadow, camYaw);
             state.shadow.mesh.position.copy(world);
         }
+        // Nome do mob: projeta um ponto logo acima da cabeça usando a MESMA
+        // técnica do sprite (não mais a caixa antiga do spot), pra nunca mais
+        // se descolar dele ao andar ou ao girar a câmera.
+        const headWorld = world.clone().addScaledVector(t.up, state.baseH * 1.04);
+        const screen = _mobProjectScreen(headWorld);
+        if (screen) {
+            el.style.display = '';
+            el.style.left = screen.x + 'px';
+            el.style.top = screen.y + 'px';
+        } else {
+            el.style.display = 'none';
+        }
     }
 }
 
 // Repulsão contínua entre mobs do mesmo spot — só ajusta a posição
-// RENDERIZADA (nunca escreve em style.left/top, que continua sendo a
-// verdade usada pelo planejamento de rota). É a "física" que garante que,
-// mesmo se o desvio planejado falhar por algum motivo, os mobs nunca
-// cheguem a se sobrepor visualmente na tela.
+// RENDERIZADA (nunca escreve na posição lógica, que continua sendo a
+// verdade usada pelo planejamento de rota). É a última rede de segurança:
+// se o desvio planejado falhar e dois mobs chegarem perto demais, isso
+// evita que fiquem visualmente sobrepostos.
 //
-// A direção do empurrão é suavizada em DOIS estágios (ângulo e depois
-// magnitude) — não só a magnitude como numa mola simples. Sem isso, quando
-// dois mobs se cruzam (a caminho de pontos opostos), o vetor bruto (posição
-// de um menos a do outro) inverte de sinal de repente bem no meio do
-// cruzamento; a magnitude suavizada sozinha ainda seguia essa direção que
-// vira instantaneamente, e o resultado visual era os dois "girando" um em
-// torno do outro por um instante. Suavizando o ÂNGULO também (bem mais
-// devagar que a magnitude), o empurrão gira aos poucos até a nova direção
-// em vez de virar de uma vez — sem mais giro, só um leve desvio ao esbarrar.
+// A direção do empurrão é TRAVADA no instante em que o contato começa (a
+// partir da posição relativa NAQUELE momento) e mantida reta enquanto durar
+// o contato — só a magnitude (que segue a proximidade atual) varia. Antes eu
+// tentava suavizar a direção continuamente a cada frame, mas como o alvo
+// (a direção crua entre os dois mobs) muda o tempo todo enquanto eles se
+// cruzam, suavizar a direção só fazia o empurrão "varrer" um arco enquanto
+// perseguia esse alvo em movimento — visualmente um giro. Travando a
+// direção uma vez, o empurrão vira sempre um simples empurrão reto, nunca
+// uma curva.
 const MOB_SEP_PUSH_MAX = 18; // px máx. de empurrão visual
 function _updateMobSeparation(dt) {
     for (const group of _allMobGroups) {
         for (const el of group) {
-            if (el.classList.contains('mob-dying') || el.classList.contains('mob-respawning')) { el.__mobSepOffset = { x: 0, y: 0 }; el.__mobPushAngle = undefined; continue; }
-            const left = parseFloat(el.style.left) || 0, top = parseFloat(el.style.top) || 0;
-            const cx = left + MOB_HITBOX_W / 2, cy = top + MOB_HITBOX_H / 2;
+            if (el.classList.contains('mob-dying') || el.classList.contains('mob-respawning')) { el.__mobSepOffset = { x: 0, y: 0 }; el.__mobPushDir = null; continue; }
             // Viés fixo por mob (sorteado uma vez) — desempata casos quase perfeitamente
             // simétricos (dois mobs exatamente sobrepostos), onde a direção "certa" do
-            // empurrão é ambígua e ficaria oscilando/girando sem um critério de desempate.
+            // empurrão é ambígua.
             const bias = el.__mobAvoidBias || (el.__mobAvoidBias = { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 });
+            const { left, top } = _mobGetLogical(el);
+            const cx = left + MOB_HITBOX_W / 2, cy = top + MOB_HITBOX_H / 2;
             let pushX = 0, pushY = 0;
             for (const other of group) {
                 if (other === el || other.classList.contains('mob-dying')) continue;
-                const ol = parseFloat(other.style.left) || 0, ot = parseFloat(other.style.top) || 0;
+                const ol = _mobGetLogical(other).left, ot = _mobGetLogical(other).top;
                 const ocx = ol + MOB_HITBOX_W / 2, ocy = ot + MOB_HITBOX_H / 2;
                 let dx = cx - ocx, dy = cy - ocy;
                 let dist = Math.sqrt(dx * dx + dy * dy);
@@ -1314,19 +1351,18 @@ function _updateMobSeparation(dt) {
             const rawMag = Math.sqrt(pushX * pushX + pushY * pushY);
             let targetX = 0, targetY = 0;
             if (rawMag > 0.001) {
-                const rawAngle = Math.atan2(pushY, pushX);
-                const prevAngle = el.__mobPushAngle ?? rawAngle;
-                let diff = rawAngle - prevAngle;
-                diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // normaliza a diferença pra [-π, π]
-                const dirRate = Math.min(1, dt * 0.006); // ângulo muda BEM devagar — é isso que impede o giro
-                const smoothAngle = prevAngle + diff * dirRate;
-                el.__mobPushAngle = smoothAngle;
+                if (!el.__mobPushDir) {
+                    // Início de um novo contato — trava a direção agora (reta), não recalcula depois.
+                    el.__mobPushDir = { x: pushX / rawMag, y: pushY / rawMag };
+                }
                 const mag = Math.min(1, rawMag);
-                targetX = Math.cos(smoothAngle) * MOB_SEP_PUSH_MAX * mag;
-                targetY = Math.sin(smoothAngle) * MOB_SEP_PUSH_MAX * mag;
+                targetX = el.__mobPushDir.x * MOB_SEP_PUSH_MAX * mag;
+                targetY = el.__mobPushDir.y * MOB_SEP_PUSH_MAX * mag;
+            } else {
+                el.__mobPushDir = null; // saiu do contato — próxima vez trava uma direção nova
             }
             const prev = el.__mobSepOffset || { x: 0, y: 0 };
-            const rate = Math.min(1, dt * 0.008);
+            const rate = Math.min(1, dt * 0.02); // pode reagir mais rápido agora — a direção já não muda de repente
             el.__mobSepOffset = { x: prev.x + (targetX - prev.x) * rate, y: prev.y + (targetY - prev.y) * rate };
         }
     }
@@ -1405,12 +1441,12 @@ function _mobDistSq(aLeft,aTop,bLeft,bTop){const acx=aLeft+MOB_HITBOX_W/2,acy=aT
 // valia o destino final mesmo com o mob ainda no meio do caminho, então o
 // desvio comparava contra um ponto onde o outro mob nem estava ainda — essa
 // era a causa do "atravessar" inconsistente.
-function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot={left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
+function _mobMinDistTo(left,top,group,self){if(!group||!group.length)return Infinity;let min=Infinity;for(const other of group){if(other===self)continue;const ot=_mobGetLogical(other);const d=Math.sqrt(_mobDistSq(left,top,ot.left,ot.top));if(d<min)min=d;}return min;}
 function _pickMobPosition(w,h,group,self){const maxLeft=Math.max(0,w-MOB_HITBOX_W),maxTop=Math.max(0,h-MOB_HITBOX_H);let best=null,bestScore=-1;for(let tries=0;tries<24;tries++){const left=Math.random()*maxLeft,top=Math.random()*maxTop;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>=MOB_MIN_DIST_PX)return{left,top};if(minDist>bestScore){bestScore=minDist;best={left,top};}}if(best)return best;const cols=6,rows=6;let gLeft=0,gTop=0,gScore=-1;for(let r=0;r<=rows;r++){for(let c=0;c<=cols;c++){const left=(maxLeft*c)/cols,top=(maxTop*r)/rows;const minDist=_mobMinDistTo(left,top,group,self);if(minDist>gScore){gScore=minDist;gLeft=left;gTop=top;}}}return{left:gLeft,top:gTop};}
 // Distância do ponto (px,py) até o segmento AB — usada pra saber se um trecho do caminho passa perto demais de outro mob.
 function _mobPointSegDist(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay;const lenSq=dx*dx+dy*dy;let t=lenSq>0?((px-ax)*dx+(py-ay)*dy)/lenSq:0;t=Math.max(0,Math.min(1,t));const cx=ax+dx*t,cy=ay+dy*t;return Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));}
 // Menor distância de um único trecho AB até qualquer outro mob do grupo.
-function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot={left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
+function _mobSegMinClearance(ax,ay,bx,by,group,self){let min=Infinity;for(const other of group){if(other===self)continue;const ot=_mobGetLogical(other);const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);if(d<min)min=d;}return min;}
 // Menor distância ao longo do caminho INTEIRO (origem passando por cada waypoint até o destino).
 function _mobFullPathClearance(oldLeft,oldTop,path,group,self){let curLeft=oldLeft,curTop=oldTop,min=Infinity;for(const p of path){const ax=curLeft+MOB_HITBOX_W/2,ay=curTop+MOB_HITBOX_H/2;const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;const c=_mobSegMinClearance(ax,ay,bx,by,group,self);if(c<min)min=c;curLeft=p.left;curTop=p.top;}return min;}
 // Acha, ao longo do caminho inteiro, o trecho que passa mais perto de algum outro mob (abaixo da folga mínima).
@@ -1424,7 +1460,7 @@ function _mobFindWorstSegment(oldLeft,oldTop,path,group,self){
         const bx=p.left+MOB_HITBOX_W/2,by=p.top+MOB_HITBOX_H/2;
         for(const other of group){
             if(other===self)continue;
-            const ot={left:parseFloat(other.style.left)||0,top:parseFloat(other.style.top)||0};
+            const ot=_mobGetLogical(other);
             const ox=ot.left+MOB_HITBOX_W/2,oy=ot.top+MOB_HITBOX_H/2;
             const d=_mobPointSegDist(ox,oy,ax,ay,bx,by);
             if(d<worstDist){worstDist=d;worstIdx=i;worstObstacle={ox,oy};}
@@ -1489,7 +1525,7 @@ function _mobWalkPath(el,img,startLeft,startTop,points){
             .to({left:seg.to.left,top:seg.to.top},segDurationMs)
             .easing(TWEEN.Easing.Quadratic.InOut)
             .onStart(()=>{if(img)_mobWalkOnMoveStart(el,img,seg.to.left-seg.from.left,seg.to.top-seg.from.top);})
-            .onUpdate(()=>{el.style.left=pos.left+'px';el.style.top=pos.top+'px';})
+            .onUpdate(()=>{const lp=_mobGetLogical(el);lp.left=pos.left;lp.top=pos.top;})
             .onComplete(()=>{if(isLast&&img)_mobWalkOnMoveEnd(img);});
         if(chain)chain.chain(tw);else first=tw;
         chain=tw;
@@ -1498,7 +1534,7 @@ function _mobWalkPath(el,img,startLeft,startTop,points){
     if(first)first.start();
     return totalDurationMs;
 }
-function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group&&!group.includes(el))group.push(el);const move=()=>{const oldLeft=parseFloat(el.style.left)||0;const oldTop=parseFloat(el.style.top)||0;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
+function startWander(el,w,h,delay,group){const img=el.querySelector('.mob-avatar');if(group&&!group.includes(el))group.push(el);const move=()=>{const lp=_mobGetLogical(el);const oldLeft=lp.left;const oldTop=lp.top;const pos=group?_pickMobPosition(w,h,group,el):{left:Math.max(0,Math.random()*(w-70)),top:Math.max(0,Math.random()*(h-90))};const newLeft=pos.left,newTop=pos.top;const path=group?_mobBuildPath(oldLeft,oldTop,newLeft,newTop,w,h,group,el):[{left:newLeft,top:newTop}];const totalMs=_mobWalkPath(el,img,oldLeft,oldTop,path);wanderTimers.push(setTimeout(()=>{pause();},totalMs+100+Math.random()*800));};const pause=()=>{wanderTimers.push(setTimeout(move,8000+Math.random()*5000));};wanderTimers.push(setTimeout(move,delay));}
 
 // ── SPOTS + MOBS ─────────────────────────────────────────────
 // Cada mob continua sendo um <div class="mob-wrapper"> comum (mesma lógica de
@@ -1531,11 +1567,11 @@ function renderSpots(){
             const wrap=document.createElement('div');
             wrap.className='mob-wrapper';
             const _initPos=_pickMobPosition(spot.width,spot.height,mobGroup,wrap);
-            Object.assign(wrap.style,{left:_initPos.left+'px',top:_initPos.top+'px'});
+            Object.assign(_mobGetLogical(wrap),_initPos);
+            wrap.style.transform='translate(-50%, 0)'; // centraliza o nome no ponto projetado (ver updateAllMobVisuals)
             const nm=document.createElement('div');
             nm.className='mob-name';
             nm.textContent=spot.name;
-            nm.style.color=spot.labelColor||'#fcc';
             const shadow=document.createElement('div');
             shadow.className='mob-shadow';
             const av=document.createElement('img');
@@ -3024,8 +3060,9 @@ async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive
     if(mobs.length === 0) return true;
 
     const targetMob = mobs[Math.floor(Math.random() * mobs.length)];
-    const mobL = parseFloat(targetMob.style.left) || targetMob.offsetLeft;
-    const mobT = parseFloat(targetMob.style.top)  || targetMob.offsetTop;
+    const _mlp = _mobGetLogical(targetMob);
+    const mobL = _mlp.left;
+    const mobT = _mlp.top;
     const pW = 70, pH = 90;
 
     const rawLeft  = mobL - pW - 4 + (Math.random()*16 - 8);
@@ -3134,9 +3171,7 @@ function _triggerMobDeath(mobEl, spot){
         if(!mobEl.parentElement) return;
         const newL = 8 + Math.random() * Math.max(10, spot.width  - 80);
         const newT = 8 + Math.random() * Math.max(10, spot.height - 95);
-        mobEl.style.transition = 'none';
-        mobEl.style.left = newL + 'px';
-        mobEl.style.top  = newT + 'px';
+        Object.assign(_mobGetLogical(mobEl), { left: newL, top: newT });
         mobEl.classList.remove('mob-dying');
         mobEl.classList.add('mob-respawning');
         void mobEl.offsetWidth;
@@ -3255,7 +3290,7 @@ function _mobDirSrc(baseSrc, dir) {
 // quando ele vira pra esquerda (ver nota sobre THREE.Sprite acima) — só
 // quando o estado realmente muda, nunca a cada frame.
 function _mobApplyDirSprite(el, img, st) {
-    const wantFlip = !st.vertical && st.facingTarget < 0;
+    const wantFlip = !st.vertical && st.facingTarget > 0;
     if (st.verticalApplied === st.vertical && st.flipApplied === wantFlip) return;
     st.verticalApplied = st.vertical;
     st.flipApplied = wantFlip;

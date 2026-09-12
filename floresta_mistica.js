@@ -1617,7 +1617,7 @@ function renderPlayerOnSpot(spotId){
     if(myGuildName){
         const gb=document.createElement('div');
         gb.className='player-name-label';
-        gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
+        gb.style.cssText='font-size:1.15em;color:silver;margin-top:-3px;text-shadow:1px 1px 2px #000;white-space:nowrap;';
         gb.textContent=esc(myGuildName);
         wrap.appendChild(gb);
         gb.style.marginBottom='30px';
@@ -1687,7 +1687,7 @@ function renderOtherPlayers(players){
         if(guildName){
             const gb=document.createElement('div');
             gb.className='other-player-name';
-            gb.style.cssText='font-size:0.65em;color:silver;margin-top:-3px;';
+            gb.style.cssText='font-size:1.15em;color:silver;margin-top:-3px;';
             gb.textContent=esc(guildName);
             wrap.appendChild(gb);
             gb.style.marginBottom='30px';

@@ -30,11 +30,16 @@ import { initPostFX, POSTFX_CONFIG } from './postfx.js';
 // técnica da respiração dos mobs da Floresta Mística (fases e
 // velocidades próprias, que derivam sozinhas com o tempo — nunca
 // robótico/repetitivo):
-//   - bater de asas: squash & stretch (nunca rotação) alternando sozinho
-//     entre rajadas de batida e trechos de puro planeio;
-//   - desvio tipo "caça em exercício": um balanço vertical bem mais lento
-//     e sutil que o bater de asas, como o vento empurrando o voo, com uma
-//     leve inclinação (bank) só na direção desse desvio — não uma pirueta.
+//   - bater de asas: só o eixo vertical estica/encolhe, a partir de um
+//     PIVÔ perto da cauda/pernas (sprite.center) — igual à respiração dos
+//     mobs ancorada nos pés: a base do corpo quase não se mexe, e o
+//     alongamento fica concentrado lá em cima, nas asas (sem isso, o
+//     corpo inteiro esticava/encolhia junto e parecia borracha);
+//   - alterna sozinho entre rajadas de batida e trechos de puro planeio;
+//   - desvio vertical lento tipo "vento" (posição) + ROLAGEM (roll)
+//     independente, com ritmo próprio mais rápido — o "efeito caça" de
+//     aves/aeronaves fazendo pequenos ajustes de estabilidade contra o
+//     vento, sem virar pirueta.
 // ═══════════════════════════════════════════════════════════════════════
 
 const SKY_IMAGE_URL    = '/assets/aden_ini_sb.png';
@@ -82,35 +87,46 @@ const DRAGON_FADE_IN_MS_MAX  = 1700;
 const DRAGON_FADE_OUT_MS_MIN = 1600;
 const DRAGON_FADE_OUT_MS_MAX = 2400;
 
-// ── Bater de asas / planar (squash & stretch, mesma família de técnica
-// da respiração dos mobs da Floresta Mística — ver _mobBreath* lá) ──────
-// Alterna sozinho entre rajadas de batida de asa e trechos de planeio,
-// com durações sorteadas — nunca fica batendo asa o tempo todo, nem para
-// de vez. A curva de cada batida é assimétrica (a "descida" da asa é mais
-// rápida que a "subida"), como uma batida de verdade, não um sino simétrico.
+// ── Bater de asas / planar (squash & stretch a partir de um PIVÔ perto da
+// cauda/corpo — mesma ideia da respiração dos mobs da Floresta Mística,
+// que ancora nos "pés" pra só o peito subir: aqui a âncora fica perto da
+// cauda/pernas, deixando essa parte praticamente parada e concentrando o
+// esticar/encolher nas asas, lá em cima. Só o eixo vertical se mexe —
+// nada de encolher/esticar o corpo nos dois eixos ao mesmo tempo, que foi
+// o que deu aquela sensação de borracha/gelatina). ───────────────────────
 const FLAP_PERIOD_SEC_MIN   = 0.5;   // período de UMA batida de asa (segundos), sorteado por dragão
 const FLAP_PERIOD_SEC_MAX   = 0.75;
-const FLAP_BASE_AMPL        = 0.065; // até ~6.5% de achatamento/alongamento no pico de uma batida forte
+const FLAP_BASE_AMPL        = 0.022; // bem mais sutil que antes — só uma sugestão de batida, não borracha
+const FLAP_PIVOT_V          = 0.20;  // 0 = base da imagem, 1 = topo — 0.20 ≈ altura da cauda/pernas
 const FLAP_GLIDE_MS_MIN     = 3000;  // planeio: bate muito pouco (ou quase nada) a asa
 const FLAP_GLIDE_MS_MAX     = 8000;
 const FLAP_BURST_MS_MIN     = 1800;  // rajada: bate a asa de verdade
 const FLAP_BURST_MS_MAX     = 4500;
 const FLAP_SMOOTH_RATE      = 0.004; // quão rápido a intensidade/velocidade da batida converge pro alvo
 
-// ── Desvio lateral tipo "caça em exercício" (bem sutil, causado pelo
-// "vento") — um balanço vertical LENTO, mais amplo que o bater de asas,
-// desviando a rota um pouco pra cima e pra baixo ao longo do voo, com uma
-// leve inclinação (bank) na direção do desvio, como um planador real
-// correndo o risco de guinar levemente com o vento. ──────────────────────
+// ── Desvio lento tipo "vento" (posição) + ROLAGEM (roll) tipo caça/ave
+// ajustando estabilidade — dois efeitos DIFERENTES, ambos sutis mas a
+// rolagem é deliberadamente rápida/clara o bastante pra ser percebida
+// (é o "efeito caça" pedido), sem virar pirueta. ─────────────────────────
 const DRIFT_PERIOD_MS_MIN   = 7000;
 const DRIFT_PERIOD_MS_MAX   = 13000;
-const DRIFT_AMPL_MIN        = 0.015; // NDC — bem mais sutil que uma pirueta
+const DRIFT_AMPL_MIN        = 0.015; // NDC — desvio vertical bem sutil
 const DRIFT_AMPL_MAX        = 0.035;
 const DRIFT_RETARGET_MS_MIN = 4000;  // a amplitude do desvio também deriva sozinha com o tempo,
 const DRIFT_RETARGET_MS_MAX = 9000;  // pra nunca repetir o mesmo "S" sempre do mesmo jeito
 const DRIFT_SMOOTH_RATE     = 0.002;
-const BANK_MAX_RAD          = 0.05;  // ~2.9° — inclinação máxima ao "entrar" no desvio, nunca mais que isso
-const BANK_SCALE            = 2.4;
+
+// Rolagem (roll): inclinação periódica em torno do próprio eixo de voo —
+// o "ajuste de estabilidade" que aves/aeronaves fazem contra o vento.
+// Independente do desvio vertical acima (tem seu próprio ritmo, mais
+// rápido, pra ficar claramente visível).
+const ROLL_PERIOD_SEC_MIN   = 2.6;
+const ROLL_PERIOD_SEC_MAX   = 4.4;
+const ROLL_AMPL_DEG_MIN     = 5;
+const ROLL_AMPL_DEG_MAX     = 9;
+const ROLL_RETARGET_MS_MIN  = 5000;  // amplitude/período também derivam sozinhos com o tempo
+const ROLL_RETARGET_MS_MAX  = 11000;
+const ROLL_SMOOTH_RATE      = 0.0025;
 
 // Faixa vertical (em NDC, -1..1) onde os dragões podem aparecer — região
 // do céu, acima da caixa de login.
@@ -276,6 +292,11 @@ function createDragonEntry(profile) {
 
     const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0 });
     const sprite = new THREE.Sprite(material);
+    // Âncora perto da cauda/pernas (não no centro) — mesma lógica da
+    // respiração dos mobs ancorada nos "pés": ao esticar no eixo Y, a
+    // parte de baixo (âncora) quase não se mexe, e o alongamento fica
+    // concentrado lá em cima, nas asas.
+    sprite.center.set(0.5, FLAP_PIVOT_V);
     sprite.scale.set(worldWidth, worldHeight, 1);
     sprite.renderOrder = 5;
     sprite.visible = false;
@@ -329,6 +350,14 @@ function createDragonAnimState() {
         driftAmp: randBetween(DRIFT_AMPL_MIN, DRIFT_AMPL_MAX),
         driftAmpTarget: randBetween(DRIFT_AMPL_MIN, DRIFT_AMPL_MAX),
         nextDriftRetargetMs: randBetween(DRIFT_RETARGET_MS_MIN, DRIFT_RETARGET_MS_MAX),
+        // Rolagem (roll) — o "efeito caça": oscilação de inclinação em
+        // torno do eixo de voo, independente do desvio acima, com ritmo
+        // próprio (mais rápido, pra ser claramente perceptível).
+        rollPhase: Math.random() * Math.PI * 2,
+        rollAngularSpeed: (Math.PI * 2) / randBetween(ROLL_PERIOD_SEC_MIN, ROLL_PERIOD_SEC_MAX),
+        rollAmpRad: THREE.MathUtils.degToRad(randBetween(ROLL_AMPL_DEG_MIN, ROLL_AMPL_DEG_MAX)),
+        rollAmpTargetRad: THREE.MathUtils.degToRad(randBetween(ROLL_AMPL_DEG_MIN, ROLL_AMPL_DEG_MAX)),
+        nextRollRetargetMs: randBetween(ROLL_RETARGET_MS_MIN, ROLL_RETARGET_MS_MAX),
     };
 }
 
@@ -366,10 +395,20 @@ function updateDragonAnim(anim, dtMs) {
     anim.driftAmp += (anim.driftAmpTarget - anim.driftAmp) * Math.min(1, DRIFT_SMOOTH_RATE * dtMs);
     anim.driftPhase += (dtMs / 1000) * anim.driftAngularSpeed;
     const driftValue = Math.sin(anim.driftPhase) * anim.driftAmp;
-    // Derivada de sin(phase)*amp em relação ao tempo — usada só pra
-    // inclinar levemente NA DIREÇÃO do desvio (bank), não de qualquer jeito.
-    const driftDeriv = Math.cos(anim.driftPhase) * anim.driftAmp * anim.driftAngularSpeed;
-    const bank = Math.max(-BANK_MAX_RAD, Math.min(BANK_MAX_RAD, driftDeriv * BANK_SCALE));
+
+    // Rolagem (roll) — oscilação própria, independente do desvio acima,
+    // com período mais curto (poucos segundos) pra ficar claramente
+    // visível, como o "ajuste de estabilidade contra o vento" pedido —
+    // não uma pirueta, só um balanço periódico de poucos graus.
+    anim.nextRollRetargetMs -= dtMs;
+    if (anim.nextRollRetargetMs <= 0) {
+        anim.rollAmpTargetRad = THREE.MathUtils.degToRad(randBetween(ROLL_AMPL_DEG_MIN, ROLL_AMPL_DEG_MAX));
+        anim.rollAngularSpeed = (Math.PI * 2) / randBetween(ROLL_PERIOD_SEC_MIN, ROLL_PERIOD_SEC_MAX);
+        anim.nextRollRetargetMs = randBetween(ROLL_RETARGET_MS_MIN, ROLL_RETARGET_MS_MAX);
+    }
+    anim.rollAmpRad += (anim.rollAmpTargetRad - anim.rollAmpRad) * Math.min(1, ROLL_SMOOTH_RATE * dtMs);
+    anim.rollPhase += (dtMs / 1000) * anim.rollAngularSpeed;
+    const bank = Math.sin(anim.rollPhase) * anim.rollAmpRad;
 
     return { flapAmount, driftValue, bank };
 }
@@ -452,12 +491,14 @@ function updateDragonsVisual(ts, dtMs) {
         const worldPos = _sky.camera.position.clone().addScaledVector(dir, distance);
         dragon.sprite.position.copy(worldPos);
 
-        // Batida de asa: achata/estica o sprite (squash & stretch), igual
-        // em espírito à respiração dos mobs — nunca gira o sprite pra
-        // simular isso (é isso que parecia pipa). O bank abaixo é a ÚNICA
-        // rotação aplicada, e é pequena e ligada ao desvio real do voo.
+        // Batida de asa: achata/estica só o eixo vertical, a partir do
+        // pivô perto da cauda (ver sprite.center em createDragonEntry) —
+        // por isso o corpo/cauda fica praticamente parado e o alongamento
+        // concentra nas asas, sem esticar/encolher tudo junto (era isso
+        // que dava a sensação de borracha). O bank (rolagem) é a ÚNICA
+        // rotação aplicada, com ritmo próprio — ver updateDragonAnim.
         dragon.sprite.scale.set(
-            dragon.worldWidth * (1 - flapAmount * 0.35),
+            dragon.worldWidth,
             dragon.worldHeight * (1 + flapAmount),
             1
         );

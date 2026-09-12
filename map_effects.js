@@ -85,6 +85,15 @@
        presente na página (necessário pro auth_skybox.js). */
     function applyShaderGrading(mapContainer, mapImage) {
         import('./postfx.js').then(function (mod) {
+            // Ajuste SÓ PARA ESTA PÁGINA (mesma lógica do auth_skybox.js):
+            // o postfx.js continua intocado no arquivo — cada página carrega
+            // sua própria cópia do módulo, então subir um pouco o contraste
+            // e a saturação aqui não afeta a Floresta Mística nem nenhuma
+            // outra tela. Isso realça tanto o sol (tons quentes) quanto o
+            // temporal ao fundo (tons azuis) do mapa, sem precisar de bloom
+            // real (o mapa é uma imagem 2D comum, sem cena WebGL própria).
+            mod.POSTFX_CONFIG.colorGrade.contrast = 1.12;
+            mod.POSTFX_CONFIG.colorGrade.saturation = 1.35;
             mod.applyDomLayer(mapContainer, mapImage);
         }).catch(function (e) {
             console.error('[mfx] Falha ao carregar postfx.js para o grading do mapa:', e);

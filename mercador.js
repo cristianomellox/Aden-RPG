@@ -841,8 +841,8 @@ const MC_NPC_SPOT = {
 // a direção da luz caso a auto-detecção erre nesta cena.
 const MC_LIGHT_OVERRIDE = null;
 
-const MC_INITIAL_YAW = 0, MC_INITIAL_PITCH = -6, MC_INITIAL_FOV = 110;
-const MC_FOV_MIN = 75, MC_FOV_MAX = 110;
+const MC_INITIAL_YAW = 0, MC_INITIAL_PITCH = -6, MC_INITIAL_FOV = 120;
+const MC_FOV_MIN = 120, MC_FOV_MAX = 120;
 const MC_START_FOV = MC_FOV_MAX;
 const MC_PITCH_LIMIT = 89;
 
@@ -1006,7 +1006,7 @@ function initMercadorSkybox() {
             // Detecta o ponto mais claro do skybox pra orientar a sombra do
             // NPC (ver estimateLightDirectionFromEquirect em postfx.js).
             const debugShadow = new URLSearchParams(location.search).get('debugShadow') === '1';
-            _mcLightDir = Mc_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
+            _mcLightDir = MC_LIGHT_OVERRIDE || estimateLightDirectionFromEquirect(tex, { debug: debugShadow });
             if (_mcNpcShadow) updateNpcGroundShadowLight(_mcNpcShadow, _mcLightDir.yaw, _mcLightDir.pitch, mcYaw);
         },
         undefined,

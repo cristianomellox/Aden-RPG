@@ -56,7 +56,7 @@ export const POSTFX_CONFIG = {
         blurFrac: 0.090,     // raio do desfoque como fração da largura da imagem do NPC (não px fixo — se adapta a qualquer resolução de asset). Suba pra sombra mais "nublada", desça pra mais definida
         baseSquash: 0.84,   // o quanto a silhueta é achatada antes de esticar pela luz
         minStretch: 0.7,    // sombra mínima (luz quase a pino)
-        maxStretch: 1.7,    // sombra máxima (luz rente ao horizonte)
+        maxStretch: 1.9,    // sombra máxima (luz rente ao horizonte)
     },
 };
 

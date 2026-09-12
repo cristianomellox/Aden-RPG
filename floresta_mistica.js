@@ -1583,7 +1583,13 @@ function renderSpots(){
             wrap.appendChild(shadow);
             wrap.appendChild(nm);
             wrap.appendChild(av);
-            el.appendChild(wrap);
+            // IMPORTANTE: o wrap vai direto pro #map (não pra dentro da .hunt-spot),
+            // porque a .hunt-spot ainda tem seu próprio transform:scale/translate (a
+            // mesma caixa aproximada de antes). Se o nome ficasse dentro dela, as
+            // coordenadas de tela calculadas em updateAllMobVisuals (que já são px
+            // reais da viewport) seriam escaladas/deslocadas de novo por cima —
+            // exatamente o desalinhamento que estava acontecendo.
+            map.appendChild(wrap);
             wrap.__mobSpot=spot;
             wrap.__mobVisual=_mobCreateVisual(spot,spot.mobImg);
             _mobVisualRegistry.push(wrap);
@@ -3056,7 +3062,10 @@ async function _otherCombatGlobalTick(){
 // isAlive: function returning bool — gates the await checkpoints
 async function _runAttackSequence(playerWrap, spotEl, spot, soundVolume, isAlive){
     const isOwn = soundVolume === null; // own player uses null volume
-    const mobs = [...spotEl.querySelectorAll('.mob-wrapper')].filter(m=>!m.classList.contains('mob-dying'));
+    // O wrap não é mais filho de spotEl (agora vai direto pro #map — ver
+    // renderSpots), então filtramos pelo spot guardado em wrap.__mobSpot
+    // em vez de spotEl.querySelectorAll.
+    const mobs = _mobVisualRegistry.filter(m=>m.__mobSpot===spot && !m.classList.contains('mob-dying'));
     if(mobs.length === 0) return true;
 
     const targetMob = mobs[Math.floor(Math.random() * mobs.length)];

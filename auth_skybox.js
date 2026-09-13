@@ -46,7 +46,7 @@ const SKY_IMAGE_URL    = '/assets/aden_ini_sb.png';
 const DRAGON_IMAGE_URL = '/assets/mon_dg_auth.png';
 
 // ── Câmera (gira sozinha, devagar, só no eixo horizontal) ───────────────
-const CAM_FOV               = 110;
+const CAM_FOV               = 120;
 const CAM_PITCH_DEG         = -3;               // fixo — nunca muda (sem movimento vertical)
 const ROTATE_DEG_PER_SEC    = 360 / 150;        // 1 volta completa a cada 150s — bem suave
 // A câmera não deve nascer olhando bem em cima do sol (yaw perto de 0).
@@ -55,7 +55,7 @@ const CAM_INITIAL_YAW_MIN   = 90;
 const CAM_INITIAL_YAW_MAX   = 150;
 
 // ── Dragões (billboards planando pelo céu) ───────────────────────────────
-const DRAGON_HEIGHT_FRAC    = 0.10;             // fração da altura da tela ocupada pelo dragão
+const DRAGON_HEIGHT_FRAC    = 0.09;             // fração da altura da tela ocupada pelo dragão
 const DRAGON_REF_DISTANCE   = 320;              // distância de referência p/ calcular o tamanho do sprite
 // Cada voo sorteia uma distância inicial e uma final DENTRO desse
 // intervalo — quando elas são bem diferentes, o dragão parece se
@@ -105,7 +105,7 @@ const DRAGON_FADE_OUT_MS_MAX = 2400;
 //     muito altos podem voltar a distorcer o corpo perto do pivô.
 const FLAP_PERIOD_SEC_MIN   = 1.8;   // período de UMA batida de asa (segundos), sorteado por dragão
 const FLAP_PERIOD_SEC_MAX   = 2.6;
-const FLAP_BASE_AMPL        = 0.06;  // o quanto a asa dobra no pico de uma batida forte
+const FLAP_BASE_AMPL        = 0.09;  // o quanto a asa dobra no pico de uma batida forte
 const FLAP_PIVOT_V          = 0.20;  // 0 = base da imagem, 1 = topo — 0.20 ≈ altura da cauda/pernas
 const FLAP_GLIDE_MS_MIN     = 3000;  // planeio: bate muito pouco (ou quase nada) a asa
 const FLAP_GLIDE_MS_MAX     = 8000;
@@ -131,7 +131,7 @@ const DRIFT_SMOOTH_RATE     = 0.002;
 const DEPTH_OSC_PERIOD_MS_MIN = 4500;
 const DEPTH_OSC_PERIOD_MS_MAX = 8500;
 const DEPTH_OSC_AMPL_MIN      = 12;  // unidades de mundo — bem menor que a faixa de distância total
-const DEPTH_OSC_AMPL_MAX      = 28;
+const DEPTH_OSC_AMPL_MAX      = 18;
 const DEPTH_OSC_RETARGET_MS_MIN = 5000;
 const DEPTH_OSC_RETARGET_MS_MAX = 11000;
 const DEPTH_OSC_SMOOTH_RATE     = 0.0025;

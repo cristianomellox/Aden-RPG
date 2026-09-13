@@ -46,7 +46,7 @@ const SKY_IMAGE_URL    = '/assets/aden_ini_sb.png';
 const DRAGON_IMAGE_URL = '/assets/mon_dg_auth.png';
 
 // ── Câmera (gira sozinha, devagar, só no eixo horizontal) ───────────────
-const CAM_FOV               = 120;
+const CAM_FOV               = 100;
 const CAM_PITCH_DEG         = -3;               // fixo — nunca muda (sem movimento vertical)
 const ROTATE_DEG_PER_SEC    = 360 / 150;        // 1 volta completa a cada 150s — bem suave
 // A câmera não deve nascer olhando bem em cima do sol (yaw perto de 0).
@@ -103,9 +103,9 @@ const DRAGON_FADE_OUT_MS_MAX = 2400;
 //     tamanho do dragão). Quanto maior, mais pronunciada a dobra. Se ainda
 //     quiser mais, vá subindo aos poucos (ex.: 0.07, 0.08...) — valores
 //     muito altos podem voltar a distorcer o corpo perto do pivô.
-const FLAP_PERIOD_SEC_MIN   = 1.8;   // período de UMA batida de asa (segundos), sorteado por dragão
-const FLAP_PERIOD_SEC_MAX   = 2.6;
-const FLAP_BASE_AMPL        = 0.09;  // o quanto a asa dobra no pico de uma batida forte
+const FLAP_PERIOD_SEC_MIN   = 1.1;   // período de UMA batida de asa (segundos), sorteado por dragão
+const FLAP_PERIOD_SEC_MAX   = 2.0;
+const FLAP_BASE_AMPL        = 0.19;  // o quanto a asa dobra no pico de uma batida forte
 const FLAP_PIVOT_V          = 0.20;  // 0 = base da imagem, 1 = topo — 0.20 ≈ altura da cauda/pernas
 const FLAP_GLIDE_MS_MIN     = 3000;  // planeio: bate muito pouco (ou quase nada) a asa
 const FLAP_GLIDE_MS_MAX     = 8000;

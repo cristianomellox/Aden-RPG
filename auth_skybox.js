@@ -46,7 +46,7 @@ const SKY_IMAGE_URL    = '/assets/aden_ini_sb.png';
 const DRAGON_IMAGE_URL = '/assets/mon_dg_auth.png';
 
 // ── Câmera (gira sozinha, devagar, só no eixo horizontal) ───────────────
-const CAM_FOV               = 88;
+const CAM_FOV               = 110;
 const CAM_PITCH_DEG         = -3;               // fixo — nunca muda (sem movimento vertical)
 const ROTATE_DEG_PER_SEC    = 360 / 150;        // 1 volta completa a cada 150s — bem suave
 // A câmera não deve nascer olhando bem em cima do sol (yaw perto de 0).
@@ -55,7 +55,7 @@ const CAM_INITIAL_YAW_MIN   = 90;
 const CAM_INITIAL_YAW_MAX   = 150;
 
 // ── Dragões (billboards planando pelo céu) ───────────────────────────────
-const DRAGON_HEIGHT_FRAC    = 0.13;             // fração da altura da tela ocupada pelo dragão
+const DRAGON_HEIGHT_FRAC    = 0.10;             // fração da altura da tela ocupada pelo dragão
 const DRAGON_REF_DISTANCE   = 320;              // distância de referência p/ calcular o tamanho do sprite
 // Cada voo sorteia uma distância inicial e uma final DENTRO desse
 // intervalo — quando elas são bem diferentes, o dragão parece se
@@ -110,8 +110,8 @@ const FLAP_SMOOTH_RATE      = 0.004; // quão rápido a intensidade/velocidade d
 // (é o "efeito caça" pedido), sem virar pirueta. ─────────────────────────
 const DRIFT_PERIOD_MS_MIN   = 7000;
 const DRIFT_PERIOD_MS_MAX   = 13000;
-const DRIFT_AMPL_MIN        = 0.015; // NDC — desvio vertical bem sutil
-const DRIFT_AMPL_MAX        = 0.035;
+const DRIFT_AMPL_MIN        = 0.005; // NDC — desvio vertical bem sutil
+const DRIFT_AMPL_MAX        = 0.010;
 const DRIFT_RETARGET_MS_MIN = 4000;  // a amplitude do desvio também deriva sozinha com o tempo,
 const DRIFT_RETARGET_MS_MAX = 9000;  // pra nunca repetir o mesmo "S" sempre do mesmo jeito
 const DRIFT_SMOOTH_RATE     = 0.002;
@@ -122,8 +122,8 @@ const DRIFT_SMOOTH_RATE     = 0.002;
 // rápido, pra ficar claramente visível).
 const ROLL_PERIOD_SEC_MIN   = 2.6;
 const ROLL_PERIOD_SEC_MAX   = 4.4;
-const ROLL_AMPL_DEG_MIN     = 5;
-const ROLL_AMPL_DEG_MAX     = 9;
+const ROLL_AMPL_DEG_MIN     = 1;
+const ROLL_AMPL_DEG_MAX     = 4;
 const ROLL_RETARGET_MS_MIN  = 5000;  // amplitude/período também derivam sozinhos com o tempo
 const ROLL_RETARGET_MS_MAX  = 11000;
 const ROLL_SMOOTH_RATE      = 0.0025;

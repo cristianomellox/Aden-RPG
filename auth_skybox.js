@@ -105,8 +105,8 @@ const DRAGON_FADE_OUT_MS_MAX = 2400;
 //     muito altos podem voltar a distorcer o corpo perto do pivô.
 const FLAP_PERIOD_SEC_MIN   = 2.1;   // período de UMA batida de asa (segundos), sorteado por dragão
 const FLAP_PERIOD_SEC_MAX   = 3.0;
-const FLAP_BASE_AMPL        = 0.19;  // o quanto a asa dobra no pico de uma batida forte
-const FLAP_PIVOT_V          = 0.20;  // 0 = base da imagem, 1 = topo — 0.20 ≈ altura da cauda/pernas
+const FLAP_BASE_AMPL        = 0.15;  // o quanto a asa dobra no pico de uma batida forte
+const FLAP_PIVOT_V          = 0.40;  // 0 = base da imagem, 1 = topo — 0.20 ≈ altura da cauda/pernas
 const FLAP_GLIDE_MS_MIN     = 2000;  // planeio: bate muito pouco (ou quase nada) a asa
 const FLAP_GLIDE_MS_MAX     = 4000;
 const FLAP_BURST_MS_MIN     = 1800;  // rajada: bate a asa de verdade

@@ -1,6 +1,6 @@
 // sw.js
 
-const CACHE_NAME = 'aden-rpg-assets-v40'; // Mude isso quando alterar a lista de precache (UI essencial)
+const CACHE_NAME = 'aden-rpg-assets-v41'; // Mude isso quando alterar a lista de precache (UI essencial)
 const CACHE_ZIP_ASSETS = 'aden-rpg-zip-assets-v1'; // CACHE BLINDADO: nunca mude esse nome, ele guarda os assets extraídos dos zips + os marcadores de versão de cada pacote
 
 const ASSET_PREFIX = '/assets/';
@@ -77,12 +77,22 @@ self.addEventListener('fetch', event => {
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request).catch(() => {
-                return caches.match('/offline.html').then(offlinePage => {
-                    return offlinePage || new Response('Sem conexão com a internet.', {
+                return caches.match('/offline.html')
+                    .then(offlinePage => {
+                        return offlinePage || new Response('Sem conexão com a internet.', {
+                            status: 503,
+                            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+                        });
+                    })
+                    // Rede de segurança: se ATÉ o caches.match falhar (cache
+                    // corrompido, quota, etc.), ainda devolvemos uma Response
+                    // válida em vez de deixar a Promise rejeitar — uma Promise
+                    // rejeitada aqui é o que gera o ERR_FAILED genérico do
+                    // navegador em vez da nossa página offline.
+                    .catch(() => new Response('Sem conexão com a internet.', {
                         status: 503,
                         headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-                    });
-                });
+                    }));
             })
         );
         return;

@@ -40,16 +40,30 @@
     <!-- Android/Chrome antigo -->
     <meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- Adicione isso logo após a tag <title> ou nas primeiras linhas do <head> -->
 <script>
-    // Proteção Offline: Redireciona imediatamente se abrir o app sem internet
-    function checkOfflineStatus() {
+    // Controle Offline Embutido (Sem redirecionamento)
+    function checkConnection() {
+        const offlineScreen = document.getElementById('inline-offline-screen');
         if (!navigator.onLine) {
-            window.location.replace('/offline.html');
+            // Mostra a tela offline por cima de tudo
+            if (offlineScreen) offlineScreen.style.display = 'flex';
+            
+            // Oculta o loading se ele estiver rodando
+            const loading = document.getElementById('loading-overlay');
+            if (loading) loading.style.display = 'none';
+        } else {
+            // Esconde a tela offline se a internet voltar
+            if (offlineScreen) offlineScreen.style.display = 'none';
         }
     }
-    window.addEventListener('offline', checkOfflineStatus);
-    checkOfflineStatus(); // Checa no momento em que a página abre
+    
+    // Escuta quedas e retornos de rede em tempo real
+    window.addEventListener('offline', checkConnection);
+    window.addEventListener('online', () => location.reload()); // Recarrega o jogo ao voltar a net
+    
+    // Checa assim que o HTML carregar
+    document.addEventListener('DOMContentLoaded', checkConnection);
+    checkConnection(); // Checa imediatamente
 </script>
 <script type="module" src="maintenance2.js"></script>
 <link href="style.css" rel="stylesheet"/>
@@ -71,6 +85,13 @@
 </script>
 </head>
 <body>
+  <!-- TELA OFFLINE EMBUTIDA (Fica oculta por padrão) -->
+<div id="inline-offline-screen" style="display: none; position: fixed; inset: 0; z-index: 2147483647; background: #000 url('https://aden-rpg.pages.dev/assets/offline.webp') center/cover no-repeat; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 30px;">
+    <div style="background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 60%, transparent 100%); width: 100%; text-align: center; padding: 40px 20px 20px; box-sizing: border-box;">
+        <p style="color: #fff; font-family: Arial, sans-serif; font-size: 1.1em; margin-bottom: 20px; text-shadow: 1px 1px 5px black;">Você está sem conexão com a internet.</p>
+        <button onclick="location.reload()" style="background: linear-gradient(to top, #7a4e00, #c98c1a); color: #fff; border: none; border-radius: 8px; padding: 14px 35px; font-size: 1.1em; font-weight: bold; cursor: pointer; box-shadow: 0 0 20px rgba(139,105,20,0.5);">Tentar Novamente</button>
+    </div>
+</div>
   <div id="floatingMessage" style="display: none;"></div>
 <div id="playerTopBar">
 <img id="topBarConfigBtn" data-src="/assets/config.webp" alt="Configurações" title="Configurações"/>

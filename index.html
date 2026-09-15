@@ -40,6 +40,17 @@
     <!-- Android/Chrome antigo -->
     <meta name="mobile-web-app-capable" content="yes">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Adicione isso logo após a tag <title> ou nas primeiras linhas do <head> -->
+<script>
+    // Proteção Offline: Redireciona imediatamente se abrir o app sem internet
+    function checkOfflineStatus() {
+        if (!navigator.onLine) {
+            window.location.replace('/offline.html');
+        }
+    }
+    window.addEventListener('offline', checkOfflineStatus);
+    checkOfflineStatus(); // Checa no momento em que a página abre
+</script>
 <script type="module" src="maintenance2.js"></script>
 <link href="style.css" rel="stylesheet"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -1,5 +1,10 @@
 name: Faxina Automatica de Assets
 on: workflow_dispatch
+
+# ISSO AQUI RESOLVE O ERRO: Dá permissão para o robô salvar as mudanças
+permissions:
+  contents: write 
+
 jobs:
   limpar_arquivos:
     runs-on: ubuntu-latest
@@ -8,7 +13,6 @@ jobs:
 
       - name: Salvar VIPs e Apagar o Resto
         run: |
-          # Cria uma pasta temporária segura fora do projeto
           mkdir -p /tmp/cofre_seguro
           
           # 1. Salva a pasta itens
@@ -25,8 +29,9 @@ jobs:
           mv assets/goldcoin.webp /tmp/cofre_seguro/ 2>/dev/null || true
           mv assets/cristais.webp /tmp/cofre_seguro/ 2>/dev/null || true
           mv assets/CPicon.webp /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/avatar01.webp /tmp/cofre_seguro/ 2>/dev/null || true
           
-          # 4. DESTRÓI tudo que sobrou na pasta assets (Músicas, Monstros, etc)
+          # 4. DESTRÓI tudo que sobrou na pasta assets
           rm -rf assets/*
           
           # 5. Devolve os arquivos do cofre para a pasta assets

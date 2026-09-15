@@ -1,0 +1,20 @@
+name: Verificar Tamanho Real do Repositorio
+on: workflow_dispatch
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tamanho real do .git (objetos de verdade, sem cache da API)
+        run: |
+          echo "===== git count-objects ====="
+          git count-objects -vH
+          echo ""
+          echo "===== Tamanho da pasta .git ====="
+          du -sh .git
+          echo ""
+          echo "===== Tamanho total do checkout (working tree + .git) ====="
+          du -sh .

@@ -526,10 +526,48 @@
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Espera o fluxo de boas-vindas (data de nascimento, edição de perfil
+  // obrigatória, pacote inicial — ver script.js/AdenOnboardingGate) e o
+  // tutorial de onboarding terminarem antes de considerar mostrar o modal
+  // de permissão. Isso substitui o antigo "setTimeout(1500)", que era só um
+  // chute e podia disparar o modal em cima da criação/edição de perfil ou
+  // no meio do tutorial.
+  // ─────────────────────────────────────────────
+  function isTutorialInProgress() {
+    if (!window.AdenTutorial || typeof window.AdenTutorial.getStep !== 'function') return false;
+    const step = window.AdenTutorial.getStep();
+    // Passo vazio = tutorial nunca começou (não é motivo pra esperar).
+    // Passo 'done' = já terminou. Qualquer outro valor = em andamento.
+    return !!step && step !== 'done';
+  }
+
+  function isOnboardingBusy() {
+    const gateLocked = !!(window.AdenOnboardingGate && window.AdenOnboardingGate.isLocked());
+    return gateLocked || isTutorialInProgress();
+  }
+
+  function scheduleMaybeShowFlow() {
+    if (modalShownThisPageLoad) return;
+
+    if (isOnboardingBusy()) {
+      // Tenta de novo assim que o gate de boas-vindas for liberado nesta
+      // mesma página. Se o motivo for o tutorial em andamento (que atravessa
+      // várias páginas), essa página não vai mais tentar — o modal aparece
+      // naturalmente no próximo carregamento em que o tutorial já estiver
+      // 'done' (ex: quando o jogador volta pro index após o tutorial.html).
+      window.addEventListener('aden_onboarding_gate_cleared', scheduleMaybeShowFlow, { once: true });
+      return;
+    }
+
+    // Pequeno delay só pra dar tempo da UI assentar (dots de progressão etc.)
+    setTimeout(maybeShowFlow, 1500);
+  }
+
   // Roda depois que o jogador carrega (precisamos do id pra dar a recompensa)
   window.addEventListener('aden_player_ready', (e) => {
     lastKnownPlayer = e.detail || null;
-    setTimeout(maybeShowFlow, 1500); // pequeno delay pra não brigar com outros modais de entrada (banimento, pacote inicial etc.)
+    scheduleMaybeShowFlow();
   });
 
   window.AdenNotifications = { maybeShowFlow, requestPermissionFlow, notifyLocal };

@@ -1740,13 +1740,11 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
                 currentPlayerId = cachedPlayer.id;
                 renderPlayerUI(cachedPlayer, preserveActiveContainer);
                 checkProgressionNotifications(cachedPlayer);
-                enforceBirthDateCompliance(cachedPlayer);
-                
-                // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
-                if (!localStorage.getItem('aden_starter_pack_given_' + cachedPlayer.id)) {
-                    checkAndGiveStarterPack(cachedPlayer);
-                }
-                
+
+                // Sequência de boas-vindas (data de nascimento -> perfil -> pacote
+                // inicial -> tutorial), em ordem — não bloqueia o restante do boot.
+                runWelcomeSequence(cachedPlayer);
+
                 // Dispara o evento de "Pronto" para que o PV.js saiba que pode carregar
                 window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: cachedPlayer }));
                 
@@ -1868,21 +1866,10 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 
         renderPlayerUI(player, preserveActiveContainer);
         checkProgressionNotifications(player);
-        enforceBirthDateCompliance(player);
 
-        // --- PACOTE INICIAL (nível 1, apenas 1 vez por conta) ---
-        if (!localStorage.getItem('aden_starter_pack_given_' + player.id)) {
-            checkAndGiveStarterPack(player); // async, não bloqueia
-        }
-
-        if (/^Nome_[0-9a-fA-F]{6}$/.test(player.name)) {
-            if (typeof window.updateProfileEditModal === 'function') {
-                window.updateProfileEditModal(player);
-            }
-            const nameInput = document.getElementById('editPlayerName');
-            if (nameInput) nameInput.value = '';
-            profileEditModal.style.display = 'flex';
-        }
+        // Sequência de boas-vindas (data de nascimento -> perfil -> pacote
+        // inicial -> tutorial), em ordem — não bloqueia o restante do boot.
+        runWelcomeSequence(player);
 
         // Dispara o evento avisando que o jogador está pronto (para PV.js e outros)
         window.dispatchEvent(new CustomEvent('aden_player_ready', { detail: player }));
@@ -1892,6 +1879,40 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
         window.isPlayerLoading = false; // Libera o semáforo
     }
 }
+
+// =======================================================================
+// GATE DE ONBOARDING — ORQUESTRAÇÃO DO FLUXO DE MODAIS DE ENTRADA
+// =======================================================================
+// Antes, os modais de data de nascimento, edição de perfil (conta nova) e
+// pacote inicial eram disparados de forma independente (um fire-and-forget
+// por baixo do outro), podendo aparecer sobrepostos ou fora de ordem. Este
+// gate serializa essas etapas em um único fluxo:
+//
+//   Data de nascimento -> Edição de perfil (só p/ conta nova) -> Pacote inicial
+//   -> início do tutorial (só p/ conta nova) -> [tutorial em andamento] ->
+//   modal de permissão de notificação (notifications.js), só depois de tudo.
+//
+// window.AdenOnboardingGate.isLocked() fica true enquanto a sequência acima
+// estiver em andamento NA MESMA PÁGINA. Quem precisar esperar (ex: o pedido
+// de permissão de notificação) escuta o evento 'aden_onboarding_gate_cleared'.
+// A checagem de "tutorial em andamento" é feita à parte, lendo o passo salvo
+// em localStorage (via window.AdenTutorial.getStep()), pois o tutorial
+// atravessa várias páginas (index -> inventory -> index) e não sobrevive
+// como estado em memória entre recarregamentos.
+window.AdenOnboardingGate = (function () {
+    let locked = false;
+
+    function lock() { locked = true; }
+
+    function unlock() {
+        locked = false;
+        window.dispatchEvent(new CustomEvent('aden_onboarding_gate_cleared'));
+    }
+
+    function isLocked() { return locked; }
+
+    return { lock, unlock, isLocked };
+})();
 
 // =======================================================================
 // DATA DE NASCIMENTO OBRIGATÓRIA (Lei 15.211/2025) — contas via Google
@@ -1909,27 +1930,43 @@ async function fetchAndDisplayPlayerInfo(forceRefresh = false, preserveActiveCon
 // e a coluna birth_date está vazia, um modal bloqueante é exibido — cobre
 // tanto contas novas via Google quanto contas Google antigas que ainda não
 // tinham essa exigência.
-function enforceBirthDateCompliance(player) {
-    const modal = document.getElementById('googleBirthDateModal');
-    if (!modal) return;
+// Versão assíncrona: resolve imediatamente se não houver nada a fazer, ou
+// só resolve depois que o jogador confirmar a data (evento disparado pelo
+// handler do botão de confirmação, mais abaixo). Usada por runWelcomeSequence
+// para travar as próximas etapas (perfil/pacote inicial) até aqui.
+function enforceBirthDateComplianceAsync(player) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('googleBirthDateModal');
 
-    if (!player || player.birth_date) {
-        // Já possui data de nascimento cadastrada — garante que o modal esteja fechado
-        if (modal.style.display !== 'none') {
-            modal.style.display = 'none';
-            document.body.style.overflow = '';
+        if (!modal || !player || player.birth_date) {
+            // Já possui data de nascimento cadastrada — garante que o modal esteja fechado
+            if (modal && modal.style.display !== 'none') {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+            resolve();
+            return;
         }
-        return;
-    }
 
-    // Não exibe por cima do modal de banimento (prioridade)
-    const banModal = document.getElementById('banModalOverlay');
-    if (banModal && banModal.style.display === 'flex') return;
+        // Não exibe por cima do modal de banimento (prioridade) — não trava
+        // o restante do fluxo, o banimento já interrompe o carregamento.
+        const banModal = document.getElementById('banModalOverlay');
+        if (banModal && banModal.style.display === 'flex') {
+            resolve();
+            return;
+        }
 
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        window.addEventListener('aden_birthdate_confirmed', function onConfirmed() {
+            window.removeEventListener('aden_birthdate_confirmed', onConfirmed);
+            resolve();
+        }, { once: true });
+    });
 }
-window.enforceBirthDateCompliance = enforceBirthDateCompliance;
+// Mantido por compatibilidade, caso algo externo ainda chame pelo nome antigo.
+window.enforceBirthDateCompliance = enforceBirthDateComplianceAsync;
 
 document.addEventListener('DOMContentLoaded', () => {
     const gDaySelect  = document.getElementById('googleBirthDaySelect');
@@ -2013,6 +2050,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (modal) modal.style.display = 'none';
             document.body.style.overflow = '';
             if (gMsg) gMsg.textContent = '';
+
+            // Libera a próxima etapa do fluxo de onboarding (perfil/pacote inicial)
+            window.dispatchEvent(new CustomEvent('aden_birthdate_confirmed'));
         } catch (err) {
             console.error('Erro ao salvar data de nascimento:', err);
             if (gMsg) { gMsg.style.color = '#e55'; gMsg.textContent = 'Ocorreu um erro ao salvar. Tente novamente.'; }
@@ -2029,6 +2069,75 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// =======================================================================
+// FLUXO DE BOAS-VINDAS (SEQUENCIAL) — conta nova ou login sem cache
+// =======================================================================
+// Aguarda o jogador confirmar a edição de perfil obrigatória (nome padrão
+// de conta nova). Resolve na hora se o perfil já foi configurado antes.
+// O disparo do evento 'aden_profile_setup_complete' fica em perfil_edit.js,
+// no sucesso do primeiro salvamento (wasNewUser).
+function waitForProfileSetup(player) {
+    return new Promise((resolve) => {
+        if (typeof window.updateProfileEditModal === 'function') {
+            window.updateProfileEditModal(player);
+        }
+        const nameInput = document.getElementById('editPlayerName');
+        if (nameInput) nameInput.value = '';
+        if (profileEditModal) profileEditModal.style.display = 'flex';
+
+        window.addEventListener('aden_profile_setup_complete', function onDone() {
+            window.removeEventListener('aden_profile_setup_complete', onDone);
+            resolve();
+        }, { once: true });
+    });
+}
+
+// Evita que duas chamadas concorrentes (ex: o load original + o
+// fetchAndDisplayPlayerInfo(true) forçado pelo perfil_edit.js após salvar)
+// rodem a sequência em paralelo e disparem o pacote inicial/tutorial 2x.
+let __welcomeSequenceActive = false;
+
+// Orquestra, em ordem: data de nascimento -> edição de perfil (conta nova)
+// -> pacote inicial -> início do tutorial (só para conta nova).
+// O pedido de permissão de notificação (notifications.js) não faz parte
+// desta função — ele escuta 'aden_onboarding_gate_cleared' e também
+// verifica se o tutorial está em andamento antes de aparecer.
+async function runWelcomeSequence(player) {
+    if (!player || !player.id) return;
+    if (__welcomeSequenceActive) return;
+
+    __welcomeSequenceActive = true;
+    window.AdenOnboardingGate.lock();
+
+    try {
+        // 1) Data de nascimento (obrigatória por lei — hoje só falta em contas Google)
+        await enforceBirthDateComplianceAsync(player);
+
+        // 2) Edição de perfil obrigatória (nome padrão gerado no cadastro)
+        const isNewUser = /^Nome_[0-9a-fA-F]{6}$/.test(player.name);
+        if (isNewUser) {
+            await waitForProfileSetup(player);
+        }
+
+        // 3) Pacote inicial (nível 1, uma única vez por conta)
+        const packKey = 'aden_starter_pack_given_' + player.id;
+        if (!localStorage.getItem(packKey)) {
+            // Usa currentPlayerData quando disponível: pode já refletir o nome/
+            // avatar recém-salvos na etapa anterior.
+            await checkAndGiveStarterPackAsync(currentPlayerData || player);
+        }
+
+        // 4) Só então o tutorial começa — e só para quem acabou de configurar
+        // o perfil agora (conta nova de fato).
+        if (isNewUser && window.AdenTutorial && !window.AdenTutorial.isDone()) {
+            window.AdenTutorial.startOnboarding();
+        }
+    } finally {
+        __welcomeSequenceActive = false;
+        window.AdenOnboardingGate.unlock();
+    }
+}
 
 // === Botão de copiar ID do jogador ===
 document.addEventListener('DOMContentLoaded', () => {
@@ -2952,23 +3061,29 @@ const STARTER_PACK_ITEMS = [
  * Zero egress após a primeira execução.
  * Chave localStorage é por ID de jogador — evita colisão entre contas no mesmo browser.
  */
-async function checkAndGiveStarterPack(player) {
-    if (!player || !player.id) return;
+async function checkAndGiveStarterPack(player, onDone) {
+    // onDone é chamado em TODO caminho de saída — inclusive quando não há
+    // nada a fazer — para permitir que runWelcomeSequence aguarde essa etapa
+    // (incluindo o fechamento do modal, quando ele é exibido) antes de seguir
+    // para o início do tutorial.
+    const finish = () => { if (typeof onDone === 'function') onDone(); };
+
+    if (!player || !player.id) return finish();
     const PACK_KEY = 'aden_starter_pack_given_' + player.id;
 
     // Guard dupla client-side: se já tiver a flag, não faz nada
-    if (localStorage.getItem(PACK_KEY)) return;
+    if (localStorage.getItem(PACK_KEY)) return finish();
 
     // Verifica client-side se o pack já foi marcado no progression_state (sem query extra)
     if (player?.progression_state?.starter === true) {
         localStorage.setItem(PACK_KEY, '1');
-        return;
+        return finish();
     }
 
     // Só entrega para nível 1 — após levelar up a flag já terá sido setada
     if (player.level !== 1) {
         localStorage.setItem(PACK_KEY, '1');
-        return;
+        return finish();
     }
 
     try {
@@ -2976,13 +3091,13 @@ async function checkAndGiveStarterPack(player) {
 
         if (error) {
             console.warn('⚠️ [StarterPack] Erro na RPC:', error.message);
-            return;
+            return finish();
         }
 
         // Pack já foi dado (ex: localStorage foi limpo mas server tem a flag)
         if (data?.already_given || !data?.success) {
             localStorage.setItem(PACK_KEY, '1');
-            return;
+            return finish();
         }
 
         // ✅ Sucesso: marca localmente e atualiza cache
@@ -3002,18 +3117,28 @@ async function checkAndGiveStarterPack(player) {
             await surgicalCacheUpdate(data.inventory_updates, data.new_timestamp);
         }
 
-        // Exibe o modal de boas-vindas
-        showStarterPackModal();
+        // Exibe o modal de boas-vindas — só chama finish() quando o jogador fechar
+        showStarterPackModal(finish);
 
     } catch (err) {
         console.error('❌ [StarterPack] Erro inesperado:', err);
+        finish();
     }
+}
+
+// Wrapper em Promise, usado pelo runWelcomeSequence.
+function checkAndGiveStarterPackAsync(player) {
+    return new Promise((resolve) => {
+        checkAndGiveStarterPack(player, resolve);
+    });
 }
 
 /**
  * Exibe o modal de boas-vindas com os itens do pacote inicial.
+ * @param {Function} [onClose] - Chamado quando o jogador fecha o modal
+ * (botão ou clique fora), depois da animação de saída.
  */
-function showStarterPackModal() {
+function showStarterPackModal(onClose) {
     // Remove instância anterior se existir
     const existing = document.getElementById('starterPackModal');
     if (existing) existing.remove();
@@ -3146,20 +3271,24 @@ function showStarterPackModal() {
 
     document.body.appendChild(modal);
 
-    // Fecha ao clicar no botão
-    modal.querySelector('#spCloseBtn').addEventListener('click', () => {
+    let closed = false;
+    const closeModal = () => {
+        if (closed) return; // evita chamar onClose duas vezes (botão + clique fora)
+        closed = true;
         modal.style.opacity = '0';
         modal.style.transition = 'opacity 0.3s';
-        setTimeout(() => modal.remove(), 300);
-    });
+        setTimeout(() => {
+            modal.remove();
+            if (typeof onClose === 'function') onClose();
+        }, 300);
+    };
+
+    // Fecha ao clicar no botão
+    modal.querySelector('#spCloseBtn').addEventListener('click', closeModal);
 
     // Fecha ao clicar fora
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.style.opacity = '0';
-            modal.style.transition = 'opacity 0.3s';
-            setTimeout(() => modal.remove(), 300);
-        }
+        if (e.target === modal) closeModal();
     });
 }
 

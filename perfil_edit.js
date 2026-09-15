@@ -562,7 +562,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 showFloatingMessage('Perfil atualizado com sucesso!');
 
-                // Dispara o tutorial de onboarding somente no primeiro cadastro
+                // Avisa o restante do fluxo de onboarding (script.js) somente
+                // no primeiro cadastro. O início do tutorial NÃO é mais
+                // disparado daqui — script.js decide isso depois de mostrar
+                // (e o jogador fechar) o modal do pacote inicial, mantendo a
+                // ordem: perfil -> pacote inicial -> tutorial.
                 const wasNewUser = isNewUserSetup;
 
                 // Libera o modo de primeiro cadastro
@@ -570,8 +574,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (profileEditModal) profileEditModal.removeAttribute('data-locked');
                 if (closeProfileModalBtn) closeProfileModalBtn.style.display = '';
 
-                if (wasNewUser && window.AdenTutorial && !window.AdenTutorial.isDone()) {
-                    window.AdenTutorial.startOnboarding();
+                if (wasNewUser) {
+                    window.dispatchEvent(new CustomEvent('aden_profile_setup_complete'));
                 }
 
                 const finalName = (typeof data === 'string' && data.length > 0) ? data : rawName;

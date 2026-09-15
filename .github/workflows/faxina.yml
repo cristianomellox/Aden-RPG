@@ -1,0 +1,41 @@
+name: Faxina Automatica de Assets
+on: workflow_dispatch
+jobs:
+  limpar_arquivos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Salvar VIPs e Apagar o Resto
+        run: |
+          # Cria uma pasta temporária segura fora do projeto
+          mkdir -p /tmp/cofre_seguro
+          
+          # 1. Salva a pasta itens
+          mv assets/itens /tmp/cofre_seguro/ 2>/dev/null || true
+          
+          # 2. Salva todos os JPGs (Meta tags)
+          mv assets/*.jpg /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/*.jpeg /tmp/cofre_seguro/ 2>/dev/null || true
+          
+          # 3. Salva os ícones do PWA e moedas da UI
+          mv assets/icon-*.png /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/notification-icon-*.png /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/badge-icon.png /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/goldcoin.webp /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/cristais.webp /tmp/cofre_seguro/ 2>/dev/null || true
+          mv assets/CPicon.webp /tmp/cofre_seguro/ 2>/dev/null || true
+          
+          # 4. DESTRÓI tudo que sobrou na pasta assets (Músicas, Monstros, etc)
+          rm -rf assets/*
+          
+          # 5. Devolve os arquivos do cofre para a pasta assets
+          mv /tmp/cofre_seguro/* assets/
+          
+      - name: Salvar as alteracoes no GitHub
+        run: |
+          git config --global user.name "Robo Faxineiro"
+          git config --global user.email "actions@github.com"
+          git add -A
+          git commit -m "Faxina: Removendo 1000+ assets pesados" || echo "Nada para mudar"
+          git push
